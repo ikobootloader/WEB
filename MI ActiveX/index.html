@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Test ActiveX</title>
+
+	<style>
+
+	</style>
+
+	<script>
+		/** Messagerie Instantanée ActiveX **/
+		/** Fonctionne uniquement sur IE : Compatibilité assurée sur IE 11 V11.345.17134.0 **/
+		
+		//fso.CreateTextFile("BDD.txt",true); //Création du fichier "fichier1.txt" avec ecrasement.	
+		
+		/**Traitement**/
+		//formatage des messages par pseudo : ex "pseudo:[message]"
+		
+		//Initialisation des variables
+		var fso=new ActiveXObject("Scripting.FileSystemObject"); //Système de fichier.
+		var chemin = "BDD.txt"; // Mettre BDD sur le réseau pour activer le tchat simultané
+		//var chemin = "BDD.txt"; // Destination de la BDD
+		
+		//Retrouver le nom utilisateur Windows
+		function compteWin(){
+			var wshshell=new ActiveXObject("wscript.shell");
+			var username=wshshell.ExpandEnvironmentStrings("%username%");
+			//alert(username);
+			return document.getElementById('pseudo').setAttribute("value", username); //Propose d'utiliser le vrai nom mais modfication possible
+		}
+	
+		//Fonctions d'enregistrement dans la BDD
+		function envoyer() {
+			
+			//Concaténation
+			var pseudo = document.getElementById('pseudo').value;
+			var message = document.getElementById('message').value;
+			var psmes = '['+pseudo+']: '+message+'<br/>'; //Concaténation
+			//alert(psmes); ok
+			
+			//Ecriture des données
+			var otf=fso.OpenTextFile(chemin, 8 ,true);
+			otf.WriteLine(psmes); //Ecriture sur le fichier BDD
+			otf.Close(); //Fermeture du fichier BDD.
+			document.getElementById("message").innerHTML = ""; //clear le textarea
+			document.getElementById('pseudo').setAttribute("disabled", "disabled"); //bloquer la possibilité de changer de pseudo
+			
+			//Lecture des données
+			otf=fso.OpenTextFile(chemin, 1 ,false); // Activer le mode lecture
+			var recup = otf.ReadAll(); //récupération du texte
+			document.getElementById("affichage").innerHTML = recup; //intégration du texte
+			//alert(recup);	
+			otf.Close(); //Fermeture du fichier BDD.
+			//alert(document.getElementById("affichage").scrollTop); 
+			document.getElementById("affichage").scrollTop = document.getElementById("affichage").scrollHeight; //scroll tjs en bas
+
+		}
+		
+		//Recharge auto
+		setInterval(function() {
+			if (fso.FileExists(chemin)){
+				//Lecture des données
+				otf=fso.OpenTextFile(chemin, 1 ,false); // Activer le mode lecture
+				var recup = otf.ReadAll();
+				document.getElementById("affichage").innerHTML = recup; //lecture
+				otf.Close(); //Fermeture du fichier BDD.
+			}
+			
+		}, 1000);	
+		
+		//Bouton de suppression rapide de la BDD
+		function supprimer() {
+			if (fso.FileExists(chemin)){
+			fso.DeleteFile(chemin); //Suppression du fichier "fichier1.txt". 
+			document.getElementById("affichage").innerHTML = " "; //Effacer contenu du bloc "Affichage"
+			}
+			else {alert("Aucune BDD pour cette messagerie");}
+		}
+	</script>
+</head>
+
+<body onload="compteWin();">
+		
+	<div style="width:600px;height:300px;overflow:auto;margin-bottom:15px;background-color:#eee" id="affichage"></div>
+	
+	<div style="width:600px">
+		
+		<label>Pseudo:</label><input type="text" id="pseudo" style="width:100%;margin-bottom:15px;" />
+		<label>Message:</label><textarea id="message" style="width:100%;height:150px;"></textarea>
+		<button onclick="envoyer();" id="envoyer">Envoyer</button>
+		<button onclick="supprimer();" id="suppression" style="float:right">Suppression de la BDD</button>
+		
+	</div>
+
+</body>
+
+</html>
