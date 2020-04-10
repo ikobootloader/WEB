@@ -3,7 +3,7 @@ Hi there !
 
 i build this program because i wanted to discuss discretely with colleagues in my office XD.
 
-With it, I seat up a BBD in a folder places in the network of our office that is open to write and read files.
+With it, I seat up a BBD in a folder places in the network of our office that is allowed to write and read files.
 
 we can only use this program in Internet Explorer with the plugin ActiveX activated.
 
