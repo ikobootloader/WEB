@@ -1,7 +1,7 @@
 # MI ACTIVEX
 Hi there !
 
-i build this program because i wanted to discuss discretely with colleagues in my office XD
+i build this program because i wanted to test the using of a database with IE 11 active X
 
 With it, I seat up a BBD in a folder places in the network of our office that is allowed to write and read files.
 
