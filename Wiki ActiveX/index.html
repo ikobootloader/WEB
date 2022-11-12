@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+
+<HTML>
+
+<HEAD>
+
+	<title>Wiki ActiveX</title>
+
+	<meta charset="utf-8" /> 
+	
+	<style>
+		body{margin:0;font-family:Calibri;color:rgba(85, 85, 85, 1);}
+		button{padding: 9px; border: currentColor; border-image: none; background-color: rgb(238, 238, 238);cursor:pointer;margin-left:-5px;color:rgba(85, 85, 85, 1);}
+		input[type="text"]{margin: 0px; padding: 8px;box-sizing: border-box;border:1px solid #eee;}
+		textearea{box-sizing: border-box;border:1px solid #eee;}
+		::-webkit-scrollbar {/* Scrollbars */
+			width: 14px;
+			height: 14px;
+			background: #bfb6a3 url(images/bg-blog-repeat.png) 0 0 repeat;
+		}
+		img{max-width: 100%;height: auto;}	
+		
+		/** SCROLL TO TOP **/
+		/** https://www.w3schools.com/howto/howto_js_scroll_to_top.asp **/
+		#myBtn {
+			display: none; /* Hidden by default */
+			position: fixed; /* Fixed/sticky position */
+			bottom: 20px;/* Place the button at the bottom of the page */
+			right: 30px; /* Place the button 30px from the right */
+			z-index: 99;/* Make sure it does not overlap */
+			border:none; /* Remove borders */
+			outline: none; /* Removeoutline */
+			background-color: rgba(184, 184, 184, 1); /* Set a background color */
+			background-image: url('https://www.impressions-languedoc.eu/931-thickbox_default/fleche-haut.jpg'); 
+			color: white;/* Text color */
+			cursor: pointer; /* Add a mouse pointer on hover */
+			padding:10px 15px;/* Some padding */
+			border-radius: 10px; /* Rounded corners */
+			font-size:18px; /* Increase font size */
+		}
+
+		#myBtn:hover {
+			background-color: #555; /* Add a dark-grey background on hover */
+		}		
+		
+		/** VOLET BASES DE DONNEES **/
+		#cuisine li{cursor:pointer;}
+		#cuisine li:hover{text-decoration:underline;}
+		
+		/** FONCTION CATALOGUE **/
+		.flottant{display:inline-block;width:33%;vertical-align:top;}
+		h5{margin-top:5px;margin-bottom:0px;}
+		.catLinks:hover{color:rgba(23, 23, 23, 1);}
+		.pad{padding:10px;}
+		
+		/** FONCTION RECHERCHER **/
+		.indice{font-size:8px;}
+		#containerTrouve{overflow:auto;max-height:500px;}
+		#containerTrouve h3:hover{color:rgba(23, 23, 23, 1);}
+		
+		/** FONCTIONS DE STYLES **/
+		.styleTexte {margin:0;padding:0;display:inline-block;margin-left:15px;}
+		.styleTexte li{margin:0;padding:0;cursor:pointer;display:inline-block}
+		
+		/** FONCTION AJOUTER **/
+		#survol{position:absolute;background-color:rgba(82, 82, 82, 1);color:white;width:60%;overflow:auto;max-height:100px;}
+		#listeSurvol li:hover{text-decoration:underline;}
+		#image{display:none;}
+		#envoyer{margin-top:6px;}
+		
+		/** VOLET AFFICHER **/
+		#voletAfficher{margin-bottom:30px;border-left:1px solid #eee;}
+		#afficheResultat{padding-left:30px;}
+		#containerRechercher{padding-left:30px;}
+		#afficheCategorie{margin-top:30px;}
+		
+		/** BANDEAU SUPERIEUR **/
+		#bandeauSuperieur{}
+		#titreWiki{padding:5px 5px 5px 30px;display:inline-block;width:20%;font-weight:bold;}
+		#fonctions{padding:5px;display:inline-block;width:70%;text-align:right;font-size:14px;}
+		#fonctions ul{margin:0;padding:0;display:inline-block;}
+		#fonctions li{margin:0;padding:0;display:inline-block;}
+		.addOn:hover{text-decoration:underline;cursor:pointer;}
+	</style>
+
+	<script>
+
+		// Reset le cookie MIAM
+		//document.cookie = 'BDD=; expires=Thu, 01-Jan-70 00:00:01 GMT;';
+		
+		var fichier = {
+			
+			/** COOKIES > SESSION BDD **/
+			getcookie: function(cname) {
+			  var name = cname + "=";
+			  var decodedCookie = decodeURIComponent(document.cookie);
+			   var ca = decodedCookie.split(';');
+			   for(var i = 0; i <ca.length; i++) {
+				var c = ca[i];
+				while (c.charAt(0) == ' ') {
+				  c = c.substring(1);
+			   }
+				if (c.indexOf(name) == 0) {
+				  return c.substring(name.length, c.length);
+				}
+			  }
+			  return "";
+			 }, 
+			//https://stackoverflow.com/questions/179355/clearing-all-cookies-with-javascript 
+			deletecookie: function() {
+				var cookies = document.cookie.split(";");
+				for (var i = 0; i < cookies.length; i++) {
+					var cookie = cookies[i];
+					var eqPos = cookie.indexOf("=");
+					var name = eqPos > -1 ? cookie.substr(0, eqPos) : cookie;
+					document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT";
+				}
+			},	
+
+			checkCoockie: function(){
+				//Changement de l'intitulé du CMS
+				if(this.getcookie("BDD")){
+					if(this.getcookie("BDD") == "BDDWIKI.txt"){
+						document.getElementById("titreWiki").innerHTML = "Wiki Perso";
+					}
+					else if(this.getcookie("BDD") == "BDDX.txt"){
+						document.getElementById("titreWiki").innerHTML = "Wiki X";
+					}
+					else if(this.getcookie("BDD") == "BDDY.txt"){
+						document.getElementById("titreWiki").innerHTML = "Wiki Y";
+					}
+					else{
+						document.getElementById("titreWiki").innerHTML = "Wiki Perso";
+					}	
+				}
+			},
+						
+			cookies: function(bdd){
+				
+				// Effacer résultats de recherche
+				document.getElementById('containerTrouve').innerHTML = "";
+				
+				var date = new Date();
+				var n = date.getFullYear();
+				var ad = n + 1;
+				
+				if(document.cookie){
+					// Reset cookie
+					this.deletecookie();
+					//
+					document.cookie = "BDD="+bdd+"; expires=Thu, 31 Dec "+ad+" 12:00:00 UTC; path=/"; 
+				}
+				else{
+					document.cookie = "BDD="+bdd+"; expires=Thu, 31 Dec "+ad+" 12:00:00 UTC; path=/";
+				}
+				alert("Base de données Chargée!");
+				
+				//Changement de l'intitulé du CMS
+				this.checkCoockie();
+
+			},
+			
+			/** Initialisation **/
+			fso: new ActiveXObject("Scripting.FileSystemObject"),
+			
+			chemin : function(){
+				// A initialiser
+				/* TODO: 
+					- créer le répertoire dans "Documents"
+					- récupérer nom de session utilisateur windows
+					- recréer le lien final
+				*/
+				var direction;
+			
+					if(this.getcookie("BDD") == "BDDWIKI.txt"){
+						return direction+"BDDWIKI.txt";
+					}
+					else if(this.getcookie("BDD") == "BDDX.txt"){
+						return "BDDX.txt";
+					}
+					else if(this.getcookie("BDD") == "BDDY.txt"){
+						return direction+"BDDY.txt";
+					}
+					else{
+						return direction+"BDDWIKI.txt";
+					}							
+			},
+
+			/** Fonctions d'utilisation de la BDD **/
+			creer: function(){
+				this.fso.CreateTextFile(this.chemin(),true, -1); // -1 pour unicode
+			},
+			lire: function(){	
+				if(this.fso.FileExists(this.chemin())){
+					var otf=this.fso.OpenTextFile(this.chemin(), 1 ,false, -1); 
+					var lecture = otf.ReadAll();
+					otf.Close();
+					return lecture.trim();	
+				}
+			},
+			ecrire: function(concatenation){
+				var otf=this.fso.OpenTextFile(this.chemin(), 8 ,true, -1);
+				otf.WriteLine(concatenation); 
+				otf.Close();
+			},
+			effacer: function(){
+				if(this.fso.FileExists(this.chemin())){			
+					this.fso.DeleteFile(this.chemin(),true);	
+				}
+			}
+
+		};
+		
+		// Créer la base de données si elle n'existe pas
+		if(!fichier.fso.FileExists(fichier.chemin())){concatenation = '[[0]-[titre]*[message]]${categorie}$';fichier.ecrire(concatenation);}
+		// Remplir la base de donnée si elle est vide
+		if(!fichier.lire()){concatenation = '[[0]-[titre]*[message]]${categorie}$';fichier.ecrire(concatenation);}
+			
+		var donnees = {
+		
+			/** Conditionnement des données **/
+			recup_tout:  new RegExp (/\[\[((.|\n)*)\}\$/g), 
+			recup_id: new RegExp (/\[.*]*]\-/g),
+			recup_titre: new RegExp (/\-]*.*\*/g),
+			recup_texte: new RegExp (/\*\[((.|\n)*)]]/g),
+			recup_titretexte: new RegExp (/\-]*((.|\n)*)\}\$/g),
+			recup_cat: new RegExp (/\$\{*((.|\n)*)\}\$/g),
+			
+			/** Nettoyage des données **/
+			article: function(article,nbr){
+				if(!nbr)nbr=0;
+				var taille = article.match(this.recup_tout).length;				
+				article = article.match(this.recup_tout)[nbr];	
+				var touslesarticles = article.match(this.recup_tout);
+				return [article,taille,touslesarticles];
+			},	
+			titretexte: function(titretexte,nbr){
+				if(!nbr)nbr=0;
+				var taille = titretexte.match(this.recup_titretexte).length;				
+				titretexte = titretexte.match(this.recup_titretexte)[nbr];	
+				var touslestitrestextes = titretexte.match(this.recup_titretexte);
+				var cleanTitretexte = titretexte.replace("-[", "");		
+				cleanTitretexte = cleanTitretexte.replace("]*", "");
+				return [titre,cleanTitretexte,taille,touslestitrestextes];
+			},			
+			titre: function(titre,nbr){
+				if(!nbr)nbr=0;
+				var taille = titre.match(this.recup_titre).length;				
+				titre = titre.match(this.recup_titre)[nbr];	
+				var cleanTitre = titre.replace("-[", "");		
+				cleanTitre = cleanTitre.replace("]*", "");
+				return [titre,cleanTitre,taille];
+			},
+			texte: function(texte,nbr){
+				if(!nbr)nbr=0;
+				var taille = texte.match(this.recup_texte).length;				
+				texte = texte.match(this.recup_texte)[nbr];
+				var cleanTexte = texte.replace("*[", "");		
+				cleanTexte = cleanTexte.replace("]]", "");
+				return [texte,cleanTexte,taille];
+			},
+			id: function(id,nbr){	
+				if(!nbr)nbr=0;	
+				var taille = id.match(this.recup_id).length;
+				id = id.match(this.recup_id)[nbr];
+				var cleanId = id.replace("[[", "");		
+				cleanId = cleanId.replace("]-", "");
+				return [id,cleanId,taille];
+			},
+			categorie: function(categorie,nbr){ 
+				if(!nbr)nbr=0;
+				var taille = categorie.length;				
+				categorie = categorie.match(this.recup_cat)[nbr];
+				var cleanCategorie = categorie.replace("${", "");		
+				cleanCategorie = cleanCategorie.replace("}$", "");	
+				return [categorie,cleanCategorie,taille];
+			}
+			
+		};	
+		
+		var frontend = {
+		
+			chargement : function(id){
+				// l'affichage du gif augmente les tps de chargement
+				//var gif = '<img src="https://media.giphy.com/media/3oEjI6SIIHBdRxXI40/giphy.gif" width="100" height="100" />';
+				var gif = '<img src="Loading_icon.gif" width="100" height="100" />';
+				document.getElementById(id).innerHTML = "";
+				document.getElementById(id).innerHTML = gif;
+				// voir si utilisation de ".style['cursor'] = "wait";" pourrait convenir
+			},
+		
+			//Gestion du menu				
+			gestionMenu: function(power,id){
+			
+				// power = [0,1]
+				
+				if(power){
+					//Effacer style Modifier
+					document.getElementById('modifierArticle').style.color="rgba(184, 184, 184, 1)";
+					var setAttModifier = ''; //vidage de la valeur du onclick
+					document.getElementById('modifierArticle').setAttribute('onclick',setAttModifier);	
+					//Effacer style supprimer
+					document.getElementById('supprimerArticle').style.color="rgba(184, 184, 184, 1)";
+					var setAttModifier = ''; //vidage de la valeur du onclick
+					document.getElementById('supprimerArticle').setAttribute('onclick',setAttModifier);							
+				}
+				else{
+					// Intégrer l'ID dans la fonction 'Modifier' et le bouton 
+					setAttModifier = 'frontend.actions("modifier",'+id+');'; //création d'un attribut onclick avec le nom de la fonction en valeur (id)
+					document.getElementById('modifierArticle').setAttribute('onclick',setAttModifier);
+					document.getElementById('modifierArticle').style.color="rgba(85, 85, 85, 1)";		
+					// Intégrer l'ID dans la fonction 'Supprimer' et le bouton 
+					setAttModifier = 'frontend.supprimer('+id+');'; //création d'un attribut onclick avec le nom de la fonction en valeur (id)
+					document.getElementById('supprimerArticle').setAttribute('onclick',setAttModifier);
+					document.getElementById('supprimerArticle').style.color="rgba(85, 85, 85, 1)";						
+				}
+			
+			},		
+		
+			//cleanArray removes all duplicated elements
+			doublonsSupp : function cleanArray(array) {
+			  var i, j, len = array.length, out = [], obj = {};
+			  for (i = 0; i < len; i++) {
+				obj[array[i]] = 0;
+			  }
+			  for (j in obj) {
+				out.push(j);
+			  }
+			  return out;
+			},
+			
+			filtrer: function(input,titre,texte,categorie){
+				// THX to Chris Van Opstal & Kip : https://stackoverflow.com/questions/1314045/emulating-sql-like-in-javascript
+				RegExp.escape = function(text) {
+				  if (!arguments.callee.sRE) {
+					var specials = [
+					  '/', '.', '*', '+', '?', '|',
+					  '(', ')', '[', ']', '{', '}', '\\'
+					];
+					arguments.callee.sRE = new RegExp(
+					  '(\\' + specials.join('|\\') + ')', 'g'
+					);
+				  }
+				  return text.replace(arguments.callee.sRE, '\\$1');
+				}	
+
+				likeExpr = RegExp.escape(input);
+				var matchTitre = new RegExp(likeExpr.replace("%", ".*").replace("_", ".")).exec(titre.toLowerCase()) != null;	
+				var matchTexte = new RegExp(likeExpr.replace("%", ".*").replace("_", ".")).exec(texte.toLowerCase()) != null;
+				var matchCat = new RegExp(likeExpr.replace("%", ".*").replace("_", ".")).exec(categorie.toLowerCase()) != null;	
+				
+				return [matchTitre,matchTexte,matchCat];
+				
+			},
+				
+			rechercher: function(){
+			
+				// voyant de chargement
+				//this.chargement('afficheResultat');
+				
+				function encapsulerResultat(id,titre,precision,sup){						
+					// Intégrer résultats de recherche
+					var para = document.createElement("h3");
+					//création d'un attribut onclick avec le nom de la fonction en valeur (id)
+					var setAtt = 'frontend.afficher("recherche",'+id+')'; 
+					para.setAttribute('onclick',setAtt);
+					para.style.cursor = 'pointer';
+					//var node = document.createTextNode(titre+precision);
+					para.innerHTML = titre+precision;
+					//para.appendChild(node);
+					var element = document.getElementById("containerTrouve");
+					element.appendChild(para);	
+					if(sup === true){
+						element.insertBefore(para, element.childNodes[0]);			
+					}	
+	
+				}
+				
+				//match avec la valeur entrée en input
+				var inputRechercher = document.getElementById("rechercher").value;
+				inputRechercher = inputRechercher.toLowerCase();
+				var containerTrouve = document.getElementById("containerTrouve");
+				var qteArticles = donnees.titre(fichier.lire())[2];
+				var tousArticles = [];
+				if(inputRechercher != ""){
+					//Effacer précédent(s) résultat(s) de recherche
+					containerTrouve.innerHTML = ''; //
+					
+					// RETIRER LES DOUBLONS	CAT ET AFFICHAGE A PART
+					var Obj = {};
+					var p = [];
+					var x;
+					for(x=1;x<qteArticles;x++){
+						var noDoublons = donnees.categorie(fichier.lire(),x)[1];
+						p.push(noDoublons);
+						//console.log(p);
+						Obj[donnees.id(fichier.lire(),x)[1]] = noDoublons; // pour retrouver l'id 
+					}
+					var newNbr = this.doublonsSupp(p);
+					
+					//console.log(Obj[0+1]);
+					
+					var e;					
+					var g;
+					for(g=0;g<newNbr.length;g++){
+						var matchCatsd =  this.filtrer(inputRechercher,"","",newNbr[g])[2];
+						var cat = newNbr[g];
+						
+						// retrouver l'ID code pas ouf..
+						for(e=0;e<p.length;e++){							
+							if(Obj[e+1] == cat){id= e+1};	
+						}						
+						
+						if (matchCatsd){
+							function catResult() {
+							  var element = document.createElement("div");
+							  element.innerHTML = "<h3 style='cursor:pointer;' onclick='frontend.afficher(\"categorie\","+id+");'>"+cat+" (Catégorie)</h3>";
+							  return element;
+							}
+							document.getElementById("containerTrouve").appendChild(catResult());
+						}
+					}
+					
+					// Afficher résultats de recherche
+					var n;
+					
+					for(n=1;n<qteArticles;n++){					
+						var matchTitre = this.filtrer(inputRechercher,donnees.titre(fichier.lire(),n)[1],donnees.texte(fichier.lire(),n)[1],donnees.categorie(fichier.lire(),n)[1])[0];
+						var matchTexte = this.filtrer(inputRechercher,donnees.titre(fichier.lire(),n)[1],donnees.texte(fichier.lire(),n)[1],donnees.categorie(fichier.lire(),n)[1])[1];
+						var matchCat =  this.filtrer(inputRechercher,donnees.titre(fichier.lire(),n)[1],donnees.texte(fichier.lire(),n)[1],donnees.categorie(fichier.lire(),n)[1])[2];
+						
+						if (matchTitre && matchTexte && matchCat) {
+							
+							encapsulerResultat(donnees.id(fichier.lire(),n)[1],donnees.titre(fichier.lire(),n)[1]," <br/><span style='font-size:11px;color:rgba(61, 148, 255, 1);'>(trouvé dans titre, contenu et catégorie)</span>",true);
+						}					
+						else if (matchTitre && matchTexte) {
+							
+							encapsulerResultat(donnees.id(fichier.lire(),n)[1],donnees.titre(fichier.lire(),n)[1],"<br/><span style='font-size:11px;'> (trouvé dans titre et contenu)</span>",true); 
+						}
+						else if (matchTexte) {
+
+							encapsulerResultat(donnees.id(fichier.lire(),n)[1],donnees.titre(fichier.lire(),n)[1]," <br/><span style='font-size:11px;'>(trouvé uniquement dans le contenu)</span>",false);
+								
+						}										
+						else if (matchTitre) {
+						
+							encapsulerResultat(donnees.id(fichier.lire(),n)[1],donnees.titre(fichier.lire(),n)[1]," <br/><span style='font-size:11px;'>(trouvé uniquement dans le titre)</span>",false);										
+						}
+						else if(matchTitre === false && matchTexte === false && matchCat === false){	
+							tousArticles.push(n);	
+						}						
+					}
+				}else{setTimeout(function(){ document.getElementById("containerTrouve").innerHTML = '' }, 150);}
+				
+				//Si pas de résultat
+				var calcNBArt = qteArticles-1;
+				if(tousArticles.length == calcNBArt){
+					containerTrouve.innerHTML = "<h3>Aucun résultat trouvé</h3>";
+					if(document.getElementById("rechercher").value == ""){
+						setTimeout(function(){ document.getElementById("containerTrouve").innerHTML = '' }, 150);
+					}
+				}
+				
+				//document.getElementById('afficheResultat').innerHTML = '';
+			
+			},
+			
+			rechercheDirect: function rechercheDirect(){ //onkeyup
+				//this.chargement("containerTrouve");
+				/*setTimeout(function() {
+					frontend.rechercher();
+				}, 150);*/
+				this.rechercher(); // rallenti à mesure que des articles sont postés. TODO: trouver un moyen d'alléger le chargement!
+			},			
+			
+			afficher: function(type,id){
+			
+				//Préparer l'espace d'affichage
+				document.getElementById("voletAction").style.display="none";
+				document.getElementById("voletAfficher").style.display="block";
+				document.getElementById("afficheResultat").innerHTML = '';
+				
+				function encapsuleArticle(titre,texte,categorie,id){					
+					//titre
+					var para = document.createElement("h3");
+					var node = document.createTextNode(titre);
+					para.appendChild(node);
+					var element = document.getElementById("afficheResultat");
+					element.appendChild(para);	
+					//texte
+					function lectureHTML() {
+					  var element = document.createElement("div");
+					  element.innerHTML = texte;
+					  return element;
+					}
+					document.getElementById("afficheResultat").appendChild(lectureHTML());
+					//categorie
+					function lectureHTML2() {
+					  var element = document.createElement("div");
+					  element.setAttribute("id","afficheCategorie");
+					  element.innerHTML = "<b>Catégorie: </b><u style='cursor:pointer;' onclick='frontend.afficher(\"categorie\","+id+");'>"+categorie+"</u>";
+					  return element;
+					}
+					document.getElementById("afficheResultat").appendChild(lectureHTML2());						
+				}
+			
+				if(type == "recherche"){
+					
+					//Menu action
+					this.gestionMenu(false,id);
+					
+					var qteArticles = donnees.titre(fichier.lire())[2];
+					var t;
+					for(t=1;t<qteArticles;t++){	//lecture de l'article sélectionné	
+						if(donnees.id(fichier.lire(),t)[1] == id){
+							encapsuleArticle(donnees.titre(fichier.lire(),t)[1],donnees.texte(fichier.lire(),t)[1],donnees.categorie(fichier.lire(),t)[1],donnees.id(fichier.lire(),t)[1]);
+						}
+					}
+					
+					// surligner terme de recherche dans l'affichage du résultat
+					// TODO: 
+					//- ne pas modifier lien image!! 
+					//- préserver élément catégorie en bas de page
+					//- préserver la casse
+					//- gestion des caractères spéciaux
+					/**var inputRech = document.getElementById("rechercher").value;
+					var re = new RegExp(inputRech,"gi");
+					var resultIn = document.getElementById('afficheResultat').innerHTML;
+					var resultOn = resultIn.replace(re, '<span style="display:inline-block;background-color:rgba(255, 255, 0, 1);">'+inputRech+'</span>');
+					if(resultOn != ""){
+						document.getElementById('afficheResultat').innerHTML = resultOn;
+					}**/
+
+				}
+				if(type == "categorie"){
+					
+					// voyant de chargement
+					this.chargement('afficheResultat');					
+					
+					//Menu action
+					this.gestionMenu(true,"");	
+					
+					var nodeCat = donnees.categorie(fichier.lire(),id)[1];
+					//cat
+					var titreCat = document.createElement("h1");
+					var node1 = document.createTextNode('Catégorie : '+nodeCat);
+					titreCat.appendChild(node1);
+					var element1 = document.getElementById("afficheResultat");
+					element1.appendChild(titreCat);		
+
+					var qteArticles = donnees.titre(fichier.lire())[2];
+					var t;
+					for(t=1;t<qteArticles;t++){	//lecture de l'article sélectionné	
+					
+						// Link pour afficher l'article
+						var para = document.createElement("h3"); //création d'une balise html 
+						var setAtt = 'frontend.afficher("recherche",'+donnees.id(fichier.lire(),t)[1]+');'; //création d'un attribut onclick avec le nom de la fonction en valeur (id)
+						para.setAttribute('onclick',setAtt);
+						para.style.cursor = 'pointer';		
+						para.style['text-decoration'] = 'underline';	
+						
+						if(donnees.categorie(fichier.lire(),t)[1] == nodeCat){
+							var node = document.createTextNode(donnees.titre(fichier.lire(),t)[1]);
+							para.appendChild(node);
+							var element = document.getElementById("afficheResultat");
+							element.appendChild(para);
+						}
+						
+					}
+				
+				}	
+
+				if(type == "BDD"){
+				
+					// voyant de chargement
+					//this.chargement('afficheResultat');					
+				
+					//Menu action
+					this.gestionMenu(true,"");
+					
+					document.getElementById("afficheResultat").innerHTML = "<ul id='cuisine'><li onclick='fichier.cookies(\"BDDWIKI.txt\");'>Wiki personnel</li><li onclick='fichier.cookies(\"BDDX.txt\");'>X</li><li onclick='fichier.cookies(\"BDDY.txt\");'>Y</li></ul>";
+				}
+					
+				if(type == "catalogue"){
+				
+					// voyant de chargement
+					//this.chargement('afficheResultat');
+				
+					//Menu action
+					this.gestionMenu(true,"");		
+
+					var qteArticles = donnees.titre(fichier.lire())[2];		
+					// Créer une liste de catégorie sans doublons ET AJOUT DANS ARRAY
+					var r = [];
+					var z = [];
+					//var as = [];
+					var t;
+					var b;
+					for(t=1;t < qteArticles;t++){
+						var supprDoublons = donnees.categorie(fichier.lire(),t)[1];
+						var allinID = donnees.id(fichier.lire(),t)[0];
+						r.push(supprDoublons);
+						//as.push(allinID);
+					}
+					var newNbr = this.doublonsSupp(r);
+					//var newNbrID = this.doublonsSupp(as);
+					
+					//console.log(newNbrID);
+					
+					// ENTRER ELEMENTS DANS ARRAY ET AJOUTS MARQUEURS CAT	
+					var n;
+					for(n=1;n < qteArticles;n++){
+						var allin = donnees.article(fichier.lire(),n)[0];			
+						z.push(allin);
+					}
+					
+					document.getElementById('afficheResultat').innerHTML = "";
+					
+					if(z.length == 0){document.getElementById('afficheResultat').innerHTML = "Aucune entrée dans le catalogue"};
+					
+					// Afficher éléments dans cat correspondant
+					var d;
+					var s;
+					for(d=0;d < newNbr.length;d++){
+					
+						// Création d'une capsule flottante
+						function capsule() {
+							var element = document.createElement("div");
+							var setAtt = 'flottant'; //création d'un attribut onclick avec le nom de la fonction en valeur (id)
+							element.setAttribute('class',setAtt);
+							return element;
+						}
+						document.getElementById("afficheResultat").appendChild(capsule());	
+						
+						// Création d'une capsule destinée au padding
+						function capsule2() {
+							var element = document.createElement("div");
+							var setAtt = 'pad'; //création d'un attribut onclick avec le nom de la fonction en valeur (id)
+							element.setAttribute('class',setAtt);
+							return element;
+						}
+						document.getElementsByClassName("flottant")[d].appendChild(capsule2());	
+						
+						var catcat = newNbr[d]; // newNbr[d].match(donnees.recup_cat)[0]
+						
+						// append catcat dans affichage
+						var titreCat = document.createElement("h3");
+						//var setAtt2 = 'frontend.afficher("categorie",'+donnees.id(fichier.lire(),d)[1]+');'; //création d'un attribut onclick avec le nom de la fonction en valeur (id)
+						//titreCat.setAttribute('onclick',setAtt2);
+						var node1 = document.createTextNode(catcat);
+						titreCat.appendChild(node1);
+						var element1 = document.getElementsByClassName("pad")[d];
+						element1.appendChild(titreCat);	
+						
+						for(s=0;s<z.length;s++){
+						
+							//ID
+							var idArticle = z[s].match(donnees.recup_id)[0];	
+							idArticle = idArticle.replace("[[", "");		
+							idArticle = idArticle.replace("]-", "");							
+							// Intégrer Titre
+							var titre = z[s].match(donnees.recup_titre)[0];	
+							titre = titre.replace("-[", "");		
+							titre = titre.replace("]*", "");
+							var cat = z[s].match(donnees.recup_cat)[0];
+							cat = cat.replace("${", "");		
+							cat = cat.replace("}$", "");							
+		
+							if(cat == newNbr[d]){
+								
+								function lectureHTML() {
+								  var element = document.createElement("h5");
+								  var setAtt = 'frontend.afficher("recherche",'+idArticle+');'; 
+								  element.setAttribute('onclick',setAtt);
+								  var setAtt2 = "catLinks";
+								  element.setAttribute('class',setAtt2);
+								  element.style.cursor = 'pointer';
+								  element.style['text-decoration'] = 'none'; //underline
+								  element.innerHTML = titre;
+								  return element;
+								}
+								document.getElementsByClassName("pad")[d].appendChild(lectureHTML());													
+										
+							}
+							
+						}
+						
+					}
+				
+				}				
+			
+			
+			},
+
+			listeCategorie: function(numb){ // spécifique aux fonctions ajouter et modifier
+				
+				document.getElementById("listeSurvol").innerHTML = "";
+				
+				var inputCategorie = document.getElementById("categorie").value;
+				inputCategorie = inputCategorie.toLowerCase();				
+				
+				var qteArticles = donnees.titre(fichier.lire())[2];
+				// RETIRER LES DOUBLONS	CAT ET AFFICHAGE A PART
+				var p = [];
+				var x;
+				for(x=1;x<qteArticles;x++){
+					var noDoublons = donnees.categorie(fichier.lire(),x)[1];
+					p.push(noDoublons);
+				}
+				var newNbr = this.doublonsSupp(p);
+				
+				//console.log(newNbr);
+				
+				var s = [];
+				var g;
+				for(g=0;g < newNbr.length;g++){
+					var matchCatsd =  this.filtrer(inputCategorie,"","",newNbr[g])[2];
+					var cat = newNbr[g];
+					
+
+					if(matchCatsd){
+
+						var titreCat = document.createElement("li");
+						var node1 = document.createTextNode(newNbr[g]);
+						titreCat.appendChild(node1);
+						var element1 = document.getElementById("listeSurvol");
+						element1.appendChild(titreCat);	
+
+						document.getElementById("survol").style.display= "block";						
+						
+						// On enreigistre les catégories trouver dans un array pour les fonctions li
+						s.push(newNbr[g]);
+						//console.log(s);
+
+					}else{
+						//document.getElementById("survol").style.display= "none";
+					}
+
+				}
+				if(inputCategorie == ""){
+					document.getElementById("survol").style.display= "none";
+				}
+				
+				// Intégrer des fonctions aux li
+				var catElement = document.getElementById("listeSurvol");
+				var tailledeCat = catElement.getElementsByTagName("li").length;
+				
+				for(n=0;n < tailledeCat;n++){
+					//console.log(s[n]);
+					var inCatlink = s[n].replace("'","&#x2019;");
+					//console.log(inCatlink);
+					catElement.getElementsByTagName("li")[n].setAttribute("onclick","frontend.remplacer('"+inCatlink+"',"+numb+");");
+					catElement.getElementsByTagName("li")[n].style.cursor = "pointer";				
+				}
+	
+			},
+			
+			remplacer: function(indoor,numb){				
+				// Remplacer la catégorie dans le champ input
+				indoor = indoor.replace("&#x2019;","'"); // Gestion des caractères interdits à définir ({;})
+				document.getElementById("categorie").value = indoor;
+				document.getElementById("survol").style.display= "none";
+			},		
+			stopafficheliste: function(numb){
+				setTimeout(function(){ document.getElementById("survol").style.display= "none"; }, 150);
+			},			
+			
+			actions: function(type,id){
+				
+				//Préparer l'espace d'affichage
+				document.getElementById("voletAction").style.display="block";
+				document.getElementById("voletAfficher").style.display="none";
+				document.getElementById("afficheResultat").innerHTML = '';
+				//Effacer écran Affichage
+				document.getElementById("onTitre").innerHTML = "";
+				document.getElementById("onTexte").innerHTML = "";				
+				
+				if(type == "ajouter"){
+				
+					//Effacer les valeurs des champs input et textarea
+					document.getElementById("titre").value = "";
+					document.getElementById("texte").value = "";
+					//document.getElementsByClassName("categorie")[0].value = "";
+					document.getElementById("categorie").value = "";
+
+					//Récupération du dernier ID + 1 (l'article 0 fait l'addition)
+					var qteArticles = donnees.titre(fichier.lire())[2];
+					
+					var setAtt = 'frontend.envoyer('+qteArticles+',"ajouter");'; 
+					document.getElementById('envoyer').setAttribute('onclick',setAtt);
+					
+					//Menu action
+					this.gestionMenu(true,"");	
+				
+				}
+				
+				if(type == "modifier"){
+				
+					document.getElementById('onTitre').innerHTML = donnees.titre(fichier.lire(),id)[1];
+					document.getElementById('categorie').value = donnees.categorie(fichier.lire(),id)[1];
+					document.getElementById("titre").value = donnees.titre(fichier.lire(),id)[1];
+					document.getElementById('onTexte').innerHTML = donnees.texte(fichier.lire(),id)[1];
+					document.getElementById("texte").value = donnees.texte(fichier.lire(),id)[1]; 
+					var setAtt = 'frontend.envoyer('+id+',"modifier");'; 
+					document.getElementById('envoyer').setAttribute('onclick',setAtt);					
+					
+				}				
+				
+			},	
+			
+			// Copie des inputs dans l'ecran d'affichage
+			onTitre: function(){
+				var valueTitre = document.getElementById('titre').value;
+				document.getElementById('onTitre').innerHTML = valueTitre;
+			},
+			onTexte: function(){
+				var valueTexte = document.getElementById('texte').value;
+				document.getElementById('onTexte').innerHTML = valueTexte;
+			},
+			
+			envoyer: function(id,action){
+			
+				/** Variables usuelles **/
+				var titre = document.getElementById("titre").value;
+				var message = document.getElementById("texte").value;
+				var categorie = document.getElementById("categorie").value;
+				var concatenation;				
+			
+				if(titre != "" || message != ""){
+
+					// Prendre en compte les balises HTML
+					message = message.split('\n').join('<br/>');
+					//message = message.replace("*","&#x204E;");
+					
+					// Traitement de certains caractères spéciaux à risque
+				   var newTab = new Array();
+				   newTab['speciaux'] = new Array('!','→','(',')','[',']','{','}','`','^','~','*','%','$');
+				   // Valeurs html numériques de correspondance
+				   newTab['html'] = new Array('&#33;','&#8594;','&#x28;','&#41;','&#91;','&#93;','&#123;','&#125;','&#96;','&#94;','&#126;','&#42;','&#37;','&#36;');
+				   var qte = newTab['speciaux'].length;	
+					var k;
+					for(k=0;k<qte;k++){
+						if(message != ""){
+							if(newTab['speciaux'][k] != ""){
+								message = message.replace(newTab['speciaux'][k],newTab['html'][k]);
+							}
+						}
+					}				
+
+					if(categorie == ""){
+						categorie = "indéfini";
+					}
+					
+					concatenation = '[['+id+']-['+titre.trim()+']*['+message.trim()+']]${'+categorie.trim()+'}$';	
+					
+					this.gestionMenu(false,id);
+					
+					if(action == "ajouter"){	
+						fichier.ecrire(concatenation);
+						alert("Article ajouté!");
+					}
+					if(action == "modifier"){
+						
+						var x;
+						var k = [];
+						var remplacement = donnees.article(fichier.lire(),x)[2];
+						var qte = donnees.id(fichier.lire())[2];
+						for(x=0;x<qte;x++){
+							k.push(donnees.article(fichier.lire(),x)[0]);
+						}
+						
+						k.splice(id, 1, concatenation); 
+
+						fichier.effacer(); //Suppression de la base de donnée.
+						
+						var formatageBDD = k.join('\n\r');
+						
+						fichier.ecrire(formatageBDD);
+						alert("Article modifié!");
+					}					
+					
+					this.afficher("recherche",id); //affichage
+
+				}else{alert("Tous les champs obligatoires ne sont pas remplis!");}
+
+			},
+			
+			// GESTION DES TAGS HTML //
+			//https://forum.alsacreations.com/topic-5-41942-1-Entoureruntextepardesbalisesdansuntextareacommeunbbcode.html
+			BBcode: function(where_, tagdeb_, tagfin_){
+				  var Obj = document.getElementById( where_);
+				  if( Obj){
+					Obj.focus();
+					if(typeof Obj.selectionStart != 'undefined'){
+					  //-- Position du curseur
+					  var PosDeb = Obj.selectionStart;
+					  var PosFin = Obj.selectionEnd;
+					  //-- Recup. des Chaines
+					  var Chaine  = Obj.value;
+					  var szAvant = Chaine.substring( 0 , PosDeb);
+					  var szApres = Chaine.substring( PosFin, Obj.textLength );
+					  //-- Recup. texte selectionne
+					  var szSelect = Chaine.substring( PosDeb, PosFin);
+					  //-- Insertion des tags
+					  Obj.value = szAvant + tagdeb_ + szSelect + tagfin_ + szApres;
+					  //-- Replace le curseur
+					  PosDeb = szAvant.length + tagdeb_.length +szSelect.length;
+					  PosFin = PosDeb;
+					  Obj.setSelectionRange(  PosDeb, PosFin);
+					  //-- Replace le Focus
+					  Obj.focus();
+					}
+					else{ // IE and consort
+					  var Decal;
+					  //-- Recup. de la selection
+					  var Chaine   = document.selection.createRange();
+					  var szSelect = Chaine.text;
+					  Chaine.text  = tagdeb_ + szSelect + tagfin_;
+					  Chaine = document.selection.createRange();
+					  //-- Replace le curseur avant balise fin
+					  if( szSelect.length > 0){
+						//-- Le curseur est en debut de chaine
+						Decal = tagdeb_.length + szSelect.length;
+						//-(*)- Supprime les retours Chariot
+						Decal -= Get_NbrCR( szSelect);
+					  }
+					  else{
+						//-- Le curseur est en fin de chaine
+						Decal = -tagfin_.length;
+					  }
+					  //-- Deplace le curseur
+					  Chaine.move('character', Decal);
+					  Chaine.collapse();
+					  Chaine.select();
+					}
+				  }
+				//-----------------------
+
+			},	
+			tag: function(value){
+			  //var szTag ="";
+			 // szTag = document.getElementById('texte').value;
+			 value == "div" ? this.BBcode('texte', "<"+ value +" style='text-align:center;'>", "</"+ value +">") : this.BBcode('texte', "<"+ value +">", "</"+ value +">");
+			},
+
+			lien: function(){
+				//var szTag ="";
+				//szTag = document.getElementById('texte').value;
+				this.BBcode('texte', "<a href='' target='_blank'>", "</a>");	
+			},
+
+			img: function(){
+				document.getElementById("image").style.display = "inline-block";		
+			},
+
+			imgGenerer : function(){
+				im = new Image();
+				im.src = document.Upload.submitfile.value;
+				if(!im.src)
+				im.src = document.getElementById('submitfile').value;
+				// Traitement lien im.src
+				//https://stackoverflow.com/questions/29182283/javascript-onclick-get-image-name-without-path
+				var filename = im.src.replace(/^.*[\\\/]/, '');
+				var lienDef = 'Base/img/'+filename;
+				//var szTag ="";
+				//szTag = document.getElementById('texte').value;
+				this.BBcode('texte', "<div style='margin-top:40px;margin-bottom:40px;text-align:center;'><img src='"+lienDef+"' /></div>", "");
+			},
+			
+			// Gestion du saut de ligne
+			// Ajoute <br/> lorsque l'on presse la touche Entrée
+			runScript: function(e) {
+				//See notes about 'which' and 'key'
+				if (e.keyCode == 13 || e.which == 13 ) {
+					this.BBcode('texte', "</br>", "");
+					return false;
+				}
+				return true;
+			},
+			
+			supprimer: function(id){
+			
+				if (confirm("Voulez-vous vraiment supprimer cet article ?")) {
+
+						//console.log(donnees.titretexte(fichier.lire(),id)[3]);
+				
+						var suppression = [];
+						var x;
+						var qte = donnees.id(fichier.lire())[2];
+						for(x=0;x<qte;x++){
+							suppression.push(donnees.titretexte(fichier.lire(),x)[3]);
+						}						
+						
+						//console.log(suppression);
+						
+						suppression.splice(id, 1);
+
+						var p= 0;
+						var reincrement = []; 
+						for(p=0;p<suppression.length;p++){
+							reincrement.push('[['+p+']'+suppression[p]);
+						}				
+						
+						//console.log(reincrement);
+
+						//Effacer et enregistrer à la suite [j'aime pas cette action.. faut trouver mieux!!]
+						var formatageBDD = reincrement.join('\n\r'); // fonctionne pas
+						//console.log(formatageBDD);
+						
+						fichier.effacer(); //Suppression de la base de donnée.
+						
+						fichier.ecrire(formatageBDD); //	
+						
+						//Supprimer les données de l'article dans les fonctions recherches et modifier
+						document.getElementById('afficheResultat').innerHTML = "";
+						document.getElementById('containerTrouve').innerHTML = "";
+						document.getElementById('voletAfficher').style.display = "block";
+						document.getElementById('voletAction').style.display = "none";
+						alert('Article supprimé avec succès!');
+						
+						// Vider les boutons modifier et supprimer
+						this.gestionMenu(true,"");				
+						
+					}
+					else {
+						//alert("non")
+					}
+				}
+		
+		};
+
+	/** SCROLL TO TOP **/	
+	// https://www.w3schools.com/howto/howto_js_scroll_to_top.asp
+	// When the user scrolls down 20px from the top of the document, show thebutton
+	window.onscroll = function() {scrollFunction()};
+
+	function scrollFunction() {
+		if (document.body.scrollTop > 20 ||document.documentElement.scrollTop > 20) {
+			document.getElementById("myBtn").style.display = "block";
+		} else {
+			document.getElementById("myBtn").style.display= "none";
+		}
+	}
+
+	// When the user clicks on thebutton, scroll to the top of the document
+	function topFunction() {
+		document.body.scrollTop = 0; // For Safari
+		document.documentElement.scrollTop = 0; // For Chrome, Firefox, IE and Opera
+	}		
+		
+	</script>
+
+</HEAD>
+
+<BODY onload="fichier.checkCoockie();">
+
+	<div id="bandeauSuperieur" style="width:100%;background-color:#eee;height:30px;margin-bottom:30px;">
+	
+		<div id="titreWiki" onclick="document.location.reload(false);" style="cursor:pointer;"> Wiki</div>
+
+		<div id="fonctions">
+			<ul>
+				<li class="addOn" onclick="frontend.afficher('BDD',0);">Bases de données</li>
+				<li>|</li>
+				<li class="addOn" onclick="frontend.afficher('catalogue',0);">Catalogue</li>
+				<li>|</li>
+				<li onclick="frontend.actions('ajouter',0);" class="addOn">Ajouter</li>
+				<li>|</li>
+				<li id="modifierArticle" style="color:rgba(184, 184, 184, 1);" class="addOn">Modifier</li>
+				<li>|</li>
+				<li id="supprimerArticle" style="color:rgba(184, 184, 184, 1);" class="addOn">Supprimer</li>					
+			</ul>
+		</div>
+			
+	</div>
+	
+	<div id="voletRechercher" style="display:inline-block;width:30%;padding:5px;border-right:2px #eee">
+	
+		<div id="containerRechercher">
+		
+			<div class="containerInput">
+			
+				<input type="text" id="rechercher" style="width:65%" onkeyup="frontend.rechercheDirect();"  placeholder="Taper un mot.."/>	
+				<button id="boutonRechercher" style="width:100px" onClick="frontend.rechercher();" >Rechercher</button>
+			
+			</div>			
+		
+			<div id="containerTrouve"></div>
+		
+		</div>	
+	
+	</div>		
+
+	<div id="containerDonnees" style="display:inline-block;width:60%;padding:5px;margin-left:15px;vertical-align:top;">
+
+		<!-- Modifier un article -->
+		
+		<div id="voletAction" style="display:none;">
+		
+			<div id="" style="width:100%;height:300px;background-color:#eee;overflow:auto">
+				<div id="affichageModifier" style="padding:10px;"><h3 id="onTitre"></h3><div id="onTexte"></div></div>
+			</div>
+			
+			<label>Titre</label><input type="text" style="width:100%;background-color:#eee;" id="titre" onkeyup="frontend.onTitre();"/>
+			<label>Catégorie</label>
+			<input type="text" style="width:100%;background-color:#eee;" id="categorie" onkeyup="frontend.listeCategorie(0);" onblur="frontend.stopafficheliste(0);"/>
+			<div id="survol" style="display:none;"><ul id="listeSurvol"></ul></div>
+			<label>Texte</label>
+			<ul class="styleTexte">
+				<li style="font-weight:bold;" onclick="frontend.tag('b');">Gras</li>
+				<li>|</li>
+				<li style="font-style:italic;" onclick="frontend.tag('i');">Italique</li>
+				<li>|</li>
+				<li style=" text-decoration: underline;" onclick="frontend.tag('u');">Souligner</li>
+				<li>|</li>
+				<li style=" text-decoration: underline;" onclick="frontend.tag('div');">Centrer</li>
+				<li>|</li>				
+				<li style="color:blue;text-decoration: underline;" onclick="frontend.lien();">Lien</li>
+				<li>|</li>
+				<li style="" onclick="frontend.img();">Image</li>
+				<li id="image">
+					<form name="Upload" action="#" enctype="multipart/form-data" method="post">
+						<input type="file" name="submitfile" id="submitfile" />
+						<input type="button" value="Générer" onClick="frontend.imgGenerer();" />
+					</form>
+				</li>				
+			</ul>
+			<textarea style="width:100%;height:300px;background-color:#eee;" id="texte" onkeyup="frontend.onTexte();" onkeydown="frontend.onTexte();" onkeypress="return frontend.runScript(event);"></textarea>
+			<button id="envoyer">Envoyer</button>
+		
+		</div>
+		
+		<!-- Afficher article au clic résultat de recherche -->
+		<div id="voletAfficher" style="display:none;">
+		
+			<div id="afficheResultat" style=""><span id="innerhtml"></span></div>
+			
+		</div>
+		
+	</div> <!-- containerDonnees -->
+	
+	<button onclick="topFunction()" id="myBtn" title="Retour en haut">&#11014;&#65039;</button>
+
+</BODY>
+
+</HTML>
