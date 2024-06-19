@@ -1,0 +1,326 @@
+﻿<!DOCTYPE html>
+
+<html lang="fr">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <title>Frédérick MURAT - Curriculum Vitæ</title>
+    <link rel="icon" href="">
+	<link rel="stylesheet" href="https://unpkg.com/mvp.css"> 
+    <meta name="description" content="Curriculum Vitæ de Frédérick MURAT. Le CV démontre une forte polyvalence avec une large gamme de compétences techniques et une expérience significative en gestion de projets, développement web, analyse de données et administration de systèmes. De plus, l'expérience en formation, marketing, commercialisation et protection des données souligne une capacité à s'adapter et à répondre à divers besoins organisationnels.(GPT4o)">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<style>
+   h1 {
+      font-size: 2em;
+      color: #333;
+      position: relative;
+      display: inline-block;
+      padding: 5px;
+    }
+    h1::before, h1::after, h1 span::before, h1 span::after {
+      content: '';
+      position: absolute;
+      background-color: #333;
+      transition: all 1s ease-in-out;
+    }
+    h1::before {
+      width: 0;
+      height: 2px;
+      left: 0;
+      bottom: 0;
+      animation: underline 2s forwards;
+    }/**
+    h1::after {
+      width: 2px;
+      height: 0;
+      right: 0;
+      top: 0;
+      animation: uprightside 2s forwards;
+    }
+    h1 span::before {
+      width: 2px;
+      height: 0;
+      left: 0;
+      top: 0;
+      animation: upleftside 2s forwards;
+    }
+    h1 span::after {
+      width: 0;
+      height: 2px;
+      right: 0;
+      top: 0;
+      animation: topborder 2s forwards;
+    }**/
+    @keyframes underline {
+      0% {
+        width: 0;
+      }
+      100% {
+        width: 100%;
+      }
+    }
+    @keyframes uprightside {
+      0% {
+        height: 0;
+      }
+      100% {
+        height: 100%;
+      }
+    }
+    @keyframes upleftside {
+      0% {
+        height: 0;
+      }
+      100% {
+        height: 100%;
+      }
+    }
+    @keyframes topborder {
+      0% {
+        width: 0;
+      }
+      100% {
+        width: 100%;
+      }
+    }
+	
+	#legal-link {
+		display: block;
+		margin-top: 20px;
+		text-decoration:none;
+		cursor: pointer;
+	}
+
+	.popup {
+		display: none;
+		position: fixed;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+		background-color: rgba(0, 0, 0, 0.8);
+		justify-content: center;
+		align-items: center;
+	}
+
+	.popup-content {
+		background-color: white;
+		padding: 20px;
+		border-radius: 5px;
+		width: 80%;
+		height: 80%;
+		overflow-y: auto;
+		position: relative;
+	}
+
+	.close-button {
+		position: absolute;
+		top: 10px;
+		left: 10px;
+		font-size: 24px;
+		cursor: pointer;
+	}	
+	</style>
+</head>
+
+<body>
+   <main class="container">
+        <header>
+            <h1 style="margin-bottom:0px;"><span>Frédérick Murat</span></h1>
+			<p><span class="email" style="cursor: pointer;">cliquez ici pour afficher l'adresse mail de contact</span></p>
+        </header>
+		<section>
+				<header>
+					<div style="height:100px;">
+					<h2><span id="typed"></span></h2>
+					<p><b>Spécialisé dans le secteur médico-social</b></p>
+					</div>
+				</header>
+				<aside class="experience">
+					<h3>Correspondant / Référent informatique - Maison Départementale à l'Autonomie de l'Orne</h3>
+					<p>2017 à aujourd'hui</p>
+					<ul>
+						<li><b>Administration et Maintenance logicielles</b> (SOLIS MDPH/GED MULTIGEST)</li>
+						<li><b>Suivi de projets informatiques</b> en collaboration avec la CNSA, les éditeurs et la DSI</li>
+						<li><b>Gestion de flux dématérialisés</b> (CAF, ViaTrajectoire, Imprimerie Nationale, Education Nationale, CNSA)</li>
+						<li><b>Analyse de données</b> : collecte, nettoyage, analyse statistique et visualisation (SAP BO)</li>
+						<li><b>Publipostage et Modèles de Courriers</b> : Création et gestion en lien avec le SI</li>
+						<li><b>Formation et support technique</b></li>
+						<li><b>Délégué à la protection des données</b> (jusqu'en 2023) / <b>Référent informatique et liberté</b></li>
+						<li><b>Webmastering</b></li>
+					</ul>
+				</aside>
+				<aside class="experience">
+					<h3>Développeur / Chef de projet Web - AZNETWORK</h3>
+					<p>2014 - 2016</p>
+					<ul>
+						<li><b>Commercialisation BtoB</b> : marketing, prospection et vente</li>
+						<li><b>Gestion de projets</b> : étude, élaboration du cahier des charges, réponse aux appels d'offres</li>
+						<li><b>Webdesign et infographie</b> : proposition de maquettes et d’architectures web</li>
+						<li><b>Développement Frontend et Backend</b></li>
+						<li><b>Campagne d’emailing</b></li>
+						<li><b>Maintenance / SEO / Rédaction de guides techniques</b></li>
+						<li><b>Conseil, audit et formation</b></li>
+						<li><b>Webmastering</b></li>
+					</ul>
+				</aside>
+				<aside class="experience">
+					<h3>Développeur freelance - AE Webdev61</h3>
+					<p>2013 - 2015</p>
+					<ul>
+						<li><b>Commercialisation BtoB</b> : marketing, prospection et vente</li>
+						<li><b>Gestion complète de projets web</b></li>
+						<li><b>Ingénierie web, webdesign, éditorial web</b></li>
+						<li><b>Webmarketing / PAO</b> (prospectus, cartes de visite, book, etc.)</li>
+						<li><b>Maintenance / SEO / Rédaction de guides techniques</b></li>
+						<li><b>Conseil, audit et formation</b></li>
+						<li><b>Webmastering</b></li>
+					</ul>
+				</aside>
+			<!--</aside>-->
+		</section>
+		<section>
+			<aside>
+				<h2>Formations</h2>
+				<div>
+					<h3>Correspondant informatique dans le secteur médico-social</h3>
+					<p>Depuis 2017</p>
+					<p><u>Bientôt 7 années d'expérience</u> au service informatique d'une Maison Départementale à l'Autonomie, guichet unique d'accès simplifié aux droits et prestations pour les personnes en situation de handicap et les personnes âgées dépendantes.<p>
+				</div>
+				<div>
+					<h3>DUT Informatique et Communication</h3>
+					<p>2007</p>
+					<p>Diplôme Universitaire en Communication visuelle, Multimédia et Audiovisuel (Option Éducation aux Technologies de l'Image, de la Communication et du Son)</p>
+				</div>
+				<div class="education">
+					<h3>Certificat d’Aptitude Professionnelle</h3>
+					<p>2007</p>
+					<p>Multimédia et audiovisuel</p>
+				</div>
+				<div class="education">
+					<h3>Baccalauréat Comptabilité/Gestion</h3>
+					<p>2002</p>
+				</div>
+			</aside>
+			<aside>
+				<h2>Compétences Logicielles et CMS</h2>
+				<ul>
+					<li><u>Bureautique</u> : Word / Excel / Outlook / SAP BO / Powerpoint / Teams / Notepad++ / FileZilla / Drive / Dropbox / GitHub Desktop / Obsidian / Arduino IDE / ..</li>
+					<li><u>CMS & progiciels</u> : Wordpress / Prestashop / Joomla / <a href="https://arche-mc2.fr/suite-solis/" target="_blank">Solis</a> / <a href="https://www.multigest.fr/wp-content/uploads/2019/01/plaquette-multigest.pdf" target="_blank">Multigest</a> / MGChange</li>
+					<li><u>Langages</u> :  <a href="https://github.com/ikobootloader/WEB/tree/master/Wiki%20ActiveX" target="_blank"><i>HTML / CSS / JS</i></a> / <a href="https://github.com/ikobootloader/PROJETS-ARDUINO/tree/main" target="_blank"><i>C / C++</i></a> / PHP / SQL</li>
+					<li><u>Autres</u> : JQuery / Bootstrap / POO / Machine learning / Instagram</li>
+					<li><a href="https://github.com/ikobootloader/PROJETS-ARDUINO/tree/main/libraries" target="_blank"><i>Création de bibliothèques/pilotes ARDUINO</i></a></li>
+					<li><u>Infographie</u> : Canvas / Inkscape / Gimp / Photoshop / Illustrator / Premiere Pro / InDesign</li>
+					<li>GPT4o</li>
+				</ul>
+			</aside>
+			<aside>
+				<h2>Informations Complémentaires</h2>
+				<ul>
+					<li>Anglais niveau B2</li>
+					<li>Permis B - voiture</li>
+					<li>Certification RGPD CNIL</li>
+					<li>Autonome, rigoureux, autodidacte, créatif, multipotentiel, veille technologique</li>
+					<li>Loisirs : peinture, ingénierie électronique, écriture, musique</li>
+				</ul>
+			</aside>
+		</section>
+    </main>
+	<footer>
+		<hr>
+		<p style="text-align:center;">
+			<a href="#" id="legal-link"><small>Mentions légales</small></a>
+		</p>
+	</footer>
+	<!--popup-->
+	<div id="legal-popup" class="popup">
+		<div class="popup-content">
+			<span class="close-button">&times;</span>
+            <h2>1 - Édition du site</h2>
+			En vertu de l'article 6 de la loi n° 2004-575 du 21 juin 2004 pour la confiance dans l'économie numérique, il est précisé aux utilisateurs du site internet http://frederick-murat.fr l'identité des différents intervenants dans le cadre de sa réalisation et de son suivi:
+			</br>
+			Propriétaire du site : Murat Frédérick - Contact : <span class="email" style="cursor: pointer;">cliquez ici pour afficher l'adresse mail de contact</span>
+			</br>
+			Directeur de la publication : Murat Frédérick - Contact : <span class="email" style="cursor: pointer;">cliquez ici pour afficher l'adresse mail de contact</span>.
+			</br>
+			Hébergeur : OVH SAS - 2 rue Kellermann - BP 80157 - 59053 Roubaix Cedex 1
+
+			<h2>2 - Propriété intellectuelle et contrefaçons.</h2>
+			Murat Frédérick est propriétaire des droits de propriété intellectuelle et détient les droits d’usage sur tous les éléments accessibles sur le site internet, notamment les textes, images, graphismes, logos, vidéos, architecture, icônes et sons.
+
+			Toute reproduction, représentation, modification, publication, adaptation de tout ou partie des éléments du site, quel que soit le moyen ou le procédé utilisé, est interdite, sauf autorisation écrite préalable au propriétaire du site.
+			</br>
+			Toute exploitation non autorisée du site ou de l’un quelconque des éléments qu’il contient sera considérée comme constitutive d’une contrefaçon et poursuivie conformément aux dispositions des articles L.335-2 et suivants du Code de Propriété Intellectuelle.
+
+			<h2>3 - Limitations de responsabilité.</h2>
+			Le propriétaire du site ne pourra être tenu pour responsable des dommages directs et indirects causés au matériel de l’utilisateur, lors de l’accès au site http://frederick-murat.fr.
+			</br>
+			Le propriétaire du site décline toute responsabilité quant à l’utilisation qui pourrait être faite des informations et contenus présents sur http://frederick-murat.fr.
+			</br>
+			Le propriétaire du site s’engage à sécuriser au mieux le site http://frederick-murat.fr, cependant sa responsabilité ne pourra être mise en cause si des données indésirables sont importées et installées sur son site à son insu.
+
+			<h2>4 - CNIL et gestion des données personnelles.</h2>
+			Aucune donnée personnelle n'est collectée sur ce site.
+
+			<h2>5 - Liens hypertextes et cookies</h2>
+			Le site http://frederick-murat.fr contient des liens hypertextes vers d’autres sites et dégage toute responsabilité à propos de ces liens externes ou des liens créés par d’autres sites vers http://frederick-murat.fr.
+			</br>
+			Le propriétaire du site n'a pas prévu l'utilisation de cookie. Un "cookie" est un fichier de petite taille qui enregistre des informations relatives à la navigation d’un utilisateur sur un site. Les données ainsi obtenues permettent d'obtenir des mesures de fréquentation, par exemple.
+
+			<h2>6 - Droit applicable et attribution de juridiction.</h2>
+			Tout litige en relation avec l’utilisation du site http://frederick-murat.fr est soumis au droit français. En dehors des cas où la loi ne le permet pas, il est fait attribution exclusive de juridiction aux tribunaux compétents.
+		</div>
+	</div>	
+	
+<script src="https://draco.afnizarnur.com/js/jquery.min.js"></script>
+<script src="https://draco.afnizarnur.com/js/typed.min.js"></script>
+<script>
+//Source: https://draco.afnizarnur.com/
+function newTyped(){}$(function(){$("#typed").typed({
+// Change to edit type effect
+strings: ["CORRESPONDANT INFORMATIQUE","RÉFÉRENT DOMAINE APPLICATIF", "DÉVELOPPEUR FULL-STACK", "WEBMASTER"],
+
+typeSpeed:90,backDelay:700,contentType:"html",loop:!0,resetCallback:function(){newTyped()}}),$(".reset").click(function(){$("#typed").typed("reset")})});
+    
+//1 clic et affiche !
+document.addEventListener("DOMContentLoaded", function() {
+    // Les parties de l'adresse email
+    var part1 = "contact";
+    var part2 = "frederick-murat";
+    var part3 = "fr";
+
+    // Assembler l'adresse email
+    var email = part1 + "@" + part2 + "." + part3;
+
+    // Ajouter un gestionnaire d'événements au clic à chaque élément avec la classe "email"
+    var emailElements = document.querySelectorAll(".email");
+    emailElements.forEach(function(element) {
+        element.addEventListener("click", function() {
+            // Créer un lien mailto
+            var emailLink = document.createElement("a");
+            emailLink.href = "mailto:" + email;
+            emailLink.textContent = email;
+
+            // Remplacer le texte avec le lien
+            this.innerHTML = "";
+            this.appendChild(emailLink);
+        });
+    });
+});
+
+//pop-up
+document.getElementById('legal-link').addEventListener('click', function(event) {
+event.preventDefault();
+document.querySelector('.container').style.display = 'none';
+document.getElementById('legal-popup').style.display = 'flex';
+});
+
+document.querySelector('.close-button').addEventListener('click', function() {
+	document.getElementById('legal-popup').style.display = 'none';
+	document.querySelector('.container').style.display = 'block';
+});
+
+</script>
+
+</body>
+
+</html>
