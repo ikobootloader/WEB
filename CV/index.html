@@ -4,227 +4,10 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <title>Frédérick MURAT - Curriculum Vitæ</title>
-    <link rel="icon" href="">
-	<link rel="stylesheet" href="https://unpkg.com/mvp.css"> 
-    <meta name="description" content="Curriculum Vitæ de Frédérick MURAT. Le CV démontre une forte polyvalence avec une large gamme de compétences techniques et une expérience significative en gestion de projets, développement web, analyse de données et administration de systèmes. De plus, l'expérience en formation, marketing, commercialisation et protection des données souligne une capacité à s'adapter et à répondre à divers besoins organisationnels.(GPT4o)">
+    <link rel="icon" href=".\content\v.png">
+	<link rel="stylesheet" href=".\content\styles.css"> 
+    <meta name="description" content="Curriculum Vitæ de Frédérick MURAT. Le CV démontre une forte polyvalence avec une large gamme de compétences techniques et une expérience significative en gestion de projets, développement web, analyse de données et administration de systèmes. De plus, l'expérience en formation, marketing, commercialisation et protection des données souligne une capacité à s'adapter et à répondre à divers besoins organisationnels.">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<style>
-   h1 {
-      font-size: 2em;
-      color: #333;
-      position: relative;
-      display: inline-block;
-      padding: 5px;
-    }
-    h1::before, h1::after, h1 span::before, h1 span::after {
-      content: '';
-      position: absolute;
-      background-color: #333;
-      transition: all 1s ease-in-out;
-    }
-    h1::before {
-      width: 0;
-      height: 2px;
-      left: 0;
-      bottom: 0;
-      animation: underline 2s forwards;
-    }/**
-    h1::after {
-      width: 2px;
-      height: 0;
-      right: 0;
-      top: 0;
-      animation: uprightside 2s forwards;
-    }
-    h1 span::before {
-      width: 2px;
-      height: 0;
-      left: 0;
-      top: 0;
-      animation: upleftside 2s forwards;
-    }
-    h1 span::after {
-      width: 0;
-      height: 2px;
-      right: 0;
-      top: 0;
-      animation: topborder 2s forwards;
-    }**/
-    @keyframes underline {
-      0% {
-        width: 0;
-      }
-      100% {
-        width: 100%;
-      }
-    }
-    @keyframes uprightside {
-      0% {
-        height: 0;
-      }
-      100% {
-        height: 100%;
-      }
-    }
-    @keyframes upleftside {
-      0% {
-        height: 0;
-      }
-      100% {
-        height: 100%;
-      }
-    }
-    @keyframes topborder {
-      0% {
-        width: 0;
-      }
-      100% {
-        width: 100%;
-      }
-    }
-	
-	#legal-link {
-		display: block;
-		margin-top: 20px;
-		text-decoration:none;
-		cursor: pointer;
-	}
-
-	.popup {
-		display: none;
-		position: fixed;
-		top: 0;
-		left: 0;
-		width: 100%;
-		height: 100%;
-		background-color: rgba(0, 0, 0, 0.8);
-		justify-content: center;
-		align-items: center;
-	}
-
-	.popup-content {
-		background-color: white;
-		padding: 20px;
-		border-radius: 5px;
-		width: 80%;
-		height: 80%;
-		overflow-y: auto;
-		position: relative;
-	}
-
-	.close-button {
-		position: absolute;
-		top: 10px;
-		left: 10px;
-		font-size: 24px;
-		cursor: pointer;
-	}	
-	
-	/**MENU**/
-	
-	
-	#menu-button-container {
-    position: fixed;
-    top: 0;
-    right: 0;
-    z-index: 1001;
-    width: 0;
-    height: 0;
-	}
-
-
-	#menu-button {
-		width: 0;
-		height: 0;
-		border-top: 150px solid transparent;
-		border-left: 150px solid black;
-		cursor: pointer;
-		transform: rotate(45deg);
-		transform-origin: top right;
-		transition: border-left-color 0.3s;
-		display: flex;
-		justify-content: center;
-		align-items: center;
-		color: white;
-		font-weight: bold;
-	}
-
-	#menu-button:hover {
-		border-left-color: #aaa;
-	}
-
-	#side-menu {
-		position: fixed;
-		top: 0;
-		right: -400px;
-		width: 300px;
-		height: 100%;
-		background: #494949;
-		color: white;
-		transition: right 0.3s ease;
-		z-index: 1000;
-		padding: 20px;
-		box-shadow: -2px 0 5px rgba(0, 0, 0, 0.5);
-	}
-
-	#side-menu ul {
-		list-style-type: none;
-		padding: 0;
-	}
-
-	#side-menu li {
-		margin: 10px 0;
-		cursor: pointer;
-	}
-
-	#side-menu.visible {
-		right: 0;
-	}
-
-	#overlay {
-		position: fixed;
-		top: 0;
-		right: -100%;
-		width: 100%;
-		height: 100%;
-		background: rgba(0, 0, 0, 0.8);
-		color: white;
-		transition: right 0.5s ease;
-		display: flex;
-		justify-content: center;
-		align-items: center;
-		z-index: 999;
-	}
-
-	.slide-in {
-		width: 80%;
-		max-width: 600px;
-		padding: 20px;
-		background: #333;
-		border-radius: 10px;
-		box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
-	}
-
-	#title {
-		margin-top: 0;
-		margin-left: 15px;
-	}
-
-	#overlay.visible {
-		right: 0;
-	}
-
-	#close-button {
-		margin-top: 20px;
-		padding: 10px 20px;
-		font-size: 16px;
-		cursor: pointer;
-		color: white;
-		border: none;
-		border-radius: 5px;
-		transition: background-color 0.3s;
-	}
-	</style>
 </head>
 
 <body>
@@ -309,12 +92,13 @@
 			<aside>
 				<h2>Compétences Logicielles et CMS</h2>
 				<ul>
-					<li><u>Bureautique</u> : Word / Excel / Outlook / SAP BO / Powerpoint / Teams / Notepad++ / FileZilla / Drive / Dropbox / GitHub Desktop / Obsidian / Arduino IDE / ..</li>
+					<li><u>Bureautique</u> : Word / Excel / Outlook / SAP BO / GLPI / EasyVista / Powerpoint / Teams / Notepad++ / FileZilla / Drive / Dropbox / GitHub Desktop / Obsidian / Arduino IDE / Gmail / Zimbra / ...</li>
 					<li><u>CMS & progiciels</u> : Wordpress / Prestashop / Joomla / <a href="https://arche-mc2.fr/suite-solis/" target="_blank">Solis</a> / <a href="https://www.multigest.fr/wp-content/uploads/2019/01/plaquette-multigest.pdf" target="_blank">Multigest</a> / MGChange</li>
 					<li><u>Langages</u> :  <a href="https://github.com/ikobootloader/WEB/tree/master/Wiki%20ActiveX" target="_blank"><i>HTML / CSS / JS</i></a> / <a href="https://github.com/ikobootloader/PROJETS-ARDUINO/tree/main" target="_blank"><i>C / C++</i></a> / PHP / SQL</li>
-					<li><u>Autres</u> : JQuery / Bootstrap / POO / se forme à Node.js / Machine learning / Instagram</li>
+					<li><u>Framework / Autres</u> : JQuery / Bootstrap / WAMP / XAMPP / phpMyAdmin / POO / Machine learning</li>
 					<li><a href="https://github.com/ikobootloader/PROJETS-ARDUINO/tree/main/libraries" target="_blank"><i>Création de bibliothèques/pilotes ARDUINO</i></a></li>
-					<li><u>Infographie</u> : Canvas / Inkscape / Gimp / Photoshop / Illustrator / Premiere Pro / InDesign</li>
+					<li><u>Infographie</u> : Canvas / Inkscape / Gimp / Photoshop / Illustrator / Premiere Pro / InDesign / Instagram</li>
+					<li><u>Formation en cours et à venir</u> : Node.js / express.js / mongoDB / Composer / Laravel / Python / Django</li>
 					<li>GPT4o</li>
 				</ul>
 			</aside>
@@ -378,7 +162,7 @@
 	</div>	
 	<!--menu-->
 	<div id="menu-button-container">
-		<div id="menu-button">Détails</div>
+		<div id="menu-button"></div>
     </div>
     <div id="side-menu">
         <ul>
@@ -396,122 +180,7 @@
             <div style="text-align:center;"><button id="close-button">Fermer</button></div>
         </div>
     </div>
-<script src="https://draco.afnizarnur.com/js/jquery.min.js"></script>
-<script src="https://draco.afnizarnur.com/js/typed.min.js"></script>
-<script>
-//Source: https://draco.afnizarnur.com/
-function newTyped(){}$(function(){$("#typed").typed({
-// Change to edit type effect
-strings: ["CORRESPONDANT INFORMATIQUE","RÉFÉRENT DOMAINE APPLICATIF", "TECHNICIEN SUPPORT APPLICATIF", "DÉVELOPPEUR FULL-STACK", "WEBMASTER"],
-
-typeSpeed:90,backDelay:700,contentType:"html",loop:!0,resetCallback:function(){newTyped()}}),$(".reset").click(function(){$("#typed").typed("reset")})});
-    
-//1 clic et affiche !
-document.addEventListener("DOMContentLoaded", function() {
-    // Les parties de l'adresse email
-    var part1 = "contact";
-    var part2 = "frederick-murat";
-    var part3 = "fr";
-
-    // Assembler l'adresse email
-    var email = part1 + "@" + part2 + "." + part3;
-
-    // Ajouter un gestionnaire d'événements au clic à chaque élément avec la classe "email"
-    var emailElements = document.querySelectorAll(".email");
-    emailElements.forEach(function(element) {
-        element.addEventListener("click", function() {
-            // Créer un lien mailto
-            var emailLink = document.createElement("a");
-            emailLink.href = "mailto:" + email;
-            emailLink.textContent = email;
-
-            // Remplacer le texte avec le lien
-            this.innerHTML = "";
-            this.appendChild(emailLink);
-        });
-    });
-});
-
-//pop-up
-document.getElementById('legal-link').addEventListener('click', function(event) {
-event.preventDefault();
-document.querySelector('.container').style.display = 'none';
-document.getElementById('legal-popup').style.display = 'flex';
-});
-
-document.querySelector('.close-button').addEventListener('click', function() {
-	document.getElementById('legal-popup').style.display = 'none';
-	document.querySelector('.container').style.display = 'block';
-});
-
-//menu
-document.addEventListener("DOMContentLoaded", function() {
-    const skills = {
-        "CORRESPONDANT INFORMATIQUE": `<ul>
-            <li><strong>Gestion des systèmes informatiques :</strong> Responsable de la surveillance et de la maintenance des systèmes informatiques pour assurer leur bon fonctionnement.</li>
-            <li><strong>Assistance technique :</strong> Fournit un support technique aux utilisateurs finaux pour résoudre les problèmes informatiques quotidiens.</li>
-            <li><strong>Installation et configuration :</strong> Installe et configure les progiciels, assure les mises à jour nécessaires.</li>
-            <li><strong>Gestion des incidents :</strong> Enregistre et suit les incidents informatiques pour une résolution rapide et efficace.</li>
-            <li><strong>Formation des utilisateurs :</strong> Forme les utilisateurs sur les nouvelles applications et les meilleures pratiques en matière de sécurité informatique.</li>
-        </ul>`,
-        "RÉFÉRENT DOMAINE APPLICATIF": `<ul>
-            <li><strong>Support fonctionnel :</strong> Agit en tant qu'expert dans un domaine applicatif spécifique, fournissant un support fonctionnel aux utilisateurs.</li>
-            <li><strong>Analyse des besoins :</strong> Identifie et analyse les besoins des utilisateurs pour améliorer les applications logicielles.</li>
-            <li><strong>Coordination des projets :</strong> Coordonne les projets de développement et de maintenance des applications avec les équipes techniques.</li>
-            <li><strong>Tests et validation :</strong> Participe aux tests et à la validation des nouvelles fonctionnalités et des mises à jour des applications.</li>
-            <li><strong>Documentation :</strong> Crée et maintient la documentation utilisateur et technique pour les applications.</li>
-        </ul>`,
-        "TECHNICIEN SUPPORT APPLICATIF": `<ul>
-            <li><strong>Support technique :</strong> Fournit un support technique et fonctionnel pour les applications logicielles, aidant les utilisateurs à résoudre les problèmes.</li>
-            <li><strong>Gestion des tickets :</strong> Gère les tickets de support, les priorise et les résout en temps opportun.</li>
-            <li><strong>Surveillance des applications :</strong> Surveille les performances des applications pour identifier et résoudre les problèmes avant qu'ils n'affectent les utilisateurs.</li>
-            <li><strong>Formation des utilisateurs :</strong> Forme les utilisateurs sur l'utilisation des applications et des nouvelles fonctionnalités.</li>
-            <li><strong>Rapports et analyses :</strong> Génère des rapports sur les incidents et les performances des applications pour identifier les tendances et les domaines à améliorer.</li>
-        </ul>`,
-        "DÉVELOPPEUR FULL-STACK": `<ul>
-            <li><strong>Développement front-end :</strong> Conçoit et développe l'interface utilisateur des applications web en utilisant des technologies comme HTML, CSS et JavaScript.</li>
-            <li><strong>Développement back-end :</strong> Développe la logique côté serveur, les bases de données et les API pour soutenir les fonctionnalités de l'application.</li>
-            <li><strong>Intégration :</strong> Intègre le front-end et le back-end pour créer des applications web complètes et fonctionnelles.</li>
-            <li><strong>Tests et débogage :</strong> Effectue des tests et du débogage pour garantir la qualité et les performances de l'application.</li>
-            <li><strong>Collaboration :</strong> Travaille en étroite collaboration avec les designers, les chefs de projet et d'autres développeurs pour mener à bien les projets.</li>
-        </ul>`,
-        "WEBMASTER": `<ul>
-            <li><strong>Gestion de site web :</strong> Responsable de la gestion quotidienne des sites web, y compris la mise à jour du contenu et la maintenance technique.</li>
-            <li><strong>Optimisation des performances :</strong> Optimise la performance des sites web pour assurer des temps de chargement rapides et une bonne expérience utilisateur.</li>
-            <li><strong>Sécurité :</strong> Assure la sécurité des sites web en mettant en œuvre des mesures de protection contre les attaques et les vulnérabilités.</li>
-            <li><strong>Analyse web :</strong> Utilise des outils d'analyse web pour suivre le trafic, le comportement des utilisateurs et les performances des sites.</li>
-            <li><strong>SEO :</strong> Optimise les sites pour les moteurs de recherche (SEO) afin d'améliorer leur visibilité et leur classement.</li>
-        </ul>`
-    };
-
-    document.getElementById('menu-button').addEventListener('click', function() {
-        document.getElementById('side-menu').classList.toggle('visible');
-    });
-
-    document.querySelectorAll('.skill-item').forEach(function(item) {
-        item.addEventListener('click', function() {
-            const skill = item.getAttribute('data-skill');
-            if (skills[skill]) {
-                document.getElementById('title').textContent = skill;
-                document.getElementById('description').innerHTML = skills[skill];
-                document.getElementById('overlay').classList.add('visible');
-                document.getElementById('side-menu').classList.remove('visible');
-            }
-        });
-    });
-
-    document.getElementById('close-button').addEventListener('click', function() {
-        document.getElementById('overlay').classList.remove('visible');
-    });
-
-    document.getElementById('overlay').addEventListener('click', function(event) {
-        if (event.target === this) {
-            this.classList.remove('visible');
-        }
-    });
-});
-
-</script>
+<script src=".\content\functions.js"></script>
 
 </body>
 
