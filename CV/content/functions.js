@@ -9,7 +9,7 @@
 //Source: https://draco.afnizarnur.com/
 function newTyped(){}$(function(){$("#typed").typed({
 // Change to edit type effect
-strings: ["CORRESPONDANT INFORMATIQUE","RÉFÉRENT DOMAINE APPLICATIF", "TECHNICIEN SUPPORT APPLICATIF", "DÉVELOPPEUR FULL-STACK", "WEBMASTER"],
+strings: ["CORRESPONDANT INFORMATIQUE","RÉFÉRENT DOMAINE APPLICATIF", "TECHNICIEN SUPPORT APPLICATIF", "DATA ANALYST", "DÉVELOPPEUR FULL-STACK", "WEBMASTER"],
 
 typeSpeed:90,backDelay:700,contentType:"html",loop:!0,resetCallback:function(){newTyped()}}),$(".reset").click(function(){$("#typed").typed("reset")})});
     
@@ -71,6 +71,13 @@ $(document).ready(function() {
             <li><strong>Formation des utilisateurs :</strong> Forme les utilisateurs sur l'utilisation des applications et des nouvelles fonctionnalités.</li>
             <li><strong>Rapports et analyses :</strong> Génère des rapports sur les incidents et les performances des applications pour identifier les tendances et les domaines à améliorer.</li>
         </ul>`,
+        "DATA ANALYST": `<ul>
+            <li><strong>Analyse des données :</strong> Examine, traite et interprète de grandes quantités de données pour en extraire des insights utiles.</li>
+            <li><strong>Outils et technologies :</strong> Utilise des outils de data analytics tels que SQL, Python, R, et des logiciels de visualisation de données comme Tableau ou Power BI.</li>
+            <li><strong>Rapports et visualisation :</strong> Crée des rapports et des visualisations pour présenter les données de manière compréhensible aux parties prenantes.</li>
+            <li><strong>Modélisation des données :</strong> Développe des modèles de données pour prédire les tendances futures et aider à la prise de décision stratégique.</li>
+            <li><strong>Qualité des données :</strong> Assure la qualité et l'intégrité des données utilisées pour les analyses.</li>
+        </ul>`,
         "DÉVELOPPEUR FULL-STACK": `<ul>
             <li><strong>Développement front-end :</strong> Conçoit et développe l'interface utilisateur des applications web en utilisant des technologies comme HTML, CSS et JavaScript.</li>
             <li><strong>Développement back-end :</strong> Développe la logique côté serveur, les bases de données et les API pour soutenir les fonctionnalités de l'application.</li>
@@ -87,18 +94,37 @@ $(document).ready(function() {
         </ul>`
     };
 
+    const skillKeys = Object.keys(skills);
+    let currentSkillIndex = 0;
+
+    function displaySkill(index) {
+        const skill = skillKeys[index];
+        $('#title').text(skill);
+        $('#description').html(skills[skill]);
+        $('#overlay').addClass('visible');
+        $('#side-menu').removeClass('visible');
+    }
+
     $('#menu-button').on('click', function() {
         $('#side-menu').toggleClass('visible');
     });
 
     $('.skill-item').on('click', function() {
         const skill = $(this).data('skill');
+        currentSkillIndex = skillKeys.indexOf(skill);
         if (skills[skill]) {
-            $('#title').text(skill);
-            $('#description').html(skills[skill]);
-            $('#overlay').addClass('visible');
-            $('#side-menu').removeClass('visible');
+            displaySkill(currentSkillIndex);
         }
+    });
+
+    $('#prev-skill').on('click', function() {
+        currentSkillIndex = (currentSkillIndex > 0) ? currentSkillIndex - 1 : skillKeys.length - 1;
+        displaySkill(currentSkillIndex);
+    });
+
+    $('#next-skill').on('click', function() {
+        currentSkillIndex = (currentSkillIndex < skillKeys.length - 1) ? currentSkillIndex + 1 : 0;
+        displaySkill(currentSkillIndex);
     });
 
     $('#close-button').on('click', function() {
@@ -111,3 +137,4 @@ $(document).ready(function() {
         }
     });
 });
+

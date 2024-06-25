@@ -94,11 +94,11 @@
 				<ul>
 					<li><u>Bureautique</u> : Word / Excel / Outlook / SAP BO / GLPI / EasyVista / Powerpoint / Teams / Notepad++ / FileZilla / Drive / Dropbox / GitHub Desktop / Obsidian / Arduino IDE / Gmail / Zimbra / ...</li>
 					<li><u>CMS & progiciels</u> : Wordpress / Prestashop / Joomla / <a href="https://arche-mc2.fr/suite-solis/" target="_blank">Solis</a> / <a href="https://www.multigest.fr/wp-content/uploads/2019/01/plaquette-multigest.pdf" target="_blank">Multigest</a> / MGChange</li>
-					<li><u>Langages</u> :  <a href="https://github.com/ikobootloader/WEB/tree/master/Wiki%20ActiveX" target="_blank"><i>HTML / CSS / JS</i></a> / <a href="https://github.com/ikobootloader/PROJETS-ARDUINO/tree/main" target="_blank"><i>C / C++</i></a> / PHP / SQL</li>
-					<li><u>Framework / Autres</u> : JQuery / Bootstrap / WAMP / XAMPP / phpMyAdmin / POO / Machine learning</li>
-					<li><a href="https://github.com/ikobootloader/PROJETS-ARDUINO/tree/main/libraries" target="_blank"><i>Création de bibliothèques/pilotes ARDUINO</i></a></li>
+					<li><u>Langages</u> :  <a href="https://github.com/ikobootloader/WEB/tree/master/Wiki%20ActiveX" target="_blank">HTML / CSS / JS</a> / <a href="https://github.com/ikobootloader/PROJETS-ARDUINO/tree/main" target="_blank">C / C++</a> / PHP / SQL</li>
+					<li><u>Framework / Autres</u> : JQuery / Bootstrap / WAMP / XAMPP / phpMyAdmin / mongoDB / POO / Machine learning</li>
+					<li><a href="https://github.com/ikobootloader/PROJETS-ARDUINO/tree/main/libraries" target="_blank">Création de bibliothèques/pilotes ARDUINO</a></li>
 					<li><u>Infographie</u> : Canvas / Inkscape / Gimp / Photoshop / Illustrator / Premiere Pro / InDesign / Instagram</li>
-					<li><u>Formation en cours et à venir</u> : Node.js / express.js / mongoDB / Composer / Laravel / Python / Django</li>
+					<li><u>Formation en cours et à venir</u> : Node.js / express.js / Composer / Laravel / Python / Django</li>
 					<li>GPT4o</li>
 				</ul>
 			</aside>
@@ -169,17 +169,23 @@
             <li class="skill-item" data-skill="CORRESPONDANT INFORMATIQUE">CORRESPONDANT INFORMATIQUE</li>
             <li class="skill-item" data-skill="RÉFÉRENT DOMAINE APPLICATIF">RÉFÉRENT DOMAINE APPLICATIF</li>
             <li class="skill-item" data-skill="TECHNICIEN SUPPORT APPLICATIF">TECHNICIEN SUPPORT APPLICATIF</li>
+			<li class="skill-item" data-skill="DATA ANALYST">DATA ANALYST</li>
             <li class="skill-item" data-skill="DÉVELOPPEUR FULL-STACK">DÉVELOPPEUR FULL-STACK</li>
             <li class="skill-item" data-skill="WEBMASTER">WEBMASTER</li>
         </ul>
     </div>
-    <div id="overlay">
-        <div class="slide-in">
-            <h2 id="title"></h2>
-            <p id="description"></p>
-            <div style="text-align:center;"><button id="close-button">Fermer</button></div>
-        </div>
-    </div>
+	<div id="overlay">
+		<div class="slide-in">
+			<h2 id="title"></h2>
+			<p id="description"></p>
+			<div id="skill-navigation" style="display: flex; justify-content: space-between;">
+				<button id="prev-skill">←</button>
+				<button id="next-skill">→</button>
+			</div>
+			<div style="text-align:center;"><button id="close-button">Fermer</button></div>
+		</div>
+	</div>
+
 <script src=".\content\functions.js"></script>
 
 </body>
