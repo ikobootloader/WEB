@@ -1,122 +1,420 @@
-﻿<!DOCTYPE html>
-
+<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <title>Frédérick MURAT - Curriculum Vitæ</title>
     <link rel="icon" href=".\content\v.png">
-	<link rel="stylesheet" href=".\content\styles.css"> 
-    <meta name="description" content="Curriculum Vitæ de Frédérick MURAT. Le CV démontre une forte polyvalence avec une large gamme de compétences techniques et une expérience significative en gestion de projets, développement web, analyse de données et administration de systèmes. De plus, l'expérience en formation, marketing, commercialisation et protection des données souligne une capacité à s'adapter et à répondre à divers besoins organisationnels.">
+    <meta name="description" content="Curriculum Vitæ de Frédérick MURAT. Bientôt 7 années d'expérience au service informatique d'une Maison Départementale à l'Autonomie, guichet unique d'accès simplifié aux droits et prestations pour les personnes en situation de handicap et les personnes âgées dépendantes.">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+			padding: 0;
+            background-color: transparent;
+            width: 100%;
+            height: 100%;			
+        }
+        .container {
+            max-width: 800px;
+            margin: 50px auto 0 auto;
+            background-color: #fff;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+			border-radius: 10px;
+        }
+        h1, h2 {
+            color: #333;
+        }
+		
+		/** Animation **/
+		h1 {
+		  font-size: 2em;
+		  color: #333;
+		  position: relative;
+		  display: inline-block;
+		  padding: 5px;
+		}
+		h1::before, h1::after, h1 span::before, h1 span::after {
+		  content: '';
+		  position: absolute;
+		  background-color: #333;
+		  transition: all 1s ease-in-out;
+		}
+		h1::before {
+		  width: 0;
+		  height: 2px;
+		  left: 0;
+		  bottom: 0;
+		  animation: underline 2s forwards;
+		}
+		
+		@keyframes underline {
+		  0% {
+			width: 0;
+		  }
+		  100% {
+			width: 100%;
+		  }
+		}
+		@keyframes uprightside {
+		  0% {
+			height: 0;
+		  }
+		  100% {
+			height: 100%;
+		  }
+		}
+		@keyframes upleftside {
+		  0% {
+			height: 0;
+		  }
+		  100% {
+			height: 100%;
+		  }
+		}
+		@keyframes topborder {
+		  0% {
+			width: 0;
+		  }
+		  100% {
+			width: 100%;
+		  }
+		}
+		
+		#legal-link {
+			display: block;
+			margin-top: 20px;
+			text-decoration:none;
+			cursor: pointer;
+		}
 
+		.popup {
+			display: none;
+			position: fixed;
+			top: 0;
+			left: 0;
+			width: 100%;
+			height: 100%;
+			background-color: rgba(0, 0, 0, 0.8);
+			justify-content: center;
+			align-items: center;
+		}
+
+		.popup-content {
+			background-color: white;
+			padding: 20px;
+			border-radius: 5px;
+			width: 80%;
+			height: 80%;
+			overflow-y: auto;
+			position: relative;
+		}
+
+		.close-button {
+			position: absolute;
+			top: 10px;
+			left: 10px;
+			font-size: 24px;
+			cursor: pointer;
+		}	
+		
+		small {
+			color : white;
+			font-weight: bold;
+		}
+		
+		/** hr **/
+		/* Styles pour les lignes horizontales */
+		hr {
+			border: 0;
+			height: 1px;
+			background: linear-gradient(to right, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0));
+			width: 0;
+			opacity: 0;
+			transition: width 1s ease, opacity 1s ease;
+		}
+
+		/* Classe pour l'animation */
+		hr.animate {
+			width: 100%;
+			opacity: 1;
+		}
+		
+		/**MENU**/
+		
+		
+		#menu-button-container {
+		position: fixed;
+		top: 0;
+		right: 0;
+		z-index: 1001;
+		width: 0;
+		height: 0;
+		}
+
+
+		#menu-button {
+			width: 0;
+			height: 0;
+			border-top: 150px solid transparent;
+			border-left: 150px solid black;
+			cursor: pointer;
+			transform: rotate(45deg);
+			transform-origin: top right;
+			transition: border-left-color 0.3s;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			color: white;
+			font-weight: bold;
+		}
+
+		#menu-button:hover {
+			border-left-color: #aaa;
+		}
+
+		#side-menu {
+			position: fixed;
+			top: 0;
+			right: -400px;
+			width: 300px;
+			height: 100%;
+			background: #494949;
+			color: white;
+			transition: right 0.3s ease;
+			z-index: 1000;
+			padding: 20px;
+			box-shadow: -2px 0 5px rgba(0, 0, 0, 0.5);
+		}
+
+		#side-menu ul {
+			list-style-type: none;
+			padding: 0;
+		}
+
+		#side-menu li {
+			margin: 10px 0;
+			cursor: pointer;
+		}
+
+		#side-menu.visible {
+			right: 0;
+		}
+
+		#overlay {
+			position: fixed;
+			top: 0;
+			right: -100%;
+			width: 100%;
+			height: 100%;
+			background: rgba(0, 0, 0, 0.8);
+			color: white;
+			transition: right 0.5s ease;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			z-index: 999;
+		}
+
+		.slide-in {
+			width: 80%;
+			max-width: 600px;
+			padding: 20px;
+			background: #333;
+			border-radius: 10px;
+			box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+		}
+
+		#title {
+			margin-top: 0;
+			margin-left: 15px;
+		}
+
+		#overlay.visible {
+			right: 0;
+		}
+
+		#close-button {
+			margin-top: 20px;
+			padding: 10px 20px;
+			font-size: 16px;
+			cursor: pointer;
+			color: white;
+			border: none;
+			border-radius: 5px;
+			transition: background-color 0.3s;
+		}
+		
+		/** **/	
+        .section {
+            margin-bottom: 30px;
+			margin-top: 30px;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.5s ease, transform 0.5s ease;
+        }
+        .job {
+            margin-bottom: 15px;
+        }
+        .job-title {
+            font-weight: bold;
+			font-size: large;
+        }
+        .job-date {
+            color: #666;
+            font-style: italic;
+        }
+        /* Styles pour les barres de progression */
+        .skill {
+            margin-bottom: 10px;
+        }
+        .skill-name {
+            display: inline-block;
+            width: 120px;
+        }
+        .skill-bar {
+            background-color: #ddd;
+            height: 20px;
+            width: 300px;
+            display: inline-block;
+        }
+        .skill-level {
+            background-color: #4CAF50;
+            height: 100%;
+            width: 0;
+            transition: width 1s ease-in-out;
+        }
+
+        /* Animation pour le changement de section */
+        .fade-out {
+            opacity: 0;
+            transform: translateY(-20px);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+        .fade-in {
+            opacity: 1;
+            transform: translateY(0);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+		
+		/** Background**/
+
+		#waveCanvas{
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+		}		
+    </style>
+</head>
 <body>
-   <main class="container">
+	<canvas id="waveCanvas"></canvas>
+    
+    <div class="container">
         <header>
-            <h1 style="margin-bottom:0px;"><span>Frédérick Murat</span></h1>
-			<p><span class="email" style="cursor: pointer;">cliquez ici pour afficher l'adresse mail de contact</span></p>
+            <h1><span>Frédérick Murat</span></h1>
+            <p>Email: <span class="email" style="cursor: pointer;">cliquez ici pour afficher l'adresse mail de contact</span></p>
         </header>
-		<section>
-				<header>
-					<div style="height:100px;">
-					<h2><span id="typed"></span></h2>
-					<p><b>Spécialisé dans le secteur médico-social</b></p>
-					</div>
-				</header>
-				<aside class="experience">
-					<h3>Correspondant / Référent informatique - Maison Départementale à l'Autonomie de l'Orne</h3>
-					<p>2017 à aujourd'hui</p>
-					<ul>
-						<li><b>Administration et Maintenance logicielles</b> (SOLIS MDPH/GED MULTIGEST)</li>
-						<li><b>Suivi de projets informatiques</b> en collaboration avec la CNSA, les éditeurs et la DSI</li>
-						<li><b>Gestion de flux dématérialisés</b> (CAF, ViaTrajectoire, Imprimerie Nationale, Education Nationale, CNSA)</li>
-						<li><b>Analyse de données</b> : collecte, nettoyage, analyse statistique et visualisation (SAP BO)</li>
-						<li><b>Publipostage et Modèles de Courriers</b> : Création et gestion en lien avec le SI</li>
-						<li><b>Formation et support technique</b></li>
-						<li><b>Délégué à la protection des données</b> (jusqu'en 2023) / <b>Référent informatique et liberté</b></li>
-						<li><b>Webmastering</b></li>
-					</ul>
-				</aside>
-				<aside class="experience">
-					<h3>Développeur / Chef de projet Web - AZNETWORK</h3>
-					<p>2014 - 2016</p>
-					<ul>
-						<li><b>Commercialisation BtoB</b> : marketing, prospection et vente</li>
-						<li><b>Gestion de projets</b> : étude, élaboration du cahier des charges, réponse aux appels d'offres</li>
-						<li><b>Webdesign et infographie</b> : proposition de maquettes et d’architectures web</li>
-						<li><b>Développement Frontend et Backend</b></li>
-						<li><b>Campagne d’emailing</b></li>
-						<li><b>Maintenance / SEO / Rédaction de guides techniques</b></li>
-						<li><b>Conseil, audit et formation</b></li>
-						<li><b>Webmastering</b></li>
-					</ul>
-				</aside>
-				<aside class="experience">
-					<h3>Développeur freelance - AE Webdev61</h3>
-					<p>2013 - 2015</p>
-					<ul>
-						<li><b>Commercialisation BtoB</b> : marketing, prospection et vente</li>
-						<li><b>Gestion complète de projets web</b></li>
-						<li><b>Ingénierie web, webdesign, éditorial web</b></li>
-						<li><b>Webmarketing / PAO</b> (prospectus, cartes de visite, book, etc.)</li>
-						<li><b>Maintenance / SEO / Rédaction de guides techniques</b></li>
-						<li><b>Conseil, audit et formation</b></li>
-						<li><b>Webmastering</b></li>
-					</ul>
-				</aside>
-			<!--</aside>-->
-		</section>
-		<section>
-			<aside>
-				<h2>Formations</h2>
-				<div>
-					<h3>Correspondant informatique dans le secteur médico-social</h3>
-					<p>Depuis 2017</p>
-					<p><u>Bientôt 7 années d'expérience</u> au service informatique d'une Maison Départementale à l'Autonomie, guichet unique d'accès simplifié aux droits et prestations pour les personnes en situation de handicap et les personnes âgées dépendantes.<p>
-				</div>
-				<div>
-					<h3>DUT Informatique et Communication</h3>
-					<p>2007</p>
-					<p>Diplôme Universitaire en Communication visuelle, Multimédia et Audiovisuel (Option Éducation aux Technologies de l'Image, de la Communication et du Son)</p>
-				</div>
-				<div class="education">
-					<h3>Certificat d’Aptitude Professionnelle</h3>
-					<p>2007</p>
-					<p>Multimédia et audiovisuel</p>
-				</div>
-				<div class="education">
-					<h3>Baccalauréat Comptabilité/Gestion</h3>
-					<p>2002</p>
-				</div>
-			</aside>
-			<aside>
-				<h2>Compétences Logicielles et CMS</h2>
-				<ul>
-					<li><u>Bureautique</u> : Word / Excel / Outlook / SAP BO / GLPI / EasyVista / Powerpoint / Teams / Notepad++ / FileZilla / Drive / Dropbox / GitHub Desktop / Obsidian / Arduino IDE / Gmail / Zimbra / ...</li>
-					<li><u>CMS & progiciels</u> : Wordpress / Prestashop / Joomla / <a href="https://arche-mc2.fr/suite-solis/" target="_blank">Solis</a> / <a href="https://www.multigest.fr/wp-content/uploads/2019/01/plaquette-multigest.pdf" target="_blank">Multigest</a> / MGChange</li>
-					<li><u>Langages</u> :  <a href="https://github.com/ikobootloader/WEB/tree/master/Wiki%20ActiveX" target="_blank">HTML / CSS / JS</a> / <a href="https://github.com/ikobootloader/PROJETS-ARDUINO/tree/main" target="_blank">C / C++</a> / PHP / SQL</li>
-					<li><u>Framework / Autres</u> : JQuery / Bootstrap / WAMP / XAMPP / phpMyAdmin / mongoDB / POO / Machine learning</li>
-					<li><a href="https://github.com/ikobootloader/PROJETS-ARDUINO/tree/main/libraries" target="_blank">Création de bibliothèques/pilotes ARDUINO</a></li>
-					<li><u>Infographie</u> : Canvas / Inkscape / Gimp / Photoshop / Illustrator / Premiere Pro / InDesign / Instagram</li>
-					<li><u>Formation en cours et à venir</u> : Node.js / express.js / Composer / Laravel / Python / Django</li>
-					<li>GPT4o</li>
-				</ul>
-			</aside>
-			<aside>
-				<h2>Informations Complémentaires</h2>
-				<ul>
-					<li>Anglais niveau B2</li>
-					<li>Permis B - voiture</li>
-					<li>Certification RGPD CNIL</li>
-					<li>Autonome, rigoureux, autodidacte, créatif, multipotentiel</li>
-					<li>Veille technologique</li>
-					<li>Loisirs : peinture, ingénierie électronique, écriture, musique</li>
-				</ul>
-			</aside>
-		</section>
-    </main>
-	<footer>
+
+        <section id="resume" class="section">
+            <h2>Résumé</h2>
+            <p style="font-size: large;"><b>Administrateur de logiciels et analyste de données dans le secteur médico-social</b></p>
+			<p>Bientôt 7 années d'expérience au service informatique d'une Maison Départementale à l'Autonomie, guichet unique d'accès simplifié aux droits et prestations pour les personnes en situation de handicap et les personnes âgées dépendantes.</p>
+        </section>
+		
 		<hr>
+
+        <section id="experience" class="section">
+            <h2>Expériences Professionnelles</h2>
+            <div class="job">
+                <p class="job-title">Administrateur et Référent Support Applicatif / Analyste de données</p>
+                <p class="job-date">Maison Départementale à l'Autonomie de l'Orne | 2017 à aujourd'hui</p>
+				<ul>
+					<li><b>Administration et Maintenance logicielles</b> (SOLIS MDPH/GED MULTIGEST)</li>
+					<li><b>Suivi de projets informatiques</b> en collaboration avec la CNSA, les éditeurs et la DSI</li>
+					<li><b>Gestion de flux dématérialisés</b> (CAF, ViaTrajectoire, Imprimerie Nationale, Education Nationale, CNSA)</li>
+					<li><b>Analyse de données</b> : collecte, nettoyage, analyse statistique et visualisation (SAP BO)</li>
+					<li><b>Publipostage et Modèles de Courriers</b> : Création et gestion en lien avec le SI</li>
+					<li><b>Formation et support technique</b></li>
+					<li><b>Délégué à la protection des données</b> (jusqu'en 2023) / <b>Référent informatique et liberté</b></li>
+					<li><b>Référent informatique</b></li>
+					<li><b>Webmaster</b></li>
+				</ul>
+            </div>
+            <div class="job">
+                <p class="job-title">Développeur Full-Stack / Chef de projet Web / Webmaster</p>
+                <p class="job-date">AZNETWORK | 2014 - 2016</p>
+				<ul>
+					<li><b>Commercialisation BtoB</b> : marketing, prospection et vente</li>
+					<li><b>Gestion de projets</b> : étude, élaboration du cahier des charges, réponse aux appels d'offres</li>
+					<li><b>Webdesign et infographie</b> : proposition de maquettes et d’architectures web</li>
+					<li><b>Développement Frontend et Backend</b></li>
+					<li><b>Campagne d’emailing</b></li>
+					<li><b>Maintenance / SEO / Rédaction de guides techniques</b></li>
+					<li><b>Conseil, audit et formation</b></li>
+					<li><b>Webmastering</b></li>
+				</ul>
+            </div>
+            <div class="job">
+                <p class="job-title">Développeur Full-Stack en freelance</p>
+                <p class="job-date">AE Webdev61 | 2013 - 2015</p>
+				<ul>
+					<li><b>Commercialisation BtoB</b> : marketing, prospection et vente</li>
+					<li><b>Gestion complète de projets web</b></li>
+					<li><b>Ingénierie web, webdesign, éditorial web</b></li>
+					<li><b>Webmarketing / PAO</b> (prospectus, cartes de visite, book, etc.)</li>
+					<li><b>Maintenance / SEO / Rédaction de guides techniques</b></li>
+					<li><b>Conseil, audit et formation</b></li>
+					<li><b>Webmastering</b></li>
+				</ul>
+            </div>
+        </section>
+		
+		<hr>
+
+        <section id="formation" class="section">
+            <h2>Formation</h2>
+			<ul>
+            <li><strong>DUT Informatique et Communication</strong> - Université de La Réunion, 2007</li>
+            <li><strong>Certificat d’Aptitude Professionnelle en Audiovisuelle</strong> - Université de La Réunion, 2007</li>
+			<li><strong>Baccalauréat Comptabilité-Gestion</strong> - Lycée Perseigne, 2002</li>
+			</ul>
+        </section>
+		
+		<hr>
+
+        <section id="competences" class="section">
+            <h2>Compétences</h2>
+			<ul>
+				<li><u>Bureautique</u> : Word / Excel / Outlook / SAP BO / GLPI / EasyVista / Powerpoint / Teams / Notepad++ / FileZilla / Drive / Dropbox / GitHub Desktop / Obsidian / Arduino IDE / Gmail / Zimbra / ...</li>
+				<li><u>CMS &amp; progiciels</u> : Wordpress / Prestashop / Joomla / <a href="https://arche-mc2.fr/suite-solis/" target="_blank">Solis</a> / <a href="https://www.multigest.fr/wp-content/uploads/2019/01/plaquette-multigest.pdf" target="_blank">Multigest</a> / MGChange</li>
+				<li><u>Langages</u> :  <a href="https://github.com/ikobootloader/WEB/tree/master/Wiki%20ActiveX" target="_blank">HTML / CSS / JS</a> / <a href="https://github.com/ikobootloader/PROJETS-ARDUINO/tree/main" target="_blank">C / C++</a> / PHP / SQL</li>
+				<li><u>Framework / Autres</u> : JQuery / Bootstrap / WAMP / XAMPP / phpMyAdmin / mongoDB / POO / Machine learning</li>
+				<li><a href="https://github.com/ikobootloader/PROJETS-ARDUINO/tree/main/libraries" target="_blank">Création de bibliothèques/pilotes ARDUINO</a></li>
+				<li><u>Infographie</u> : Canvas / Inkscape / Gimp / Photoshop / Illustrator / Premiere Pro / InDesign / Instagram</li>
+				<li><u>Formation en cours et à venir</u> : Node.js / express.js / Composer / Laravel / Python / Django</li>
+			</ul>
+        </section>
+		
+		<hr>
+		
+        <section id="infoComp" class="section">
+            <h2>Informations complémentaires</h2>	
+			<ul>
+				<li>Anglais niveau B2</li>
+				<li>Permis B - voiture</li>
+				<li>Certification RGPD CNIL</li>
+				<li>Autonome, rigoureux, autodidacte, créatif</li>
+				<li>Veille technologique</li>
+				<li>Loisirs : peinture, ingénierie électronique, écriture, musique</li>
+			</ul>			
+		</section>
+    </div>
+	<footer>
 		<p style="text-align:center;">
 			<a href="#" id="legal-link"><small>Mentions légales</small></a>
 		</p>
@@ -124,28 +422,28 @@
 	<!--popup-->
 	<div id="legal-popup" class="popup">
 		<div class="popup-content">
-			<span class="close-button">&times;</span>
+			<span class="close-button">×</span>
             <h2>1 - Édition du site</h2>
 			En vertu de l'article 6 de la loi n° 2004-575 du 21 juin 2004 pour la confiance dans l'économie numérique, il est précisé aux utilisateurs du site internet http://frederick-murat.fr l'identité des différents intervenants dans le cadre de sa réalisation et de son suivi:
-			</br>
+			<br>
 			Propriétaire du site : Murat Frédérick - Contact : <span class="email" style="cursor: pointer;">cliquez ici pour afficher l'adresse mail de contact</span>
-			</br>
+			<br>
 			Directeur de la publication : Murat Frédérick - Contact : <span class="email" style="cursor: pointer;">cliquez ici pour afficher l'adresse mail de contact</span>.
-			</br>
+			<br>
 			Hébergeur : OVH SAS - 2 rue Kellermann - BP 80157 - 59053 Roubaix Cedex 1
 
 			<h2>2 - Propriété intellectuelle et contrefaçons.</h2>
 			Murat Frédérick est propriétaire des droits de propriété intellectuelle et détient les droits d’usage sur tous les éléments accessibles sur le site internet, notamment les textes, images, graphismes, logos, vidéos, architecture, icônes et sons.
 
 			Toute reproduction, représentation, modification, publication, adaptation de tout ou partie des éléments du site, quel que soit le moyen ou le procédé utilisé, est interdite, sauf autorisation écrite préalable au propriétaire du site.
-			</br>
+			<br>
 			Toute exploitation non autorisée du site ou de l’un quelconque des éléments qu’il contient sera considérée comme constitutive d’une contrefaçon et poursuivie conformément aux dispositions des articles L.335-2 et suivants du Code de Propriété Intellectuelle.
 
 			<h2>3 - Limitations de responsabilité.</h2>
 			Le propriétaire du site ne pourra être tenu pour responsable des dommages directs et indirects causés au matériel de l’utilisateur, lors de l’accès au site http://frederick-murat.fr.
-			</br>
+			<br>
 			Le propriétaire du site décline toute responsabilité quant à l’utilisation qui pourrait être faite des informations et contenus présents sur http://frederick-murat.fr.
-			</br>
+			<br>
 			Le propriétaire du site s’engage à sécuriser au mieux le site http://frederick-murat.fr, cependant sa responsabilité ne pourra être mise en cause si des données indésirables sont importées et installées sur son site à son insu.
 
 			<h2>4 - CNIL et gestion des données personnelles.</h2>
@@ -153,41 +451,194 @@
 
 			<h2>5 - Liens hypertextes et cookies</h2>
 			Le site http://frederick-murat.fr contient des liens hypertextes vers d’autres sites et dégage toute responsabilité à propos de ces liens externes ou des liens créés par d’autres sites vers http://frederick-murat.fr.
-			</br>
+			<br>
 			Le propriétaire du site n'a pas prévu l'utilisation de cookie. Un "cookie" est un fichier de petite taille qui enregistre des informations relatives à la navigation d’un utilisateur sur un site. Les données ainsi obtenues permettent d'obtenir des mesures de fréquentation, par exemple.
 
 			<h2>6 - Droit applicable et attribution de juridiction.</h2>
 			Tout litige en relation avec l’utilisation du site http://frederick-murat.fr est soumis au droit français. En dehors des cas où la loi ne le permet pas, il est fait attribution exclusive de juridiction aux tribunaux compétents.
 		</div>
-	</div>	
-	<!--menu-->
-	<div id="menu-button-container">
-		<div id="menu-button"></div>
-    </div>
-    <div id="side-menu">
-        <ul>
-            <li class="skill-item" data-skill="CORRESPONDANT INFORMATIQUE">CORRESPONDANT INFORMATIQUE</li>
-            <li class="skill-item" data-skill="RÉFÉRENT DOMAINE APPLICATIF">RÉFÉRENT DOMAINE APPLICATIF</li>
-            <li class="skill-item" data-skill="TECHNICIEN SUPPORT APPLICATIF">TECHNICIEN SUPPORT APPLICATIF</li>
-			<li class="skill-item" data-skill="DATA ANALYST">DATA ANALYST</li>
-            <li class="skill-item" data-skill="DÉVELOPPEUR FULL-STACK">DÉVELOPPEUR FULL-STACK</li>
-            <li class="skill-item" data-skill="WEBMASTER">WEBMASTER</li>
-        </ul>
-    </div>
-	<div id="overlay">
-		<div class="slide-in">
-			<h2 id="title"></h2>
-			<p id="description"></p>
-			<div id="skill-navigation" style="display: flex; justify-content: space-between;">
-				<button id="prev-skill">←</button>
-				<button id="next-skill">→</button>
-			</div>
-			<div style="text-align:center;"><button id="close-button">Fermer</button></div>
-		</div>
 	</div>
+	<script src=".\content\functions.js"></script>
+	<script>
+        const canvas = document.getElementById('waveCanvas');
+        const ctx = canvas.getContext('2d');
 
-<script src=".\content\functions.js"></script>
+        let width, height, particles, movingParticles;
+        let mouseX = 0, mouseY = 0;
+        let lastMouseX = 0, lastMouseY = 0;
 
+        function resizeCanvas() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            initParticles();
+            initMovingParticles();
+        }
+
+        function initParticles() {
+            particles = [];
+            const rows = 100;
+            const cols = 200;
+
+            for (let i = 0; i < rows; i++) {
+                for (let j = 0; j < cols; j++) {
+                    particles.push({
+                        x: width * j / cols,
+                        y: height * i / rows,
+                        originX: width * j / cols,
+                        originY: height * i / rows,
+                        color: `rgba(100, 200, 255, 0.5)`,
+                        size: 0.5,
+                        vx: 0,
+                        vy: 0
+                    });
+                }
+            }
+        }
+
+        function initMovingParticles() {
+            movingParticles = [];
+            for (let i = 0; i < 20; i++) { // Number of moving particles
+                movingParticles.push({
+                    x: Math.random() * width,
+                    y: Math.random() * height,
+                    color: `rgba(100, 200, 255, 0.8)`,
+                    size: 2,
+                    vx: (Math.random() - 0.5) * 2,
+                    vy: (Math.random() - 0.5) * 2
+                });
+            }
+        }
+
+        function applyAttractionAndRotation() {
+            for (let i = 0; i < movingParticles.length; i++) {
+                for (let j = i + 1; j < movingParticles.length; j++) {
+                    const p1 = movingParticles[i];
+                    const p2 = movingParticles[j];
+                    const distX = p2.x - p1.x;
+                    const distY = p2.y - p1.y;
+                    const distance = Math.sqrt(distX * distX + distY * distY);
+
+                    if (distance < 50) { // Adjust interaction radius as needed
+                        // Attraction force
+                        const force = Math.min(500 / (distance * distance), 5);
+                        const angle = Math.atan2(distY, distX);
+
+                        const fx = Math.cos(angle) * force;
+                        const fy = Math.sin(angle) * force;
+
+                        p1.vx += fx;
+                        p1.vy += fy;
+
+                        p2.vx -= fx;
+                        p2.vy -= fy;
+
+                        // Tangential force for rotation
+                        const tangentialForce = 0.05;
+                        const tangentialAngle = angle + Math.PI / 2;
+
+                        const tx = Math.cos(tangentialAngle) * tangentialForce;
+                        const ty = Math.sin(tangentialAngle) * tangentialForce;
+
+                        p1.vx += tx;
+                        p1.vy += ty;
+
+                        p2.vx -= tx;
+                        p2.vy -= ty;
+
+                        // Collision detection and merging
+                        if (distance < p1.size + p2.size) {
+                            p1.size += p2.size;
+                            movingParticles.splice(j, 1); // Remove merged particle
+                            j--;
+                        }
+                    }
+                }
+            }
+        }
+
+        function animate() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+            ctx.fillRect(0, 0, width, height);
+
+            const dx = mouseX - lastMouseX;
+            const dy = mouseY - lastMouseY;
+            const mouseSpeed = Math.sqrt(dx * dx + dy * dy);
+
+            for (let i = 0; i < particles.length; i++) {
+                const p = particles[i];
+                const distX = mouseX - p.originX;
+                const distY = mouseY - p.originY;
+                const distance = Math.sqrt(distX * distX + distY * distY);
+                const force = Math.min(5000 / (distance * distance), 50);
+                const angle = Math.atan2(distY, distX);
+
+                const targetX = p.originX + Math.cos(angle) * force * mouseSpeed * 0.05;
+                const targetY = p.originY + Math.sin(angle) * force * mouseSpeed * 0.05;
+
+                p.vx += (targetX - p.x) * 0.05;
+                p.vy += (targetY - p.y) * 0.05;
+
+                p.vx *= 0.95;
+                p.vy *= 0.95;
+
+                p.x += p.vx;
+                p.y += p.vy;
+
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fillStyle = p.color;
+                ctx.fill();
+            }
+
+            // Apply attraction and rotation forces between moving particles
+            applyAttractionAndRotation();
+
+            // Update moving particles
+            for (let i = 0; i < movingParticles.length; i++) {
+                const mp = movingParticles[i];
+                mp.x += mp.vx;
+                mp.y += mp.vy;
+
+                if (mp.x > width || mp.x < 0) mp.vx *= -1;
+                if (mp.y > height || mp.y < 0) mp.vy *= -1;
+
+                ctx.beginPath();
+                ctx.arc(mp.x, mp.y, mp.size, 0, Math.PI * 2);
+                ctx.fillStyle = mp.color;
+                ctx.fill();
+
+                // Impact on nearby particles
+                for (let j = 0; j < particles.length; j++) {
+                    const p = particles[j];
+                    const distX = mp.x - p.x;
+                    const distY = mp.y - p.y;
+                    const distance = Math.sqrt(distX * distX + distY * distY);
+                    if (distance < 50) { // Adjust impact radius as needed
+                        const force = Math.min(2000 / (distance * distance), 30);
+                        const angle = Math.atan2(distY, distX);
+
+                        p.vx += Math.cos(angle) * force;
+                        p.vy += Math.sin(angle) * force;
+                    }
+                }
+            }
+
+            lastMouseX = mouseX;
+            lastMouseY = mouseY;
+
+            requestAnimationFrame(animate);
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        window.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+        });
+
+        resizeCanvas();
+        animate();
+	</script>
 </body>
-
 </html>
