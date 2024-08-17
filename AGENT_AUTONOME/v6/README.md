@@ -1,5 +1,3 @@
-Vous soulevez des points très intéressants. Examinons la méthode d'exploration actuelle et ses implications pour un agent motorisé réel.
-
 La méthode d'exploration actuelle n'est pas optimale pour plusieurs raisons :
 
 1. Manque de mémoire à long terme : L'agent ne garde pas une trace complète des zones déjà explorées. Il peut donc revisiter inutilement les mêmes zones.
