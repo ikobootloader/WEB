@@ -1,7 +1,7 @@
 /**
 AGENT AUTONOME SANS ETAT TERMINAL - APPROCHE HEURISTIQUE - 2024
 **/
-
+//TODO: l'exploration doit tenir compte de la quantité d'énergie restante et du point de recharge le plus proche!
 document.addEventListener("DOMContentLoaded", () => {
     const canvas = document.getElementById('territory');
     const ctx = canvas.getContext('2d');
