@@ -218,10 +218,31 @@ document.addEventListener("DOMContentLoaded", () => {
         tooltip: createTooltip(),
     };
 	
+    let isRunning = true;
     let moveInterval;
+
+    const playPauseBtn = document.getElementById('playPauseBtn');
+
+    function toggleSimulation() {
+        if (isRunning) {
+            clearInterval(moveInterval);
+            playPauseBtn.textContent = 'Play';
+        } else {
+            moveInterval = setInterval(() => {
+                moveAgent();
+                redrawAll();
+            }, 100);
+            playPauseBtn.textContent = 'Pause';
+        }
+        isRunning = !isRunning;
+    }
+
+    playPauseBtn.addEventListener('click', toggleSimulation);
 
     function stopSimulation() {
         clearInterval(moveInterval);
+        isRunning = false;
+        playPauseBtn.textContent = 'Play';
     }
 
     const agent = new Agent(
