@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exploration optimale avec récompenses et obstacles</title>
+    <style>
+        canvas {
+            border: 1px solid black;
+            background-color: #f0f0f0;
+        }
+        .info {
+            margin-top: 10px;
+        }
+        .explanation {
+            margin-left: 20px;
+            max-width: 400px;
+			max-height: 600px;
+			overflow: auto;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        .container {
+            display: flex;
+            align-items: flex-start;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <canvas id="territory" width="600" height="600"></canvas>
+		<div class="explanation">
+		<h2>Explication détaillée du code</h2>
+
+		<p>Ce code JavaScript implémente une simulation où un agent explore une grille représentant un territoire. La grille est divisée en cellules, et chaque cellule peut contenir un obstacle, une récompense, ou être vide. L'agent doit naviguer dans cet environnement pour collecter des récompenses tout en évitant les obstacles.</p>
+
+		<h3>Initialisation de l'environnement</h3>
+
+		<p>Le script commence par initialiser le canvas où la simulation sera affichée, ainsi que diverses variables comme la taille des cellules, la santé de l'agent, et les paramètres de la grille. Les obstacles et les récompenses sont générés aléatoirement sur la grille, avec une modification importante : une cellule ne peut plus être à la fois un obstacle et une récompense.</p>
+
+		<h3>Fonctions principales</h3>
+
+		<h4>1. <code>generateObstaclesAndRewards()</code></h4>
+
+		<p>Cette fonction a été modifiée pour s'assurer qu'une cellule ne peut pas être à la fois un obstacle et une récompense. Elle utilise un ensemble <code>occupiedCells</code> pour garder une trace des cellules déjà occupées, garantissant ainsi que les obstacles et les récompenses sont placés sur des cellules distinctes.</p>
+
+		<h4>2. <code>propagateValues()</code></h4>
+
+		<p>Cette fonction a été significativement modifiée. Au lieu d'additionner les valeurs de propagation pour chaque récompense, elle utilise maintenant la fonction <code>Math.max()</code> pour conserver uniquement la valeur la plus élevée. Cela signifie que chaque cellule ne conserve que l'influence de la récompense la plus forte, plutôt que la somme des influences de toutes les récompenses.</p>
+
+		<h3>Méthode mathématique utilisée pour le mouvement de l'agent</h3>
+
+		<p>Le mouvement de l'agent est toujours basé sur la propagation des valeurs d'état, mais avec une modification importante dans la façon dont ces valeurs sont calculées.</p>
+
+		<h4>Calcul des valeurs d'état</h4>
+
+		<p>Les valeurs d'état pour chaque cellule sont maintenant calculées comme suit :</p>
+
+		<ul>
+		<li><strong>Récompenses :</strong> Les cellules proches des récompenses reçoivent une valeur positive. Cette valeur diminue exponentiellement avec la distance, mais n'est plus cumulative. Pour une cellule donnée, sa valeur d'état est maintenant déterminée par la récompense la plus influente, plutôt que par la somme des influences de toutes les récompenses. La formule utilisée est :
+
+		<p><code>V(x,y) = max(γ^d * V_récompense)</code></p>
+
+		où <code>γ</code> est le facteur de décroissance (gamma), <code>d</code> est la distance à la récompense, et <code>V_récompense</code> est la valeur de la récompense.</p>
+		</li>
+		<li><strong>Obstacles :</strong> Les cellules contenant des obstacles conservent une valeur négative fixe (-1), créant des zones que l'agent cherchera à éviter.</li>
+		</ul>
+
+		<h4>Choix de la direction</h4>
+
+		<p>Le processus de choix de direction de l'agent reste largement inchangé. L'agent continue d'évaluer les valeurs d'état des cellules voisines et de se déplacer vers la cellule ayant la valeur d'état la plus élevée, tout en évitant les obstacles.</p>
+
+		<h4>Impact des modifications</h4>
+
+		<p>Ces changements ont plusieurs implications importantes pour le comportement de l'agent :</p>
+
+		<ol>
+		<li>L'agent sera moins attiré par les clusters de récompenses, car les valeurs ne sont plus cumulatives.</li>
+		<li>Les récompenses isolées auront maintenant une influence plus importante sur le comportement de l'agent.</li>
+		<li>Le comportement de l'agent devrait être plus prévisible et moins influencé par des effets cumulatifs complexes.</li>
+		<li>L'agent pourrait explorer plus uniformément l'environnement, car l'attraction vers des zones spécifiques sera moins prononcée.</li>
+		</ol>
+
+		<p>Ces modifications visent à créer un comportement plus équilibré et plus naturel pour l'agent, en évitant une attraction excessive vers des clusters de récompenses tout en maintenant une exploration efficace de l'environnement.</p>
+
+		</div>
+    </div>
+    <div class="info">
+        <p style="margin:0;padding:0;">Points de vie de l'agent : <span id="health"></span></p>
+        <p style="margin:0;padding:0;">Dernier choix de direction : <span id="direction"></span></p>
+        <p style="margin:0;padding:0;">Valeur de l'état : <span id="stateValue">0</span></p>
+    </div>
+    <script src="agent.js"></script>
+</body>
+</html>
