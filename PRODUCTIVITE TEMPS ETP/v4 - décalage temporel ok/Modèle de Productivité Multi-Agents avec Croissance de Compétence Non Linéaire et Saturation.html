@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modèle de Productivité et ETP Multi-Agents</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="script.js"></script>
+    <style>
+        .input-group {
+            margin-bottom: 10px;
+        }
+        .chart-container {
+            width: 80%;
+            margin: 20px auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Modèle de Productivité et ETP Multi-Agents</h1>
+
+    <div class="input-group">
+        <label for="duree">Durée (mois):</label>
+        <input type="number" id="duree" value="36" min="1" max="120">
+    </div>
+
+    <h2>Ajouter un nouvel agent</h2>
+    <div class="input-group">
+        <label for="newAgentName">Nom de l'agent:</label>
+        <input type="text" id="newAgentName">
+    </div>
+    <div class="input-group">
+        <label for="newAgentC0">Compétence initiale (0-1):</label>
+        <input type="number" id="newAgentC0" value="0" min="0" max="1" step="0.1">
+    </div>
+    <div class="input-group">
+        <label for="newAgentB">Facteur d'apprentissage (0-1):</label>
+        <input type="number" id="newAgentB" value="0.30" min="0" max="1" step="0.1">
+    </div>
+    <div class="input-group">
+        <label for="newAgentM">Facteur d'échelle:</label>
+        <input type="number" id="newAgentM" value="1" min="0.1" step="0.1">
+    </div>
+    <div class="input-group">
+        <label for="newAgentK">Facteur de saturation:</label>
+        <input type="number" id="newAgentK" value="2" min="0.01" max="10" step="0.01">
+    </div>
+    <div class="input-group">
+        <label for="newAgentMaxTime">Temps pour productivité maximale (mois):</label>
+        <input type="number" id="newAgentMaxTime" value="36" min="1" step="1">
+    </div>
+
+    <button onclick="addAgent()">Ajouter l'agent</button>
+
+    <div id="agentsList"></div>
+	
+	<div class="input-group">
+    <label for="newAgentTimeShift">Décalage temporel (mois):</label>
+    <input type="number" id="newAgentTimeShift" value="0" step="1">
+	</div>
+
+    <button onclick="updateCharts()">Mettre à jour les graphiques</button>
+
+    <div class="chart-container">
+        <h3>Graphique de Productivité</h3>
+        <canvas id="productivityChart"></canvas>
+    </div>
+
+    <div class="chart-container">
+        <h3>Graphique d'ETP Productif</h3>
+        <canvas id="etpChart"></canvas>
+    </div>
+
+    <div id="equilibriumInfo"></div>
+</body>
+</html>

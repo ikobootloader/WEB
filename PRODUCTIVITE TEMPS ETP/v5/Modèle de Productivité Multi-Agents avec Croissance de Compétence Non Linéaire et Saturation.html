@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modèle de Productivité Multi-Agents</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <h1>Modèle de Productivité et ETP Multi-Agents</h1>
+    </header>
+
+    <main>
+        <section id="duration-section">
+            <h2>Paramètres de Simulation</h2>
+            <div class="input-group">
+                <label for="duree">Durée (mois):</label>
+                <input type="number" id="duree" value="36">
+            </div>
+        </section>
+
+        <section id="add-agent-section">
+            <h2>Ajouter un nouvel agent</h2>
+            <form id="add-agent-form">
+                <div class="input-group">
+                    <label for="newAgentName">Nom de l'agent:</label>
+                    <input type="text" id="newAgentName" required>
+                </div>
+                <div class="input-group">
+                    <label for="newAgentMonthsLearned">Mois déjà passés dans l'entreprise:</label>
+                    <input type="number" id="newAgentMonthsLearned" min="0" required>
+                </div>
+                <div class="input-group">
+                    <label for="newAgentB">Facteur d'apprentissage (0-1):</label>
+                    <input type="number" id="newAgentB" min="0" max="1" step="0.01" value="0.3" required>
+                </div>
+                <div class="input-group">
+                    <label for="newAgentM">Facteur d'échelle:</label>
+                    <input type="number" id="newAgentM" min="0" step="0.1" value="1" required>
+                </div>
+                <div class="input-group">
+                    <label for="newAgentK">Facteur de saturation:</label>
+                    <input type="number" id="newAgentK" min="0" step="0.1" value="2" required>
+                </div>
+                <div class="input-group">
+                    <label for="newAgentMaxTime">Temps pour productivité maximale (mois):</label>
+                    <input type="number" id="newAgentMaxTime" min="1" value="36" required>
+                </div>
+                <button type="button" onclick="addAgent()">Ajouter l'agent</button>
+            </form>
+        </section>
+
+        <section id="agents-list-section">
+            <h2>Agents ajoutés</h2>
+            <div id="agentsList"></div>
+        </section>
+
+        <button id="update-charts-btn" onclick="updateCharts()">Mettre à jour les graphiques</button>
+
+        <section id="charts-section">
+            <div class="chart-container">
+                <h3>Graphique de Productivité</h3>
+                <canvas id="productivityChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <h3>Graphique d'ETP Productif</h3>
+                <canvas id="etpChart"></canvas>
+            </div>
+        </section>
+
+        <section id="equilibrium-section">
+            <div id="equilibriumInfo"></div>
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2024 Modèle de Productivité Multi-Agents. Tous droits réservés.</p>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

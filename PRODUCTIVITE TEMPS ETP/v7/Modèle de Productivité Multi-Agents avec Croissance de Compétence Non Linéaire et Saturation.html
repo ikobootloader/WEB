@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modèle de Productivité Multi-Agents</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <h1>Modèle de Productivité et ETP Multi-Agents</h1>
+        <button id="infoButton" class="info-button">ℹ️ Information</button>
+    </header>
+
+    <main>
+        <section id="duration-section">
+            <h2>Paramètres de Simulation</h2>
+            <div class="input-group">
+                <label for="duree">Durée (mois):</label>
+                <input type="number" id="duree" value="36">
+            </div>
+        </section>
+
+        <section id="add-agent-section">
+            <h2>Ajouter un nouvel agent</h2>
+            <form id="add-agent-form">
+                <div class="input-group">
+                    <label for="newAgentName">Nom de l'agent:</label>
+                    <input type="text" id="newAgentName" required>
+                </div>
+                <div class="input-group">
+                    <label for="newAgentMonthsLearned">Mois déjà passés dans l'entreprise:</label>
+                    <input type="number" id="newAgentMonthsLearned" min="0" required>
+                </div>
+                <div class="input-group">
+                    <label for="newAgentB">Facteur d'apprentissage (0-1):</label>
+                    <input type="number" id="newAgentB" min="0" max="1" step="0.01" value="0.3" required>
+                </div>
+                <div class="input-group">
+                    <label for="newAgentM">Facteur d'échelle:</label>
+                    <input type="number" id="newAgentM" min="0" step="0.1" value="1" required>
+                </div>
+                <div class="input-group">
+                    <label for="newAgentK">Facteur de saturation:</label>
+                    <input type="number" id="newAgentK" min="0" step="0.1" value="2" required>
+                </div>
+                <div class="input-group">
+                    <label for="newAgentMaxTime">Temps pour productivité maximale (mois):</label>
+                    <input type="number" id="newAgentMaxTime" min="1" value="36" required>
+                </div>
+                <button type="button" onclick="addAgent()">Ajouter l'agent</button>
+            </form>
+        </section>
+
+        <section id="agents-list-section">
+            <h2>Agents ajoutés</h2>
+            <div id="agentsList"></div>
+        </section>
+
+        <button id="update-charts-btn" onclick="updateCharts()">Mettre à jour les graphiques</button>
+
+        <section id="charts-section">
+            <div class="chart-container">
+                <h3>Graphique de Productivité</h3>
+                <canvas id="productivityChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <h3>Graphique d'ETP Productif</h3>
+                <canvas id="etpChart"></canvas>
+            </div>
+        </section>
+
+        <section id="equilibrium-section">
+            <div id="equilibriumInfo"></div>
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2024 Modèle de Productivité Multi-Agents. Tous droits réservés.</p>
+    </footer>
+
+    <div id="infoModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Explication du Modèle de Productivité Multi-Agents</h2>
+            <p>Ce programme modélise la productivité et l'Équivalent Temps Plein (ETP) d'une équipe multi-agents en tenant compte de la croissance non linéaire des compétences et de la saturation de l'apprentissage.</p>
+            
+            <h3>Fondements Mathématiques</h3>
+            <p>Le modèle s'appuie sur une fonction de productivité de la forme :</p>
+            <div class="math-formula" id="mainFormula">
+                \[P(t) = m \cdot [c_0 + (1 - c_0) \cdot (1 - e^{-k\cdot t/\text{maxTime}})]^b\]
+            </div>
+            <p>Où :</p>
+            <ul>
+                <li>$P(t)$ est la productivité au temps $t$</li>
+                <li>$m$ est le facteur d'échelle (productivité maximale)</li>
+                <li>$c_0$ est la compétence initiale (calculée à partir des mois déjà passés à apprendre)</li>
+                <li>$k$ est le facteur de saturation</li>
+                <li>$\text{maxTime}$ est le temps pour atteindre la productivité maximale</li>
+                <li>$b$ est le facteur d'apprentissage</li>
+            </ul>
+
+            <h3>Validité Théorique</h3>
+            <p>Ce modèle est une approximation théorique basée sur plusieurs principes :</p>
+            <ol>
+                <li>La croissance des compétences suit une courbe en S (sigmoïde), reflétant une progression rapide initiale qui ralentit avec le temps.</li>
+                <li>Il existe une limite supérieure à la productivité (saturation).</li>
+                <li>L'apprentissage est non linéaire et dépend de facteurs individuels (représentés par le facteur b).</li>
+                <li>La productivité initiale n'est pas nécessairement nulle, reflétant l'expérience ou les compétences préexistantes.</li>
+            </ol>
+            <p>Bien que ce modèle offre une approximation utile, il est important de noter qu'il simplifie la réalité complexe du développement des compétences et de la productivité en milieu professionnel. Des facteurs externes, la dynamique d'équipe, et d'autres variables non modélisées peuvent influencer les résultats dans un contexte réel.</p>
+        </div>
+    </div>
+	<script>
+		MathJax = {
+			tex: {
+				inlineMath: [['$', '$'], ['\\(', '\\)']]
+			},
+			svg: {
+				fontCache: 'global'
+			}
+		};
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="script.js"></script>
+    <script src="modal.js"></script>
+</body>
+</html>
