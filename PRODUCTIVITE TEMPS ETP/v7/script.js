@@ -184,7 +184,7 @@ function updateEtpChart(labels) {
 // Fonction pour mettre à jour les informations d'équilibre
 function updateEquilibriumInfo(duree) {
     const equilibriumInfo = document.getElementById('equilibriumInfo');
-    let infoText = "<h3>Points d'équilibre ETP productif = ETP théorique</h3>";
+    let infoText = "<h3>Points d'équilibre ETP productif = ETP homéostasique théorique</h3>";
 
     agents.forEach(agent => {
         const equilibriumMonth = calculateEquilibriumMonth(agent, duree);
