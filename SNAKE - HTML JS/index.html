@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jeu Snake</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="game-container">
+        <div class="header">
+            <h1>🐍 Jeu Snake</h1>
+            
+            <div class="game-buttons">
+                <button id="startBtn">Commencer</button>
+                <button id="pauseBtn">Pause</button>
+                <button id="resetBtn">Reset</button>
+            </div>
+        </div>
+        
+        <div class="score-board">
+            <div class="score">Score: <span id="score">0</span></div>
+            <div class="high-score">Meilleur: <span id="high-score">0</span></div>
+        </div>
+        
+        <div class="game-area">
+            <canvas id="gameCanvas" width="400" height="400"></canvas>
+            <div class="game-over" id="gameOver">
+                <h2>Game Over!</h2>
+                <p>Score final: <span id="finalScore">0</span></p>
+                <button id="restartBtn">Rejouer</button>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <div class="instructions">
+                <h3>Instructions:</h3>
+                <p>Utilisez les flèches du clavier ou les boutons ci-dessous pour diriger le serpent</p>
+            </div>
+            
+            <div class="control-buttons">
+                <button class="control-btn" id="upBtn">↑</button>
+                <div class="middle-row">
+                    <button class="control-btn" id="leftBtn">←</button>
+                    <button class="control-btn" id="downBtn">↓</button>
+                    <button class="control-btn" id="rightBtn">→</button>
+                </div>
+            </div>
+            
+
+        </div>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>
