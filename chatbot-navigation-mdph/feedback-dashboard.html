@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Feedbacks - Chatbot MDPH</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 2rem;
+        }
+
+        .subtitle {
+            color: #999;
+            margin-bottom: 30px;
+            font-size: 0.9rem;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #f5f7fa 0%, #e9ecef 100%);
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            border: 2px solid #e0e0e0;
+        }
+
+        .stat-card.negative {
+            background: linear-gradient(135deg, #fff5f5 0%, #ffe0e0 100%);
+            border-color: #ffcccb;
+        }
+
+        .stat-card.positive {
+            background: linear-gradient(135deg, #f0fff4 0%, #d4edda 100%);
+            border-color: #c3e6cb;
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+
+        .stat-card.negative .stat-number {
+            color: #dc3545;
+        }
+
+        .stat-card.positive .stat-number {
+            color: #28a745;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .filters {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .filters button {
+            padding: 10px 20px;
+            border: 2px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .filters button:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .filters button.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .feedback-list {
+            display: grid;
+            gap: 15px;
+        }
+
+        .feedback-item {
+            background: #f8f9fa;
+            border-left: 4px solid #dc3545;
+            padding: 20px;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+
+        .feedback-item:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transform: translateX(5px);
+        }
+
+        .feedback-item.positive {
+            border-left-color: #28a745;
+        }
+
+        .feedback-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .feedback-question {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #333;
+            flex: 1;
+        }
+
+        .feedback-meta {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .badge {
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .badge.dislike {
+            background: #fff5f5;
+            color: #dc3545;
+            border: 1px solid #ffcccb;
+        }
+
+        .badge.like {
+            background: #f0fff4;
+            color: #28a745;
+            border: 1px solid #c3e6cb;
+        }
+
+        .badge.score-low {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+        }
+
+        .badge.score-medium {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .badge.score-high {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .feedback-answer {
+            background: white;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 10px 0;
+            border: 1px solid #e0e0e0;
+            line-height: 1.6;
+            color: #555;
+        }
+
+        .feedback-chunk {
+            font-size: 0.85rem;
+            color: #999;
+            font-family: 'Courier New', monospace;
+        }
+
+        .feedback-timestamp {
+            font-size: 0.8rem;
+            color: #999;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+
+        .empty-state-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+        }
+
+        .export-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: all 0.3s;
+            box-shadow: 0 4px 10px rgba(102, 126, 234, 0.3);
+        }
+
+        .export-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .search-box {
+            flex: 1;
+            min-width: 200px;
+            padding: 10px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+
+        .search-box:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Dashboard Feedbacks Utilisateurs</h1>
+        <p class="subtitle">Analyse des retours utilisateurs sur le chatbot MDPH</p>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-number" id="totalFeedbacks">0</div>
+                <div class="stat-label">Total Feedbacks</div>
+            </div>
+            <div class="stat-card positive">
+                <div class="stat-number" id="positiveFeedbacks">0</div>
+                <div class="stat-label">👍 Positifs</div>
+            </div>
+            <div class="stat-card negative">
+                <div class="stat-number" id="negativeFeedbacks">0</div>
+                <div class="stat-label">👎 Négatifs</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="satisfactionRate">0%</div>
+                <div class="stat-label">Satisfaction</div>
+            </div>
+        </div>
+
+        <div class="filters">
+            <input type="text" class="search-box" id="searchBox" placeholder="🔍 Rechercher dans les questions...">
+            <button class="active" onclick="filterFeedback('all')">Tous</button>
+            <button onclick="filterFeedback('negative')">👎 Négatifs</button>
+            <button onclick="filterFeedback('positive')">👍 Positifs</button>
+            <button onclick="filterFeedback('low-score')">Scores faibles</button>
+            <button class="export-btn" onclick="exportFeedback()">📥 Exporter</button>
+        </div>
+
+        <div id="feedbackList" class="feedback-list"></div>
+    </div>
+
+    <script>
+        let allFeedbacks = [];
+        let currentFilter = 'all';
+        let searchQuery = '';
+
+        function loadFeedbacks() {
+            const feedbackData = localStorage.getItem('chatbot_feedback');
+            if (!feedbackData) {
+                allFeedbacks = [];
+                return;
+            }
+
+            const data = JSON.parse(feedbackData);
+            allFeedbacks = data.feedbacks || [];
+
+            // Trier par date (plus récent en premier)
+            allFeedbacks.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+            updateStats();
+            renderFeedbacks();
+        }
+
+        function updateStats() {
+            const total = allFeedbacks.length;
+            const positive = allFeedbacks.filter(f => f.isLike).length;
+            const negative = allFeedbacks.filter(f => !f.isLike).length;
+            const satisfaction = total > 0 ? ((positive / total) * 100).toFixed(1) : 0;
+
+            document.getElementById('totalFeedbacks').textContent = total;
+            document.getElementById('positiveFeedbacks').textContent = positive;
+            document.getElementById('negativeFeedbacks').textContent = negative;
+            document.getElementById('satisfactionRate').textContent = satisfaction + '%';
+        }
+
+        function filterFeedback(type) {
+            currentFilter = type;
+
+            // Mettre à jour les boutons actifs
+            document.querySelectorAll('.filters button:not(.export-btn)').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            renderFeedbacks();
+        }
+
+        function getScoreBadge(score) {
+            if (score < 100) return 'score-low';
+            if (score < 300) return 'score-medium';
+            return 'score-high';
+        }
+
+        function formatDate(timestamp) {
+            const date = new Date(timestamp);
+            const now = new Date();
+            const diff = now - date;
+
+            const minutes = Math.floor(diff / 60000);
+            const hours = Math.floor(diff / 3600000);
+            const days = Math.floor(diff / 86400000);
+
+            if (minutes < 60) return `Il y a ${minutes} min`;
+            if (hours < 24) return `Il y a ${hours}h`;
+            if (days < 7) return `Il y a ${days}j`;
+
+            return date.toLocaleDateString('fr-FR', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        function renderFeedbacks() {
+            let filtered = allFeedbacks;
+
+            // Appliquer le filtre
+            if (currentFilter === 'negative') {
+                filtered = filtered.filter(f => !f.isLike);
+            } else if (currentFilter === 'positive') {
+                filtered = filtered.filter(f => f.isLike);
+            } else if (currentFilter === 'low-score') {
+                filtered = filtered.filter(f => f.score < 150);
+            }
+
+            // Appliquer la recherche
+            if (searchQuery) {
+                filtered = filtered.filter(f =>
+                    f.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    f.chunkId.toLowerCase().includes(searchQuery.toLowerCase())
+                );
+            }
+
+            const container = document.getElementById('feedbackList');
+
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📭</div>
+                        <h2>Aucun feedback trouvé</h2>
+                        <p>Il n'y a pas encore de feedbacks ${currentFilter !== 'all' ? 'pour ce filtre' : 'enregistrés'}.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = filtered.map(feedback => {
+                const scoreBadgeClass = getScoreBadge(feedback.score);
+                const feedbackClass = feedback.isLike ? 'positive' : '';
+
+                return `
+                    <div class="feedback-item ${feedbackClass}">
+                        <div class="feedback-header">
+                            <div class="feedback-question">❓ ${feedback.question}</div>
+                            <div class="feedback-meta">
+                                <span class="badge ${feedback.isLike ? 'like' : 'dislike'}">
+                                    ${feedback.isLike ? '👍 Positif' : '👎 Négatif'}
+                                </span>
+                                <span class="badge ${scoreBadgeClass}">
+                                    Score: ${feedback.score}
+                                </span>
+                                <span class="feedback-timestamp">
+                                    🕒 ${formatDate(feedback.timestamp)}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="feedback-answer">
+                            ${feedback.answer.substring(0, 300)}${feedback.answer.length > 300 ? '...' : ''}
+                        </div>
+
+                        <div class="feedback-chunk">
+                            📦 Chunk: <strong>${feedback.chunkId}</strong>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function exportFeedback() {
+            const negativeFeedbacks = allFeedbacks.filter(f => !f.isLike);
+            const dataStr = JSON.stringify(negativeFeedbacks, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `feedbacks-negatifs-${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            alert(`✅ ${negativeFeedbacks.length} feedbacks négatifs exportés !`);
+        }
+
+        // Recherche en temps réel
+        document.getElementById('searchBox').addEventListener('input', (e) => {
+            searchQuery = e.target.value;
+            renderFeedbacks();
+        });
+
+        // Auto-refresh toutes les 5 secondes
+        setInterval(() => {
+            loadFeedbacks();
+        }, 5000);
+
+        // Charger au démarrage
+        loadFeedbacks();
+    </script>
+</body>
+</html>
