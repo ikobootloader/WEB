@@ -530,7 +530,7 @@ Ce projet est sous licence **MIT**.
 ## 👥 Auteurs et contributeurs
 
 ### Auteurs principaux
-- **Équipe BMAD Project** - *Développement initial*
+- Frédérick MURAT
 
 ### Contributeurs
 Voir la liste complète des contributeurs sur GitHub
