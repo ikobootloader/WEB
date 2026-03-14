@@ -781,16 +781,9 @@
                 font-size: 0.7rem;
             }
 
-            /* Réduire la taille de l'indicateur de scroll sur mobile */
+            /* Masquer l'indicateur de scroll sur mobile */
             .message-scroll-hint {
-                width: 44px;
-                height: 44px;
-                top: 15px;
-                right: 8%;
-            }
-
-            .message-scroll-hint .material-icons {
-                font-size: 26px;
+                display: none;
             }
 
             .chatbot-input {
@@ -798,13 +791,12 @@
             }
 
             .input-row {
-                flex-wrap: wrap;
-                gap: 6px;
+                gap: 8px;
+                /* Ne pas wrapper sur mobile - garder sur une ligne */
             }
 
             .input-wrapper {
-                width: 100%;
-                margin-bottom: 6px;
+                flex: 3; /* 75% pour le champ texte */
             }
 
             #userInput {
@@ -813,11 +805,25 @@
                 padding: 12px 16px;
             }
 
-            #sendBtn, #voiceBtn {
-                flex: 1;
-                min-width: 48%;
-                min-height: 50px;
+            #sendBtn {
+                display: none; /* Masquer le bouton flèche sur mobile */
+            }
+
+            #voiceBtn {
+                flex: 1; /* 25% pour le bouton micro */
+                min-width: unset;
+                min-height: 60px;
                 font-size: 15px;
+                padding: 8px;
+            }
+
+            #voiceBtn .material-icons {
+                font-size: 26px; /* Icône légèrement plus petite */
+            }
+
+            /* Masquer le bouton plein écran sur mobile */
+            .fullscreen-btn {
+                display: none;
             }
 
             .secondary-button {
@@ -1087,48 +1093,11 @@
       "answer": "Si vous êtes en situation de handicap, voici les premières démarches à effectuer :\n\n**1️⃣ CONTACTER LA MDPH (Maison Départementale des Personnes Handicapées)**\nC'est l'organisme unique qui centralise toutes les demandes d'aide pour les personnes handicapées. Trouvez votre MDPH locale sur monparcourshandicap.gouv.fr/annuaire.\n\n**2️⃣ CONSTITUER UN DOSSIER MDPH**\nVous devrez remplir :\n- Le formulaire Cerfa 15692 (demande unique)\n- Un certificat médical de moins de 1 an (Cerfa 15695)\n- Un justificatif d'identité et de domicile\n- Tout document utile (bilans médicaux, compte-rendu hospitalisation...)\n\n**3️⃣ PRINCIPALES AIDES DISPONIBLES**\nSelon votre situation, vous pouvez demander :\n- **AAH** : Allocation aux Adultes Handicapés (aide financière mensuelle)\n- **PCH** : Prestation de Compensation du Handicap (aides humaines, techniques, aménagement logement...)\n- **RQTH** : Reconnaissance Qualité Travailleur Handicapé (pour l'emploi)\n- **CMI** : Carte Mobilité Inclusion (stationnement, priorité, invalidité)\n- **Orientation** : ESAT, entreprise adaptée, formation professionnelle\n\n**4️⃣ DÉLAIS**\nLa MDPH a 4 mois maximum pour traiter votre dossier. ⚠️ En cas de silence après 4 mois = **refus tacite** (vous pouvez alors faire un recours).\n\n**5️⃣ SI VOUS TRAVAILLEZ**\n- Possibilité d'aménagement de poste via médecine du travail\n- Maintien dans l'emploi avec Cap Emploi\n- Temps partiel thérapeutique\n\n**6️⃣ ACCOMPAGNEMENT**\nN'hésitez pas à solliciter :\n- Le référent de parcours MDPH\n- Les associations (APF France Handicap, FNATH...)\n- Le service social de votre CPAM\n- France Travail (si recherche d'emploi)\n\n💡 **Astuce** : Déposez votre dossier le plus tôt possible, même si tous les documents ne sont pas encore réunis. Vous pourrez les compléter ensuite.",
       "source": "monparcourshandicap.gouv.fr",
       "keywords": [
-        "je suis handicape",
         "je suis handicapé",
-        "j'ai un handicap",
-        "j'ai handicap",
-        "adulte handicape",
+        "je suis handicape",
         "adulte handicapé",
-        "handicape adulte",
-        "handicapé adulte",
-        "premiere demande mdph",
-        "première demande mdph",
-        "premiere demande adulte",
-        "comment faire demande mdph",
-        "comment faire premiere demande",
-        "faire une demande mdph",
-        "demande mdph adulte",
-        "formulaire mdph",
-        "dossier mdph",
-        "demande en ligne mdph",
-        "mdph en ligne",
-        "documents mdph",
-        "certificat medical mdph",
-        "certificat médical mdph",
-        "que faire",
-        "comment faire",
-        "commencer",
-        "par ou commencer",
-        "premiere demarche",
-        "première démarche",
-        "demarches mdph",
-        "démarches mdph",
-        "suis perdu",
-        "ne sais pas quoi faire",
-        "aide adulte handicape",
-        "besoin aide",
-        "comment obtenir",
-        "obtenir droit",
-        "avoir droit",
-        "faire pour obtenir",
-        "obtenir aide",
-        "demander aide",
-        "quels droits",
-        "quelles aides"
+        "adulte handicape",
+        "que faire handicap adulte"
       ],
       "related_links": [
         {
@@ -1241,7 +1210,12 @@
         "fibromyalgie reconnaissance mdph",
         "liste des handicaps reconnus",
         "handicap psychique reconnu ?",
-        "troubles psychiques reconnus mdph"
+        "troubles psychiques reconnus mdph",
+        "est-ce que tout handicap peut être reconnu par la mdph ?",
+        "quels handicaps sont reconnus par la mdph ?",
+        "tous les handicaps sont-ils reconnus ?",
+        "la mdph reconnaît tous les handicaps ?",
+        "handicaps reconnus mdph"
       ],
       "related_links": [
         {
@@ -1268,38 +1242,11 @@
       "answer": "Si votre enfant est en situation de handicap, voici les premières démarches à effectuer :\n\n**1️⃣ CONTACTER LA MDPH (Maison Départementale des Personnes Handicapées)**\nC'est l'organisme unique qui centralise toutes les demandes d'aide pour les personnes handicapées. Trouvez votre MDPH locale sur monparcourshandicap.gouv.fr/annuaire.\n\n**2️⃣ CONSTITUER UN DOSSIER MDPH**\nVous devrez remplir :\n- Le formulaire Cerfa 15692 (demande unique)\n- Un certificat médical de moins de 1 an (Cerfa 15695)\n- Un justificatif d'identité et de domicile\n- Tout document utile (bilans médicaux, scolaires...)\n\n**3️⃣ PRINCIPALES AIDES DISPONIBLES**\nSelon la situation de votre enfant, vous pouvez demander :\n- **AEEH** : Allocation d'Éducation de l'Enfant Handicapé (aide financière)\n- **PCH** : Prestation de Compensation du Handicap (financement aides techniques, humaines...)\n- **PPS** : Projet Personnalisé de Scolarisation (aménagements à l'école)\n- **AESH** : Accompagnant d'élève en situation de handicap (aide à l'école)\n- **Orientation** : IME, SESSAD, ULIS selon les besoins\n\n**4️⃣ DÉLAIS**\nLa MDPH a 4 mois maximum pour traiter votre dossier. ⚠️ En cas de silence après 4 mois = **refus tacite** (vous pouvez alors faire un recours).\n\n**5️⃣ ACCOMPAGNEMENT**\nN'hésitez pas à solliciter :\n- Le référent de parcours MDPH\n- Les associations de parents (APF, UNAPEI...)\n- Le service social de votre secteur\n\n💡 **Astuce** : Déposez votre dossier le plus tôt possible, même si tous les documents ne sont pas encore réunis. Vous pourrez les compléter ensuite.",
       "source": "monparcourshandicap.gouv.fr",
       "keywords": [
-        "enfant handicape",
         "enfant handicapé",
-        "mon enfant handicape",
+        "enfant handicape",
         "mon enfant handicapé",
-        "que faire enfant",
-        "que faire enfant handicapé",
-        "que faire enfant handicape",
-        "faire pour enfant",
-        "faire pour mon enfant",
-        "dois-je faire enfant",
-        "dois je faire enfant",
-        "que dois-je faire enfant",
-        "que dois je faire enfant",
-        "dois-je faire pour mon enfant",
-        "dois je faire pour mon enfant",
-        "commencer enfant",
-        "par ou commencer enfant",
-        "premiere demarche enfant",
-        "demarches enfant",
-        "aide enfant handicape",
-        "aide enfant handicapé",
-        "suis perdue enfant",
-        "ne sais pas quoi faire enfant",
-        "handicap enfant",
-        "besoin aide enfant",
-        "mon enfant",
-        "comment faire enfant",
-        "faire pour obtenir enfant",
-        "obtenir aide enfant",
-        "demander aide enfant",
-        "enfant en situation handicap",
-        "enfant en situation de handicap"
+        "mon enfant handicape",
+        "que faire enfant handicap"
       ],
       "related_links": [
         {
@@ -1328,9 +1275,16 @@
         }
       ],
       "typical_questions": [
+        "mon enfant est handicapé, que faire ?",
+        "enfant handicapé que faire ?",
         "comment faire reconnaître le handicap de mon enfant ?",
         "comment faire une demande mdph pour un enfant ?",
-        "mon enfant est handicapé, que faire ?"
+        "demande mdph enfant",
+        "dossier mdph pour mon enfant",
+        "mon enfant est handicapé que faire ?",
+        "mon enfant est handicapé et je ne sais pas par où commencer avec la mdph",
+        "comment faire une première demande mdph pour mon fils qui a un handicap ?",
+        "mon enfant a des difficultés, quelles aides mdph existent pour nous aider ?"
       ]
     },
     {
@@ -1463,7 +1417,13 @@
         "c'est quoi l'aah et comment on la demande ?",
         "définition de l'aah et démarches",
         "aah c'est quoi et comment faire ?",
-        "qu'est-ce que l'aah et comment l'obtenir ?"
+        "qu'est-ce que l'aah et comment l'obtenir ?",
+        "qu'est-ce que l'aah ?",
+        "c'est quoi l'aah ?",
+        "comment faire une demande d'aah ?",
+        "je suis en situation de handicap et sans emploi, puis-je toucher une allocation ?",
+        "comment savoir si j'ai le droit à l'allocation adulte handicapé ?",
+        "je voudrais demander l'aah mais je ne sais pas si je remplis les conditions"
       ],
       "related_links": [
         {
@@ -1560,7 +1520,10 @@
       ],
       "typical_questions": [
         "qui peut bénéficier de l'aah ?",
-        "quelles sont les conditions pour l'aah ?"
+        "quelles sont les conditions pour l'aah ?",
+        "quel taux d'incapacité minimum faut-il avoir pour obtenir l'aah ?",
+        "est-ce qu'il faut forcément 80% de handicap pour avoir droit à l'aah ?",
+        "je n'ai que 50% de taux d'incapacité, est-ce que je peux quand même avoir l'aah ?"
       ]
     },
     {
@@ -1653,7 +1616,6 @@
       ],
       "typical_questions": [
         "comment faire une demande d'aah ?",
-        "l'aah est-elle versée automatiquement après la décision mdph ?",
         "comment demander l'aah ?",
         "comment faire une demande l'aah ?"
       ]
@@ -1752,8 +1714,6 @@
         }
       ],
       "typical_questions": [
-        "l'aah est-elle imposable ?",
-        "l'aah est-elle compatible avec le rsa ?",
         "aah - cumul ?"
       ]
     },
@@ -1805,8 +1765,10 @@
         "c'est quoi la pch ?",
         "définition de la pch",
         "pch c'est quoi ?",
-        "la pch est-elle versée tous les mois ?",
-        "la pch est-elle imposable ?"
+        "la pch est-elle imposable ?",
+        "qu'est-ce que la prestation de compensation du handicap et comment ça marche ?",
+        "je ne comprends pas bien ce qu'est la pch, pouvez-vous m'expliquer simplement ?",
+        "la pch c'est pour qui et ça sert à payer quoi exactement ?"
       ]
     },
     {
@@ -1863,7 +1825,10 @@
       ],
       "typical_questions": [
         "qui peut bénéficier de la pch ?",
-        "quelles sont les conditions pour la pch ?"
+        "quelles sont les conditions pour la pch ?",
+        "quelles sont les conditions pour avoir le droit à la pch ?",
+        "est-ce qu'il faut un certain taux de handicap pour obtenir la pch ?",
+        "comment savoir si je suis éligible à la prestation de compensation ?"
       ]
     },
     {
@@ -2089,7 +2054,11 @@
         "la mdph peut-elle financer un monte-escalier ?",
         "pch aménagement logement",
         "financement rampe accès",
-        "financement monte-escalier"
+        "financement monte-escalier",
+        "puis-je obtenir une aide pour adapter ma salle de bain ?",
+        "quelles aides financières existent pour adapter mon logement à mon handicap ?",
+        "j'ai besoin de travaux dans ma maison pour mon fauteuil, qui peut m'aider ?",
+        "comment obtenir des financements pour rendre mon appartement accessible ?"
       ]
     },
     {
@@ -2297,7 +2266,10 @@
       "typical_questions": [
         "qu'est-ce que la rqth ?",
         "à quoi sert la rqth ?",
-        "puis-je travailler tout en ayant la rqth ?"
+        "puis-je travailler tout en ayant la rqth ?",
+        "qu'est-ce que la reconnaissance de la qualité de travailleur handicapé exactement ?",
+        "à quoi ça sert concrètement d'avoir la rqth quand on travaille ?",
+        "je ne sais pas ce qu'est la rqth, pouvez-vous m'expliquer simplement ?"
       ]
     },
     {
@@ -2345,7 +2317,10 @@
         "est-ce que la rqth donne droit à des aides pour l'emploi ?",
         "dois-je informer mon employeur de ma rqth ?",
         "suis-je obligé de déclarer ma rqth ?",
-        "faut-il dire à son employeur qu'on a la rqth ?"
+        "faut-il dire à son employeur qu'on a la rqth ?",
+        "quels avantages concrets j'aurai au travail si j'obtiens la rqth ?",
+        "est-ce que la rqth me protège vraiment dans mon entreprise ?",
+        "qu'est-ce que la rqth m'apporte de plus dans ma vie professionnelle ?"
       ]
     },
     {
@@ -2540,7 +2515,10 @@
         "qu'est-ce que aeeh ?",
         "c'est quoi aeeh ?",
         "définition de aeeh",
-        "aeeh c'est quoi ?"
+        "aeeh c'est quoi ?",
+        "qu'est-ce que l'allocation d'éducation de l'enfant handicapé et qui y a droit ?",
+        "est-ce que je peux toucher une aide financière pour élever mon enfant handicapé ?",
+        "l'aeeh c'est quoi et combien ça rapporte par mois pour un enfant handicapé ?"
       ]
     },
     {
@@ -2856,46 +2834,80 @@
     {
       "id": "mdph_definition",
       "question": "C'est quoi la MDPH ?",
-      "answer": "La MDPH (Maison Départementale des Personnes Handicapées) est un guichet unique destiné à faciliter les démarches des personnes en situation de handicap. Elle accueille, informe, accompagne et conseille les personnes handicapées et leur famille. C'est auprès de la MDPH que vous déposez toutes vos demandes d'aides et de prestations liées au handicap (AAH, PCH, RQTH, CMI, AEEH, etc.). Chaque département dispose de sa propre MDPH.",
-      "source": "monparcourshandicap.gouv.fr",
+      "answer": "La Maison Départementale des Personnes Handicapées (MDPH), aujourd’hui intégrée dans la Maison Départementale de l’Autonomie (MDA), est le guichet unique permettant aux personnes en situation de handicap d’accéder à leurs droits et prestations. Elle centralise les démarches administratives liées au handicap pour les enfants et les adultes. Dans le domaine scolaire, la MDPH évalue les besoins de l’enfant et peut décider de dispositifs comme le PPS, l’AESH, une orientation en ULIS ou vers un établissement médico-social.",
+      "source": "webinaire droits scolaires MDPH",
       "keywords": [
         "mdph",
         "mda",
-        "maison départementale personnes handicapées",
-        "maison départementale autonomie",
-        "maison de l'autonomie",
-        "maison handicap",
-        "demande aide",
-        "suis perdue",
-        "par commencer",
-        "parcours combattant"
+        "demande mdph",
+        "dossier mdph enfant",
+        "droits handicap scolarite",
+        "guichet unique handicap",
+        "aide scolaire handicap",
+        "définition",
+        "c'est quoi",
+        "exactement",
+        "expliquer",
+        "obligatoire",
+        "sécurité sociale",
+        "caf",
+        "cpam",
+        "différence",
+        "organisme",
+        "gère",
+        "dépend",
+        "autrui",
+        "quelqu'un d'autre"
       ],
       "related_links": [
         {
-          "question": "C'est quoi AAH ?",
-          "chunk_id": "aah_definition"
+          "question": "C'est quoi un PPS ?",
+          "chunk_id": "pps_definition"
         },
         {
-          "question": "C'est quoi PCH ?",
-          "chunk_id": "pch_definition"
+          "question": "C'est quoi le GEVA-Sco ?",
+          "chunk_id": "gevasco_definition"
         },
         {
-          "question": "C'est quoi AEEH ?",
-          "chunk_id": "aeeh_definition"
-        },
-        {
-          "question": "C'est quoi RQTH ?",
-          "chunk_id": "rqth_definition"
+          "question": "Comment faire une demande MDPH ?",
+          "chunk_id": "demande_mdph_scolarite"
         }
       ],
       "typical_questions": [
-        "les handicaps invisibles sont-ils reconnus par la mdph ?",
-        "handicap invisible mdph",
+        "expliquez-moi ce qu'est la mdph",
+        "mdph qu'est-ce que c'est ?",
+        "la mdph c'est quoi ?",
+        "quel est le rôle de la mdph ?",
+        "à quoi sert la mdph ?",
+        "mdph définition",
+        "définition mdph",
         "c'est quoi la mdph ?",
-        "qu'est-ce que mdph ?",
-        "c'est quoi mdph ?",
-        "définition de mdph",
-        "mdph c'est quoi ?"
+        "qu'est-ce que la mdph ?",
+        "qu'est-ce que la mdph exactement ?",
+        "comment faire une demande mdph pour mon enfant ?",
+        "a quoi sert la mdph pour la scolarité ?",
+        "qui décide des aides scolaires handicap ?",
+        "je ne connais pas la mdph, pouvez-vous m'expliquer ce que c'est ?",
+        "qu'est-ce que la mdph et à quoi ça sert concrètement ?",
+        "je suis perdu avec toutes ces démarches, c'est quoi exactement la mdph ?",
+        "est-ce obligatoire de passer par la mdph pour être reconnu handicapé ?",
+        "qui peut faire une demande à la mdph ?",
+        "est-ce qu'on peut faire une demande pour quelqu'un d'autre ?",
+        "est-ce que je peux faire une demande pour mon enfant ?",
+        "est-ce que la mdph dépend de la sécurité sociale ?",
+        "est-ce que la mdph est la même chose que la caf ?",
+        "quelle est la différence entre mdph et cpam ?",
+        "la mdph est-elle obligatoire ?",
+        "qui gère la mdph ?",
+        "la mdph dépend de quel organisme ?",
+        "mdph et sécurité sociale",
+        "différence mdph caf",
+        "différence mdph cpam",
+        "peut-on faire une demande mdph pour autrui ?",
+        "demande mdph pour enfant",
+        "demande mdph pour parent",
+        "qui a le droit de faire une demande mdph ?",
+        "conditions pour faire une demande mdph"
       ]
     },
     {
@@ -2943,7 +2955,17 @@
         "quels documents dois-je fournir pour mon dossier mdph ?",
         "puis-je envoyer mon dossier mdph par mail ?",
         "est-ce que je peux me faire aider pour remplir le dossier ?",
-        "puis-je faire une demande mdph pour plusieurs handicaps ?"
+        "puis-je faire une demande mdph pour plusieurs handicaps ?",
+        "dois-je obligatoirement fournir un certificat médical ?",
+        "le certificat médical mdph est valable combien de temps ?",
+        "certificat médical obligatoire mdph ?",
+        "validité certificat médical mdph",
+        "combien de temps certificat médical mdph ?",
+        "combien de temps est valable le certificat médical ?",
+        "durée validité certificat médical mdph",
+        "où est-ce que je peux trouver le formulaire de demande mdph à remplir ?",
+        "j'ai besoin du formulaire officiel mdph, comment je peux me le procurer ?",
+        "quel formulaire dois-je utiliser pour faire ma demande de droits mdph ?"
       ]
     },
     {
@@ -3153,7 +3175,12 @@
         }
       ],
       "typical_questions": [
-        "taux - incapacite ?"
+        "taux - incapacite ?",
+        "j'ai une invalidité de 50%",
+        "taux invalidité 50%",
+        "qu'est-ce qu'un taux d'incapacité 50% ?",
+        "50% taux incapacité que faire ?",
+        "invalidité 50 pour cent"
       ]
     },
     {
@@ -3486,146 +3513,6 @@
       ],
       "typical_questions": [
         "cmi - stationnement demarches ?"
-      ]
-    },
-    {
-      "id": "mva_definition",
-      "question": "C'est quoi MVA ?",
-      "answer": "La MVA (Majoration pour la Vie Autonome) est une aide financière permettant aux personnes handicapées vivant en logement indépendant de financer une partie des dépenses liées à leur handicap. Elle complète l'AAH et son montant forfaitaire est de 104,77 euros par mois.",
-      "source": "monparcourshandicap.gouv.fr",
-      "keywords": [
-        "mva",
-        "majoration vie autonome",
-        "majoration pour la vie autonome"
-      ],
-      "related_links": [
-        {
-          "question": "Quelles sont les conditions pour MVA ?",
-          "chunk_id": "mva_conditions"
-        },
-        {
-          "question": "Comment demander MVA ?",
-          "chunk_id": "mva_demarches"
-        },
-        {
-          "question": "C'est quoi AAH ?",
-          "chunk_id": "aah_definition"
-        },
-        {
-          "question": "C'est quoi PCH ?",
-          "chunk_id": "pch_definition"
-        },
-        {
-          "question": "C'est quoi AEEH ?",
-          "chunk_id": "aeeh_definition"
-        }
-      ],
-      "typical_questions": [
-        "c'est quoi mva ?",
-        "qu'est-ce que mva ?",
-        "définition de mva",
-        "mva c'est quoi ?"
-      ]
-    },
-    {
-      "id": "mva_conditions",
-      "question": "Quelles sont les conditions pour MVA ?",
-      "answer": "Pour percevoir la MVA, vous devez remplir 4 critères cumulatifs : 1) Avoir un taux d'incapacité d'au moins 80%, 2) Percevoir l'AAH à taux plein, en complément d'une retraite/pension/rente, ou l'ASI, 3) Ne pas percevoir de revenu d'activité professionnelle, 4) Habiter dans un logement indépendant ET percevoir une aide au logement (APL, ALF ou ALS).",
-      "source": "monparcourshandicap.gouv.fr",
-      "keywords": [
-        "mva conditions",
-        "éligibilité mva",
-        "qui peut avoir mva"
-      ],
-      "related_links": [
-        {
-          "question": "Retour : C'est quoi MVA ?",
-          "chunk_id": "mva_definition"
-        },
-        {
-          "question": "Comment demander MVA ?",
-          "chunk_id": "mva_demarches"
-        },
-        {
-          "question": "C'est quoi AAH ?",
-          "chunk_id": "aah_definition"
-        },
-        {
-          "question": "C'est quoi PCH ?",
-          "chunk_id": "pch_definition"
-        },
-        {
-          "question": "C'est quoi AEEH ?",
-          "chunk_id": "aeeh_definition"
-        }
-      ],
-      "typical_questions": [
-        "quelles sont les conditions pour mva ?"
-      ]
-    },
-    {
-      "id": "mva_demarches",
-      "question": "Comment demander MVA ?",
-      "answer": "Pour les bénéficiaires de l'AAH, la MVA est attribuée automatiquement par la CAF ou la MSA dès que vous remplissez les conditions, aucune démarche n'est nécessaire. Pour les bénéficiaires de l'ASI (Allocation Supplémentaire d'Invalidité), vous devez remplir le formulaire MDPH et l'envoyer en recommandé à votre MDPH.",
-      "source": "monparcourshandicap.gouv.fr",
-      "keywords": [
-        "demander mva",
-        "dossier mva",
-        "obtenir mva"
-      ],
-      "related_links": [
-        {
-          "question": "Retour : C'est quoi MVA ?",
-          "chunk_id": "mva_definition"
-        },
-        {
-          "question": "Quelles sont les conditions pour MVA ?",
-          "chunk_id": "mva_conditions"
-        },
-        {
-          "question": "Comment contester un refus ?",
-          "chunk_id": "recours_mdph"
-        },
-        {
-          "question": "C'est quoi la MDPH ?",
-          "chunk_id": "mdph_definition"
-        }
-      ],
-      "typical_questions": [
-        "comment demander mva ?",
-        "comment faire une demande mva ?"
-      ]
-    },
-    {
-      "id": "mva_interruption",
-      "question": "MVA - interruption ?",
-      "answer": "La MVA est interrompue après 60 jours révolus d'hospitalisation, d'hébergement en établissement médico-social ou d'incarcération. Elle reprend automatiquement le 1er du mois suivant votre retour dans un logement indépendant. Le versement est mensuel et effectué par la CAF ou la MSA.",
-      "source": "monparcourshandicap.gouv.fr",
-      "keywords": [
-        "mva hospitalisation",
-        "mva suspension",
-        "interruption mva"
-      ],
-      "related_links": [
-        {
-          "question": "C'est quoi AAH ?",
-          "chunk_id": "aah_definition"
-        },
-        {
-          "question": "C'est quoi PCH ?",
-          "chunk_id": "pch_definition"
-        },
-        {
-          "question": "C'est quoi AEEH ?",
-          "chunk_id": "aeeh_definition"
-        },
-        {
-          "question": "C'est quoi RQTH ?",
-          "chunk_id": "rqth_definition"
-        }
-      ],
-      "typical_questions": [
-        "mva - interruption ?"
       ]
     },
     {
@@ -4098,12 +3985,9 @@
         "que faire si ma demande mdph est refusée ?",
         "comment faire un recours contre une décision de la mdph ?",
         "combien de temps ai-je pour faire un recours ?",
-        "qu'est-ce qu'un recours gracieux ?",
-        "qu'est-ce qu'un recours contentieux ?",
         "dois-je fournir de nouveaux documents pour un recours ?",
         "puis-je être accompagné pour faire un recours ?",
         "est-ce que mon médecin peut m'aider à contester une décision ?",
-        "que se passe-t-il si mon recours est refusé ?",
         "puis-je refaire une nouvelle demande après un refus ?",
         "comment contester une orientation scolaire décidée par la mdph ?"
       ]
@@ -4194,50 +4078,39 @@
     },
     {
       "id": "pps_definition",
-      "question": "C'est quoi PPS ?",
-      "answer": "Le PPS (Projet Personnalise de Scolarisation) est un document qui definit les modalites d'amenagement de la scolarisation et les actions repondant aux besoins particuliers de l'eleve handicape. Le PPS couvre les mesures de compensation, le materiel pedagogique adapte, l'aide humaine (AESH), les amenagements pedagogiques. La CDAPH prend les decisions sur la base de l'evaluation de l'equipe pluridisciplinaire de la MDPH. Les eleves ou leurs representants legaux doivent deposer une demande formelle a la MDPH. Le PPS est evalue chaque annee et revise aux transitions educatives.",
-      "source": "monparcourshandicap.gouv.fr",
+      "question": "C'est quoi le PPS ?",
+      "answer": "Le Projet Personnalisé de Scolarisation (PPS) concerne les élèves reconnus en situation de handicap par la MDPH. Il définit l’ensemble des modalités de scolarisation et les actions pédagogiques, éducatives, sociales et médicales nécessaires pour répondre aux besoins de l’élève. Le PPS est élaboré par l’équipe pluridisciplinaire de la MDPH puis validé par la Commission des Droits et de l’Autonomie des Personnes Handicapées (CDAPH). Sa mise en œuvre est assurée par le directeur d’école ou le chef d’établissement et peut inclure des aides humaines (AESH), des aménagements pédagogiques ou une orientation vers un dispositif spécialisé.",
+      "source": "webinaire droits scolaires MDPH",
       "keywords": [
         "pps",
         "projet personnalise scolarisation",
-        "projet scolarisation",
-        "projet scolarite",
-        "amenagement ecole",
-        "scolarisation enfant handicape",
-        "rentree scolaire",
-        "ecole normale",
-        "aider ecole",
-        "rester ecole normale",
-        "continuer ecole",
-        "scolariser",
-        "ecole gerer",
-        "ecole peut pas",
-        "difficultes ecole"
+        "plan scolarisation handicap",
+        "aides scolaires mdph",
+        "parcours scolaire handicap",
+        "scolarisation handicap"
       ],
       "related_links": [
         {
-          "question": "C'est quoi AAH ?",
-          "chunk_id": "aah_definition"
+          "question": "C'est quoi un AESH ?",
+          "chunk_id": "aesh_definition"
         },
         {
-          "question": "C'est quoi PCH ?",
-          "chunk_id": "pch_definition"
+          "question": "C'est quoi ULIS ?",
+          "chunk_id": "ulis_definition"
         },
         {
-          "question": "C'est quoi AEEH ?",
-          "chunk_id": "aeeh_definition"
-        },
-        {
-          "question": "C'est quoi RQTH ?",
-          "chunk_id": "rqth_definition"
+          "question": "C'est quoi le GEVA-Sco ?",
+          "chunk_id": "gevasco_definition"
         }
       ],
       "typical_questions": [
+        "comment obtenir un pps ?",
+        "qui décide du pps ?",
+        "quelle différence entre pap et pps ?",
         "qu'est-ce qu'un pps (projet personnalisé de scolarisation) ?",
-        "c'est quoi pps ?",
-        "qu'est-ce que pps ?",
-        "définition de pps",
-        "pps c'est quoi ?"
+        "qu'est-ce qu'un projet personnalisé de scolarisation pour mon enfant handicapé ?",
+        "le pps c'est quoi exactement et comment ça aide mon enfant à l'école ?",
+        "l'école parle de pps pour mon fils, je ne comprends pas ce que c'est"
       ]
     },
     {
@@ -4645,72 +4518,55 @@
     },
     {
       "id": "pap_definition",
-      "question": "C'est quoi PAP ?",
-      "answer": "Le PAP (Plan d'Accompagnement Personnalise) est un plan de soutien pedagogique personnalise. Tout eleve dont les difficultes scolaires resultent d'un trouble des apprentissages peut beneficier d'un PAP. Le PAP etablit des amenagements pedagogiques permettant aux eleves de suivre le programme scolaire standard de leur niveau. POUR QUI : Eleves avec troubles des apprentissages (dyslexie, dyspraxie, dysorthographie, dyscalculie, dysphasie, TDAH) necessitant l'approbation du medecin scolaire. MISE EN PLACE : Suite a une evaluation medicale, revise annuellement. DIFFERENCE AVEC PPS : Le PPS est pour les eleves reconnus handicapes par la MDPH, le PAP est pour les troubles des apprentissages sans reconnaissance de handicap. DIFFERENCE AVEC PAI : Le PAI concerne les problemes de sante chroniques (asthme, allergies, diabete) sans amenagements pedagogiques. Base legale : Circulaire n°2015-016 du 22 janvier 2015.",
-      "source": "monparcourshandicap.gouv.fr",
+      "question": "C'est quoi le PAP ?",
+      "answer": "Le Plan d’Accompagnement Personnalisé (PAP) concerne les élèves présentant des troubles des apprentissages entraînant des difficultés scolaires durables. Il permet la mise en place d’aménagements pédagogiques comme des supports adaptés, un temps supplémentaire ou des méthodes d’apprentissage différentes. Le PAP peut être proposé par l’équipe pédagogique ou la famille et nécessite l’avis du médecin de l’éducation nationale. Il ne nécessite pas une reconnaissance de handicap par la MDPH.",
+      "source": "webinaire droits scolaires MDPH",
       "keywords": [
         "pap",
         "plan accompagnement personnalise",
-        "plan accompagnement"
+        "dys scolarite",
+        "troubles apprentissages",
+        "amenagements pedagogiques",
+        "plan scolaire dys"
       ],
       "related_links": [
         {
-          "question": "C'est quoi AAH ?",
-          "chunk_id": "aah_definition"
+          "question": "C'est quoi un PPS ?",
+          "chunk_id": "pps_definition"
         },
         {
-          "question": "C'est quoi PCH ?",
-          "chunk_id": "pch_definition"
-        },
-        {
-          "question": "C'est quoi AEEH ?",
-          "chunk_id": "aeeh_definition"
-        },
-        {
-          "question": "C'est quoi RQTH ?",
-          "chunk_id": "rqth_definition"
+          "question": "C'est quoi un PPRE ?",
+          "chunk_id": "ppre_definition"
         }
       ],
       "typical_questions": [
-        "c'est quoi pap ?",
-        "qu'est-ce que pap ?",
-        "définition de pap",
-        "pap c'est quoi ?"
+        "comment demander un pap ?",
+        "difference pap pps",
+        "mon enfant dys peut il avoir un pap ?"
       ]
     },
     {
       "id": "pial_definition",
-      "question": "C'est quoi PIAL ?",
-      "answer": "Le PIAL (Pole Inclusif d'Accompagnement Localise) est une organisation au niveau d'un etablissement scolaire ou d'un ensemble d'etablissements permettant de coordonner les moyens d'accompagnement humain (AESH) au plus pres des besoins des eleves en situation de handicap. ROLE : Le PIAL vise a mieux coordonner les ressources au plus pres des eleves, organiser la cooperation entre les differents acteurs, coordonner les emplois du temps des AESH pour plus de flexibilite et de reactivite. COMPOSITION : Le PIAL regroupe un pilote (chef d'etablissement, IEN), un coordonnateur PIAL, les AESH du territoire, les enseignants referents. AVANTAGES : Meilleure adaptation aux besoins evolutifs des eleves, mutualisation des competences des AESH, continuite de l'accompagnement. Les AESH peuvent ainsi intervenir aupres de plusieurs eleves selon les besoins identifies dans les PPS.",
-      "source": "education.gouv.fr",
+      "question": "C'est quoi le PIAL ?",
+      "answer": "Le Pôle Inclusif d’Accompagnement Localisé (PIAL) organise l’accompagnement des élèves en situation de handicap dans un secteur scolaire. Il coordonne notamment l’intervention des AESH et adapte leur emploi du temps en fonction des besoins des élèves. Le PIAL regroupe généralement plusieurs écoles ou établissements afin d’améliorer la gestion des ressources et de favoriser l’inclusion scolaire.",
+      "source": "webinaire droits scolaires MDPH",
       "keywords": [
         "pial",
         "pole inclusif accompagnement localise",
-        "pole inclusif"
+        "organisation aesh",
+        "coordination accompagnement handicap",
+        "inclusion scolaire organisation"
       ],
       "related_links": [
         {
-          "question": "C'est quoi AAH ?",
-          "chunk_id": "aah_definition"
-        },
-        {
-          "question": "C'est quoi PCH ?",
-          "chunk_id": "pch_definition"
-        },
-        {
-          "question": "C'est quoi AEEH ?",
-          "chunk_id": "aeeh_definition"
-        },
-        {
-          "question": "C'est quoi RQTH ?",
-          "chunk_id": "rqth_definition"
+          "question": "C'est quoi un AESH ?",
+          "chunk_id": "aesh_definition"
         }
       ],
       "typical_questions": [
-        "c'est quoi pial ?",
-        "qu'est-ce que pial ?",
-        "définition de pial",
-        "pial c'est quoi ?"
+        "qui gère les aesh ?",
+        "comment sont organisés les accompagnants scolaires ?",
+        "c'est quoi un pial ?"
       ]
     },
     {
@@ -4957,37 +4813,31 @@
     },
     {
       "id": "emas_definition",
-      "question": "C'est quoi EMAS ?",
-      "answer": "L'EMAS (Equipe Mobile d'Appui a la Scolarisation) est une equipe pluridisciplinaire qui intervient aupres des etablissements scolaires pour soutenir la scolarisation des eleves en situation de handicap. ROLE : L'EMAS apporte un appui technique et pedagogique aux equipes enseignantes accueillant des eleves handicapes, aide a l'adaptation des pratiques pedagogiques, propose des strategies d'enseignement adaptees, facilite la coordination entre les differents acteurs (enseignants, AESH, professionnels medico-sociaux). COMPOSITION : L'equipe est composee de professionnels de differentes disciplines : enseignants specialises, psychologues, ergotherapeutes, psychomotriciens, orthophonistes. INTERVENTION : Sur demande de l'etablissement scolaire ou des enseignants, intervention ponctuelle ou reguliere selon les besoins, travail en collaboration avec l'enseignant referent et l'equipe de suivi de scolarisation. PUBLIC : Tous les eleves en situation de handicap scolarises en milieu ordinaire, quel que soit le type de handicap. OBJECTIF : Favoriser l'inclusion scolaire en donnant aux enseignants les moyens de repondre aux besoins educatifs particuliers de chaque eleve.",
-      "source": "education.gouv.fr",
+      "question": "C'est quoi une EMAS ?",
+      "answer": "Les Équipes Mobiles d’Appui à la Scolarisation (EMAS) sont des équipes de professionnels du secteur médico-social qui interviennent dans les écoles et établissements scolaires pour aider les équipes éducatives à accompagner les élèves en situation de handicap. Elles peuvent apporter des conseils, proposer des adaptations pédagogiques, participer à l’évaluation des besoins de l’élève et soutenir les enseignants face à des situations complexes. Les EMAS sont composées de professionnels comme des éducateurs spécialisés, des psychologues ou des ergothérapeutes.",
+      "source": "webinaire droits scolaires MDPH",
       "keywords": [
         "emas",
         "equipe mobile appui scolarisation",
-        "equipe mobile"
+        "equipe mobile handicap ecole",
+        "aide enseignants handicap",
+        "professionnels medico social ecole",
+        "intervention handicap ecole"
       ],
       "related_links": [
         {
-          "question": "C'est quoi AAH ?",
-          "chunk_id": "aah_definition"
+          "question": "C'est quoi un SESSAD ?",
+          "chunk_id": "sessad_definition"
         },
         {
-          "question": "C'est quoi PCH ?",
-          "chunk_id": "pch_definition"
-        },
-        {
-          "question": "C'est quoi AEEH ?",
-          "chunk_id": "aeeh_definition"
-        },
-        {
-          "question": "C'est quoi RQTH ?",
-          "chunk_id": "rqth_definition"
+          "question": "C'est quoi le PAS ?",
+          "chunk_id": "pas_definition"
         }
       ],
       "typical_questions": [
-        "c'est quoi emas ?",
-        "qu'est-ce que emas ?",
-        "définition de emas",
-        "emas c'est quoi ?"
+        "qui peut aider l'école quand un enfant handicapé a des difficultés ?",
+        "c'est quoi une emas ?",
+        "qui intervient dans l'école pour le handicap ?"
       ]
     },
     {
@@ -6278,7 +6128,10 @@
         }
       ],
       "typical_questions": [
-        "quel est le montant de l'aah ?"
+        "quel est le montant de l'aah ?",
+        "combien d'argent vais-je toucher par mois si j'obtiens l'aah ?",
+        "quel est le montant exact de l'allocation adulte handicapé en 2024 ?",
+        "l'aah c'est combien par mois et est-ce que c'est imposable ?"
       ]
     },
     {
@@ -6443,7 +6296,13 @@
       "typical_questions": [
         "quelle est la différence entre cmi priorité, invalidité et stationnement ?",
         "quels sont les types de cmi ?",
-        "cmi priorité ou invalidité ?"
+        "cmi priorité ou invalidité ?",
+        "types cmi",
+        "différence cmi types",
+        "types de cmi",
+        "quelle est la différence entre les trois types de carte mobilité inclusion ?",
+        "je ne comprends pas les différences entre cmi priorité et cmi invalidité",
+        "comment savoir quelle mention de carte mobilité inclusion je peux demander ?"
       ]
     },
     {
@@ -6526,7 +6385,9 @@
       "typical_questions": [
         "combien de temps est valable la carte mobilité inclusion ?",
         "quelle est la durée de validité de la cmi ?",
-        "combien de temps dure la cmi ?"
+        "combien de temps dure la cmi ?",
+        "durée cmi",
+        "validité cmi"
       ]
     },
     {
@@ -6574,7 +6435,10 @@
       "typical_questions": [
         "que faire si j'ai perdu ma carte handicap ?",
         "j'ai perdu ma cmi que faire ?",
-        "comment obtenir un duplicata de cmi ?"
+        "comment obtenir un duplicata de cmi ?",
+        "perte carte handicap",
+        "perte cmi",
+        "carte perdue"
       ]
     },
     {
@@ -6752,8 +6616,8 @@
         }
       ],
       "typical_questions": [
-        "l'aah dépend-elle des revenus ?",
-        "quelles ressources sont prises en compte pour l'aah ?"
+        "quelles ressources sont prises en compte pour l'aah ?",
+        "plafond ressources aah"
       ]
     },
     {
@@ -7530,8 +7394,6 @@
         }
       ],
       "typical_questions": [
-        "que se passe-t-il si je déménage dans un autre département ?",
-        "déménagement changement département mdph",
         "passage primaire vers college pour enfant handicape ?"
       ]
     },
@@ -7581,18 +7443,14 @@
       "answer": "**📋 PREMIÈRE DEMANDE À LA MDPH**\n\nPour faire une première demande à la MDPH, vous devez constituer un dossier avec :\n\n**1️⃣ Documents obligatoires**\n\n- **Formulaire de demande** (Cerfa n° 15692*01)\n- **Certificat médical** (Cerfa n° 15695*01) de moins de 12 mois\n- **Justificatif d'identité** (recto-verso) : carte d'identité ou titre de séjour\n- **Justificatif de domicile** de moins de 3 mois (facture électricité, gaz, téléphone, eau)\n\n**2️⃣ Documents optionnels**\n\n- Livret de famille complet (pour une première demande)\n- Décision relative à l'autorité parentale si applicable\n- Documents utiles : bilan médico-social, compte-rendu d'hospitalisation, etc.\n\n**3️⃣ Dépôt du dossier**\n\nVous pouvez déposer votre dossier :\n- **En ligne** sur [MDPH en ligne](https://mdphenligne.cnsa.fr/) (accessible 24h/24, 7j/7)\n- **Par courrier** à votre MDPH départementale\n- **Sur place** à l'accueil de votre MDPH\n\n**ℹ️ Bon à savoir**\n\nDes guides simplifiés sont disponibles pour vous aider à remplir le formulaire (versions FALC, illustrées, vidéos).",
       "source": "monparcourshandicap.gouv.fr",
       "keywords": [
-        "première demande mdph",
-        "faire demande mdph",
-        "formulaire mdph",
-        "cerfa 15692",
-        "documents mdph",
-        "comment demander mdph",
-        "dossier mdph",
-        "demande mdph en ligne",
-        "mdph comment faire"
+        "mdph",
+        "maison départementale personnes handicapées",
+        "qu'est-ce que mdph"
       ],
       "typical_questions": [
-        "comment faire une première demande à la mdph ?"
+        "c'est quoi la mdph ?",
+        "qu'est-ce que la mdph ?",
+        "mdph c'est quoi ?"
       ],
       "related_links": []
     },
@@ -7641,11 +7499,7 @@
         "cerfa 15695",
         "certificat valable combien temps"
       ],
-      "typical_questions": [
-        "le certificat médical mdph est valable combien de temps ?",
-        "combien de temps est valable le certificat médical ?",
-        "durée validité certificat médical mdph"
-      ],
+      "typical_questions": [],
       "related_links": []
     },
     {
@@ -7664,7 +7518,9 @@
       "typical_questions": [
         "qu'est-ce que la cdaph ?",
         "qui décide des droits accordés par la mdph ?",
-        "qui prend les décisions à la mdph ?"
+        "qui prend les décisions à la mdph ?",
+        "c'est quoi la cdaph ?",
+        "cdaph définition"
       ],
       "related_links": []
     },
@@ -7705,7 +7561,10 @@
       "typical_questions": [
         "comment obtenir une carte mobilité inclusion ?",
         "comment demander la cmi ?",
-        "où faire la demande de cmi ?"
+        "où faire la demande de cmi ?",
+        "comment faire pour obtenir la carte mobilité inclusion handicap ?",
+        "quelles sont les démarches pour demander ma carte cmi à la mdph ?",
+        "je voudrais avoir la carte handicap pour stationner, comment je fais ?"
       ],
       "related_links": []
     },
@@ -7800,7 +7659,12 @@
         "puis-je utiliser la carte de stationnement dans toute la france ?",
         "puis-je utiliser la carte de stationnement à l'étranger ?",
         "la cmi est-elle valable partout ?",
-        "cmi valable europe"
+        "cmi valable europe",
+        "cmi à l'étranger",
+        "carte stationnement étranger",
+        "puis-je utiliser ma carte de stationnement handicapé partout en france ?",
+        "la carte cmi stationnement est-elle valable dans tous les pays européens ?",
+        "où est-ce que j'ai le droit de me garer avec ma carte mobilité inclusion ?"
       ],
       "related_links": []
     },
@@ -7839,7 +7703,9 @@
         "combien de temps faut-il pour recevoir la carte après la décision ?",
         "délai de fabrication de la cmi",
         "quand vais-je recevoir ma cmi ?",
-        "délai réception cmi"
+        "délai réception cmi",
+        "délai fabrication cmi",
+        "temps fabrication carte"
       ],
       "related_links": []
     },
@@ -7939,7 +7805,10 @@
         "comment faire si je change de département ?",
         "transfert dossier mdph déménagement",
         "que devient mon dossier mdph si je déménage ?",
-        "changement de département mdph que faire ?"
+        "changement de département mdph que faire ?",
+        "déménagement mdph autre département",
+        "changer de département mdph",
+        "je déménage que faire mdph ?"
       ],
       "related_links": []
     },
@@ -8012,7 +7881,11 @@
       "typical_questions": [
         "comment obtenir un aesh pour mon enfant ?",
         "demande aesh mdph",
-        "comment avoir une aide scolaire"
+        "comment avoir une aide scolaire",
+        "demande aesh",
+        "comment obtenir une accompagnante aesh pour aider mon enfant en classe ?",
+        "mon enfant a besoin d'aide à l'école, comment demander un aesh à la mdph ?",
+        "quelles démarches pour avoir une auxiliaire de vie scolaire pour mon fils ?"
       ],
       "related_links": []
     },
@@ -8035,7 +7908,12 @@
         "école normale pour enfant handicapé",
         "scolarisation milieu ordinaire handicap",
         "inclusion scolaire enfant handicapé",
-        "mon enfant handicapé peut-il être dans une école classique ?"
+        "mon enfant handicapé peut-il être dans une école classique ?",
+        "peut-il aller en école ordinaire ?",
+        "école ordinaire enfant handicapé",
+        "peut-on aller en école normale avec un handicap ?",
+        "scolarisation école ordinaire handicap",
+        "école normale handicap"
       ],
       "related_links": [
         {
@@ -8070,7 +7948,12 @@
       "typical_questions": [
         "qui décide de l'orientation scolaire d'un enfant handicapé ?",
         "qui choisit l'école de mon enfant handicapé ?",
-        "orientation scolaire handicap"
+        "orientation scolaire handicap",
+        "quel parcours scolaire pour un enfant handicapé ?",
+        "parcours scolaire enfant handicapé",
+        "scolarité enfant handicap",
+        "comment scolariser enfant handicapé ?",
+        "parcours de scolarisation handicap"
       ],
       "related_links": []
     },
@@ -8115,7 +7998,10 @@
         "financement tierce personne handicap",
         "aide pour auxiliaire de vie à domicile",
         "la pch peut-elle financer une aide humaine ?",
-        "financement aide humaine pch"
+        "financement aide humaine pch",
+        "la pch peut-elle payer quelqu'un pour m'aider au quotidien à la maison ?",
+        "j'ai besoin d'une aide à domicile, est-ce que la pch peut financer ça ?",
+        "combien d'heures d'aide humaine la pch peut-elle rembourser par mois ?"
       ],
       "related_links": [
         {
@@ -8129,6 +8015,1176 @@
         {
           "question": "Quelles sont les conditions pour la PCH ?",
           "chunk_id": "pch_conditions"
+        }
+      ]
+    },
+    {
+      "id": "ppre_definition",
+      "question": "C'est quoi un PPRE ?",
+      "answer": "Le Programme Personnalisé de Réussite Éducative (PPRE) est un dispositif destiné aux élèves qui risquent de ne pas maîtriser certaines compétences attendues à la fin d’un cycle scolaire. Il est élaboré par l’équipe pédagogique en concertation avec les parents et présenté à l’élève. Le PPRE prévoit des actions ciblées pour aider l’enfant à acquérir les connaissances ou compétences nécessaires.",
+      "source": "webinaire droits scolaires MDPH",
+      "keywords": [
+        "ppre",
+        "programme reussite educative",
+        "difficultes scolaires",
+        "aide scolaire eleve",
+        "soutien scolaire ecole"
+      ],
+      "related_links": [
+        {
+          "question": "C'est quoi un PAP ?",
+          "chunk_id": "pap_definition"
+        }
+      ],
+      "typical_questions": [
+        "qu'est ce qu'un ppre ?",
+        "qui met en place un ppre ?",
+        "mon enfant peut il avoir un ppre ?"
+      ]
+    },
+    {
+      "id": "gevasco_definition",
+      "question": "C'est quoi le GEVA-Sco ?",
+      "answer": "Le GEVA-Sco est un document utilisé pour analyser la situation scolaire d’un élève et transmettre les informations nécessaires à la MDPH. Il décrit les capacités de l’élève, ses difficultés et les conditions dans lesquelles elles apparaissent. Il est rempli par l’équipe pédagogique de l’école ou par l’équipe de suivi de scolarisation lors d’un réexamen. Ce document permet à la MDPH d’évaluer les besoins de l’élève et de proposer des aides adaptées.",
+      "source": "webinaire droits scolaires MDPH",
+      "keywords": [
+        "gevasco",
+        "geva sco",
+        "evaluation besoins eleve",
+        "dossier mdph scolarite",
+        "evaluation handicap ecole"
+      ],
+      "related_links": [
+        {
+          "question": "C'est quoi un PPS ?",
+          "chunk_id": "pps_definition"
+        },
+        {
+          "question": "Comment faire une demande MDPH ?",
+          "chunk_id": "demande_mdph_scolarite"
+        }
+      ],
+      "typical_questions": [
+        "qui remplit le geva sco ?",
+        "a quoi sert le geva sco ?",
+        "geva sco première demande mdph"
+      ]
+    },
+    {
+      "id": "pas_definition",
+      "question": "C'est quoi le Pôle d'Appui à la Scolarité (PAS) ?",
+      "answer": "Le Pôle d’Appui à la Scolarité (PAS) est un dispositif destiné à faciliter l’accompagnement des élèves ayant des besoins éducatifs particuliers. Il sert de point d’entrée unique pour les demandes d’aide concernant la scolarisation. Le PAS fonctionne avec un binôme opérationnel composé généralement d’un enseignant et d’un éducateur spécialisé. Ce binôme analyse les situations, mobilise les professionnels nécessaires et coordonne les actions d’accompagnement pour l’élève, sa famille et l’établissement scolaire.",
+      "source": "webinaire droits scolaires MDPH",
+      "keywords": [
+        "pas scolarite",
+        "pole appui scolarite",
+        "coordination aide scolaire handicap",
+        "aide scolarisation enfant handicap",
+        "dispositif accompagnement scolaire"
+      ],
+      "related_links": [
+        {
+          "question": "C'est quoi une EMAS ?",
+          "chunk_id": "emas_definition"
+        },
+        {
+          "question": "C'est quoi un PPS ?",
+          "chunk_id": "pps_definition"
+        }
+      ],
+      "typical_questions": [
+        "qui coordonne l'aide pour la scolarité d'un enfant handicapé ?",
+        "c'est quoi un pas scolarité ?",
+        "comment demander de l'aide pour la scolarité de mon enfant ?"
+      ]
+    },
+    {
+      "id": "pole_ressource_ecole_inclusive",
+      "question": "C'est quoi le pôle ressource de l'école inclusive ?",
+      "answer": "Le pôle ressource de l’école inclusive regroupe des enseignants et professionnels spécialisés qui accompagnent les équipes éducatives pour mieux répondre aux besoins des élèves en difficulté ou en situation de handicap. Ils peuvent conseiller les enseignants, participer à l’évaluation des besoins de l’élève, proposer des outils pédagogiques adaptés et aider à mettre en place des aménagements dans le cadre de dispositifs comme le PAP ou le PPS.",
+      "source": "webinaire droits scolaires MDPH",
+      "keywords": [
+        "pole ressource ecole inclusive",
+        "enseignant ressource handicap",
+        "conseil enseignants handicap",
+        "aide pedagogique ecole inclusive"
+      ],
+      "related_links": [
+        {
+          "question": "C'est quoi un PAP ?",
+          "chunk_id": "pap_definition"
+        },
+        {
+          "question": "C'est quoi un PPS ?",
+          "chunk_id": "pps_definition"
+        }
+      ],
+      "typical_questions": [
+        "qui aide les enseignants pour un élève handicapé ?",
+        "c'est quoi un pôle ressource ?"
+      ]
+    },
+    {
+      "id": "iem_definition",
+      "question": "C'est quoi un IEM ?",
+      "answer": "Les Instituts d’Éducation Motrice (IEM) accueillent des enfants et adolescents présentant un handicap moteur. Ils proposent un accompagnement global incluant l’enseignement, la rééducation et le suivi médical afin de favoriser l’autonomie et l’insertion sociale de l’enfant. L’orientation vers un IEM est décidée par la MDPH.",
+      "source": "webinaire droits scolaires MDPH",
+      "keywords": [
+        "iem",
+        "institut education motrice",
+        "handicap moteur enfant",
+        "ecole handicap moteur",
+        "orientation iem"
+      ],
+      "related_links": [
+        {
+          "question": "C'est quoi un IME ?",
+          "chunk_id": "ime_definition"
+        }
+      ],
+      "typical_questions": [
+        "c'est quoi un iem ?",
+        "ecole pour handicap moteur enfant",
+        "orientation iem mdph"
+      ]
+    },
+    {
+      "id": "ies_definition",
+      "question": "C'est quoi un IES ?",
+      "answer": "Les Instituts d’Éducation Sensorielle (IES) accompagnent les enfants présentant des déficiences sensorielles comme la surdité ou la déficience visuelle. Ils proposent des méthodes pédagogiques adaptées et un accompagnement spécialisé pour favoriser l’apprentissage et l’autonomie.",
+      "source": "webinaire droits scolaires MDPH",
+      "keywords": [
+        "ies",
+        "institut education sensorielle",
+        "ecole handicap visuel",
+        "ecole handicap auditif",
+        "accompagnement sensoriel enfant"
+      ],
+      "related_links": [
+        {
+          "question": "C'est quoi un IME ?",
+          "chunk_id": "ime_definition"
+        }
+      ],
+      "typical_questions": [
+        "ecole pour enfant malvoyant",
+        "etablissement pour enfant sourd",
+        "c'est quoi un ies ?"
+      ]
+    },
+    {
+      "id": "ess_definition",
+      "question": "C'est quoi une ESS ?",
+      "answer": "L'Équipe de Suivi de Scolarisation (ESS) est une réunion organisée pour suivre la scolarité d’un élève bénéficiant d’un Projet Personnalisé de Scolarisation (PPS). Elle réunit les parents, les enseignants, l’AESH, l’enseignant référent et éventuellement des professionnels de santé. L’ESS permet d’évaluer les besoins de l’élève, d’adapter les aménagements et de proposer des ajustements du PPS.",
+      "source": "scolarisation handicap",
+      "keywords": [
+        "ess",
+        "equipe suivi scolarisation",
+        "reunion handicap ecole",
+        "suivi pps",
+        "reunion scolarite handicap"
+      ],
+      "related_links": [
+        {
+          "question": "C'est quoi un PPS ?",
+          "chunk_id": "pps_definition"
+        }
+      ],
+      "typical_questions": [
+        "qui participe à l'ess ?",
+        "comment demander une ess ?",
+        "réunion pps école"
+      ]
+    },
+    {
+      "id": "enseignant_referent_definition",
+      "question": "C'est quoi un enseignant référent ?",
+      "answer": "L’enseignant référent est un professeur spécialisé chargé de suivre la scolarisation des élèves en situation de handicap dans un secteur géographique. Il organise les équipes de suivi de scolarisation (ESS), accompagne les familles dans les démarches et assure le lien entre l’école et la MDPH.",
+      "source": "scolarisation handicap",
+      "keywords": [
+        "enseignant referent",
+        "referent handicap ecole",
+        "suivi pps enseignant referent",
+        "contact mdph scolarite"
+      ],
+      "related_links": [
+        {
+          "question": "C'est quoi une ESS ?",
+          "chunk_id": "ess_definition"
+        }
+      ],
+      "typical_questions": [
+        "qui est l enseignant référent ?",
+        "comment contacter l enseignant référent ?"
+      ]
+    },
+    {
+      "id": "orientation_scolaire_handicap",
+      "question": "Comment est décidée l'orientation scolaire d'un enfant handicapé ?",
+      "answer": "L’orientation scolaire d’un enfant en situation de handicap est décidée par la MDPH après évaluation de ses besoins. La Commission des Droits et de l’Autonomie des Personnes Handicapées (CDAPH) peut proposer différentes orientations : scolarisation en classe ordinaire, dispositif ULIS, accompagnement par un SESSAD ou orientation vers un établissement spécialisé comme un IME ou un ITEP.",
+      "source": "scolarisation handicap",
+      "keywords": [
+        "orientation scolaire handicap",
+        "decision mdph ecole",
+        "cdaph orientation",
+        "choix etablissement handicap"
+      ],
+      "related_links": [
+        {
+          "question": "C'est quoi un IME ?",
+          "chunk_id": "ime_definition"
+        },
+        {
+          "question": "C'est quoi ULIS ?",
+          "chunk_id": "ulis_definition"
+        }
+      ],
+      "typical_questions": [
+        "qui décide l orientation scolaire ?",
+        "mdph orientation enfant"
+      ]
+    },
+    {
+      "id": "demande_mdph_scolarite",
+      "question": "Comment faire une demande MDPH pour la scolarité ?",
+      "answer": "Pour demander des aides scolaires liées au handicap, les parents doivent déposer un dossier à la MDPH. Le dossier comprend un formulaire de demande, un certificat médical de moins d’un an et différents documents selon la situation. L’équipe pluridisciplinaire de la MDPH étudie ensuite les besoins de l’enfant et propose des aides comme un PPS, un AESH ou une orientation spécialisée.",
+      "source": "scolarisation handicap",
+      "keywords": [
+        "demande mdph scolarite",
+        "dossier mdph enfant",
+        "aide scolaire handicap mdph"
+      ],
+      "related_links": [
+        {
+          "question": "C'est quoi le GEVA-Sco ?",
+          "chunk_id": "gevasco_definition"
+        }
+      ],
+      "typical_questions": [
+        "comment faire un dossier mdph ?",
+        "aide scolaire mdph enfant",
+        "comment faire une demande mdph pour un enfant ?",
+        "quelles aides pour le scolaire ?",
+        "aides scolaires mdph",
+        "quelles aides mdph pour la scolarité ?",
+        "aide scolarité enfant handicapé",
+        "aides disponibles école handicap"
+      ]
+    },
+    {
+      "id": "renouvellement_mdph_scolarite",
+      "question": "Comment renouveler les aides MDPH pour la scolarité ?",
+      "answer": "Les aides accordées par la MDPH pour la scolarité ont une durée limitée. Les parents doivent déposer une demande de renouvellement avant la fin des droits. Le dossier doit généralement inclure un nouveau certificat médical, un bilan scolaire et parfois un GEVA-Sco.",
+      "source": "scolarisation handicap",
+      "keywords": [
+        "renouvellement mdph",
+        "renouvellement pps",
+        "renouveler aesh",
+        "dossier mdph renouvellement"
+      ],
+      "related_links": [
+        {
+          "question": "Comment faire une demande MDPH ?",
+          "chunk_id": "demande_mdph_scolarite"
+        }
+      ],
+      "typical_questions": [
+        "quand renouveler mdph enfant ?",
+        "renouvellement aesh"
+      ]
+    },
+    {
+      "id": "refus_mdph_recours",
+      "question": "Que faire en cas de refus de la MDPH ?",
+      "answer": "Si la MDPH refuse une aide ou une orientation, les parents peuvent contester la décision. Il est possible de faire un recours administratif auprès de la MDPH ou un recours contentieux devant le tribunal compétent. Il est conseillé d’apporter des éléments complémentaires comme des bilans médicaux ou scolaires.",
+      "source": "scolarisation handicap",
+      "keywords": [
+        "refus mdph",
+        "recours mdph",
+        "contester decision mdph"
+      ],
+      "related_links": [
+        {
+          "question": "Comment faire une demande MDPH ?",
+          "chunk_id": "demande_mdph_scolarite"
+        }
+      ],
+      "typical_questions": [
+        "mdph refus que faire ?",
+        "recours mdph enfant"
+      ]
+    },
+    {
+      "id": "amenagement_examens_scolarite",
+      "question": "Quels aménagements sont possibles aux examens ?",
+      "answer": "Les élèves en situation de handicap peuvent bénéficier d’aménagements lors des examens comme un tiers temps, l’utilisation d’un ordinateur ou l’aide d’un secrétaire. Ces aménagements sont demandés auprès de l’établissement scolaire et validés par l’administration de l’Éducation nationale.",
+      "source": "scolarisation handicap",
+      "keywords": [
+        "amenagement examens",
+        "tiers temps examen",
+        "examen handicap"
+      ],
+      "related_links": [
+        {
+          "question": "C'est quoi un PPS ?",
+          "chunk_id": "pps_definition"
+        }
+      ],
+      "typical_questions": [
+        "tiers temps brevet handicap",
+        "amenagement bac handicap"
+      ]
+    },
+    {
+      "id": "transition_maternelle_primaire",
+      "question": "Comment préparer le passage de la maternelle à l'école primaire ?",
+      "answer": "Le passage de la maternelle à l’école primaire peut nécessiter une préparation particulière pour un enfant en situation de handicap. Une réunion avec l’équipe éducative permet d’anticiper les besoins, d’adapter les aménagements pédagogiques et d’actualiser le PPS si nécessaire.",
+      "keywords": [
+        "passage maternelle primaire",
+        "transition ecole enfant handicap"
+      ],
+      "related_links": [
+        {
+          "question": "C'est quoi un PPS ?",
+          "chunk_id": "pps_definition"
+        }
+      ],
+      "typical_questions": [
+        "passage maternelle primaire handicap"
+      ]
+    },
+    {
+      "id": "transition_college_lycee",
+      "question": "Comment préparer le passage du collège au lycée ?",
+      "answer": "Le passage du collège au lycée doit être anticipé pour les élèves en situation de handicap. Une équipe de suivi de scolarisation peut être organisée pour adapter les aides nécessaires et préparer les aménagements pédagogiques ou les accompagnements.",
+      "keywords": [
+        "passage college lycee handicap",
+        "transition lycee handicap"
+      ],
+      "related_links": [
+        {
+          "question": "C'est quoi une ESS ?",
+          "chunk_id": "ess_definition"
+        }
+      ],
+      "typical_questions": [
+        "entrée lycée enfant handicap"
+      ]
+    },
+    {
+      "id": "difficultes_scolaires_sans_handicap",
+      "question": "Que faire si mon enfant a des difficultés scolaires sans handicap reconnu ?",
+      "answer": "Si un enfant rencontre des difficultés scolaires sans handicap reconnu, l’école peut proposer des dispositifs comme le PPRE ou le PAP. Ces dispositifs permettent de mettre en place des adaptations pédagogiques pour aider l’élève à progresser.",
+      "keywords": [
+        "difficultes scolaires enfant",
+        "aide scolaire pap ppre"
+      ],
+      "related_links": [
+        {
+          "question": "C'est quoi un PAP ?",
+          "chunk_id": "pap_definition"
+        },
+        {
+          "question": "C'est quoi un PPRE ?",
+          "chunk_id": "ppre_definition"
+        }
+      ],
+      "typical_questions": [
+        "mon enfant a des difficultés école que faire"
+      ]
+    },
+    {
+      "id": "materiel_pedagogique_adapte",
+      "question": "Quel matériel peut être adapté pour un élève handicapé ?",
+      "answer": "Certains élèves en situation de handicap peuvent bénéficier de matériel pédagogique adapté comme un ordinateur, un logiciel spécialisé ou des supports pédagogiques spécifiques. Ces aides peuvent être proposées dans le cadre d’un PPS ou d’un PAP.",
+      "keywords": [
+        "materiel pedagogique adapte",
+        "ordinateur handicap ecole",
+        "outil scolaire handicap"
+      ],
+      "typical_questions": [
+        "ordinateur mdph enfant",
+        "outil adaptation ecole"
+      ]
+    },
+    {
+      "id": "inclusion_scolaire_definition",
+      "question": "Qu'est-ce que l'inclusion scolaire ?",
+      "answer": "L’inclusion scolaire consiste à permettre aux élèves en situation de handicap de suivre leur scolarité dans une école ordinaire avec les adaptations nécessaires. L’objectif est de favoriser l’égalité des chances et la participation de tous les élèves à la vie scolaire.",
+      "keywords": [
+        "inclusion scolaire",
+        "ecole inclusive",
+        "scolarisation handicap"
+      ],
+      "typical_questions": [
+        "c est quoi l ecole inclusive ?",
+        "c'est quoi l'inclusion scolaire ?",
+        "inclusion scolaire définition",
+        "qu'est-ce que l'inclusion scolaire ?"
+      ]
+    },
+    {
+      "id": "vie_periscolaire_handicap",
+      "question": "Les aides concernent-elles aussi la cantine ou les activités périscolaires ?",
+      "answer": "Selon la situation de l’enfant, certaines aides peuvent aussi concerner la vie périscolaire comme la cantine, les activités extrascolaires ou les transports. Ces besoins peuvent être mentionnés dans le dossier MDPH.",
+      "keywords": [
+        "periscolaire handicap",
+        "cantine handicap",
+        "transport scolaire handicap"
+      ],
+      "typical_questions": [
+        "aesh cantine",
+        "aide transport handicap ecole"
+      ]
+    },
+    {
+      "id": "age_limite_scolarisation_mdph",
+      "question": "Jusqu'à quel âge les aides scolaires sont-elles possibles ?",
+      "answer": "Les aides liées à la scolarisation des élèves en situation de handicap peuvent être accordées pendant toute la durée de la scolarité. Après 20 ans, certaines démarches doivent être réalisées directement auprès du référent handicap de l’établissement d’enseignement supérieur.",
+      "keywords": [
+        "age limite mdph scolarite",
+        "aide handicap etudiant"
+      ],
+      "typical_questions": [
+        "aide mdph apres 20 ans",
+        "handicap universite"
+      ]
+    },
+    {
+      "id": "aah_couple_calcul",
+      "question": "Comment est calculée l'AAH quand je vis en couple ?",
+      "answer": "**💑 AAH ET VIE EN COUPLE - CALCUL DÉTAILLÉ**\n\n## 📊 **PRINCIPE GÉNÉRAL**\n\nQuand vous vivez **en couple** (marié, pacsé ou en concubinage), l'AAH est calculée en tenant compte des **revenus de votre conjoint(e)**.\n\n⚠️ **Important :** Vos revenus ET ceux de votre conjoint(e) sont pris en compte.\n\n---\n\n## 💰 **PLAFONDS DE RESSOURCES 2024**\n\n| Situation | Plafond annuel |\n|-----------|----------------|\n| **Personne seule** | 11 656 € |\n| **Couple (marié/pacsé/concubinage)** | **21 098 €** |\n| **+ 5 818 € par enfant à charge** | |\n\n---\n\n## 🧮 **COMMENT ÇA SE CALCULE ?**\n\n### **Étape 1 : Calcul des revenus du couple**\n\nOn prend les **revenus annuels** (N-2) du couple :\n- Vos salaires/pensions\n- Les salaires/pensions de votre conjoint(e)\n- Autres revenus (loyers, intérêts...)\n\n**💡 Bon à savoir :**\n- Les revenus d'activité sont abattus (40% la 1ère année, 30% ensuite)\n- Les pensions alimentaires versées aux enfants sont déduites\n\n### **Étape 2 : Calcul du montant AAH**\n\n**Formule :**\n```\nAAH mensuelle = (Plafond - Revenus annuels) / 12\n```\n\n**⚠️ AAH minimale :** Si le calcul donne moins de 1 €, vous n'avez pas droit à l'AAH.\n\n---\n\n## 💡 **EXEMPLES CONCRETS**\n\n### **Exemple 1 : Conjoint sans revenus**\n\n- Vous : AAH demandée\n- Conjoint : sans emploi, sans revenus\n- Revenus du couple : 0 €\n\n**Résultat :**\n- Plafond : 21 098 €\n- AAH annuelle : 21 098 € / 12 = **1 016 €/mois** (AAH à taux plein)\n\n---\n\n### **Exemple 2 : Conjoint avec salaire**\n\n- Vous : AAH demandée\n- Conjoint : 1 500 €/mois net (18 000 €/an)\n- Revenus du couple : 18 000 €/an\n\n**Calcul :**\n- Plafond : 21 098 €\n- Revenus : 18 000 €\n- AAH annuelle : (21 098 - 18 000) = 3 098 €\n- **AAH mensuelle : 3 098 / 12 = 258 €/mois**\n\n---\n\n### **Exemple 3 : Couple avec 1 enfant**\n\n- Vous : AAH demandée\n- Conjoint : 1 800 €/mois (21 600 €/an)\n- 1 enfant à charge\n- Revenus du couple : 21 600 €/an\n\n**Calcul :**\n- Plafond de base : 21 098 €\n- **+ 5 818 € (1 enfant) = 26 916 €**\n- Revenus : 21 600 €\n- AAH annuelle : (26 916 - 21 600) = 5 316 €\n- **AAH mensuelle : 5 316 / 12 = 443 €/mois**\n\n---\n\n### **Exemple 4 : Revenus du conjoint trop élevés**\n\n- Vous : AAH demandée\n- Conjoint : 2 500 €/mois (30 000 €/an)\n- Revenus du couple : 30 000 €/an\n\n**Calcul :**\n- Plafond : 21 098 €\n- Revenus : 30 000 € (> plafond)\n- **AAH = 0 € (pas de droit)**\n\n---\n\n## 📝 **REVENUS PRIS EN COMPTE**\n\n### ✅ **Comptent dans les ressources :**\n- Salaires, pensions, retraites\n- Allocations chômage\n- Revenus fonciers (loyers)\n- Pensions alimentaires reçues\n- Intérêts bancaires, placements\n- Revenus du conjoint\n\n### ❌ **Ne comptent PAS :**\n- Prestations familiales (allocations familiales, APL...)\n- Prime d'activité\n- Bourses d'études\n- Pensions alimentaires versées aux enfants (déductibles)\n- PCH (Prestation de Compensation du Handicap)\n- Certaines aides sociales\n\n---\n\n## 🔄 **DÉCONJUGALISATION DE L'AAH**\n\n**📅 Depuis octobre 2023 :**\n\nLa réforme de la \"déconjugalisation\" a modifié le calcul :\n\n✅ **Avantage :** L'abattement sur les revenus du conjoint est plus favorable\n✅ **Résultat :** Plus de bénéficiaires peuvent avoir une AAH à taux plein ou partiel\n\n**Pour en savoir plus, voir le chunk dédié** : `aah_deconjugalisation`\n\n---\n\n## 🔁 **RÉVISION AUTOMATIQUE**\n\nVotre AAH est **recalculée tous les 3 mois** si les revenus de votre foyer changent (vous ou votre conjoint(e) trouve/perd un emploi, changement de salaire...).\n\n**💡 Obligation :** Déclarez tout changement de situation à la CAF/MSA dans le mois.\n\n---\n\n## ⚠️ **CHANGEMENT DE SITUATION**\n\nSi vous vous **mariez, pacsez ou vivez en concubinage**, prévenez rapidement la CAF/MSA car le montant de votre AAH sera recalculé.\n\nDe même en cas de **séparation** : votre AAH augmentera (recalcul sur plafond personne seule).\n\n---\n\n## 📞 **POUR SIMULER VOTRE AAH**\n\n**🔗 Simulateur CAF :** [https://www.caf.fr/allocataires/mes-services-en-ligne/estimer-vos-droits](https://www.caf.fr/allocataires/mes-services-en-ligne/estimer-vos-droits)\n\nRenseignez vos revenus + ceux de votre conjoint pour avoir une estimation.\n\n---\n\n## 💡 **L'ESSENTIEL**\n\n✅ L'AAH tient compte des revenus de votre **couple** (vous + conjoint)\n✅ Plafond couple : **21 098 €/an** (+ 5 818 €/enfant)\n✅ AAH calculée = (Plafond - Revenus) / 12\n✅ Réforme 2023 : calcul plus favorable avec la déconjugalisation\n✅ Déclarez tout changement de situation à la CAF/MSA",
+      "source": "service-public.fr, caf.fr",
+      "keywords": [
+        "aah couple",
+        "aah conjoint",
+        "aah vie en couple",
+        "aah marié",
+        "aah pacsé",
+        "aah concubinage",
+        "revenus conjoint aah",
+        "calcul aah couple",
+        "plafond aah couple",
+        "aah et revenus du conjoint"
+      ],
+      "typical_questions": [
+        "comment est calculée l'aah quand je vis en couple ?",
+        "les revenus de mon conjoint sont-ils pris en compte pour l'aah ?",
+        "quel est le plafond aah pour un couple ?",
+        "je vis en couple, ai-je droit à l'aah ?",
+        "mon mari travaille, puis-je avoir l'aah ?",
+        "aah et revenus du conjoint",
+        "calcul aah en couple",
+        "je me marie, vais-je perdre mon aah ?",
+        "aah couple avec enfant",
+        "si je vis en concubinage, ai-je droit à l'aah ?",
+        "je vis en couple, est-ce que les revenus de mon conjoint vont réduire mon aah ?",
+        "comment est calculée l'aah quand on vit avec son compagnon ou sa compagne ?",
+        "mon mari travaille, est-ce que je peux quand même toucher l'aah complète ?"
+      ],
+      "related_links": [
+        {
+          "question": "Qu'est-ce que la déconjugalisation de l'AAH ?",
+          "chunk_id": "aah_deconjugalisation"
+        },
+        {
+          "question": "Quelles sont les conditions pour l'AAH ?",
+          "chunk_id": "aah_conditions"
+        },
+        {
+          "question": "L'AAH dépend-elle des revenus ?",
+          "chunk_id": "aah_ressources"
+        },
+        {
+          "question": "Peut-on cumuler AAH et emploi ?",
+          "chunk_id": "aah_emploi"
+        }
+      ]
+    },
+    {
+      "id": "aah_emploi_mi_temps_calcul",
+      "question": "Je touche l'AAH, si je trouve un emploi à mi-temps vais-je tout perdre ?",
+      "answer": "**💼 AAH + EMPLOI À MI-TEMPS - VOUS NE PERDEZ PAS TOUT !**\n\n## ✅ **RÉPONSE RAPIDE**\n\n**NON, vous ne perdrez pas tout !** L'AAH est **cumulable avec un salaire**, avec un système d'abattement favorable qui vous permet de gagner plus en travaillant.\n\n**💡 Principe :** Plus vous travaillez, plus vos revenus totaux augmentent (AAH réduite + salaire > AAH seule).\n\n---\n\n## 🧮 **COMMENT ÇA MARCHE ?**\n\n### **Abattement sur les revenus d'activité**\n\nQuand vous travaillez, la CAF/MSA applique un **abattement** sur votre salaire avant de calculer votre AAH restante :\n\n| Période | Abattement | Revenus pris en compte |\n|---------|-----------|------------------------|\n| **Année 1-6 mois** | **80%** | Seulement 20% de votre salaire |\n| **Mois 7-12** | **40%** | 60% de votre salaire |\n| **Après 1 an** | **40%** | 60% de votre salaire |\n\n**💡 En clair :**\n- Les 6 premiers mois : 80% de votre salaire n'est PAS compté → **AAH quasi maintenue**\n- Ensuite : 40% de votre salaire n'est pas compté → **AAH réduite progressivement**\n\n---\n\n## 💡 **EXEMPLES CONCRETS**\n\n### **Exemple 1 : Mi-temps à 800 €/mois**\n\nVous gagnez **800 €/mois** en mi-temps.\n\n**Les 6 premiers mois :**\n- Abattement 80% → revenus comptés : 800 × 20% = **160 €/mois**\n- AAH restante : 1 016 - (160 / 12 × 12) = **~1 000 €/mois**\n- **Total : 800 + 1 000 = 1 800 €/mois** 🎉\n\n**Après 6 mois :**\n- Abattement 40% → revenus comptés : 800 × 60% = **480 €/mois**\n- AAH restante : 1 016 - 480 = **536 €/mois**\n- **Total : 800 + 536 = 1 336 €/mois** 🎉\n\n**👉 Vous gagnez 1 336 €/mois au lieu de 1 016 € sans travailler (+320 €/mois) !**\n\n---\n\n### **Exemple 2 : Temps partiel 60% = 1 000 €/mois**\n\nVous gagnez **1 000 €/mois**.\n\n**Les 6 premiers mois :**\n- Revenus comptés : 1 000 × 20% = 200 €/mois\n- AAH restante : **~990 €/mois**\n- **Total : 1 000 + 990 = 1 990 €/mois** 🎉\n\n**Après 6 mois :**\n- Revenus comptés : 1 000 × 60% = 600 €/mois\n- AAH restante : 1 016 - 600 = **416 €/mois**\n- **Total : 1 000 + 416 = 1 416 €/mois** 🎉\n\n**👉 Vous gagnez 1 416 €/mois au lieu de 1 016 € (+400 €/mois) !**\n\n---\n\n### **Exemple 3 : Plein temps SMIC = 1 400 €/mois**\n\nVous gagnez **1 400 €/mois** (SMIC).\n\n**Les 6 premiers mois :**\n- Revenus comptés : 1 400 × 20% = 280 €/mois\n- AAH restante : **~750 €/mois**\n- **Total : 1 400 + 750 = 2 150 €/mois** 🎉\n\n**Après 6 mois :**\n- Revenus comptés : 1 400 × 60% = 840 €/mois\n- AAH restante : 1 016 - 840 = **176 €/mois**\n- **Total : 1 400 + 176 = 1 576 €/mois** 🎉\n\n**👉 Vous gagnez 1 576 €/mois au lieu de 1 016 € (+560 €/mois) !**\n\n---\n\n## 📊 **TABLEAU RÉCAPITULATIF**\n\n| Salaire mensuel | AAH restante (mois 1-6) | Total (mois 1-6) | AAH restante (après 6 mois) | Total (après 6 mois) |\n|----------------|-------------------------|------------------|----------------------------|----------------------|\n| 0 € | 1 016 € | 1 016 € | 1 016 € | 1 016 € |\n| 500 € | ~920 € | ~1 420 € | ~716 € | ~1 216 € |\n| 800 € | ~840 € | ~1 640 € | ~536 € | ~1 336 € |\n| 1 000 € | ~790 € | ~1 790 € | ~416 € | ~1 416 € |\n| 1 200 € | ~730 € | ~1 930 € | ~296 € | ~1 496 € |\n| 1 400 € | ~670 € | ~2 070 € | ~176 € | ~1 576 € |\n\n**💡 Conclusion :** Travailler rapporte TOUJOURS plus que ne pas travailler !\n\n---\n\n## 🔄 **RÉVISION TRIMESTRIELLE**\n\nQuand vous commencez à travailler, l'AAH est **recalculée tous les 3 mois** en fonction de vos revenus réels.\n\n**⚠️ Obligations :**\n- Déclarez votre reprise d'activité à la CAF/MSA **dans le mois**\n- Déclarez vos revenus trimestriels\n- Fournissez vos bulletins de salaire si demandés\n\n---\n\n## 💰 **GARANTIE DE RESSOURCES MINIMALES**\n\nSi votre salaire + AAH réduite < 1 016 €, la CAF maintient un montant minimal.\n\n**👉 Vous ne pouvez JAMAIS gagner moins en travaillant qu'en ne travaillant pas !**\n\n---\n\n## ⚠️ **CAS PARTICULIERS**\n\n### **Emploi en ESAT**\nSi vous travaillez en ESAT (milieu protégé), le cumul est encore plus avantageux. Voir chunk dédié : `aah_emploi`\n\n### **Auto-entrepreneur**\nLes revenus d'activité indépendante bénéficient aussi de l'abattement. Voir : `aah_auto_entrepreneur`\n\n---\n\n## 📞 **SIMULATION ET AIDE**\n\n**🔗 Simulateur CAF :** [caf.fr](https://www.caf.fr/allocataires/mes-services-en-ligne/estimer-vos-droits)\n\n**📞 Contacts :**\n- Votre CAF/MSA pour une simulation personnalisée\n- Cap Emploi : accompagnement emploi + handicap\n\n---\n\n## 💡 **L'ESSENTIEL**\n\n✅ **NON, vous ne perdez pas tout !** AAH cumulable avec salaire\n✅ **Abattement 80%** les 6 premiers mois → AAH quasi maintenue\n✅ **Abattement 40%** ensuite → AAH réduite mais revenus totaux > AAH seule\n✅ **Travailler rapporte TOUJOURS plus** que ne pas travailler\n✅ Exemple mi-temps 800 € : Total **1 336 €/mois** au lieu de 1 016 €\n✅ **Déclarez votre reprise d'activité** à la CAF dans le mois",
+      "source": "service-public.fr, caf.fr",
+      "keywords": [
+        "aah emploi mi temps",
+        "aah temps partiel",
+        "aah et travail mi-temps",
+        "cumul aah salaire",
+        "aah et salaire",
+        "travailler avec aah",
+        "aah reprise emploi",
+        "perdre aah en travaillant",
+        "aah abattement salaire",
+        "calcul aah emploi partiel"
+      ],
+      "typical_questions": [
+        "je touche l'aah, si je trouve un emploi à mi-temps vais-je tout perdre ?",
+        "peut-on cumuler aah et salaire ?",
+        "combien vais-je toucher avec aah et un mi-temps ?",
+        "aah et emploi à temps partiel",
+        "si je travaille à mi-temps, combien d'aah vais-je garder ?",
+        "puis-je travailler en gardant l'aah ?",
+        "calcul aah avec emploi à mi-temps",
+        "je trouve un emploi, vais-je perdre mon aah ?",
+        "aah et reprise d'activité partielle",
+        "travailler 20h avec aah combien ?",
+        "je travaille à mi-temps avec mon handicap, comment ça se passe avec l'aah ?",
+        "est-ce que je peux cumuler un salaire partiel et l'allocation adulte handicapé ?",
+        "si je trouve un petit boulot, je vais perdre mon aah ou c'est compatible ?"
+      ],
+      "related_links": [
+        {
+          "question": "Peut-on cumuler AAH et emploi ?",
+          "chunk_id": "aah_emploi"
+        },
+        {
+          "question": "AAH et auto-entrepreneur",
+          "chunk_id": "aah_auto_entrepreneur"
+        },
+        {
+          "question": "Quelles sont les conditions de l'AAH ?",
+          "chunk_id": "aah_conditions"
+        },
+        {
+          "question": "L'AAH dépend-elle des revenus ?",
+          "chunk_id": "aah_ressources"
+        }
+      ]
+    },
+    {
+      "id": "aah_rsa",
+      "question": "L'AAH est-elle compatible avec le RSA ?",
+      "answer": "**💰 AAH ET RSA - CUMUL ET COMPATIBILITÉ**\n\n## ✅ **RÉPONSE RAPIDE**\n\n**NON, l'AAH et le RSA ne sont PAS cumulables.**\n\nSi vous avez droit à l'AAH ET au RSA, **vous recevrez uniquement l'AAH** (qui est généralement plus avantageuse).\n\n---\n\n## 📊 **PRINCIPE GÉNÉRAL**\n\n### **Montants 2024**\n- **AAH** : 1 016,05 €/mois (personne seule)\n- **RSA** : 607,75 €/mois (personne seule)\n\n**💡 L'AAH est plus élevée** → Si vous avez droit aux deux, la CAF verse automatiquement l'AAH.\n\n---\n\n## 🔄 **COMMENT ÇA FONCTIONNE ?**\n\n### **Cas 1 : Vous touchez le RSA et obtenez l'AAH**\n\nQuand votre droit à l'AAH est accepté par la MDPH :\n1. Le **RSA s'arrête automatiquement**\n2. L'**AAH démarre** à la place\n3. Vous gagnez : **1 016 € au lieu de 608 €** (+408 €/mois) 🎉\n\n**⚠️ Transition :** La CAF gère automatiquement le basculement RSA → AAH.\n\n---\n\n### **Cas 2 : Vous touchez l'AAH et faites une demande RSA**\n\nSi vous touchez déjà l'AAH et demandez le RSA :\n- La CAF **refuse automatiquement le RSA**\n- Vous **continuez à toucher l'AAH** (montant plus élevé)\n\n---\n\n### **Cas 3 : AAH réduite (différentiel)**\n\nSi vous touchez une **AAH partielle** (AAH réduite car vous avez des petits revenus), vous ne pouvez toujours pas cumuler avec le RSA.\n\n**Exemple :**\n- Vous travaillez à mi-temps : 600 €/mois\n- AAH réduite : 400 €/mois\n- **Total : 1 000 €/mois**\n\n❌ **Pas de RSA en plus** (car AAH déjà versée)\n\n---\n\n## 💡 **POURQUOI L'AAH REMPLACE LE RSA ?**\n\n### **L'AAH est une allocation \"subsidiaire\"**\n\nL'AAH est conçue pour garantir un **revenu minimum** aux personnes handicapées :\n- Elle remplace le RSA pour les personnes en situation de handicap\n- Elle est **plus élevée** que le RSA (1 016 € vs 608 €)\n- Elle tient compte des **difficultés liées au handicap**\n\n**💡 En clair :** L'AAH = \"RSA + complément handicap\" intégré dans un seul versement.\n\n---\n\n## 🎯 **CAS PARTICULIERS**\n\n### **AAH + Couple au RSA**\n\nSi vous vivez en couple :\n- **Vous** : AAH (1 016 €)\n- **Votre conjoint** : RSA possible si conditions remplies\n\n**✅ Le conjoint peut toucher le RSA** si :\n- Il n'a pas de revenus\n- Le foyer remplit les conditions RSA\n\n**Exemple :**\n- Vous : AAH 1 016 €\n- Conjoint : RSA individuel (environ 304 € pour personne en couple)\n- **Total foyer : ~1 320 €**\n\n---\n\n### **AAH + Prime d'activité**\n\nL'AAH n'est **pas cumulable avec le RSA**, mais elle EST cumulable avec la **Prime d'activité** si vous travaillez.\n\n**💡 Important :** Si vous travaillez en touchant l'AAH, vous pouvez demander la prime d'activité (voir chunk dédié : `aah_emploi`).\n\n---\n\n## 📋 **COMPARAISON AAH vs RSA**\n\n| Critère | AAH | RSA |\n|---------|-----|-----|\n| **Montant** | 1 016 €/mois | 608 €/mois |\n| **Conditions** | Taux incapacité ≥ 80% | Ressources faibles |\n| **Âge** | 20-62 ans | 25+ ans (ou +18 si enfant) |\n| **Démarches** | MDPH + CAF | CAF uniquement |\n| **Durée** | 1-10 ans (renouvelable) | Tant que conditions remplies |\n| **Cumul** | ❌ Non | ❌ Non |\n\n---\n\n## ⚠️ **QUE FAIRE SI VOUS TOUCHEZ LE RSA ?**\n\n### **Si vous pensez avoir droit à l'AAH :**\n\n1. **Faites une demande MDPH** pour l'AAH\n2. Si acceptée, le **RSA s'arrête automatiquement**\n3. L'**AAH démarre** → Vous gagnez **+408 €/mois** ✅\n\n**📄 Documents nécessaires :**\n- Formulaire Cerfa 15692 (demande MDPH)\n- Certificat médical Cerfa 15695 (moins de 1 an)\n- Justificatifs identité et domicile\n\n---\n\n### **Délais**\n\nLa MDPH a **4 mois maximum** pour traiter votre demande.\n\nPendant ce délai, **vous continuez à toucher le RSA**.\n\nDès que l'AAH est accordée :\n- RSA stop\n- AAH démarre (effet rétroactif possible selon date de décision)\n\n---\n\n## 💰 **DROITS CONNEXES**\n\nSi vous touchez l'AAH (et plus le RSA), vous conservez :\n\n✅ **APL** (Aide Personnalisée au Logement)\n✅ **CMU-C** / **Complémentaire santé solidaire** (si ressources faibles)\n✅ **Réduction téléphone social** (selon opérateurs)\n✅ **Tarifs sociaux énergie** (chèque énergie)\n✅ **Exonération taxe d'habitation** (selon revenus)\n\n**💡 Vous ne perdez pas vos autres droits sociaux** en basculant RSA → AAH.\n\n---\n\n## 📞 **CONTACTS**\n\n- **CAF** : 3230 ou [caf.fr](https://www.caf.fr)\n- **MDPH** : Votre MDPH départementale ([annuaire](https://www.monparcourshandicap.gouv.fr/annuaire))\n- **Simulateur CAF** : [Estimer vos droits](https://www.caf.fr/allocataires/mes-services-en-ligne/estimer-vos-droits)\n\n---\n\n## 💡 **L'ESSENTIEL**\n\n❌ **AAH et RSA ne sont PAS cumulables**\n✅ **Si droit aux deux → AAH versée** (montant plus élevé)\n✅ **AAH remplace le RSA** : 1 016 € au lieu de 608 € (+408 €)\n✅ **Transition automatique** RSA → AAH gérée par la CAF\n✅ **Prime d'activité cumulable** avec AAH si vous travaillez\n✅ **Conjoint peut toucher RSA** si vous êtes en couple",
+      "source": "service-public.fr, caf.fr",
+      "keywords": [
+        "aah rsa",
+        "aah et rsa",
+        "cumul aah rsa",
+        "aah compatible rsa",
+        "aah ou rsa",
+        "difference aah rsa",
+        "peut on cumuler aah et rsa",
+        "rsa avec aah",
+        "toucher aah et rsa"
+      ],
+      "typical_questions": [
+        "l'aah est-elle compatible avec le rsa ?",
+        "peut-on cumuler aah et rsa ?",
+        "aah ou rsa ?",
+        "quelle différence entre aah et rsa ?",
+        "si j'ai l'aah, puis-je toucher le rsa ?",
+        "je touche le rsa, puis-je avoir l'aah ?",
+        "aah et rsa en même temps",
+        "cumul aah rsa possible ?",
+        "aah remplace rsa ?",
+        "passer du rsa à l'aah"
+      ],
+      "related_links": [
+        {
+          "question": "Qu'est-ce que l'AAH ?",
+          "chunk_id": "aah_definition"
+        },
+        {
+          "question": "Quelles sont les conditions pour l'AAH ?",
+          "chunk_id": "aah_conditions"
+        },
+        {
+          "question": "Peut-on cumuler AAH et emploi ?",
+          "chunk_id": "aah_emploi"
+        },
+        {
+          "question": "AAH et revenus",
+          "chunk_id": "aah_ressources"
+        }
+      ]
+    },
+    {
+      "id": "aah_auto_entrepreneur",
+      "question": "Puis-je cumuler AAH et statut auto-entrepreneur ?",
+      "answer": "**💼 AAH ET AUTO-ENTREPRENEUR - CUMUL POSSIBLE !**\n\n## ✅ **RÉPONSE RAPIDE**\n\n**OUI, vous pouvez cumuler l'AAH avec le statut auto-entrepreneur** (micro-entrepreneur).\n\nLe cumul suit les **mêmes règles que pour un emploi salarié** : abattement favorable sur vos revenus d'activité.\n\n---\n\n## 🧮 **COMMENT ÇA MARCHE ?**\n\n### **Abattement sur les revenus auto-entrepreneur**\n\nComme pour un salarié, vos revenus bénéficient d'un **abattement** avant calcul de l'AAH :\n\n| Période | Abattement | Revenus pris en compte |\n|---------|-----------|------------------------|\n| **6 premiers mois** | **80%** | Seulement 20% de vos revenus |\n| **Après 6 mois** | **40%** | 60% de vos revenus |\n\n**💡 En clair :**\n- Les 6 premiers mois : 80% de vos revenus ne sont PAS comptés → **AAH quasi maintenue**\n- Ensuite : 40% de vos revenus ne sont pas comptés → **AAH réduite progressivement**\n\n---\n\n## 💡 **EXEMPLES CONCRETS**\n\n### **Exemple 1 : Revenus 500 €/mois**\n\nVous générez **500 €/mois** de chiffre d'affaires (CA) en auto-entrepreneur.\n\n**Les 6 premiers mois :**\n- Abattement 80% → revenus comptés : 500 × 20% = **100 €/mois**\n- AAH restante : **~916 €/mois**\n- **Total : 500 + 916 = 1 416 €/mois** 🎉\n\n**Après 6 mois :**\n- Abattement 40% → revenus comptés : 500 × 60% = **300 €/mois**\n- AAH restante : **~716 €/mois**\n- **Total : 500 + 716 = 1 216 €/mois** 🎉\n\n**👉 Vous gagnez 1 216 €/mois au lieu de 1 016 € (+200 €/mois) !**\n\n---\n\n### **Exemple 2 : Revenus 1 000 €/mois**\n\nVous générez **1 000 €/mois** de CA.\n\n**Les 6 premiers mois :**\n- Revenus comptés : 1 000 × 20% = 200 €/mois\n- AAH restante : **~816 €/mois**\n- **Total : 1 000 + 816 = 1 816 €/mois** 🎉\n\n**Après 6 mois :**\n- Revenus comptés : 1 000 × 60% = 600 €/mois\n- AAH restante : **~416 €/mois**\n- **Total : 1 000 + 416 = 1 416 €/mois** 🎉\n\n---\n\n## 📋 **DÉMARCHES À FAIRE**\n\n### **1️⃣ Déclarer votre activité auto-entrepreneur**\n\n**Sur [autoentrepreneur.urssaf.fr](https://www.autoentrepreneur.urssaf.fr)**\n\n- Créer votre statut auto-entrepreneur\n- Choisir votre activité\n- Obtenir votre **numéro SIRET**\n\n---\n\n### **2️⃣ Déclarer votre activité à la CAF/MSA**\n\n**⚠️ OBLIGATOIRE dans le mois suivant le début d'activité**\n\n**Sur votre espace CAF :**\n- Déclarer le **début d'activité**\n- Indiquer votre **numéro SIRET**\n- Type d'activité : \"Travailleur indépendant / auto-entrepreneur\"\n\n**💡 Important :** Si vous ne déclarez pas, vous risquez un **trop-perçu** (remboursement AAH) + sanctions.\n\n---\n\n### **3️⃣ Déclarer vos revenus trimestriels**\n\n**Tous les 3 mois** à la CAF/MSA :\n- Déclarer votre **chiffre d'affaires** réel\n- La CAF recalcule automatiquement votre AAH\n\n**Exemple de déclaration :**\n- Trimestre 1 (jan-mar) : 1 500 € de CA → déclarer 1 500 €\n- Trimestre 2 (avr-jun) : 2 000 € de CA → déclarer 2 000 €\n\n---\n\n## ⚠️ **CHIFFRE D'AFFAIRES vs BÉNÉFICE**\n\n**Pour la CAF, on déclare le CHIFFRE D'AFFAIRES** (pas le bénéfice).\n\n**Exemple :**\n- Vous facturez 1 000 € (CA)\n- Vous avez 300 € de charges\n- Bénéfice : 700 €\n\n**👉 Vous déclarez 1 000 €** à la CAF (le CA brut)\n\n**Mais :** La CAF applique ensuite un **abattement forfaitaire** selon votre activité :\n\n| Type d'activité | Abattement forfaitaire |\n|----------------|------------------------|\n| **Vente de marchandises** | 71% |\n| **Prestations de services (BIC)** | 50% |\n| **Prestations de services (BNC)** | 34% |\n| **Activités libérales** | 34% |\n\n**Exemple avec prestations de services BNC :**\n- CA déclaré : 1 000 €\n- Abattement forfaitaire 34% : 1 000 × 66% = **660 €**\n- Puis abattement AAH 40% : 660 × 60% = **396 € comptés**\n- AAH restante : 1 016 - 396 = **620 €**\n- **Total : 1 000 + 620 = 1 620 €**\n\n---\n\n## 🎯 **AVANTAGES AUTO-ENTREPRENEUR + AAH**\n\n✅ **Cumul avantageux** : Abattement 80% puis 40%\n✅ **Flexibilité** : Vous gérez votre activité à votre rythme\n✅ **Sécurité** : Vous gardez l'AAH si l'activité ne marche pas\n✅ **Progressif** : Vous pouvez développer votre activité petit à petit\n✅ **RQTH compatible** : Vous pouvez avoir RQTH + auto-entrepreneur + AAH\n\n---\n\n## ⚠️ **POINTS DE VIGILANCE**\n\n### **Déclarations obligatoires**\n- ❌ **Ne pas déclarer** = trop-perçu + sanctions\n- ✅ **Déclarer dans le mois** le début d'activité à la CAF\n- ✅ **Déclarer tous les 3 mois** vos revenus réels\n\n### **Cotisations sociales**\nEn tant qu'auto-entrepreneur, vous payez des **cotisations URSSAF** sur votre CA :\n- Environ **22%** pour prestations de services\n- Environ **12,8%** pour vente de marchandises\n\n**💡 Ces cotisations sont déduites de votre CA**, mais la CAF compte le CA brut (avant cotisations).\n\n---\n\n## 🔄 **TRANSITION AAH ↔ AUTO-ENTREPRENEUR**\n\n### **Si vous arrêtez l'activité**\nVotre AAH **redevient à taux plein** (1 016 €).\n\n### **Si vos revenus augmentent beaucoup**\nL'AAH diminue progressivement, mais **vous gagnez toujours plus au total**.\n\n**Exemple :**\n- CA : 2 000 €/mois\n- AAH restante : ~200 €\n- **Total : 2 200 €** (bien plus que 1 016 € !)\n\n---\n\n## 📞 **CONTACTS ET AIDES**\n\n- **URSSAF Auto-entrepreneur** : [autoentrepreneur.urssaf.fr](https://www.autoentrepreneur.urssaf.fr)\n- **Votre CAF/MSA** : Pour déclarations trimestrielles\n- **Cap Emploi** : Accompagnement création d'activité handicap\n- **BGE / Réseau Entreprendre** : Aide à la création d'entreprise\n\n---\n\n## 💡 **L'ESSENTIEL**\n\n✅ **OUI, AAH cumulable avec auto-entrepreneur**\n✅ **Abattement 80%** les 6 premiers mois → AAH quasi maintenue\n✅ **Abattement 40%** ensuite → AAH réduite mais revenus totaux > AAH seule\n✅ **Déclarer obligatoire** : début d'activité + revenus trimestriels à la CAF\n✅ **Déclarer le CA brut** (pas le bénéfice)\n✅ **Travailler rapporte toujours plus** que ne pas travailler",
+      "source": "service-public.fr, caf.fr, autoentrepreneur.urssaf.fr",
+      "keywords": [
+        "aah auto entrepreneur",
+        "aah micro entrepreneur",
+        "aah auto-entrepreneur",
+        "cumul aah auto entrepreneur",
+        "aah et auto entrepreneur",
+        "aah travailleur indépendant",
+        "aah freelance",
+        "statut auto entrepreneur aah",
+        "créer entreprise avec aah"
+      ],
+      "typical_questions": [
+        "puis-je cumuler aah et statut auto-entrepreneur ?",
+        "aah et auto-entrepreneur compatible ?",
+        "peut-on être auto-entrepreneur avec l'aah ?",
+        "comment cumuler aah et auto-entrepreneur ?",
+        "aah et micro-entreprise",
+        "je veux créer mon entreprise, puis-je garder l'aah ?",
+        "aah et travailleur indépendant",
+        "freelance avec aah",
+        "auto-entrepreneur handicap aah"
+      ],
+      "related_links": [
+        {
+          "question": "AAH et emploi",
+          "chunk_id": "aah_emploi"
+        },
+        {
+          "question": "AAH et revenus",
+          "chunk_id": "aah_ressources"
+        },
+        {
+          "question": "Quelles sont les conditions de l'AAH ?",
+          "chunk_id": "aah_conditions"
+        }
+      ]
+    },
+    {
+      "id": "cumul_aeeh_sessad",
+      "question": "Peut-on cumuler l'AEEH avec un accompagnement en SESSAD ?",
+      "answer": "**💰 CUMUL AEEH + SESSAD**\n\n**OUI, l'AEEH et le SESSAD sont cumulables** ✅\n\n### 🔑 Points clés\n\n**AEEH (Allocation d'Éducation de l'Enfant Handicapé)** :\n- Aide financière pour compenser les frais liés au handicap\n- Montant de base : 142,70 € (2024) + éventuels compléments\n- Versée par la CAF/MSA\n\n**SESSAD (Service d'Éducation Spéciale et de Soins À Domicile)** :\n- Accompagnement médico-social (éducatif, thérapeutique, pédagogique)\n- Prise en charge à 100% par l'Assurance Maladie\n- **Gratuit pour les familles**\n\n### ✅ Compatibilité totale\n\n- L'AEEH compense les **frais** (matériel, aménagements, surcoût...)\n- Le SESSAD apporte un **accompagnement professionnel**\n- **Aucune incompatibilité** : les deux se complètent\n\n### 📋 Comment obtenir les deux ?\n\n1. **Déposer un dossier MDPH unique** avec :\n   - Demande d'AEEH (formulaire Cerfa 15692)\n   - Demande d'orientation SESSAD\n   - Certificat médical (Cerfa 15695)\n\n2. **Décision CDAPH** :\n   - Attribution AEEH (+ éventuel complément selon besoins)\n   - Notification d'orientation SESSAD\n\n3. **Mise en place** :\n   - AEEH versée directement par la CAF\n   - Recherche d'une place en SESSAD (parfois délai)\n\n### ⚠️ Bon à savoir\n\n- Le SESSAD ne réduit **pas** le montant de l'AEEH\n- L'AEEH peut être majorée si besoin de **réduire l'activité professionnelle** du parent\n- Le SESSAD peut intervenir à l'école, au domicile ou dans ses locaux\n\n### 🔗 Voir aussi\n\n- [AEEH - Montants et compléments](chunk_aeeh_montant)\n- [SESSAD - Fonctionnement](chunk_sessad_definition)\n- [Dossier MDPH pour enfant](guide_demarrage_enfant_handicape)\n\n**Source** : service-public.fr, CNSA",
+      "source": "service-public.fr",
+      "keywords": [
+        "aeeh",
+        "sessad",
+        "cumul",
+        "allocation enfant handicapé",
+        "service éducation spéciale",
+        "soins à domicile",
+        "enfant",
+        "compatible"
+      ],
+      "typical_questions": [
+        "peut-on cumuler l'aeeh avec un sessad ?",
+        "aeeh et sessad compatible ?",
+        "cumul aeeh sessad possible ?",
+        "mon enfant a aeeh et sessad",
+        "sessad avec aeeh",
+        "aeeh + sessad cumulables ?",
+        "allocation enfant et sessad ensemble",
+        "peut-on avoir les deux aeeh sessad ?",
+        "aeeh réduit avec sessad ?",
+        "sessad diminue aeeh ?"
+      ],
+      "related_links": [
+        {
+          "question": "Quel est le montant de l'AEEH ?",
+          "chunk_id": "aeeh_montant"
+        },
+        {
+          "question": "Qu'est-ce qu'un SESSAD ?",
+          "chunk_id": "sessad_definition"
+        },
+        {
+          "question": "Comment faire une demande MDPH pour enfant ?",
+          "chunk_id": "guide_demarrage_enfant_handicape"
+        }
+      ]
+    },
+    {
+      "id": "aah_pension_invalidite",
+      "question": "Peut-on cumuler l'AAH avec une pension d'invalidité ?",
+      "answer": "**💰 AAH + PENSION D'INVALIDITÉ**\n\n**NON, l'AAH et la pension d'invalidité ne sont PAS cumulables** ❌\n\n### 🔑 Principe général\n\nSi vous percevez une **pension d'invalidité** (catégorie 1, 2 ou 3) :\n- Elle est **déduite du montant de l'AAH**\n- Vous recevez uniquement la **différence** (si AAH > pension)\n\n### 💶 Calcul\n\n**Montant AAH (2024)** : 1 016,05 €\n\n**Exemples** :\n\n| Pension invalidité | AAH versée | Total perçu |\n|-------------------|------------|-------------|\n| 400 € | 616,05 € | 1 016,05 € |\n| 800 € | 216,05 € | 1 016,05 € |\n| 1 100 € | 0 € | 1 100 € |\n\n➡️ **Le total ne peut jamais dépasser le montant maximum de l'AAH**\n\n### ⚠️ Cas particulier : AAH différentielle\n\nSi votre pension d'invalidité < 1 016,05 € :\n- Vous pouvez demander **l'AAH différentielle** (complément)\n- La CAF calcule automatiquement la différence\n- Vous touchez : pension + complément AAH = 1 016,05 €\n\n### 📋 Démarches\n\n1. **Déposer une demande AAH à la MDPH** même si vous avez une pension\n2. **Déclarer la pension à la CAF/MSA**\n3. La CAF calcule le montant différentiel automatiquement\n\n### ✅ Avantages de l'AAH même en différentiel\n\n- **Droits connexes** : exonération taxe d'habitation, réduction téléphone...\n- **Maintien CMI** si éligible via MDPH\n- **AAH majorée** possible si vie autonome\n\n### 🔗 Voir aussi\n\n- [AAH - Conditions et montant](aah_definition_demarches)\n- [AAH différentielle](aah_montant)\n- [Plafonds de ressources AAH](aah_plafond_ressources)\n\n**Source** : caf.fr, service-public.fr",
+      "source": "caf.fr",
+      "keywords": [
+        "aah",
+        "pension invalidité",
+        "cumul",
+        "allocation adulte handicapé",
+        "différentielle",
+        "sécurité sociale",
+        "catégorie 1",
+        "catégorie 2",
+        "compatible"
+      ],
+      "typical_questions": [
+        "peut-on cumuler aah et pension d'invalidité ?",
+        "aah et pension invalidité compatible ?",
+        "j'ai une pension invalidité puis-je avoir l'aah ?",
+        "cumul aah pension invalidité possible ?",
+        "pension invalidité avec aah",
+        "aah différentielle pension invalidité",
+        "aah + pension sécurité sociale",
+        "pension catégorie 2 et aah",
+        "invalidité et aah ensemble",
+        "toucher les deux aah et pension ?"
+      ],
+      "related_links": [
+        {
+          "question": "Qu'est-ce que l'AAH ?",
+          "chunk_id": "aah_definition_demarches"
+        },
+        {
+          "question": "Quel est le montant de l'AAH ?",
+          "chunk_id": "aah_montant"
+        },
+        {
+          "question": "Avec quoi l'AAH est-elle cumulable ?",
+          "chunk_id": "aah_cumul"
+        }
+      ]
+    },
+    {
+      "id": "refus_amenagement_poste",
+      "question": "Que faire si mon employeur refuse l'aménagement de mon poste de travail ?",
+      "answer": "**🛠️ REFUS D'AMÉNAGEMENT DE POSTE**\n\n**L'employeur a l'OBLIGATION légale d'aménager votre poste** si vous avez la RQTH ⚖️\n\n### 🔑 Cadre légal\n\n**Articles L5213-6 et L1133-3 du Code du travail** :\n- L'employeur doit prendre des **mesures appropriées** pour permettre l'accès, l'exercice et le maintien dans l'emploi\n- Sauf si ces mesures représentent une **charge disproportionnée**\n\n### 📋 Démarches à suivre\n\n#### 1️⃣ **Solliciter le médecin du travail**\n- Demander une **visite médicale**\n- Le médecin émet des **préconisations d'aménagement** (opposables à l'employeur)\n- Ces préconisations s'imposent sauf avis contraire motivé\n\n#### 2️⃣ **Faire appel à l'AGEFIPH ou au FIPHFP**\n- **AGEFIPH** (secteur privé) : [www.agefiph.fr](https://www.agefiph.fr)\n- **FIPHFP** (fonction publique) : [www.fiphfp.fr](https://www.fiphfp.fr)\n- Ces organismes peuvent **financer** tout ou partie des aménagements\n- Argument pour l'employeur : **coût réduit ou nul**\n\n#### 3️⃣ **Saisir les représentants du personnel**\n- Informer le **CSE** (Comité Social et Économique)\n- Demander l'appui du **référent handicap** de l'entreprise (si >250 salariés)\n\n#### 4️⃣ **Saisir l'inspection du travail**\n- Si refus persistant malgré préconisations médicales\n- L'inspection peut **contraindre** l'employeur\n\n#### 5️⃣ **Recours juridique** (si échec)\n- **Conseil de Prud'hommes** pour discrimination liée au handicap\n- Risque pour l'employeur : dommages et intérêts + sanctions pénales\n\n### ⚠️ Charge disproportionnée\n\nL'employeur peut refuser **uniquement si** :\n- Coût excessif non couvert par aides\n- Impossibilité technique avérée\n- **Mais il doit le prouver** et chercher des solutions alternatives\n\n### 💡 Exemples d'aménagements possibles\n\n- **Matériel** : écran adapté, siège ergonomique, logiciel vocal\n- **Organisation** : télétravail partiel, horaires flexibles, réduction du temps de trajet\n- **Espace** : bureau au rez-de-chaussée, poste de travail plus calme\n\n### 🔗 Voir aussi\n\n- [RQTH - Avantages pour le salarié](rqth_avantages)\n- [Médecin du travail - Rôle](medecin_travail_role)\n- [Licenciement et handicap](licenciement_handicap)\n\n**Source** : travail-emploi.gouv.fr, agefiph.fr",
+      "source": "travail-emploi.gouv.fr",
+      "keywords": [
+        "aménagement poste",
+        "refus",
+        "employeur",
+        "rqth",
+        "travail",
+        "discrimination",
+        "médecin du travail",
+        "agefiph",
+        "obligation",
+        "recours"
+      ],
+      "typical_questions": [
+        "que faire si mon employeur refuse l'aménagement de poste ?",
+        "refus aménagement travail handicap",
+        "employeur refuse aménager mon poste",
+        "mon patron ne veut pas aménager",
+        "refus aménagement rqth",
+        "employeur refuse préconisations médecin du travail",
+        "pas d'aménagement malgré handicap",
+        "que faire refus aménagement ?",
+        "recours refus aménagement poste",
+        "employeur ne respecte pas rqth",
+        "mon patron refuse d'aménager mon poste malgré mon handicap, que faire ?",
+        "l'employeur refuse les aménagements demandés par le médecin du travail",
+        "comment faire si mon entreprise ne veut pas adapter mon poste de travail ?"
+      ],
+      "related_links": [
+        {
+          "question": "Qu'est-ce que la RQTH ?",
+          "chunk_id": "rqth_definition"
+        },
+        {
+          "question": "Quels sont les avantages de la RQTH pour le salarié ?",
+          "chunk_id": "rqth_avantages"
+        },
+        {
+          "question": "Rôle du médecin du travail",
+          "chunk_id": "medecin_travail"
+        }
+      ]
+    },
+    {
+      "id": "cmi_conditions_detaillees",
+      "question": "Quelles sont les conditions précises pour obtenir la CMI selon le taux d'incapacité ?",
+      "answer": "**📇 CMI - CONDITIONS D'ATTRIBUTION SELON TAUX D'INCAPACITÉ**\n\nLes **3 mentions de la Carte Mobilité Inclusion** ont des conditions différentes basées sur le taux d'incapacité.\n\n---\n\n### 🔴 CMI INVALIDITÉ\n\n**Condition principale** : Taux d'incapacité permanente **≥ 80%**\n\n**OU** : Bénéficiaire d'une pension d'invalidité **3ème catégorie**\n\n#### 📅 Durée d'attribution\n\n- **Définitive** si taux ≥ 80% ET handicap non susceptible d'évoluer favorablement\n- **1 à 20 ans** dans les autres cas\n\n#### ✅ Avantages\n\n- Priorité d'accès aux places assises\n- Priorité dans les files d'attente\n- Avantages fiscaux (impôts, taxe d'habitation...)\n- Réductions tarifaires (transports, loisirs...)\n\n---\n\n### 🟠 CMI PRIORITÉ\n\n**Condition principale** : Station debout **pénible** ET taux d'incapacité **< 80%**\n\n#### 📝 Critères d'évaluation\n\nL'équipe pluridisciplinaire de la MDPH évalue :\n- La capacité à rester debout\n- La durée de la station debout supportable\n- L'impact sur la vie quotidienne\n\n#### ✅ Avantages\n\n- Priorité d'accès aux places assises (transports, lieux publics)\n- Priorité dans les files d'attente\n\n---\n\n### 🟢 CMI STATIONNEMENT\n\n**Condition principale** : Capacité à se déplacer à pied **très limitée**\n\n**Critère** : **Quel que soit le taux d'incapacité** ❗\n\n#### 📋 Situations concernées\n\n- Difficultés majeures à la marche\n- Périmètre de marche réduit (< 200 mètres généralement)\n- Besoin d'accompagnement dans les déplacements\n- Impossibilité de se déplacer sans aide technique (fauteuil, déambulateur...)\n\n#### ✅ Avantages\n\n- Stationnement **gratuit et illimité** sur places handicapées\n- Stationnement gratuit sur places payantes (selon communes)\n- Valable en **France et Union Européenne**\n\n---\n\n## 🔑 Points clés\n\n### Cumul des mentions\n\n✅ **OUI, on peut avoir plusieurs mentions** sur une même CMI :\n- CMI Invalidité + Stationnement (courant)\n- CMI Priorité + Stationnement (possible)\n- CMI Invalidité inclut automatiquement la Priorité\n\n### Attribution définitive vs temporaire\n\n**Attribution définitive** possible pour :\n- Taux ≥ 80% sans évolution favorable prévisible\n- Handicap stabilisé\n\n**Attribution temporaire** (1 à 20 ans) :\n- Handicap susceptible d'évoluer\n- Taux < 80% pour CMI Priorité\n\n### Conditions de résidence\n\n✅ Résider dans le département de la demande\n✅ Nationalité française OU ressortissant UE/EEE OU titre de séjour valide\n\n---\n\n## 📋 Démarches\n\n1. **Déposer dossier MDPH** avec formulaire Cerfa 15692 + certificat médical\n2. **Évaluation MDPH** par équipe pluridisciplinaire\n3. **Décision CDAPH** (Commission des Droits et de l'Autonomie)\n4. **Fabrication carte** par l'Imprimerie Nationale (délai : 2-4 semaines)\n\n---\n\n## 🔗 Voir aussi\n\n- [CMI - Types et différences](difference_cmi_priorite_invalidite_stationnement)\n- [CMI Stationnement - Utilisation](cmi_stationnement_usage)\n- [CMI - Délai de fabrication](cmi_delai)\n\n**Sources** : [Service-Public.fr](https://www.service-public.fr/particuliers/vosdroits/F34049), [Mon Parcours Handicap](https://www.monparcourshandicap.gouv.fr/aides/la-carte-mobilite-inclusion-mention-invalidite)",
+      "source": "service-public.fr",
+      "keywords": [
+        "cmi",
+        "carte mobilité inclusion",
+        "conditions",
+        "taux incapacité",
+        "80%",
+        "invalidité",
+        "priorité",
+        "stationnement",
+        "critères"
+      ],
+      "typical_questions": [
+        "quelles sont les conditions pour avoir la cmi ?",
+        "cmi conditions taux incapacité",
+        "faut-il 80% pour la cmi ?",
+        "conditions cmi invalidité",
+        "conditions cmi priorité",
+        "conditions cmi stationnement",
+        "quel taux pour cmi invalidité ?",
+        "cmi avec quel taux handicap ?",
+        "différence conditions cmi",
+        "critères attribution cmi",
+        "j'ai un taux d'incapacité de 60%, puis-je avoir une carte mobilité inclusion ?",
+        "faut-il obligatoirement 80% de handicap pour obtenir la cmi invalidité ?",
+        "avec quel niveau de handicap peut-on avoir droit à la carte cmi ?"
+      ],
+      "related_links": [
+        {
+          "question": "Différence entre CMI priorité, invalidité et stationnement",
+          "chunk_id": "difference_cmi_priorite_invalidite_stationnement"
+        },
+        {
+          "question": "Comment faire une demande de CMI ?",
+          "chunk_id": "cmi_demarches"
+        },
+        {
+          "question": "Combien de temps pour recevoir la CMI ?",
+          "chunk_id": "cmi_delai"
+        }
+      ]
+    },
+    {
+      "id": "rqth_renouvellement_anticipe",
+      "question": "Combien de temps avant la fin de mes droits RQTH dois-je faire la demande de renouvellement ?",
+      "answer": "**♻️ RENOUVELLEMENT ANTICIPÉ DE LA RQTH**\n\n## ⏰ Délai recommandé : **6 MOIS AVANT** la fin de vos droits\n\n---\n\n### 🔑 Pourquoi 6 mois ?\n\n**Délais de traitement MDPH** :\n- Moyenne France : **4 à 6 mois** (fin 2023)\n- Certains départements : jusqu'à 8-9 mois\n\n**Protection contre rupture de droits** :\n- Si demande **avant échéance** → droits maintenus jusqu'à décision\n- Si demande **après échéance** → rupture de droits possible\n\n---\n\n## ✅ PROTECTION LÉGALE (Décret n°2018-850)\n\n**Principe** : Toute demande de renouvellement déposée **avant la date de fin** prolonge automatiquement vos droits RQTH jusqu'à la décision de la CDAPH.\n\n### 📝 Exemple concret\n\n- **RQTH expire le** : 31 décembre 2024\n- **Demande déposée le** : 1er juillet 2024 ✅\n- **Décision MDPH le** : 15 mars 2025\n- **Vos droits RQTH** : **maintenus du 31/12/2024 au 15/03/2025** sans interruption\n\n---\n\n## 📋 Comment renouveler ?\n\n### 1️⃣ **Préparer le dossier (6 mois avant)**\n\n- Formulaire Cerfa 15692 (identique à première demande)\n- Certificat médical Cerfa 15695 (**< 6 mois**)\n- Photocopie notification RQTH actuelle\n- Justificatifs identité, domicile\n\n### 2️⃣ **Déposer à la MDPH**\n\n- Courrier recommandé AR (preuve de dépôt)\n- Dépôt direct au guichet\n- Envoi par mail sécurisé (selon MDPH)\n\n### 3️⃣ **Accuser réception**\n\nConservez la **preuve de dépôt avant échéance** (AR, récépissé)\n\n---\n\n## ⚠️ Risques si demande tardive\n\n### ❌ Demande APRÈS la date d'échéance\n\n**Conséquences** :\n- **Rupture de droits** entre expiration et nouvelle attribution\n- Perte des avantages employeur (aménagements, protections)\n- Potentiel refus renouvellement si situation non stabilisée\n\n### 📅 Calendrier à respecter\n\n| Expiration RQTH | Dépôt dossier AU PLUS TARD |\n|-----------------|---------------------------|\n| 31 décembre 2024 | **30 juin 2024** (recommandé) |\n| 30 juin 2025 | **31 décembre 2024** (recommandé) |\n\n---\n\n## 💡 Conseils pratiques\n\n### ✅ À faire\n\n- **Anticiper** : commencer à rassembler documents 7-8 mois avant\n- **Vérifier certificat médical** : validité < 6 mois obligatoire\n- **Conserver AR** : preuve de dépôt avant échéance\n- **Relancer MDPH** si pas de nouvelles après 4 mois\n\n### ❌ À éviter\n\n- Attendre le dernier moment (risque retards postaux)\n- Certificat médical périmé (> 6 mois)\n- Oublier pièces justificatives (ralentit traitement)\n\n---\n\n## 🔄 Renouvellement simplifié (depuis 2019)\n\n**Si handicap stabilisé** : La CDAPH peut accorder la RQTH pour une durée pouvant aller **jusqu'à 10 ans** (au lieu de 1-5 ans).\n\n**Attribution à vie** possible si :\n- Handicap non susceptible d'évolution favorable\n- Limitations définitives\n\n---\n\n## 🔗 Voir aussi\n\n- [RQTH - Définition et avantages](rqth_definition)\n- [RQTH - Délai de traitement](delai_traitement_mdph)\n- [Que faire en cas de refus RQTH ?](recours_mdph)\n\n**Sources** : [Service-Public.fr](https://www.service-public.fr/particuliers/vosdroits/F1650), [Mon Parcours Handicap](https://www.monparcourshandicap.gouv.fr/aides/la-reconnaissance-de-la-qualite-de-travailleur-handicape-rqth)",
+      "source": "service-public.fr",
+      "keywords": [
+        "rqth",
+        "renouvellement",
+        "anticipé",
+        "combien de temps avant",
+        "6 mois",
+        "délai",
+        "échéance",
+        "expiration",
+        "prolongation"
+      ],
+      "typical_questions": [
+        "combien de temps avant pour renouveler rqth ?",
+        "quand renouveler ma rqth ?",
+        "renouvellement rqth 6 mois avant",
+        "délai renouvellement rqth",
+        "renouvellement anticipé rqth",
+        "ma rqth expire bientôt que faire ?",
+        "quand faire demande renouvellement rqth ?",
+        "rqth fin de droits renouvellement",
+        "anticiper renouvellement rqth",
+        "éviter rupture droits rqth",
+        "ma rqth expire dans 6 mois, quand dois-je faire la demande de renouvellement ?",
+        "combien de temps avant la fin de mes droits je dois renouveler ma rqth ?",
+        "j'ai peur que ma rqth expire avant le renouvellement, que faire ?"
+      ],
+      "related_links": [
+        {
+          "question": "Qu'est-ce que la RQTH ?",
+          "chunk_id": "rqth_definition"
+        },
+        {
+          "question": "Quels sont les délais de traitement MDPH ?",
+          "chunk_id": "delai_traitement_mdph"
+        },
+        {
+          "question": "Comment contester un refus RQTH ?",
+          "chunk_id": "recours_mdph"
+        }
+      ]
+    },
+    {
+      "id": "pch_aide_technique",
+      "question": "Quel est le montant maximum de la PCH pour l'achat de matériel et aides techniques ?",
+      "answer": "**🛠️ PCH AIDE TECHNIQUE - MONTANTS ET PLAFONDS 2024**\n\nLa PCH aide technique finance l'**achat ou location** d'équipements adaptés pour compenser les limitations liées au handicap.\n\n---\n\n## 💶 PLAFONDS 2024\n\n### 📊 Plafond principal\n\n**13 200 €** sur une période de **10 ans**\n\n### 📈 Plafond majoré\n\n**13 200 € + montant de l'aide technique** si :\n- L'aide technique (après déduction Sécurité sociale) a un tarif PCH **≥ 3 000 €**\n\n**Exemple** :\n- Fauteuil roulant électrique : 8 000 € (tarif PCH après SS)\n- Plafond utilisable : **13 200 € + 8 000 € = 21 200 €** ✅\n\n---\n\n## 💰 TAUX DE PRISE EN CHARGE\n\n### 🟢 100% de prise en charge\n\n**Si ressources ≤ 30 398,54 €/an** (2024)\n\n### 🟠 80% de prise en charge\n\n**Si ressources > 30 398,54 €/an**\n\n**Exemple** :\n- Aide technique : 5 000 €\n- Prise en charge à 80% : **4 000 €**\n- Reste à charge : **1 000 €**\n\n---\n\n## 🛒 TYPES D'AIDES TECHNIQUES COUVERTES\n\n### ✅ Exemples courants\n\n**Mobilité** :\n- Fauteuil roulant manuel ou électrique\n- Déambulateur, canne, verticalisateur\n- Rampe d'accès amovible\n\n**Vie quotidienne** :\n- Siège de bain ou douche\n- Lit médicalisé\n- Barre d'appui, rehausseur WC\n\n**Communication** :\n- Logiciel vocal (synthèse vocale)\n- Clavier adapté, trackball\n- Téléphone amplifié\n\n**Autres** :\n- Matériel d'aide à la préhension\n- Systèmes de contrôle d'environnement\n- Aides auditives non remboursées SS\n\n---\n\n## 📋 CONDITIONS D'ATTRIBUTION\n\n### 1️⃣ Équipement listé\n\n**Liste LPPR** (Liste Produits et Prestations Remboursables)\n**OU**\n**Annexe 2-5 du CASF** (Code Action Sociale et Familles)\n\n### 2️⃣ Compensation nécessaire\n\nL'aide technique doit compenser une **limitation d'activité** due au handicap :\n- Se déplacer\n- Se laver, s'habiller\n- Communiquer\n- Manipuler des objets\n- Etc.\n\n### 3️⃣ Après déduction Sécurité sociale\n\nLa PCH intervient **après** la prise en charge de la Sécurité sociale (mutuelle comprise).\n\n**Calcul** :\n1. Prix total aide technique : 6 000 €\n2. Prise en charge SS + mutuelle : 2 000 €\n3. **Montant éligible PCH** : 6 000 € - 2 000 € = **4 000 €**\n4. PCH à 100% : **4 000 €** versés\n5. PCH à 80% : **3 200 €** versés\n\n---\n\n## ⏱️ PÉRIODE DE RÉFÉRENCE\n\nLe plafond de **13 200 €** s'applique sur une période glissante de **10 ans**.\n\n**Exemple** :\n- 2020 : achat fauteuil 8 000 €\n- 2024 : achat siège douche 2 000 €\n- **Total utilisé** : 10 000 € / 13 200 €\n- **Reste disponible** : **3 200 €** jusqu'en 2030\n\n---\n\n## 🔄 RENOUVELLEMENT DU MATÉRIEL\n\n### 📅 Délais minimums entre 2 achats\n\nVariables selon l'équipement :\n- **Fauteuil roulant manuel** : 5 ans\n- **Fauteuil électrique** : 5 ans\n- **Lit médicalisé** : 10 ans\n- **Petit matériel** : selon usure constatée\n\n**Exception** : Renouvellement anticipé possible si :\n- Évolution du handicap\n- Usure anormale justifiée\n- Matériel inadapté\n\n---\n\n## 📋 DÉMARCHES\n\n### 1️⃣ Demande PCH à la MDPH\n\n- Formulaire Cerfa 15692\n- Certificat médical détaillant besoins\n- **Devis détaillé** du matériel\n\n### 2️⃣ Évaluation MDPH\n\n- Visite à domicile par ergothérapeute (fréquent)\n- Plan de compensation personnalisé\n\n### 3️⃣ Achat\n\n**⚠️ IMPORTANT** : Attendre **notification MDPH** avant d'acheter !\n- Achat anticipé = **pas de remboursement**\n\n### 4️⃣ Remboursement\n\n- Envoi facture + RIB au Conseil départemental\n- Versement sous 2-3 mois\n\n---\n\n## 💡 Conseils pratiques\n\n✅ **Toujours demander plusieurs devis** (3 minimum)\n✅ **Privilégier matériel LPPR** (remboursement SS + PCH)\n✅ **Conserver toutes les factures** (contrôle possible)\n✅ **Anticiper les demandes** (délai MDPH 4-6 mois)\n\n---\n\n## 🔗 Voir aussi\n\n- [PCH - Définition et volets](pch_definition)\n- [PCH - Conditions d'attribution](pch_conditions)\n- [PCH - Aménagement du logement](pch_amenagement_logement)\n\n**Sources** : [Service-Public.fr](https://www.service-public.fr/particuliers/vosdroits/F14202), [Mon Parcours Handicap](https://www.monparcourshandicap.gouv.fr/aides/la-prestation-de-compensation-du-handicap-pch)",
+      "source": "service-public.fr",
+      "keywords": [
+        "pch",
+        "aide technique",
+        "matériel adapté",
+        "plafond",
+        "montant",
+        "13200",
+        "fauteuil",
+        "équipement",
+        "remboursement"
+      ],
+      "typical_questions": [
+        "quel est le montant maximum pch aide technique ?",
+        "plafond pch aide technique",
+        "combien rembourse la pch pour matériel ?",
+        "pch aide technique 13200 euros",
+        "montant pch fauteuil roulant",
+        "pch matériel adapté montant",
+        "aide technique pch plafond",
+        "combien pour acheter fauteuil avec pch ?",
+        "pch équipement handicap montant",
+        "remboursement pch aide technique",
+        "j'ai besoin d'un fauteuil roulant électrique, la pch peut-elle le financer ?",
+        "quel montant maximum la pch peut rembourser pour du matériel médical adapté ?",
+        "est-ce que la pch prend en charge l'achat d'aides techniques pour le handicap ?"
+      ],
+      "related_links": [
+        {
+          "question": "Qu'est-ce que la PCH ?",
+          "chunk_id": "pch_definition"
+        },
+        {
+          "question": "Conditions pour obtenir la PCH",
+          "chunk_id": "pch_conditions"
+        },
+        {
+          "question": "PCH aménagement du logement",
+          "chunk_id": "pch_amenagement_logement"
+        }
+      ]
+    },
+    {
+      "id": "aah_versement",
+      "question": "Combien de temps après la décision MDPH vais-je recevoir le premier versement AAH ?",
+      "answer": "**⏱️ AAH - DÉLAIS DE VERSEMENT APRÈS DÉCISION MDPH**\n\n## 📅 Timeline complète\n\n### 1️⃣ **Transmission MDPH → CAF** : 2 à 4 semaines\n\nAprès la décision de la CDAPH, le dossier est transmis à la CAF/MSA.\n\n### 2️⃣ **Traitement CAF** : 15 à 45 jours théoriques\n\nEn pratique, les délais réels varient :\n\n| Situation | Délai |\n|-----------|-------|\n| **Cas favorable** | 2 mois après décision MDPH |\n| **Cas courant** | 3 à 4 mois |\n| **Cas complexe/département surchargé** | 6 à 12 mois ⚠️ |\n\n### 3️⃣ **Premier versement** : 5 du mois\n\nL'AAH est versée **le 5 de chaque mois** (ou jour ouvré suivant).\n\n---\n\n## 💶 RÉTROACTIVITÉ GARANTIE\n\n**Bonne nouvelle** : Même si le premier versement prend du temps, **l'AAH est versée rétroactivement** depuis la date d'effet.\n\n**Date d'effet** : **1er jour du mois civil suivant le dépôt de la demande**\n\n### 📝 Exemple concret\n\n- **Dépôt dossier MDPH** : 15 mars 2024\n- **Date d'effet AAH** : **1er avril 2024**\n- **Décision CDAPH** : 15 juillet 2024\n- **Premier versement CAF** : 5 octobre 2024\n- **Montant versé** : AAH rétroactive **avril → octobre** (7 mois) + versement courant\n\n➡️ Vous recevez un **rappel important** au premier versement !\n\n---\n\n## ⏰ Dates de versement mensuelles\n\nL'AAH est versée **mensuellement** le **5 de chaque mois** (à terme échu).\n\n| Mois concerné | Date de versement |\n|--------------|-------------------|\n| Janvier | 5 février |\n| Février | 5 mars |\n| Mars | 5 avril |\n| ... | ... |\n| Décembre | 5 janvier (année N+1) |\n\n---\n\n## 📞 Que faire en cas de retard ?\n\n### ✅ Après 3 semaines sans nouvelles\n\n1. **Vérifier espace CAF en ligne** : caf.fr (Mon Compte)\n2. Vérifier qu'aucun document n'est manquant\n\n### ⚠️ Après 3 mois sans versement\n\n1. **Contacter la CAF** : 3230 (numéro unique)\n2. **Relancer par courrier recommandé AR**\n3. Demander un \"point de situation\" du dossier\n\n### ❌ Après 6 mois sans versement\n\n- Saisir le **médiateur de la CAF**\n- Contacter le **Défenseur des Droits**\n- Signal sur **Services Publics +**\n\n---\n\n## 🔑 Points clés\n\n✅ **Patience** : Délais normaux = 2-4 mois\n✅ **Rétroactivité** : Vous ne perdez aucun mois de droits\n✅ **Versement 5 du mois** : Régulier ensuite\n✅ **Vérifier espace CAF** : Suivi en ligne du dossier\n\n⚠️ **Anticiper** : Prévoir trésorerie pendant délai d'attente\n⚠️ **Relancer si >3 mois** : Ne pas hésiter à contacter CAF\n\n---\n\n## 🔗 Voir aussi\n\n- [Quel est le montant de l'AAH ?](aah_montant)\n- [AAH - Conditions d'attribution](aah_conditions)\n- [Que faire en cas de refus AAH ?](recours_mdph)\n\n**Sources** : [Mes-Allocs](https://www.mes-allocs.fr/guides/aah/delai-versement-aah-caf/), [MDPH Mon Compte](https://mdphmoncompte.com/delai-mdph-caf/)",
+      "source": "caf.fr",
+      "keywords": [
+        "aah",
+        "versement",
+        "délai",
+        "combien de temps",
+        "premier paiement",
+        "caf",
+        "rétroactivité",
+        "rappel",
+        "retard"
+      ],
+      "typical_questions": [
+        "combien de temps après la décision mdph je touche l'aah ?",
+        "délai versement aah après notification",
+        "quand vais-je recevoir mon premier paiement aah ?",
+        "aah versement combien de temps ?",
+        "délai premier versement aah caf",
+        "l'aah est versée quand après décision ?",
+        "retard versement aah que faire ?",
+        "aah rétroactive combien de mois ?",
+        "premier paiement aah délai",
+        "combien de temps la caf met pour verser l'aah ?",
+        "l'aah est-elle versée automatiquement après la décision mdph ?",
+        "aah versement automatique",
+        "comment l'aah est-elle versée ?"
+      ],
+      "related_links": [
+        {
+          "question": "Quel est le montant de l'AAH ?",
+          "chunk_id": "aah_montant"
+        },
+        {
+          "question": "Conditions pour obtenir l'AAH",
+          "chunk_id": "aah_conditions"
+        },
+        {
+          "question": "Recours si refus AAH",
+          "chunk_id": "recours_mdph"
+        }
+      ]
+    },
+    {
+      "id": "pch_versement",
+      "question": "Comment et quand la PCH est-elle versée par le Conseil départemental ?",
+      "answer": "**💶 PCH - VERSEMENT ET MODALITÉS DE PAIEMENT**\n\n## ⚠️ IMPORTANT : Le versement PCH n'est PAS automatique\n\nContrairement à l'AAH, **la PCH nécessite des démarches actives** pour chaque remboursement.\n\n---\n\n## 📋 PROCÉDURE DE VERSEMENT\n\n### 1️⃣ **Attendre notification MDPH**\n\nDécision CDAPH accordant la PCH\n\n### 2️⃣ **Compléter formulaire PCH**\n\nFiche de renseignements à envoyer au **Conseil départemental** (dans le mois)\n\n### 3️⃣ **Effectuer les dépenses**\n\n⚠️ **Règle d'or** : Attendre validation Conseil départemental avant achats importants !\n\n### 4️⃣ **Demander remboursement**\n\nEnvoyer factures + justificatifs + RIB au Conseil départemental\n\n### 5️⃣ **Recevoir paiement**\n\nDélai : **1 à 3 mois** après envoi factures\n\n---\n\n## 📅 DÉLAIS DE VERSEMENT\n\n### Après notification MDPH\n\n**4 à 8 semaines** en moyenne (peut aller de 1 à 6 mois selon département)\n\n### Conditions\n\n- Dossier complet\n- Formulaire PCH rempli\n- Factures conformes\n\n### ⚠️ Si >3 mois sans paiement\n\nRelancer le Conseil départemental par écrit (LRAR)\n\n---\n\n## 💰 MODES DE VERSEMENT\n\n### 🔄 **Versement mensuel** (PCH aide humaine)\n\n- Paiement **entre le 5 et 15 du mois** (selon département)\n- Régulier pour les aides récurrentes (aide à domicile)\n- Date exacte variable selon Conseil départemental\n\n### 💵 **Versement ponctuel** (PCH aides techniques, aménagement)\n\n- Remboursement **après achat**\n- Sur présentation factures\n- Délai : 1 à 3 mois\n\n### 💸 **Rappel rétroactif**\n\nSi délai de traitement long, la PCH peut être versée rétroactivement depuis la date de dépôt.\n\n---\n\n## 📄 DOCUMENTS NÉCESSAIRES\n\n### Pour le premier versement\n\n- ✅ Formulaire PCH (Conseil départemental)\n- ✅ RIB au nom du bénéficiaire\n- ✅ Justificatif identité\n- ✅ Justificatif domicile\n\n### Pour chaque remboursement\n\n- ✅ **Factures originales** (nom, date, détail)\n- ✅ **Preuves de paiement** (relevé bancaire, chèque)\n- ✅ **Attestations** (employeur aidant familial, prestataire...)\n- ✅ **Formulaire demande remboursement** (selon département)\n\n---\n\n## 🔑 CAS PARTICULIERS\n\n### PCH en emploi direct (aidant salarié)\n\n- Avance possible de 50% du montant annuel\n- Régularisation trimestrielle ou semestrielle\n- Justificatifs URSSAF + bulletins de salaire\n\n### PCH aménagement logement\n\n- Parfois versement **par tranches** (30% / 40% / 30%)\n- Selon avancement travaux\n- Factures intermédiaires + attestation artisan\n\n### PCH aides techniques coûteuses\n\n- Possibilité d'**avance sur devis**\n- Facture définitive pour solde\n- Délai 2-3 mois\n\n---\n\n## ⏱️ CALENDRIER TYPE\n\n| Étape | Délai |\n|-------|-------|\n| Notification MDPH → Formulaire PCH | 1 mois |\n| Formulaire → Validation Conseil | 2-4 semaines |\n| Achat → Envoi facture | Variable |\n| Facture → Paiement | **1-3 mois** |\n\n**Total moyen** : **3 à 6 mois** entre notification et premier versement\n\n---\n\n## 📞 QUE FAIRE EN CAS DE RETARD ?\n\n### Étape 1 : Vérifier\n\n- Dossier complet ?\n- Toutes les factures envoyées ?\n- RIB à jour ?\n\n### Étape 2 : Relancer (>3 mois)\n\n- **Téléphone** : Service PCH du Conseil départemental\n- **Email/courrier** : Demande point de situation\n\n### Étape 3 : Réclamation (>6 mois)\n\n- Courrier **LRAR** au Président du Conseil départemental\n- Copie au **Défenseur des Droits**\n- Signalement **Services Publics +**\n\n---\n\n## 🔗 Voir aussi\n\n- [PCH - Qu'est-ce que c'est ?](pch_definition)\n- [PCH aide technique - Montants](pch_aide_technique)\n- [PCH aide humaine](pch_aide_humaine)\n\n**Sources** : [Dossier-MDPH](https://dossier-mdph.com/versement-pch/), [Mon-Handicap.fr](https://mon-handicap.fr/versement-pch/)",
+      "source": "conseil-departemental.fr",
+      "keywords": [
+        "pch",
+        "versement",
+        "paiement",
+        "délai",
+        "conseil départemental",
+        "remboursement",
+        "facture",
+        "mensuel",
+        "tous les mois",
+        "régulier"
+      ],
+      "typical_questions": [
+        "comment la pch est-elle versée ?",
+        "quand vais-je recevoir la pch ?",
+        "délai versement pch après notification",
+        "pch versement mensuel ou annuel ?",
+        "combien de temps pour recevoir la pch ?",
+        "pch remboursement délai",
+        "la pch est versée tous les mois ?",
+        "comment demander le paiement de la pch ?",
+        "retard versement pch que faire ?",
+        "pch délai remboursement facture",
+        "la pch est-elle versée tous les mois ?",
+        "pch versement mensuel",
+        "pch tous les mois"
+      ],
+      "related_links": [
+        {
+          "question": "Qu'est-ce que la PCH ?",
+          "chunk_id": "pch_definition"
+        },
+        {
+          "question": "PCH aide technique - montants",
+          "chunk_id": "pch_aide_technique"
+        },
+        {
+          "question": "PCH aide humaine",
+          "chunk_id": "pch_aide_humaine"
+        }
+      ]
+    },
+    {
+      "id": "recours_gracieux",
+      "question": "Comment faire un recours gracieux auprès de la MDPH ?",
+      "answer": "**📝 RECOURS GRACIEUX MDPH - PROCÉDURE COMPLÈTE**\n\n## 🔑 Qu'est-ce qu'un recours gracieux ?\n\nUn **recours gracieux** est une demande de **réexamen** adressée directement à la **MDPH** qui a rendu la décision contestée.\n\n### ✅ Avantages\n- **Gratuit**\n- **Rapide** (délai 2 mois)\n- **Simple** (pas besoin d'avocat)\n- **Non suspensif** (ne suspend pas les droits en cours)\n\n---\n\n## 📅 DÉLAIS\n\n### ⏰ Délai pour agir\n**2 mois** à compter de la **réception de la notification** de décision\n\n⚠️ **Passé ce délai**, vous devrez faire un recours contentieux (tribunal).\n\n### ⏱️ Délai de réponse MDPH\n**2 mois** maximum\n\n- Si **réponse favorable** : nouvelle décision CDAPH\n- Si **réponse défavorable ou absence de réponse** : vous pouvez saisir le **tribunal administratif** (recours contentieux)\n\n---\n\n## 📋 PROCÉDURE ÉTAPE PAR ÉTAPE\n\n### 1️⃣ **Rédiger votre courrier**\n\n**En-tête** :\n- Vos coordonnées complètes\n- Numéro de dossier MDPH\n- Date et lieu\n\n**Destinataire** :\n\nMonsieur/Madame le Président(e) de la CDAPH\nMDPH [nom du département]\n[adresse MDPH]\n\n**Objet** : Recours gracieux contre la décision du [date]\n\n**Contenu** :\n- Rappeler la décision contestée (date, type de prestation)\n- **Exposer les motifs** du recours (pourquoi vous contestez)\n- **Apporter des arguments** (nouveaux certificats médicaux, justificatifs...)\n- Demander le **réexamen** de votre dossier\n- Joindre **pièces justificatives**\n\n### 2️⃣ **Joindre les pièces justificatives**\n\n- ✅ Copie de la notification de décision contestée\n- ✅ Nouveaux certificats médicaux (si évolution)\n- ✅ Tout document appuyant vos arguments\n- ✅ Copie de votre pièce d'identité\n\n### 3️⃣ **Envoyer le courrier**\n\n**Mode d'envoi recommandé** : **Lettre recommandée avec accusé de réception (LRAR)**\n\n➡️ Conservez **l'accusé de réception** : il fait foi de la date de dépôt.\n\n### 4️⃣ **Attendre la réponse** (2 mois max)\n\n3 issues possibles :\n1. ✅ **Décision favorable** → Nouvelle décision CDAPH en votre faveur\n2. ❌ **Décision défavorable** → Vous pouvez faire un recours contentieux\n3. 🔇 **Absence de réponse** → Équivaut à un refus implicite → Recours contentieux possible\n\n---\n\n## 💡 CONSEILS PRATIQUES\n\n### ✅ À faire\n- Rédiger un courrier **clair et structuré**\n- **Argumenter** (pas simplement dire \"je ne suis pas d'accord\")\n- Joindre **toutes les preuves** médicales et sociales\n- Demander l'aide d'une **association** (APF, UNAPEI, GIHP...)\n- Conserver **copie de tout**\n\n### ❌ À éviter\n- Attendre la fin des 2 mois pour agir\n- Envoyer un courrier sans justificatifs\n- Être agressif ou insultant dans le courrier\n- Oublier de mentionner votre numéro de dossier\n\n---\n\n## 🔗 Voir aussi\n\n- [Recours contentieux MDPH](recours_contentieux_procedure)\n- [Que faire en cas de refus AAH ?](recours_mdph)\n- [Délai de traitement MDPH](delai_traitement_mdph)\n\n**Sources** : service-public.fr, CNSA",
+      "source": "service-public.fr",
+      "keywords": [
+        "recours gracieux",
+        "contestation",
+        "mdph",
+        "refus",
+        "réexamen",
+        "cdaph",
+        "délai 2 mois",
+        "courrier",
+        "procédure"
+      ],
+      "typical_questions": [
+        "comment faire un recours gracieux mdph ?",
+        "recours gracieux mdph délai",
+        "contester décision mdph recours gracieux",
+        "modèle lettre recours gracieux mdph",
+        "délai recours gracieux mdph 2 mois",
+        "recours gracieux ou contentieux ?",
+        "réexamen dossier mdph recours gracieux",
+        "procédure recours gracieux cdaph",
+        "que faire après refus mdph recours gracieux",
+        "recours gracieux mdph comment ça marche ?",
+        "qu'est-ce qu'un recours gracieux ?",
+        "recours gracieux définition",
+        "différence recours gracieux contentieux"
+      ],
+      "related_links": [
+        {
+          "question": "Qu'est-ce qu'un recours contentieux ?",
+          "chunk_id": "recours_contentieux_procedure"
+        },
+        {
+          "question": "Que faire en cas de refus ?",
+          "chunk_id": "recours_mdph"
+        },
+        {
+          "question": "Délais de traitement MDPH",
+          "chunk_id": "delai_traitement_mdph"
+        }
+      ]
+    },
+    {
+      "id": "recours_contentieux",
+      "question": "Comment saisir le tribunal pour contester une décision MDPH ?",
+      "answer": "**⚖️ RECOURS CONTENTIEUX MDPH - PROCÉDURE TRIBUNAL**\n\n## 🔑 Qu'est-ce qu'un recours contentieux ?\n\nSaisir le **tribunal compétent** pour contester une décision MDPH après échec du recours gracieux (ou sans recours gracieux).\n\n---\n\n## 🏛️ QUEL TRIBUNAL SAISIR ?\n\n### 📋 Selon le type de prestation\n\n| Prestation | Tribunal compétent |\n|-----------|-------------------|\n| **AAH, complément AAH** | **Tribunal judiciaire** (pôle social) |\n| **PCH, AEEH, CMI, RQTH, orientation** | **Tribunal administratif** |\n\n⚠️ **Important** : Si vous saisissez le mauvais tribunal, il transférera votre dossier → perte de temps !\n\n### 🔍 Comment savoir ?\n\n- **AAH** = Prestations CAF → **Tribunal judiciaire**\n- **Toutes autres prestations MDPH** → **Tribunal administratif**\n\n---\n\n## 📅 DÉLAIS\n\n### ⏰ Délai pour agir\n\n**2 mois** à compter de :\n- La notification de **refus du recours gracieux**, OU\n- La **notification initiale** si vous n'avez pas fait de recours gracieux\n\n⚠️ **Délai de forclusion** : Passé 2 mois, votre recours sera **irrecevable**.\n\n---\n\n## 📋 PROCÉDURE - TRIBUNAL ADMINISTRATIF\n\n### 1️⃣ **Rédiger la requête**\n\n**Contenu obligatoire** :\n- Vos coordonnées complètes\n- Exposé des faits\n- **Moyens de droit** (arguments juridiques)\n- **Conclusions** (ce que vous demandez au tribunal)\n\n**Pièces jointes** :\n- ✅ Copie décision MDPH contestée\n- ✅ Copie recours gracieux + réponse (si fait)\n- ✅ Certificats médicaux\n- ✅ Tous justificatifs\n\n### 2️⃣ **Déposer la requête**\n\n**Modes de dépôt** :\n- En ligne sur **Télérecours citoyens** (recommandé)\n- Par courrier LRAR\n- Au greffe du tribunal\n\n**Adresse** : Tribunal administratif du département concerné\n\n### 3️⃣ **Audience**\n\n- Le tribunal convoque les parties\n- Possibilité d'audience publique\n- **Vous pouvez vous faire assister** par un avocat (facultatif mais recommandé)\n\n### 4️⃣ **Jugement**\n\nDélai : **6 à 18 mois** selon encombrement du tribunal\n\n---\n\n## 📋 PROCÉDURE - TRIBUNAL JUDICIAIRE (AAH uniquement)\n\n### 1️⃣ **Saisir le pôle social**\n\n**Formulaire Cerfa n°15426** : Déclaration au greffe\n\n**Pièces jointes** :\n- ✅ Copie décision CAF refusant/réduisant l'AAH\n- ✅ Copie notification MDPH\n- ✅ Justificatifs médicaux et sociaux\n\n### 2️⃣ **Convocation à l'audience**\n\nLe tribunal judiciaire (pôle social) convoque les parties.\n\n### 3️⃣ **Jugement**\n\nDélai : **6 à 12 mois**\n\n---\n\n## 💰 COÛT\n\n### ✅ **Gratuit** pour les deux tribunaux\n\n- Pas de frais de greffe\n- Pas d'avocat obligatoire (sauf Cour d'appel)\n\n### 💡 Aide juridictionnelle possible\n\nSi revenus faibles, vous pouvez demander l'**aide juridictionnelle** pour être assisté gratuitement par un avocat.\n\n---\n\n## 📞 SE FAIRE AIDER\n\n### 🏢 Associations spécialisées\n\n- **APF France handicap** : 01 40 78 69 00\n- **UNAPEI** (handicap mental)\n- **GIHP** (handicap physique)\n- **Défenseur des Droits** : 09 69 39 00 00\n\nCes associations peuvent :\n- Vous aider à rédiger la requête\n- Vous accompagner à l'audience\n- Vous orienter vers un avocat spécialisé\n\n---\n\n## 🔗 Voir aussi\n\n- [Recours gracieux MDPH](recours_gracieux_procedure)\n- [Que faire en cas de refus AAH ?](recours_mdph)\n- [Aide juridictionnelle](aide_juridictionnelle)\n\n**Sources** : service-public.fr, justice.fr",
+      "source": "service-public.fr",
+      "keywords": [
+        "recours contentieux",
+        "tribunal",
+        "tribunal administratif",
+        "tribunal judiciaire",
+        "contestation",
+        "mdph",
+        "procédure",
+        "délai 2 mois",
+        "requête"
+      ],
+      "typical_questions": [
+        "comment saisir le tribunal pour contester mdph ?",
+        "recours contentieux mdph tribunal administratif",
+        "quel tribunal pour contester aah ?",
+        "tribunal judiciaire ou administratif mdph ?",
+        "délai recours contentieux mdph",
+        "procédure recours contentieux cdaph",
+        "contester décision mdph au tribunal",
+        "saisir tribunal administratif mdph",
+        "recours contentieux aah tribunal",
+        "comment faire recours contentieux mdph ?",
+        "qu'est-ce qu'un recours contentieux ?",
+        "recours contentieux définition",
+        "que se passe-t-il si mon recours est refusé ?",
+        "recours après refus recours gracieux"
+      ],
+      "related_links": [
+        {
+          "question": "Qu'est-ce qu'un recours gracieux ?",
+          "chunk_id": "recours_gracieux_procedure"
+        },
+        {
+          "question": "Refus AAH - Que faire ?",
+          "chunk_id": "recours_mdph"
+        },
+        {
+          "question": "Aide juridictionnelle",
+          "chunk_id": "aide_juridique"
+        }
+      ]
+    },
+    {
+      "id": "aah_plafond_ressources",
+      "question": "Quelles ressources sont prises en compte pour le calcul de l'AAH ?",
+      "answer": "**💶 AAH - RESSOURCES PRISES EN COMPTE ET PLAFONDS**\n\n## 🔑 Principe général\n\nL'AAH est une **allocation différentielle** : son montant dépend de vos **ressources**.\n\n**Plafonds 2024** :\n- **Personne seule** : 12 192,96 € / an (1 016,08 € / mois)\n- **En couple** : 19 489,62 € / an (1 624,13 € / mois)\n- **Majoration par enfant à charge** : + 6 096,48 € / an\n\n---\n\n## 📋 RESSOURCES PRISES EN COMPTE\n\n### ✅ Revenus d'activité professionnelle\n\n- **Salaires** (déclaration fiscale N-2)\n- **Revenus non-salariés** (auto-entrepreneur, profession libérale...)\n- **Abattement** : 80% des revenus d'activité jusqu'à 12 fois le SMIC (puis 40%)\n\n➡️ **Travailler avec l'AAH est encouragé** grâce à cet abattement !\n\n### ✅ Revenus de remplacement\n\n- **Pensions de retraite**\n- **Pensions d'invalidité** (catégorie 1, 2, 3)\n- **Allocations chômage** (ARE)\n- **Indemnités journalières maladie**\n\n⚠️ Ces revenus sont **déduits intégralement** du montant AAH.\n\n### ✅ Revenus du patrimoine\n\n- **Intérêts de placements** (livrets, assurance-vie...)\n- **Revenus fonciers** (loyers perçus)\n- **Revenus de capitaux mobiliers**\n\n### ✅ Ressources du conjoint(e) / concubin(e)\n\nSi vous vivez en couple, les ressources de votre conjoint(e) sont **prises en compte**.\n\n---\n\n## ❌ RESSOURCES NON PRISES EN COMPTE\n\n### ✅ Prestations familiales\n- **Allocations familiales**\n- **PAJE** (Prestation d'Accueil du Jeune Enfant)\n- **Complément familial**\n\n### ✅ Aides au logement\n- **APL** (Aide Personnalisée au Logement)\n- **ALF** (Allocation de Logement Familiale)\n- **ALS** (Allocation de Logement Sociale)\n\n### ✅ Prestations liées au handicap\n- **PCH** (Prestation de Compensation du Handicap)\n- **AEEH** (Allocation d'Éducation de l'Enfant Handicapé)\n- **Complément de ressources AAH** (supprimé depuis 2019 mais droits maintenus)\n\n### ✅ Aides ponctuelles\n- **Prime d'activité** (non prise en compte depuis 2019)\n- **RSA** (non cumulable mais non comptabilisé si AAH > RSA)\n\n---\n\n## 💶 CALCUL DU MONTANT AAH\n\n### Formule simplifiée\n\n**AAH versée = AAH maximale - (Ressources / 12)**\n\n### 📝 Exemples\n\n#### Exemple 1 : Personne seule sans revenus\n- Ressources : 0 €\n- **AAH versée** : **1 016,05 €** (montant maximal)\n\n#### Exemple 2 : Personne seule avec pension invalidité 400 €/mois\n- Ressources annuelles : 4 800 €\n- AAH maximale annuelle : 12 192,96 €\n- AAH versée : 12 192,96 - 4 800 = 7 392,96 € / an\n- **AAH versée** : **616,08 € / mois** (différentiel)\n\n#### Exemple 3 : Personne en couple, revenus conjoint 1 500 €/mois\n- Ressources annuelles couple : 18 000 €\n- Plafond couple : 19 489,62 €\n- AAH versée : 19 489,62 - 18 000 = 1 489,62 € / an\n- **AAH versée** : **124,13 € / mois** (différentiel)\n\n#### Exemple 4 : Personne avec revenus > plafond\n- Ressources annuelles : 13 000 €\n- Plafond personne seule : 12 192,96 €\n- **AAH versée** : **0 €** (dépassement du plafond)\n\n---\n\n## 📅 PÉRIODE DE RÉFÉRENCE\n\nLes ressources prises en compte sont celles de **l'année N-2**.\n\n**Exemple en 2024** :\n- Ressources de **2022** sont déclarées\n- La CAF calcule l'AAH 2024 sur la base de 2022\n\n---\n\n## 🔄 DÉCLARATION TRIMESTRIELLE DE RESSOURCES (DTR)\n\n### Pour qui ?\n\nLes bénéficiaires AAH qui **travaillent** (salariés ou indépendants).\n\n### Pourquoi ?\n\nPermet une **actualisation rapide** du montant AAH en fonction des revenus réels (et non N-2).\n\n### Comment ?\n\nDéclaration **tous les 3 mois** sur caf.fr (Mon Compte).\n\n---\n\n## 🔗 Voir aussi\n\n- [AAH - Conditions et montant](aah_definition_demarches)\n- [AAH et travail - Cumul possible](aah_cumul_travail)\n- [AAH différentielle](aah_montant)\n\n**Sources** : caf.fr, service-public.fr",
+      "source": "caf.fr",
+      "keywords": [
+        "aah",
+        "ressources",
+        "plafond",
+        "revenus",
+        "calcul",
+        "montant",
+        "couple",
+        "salaire",
+        "pension",
+        "prise en compte"
+      ],
+      "typical_questions": [
+        "quelles ressources sont prises en compte pour l'aah ?",
+        "plafond ressources aah 2024",
+        "aah calcul ressources",
+        "revenus pris en compte aah",
+        "plafond aah couple",
+        "aah et salaire pris en compte ?",
+        "aah ressources du conjoint",
+        "quels revenus pour l'aah ?",
+        "aah plafond personne seule",
+        "calcul aah avec pension invalidité",
+        "l'aah dépend-elle des revenus ?",
+        "aah conditions de ressources",
+        "aah plafond de revenus"
+      ],
+      "related_links": [
+        {
+          "question": "Qu'est-ce que l'AAH ?",
+          "chunk_id": "aah_definition_demarches"
+        },
+        {
+          "question": "AAH et travail - Cumul",
+          "chunk_id": "aah_cumul_travail"
+        },
+        {
+          "question": "Montant de l'AAH",
+          "chunk_id": "aah_montant"
+        }
+      ]
+    },
+    {
+      "id": "aah_imposable",
+      "question": "L'AAH est-elle imposable sur le revenu ?",
+      "answer": "**💶 AAH - FISCALITÉ ET IMPOSITION**\n\n## 🔑 Réponse directe\n\n**NON, l'AAH n'est PAS imposable sur le revenu** ✅\n\nL'AAH est **totalement exonérée d'impôt**.\n\n---\n\n## 📋 DÉTAILS\n\n### ✅ Exonération totale\n\n- L'AAH **ne doit PAS être déclarée** dans vos revenus imposables\n- Vous n'avez **rien à inscrire** sur votre déclaration d'impôts concernant l'AAH\n\n### 📝 Où déclarer l'AAH ?\n\n**Nulle part** ! L'AAH est une prestation sociale **non imposable**.\n\n### ⚠️ Attention aux pré-remplissages\n\nParfois, l'administration fiscale pré-remplit la déclaration avec des montants erronés.\n\n➡️ **Vérifiez bien** que l'AAH n'apparaît pas dans vos revenus déclarés.\n\n---\n\n## 💡 AUTRES AVANTAGES FISCAUX LIÉS AU HANDICAP\n\n### 🏠 Taxe d'habitation\n\n**Exonération totale** si :\n- Vous percevez l'AAH\n- Vous vivez seul(e) ou avec des personnes également exonérées\n- Vos revenus ne dépassent pas le plafond de ressources\n\n### 🚗 Taxe foncière\n\n**Exonération possible** si :\n- Vous percevez l'AAH\n- Vous occupez le logement comme résidence principale\n- Vos revenus ne dépassent pas le plafond\n\n⚠️ Conditions variables selon communes → se renseigner auprès des impôts locaux.\n\n### 📺 Contribution audiovisuelle (supprimée en 2022)\n\nAnciennement exonérée pour les bénéficiaires AAH (mais n'existe plus depuis 2022).\n\n---\n\n## 📊 AAH ET QUOTIENT FAMILIAL\n\n### ❌ Pas de demi-part supplémentaire avec l'AAH seule\n\nL'AAH en elle-même **ne donne pas droit** à une demi-part fiscale supplémentaire.\n\n### ✅ Demi-part si carte d'invalidité ≥ 80%\n\nSi vous avez une **carte mobilité inclusion (CMI) avec mention \"invalidité\"** ou une **carte d'invalidité** (ancien modèle) avec un taux d'incapacité **≥ 80%**, vous bénéficiez d'une **demi-part supplémentaire**.\n\n➡️ **Condition** : Titulaire de la carte, **même si vous percevez l'AAH**.\n\n---\n\n## 🔗 AUTRES PRESTATIONS HANDICAP ET FISCALITÉ\n\n| Prestation | Imposable ? |\n|-----------|-------------|\n| **AAH** | ❌ Non |\n| **PCH** | ❌ Non |\n| **AEEH** | ❌ Non |\n| **Complément AAH** | ❌ Non |\n| **Pension invalidité** | ✅ **Oui** (mais abattement 10%) |\n| **Rente accident du travail** | ✅ **Oui** (50% du montant) |\n\n---\n\n## 📞 QUI CONTACTER EN CAS DE DOUTE ?\n\n- **Impôts** : 0809 401 401 (service gratuit + prix appel)\n- **CAF** : 3230\n- **Service en ligne** : impots.gouv.fr (messagerie sécurisée)\n\n---\n\n## 🔗 Voir aussi\n\n- [AAH - Conditions et montant](aah_definition_demarches)\n- [CMI invalidité - Avantages fiscaux](cmi_invalidite)\n- [Plafonds de ressources AAH](aah_ressources_plafond_detail)\n\n**Sources** : impots.gouv.fr, service-public.fr",
+      "source": "impots.gouv.fr",
+      "keywords": [
+        "aah",
+        "imposable",
+        "impôt",
+        "fiscalité",
+        "déclaration revenus",
+        "non imposable",
+        "exonération",
+        "taxe habitation",
+        "taxe foncière"
+      ],
+      "typical_questions": [
+        "l'aah est-elle imposable ?",
+        "dois-je déclarer l'aah aux impôts ?",
+        "aah imposable sur le revenu ?",
+        "aah et déclaration d'impôts",
+        "faut-il déclarer l'aah ?",
+        "aah exonérée d'impôt ?",
+        "aah et fiscalité",
+        "aah non imposable ?",
+        "impôt sur l'aah",
+        "aah à déclarer aux impôts ?",
+        "aah imposable sur le revenu"
+      ],
+      "related_links": [
+        {
+          "question": "Qu'est-ce que l'AAH ?",
+          "chunk_id": "aah_definition_demarches"
+        },
+        {
+          "question": "CMI invalidité - Avantages",
+          "chunk_id": "cmi_invalidite"
+        },
+        {
+          "question": "Plafonds AAH",
+          "chunk_id": "aah_ressources_plafond_detail"
         }
       ]
     }
@@ -8636,6 +9692,16 @@
                     if (incompatiblePattern) {
                         score = Math.floor(score / 100); // Divise par 100
                     }
+                }
+
+                // ============================================================================
+                // PÉNALITÉ MASSIVE POUR CHUNKS "ATTRAPE-TOUT" (PHASE 1.1 ROADMAP)
+                // ============================================================================
+                // Les chunks guide_demarrage_* doivent SEULEMENT matcher les questions ultra-générales
+                // Pénalité de -75% pour forcer les chunks spécifiques à gagner
+                if (chunkId.includes('guide_demarrage')) {
+                    score = Math.floor(score * 0.25); // Réduit le score à 25% (pénalité de 75%)
+                    console.log(`[SCORING] Pénalité -75% appliquée au chunk ${chunkId}: score réduit à ${score}`);
                 }
 
                 return score + penalitesFinales;
