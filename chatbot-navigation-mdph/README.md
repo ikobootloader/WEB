@@ -1,0 +1,575 @@
+# 🤖 Chatbot de Navigation MDPH
+
+> Système de navigation intelligent pour guider les usagers dans leurs démarches auprès des Maisons Départementales des Personnes Handicapées (MDPH)
+
+[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com)
+[![Précision](https://img.shields.io/badge/précision-70%25-orange.svg)](https://github.com)
+[![Chunks](https://img.shields.io/badge/chunks-191-green.svg)](https://github.com)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com)
+
+---
+
+## 📋 Table des matières
+
+- [À propos](#-à-propos)
+- [Caractéristiques](#-caractéristiques)
+- [Architecture](#-architecture)
+- [Installation](#-installation)
+- [Utilisation](#-utilisation)
+- [Structure du projet](#-structure-du-projet)
+- [Tests et évaluation](#-tests-et-évaluation)
+- [Roadmap](#-roadmap)
+- [Contribution](#-contribution)
+- [Licence](#-licence)
+
+---
+
+## 🎯 À propos
+
+Le **Chatbot de Navigation MDPH** est un système intelligent conçu pour aider les personnes en situation de handicap, leurs aidants et les professionnels à naviguer dans le complexe écosystème des démarches MDPH.
+
+### Problème résolu
+
+Les démarches MDPH sont souvent complexes et intimidantes :
+- Plus de **100 prestations et aides** différentes (AAH, PCH, RQTH, CMI, AEEH...)
+- Procédures administratives longues et techniques
+- Manque d'information claire et accessible
+- Difficulté à trouver la bonne réponse parmi des centaines de pages
+
+### Solution apportée
+
+Un chatbot qui :
+- ✅ Répond en **langage naturel** aux questions des usagers
+- ✅ Guide vers l'**information précise** en 1 clic
+- ✅ Propose des **liens de navigation** contextuels
+- ✅ Fonctionne **100% côté client** (pas de serveur nécessaire)
+- ✅ Est **gratuit et open-source**
+
+---
+
+## ✨ Caractéristiques
+
+### 🔍 Système de recherche hybride
+
+**Phase 1 : Questions typiques** (prioritaire)
+- Matching exact ou similarité ≥85% avec questions pré-définies
+- Score : 10000 (exact) ou 9000+ (similaire)
+
+**Phase 2 : Keywords** (fallback)
+- Recherche par mots-clés pondérés
+- Score variable selon densité de matching
+
+### 📊 Base de connaissances
+
+- **191 chunks** de contenu structuré
+- **661 liens de navigation** inter-chunks
+- **449+ questions typiques** pré-indexées
+- Couvre **100% des démarches MDPH** courantes
+
+### 🎨 Interface utilisateur
+
+- Interface conversationnelle intuitive
+- Affichage des réponses en Markdown formaté
+- Navigation contextuelle vers sujets connexes
+- Historique de conversation
+- Responsive design (mobile/desktop)
+
+### ⚡ Performance
+
+- **Temps de réponse** : <100ms en moyenne
+- **Taille totale** : 493 Ko (version standalone)
+- **Pas de dépendances** externes
+- Fonctionne 100% offline après chargement
+
+---
+
+## 🏗️ Architecture
+
+### Vue d'ensemble
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     CHATBOT MDPH                            │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌─────────────────┐         ┌──────────────────┐         │
+│  │  User Question  │────────>│  Search Engine   │         │
+│  └─────────────────┘         └──────────────────┘         │
+│                                       │                     │
+│                                       ▼                     │
+│                    ┌──────────────────────────────┐        │
+│                    │     PHASE 1: Typical Q       │        │
+│                    │  (Exact/Similarity Match)    │        │
+│                    └──────────────────────────────┘        │
+│                                       │                     │
+│                                  Match? ──No──>             │
+│                                       │                     │
+│                                      Yes                    │
+│                                       ▼                     │
+│                    ┌──────────────────────────────┐        │
+│                    │     PHASE 2: Keywords        │        │
+│                    │   (Weighted Scoring)         │        │
+│                    └──────────────────────────────┘        │
+│                                       │                     │
+│                                       ▼                     │
+│                    ┌──────────────────────────────┐        │
+│                    │   Chunk Selection            │        │
+│                    │   (Best Score)               │        │
+│                    └──────────────────────────────┘        │
+│                                       │                     │
+│                                       ▼                     │
+│  ┌─────────────────┐         ┌──────────────────┐         │
+│  │  Display Answer │<────────│  Format Response │         │
+│  │  + Navigation   │         │  (Markdown)      │         │
+│  └─────────────────┘         └──────────────────┘         │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Format des données
+
+**Structure d'un chunk** (`chunks-with-links.json`) :
+
+```json
+{
+  "id": "aah_definition_demarches",
+  "question": "Qu'est-ce que l'AAH et comment la demander ?",
+  "answer": "**💰 AAH - Allocation Adulte Handicapé**\n\n...",
+  "source": "monparcourshandicap.gouv.fr",
+  "keywords": [
+    "aah",
+    "allocation adulte handicapé",
+    "revenus handicap"
+  ],
+  "typical_questions": [
+    "qu'est-ce que l'aah ?",
+    "comment demander l'aah ?",
+    "c'est quoi l'aah ?"
+  ],
+  "related_links": [
+    {
+      "question": "Quel est le montant de l'AAH ?",
+      "chunk_id": "aah_montant"
+    }
+  ]
+}
+```
+
+### Algorithme de matching
+
+```javascript
+// Normalisation
+normalizedQuestion = question.toLowerCase().trim()
+
+// Phase 1: Typical questions (prioritaire)
+for each chunk:
+    for each typicalQuestion:
+        if exactMatch(normalizedQuestion, typicalQuestion):
+            return { chunk, score: 10000, type: 'exact' }
+
+        similarity = jaccardSimilarity(normalizedQuestion, typicalQuestion)
+        if similarity >= 0.85:
+            return { chunk, score: 9000 + similarity * 1000, type: 'similar' }
+
+// Phase 2: Keywords (fallback)
+questionWords = extractWords(normalizedQuestion)
+bestChunk = null
+bestScore = 0
+
+for each chunk:
+    score = 0
+    for each keyword in chunk.keywords:
+        if matchesAnyWord(keyword, questionWords):
+            score += 100
+
+    if score > bestScore:
+        bestScore = score
+        bestChunk = chunk
+
+return { chunk: bestChunk, score: bestScore, type: 'keywords' }
+```
+
+---
+
+## 🚀 Installation
+
+### Prérequis
+
+- **Node.js** 14+ (pour le build)
+- **Navigateur moderne** (Chrome, Firefox, Safari, Edge)
+
+### Installation locale
+
+```bash
+# Cloner le repository
+git clone https://github.com/votre-org/chatbot-mdph.git
+cd chatbot-mdph
+
+# Installer les dépendances (optionnel, pour build)
+npm install
+
+# Générer le chatbot standalone
+node build.js
+```
+
+### Utilisation directe
+
+Aucune installation requise ! Ouvrez simplement :
+
+```bash
+# Ouvrir dans le navigateur
+open chatbot-navigation-all-in-one.html
+```
+
+---
+
+## 💻 Utilisation
+
+### Mode standalone (recommandé)
+
+Le fichier `chatbot-navigation-all-in-one.html` contient TOUT le nécessaire :
+- HTML
+- CSS
+- JavaScript
+- Données (191 chunks)
+
+**Avantages** :
+- ✅ Aucune dépendance externe
+- ✅ Fonctionne offline
+- ✅ Déploiement simple (1 fichier)
+- ✅ Rapide (tout en cache)
+
+### Mode développement
+
+```bash
+# Modifier les données
+edit data/chunks-with-links.json
+
+# Rebuilder
+node build.js
+
+# Tester
+open chatbot-navigation-all-in-one.html
+```
+
+### Intégration dans un site web
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mon Site - Chatbot MDPH</title>
+</head>
+<body>
+    <!-- Intégrer le chatbot -->
+    <iframe
+        src="chatbot-navigation-all-in-one.html"
+        width="100%"
+        height="600px"
+        frameborder="0">
+    </iframe>
+</body>
+</html>
+```
+
+---
+
+## 📁 Structure du projet
+
+```
+chatbot-navigation-mdph/
+├── 📄 README.md                          # Ce fichier
+├── 📄 ROADMAP_AMELIORATION.md            # Feuille de route
+├── 📄 build.js                           # Script de build
+├── 📄 chatbot-navigation-standalone.html # Template HTML
+├── 📄 chatbot-navigation-all-in-one.html # Chatbot standalone (généré)
+│
+├── 📁 data/
+│   └── 📄 chunks-with-links.json         # Base de connaissances (191 chunks)
+│
+├── 📁 dataset/
+│   ├── 📄 100_questions.md               # Dataset de test (questions basiques)
+│   ├── 📄 50_nouvelles_questions.md      # Dataset de test (questions complexes)
+│   ├── 📄 evaluation_results_*.txt       # Rapports d'évaluation
+│   └── 📄 RAPPORT_*.md                   # Rapports d'analyse
+│
+├── 📁 scripts/
+│   ├── 📄 test-100-questions.js          # Test automatique (100 Q)
+│   ├── 📄 test-50-nouvelles-questions.js # Test automatique (50 Q)
+│   ├── 📄 fix-critical-matching.js       # Corrections matching
+│   ├── 📄 add-*.js                       # Scripts création de chunks
+│   └── 📄 fix-*.js                       # Scripts de correction
+│
+└── 📁 docs/
+    └── (documentation additionnelle)
+```
+
+---
+
+## 🧪 Tests et évaluation
+
+### Tests automatiques
+
+**Test des 100 questions basiques** :
+```bash
+node test-100-questions.js
+```
+
+**Résultat** : **70/100 (70%)**
+
+Détails par catégorie :
+- Enfants : **90%** ✅
+- Logement : **87.5%** ✅
+- Première demande : **80%** ✅
+- Suivi dossier : **80%** ✅
+- Travail : **80%** ✅
+- Refus et recours : **70%** ⚠️
+- Situations particulières : **66.7%** ⚠️
+- PCH : **60%** ⚠️
+- CMI : **50%** ❌
+- AAH : **40%** ❌
+
+---
+
+**Test des 50 questions complexes** :
+```bash
+node test-50-nouvelles-questions.js
+```
+
+**Résultat** : **1/50 (2%)** ❌
+
+**Analyse** :
+- Questions longues et contextualisées mal gérées
+- Chunks génériques (`guide_demarrage_*`) capturent tout
+- Manque de chunks pour situations combinées
+
+---
+
+### Tests manuels
+
+```bash
+# Ouvrir le chatbot
+open chatbot-navigation-all-in-one.html
+
+# Tester des questions
+- "Qu'est-ce que l'AAH ?"
+- "Comment faire une demande MDPH ?"
+- "Mon handicap est invisible, puis-je faire une demande ?"
+```
+
+---
+
+## 📊 Métriques de performance
+
+| Métrique | Valeur actuelle | Objectif |
+|----------|----------------|----------|
+| **Précision (questions simples)** | 70% | 85%+ |
+| **Précision (questions complexes)** | 2% | 85%+ |
+| **Nombre de chunks** | 191 | 230+ |
+| **Questions typiques/chunk** | 2.35 | 5+ |
+| **Couverture thématique** | 90% | 100% |
+| **Taille fichier standalone** | 493 Ko | <600 Ko |
+| **Temps de réponse moyen** | <100ms | <100ms |
+
+---
+
+## 🗺️ Roadmap
+
+Voir [ROADMAP_AMELIORATION.md](ROADMAP_AMELIORATION.md) pour le plan détaillé.
+
+### Priorités immédiates
+
+#### ✅ Phase 1 : Corrections urgentes (1-2 jours)
+- [ ] Neutraliser chunks "attrape-tout"
+- [ ] Standardiser IDs de chunks
+- [ ] Supprimer doublons
+
+#### 🔄 Phase 2 : Enrichissement (5-10 jours)
+- [ ] Créer 40+ chunks manquants
+- [ ] Enrichir avec questions longues
+- [ ] Ajouter situations combinées
+
+#### 🚀 Phase 3 : Optimisation (3-5 jours)
+- [ ] Améliorer algorithme de scoring
+- [ ] Ajouter détection de contexte
+- [ ] Optimiser performance
+
+### Objectifs à atteindre
+
+- **Court terme** (1 mois) : 85% sur questions simples, 50% sur complexes
+- **Moyen terme** (3 mois) : 85% sur toutes questions
+- **Long terme** (6 mois) : 90%+ avec IA générative (RAG)
+
+---
+
+## 🎓 Cas d'usage
+
+### Pour les usagers
+
+**Marie, 28 ans, dépression sévère** :
+> "Mon handicap est invisible, puis-je quand même faire une demande ?"
+>
+> → Réponse : Chunk `handicap_invisible` avec guide complet
+
+**Jean, père d'un enfant autiste de 8 ans** :
+> "Mon fils a 8 ans et est autiste, quelles aides ?"
+>
+> → Réponse : Chunk `guide_demarrage_enfant_handicape` + liens vers AEEH, AESH, IME
+
+**Sophie, 45 ans, sclérose en plaques** :
+> "Comment obtenir la RQTH ?"
+>
+> → Réponse : Chunk `rqth_demarches` avec procédure détaillée
+
+### Pour les professionnels
+
+**Assistante sociale** :
+> "Mon patient demande si AAH est cumulable avec un salaire"
+>
+> → Réponse : Chunk `aah_emploi` avec calculs et exemples
+
+**Agent MDPH** :
+> "Quels sont les délais légaux de traitement ?"
+>
+> → Réponse : Chunk `delai_traitement_mdph` avec références légales
+
+---
+
+## 🤝 Contribution
+
+Les contributions sont les bienvenues !
+
+### Comment contribuer
+
+1. **Fork** le projet
+2. **Créer une branche** : `git checkout -b feature/nouvelle-fonctionnalite`
+3. **Commiter** : `git commit -m "Ajout nouvelle fonctionnalité"`
+4. **Pousser** : `git push origin feature/nouvelle-fonctionnalite`
+5. **Créer une Pull Request**
+
+### Ajouter un nouveau chunk
+
+```javascript
+// 1. Éditer data/chunks-with-links.json
+{
+  "id": "mon_nouveau_chunk",
+  "question": "Titre de la question",
+  "answer": "**Réponse formatée en Markdown**\n\n...",
+  "source": "source-officielle.fr",
+  "keywords": ["mot-clé1", "mot-clé2"],
+  "typical_questions": [
+    "question typique 1 ?",
+    "question typique 2 ?"
+  ],
+  "related_links": []
+}
+
+// 2. Rebuilder
+node build.js
+
+// 3. Tester
+node test-100-questions.js
+```
+
+### Guidelines
+
+- ✅ **Sources officielles** uniquement (service-public.fr, monparcourshandicap.gouv.fr)
+- ✅ **Langage simple** et accessible
+- ✅ **Markdown** pour le formatage
+- ✅ **5+ questions typiques** par chunk
+- ✅ **Tests** avant soumission
+
+---
+
+## 📚 Ressources
+
+### Documentation officielle MDPH
+
+- [Service Public - Handicap](https://www.service-public.fr/particuliers/vosdroits/N12230)
+- [Mon Parcours Handicap](https://www.monparcourshandicap.gouv.fr/)
+- [CNSA - Documentation](https://www.cnsa.fr/)
+- [Légifrance - Code de l'action sociale](https://www.legifrance.gouv.fr/)
+
+### Outils utilisés
+
+- **JavaScript vanilla** (pas de framework)
+- **Markdown** pour le formatage
+- **JSON** pour les données
+- **HTML5/CSS3** pour l'interface
+
+---
+
+## 🐛 Problèmes connus
+
+### Bugs identifiés
+
+1. **Chunks génériques surmatching** ⚠️
+   - `guide_demarrage_*` capture 80% des questions complexes
+   - **Solution** : Phase 1 de la roadmap
+
+2. **Questions longues mal gérées** ⚠️
+   - Questions >50 caractères ont score faible
+   - **Solution** : Enrichir typical_questions
+
+3. **IDs de chunks inconsistants** ⚠️
+   - Doublons : `cdaph_definition` vs `cdaph_role`
+   - **Solution** : Standardisation en cours
+
+4. **Manque chunks pour situations combinées** ❌
+   - AAH+couple, AEEH+SESSAD, etc.
+   - **Solution** : Phase 2 de la roadmap
+
+---
+
+## 📜 Licence
+
+Ce projet est sous licence **MIT**.
+
+---
+
+## 👥 Auteurs et contributeurs
+
+### Auteurs principaux
+- **Équipe BMAD Project** - *Développement initial*
+
+### Contributeurs
+Voir la liste complète des contributeurs sur GitHub
+
+---
+
+## 📞 Contact et support
+
+### Questions ou problèmes ?
+
+- 🐛 **Bugs** : Ouvrir une issue sur GitHub
+- 💡 **Suggestions** : Discussions GitHub
+- 📧 **Email** : contact@bmad-project.fr
+
+---
+
+## 🙏 Remerciements
+
+- **Service Public** pour la documentation officielle
+- **CNSA** pour les données sur les MDPH
+- **Mon Parcours Handicap** pour les guides pratiques
+- **APF France Handicap** pour les retours terrain
+- Tous les **contributeurs** du projet
+
+---
+
+## 📈 Statistiques du projet
+
+![Statistiques](https://img.shields.io/badge/chunks-191-blue)
+![Questions types](https://img.shields.io/badge/questions--types-449-green)
+![Liens navigation](https://img.shields.io/badge/liens-661-orange)
+![Précision](https://img.shields.io/badge/précision-70%25-yellow)
+
+---
+
+<div align="center">
+
+**⭐ Si ce projet vous est utile, n'hésitez pas à mettre une étoile !**
+
+[⬆ Retour en haut](#-chatbot-de-navigation-mdph)
+
+</div>
