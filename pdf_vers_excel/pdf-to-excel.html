@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF to Excel - Extraction intelligente</title>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #6366f1, #4f46e5);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+        h1 { font-size: 2rem; margin-bottom: 10px; }
+        .subtitle { opacity: 0.9; }
+        .main { padding: 40px; background: #f8fafc; }
+        .upload {
+            background: white;
+            border: 3px dashed #cbd5e1;
+            border-radius: 12px;
+            padding: 60px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .upload:hover, .upload.drag { border-color: #6366f1; background: rgba(99,102,241,0.05); }
+        .btn {
+            padding: 14px 28px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 1rem;
+        }
+        .btn-primary { background: #6366f1; color: white; }
+        .btn-primary:hover { background: #4f46e5; transform: translateY(-2px); }
+        .btn-success { background: #10b981; color: white; margin: 0 5px; }
+        .btn-success:hover { background: #059669; }
+        .hidden { display: none !important; }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #e2e8f0;
+            border-top-color: #6366f1;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 30px auto;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .split {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin: 30px 0;
+        }
+        .panel {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .panel h3 { margin-bottom: 20px; color: #1e293b; font-size: 1.1rem; }
+        canvas {
+            width: 100%;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        .table-wrap {
+            overflow: auto;
+            max-height: 600px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            font-size: 0.9rem;
+        }
+        th, td {
+            padding: 10px 12px;
+            text-align: left;
+            border: 1px solid #e2e8f0;
+        }
+        th {
+            background: #6366f1;
+            color: white;
+            position: sticky;
+            top: 0;
+            font-weight: 600;
+            z-index: 10;
+        }
+        tr:nth-child(even) td { background: #f8fafc; }
+        tr:hover td { background: rgba(99,102,241,0.1); }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px;
+            margin: 25px 0;
+        }
+        .stat {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #6366f1;
+            display: block;
+        }
+        .stat-label {
+            color: #64748b;
+            font-size: 0.9rem;
+            margin-top: 5px;
+        }
+        .controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+            margin: 25px 0;
+        }
+        .alert {
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            border-left: 4px solid;
+        }
+        .alert-info { background: #dbeafe; border-color: #3b82f6; color: #1e40af; }
+        .alert-success { background: #d1fae5; border-color: #10b981; color: #065f46; }
+        .alert-warning { background: #fef3c7; border-color: #f59e0b; color: #92400e; }
+        .page-nav {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .page-nav button { padding: 8px 16px; }
+        .page-info { font-weight: 600; min-width: 100px; text-align: center; }
+        @media (max-width: 1024px) {
+            .split { grid-template-columns: 1fr; }
+            .stats { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>📄 PDF to Excel Converter</h1>
+            <p class="subtitle">Extraction intelligente inspirée de Tabula • 100% client-side</p>
+        </header>
+
+        <main class="main">
+            <section id="upload" class="upload">
+                <div style="font-size: 4rem; margin-bottom: 20px;">📂</div>
+                <h2 style="margin-bottom: 15px;">Glissez-déposez votre PDF ici</h2>
+                <p style="color: #64748b; margin: 15px 0;">Détection avancée de tableaux • Tous types de PDF</p>
+                <button class="btn btn-primary" onclick="document.getElementById('file').click()">
+                    Choisir un fichier
+                </button>
+                <input type="file" id="file" accept=".pdf" hidden>
+                <p style="color: #94a3b8; margin-top: 20px; font-size: 0.9rem;">Max 50 MB • Format PDF</p>
+            </section>
+
+            <section id="processing" class="hidden" style="text-align: center; padding: 80px 40px;">
+                <div class="spinner"></div>
+                <h2 id="status" style="margin: 20px 0;">Chargement...</h2>
+                <p id="progress" style="color: #6366f1; font-weight: 600; font-size: 1.2rem;">0%</p>
+                <p id="details" style="color: #64748b; margin-top: 10px;"></p>
+            </section>
+
+            <section id="results" class="hidden">
+                <div class="stats">
+                    <div class="stat">
+                        <span class="stat-value" id="s-pages">0</span>
+                        <span class="stat-label">Pages</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-value" id="s-tables">0</span>
+                        <span class="stat-label">Tableaux</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-value" id="s-rows">0</span>
+                        <span class="stat-label">Lignes</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-value" id="s-cells">0</span>
+                        <span class="stat-label">Cellules</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-value" id="s-quality">0%</span>
+                        <span class="stat-label">Confiance</span>
+                    </div>
+                </div>
+
+                <div class="split">
+                    <div class="panel">
+                        <h3>📄 PDF Original</h3>
+                        <canvas id="canvas"></canvas>
+                        <div class="page-nav">
+                            <button class="btn" id="prev">← Préc.</button>
+                            <span class="page-info" id="page-info">Page 1/1</span>
+                            <button class="btn" id="next">Suiv. →</button>
+                        </div>
+                    </div>
+
+                    <div class="panel">
+                        <h3>📊 Données extraites</h3>
+                        <div class="table-wrap" id="table"></div>
+                    </div>
+                </div>
+
+                <div class="controls">
+                    <button class="btn btn-success" id="excel">📊 Excel</button>
+                    <button class="btn btn-success" id="csv">📄 CSV</button>
+                    <button class="btn" id="reset" style="background: #64748b; color: white;">← Nouveau</button>
+                </div>
+
+                <div class="alert alert-info" id="info"></div>
+            </section>
+        </main>
+    </div>
+
+    <script type="module">
+        import * as pdfjsLib from 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/+esm';
+
+        // Configuration pour fonctionner sans serveur
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs';
+
+        let state = { pdf: null, page: 1, data: [], tables: [], filename: '' };
+
+        const $ = id => document.getElementById(id);
+        const show = sec => ['upload', 'processing', 'results'].forEach(s =>
+            $(s).classList.toggle('hidden', s !== sec)
+        );
+
+        // Upload
+        $('upload').onclick = () => $('file').click();
+        $('file').onchange = e => load(e.target.files[0]);
+
+        // Drag & Drop - Fixed
+        $('upload').addEventListener('dragover', e => {
+            e.preventDefault();
+            e.stopPropagation();
+            $('upload').classList.add('drag');
+        });
+
+        $('upload').addEventListener('dragenter', e => {
+            e.preventDefault();
+            e.stopPropagation();
+            $('upload').classList.add('drag');
+        });
+
+        $('upload').addEventListener('dragleave', e => {
+            e.preventDefault();
+            e.stopPropagation();
+            // Vérifier qu'on sort vraiment de la zone
+            if (e.target === $('upload')) {
+                $('upload').classList.remove('drag');
+            }
+        });
+
+        $('upload').addEventListener('drop', e => {
+            e.preventDefault();
+            e.stopPropagation();
+            $('upload').classList.remove('drag');
+
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                const file = files[0];
+                if (file.type === 'application/pdf') {
+                    load(file);
+                } else {
+                    alert('⚠️ Fichier PDF requis\nType reçu: ' + file.type);
+                }
+            }
+        });
+
+        // Controls
+        $('prev').onclick = () => changePage(-1);
+        $('next').onclick = () => changePage(1);
+        $('excel').onclick = exportExcel;
+        $('csv').onclick = exportCSV;
+        $('reset').onclick = reset;
+
+        // Empêcher le drag & drop par défaut sur toute la page
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            document.body.addEventListener(eventName, e => {
+                e.preventDefault();
+                e.stopPropagation();
+            }, false);
+        });
+
+        async function load(file) {
+            if (!file || file.type !== 'application/pdf') return alert('⚠️ PDF invalide');
+            if (file.size > 50 * 1024 * 1024) return alert('⚠️ Fichier > 50 MB');
+
+            state.filename = file.name.replace('.pdf', '');
+            show('processing');
+
+            try {
+                update(5, 'Chargement PDF...', 'Initialisation');
+                const buf = await file.arrayBuffer();
+                state.pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+
+                update(15, 'Extraction...', `${state.pdf.numPages} page(s)`);
+                state.data = [];
+
+                for (let i = 1; i <= state.pdf.numPages; i++) {
+                    update(15 + (i / state.pdf.numPages * 50), 'Extraction...', `Page ${i}/${state.pdf.numPages}`);
+                    state.data.push(await extractPage(i));
+                }
+
+                update(70, 'Détection tableaux...', 'Algorithme Tabula-like');
+                state.tables = detectTables(state.data);
+
+                // Mode de secours: extraire tout le texte même si pas de tableau parfait
+                if (!state.tables.length) {
+                    update(75, 'Mode de secours...', 'Extraction complète du texte');
+                    state.tables = fallbackExtraction(state.data);
+                }
+
+                if (!state.tables.length) {
+                    alert('⚠️ Aucun contenu textuel détecté dans le PDF.\n\nVérifiez que votre PDF contient du texte sélectionnable (pas seulement des images).');
+                    return reset();
+                }
+
+                update(90, 'Optimisation...', 'Nettoyage des données');
+                state.tables = state.tables.map(t => ({ ...t, table: cleanTable(t.table) }));
+
+                update(100, 'Terminé !', '');
+                await delay(500);
+                display();
+
+            } catch (err) {
+                console.error(err);
+                alert('❌ Erreur: ' + err.message);
+                reset();
+            }
+        }
+
+        async function extractPage(num) {
+            const page = await state.pdf.getPage(num);
+            const text = await page.getTextContent();
+            const view = page.getViewport({ scale: 1.5 });
+
+            // Extraction du texte avec métadonnées complètes
+            const items = text.items.map(it => ({
+                text: it.str.trim(),
+                x: Math.round(it.transform[4] * 10) / 10,
+                y: Math.round(it.transform[5] * 10) / 10,
+                w: Math.round(it.width * 10) / 10,
+                h: Math.round(it.height * 10) / 10,
+                font: it.fontName,
+                size: Math.round(it.transform[0])
+            })).filter(it => it.text);
+
+            // Tri intelligent: ligne par ligne, gauche vers droite
+            items.sort((a, b) => {
+                const yDiff = Math.abs(a.y - b.y);
+                return yDiff < 2 ? a.x - b.x : b.y - a.y;
+            });
+
+            // NOUVEAU: Extraction des lignes vectorielles (bordures de tableaux)
+            const ops = await page.getOperatorList();
+            const vectors = extractVectorLines(ops, view);
+
+            return { num, items, view, vectors };
+        }
+
+        function extractVectorLines(operatorList, viewport) {
+            // Extraction des lignes horizontales et verticales (bordures de tableaux)
+            const lines = { horizontal: [], vertical: [] };
+            let currentX = 0, currentY = 0;
+            let pathStarted = false;
+
+            for (let i = 0; i < operatorList.fnArray.length; i++) {
+                const op = operatorList.fnArray[i];
+                const args = operatorList.argsArray[i];
+
+                // moveTo: début d'un chemin
+                if (op === pdfjsLib.OPS.moveTo && args.length >= 2) {
+                    currentX = args[0];
+                    currentY = args[1];
+                    pathStarted = true;
+                }
+                // lineTo: tracer une ligne
+                else if (op === pdfjsLib.OPS.lineTo && args.length >= 2 && pathStarted) {
+                    const toX = args[0];
+                    const toY = args[1];
+
+                    // Ligne horizontale (Y constant)
+                    if (Math.abs(currentY - toY) < 1 && Math.abs(currentX - toX) > 5) {
+                        lines.horizontal.push({
+                            x1: Math.min(currentX, toX),
+                            x2: Math.max(currentX, toX),
+                            y: currentY,
+                            length: Math.abs(toX - currentX)
+                        });
+                    }
+                    // Ligne verticale (X constant)
+                    else if (Math.abs(currentX - toX) < 1 && Math.abs(currentY - toY) > 5) {
+                        lines.vertical.push({
+                            x: currentX,
+                            y1: Math.min(currentY, toY),
+                            y2: Math.max(currentY, toY),
+                            length: Math.abs(toY - currentY)
+                        });
+                    }
+
+                    currentX = toX;
+                    currentY = toY;
+                }
+                // rectangle: bordure de tableau
+                else if (op === pdfjsLib.OPS.rectangle && args.length >= 4) {
+                    const [x, y, w, h] = args;
+
+                    // Ajouter les 4 côtés du rectangle
+                    lines.horizontal.push(
+                        { x1: x, x2: x + w, y: y, length: w },
+                        { x1: x, x2: x + w, y: y + h, length: w }
+                    );
+                    lines.vertical.push(
+                        { x: x, y1: y, y2: y + h, length: h },
+                        { x: x + w, y1: y, y2: y + h, length: h }
+                    );
+                }
+            }
+
+            // Filtrer les lignes trop courtes (bruit)
+            lines.horizontal = lines.horizontal.filter(l => l.length > 10);
+            lines.vertical = lines.vertical.filter(l => l.length > 10);
+
+            return lines;
+        }
+
+        function fallbackExtraction(pages) {
+            // Mode de secours: extraire tout le contenu ligne par ligne
+            const tables = [];
+
+            pages.forEach(({ num, items }) => {
+                if (!items.length) return;
+
+                const lines = groupLines(items, 3);
+
+                // Créer un tableau simple avec toutes les données
+                const table = lines.map(line => {
+                    // Grouper les mots proches en cellules
+                    const cells = [];
+                    let currentCell = '';
+                    let lastX = -1000;
+
+                    line.forEach(it => {
+                        if (lastX === -1000 || Math.abs(it.x - lastX) > 50) {
+                            if (currentCell) cells.push(currentCell.trim());
+                            currentCell = it.text;
+                        } else {
+                            currentCell += ' ' + it.text;
+                        }
+                        lastX = it.x + it.w;
+                    });
+
+                    if (currentCell) cells.push(currentCell.trim());
+                    return cells.length ? cells : [line.map(it => it.text).join(' ')];
+                });
+
+                if (table.length) {
+                    tables.push({ num, table });
+                }
+            });
+
+            return tables;
+        }
+
+        function detectTables(pages) {
+            const tables = [];
+
+            pages.forEach(({ num, items, vectors }) => {
+                if (!items.length) return;
+
+                // MÉTHODE 1: Détection par lignes vectorielles (bordures)
+                // Seuil réduit: 2 lignes au lieu de 3 pour mieux détecter les petits tableaux
+                if (vectors && (vectors.horizontal.length >= 2 || vectors.vertical.length >= 2)) {
+                    const vectorTables = detectTablesByVectors(items, vectors);
+                    if (vectorTables.length > 0) {
+                        console.log(`Page ${num}: Détection VECTORIELLE - ${vectors.horizontal.length} lignes H, ${vectors.vertical.length} lignes V`);
+                        vectorTables.forEach(tbl => tables.push({ num, table: tbl, method: 'vectors' }));
+                        return; // Priorité aux tableaux avec bordures
+                    }
+                }
+
+                // MÉTHODE 2: Détection par alignement (algorithme Tabula classique)
+                const lines = groupLines(items, 3);
+                const cols = detectColumns(lines, 0.15);
+
+                if (cols.length < 2) return;
+
+                console.log(`Page ${num}: Détection ALIGNEMENT - ${lines.length} lignes, ${cols.length} colonnes`);
+                const grid = buildGrid(lines, cols);
+                const extracted = extractTablesFromGrid(grid);
+
+                console.log(`Page ${num}: ${extracted.length} tableau(x) extrait(s) depuis la grille`);
+                extracted.forEach(tbl => {
+                    if (tbl.length >= 2 && tbl[0].length >= 2) {
+                        tables.push({ num, table: tbl, method: 'alignment' });
+                    }
+                });
+            });
+
+            return tables;
+        }
+
+        function mergeCloseLines(lines, tolerance = 15, axis = 'x') {
+            // Fusionner les lignes verticales/horizontales qui sont trop proches
+            // Cela évite de créer des colonnes/lignes parasites pour des bordures multiples
+            if (lines.length === 0) return lines;
+
+            const merged = [];
+            let current = lines[0];
+
+            for (let i = 1; i < lines.length; i++) {
+                const next = lines[i];
+                const distance = Math.abs(next[axis] - current[axis]);
+
+                if (distance < tolerance) {
+                    // Fusionner: prendre la position moyenne
+                    current = { ...current, [axis]: (current[axis] + next[axis]) / 2 };
+                } else {
+                    merged.push(current);
+                    current = next;
+                }
+            }
+            merged.push(current); // Ajouter la dernière ligne
+
+            return merged;
+        }
+
+        function detectTablesByVectors(items, vectors) {
+            // Utiliser les lignes vectorielles pour définir les cellules
+            const tables = [];
+
+            // Trier les lignes horizontales par Y et verticales par X
+            let hLines = [...vectors.horizontal].sort((a, b) => b.y - a.y);
+            let vLines = [...vectors.vertical].sort((a, b) => a.x - b.x);
+
+            if (hLines.length < 2 || vLines.length < 2) return tables;
+
+            // AMÉLIORATION: Fusionner les lignes trop proches pour éviter sur-découpage
+            // Bordures doubles ou espaces minimes entre cellules → fusionner
+            hLines = mergeCloseLines(hLines, 5, 'y');  // 5px pour lignes horizontales
+            vLines = mergeCloseLines(vLines, 25, 'x'); // 25px pour colonnes verticales (augmenté)
+
+            console.log(`Fusion bordures: H ${vectors.horizontal.length}→${hLines.length}, V ${vectors.vertical.length}→${vLines.length}`);
+
+            // AMÉLIORATION: Calculer les limites exactes du tableau basées sur les bordures
+            const tableMinX = Math.min(...vLines.map(l => l.x));
+            const tableMaxX = Math.max(...vLines.map(l => l.x));
+            const tableMinY = Math.min(...hLines.map(l => l.y));
+            const tableMaxY = Math.max(...hLines.map(l => l.y));
+
+            console.log(`Zone tableau détectée: X[${tableMinX} - ${tableMaxX}] Y[${tableMinY} - ${tableMaxY}]`);
+
+            // Filtrer les items: SEULEMENT ceux qui sont À L'INTÉRIEUR des bordures du tableau
+            const tableItems = items.filter(it => {
+                const itemCenterX = it.x + (it.w / 2);
+                const itemCenterY = it.y + (it.h / 2);
+                return itemCenterX >= tableMinX && itemCenterX <= tableMaxX &&
+                       itemCenterY >= tableMinY && itemCenterY <= tableMaxY;
+            });
+
+            console.log(`Items filtrés: ${tableItems.length}/${items.length} (exclusion du texte hors tableau)`);
+
+            // Créer une grille basée sur les intersections
+            const rows = hLines.length - 1;
+            const cols = vLines.length - 1;
+
+            if (rows < 1 || cols < 1) return tables;
+
+            const table = [];
+
+            for (let i = 0; i < rows; i++) {
+                const row = [];
+                const yTop = Math.max(hLines[i].y, hLines[i + 1].y);
+                const yBottom = Math.min(hLines[i].y, hLines[i + 1].y);
+
+                for (let j = 0; j < cols; j++) {
+                    const xLeft = vLines[j].x;
+                    const xRight = vLines[j + 1].x;
+
+                    // Trouver tous les items dans cette cellule (parmi les items du tableau uniquement)
+                    const cellItems = tableItems.filter(it =>
+                        it.x >= xLeft && it.x <= xRight &&
+                        it.y >= yBottom && it.y <= yTop
+                    );
+
+                    // Concaténer le texte
+                    const cellText = cellItems
+                        .sort((a, b) => b.y !== a.y ? b.y - a.y : a.x - b.x)
+                        .map(it => it.text)
+                        .join(' ')
+                        .trim();
+
+                    row.push(cellText);
+                }
+
+                table.push(row);
+            }
+
+            if (table.length > 0) tables.push(table);
+
+            return tables;
+        }
+
+        function groupLines(items, tolerance = 3) {
+            const lines = [];
+            let line = [], lastY = null;
+
+            items.forEach(it => {
+                // Tolérance de 3px pour gérer les variations de hauteur
+                if (lastY === null || Math.abs(it.y - lastY) <= tolerance) {
+                    line.push(it);
+                    lastY = lastY === null ? it.y : (lastY + it.y) / 2;
+                } else {
+                    if (line.length) lines.push([...line]);
+                    line = [it];
+                    lastY = it.y;
+                }
+            });
+
+            if (line.length) lines.push(line);
+            return lines;
+        }
+
+        function detectColumns(lines, threshold = 0.15) {
+            const xFreq = {};
+
+            // AMÉLIORATION: Ne compter que les lignes qui ont plusieurs éléments (structure tabulaire)
+            // Les lignes avec 1 seul élément sont probablement du texte narratif
+            const tableLines = lines.filter(ln => ln.length >= 2);
+
+            tableLines.forEach(ln => ln.forEach(it => {
+                // Tolérance plus large pour grouper les colonnes proches
+                const xKey = Math.round(it.x / 5) * 5;
+                xFreq[xKey] = (xFreq[xKey] || 0) + 1;
+            }));
+
+            // Seuil: au moins 15% des lignes tabulaires doivent avoir cette position X
+            const minFreq = Math.max(2, tableLines.length * threshold);
+            let cols = Object.entries(xFreq)
+                .filter(([_, cnt]) => cnt >= minFreq)
+                .map(([x]) => parseFloat(x))
+                .sort((a, b) => a - b);
+
+            // AMÉLIORATION: Fusionner les colonnes trop proches (< 30px)
+            // Évite d'avoir des colonnes parasites qui divisent le contenu
+            cols = mergeCloseColumns(cols, 30);
+
+            return cols;
+        }
+
+        function mergeCloseColumns(cols, tolerance = 20) {
+            // Fusionner les positions de colonnes trop proches
+            if (cols.length === 0) return cols;
+
+            const merged = [];
+            let current = cols[0];
+
+            for (let i = 1; i < cols.length; i++) {
+                const next = cols[i];
+                const distance = Math.abs(next - current);
+
+                if (distance < tolerance) {
+                    // Fusionner: prendre la moyenne
+                    current = (current + next) / 2;
+                } else {
+                    merged.push(current);
+                    current = next;
+                }
+            }
+            merged.push(current);
+
+            console.log(`Colonnes fusionnées: ${cols.length} → ${merged.length}`);
+            return merged;
+        }
+
+        function buildGrid(lines, cols) {
+            const grid = [];
+
+            lines.forEach(ln => {
+                const row = new Array(cols.length).fill('');
+                let cellsMatched = 0; // Compteur de cellules alignées
+
+                ln.forEach(it => {
+                    let minD = Infinity, idx = 0;
+
+                    cols.forEach((cx, i) => {
+                        const d = Math.abs(it.x - cx);
+                        if (d < minD) { minD = d; idx = i; }
+                    });
+
+                    // Tolérance d'alignement: 50px
+                    if (minD < 50) {
+                        row[idx] = row[idx] ? row[idx] + ' ' + it.text : it.text;
+                        cellsMatched++;
+                    }
+                });
+
+                // AMÉLIORATION: Ne garder que les lignes qui ont au moins 2 colonnes remplies
+                // Cela élimine le texte narratif (paragraphes) qui n'est pas en colonnes
+                const filledCols = row.filter(c => c.trim()).length;
+
+                if (filledCols >= 2) {
+                    grid.push(row.map(c => c.trim()));
+                }
+            });
+
+            return grid;
+        }
+
+        function extractTablesFromGrid(grid) {
+            // Détection de multiples tableaux dans une page - AMÉLIORATION anti-fragmentation
+            const tables = [];
+            let currentTable = [];
+            let emptyCount = 0;
+
+            grid.forEach((row, idx) => {
+                const isEmpty = row.every(c => !c);
+
+                if (isEmpty) {
+                    emptyCount++;
+                    // Seuil augmenté à 4 lignes vides au lieu de 2 pour éviter sur-fragmentation
+                    // On vérifie aussi qu'on a au moins 3 lignes dans le tableau actuel
+                    if (emptyCount >= 4 && currentTable.length >= 3) {
+                        tables.push([...currentTable]);
+                        currentTable = [];
+                        emptyCount = 0;
+                    }
+                } else {
+                    // Si on a seulement 1-3 lignes vides, on les ajoute au tableau (lignes intermédiaires)
+                    if (emptyCount > 0 && emptyCount < 4 && currentTable.length > 0) {
+                        for (let i = 0; i < emptyCount; i++) {
+                            currentTable.push(new Array(row.length).fill(''));
+                        }
+                    }
+                    emptyCount = 0;
+                    currentTable.push(row);
+                }
+            });
+
+            // Table finale si elle a au moins 3 lignes (sinon trop petite)
+            if (currentTable.length >= 3) {
+                tables.push(currentTable);
+            }
+
+            // Si aucune table détectée avec les critères stricts, retourner tout le grid
+            return tables.length ? tables : [grid];
+        }
+
+        function cleanTable(table) {
+            // Supprimer colonnes vides
+            const nonEmptyCols = [];
+            for (let j = 0; j < table[0].length; j++) {
+                if (table.some(r => r[j] && r[j].trim())) {
+                    nonEmptyCols.push(j);
+                }
+            }
+
+            return table.map(row => nonEmptyCols.map(j => row[j] || ''))
+                .filter(row => row.some(c => c.trim()));
+        }
+
+        function display() {
+            show('results');
+
+            const totalRows = state.tables.reduce((s, t) => s + t.table.length, 0);
+            const totalCells = state.tables.reduce((s, t) => s + t.table.length * t.table[0].length, 0);
+            const quality = calcQuality();
+
+            $('s-pages').textContent = state.pdf.numPages;
+            $('s-tables').textContent = state.tables.length;
+            $('s-rows').textContent = totalRows;
+            $('s-cells').textContent = totalCells;
+            $('s-quality').textContent = quality + '%';
+
+            state.page = 1;
+            render();
+
+            const msg = quality >= 90 ? '✅ Excellente extraction' :
+                       quality >= 75 ? '✅ Bonne extraction - Vérifiez les résultats' :
+                       '⚠️ Extraction partielle - Vérification recommandée';
+
+            // Déterminer les méthodes utilisées
+            const methods = [...new Set(state.tables.map(t => t.method || 'fallback'))];
+            const methodText = methods.includes('vectors') ? 'Bordures vectorielles + Alignement' :
+                             methods.includes('alignment') ? 'Alignement de texte (Tabula-like)' :
+                             'Extraction complète (mode secours)';
+
+            $('info').innerHTML = `<strong>Qualité:</strong> ${msg} • <strong>Méthode:</strong> ${methodText}`;
+        }
+
+        function calcQuality() {
+            let score = 0;
+            state.tables.forEach(({ table }) => {
+                const total = table.length * table[0].length;
+                const filled = table.flat().filter(c => c.trim()).length;
+                score += (filled / total) * 100;
+            });
+            return Math.round(score / state.tables.length);
+        }
+
+        async function render() {
+            const pg = await state.pdf.getPage(state.page);
+            const view = pg.getViewport({ scale: 1.5 });
+
+            const canvas = $('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.height = view.height;
+            canvas.width = view.width;
+
+            await pg.render({ canvasContext: ctx, viewport: view }).promise;
+
+            $('page-info').textContent = `Page ${state.page}/${state.pdf.numPages}`;
+            $('prev').disabled = state.page === 1;
+            $('next').disabled = state.page === state.pdf.numPages;
+
+            showTable();
+        }
+
+        function showTable() {
+            const tData = state.tables.find(t => t.num === state.page);
+
+            if (!tData) {
+                $('table').innerHTML = '<p style="padding: 40px; text-align: center; color: #94a3b8;">Aucun tableau sur cette page</p>';
+                return;
+            }
+
+            let html = '<table>';
+            tData.table.forEach((row, i) => {
+                html += '<tr>';
+                row.forEach(cell => {
+                    const tag = i === 0 ? 'th' : 'td';
+                    html += `<${tag}>${cell || '&nbsp;'}</${tag}>`;
+                });
+                html += '</tr>';
+            });
+            html += '</table>';
+
+            $('table').innerHTML = html;
+        }
+
+        function changePage(delta) {
+            const newPage = state.page + delta;
+            if (newPage >= 1 && newPage <= state.pdf.numPages) {
+                state.page = newPage;
+                render();
+            }
+        }
+
+        function exportExcel() {
+            const wb = XLSX.utils.book_new();
+
+            state.tables.forEach(({ num, table }) => {
+                const ws = XLSX.utils.aoa_to_sheet(table);
+
+                // Largeurs auto
+                ws['!cols'] = table[0].map((_, i) => ({
+                    wch: Math.min(Math.max(...table.map(r => (r[i] || '').length)) + 2, 50)
+                }));
+
+                XLSX.utils.book_append_sheet(wb, ws, `Page ${num}`);
+            });
+
+            XLSX.writeFile(wb, `${state.filename}_extraction.xlsx`);
+        }
+
+        function exportCSV() {
+            const { table } = state.tables[0];
+            const csv = table.map(r => r.map(c => `"${(c || '').replace(/"/g, '""')}"`).join(',')).join('\n');
+
+            const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `${state.filename}_extraction.csv`;
+            link.click();
+        }
+
+        function update(pct, msg, detail) {
+            $('progress').textContent = `${Math.round(pct)}%`;
+            $('status').textContent = msg;
+            $('details').textContent = detail;
+        }
+
+        function reset() {
+            state = { pdf: null, page: 1, data: [], tables: [], filename: '' };
+            $('file').value = '';
+            show('upload');
+        }
+
+        function delay(ms) {
+            return new Promise(r => setTimeout(r, ms));
+        }
+
+        console.log('✅ PDF to Excel ready - Tabula-like algorithm');
+    </script>
+</body>
+</html>
