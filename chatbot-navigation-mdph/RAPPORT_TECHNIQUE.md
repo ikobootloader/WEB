@@ -2061,7 +2061,7 @@ class MDPHChatbotConnector:
 
 ### 16.3 Contacts et support
 
-**Équipe projet** : BMAD Project
+**Équipe projet** : Frédérick MURAT
 **Repository** : (URL du repository)
 **Documentation** : README.md
 **Rapport bugs** : Issues GitHub
