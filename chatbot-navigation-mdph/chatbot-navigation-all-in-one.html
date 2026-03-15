@@ -208,18 +208,18 @@
             position: absolute;
             top: 20px;
             right: 10%;
-            background: linear-gradient(135deg, #667eea 0%, black 100%);
-            border-radius: 50%;
+            background: var(--color-primary);
+            border-radius: 10px;
             width: 48px;
             height: 48px;
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+            box-shadow: var(--shadow-md);
             cursor: pointer;
             opacity: 0;
             pointer-events: none;
-            transition: all 0.3s ease;
+            transition: all 0.2s;
             z-index: 10;
         }
 
@@ -230,8 +230,9 @@
 
         .message-scroll-hint:hover {
             opacity: 1;
-            transform: scale(1.1);
-            box-shadow: 0 6px 16px rgba(102, 126, 234, 0.5);
+            background: var(--color-primary-dark);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-lg);
         }
 
         .message-scroll-hint .material-icons {
@@ -1012,21 +1013,9 @@
         .chatbot-messages::-webkit-scrollbar-thumb:hover {
             background: #764ba2;
         }
-    
-#loading-screen{position:fixed;top:0;left:0;width:100%;height:100%;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:9999;transition:opacity .5s}
-#loading-screen.fade-out{opacity:0;pointer-events:none}
-.loading-content{text-align:center;color:#fff}
-.loading-logo{font-size:4rem;margin-bottom:1.5rem;animation:pulse 2s ease-in-out infinite}
-.loading-title{font-size:1.8rem;font-weight:600;margin-bottom:.5rem}
-.loading-subtitle{font-size:1rem;opacity:.9;margin-bottom:2rem}
-.loading-bar-container{width:300px;height:6px;background:rgba(255,255,255,.3);border-radius:10px;overflow:hidden;margin-bottom:1rem}
-.loading-bar{height:100%;background:#fff;border-radius:10px;width:0;animation:loadingProgress 2s ease-out forwards}
-.loading-text{font-size:.9rem;opacity:.8}
-@keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.05);opacity:.8}}
-@keyframes loadingProgress{0%{width:0}20%{width:30%}50%{width:60%}80%{width:90%}100%{width:100%}}
-</style>
+    </style>
 </head>
-<body><div id="loading-screen"><div class="loading-content"><div class="loading-logo">💬</div><div class="loading-title">Chatbot MDPH</div><div class="loading-subtitle">Chargement...</div><div class="loading-bar-container"><div class="loading-bar"></div></div><div class="loading-text">Préparation</div></div></div>
+<body>
     <div class="chatbot-container">
         <div class="chatbot-header">
             <button class="fullscreen-btn" id="fullscreenBtn" onclick="toggleFullscreen()">
@@ -7500,7 +7489,7 @@
     {
       "id": "pch_amenagement_vehicule",
       "question": "PCH - amenagement vehicule ?",
-      "answer": "La PCH Aménagement Véhicule finance les adaptations nécessaires pour conduire ou être transporté dans un véhicule. TYPES AMENAGEMENTS PRIS EN CHARGE : adaptations du poste de conduite (boîte automatique, commandes manuelles au volant, volant ergonomique, accélérateur/frein adaptés), aménagements pour faciliter l'accès au véhicule (siège pivotant, poignées de transfert, marchepied), installations pour transport en fauteuil roulant (rampe d'accès, système d'arrimage, hayon élévateur, abaissement de plancher). MONTANTS : PCH couvre le SURCOUT lié au handicap (différence entre prix véhicule/équipement adapté et prix véhicule standard). Taux prise en charge 75% ou 100% selon ressources. Plafonds : 5000€ sur 5 ans pour aménagements, possibilité aide complémentaire pour surcoût véhicule adapté (jusqu'à 12000€ dans certains cas). CONDITIONS : le véhicule doit être utilisé par la personne handicapée ou pour son transport régulier, devis obligatoires AVANT achat, prescription médicale si nécessaire, véhicule immatriculé au nom de la personne handicapée ou de son représentant légal. DEMARCHES : dossier MDPH avec formulaire Cerfa 15692*01, certificat médical, devis détaillés aménagements, justificatif immatriculation véhicule, RIB. IMPORTANT : NE PAS acheter ou faire aménager AVANT accord MDPH, possibilité cumul avec carte mobilité inclusion stationnement, possibilité exonération taxe véhicule selon département. Sources : monparcourshandicap.gouv.fr, service-public.fr, informations.handicap.fr",
+      "answer": "La PCH Aménagement Véhicule finance les adaptations nécessaires pour conduire ou être transporté dans un véhicule.\n\n📋 TYPES D'AMÉNAGEMENTS PRIS EN CHARGE :\n• Adaptations du poste de conduite : boîte automatique, commandes manuelles au volant, volant ergonomique, accélérateur/frein adaptés\n• Aménagements pour faciliter l'accès : siège pivotant, poignées de transfert, marchepied\n• Installations pour transport en fauteuil roulant : rampe d'accès, système d'arrimage, hayon élévateur, abaissement de plancher\n\n💰 MONTANTS ET PRISE EN CHARGE :\nLa PCH couvre le SURCOÛT lié au handicap (différence entre prix véhicule/équipement adapté et prix véhicule standard).\n• Taux de prise en charge : 75% ou 100% selon ressources\n• Plafonds : 5 000€ sur 5 ans pour aménagements\n• Aide complémentaire possible pour surcoût véhicule adapté (jusqu'à 12 000€ dans certains cas)\n\n✅ CONDITIONS D'ATTRIBUTION :\n• Le véhicule doit être utilisé par la personne handicapée ou pour son transport régulier\n• Devis obligatoires AVANT achat\n• Prescription médicale si nécessaire\n• Véhicule immatriculé au nom de la personne handicapée ou de son représentant légal\n\n📝 DÉMARCHES :\nDossier MDPH comprenant :\n• Formulaire Cerfa 15692*01\n• Certificat médical\n• Devis détaillés des aménagements\n• Justificatif d'immatriculation du véhicule\n• RIB\n\n⚠️ IMPORTANT :\n• NE PAS acheter ou faire aménager AVANT accord MDPH\n• Possibilité de cumul avec carte mobilité inclusion stationnement\n• Possibilité d'exonération de taxe véhicule selon département\n\nSources : monparcourshandicap.gouv.fr, service-public.fr, informations.handicap.fr",
       "source": "monparcourshandicap.gouv.fr, service-public.fr",
       "keywords": [
         "pch amenagement vehicule",
@@ -13041,24 +13030,6 @@
 
                 // Patterns de questions contextuelles (avec pronoms/références vagues)
                 const contextualPatterns = [
-                    // Questions très courtes (contextuelles par nature)
-                    /^quel(le)?s? montants?\s*\??$/i,  // "quel montant ?", "montant ?"
-                    /^(le |la |les? )?montants?\s*\??$/i,  // "le montant ?", "montant ?"
-                    /^combien\s*\??$/i,  // "combien ?"
-                    /^(c['']est )?combien\s*\??$/i,  // "c'est combien ?"
-                    /^(à |a )?combien\s*\??$/i,  // "à combien ?"
-                    /^(quelle |la )?somme\s*\??$/i,  // "quelle somme ?", "la somme ?"
-                    /^(les? |quelles? )?conditions?\s*\??$/i,  // "les conditions ?", "condition ?"
-                    /^(les? |quelles? )?d[ée]marches?\s*\??$/i,  // "les démarches ?", "démarche ?"
-                    /^(la )?proc[ée]dure\s*\??$/i,  // "la procédure ?", "procédure ?"
-                    /^(la |le |l[''])?demande\s*\??$/i,  // "la demande ?", "demande ?"
-                    /^(comment )?obtenir\s*\??$/i,  // "obtenir ?", "comment obtenir ?"
-                    /^(comment )?demander\s*\??$/i,  // "demander ?", "comment demander ?"
-                    /^(la |le |l[''])?dur[ée]e\s*\??$/i,  // "la durée ?", "durée ?"
-                    /^(les? )?avantages?\s*\??$/i,  // "les avantages ?", "avantage ?"
-                    /^comment faire\s*\??$/i,  // "comment faire ?"
-
-                    // Patterns existants
                     /^(quelles? sont )?les conditions?( pour)?( l['']| la | le )?obtenir/i,
                     /^comment (l['']| la | le )?obtenir/i,
                     /^(je )?peux (l['']| la | le )?avoir/i,
@@ -13066,21 +13037,19 @@
                     /^(c['']est )?combien/i,
                     /^quel(le)?s? (sont )?les? montants?/i,
                     /^(quelles? sont )?les? d[ée]marches?/i,
-                    /^comment (faire )?(la |le |l['']|cette |ce |cet )?demande/i,
-                    /^comment (le|la|cette|ce|cet|[cç]a) demander/i,
-                    /^comment (le|la|cette|ce|cet|[cç]a) renouveler/i,
+                    /^comment (faire )?la demande/i,
+                    /^comment (le|la) demander/i,
+                    /^comment (le|la) renouveler/i,
                     /^(pour |pendant )?combien de temps/i,
-                    /^(quelle est )?(la |cette )?dur[ée]e/i,
+                    /^(quelle est )?la dur[ée]e/i,
                     /^(quels? sont )?les? avantages?/i,
-                    /^[àa] quoi ([cç]a |[cç]ela |cette |ce |cet )?sert/i,
+                    /^[àa] quoi ([cç]a |[cç]ela )?sert/i,
                     /^qui d[ée]cide/i,
                     /^qui verse/i,
                     /^(peut[- ]on |puis[- ]je )?cumuler/i,
                     /^(c['']est quoi |qu['']est[- ]ce que )?(cette|ce|cet|cela|[cç]a)/i,
                     /pour (l['']| la | le | cette | ce | cet )?avoir/i,
-                    /de (l['']| la | le | cette | ce | cet )?avoir/i,
-                    /(cette|ce|cet|[cç]a|[cç]ela) (aide|prestation|droit|allocation|carte|orientation)/i,
-                    /obtenir (cette|ce|cet|[cç]a|[cç]ela) (aide|prestation|droit|allocation|carte|orientation)/i
+                    /de (l['']| la | le | cette | ce | cet )?avoir/i
                 ];
 
                 for (const pattern of contextualPatterns) {
@@ -13139,46 +13108,19 @@
                 }
 
                 // 2. Si pas trouvé dans related_links, enrichir la question avec le concept
-                // D'abord nettoyer les démonstratifs et ponctuation
-                let cleanQuestion = question
-                    .replace(/\bcette\s+/gi, '')
-                    .replace(/\bce\s+/gi, '')
-                    .replace(/\bcet\s+/gi, '')
-                    .replace(/(?:^|\s)[cç]a\s+/gi, ' ')  // ça au début ou après espace
-                    .replace(/(?:^|\s)[cç]ela\s+/gi, ' ')  // cela au début ou après espace
-                    .replace(/(^|\s)l[''](?=\w)/gi, '$1')  // l' → supprimé (ex: "comment l'obtenir" → "comment obtenir")
-                    .replace(/[?!.;,]+$/g, '')  // Retirer ponctuation finale
-                    .replace(/\s+/g, ' ')  // Normaliser espaces
-                    .trim();
-
-                const enrichedQuestion = `${cleanQuestion} ${mainConcept}`;
-                console.log('[CONTEXT] Question nettoyée:', cleanQuestion);
+                const enrichedQuestion = `${question} ${mainConcept}`;
                 console.log('[CONTEXT] Question enrichie:', enrichedQuestion);
 
                 // Rechercher avec la question enrichie
                 const result = this.search(enrichedQuestion, 30.0);
-                if (result) {
-                    // Vérifier si le chunk trouvé est pertinent pour le contexte
-                    const chunkIdLower = result.chunk_id.toLowerCase();
-                    const conceptLower = mainConcept.toLowerCase();
-
-                    // Accepter si :
-                    // 1. Le chunk ID contient le concept (ex: "orientation_ime" pour concept "ime")
-                    // 2. OU le chunk contient "orientation" dans son ID avec un bon score (chunks génériques ESMS)
-                    const containsConcept = chunkIdLower.includes(conceptLower);
-                    const isOrientationChunk = chunkIdLower.includes('orientation') && result.score >= 500;
-
-                    if (containsConcept || isOrientationChunk) {
-                        console.log('[CONTEXT] Match trouvé via enrichissement:', result.chunk_id, 'score:', result.score);
-                        return {
-                            chunkId: result.chunk_id,
-                            method: 'enriched_search',
-                            score: result.score,
-                            fromContext: mainConcept
-                        };
-                    } else {
-                        console.log('[CONTEXT] Chunk trouvé mais non pertinent:', result.chunk_id, 'concept:', mainConcept, 'score:', result.score);
-                    }
+                if (result && result.chunk_id.startsWith(mainConcept)) {
+                    console.log('[CONTEXT] Match trouvé via enrichissement:', result.chunk_id);
+                    return {
+                        chunkId: result.chunk_id,
+                        method: 'enriched_search',
+                        score: result.score,
+                        fromContext: mainConcept
+                    };
                 }
 
                 return null;
@@ -14034,9 +13976,6 @@
             if (conversationHistory.length > MAX_HISTORY_SIZE) {
                 conversationHistory = conversationHistory.slice(0, MAX_HISTORY_SIZE);
             }
-
-            console.log('[HISTORY] Ajouté:', chunkId, '| Taille historique:', conversationHistory.length);
-            console.log('[HISTORY] Historique complet:', conversationHistory.map(h => h.chunkId));
         }
 
         function getLastContextKeywords() {
@@ -14045,11 +13984,8 @@
         }
 
         function getLastChunkId() {
-            console.log('[HISTORY] getLastChunkId appelé, taille:', conversationHistory.length);
             if (conversationHistory.length === 0) return null;
-            const lastId = conversationHistory[0].chunkId;
-            console.log('[HISTORY] Dernier chunk ID:', lastId);
-            return lastId;
+            return conversationHistory[0].chunkId;
         }
  // Historique de navigation
 
@@ -14639,5 +14575,5 @@
         // Fonction pour scroller vers le bas
         // scrollToBottom is now handled per-message by the scroll indicator button onclick
     </script>
-<script>window.addEventListener("load",()=>{setTimeout(()=>{const e=document.getElementById("loading-screen");e&&(e.classList.add("fade-out"),setTimeout(()=>e.style.display="none",500))},500)});setTimeout(()=>{const e=document.getElementById("loading-screen");e&&!e.classList.contains("fade-out")&&(e.classList.add("fade-out"),setTimeout(()=>e.style.display="none",500))},5e3);</script></body>
+</body>
 </html>
