@@ -208,30 +208,30 @@
             position: absolute;
             top: 20px;
             right: 10%;
-            background: linear-gradient(135deg, #667eea 0%, black 100%);
-            border-radius: 50%;
+            background: var(--color-primary);
+            border-radius: 10px;
             width: 48px;
             height: 48px;
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+            box-shadow: var(--shadow-md);
             cursor: pointer;
             opacity: 0;
             pointer-events: none;
-            transition: all 0.3s ease;
+            transition: all 0.2s;
             z-index: 10;
         }
 
         .message-scroll-hint.visible {
-            opacity: 0.95;
+            opacity: 1;
             pointer-events: all;
         }
 
         .message-scroll-hint:hover {
-            opacity: 1;
-            transform: scale(1.1);
-            box-shadow: 0 6px 16px rgba(102, 126, 234, 0.5);
+            background: var(--color-primary-dark);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-lg);
         }
 
         .message-scroll-hint .material-icons {
@@ -6056,7 +6056,7 @@
     {
       "id": "ulis_definition",
       "question": "C'est quoi ULIS ?",
-      "answer": "Les ULIS (Unites Localisees pour l'Inclusion Scolaire) sont des dispositifs collectifs qui favorisent la scolarisation d'eleves en situation de handicap dans les ecoles ordinaires, du primaire au lycee. Il existe differents types d'ULIS selon le handicap : TFC (troubles fonctions cognitives), TFM (troubles fonctions motrices), TFV (troubles fonctions visuelles), TFA (troubles fonctions auditives), TSLA (troubles langage/apprentissage), TSA (troubles spectre autisme), TMA (troubles multiples associes). Maximum 12 eleves en ULIS ecole elementaire, 10 en ULIS college/lycee. La CDAPH de la MDPH decide du placement en ULIS apres examen du GEVA-Sco. Les eleves beneficient d'un enseignement specialise par un enseignant qualifie tout en etant integres partiellement dans les classes ordinaires.",
+      "answer": "**Qu'est-ce qu'une ULIS ?**\n\nLes ULIS (Unités Localisées pour l'Inclusion Scolaire) sont des classes spécialisées au sein des écoles ordinaires (du primaire au lycée) qui permettent aux élèves en situation de handicap d'être scolarisés avec un accompagnement adapté.\n\n**Votre enfant peut-il intégrer une ULIS ?**\n\nUne ULIS peut accueillir votre enfant s'il présente :\n- Des troubles cognitifs ou mentaux\n- Des troubles du spectre autistique (TSA)\n- Des troubles du langage et des apprentissages (dyslexie, dyspraxie...)\n- Des troubles moteurs\n- Des troubles visuels ou auditifs\n- Des troubles multiples associés\n\n**Comment ça fonctionne ?**\n\n- Maximum 10 à 12 élèves par ULIS\n- Un enseignant spécialisé coordonne le dispositif\n- L'élève suit certains cours dans sa classe ordinaire et bénéficie de temps d'enseignement adapté en ULIS\n- Il reste inscrit dans une classe de référence\n\n**Comment obtenir une place en ULIS ?**\n\n1. **Déposer un dossier à la MDPH** avec un certificat médical détaillant les difficultés\n2. **Remplir le GEVA-Sco** (document rempli avec l'école)\n3. **La CDAPH décide** de l'orientation en ULIS après étude du dossier\n4. **L'affectation** est ensuite gérée par l'Éducation Nationale\n\n**Délai** : Comptez 4 mois pour la décision MDPH + le délai d'affectation scolaire.\n\n**Important** : Les places en ULIS sont limitées. Déposez votre dossier dès que possible, idéalement avant mars pour une rentrée en septembre.",
       "source": "monparcourshandicap.gouv.fr",
       "keywords": [
         "ulis",
@@ -6076,7 +6076,15 @@
         "acces ulis",
         "unité localisée",
         "unite localisee",
-        "inclusion scolaire"
+        "inclusion scolaire",
+        "ULIS",
+        "peut aller ULIS",
+        "obtenir ULIS",
+        "place ULIS",
+        "critères ULIS",
+        "démarches ULIS",
+        "fonctionnement ULIS",
+        "intégrer ULIS"
       ],
       "related_links": [
         {
@@ -6120,7 +6128,27 @@
         "qu'est-ce qu'ulis ?",
         "ulis qu'est-ce que c'est ?",
         "ça veut dire quoi ulis ?",
-        "que signifie ulis ?"
+        "que signifie ulis ?",
+        "mon enfant peut-il intégrer une ULIS ?",
+        "est-ce que mon enfant peut aller en ULIS ?",
+        "qui peut aller en ULIS ?",
+        "quels enfants peuvent aller en ULIS ?",
+        "critères pour aller en ULIS",
+        "conditions ULIS",
+        "comment obtenir une place en ULIS ?",
+        "comment faire pour avoir une ULIS ?",
+        "comment demander une ULIS ?",
+        "démarches pour ULIS",
+        "obtenir ULIS",
+        "comment fonctionne l'ULIS ?",
+        "fonctionnement ULIS",
+        "ULIS comment ça marche ?",
+        "ULIS pour quel handicap ?",
+        "ULIS autisme",
+        "ULIS dyslexie",
+        "ULIS troubles apprentissage",
+        "mon enfant a besoin d'une ULIS",
+        "besoin ULIS pour mon enfant"
       ]
     },
     {
@@ -7727,7 +7755,15 @@
       "keywords": [
         "pch aides techniques",
         "materiel medical pch",
-        "fauteuil roulant pch"
+        "fauteuil roulant pch",
+        "fauteuil roulant",
+        "avoir fauteuil roulant",
+        "besoin fauteuil roulant",
+        "matériel adapté",
+        "équipement adapté",
+        "aides techniques",
+        "matériel médical",
+        "financer fauteuil"
       ],
       "related_links": [
         {
@@ -7759,7 +7795,28 @@
         "comment obtenir une aide pour du matériel adapté ?",
         "aide pour prothèse handicap",
         "pch fauteuil roulant",
-        "financement fauteuil roulant"
+        "financement fauteuil roulant",
+        "j'aimerais avoir un fauteuil roulant",
+        "je veux un fauteuil roulant",
+        "j'ai besoin d'un fauteuil roulant",
+        "avoir un fauteuil roulant",
+        "obtenir un fauteuil roulant",
+        "fauteuil roulant",
+        "un fauteuil roulant",
+        "aide fauteuil roulant",
+        "besoin fauteuil roulant",
+        "j'aimerais avoir du matériel adapté",
+        "je veux du matériel adapté",
+        "j'ai besoin de matériel adapté",
+        "aide pour matériel adapté",
+        "matériel adapté",
+        "j'ai besoin d'équipement adapté",
+        "équipement pour handicap",
+        "matériel pour handicap",
+        "j'ai besoin d'aides techniques",
+        "aides techniques",
+        "aide technique",
+        "matériel médical"
       ]
     },
     {
@@ -7850,7 +7907,15 @@
       "keywords": [
         "pch amenagement vehicule",
         "pch vehicule",
-        "amenagement voiture handicap"
+        "amenagement voiture handicap",
+        "aide voiture",
+        "aide véhicule",
+        "aménagement voiture",
+        "aménagement véhicule",
+        "voiture adaptée",
+        "véhicule adapté",
+        "financer voiture",
+        "acheter voiture adaptée"
       ],
       "related_links": [
         {
@@ -7871,7 +7936,33 @@
         "existe-t-il des aides pour acheter un véhicule adapté ?",
         "puis-je obtenir une aide pour l'aménagement de ma voiture ?",
         "aide véhicule adapté",
-        "financement voiture adaptée"
+        "financement voiture adaptée",
+        "j'aimerais avoir une aide pour ma voiture",
+        "je voudrais une aide pour ma voiture",
+        "j'ai besoin d'une aide pour ma voiture",
+        "aide pour ma voiture",
+        "aide pour mon véhicule",
+        "aide pour mon vehicule",
+        "j'aimerais aménager ma voiture",
+        "aménager ma voiture",
+        "aménagement de ma voiture",
+        "aménagement véhicule",
+        "aménager mon véhicule",
+        "aide pour acheter une voiture adaptée",
+        "financer une voiture adaptée",
+        "acheter un véhicule adapté",
+        "j'ai besoin d'une voiture adaptée",
+        "aide voiture",
+        "aide véhicule",
+        "voiture adaptée",
+        "véhicule adapté",
+        "adaptation voiture",
+        "adaptation véhicule",
+        "je veux une aide pour ma voiture",
+        "je veux une aide pour mon véhicule",
+        "je veux aménager ma voiture",
+        "je veux une voiture adaptée",
+        "je veux un véhicule adapté"
       ]
     },
     {
@@ -11083,7 +11174,7 @@
     {
       "id": "orientation_scolaire",
       "question": "Qui décide de l'orientation scolaire d'un enfant handicapé ?",
-      "answer": "**🎯 ORIENTATION SCOLAIRE - QUI DÉCIDE ?**\n\nC'est la **CDAPH** (Commission des Droits et de l'Autonomie) qui décide de l'orientation scolaire d'un enfant handicapé.\n\n**⚖️ Processus de décision**\n\n**1️⃣ Demande des parents**\n\nLes parents font une demande à la MDPH en exprimant leurs souhaits dans le **projet de vie**.\n\n**2️⃣ Évaluation de l'équipe éducative**\n\nL'équipe éducative de l'école évalue les besoins de l'enfant et formule des préconisations (ESS - Équipe de Suivi de Scolarisation).\n\n**3️⃣ Évaluation MDPH**\n\nL'équipe pluridisciplinaire de la MDPH évalue la situation globale de l'enfant et propose un **PPS** (Projet Personnalisé de Scolarisation).\n\n**4️⃣ Décision CDAPH**\n\nLa CDAPH prend la décision finale d'orientation :\n- École ordinaire\n- ULIS (dispositif inclusif)\n- IME (Institut Médico-Éducatif)\n- Autre établissement spécialisé\n\n**👨‍👩‍👧 Rôle des parents**\n\nLes parents :\n- ✅ Expriment leurs souhaits\n- ✅ Sont **associés** à toutes les étapes\n- ✅ Sont **entendus** par la CDAPH\n- ✅ Peuvent **contester** la décision (recours)\n\n**📝 Notification**\n\nLa décision d'orientation est notifiée par écrit aux parents et précise :\n- Le type d'établissement\n- Les aménagements prévus (AESH, matériel, etc.)\n\n**🔄 Recours possible**\n\nSi vous n'êtes pas d'accord avec l'orientation décidée, vous pouvez faire un **recours gracieux** puis **contentieux**.",
+      "answer": "**🎯 ORIENTATION SCOLAIRE - QUI DÉCIDE ?**\n\nC'est la **CDAPH** (Commission des Droits et de l'Autonomie) qui décide de l'orientation scolaire d'un enfant handicapé.\n\n**⚖️ Processus de décision**\n\n**1️⃣ Demande des parents**\nLes parents font une demande à la MDPH en exprimant leurs souhaits dans le **projet de vie**.\n\n**2️⃣ Évaluation de l'équipe éducative**\nL'équipe éducative de l'école évalue les besoins de l'enfant et formule des préconisations (ESS - Équipe de Suivi de Scolarisation).\n\n**3️⃣ Évaluation MDPH**\nL'équipe pluridisciplinaire de la MDPH évalue la situation globale de l'enfant et propose un **PPS** (Projet Personnalisé de Scolarisation).\n\n**4️⃣ Décision CDAPH**\nLa CDAPH prend la décision finale d'orientation :\n- École ordinaire\n- ULIS (dispositif inclusif)\n- IME (Institut Médico-Éducatif)\n- Autre établissement spécialisé\n\n**🔄 PEUT-ON CHANGER L'ORIENTATION DÉCIDÉE ?**\n\n**OUI**, vous pouvez contester ou demander un changement d'orientation de plusieurs façons :\n\n**Option 1 : Recours gracieux** (dans les 2 mois)\nÉcrivez à la MDPH pour expliquer pourquoi vous demandez un réexamen de la décision. La MDPH peut reconvoquer la CDAPH pour réétudier le dossier.\n\n**Option 2 : Recours contentieux** (dans les 2 mois)\nSaisir le **Tribunal Administratif** si le recours gracieux n'aboutit pas ou si vous préférez aller directement au contentieux.\n\n**Option 3 : Nouvelle demande**\nSi la situation de votre enfant évolue (progrès, nouvelles difficultés, changement de besoins), vous pouvez déposer une **nouvelle demande** à tout moment sans attendre la fin du PPS.\n\n**⏰ Délais importants**\n- Vous avez **2 mois** à partir de la notification pour faire un recours\n- Le recours gracieux n'est pas obligatoire, vous pouvez saisir directement le tribunal\n\n**👨‍👩‍👧 Rôle des parents**\n\nLes parents :\n- ✅ Expriment leurs souhaits\n- ✅ Sont **associés** à toutes les étapes\n- ✅ Sont **entendus** par la CDAPH\n- ✅ Peuvent **contester** la décision\n\n**💡 Conseil** : Avant d'engager un recours, discutez avec l'enseignant référent et l'équipe de la MDPH pour trouver une solution amiable.",
       "source": "education.gouv.fr / monparcourshandicap.gouv.fr",
       "keywords": [
         "orientation scolaire",
@@ -11094,7 +11185,14 @@
         "types orientations scolaires",
         "possibilités scolarisation",
         "orientations scolaires handicap",
-        "liste orientations scolaires"
+        "liste orientations scolaires",
+        "changer orientation",
+        "contester orientation",
+        "modifier orientation",
+        "recours orientation",
+        "refuser orientation",
+        "désaccord orientation",
+        "orientation MDPH changement"
       ],
       "typical_questions": [
         "qui décide de l'orientation scolaire d'un enfant handicapé ?",
@@ -11125,9 +11223,29 @@
         "différentes orientations scolaires handicap",
         "liste orientations scolaires enfant handicapé",
         "quelles sont les possibilités de scolarisation ?",
-        "scolarisation enfant handicapé possibilités"
+        "scolarisation enfant handicapé possibilités",
+        "peut-on contester l'orientation scolaire ?",
+        "peut-on refuser l'orientation décidée par la MDPH ?",
+        "je ne suis pas d'accord avec l'orientation de mon enfant",
+        "changer orientation scolaire",
+        "modifier orientation MDPH",
+        "comment contester une orientation scolaire ?",
+        "recours orientation scolaire",
+        "faire un recours contre orientation MDPH",
+        "la MDPH a décidé une orientation qui ne me convient pas",
+        "je refuse l'orientation en IME",
+        "je veux que mon enfant reste en école ordinaire",
+        "refus orientation MDPH",
+        "peut-on refaire une demande d'orientation ?",
+        "demander un changement d'orientation",
+        "mon enfant a progressé peut-on changer l'orientation ?"
       ],
-      "related_links": []
+      "related_links": [
+        {
+          "question": "Comment contester une décision MDPH ?",
+          "chunk_id": "recours_mdph"
+        }
+      ]
     },
     {
       "id": "vehicule_adapte",
@@ -11519,12 +11637,20 @@
     {
       "id": "demande_mdph_scolarite",
       "question": "Comment faire une demande MDPH pour la scolarité ?",
-      "answer": "Pour demander des aides scolaires liées au handicap, les parents doivent déposer un dossier à la MDPH. Le dossier comprend un formulaire de demande, un certificat médical de moins d’un an et différents documents selon la situation. L’équipe pluridisciplinaire de la MDPH étudie ensuite les besoins de l’enfant et propose des aides comme un PPS, un AESH ou une orientation spécialisée.",
+      "answer": "Pour faire reconnaître le handicap de votre enfant à l'école et obtenir les aides nécessaires, voici les étapes à suivre :\n\n**1. Prendre contact avec l'école**\nRencontrez l'enseignant et le directeur pour expliquer les difficultés de votre enfant. L'équipe éducative peut mettre en place une Équipe de Suivi de Scolarisation (ESS).\n\n**2. Consulter le médecin scolaire**\nLe médecin scolaire peut évaluer les besoins de votre enfant et vous orienter vers la MDPH. Il peut aussi proposer un PAI (Projet d'Accueil Individualisé) pour les soins médicaux.\n\n**3. Déposer un dossier à la MDPH**\nC'est l'étape essentielle pour faire reconnaître officiellement le handicap. Vous devez constituer un dossier avec :\n- Le formulaire CERFA 15692\n- Un certificat médical de moins d'1 an détaillant les difficultés\n- Le GEVA-Sco (rempli par l'école si besoin)\n- Tout document utile (bilans, comptes-rendus médicaux)\n\n**4. Aides possibles**\nLa MDPH peut accorder :\n- **AESH** (accompagnant pour aider en classe)\n- **PPS** (Projet Personnalisé de Scolarisation)\n- **Matériel pédagogique adapté** (ordinateur, logiciels)\n- **Orientation** vers un établissement spécialisé si besoin\n- **Transport scolaire adapté**\n\n**5. Délais**\nLa MDPH dispose de 4 mois pour étudier votre demande. En attendant, l'école peut mettre en place des aménagements temporaires.\n\n**Conseil** : N'attendez pas pour déposer le dossier MDPH. Même si les difficultés semblent légères, il vaut mieux avoir une reconnaissance officielle pour bénéficier des aides.",
       "source": "scolarisation handicap",
       "keywords": [
         "demande mdph scolarite",
         "dossier mdph enfant",
-        "aide scolaire handicap mdph"
+        "aide scolaire handicap mdph",
+        "reconnaître handicap enfant",
+        "reconnaissance handicap",
+        "aides scolaires",
+        "enfant handicapé école",
+        "difficultés scolaires",
+        "AESH",
+        "PPS",
+        "scolarité handicap"
       ],
       "related_links": [
         {
@@ -11552,7 +11678,25 @@
         "définition pps",
         "qu'est-ce qu'un pps ?",
         "pps définition",
-        "c'est quoi un pps ?"
+        "c'est quoi un pps ?",
+        "comment faire reconnaître le handicap de mon enfant ?",
+        "faire reconnaître handicap enfant école",
+        "reconnaissance handicap enfant",
+        "reconnaître handicap enfant",
+        "comment obtenir des aides pour mon enfant à l'école ?",
+        "aides scolaires pour enfant handicapé",
+        "mon enfant a des difficultés à l'école que faire ?",
+        "enfant en difficulté scolaire handicap",
+        "comment avoir une AESH pour mon enfant ?",
+        "obtenir une AESH",
+        "demander une AESH",
+        "mon enfant a besoin d'aide en classe",
+        "demander un PPS",
+        "obtenir un PPS pour mon enfant",
+        "scolariser un enfant handicapé",
+        "comment scolariser mon enfant handicapé ?",
+        "école et handicap",
+        "scolarité enfant handicapé"
       ]
     },
     {
