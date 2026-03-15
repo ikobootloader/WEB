@@ -70,7 +70,7 @@ Un chatbot qui :
 
 - **250 chunks** de contenu structuré
 - **835 liens de navigation** inter-chunks
-- **10000+ variantes de questions** pré-indexées
+- **3832 questions typiques** pré-indexées
 - Couvre **100% des démarches MDPH** courantes
 - **94% de précision** sur questions utilisateurs réelles
 
@@ -85,7 +85,7 @@ Un chatbot qui :
 ### ⚡ Performance
 
 - **Temps de réponse** : <100ms en moyenne
-- **Taille totale** : 871 Ko (version standalone)
+- **Taille fichier** : 871 Ko (version standalone)
 - **Pas de dépendances** externes
 - Fonctionne 100% offline après chargement
 
@@ -121,57 +121,21 @@ Chaque chunk contient :
 
 ## 🚀 Installation
 
-### Prérequis
-
-- **Node.js** 14+ (pour le build)
-- **Navigateur moderne** (Chrome, Firefox, Safari, Edge)
-
-### Installation locale
+Aucune installation requise ! Ouvrez simplement le fichier :
 
 ```bash
-# Cloner le repository
-git clone https://github.com/votre-org/chatbot-mdph.git
-cd chatbot-navigation-mdph
-
-# Installer les dépendances (optionnel, pour build)
-npm install
-
-# Générer le chatbot standalone
-node build.js
-```
-
-### Utilisation directe
-
-Aucune installation requise ! Ouvrez simplement :
-
-```bash
-open chatbot-navigation-all-in-one.html
+chatbot-navigation-all-in-one.html
 ```
 
 ---
 
 ## 💻 Utilisation
 
-### Mode standalone (recommandé)
-
 Le fichier `chatbot-navigation-all-in-one.html` contient tout le nécessaire :
 - HTML + CSS + JavaScript
 - Données (250 chunks)
 - Fonctionne offline
 - Déploiement simple (1 fichier)
-
-### Mode développement
-
-```bash
-# Modifier les données
-edit data/chunks-with-links.json
-
-# Rebuilder
-node build.js
-
-# Tester
-open chatbot-navigation-all-in-one.html
-```
 
 ### Exemples de conversations
 
@@ -215,44 +179,17 @@ node test-100-credibles-validation.js
 
 Les contributions sont les bienvenues !
 
-### Comment contribuer
-
 1. Fork le projet
 2. Créer une branche : `git checkout -b feature/nouvelle-fonctionnalite`
 3. Commiter : `git commit -m "Ajout nouvelle fonctionnalité"`
 4. Pousser : `git push origin feature/nouvelle-fonctionnalite`
 5. Créer une Pull Request
 
-### Ajouter un nouveau chunk
-
-```javascript
-// 1. Éditer data/chunks-with-links.json
-{
-  "id": "mon_nouveau_chunk",
-  "question": "Titre de la question",
-  "answer": "**Réponse formatée en Markdown**\n\n...",
-  "source": "source-officielle.fr",
-  "keywords": ["mot-clé1", "mot-clé2"],
-  "typical_questions": [
-    "question typique 1 ?",
-    "question typique 2 ?"
-  ],
-  "related_links": []
-}
-
-// 2. Rebuilder
-node build.js
-
-// 3. Tester
-node test-100-questions.js
-```
-
 ### Guidelines
 
 - ✅ Sources officielles uniquement
 - ✅ Langage simple et accessible
 - ✅ Markdown pour le formatage
-- ✅ 5+ questions typiques par chunk
 - ✅ Tests avant soumission
 
 ---
@@ -277,14 +214,6 @@ Ce projet est sous licence **MIT**.
 ## 👥 Auteurs
 
 **Frédérick MURAT**
-
----
-
-## 📞 Contact
-
-- 🐛 Bugs : Ouvrir une issue sur GitHub
-- 💡 Suggestions : Discussions GitHub
-- 📧 Email : contact@bmad-project.fr
 
 ---
 
