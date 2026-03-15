@@ -17,6 +17,19 @@
         .icon-large {
             font-size: 28px;
         }
+
+/* Style pour l'indicateur de résolution contextuelle */
+.resolved-hint {
+    background: #e8f5e9;
+    border-left: 4px solid #4caf50;
+    padding: 0.75rem 1rem;
+    margin: 0.5rem 0;
+    font-size: 0.9rem;
+    color: #2e7d32;
+    border-radius: 4px;
+    font-style: italic;
+}
+
     </style>
     <style>
         * {
@@ -999,9 +1012,21 @@
         .chatbot-messages::-webkit-scrollbar-thumb:hover {
             background: #764ba2;
         }
-    </style>
+    
+#loading-screen{position:fixed;top:0;left:0;width:100%;height:100%;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:9999;transition:opacity .5s}
+#loading-screen.fade-out{opacity:0;pointer-events:none}
+.loading-content{text-align:center;color:#fff}
+.loading-logo{font-size:4rem;margin-bottom:1.5rem;animation:pulse 2s ease-in-out infinite}
+.loading-title{font-size:1.8rem;font-weight:600;margin-bottom:.5rem}
+.loading-subtitle{font-size:1rem;opacity:.9;margin-bottom:2rem}
+.loading-bar-container{width:300px;height:6px;background:rgba(255,255,255,.3);border-radius:10px;overflow:hidden;margin-bottom:1rem}
+.loading-bar{height:100%;background:#fff;border-radius:10px;width:0;animation:loadingProgress 2s ease-out forwards}
+.loading-text{font-size:.9rem;opacity:.8}
+@keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.05);opacity:.8}}
+@keyframes loadingProgress{0%{width:0}20%{width:30%}50%{width:60%}80%{width:90%}100%{width:100%}}
+</style>
 </head>
-<body>
+<body><div id="loading-screen"><div class="loading-content"><div class="loading-logo">💬</div><div class="loading-title">Chatbot MDPH</div><div class="loading-subtitle">Chargement...</div><div class="loading-bar-container"><div class="loading-bar"></div></div><div class="loading-text">Préparation</div></div></div>
     <div class="chatbot-container">
         <div class="chatbot-header">
             <button class="fullscreen-btn" id="fullscreenBtn" onclick="toggleFullscreen()">
@@ -1412,11 +1437,13 @@
         "j'ai besoin aah",
         "je veux l'aah",
         "demander aah",
-        "obtenir aah",
-        "je veux une aide financière mensuelle",
-        "aide financière handicap",
-        "je veux une aide financière",
-        "j'ai besoin d'une aide financière"
+        "qu'est-ce que c'est aah ?",
+        "aah définition",
+        "définition aah",
+        "qu'est-ce qu'aah ?",
+        "aah qu'est-ce que c'est ?",
+        "ça veut dire quoi aah ?",
+        "que signifie aah ?"
       ]
     },
     {
@@ -1438,7 +1465,14 @@
         "faire demande aah",
         "dossier aah",
         "aah et comment",
-        "qu'est-ce que aah et comment"
+        "qu'est-ce que aah et comment",
+        "demander",
+        "la demander",
+        "comment demander",
+        "faire demande",
+        "obtenir",
+        "démarches",
+        "procédure"
       ],
       "typical_questions": [
         "qu'est-ce que l'aah et comment la demander ?",
@@ -1451,7 +1485,38 @@
         "comment faire une demande d'aah ?",
         "je suis en situation de handicap et sans emploi, puis-je toucher une allocation ?",
         "comment savoir si j'ai le droit à l'allocation adulte handicapé ?",
-        "je voudrais demander l'aah mais je ne sais pas si je remplis les conditions"
+        "je voudrais demander l'aah mais je ne sais pas si je remplis les conditions",
+        "c'est quoi aah ?",
+        "qu'est-ce que aah ?",
+        "qu'est-ce que c'est aah ?",
+        "aah c'est quoi ?",
+        "aah définition",
+        "définition aah",
+        "qu'est-ce qu'aah ?",
+        "aah qu'est-ce que c'est ?",
+        "ça veut dire quoi aah ?",
+        "que signifie aah ?",
+        "comment la demander ?",
+        "comment le demander ?",
+        "la demander",
+        "le demander",
+        "demander",
+        "comment faire la demande ?",
+        "la demande",
+        "faire la demande",
+        "comment l'obtenir ?",
+        "comment l'avoir ?",
+        "l'obtenir",
+        "pour l'obtenir",
+        "obtenir",
+        "comment faire ?",
+        "démarches ?",
+        "procédure ?",
+        "les démarches",
+        "la procédure",
+        "quelles démarches ?",
+        "les démarches ?",
+        "quelles sont les démarches ?"
       ],
       "related_links": [
         {
@@ -1557,7 +1622,21 @@
         "aah conditions de ressources",
         "revenus pour toucher aah",
         "plafond revenus aah",
-        "combien peut-on gagner avec l'aah ?"
+        "combien peut-on gagner avec l'aah ?",
+        "quelles sont les conditions pour aah ?",
+        "conditions aah",
+        "qui peut avoir aah ?",
+        "qui a droit à aah ?",
+        "puis-je avoir aah ?",
+        "est-ce que je peux avoir aah ?",
+        "qui peut bénéficier de aah ?",
+        "critères aah",
+        "conditions pour obtenir aah",
+        "quelles conditions pour aah ?",
+        "quelles conditions ?",
+        "les conditions ?",
+        "quelles sont les conditions ?",
+        "conditions ?"
       ]
     },
     {
@@ -1630,7 +1709,16 @@
         "aah versée automatiquement",
         "versement aah automatique",
         "aah apres decision",
-        "aah après décision"
+        "aah après décision",
+        "obtenir aah",
+        "conditions aah",
+        "demander",
+        "la demander",
+        "comment demander",
+        "faire demande",
+        "obtenir",
+        "démarches",
+        "procédure"
       ],
       "related_links": [
         {
@@ -1657,7 +1745,44 @@
       "typical_questions": [
         "comment faire une demande d'aah ?",
         "comment demander l'aah ?",
-        "comment faire une demande l'aah ?"
+        "comment faire une demande l'aah ?",
+        "comment obtenir aah ?",
+        "comment obtenir l'aah ?",
+        "comment obtenir la aah ?",
+        "comment obtenir le aah ?",
+        "comment avoir aah ?",
+        "obtenir aah",
+        "comment faire demande aah ?",
+        "comment demander aah ?",
+        "démarches aah",
+        "procédure aah",
+        "conditions aah",
+        "qui peut avoir aah ?",
+        "comment faire pour avoir aah ?",
+        "demander aah",
+        "faire une demande aah",
+        "demande aah",
+        "comment la demander ?",
+        "comment le demander ?",
+        "la demander",
+        "demander",
+        "comment faire la demande ?",
+        "la demande",
+        "faire la demande",
+        "comment l'obtenir ?",
+        "comment l'avoir ?",
+        "l'obtenir",
+        "pour l'obtenir",
+        "obtenir",
+        "comment faire ?",
+        "démarches ?",
+        "procédure ?",
+        "le demander",
+        "les démarches",
+        "la procédure",
+        "quelles démarches ?",
+        "les démarches ?",
+        "quelles sont les démarches ?"
       ]
     },
     {
@@ -1770,7 +1895,13 @@
         "validité aah",
         "aah combien d'années ?",
         "période aah",
-        "aah à vie ?"
+        "aah à vie ?",
+        "quelle est la durée de aah ?",
+        "combien de temps dure aah ?",
+        "durée aah",
+        "aah durée",
+        "pendant combien de temps aah ?",
+        "combien de temps est valable aah ?"
       ]
     },
     {
@@ -1817,7 +1948,12 @@
         "quelles aides avec l'aah ?",
         "aah cumulable avec quoi ?",
         "puis-je toucher aah et autre chose ?",
-        "compatibilité aah autres prestations"
+        "compatibilité aah autres prestations",
+        "peut-on cumuler avec aah ?",
+        "cumul aah",
+        "aah et autre aide",
+        "peut-on avoir plusieurs aides avec aah ?",
+        "cumuler aah"
       ]
     },
     {
@@ -1871,7 +2007,16 @@
         "la pch est-elle imposable ?",
         "qu'est-ce que la prestation de compensation du handicap et comment ça marche ?",
         "je ne comprends pas bien ce qu'est la pch, pouvez-vous m'expliquer simplement ?",
-        "la pch c'est pour qui et ça sert à payer quoi exactement ?"
+        "la pch c'est pour qui et ça sert à payer quoi exactement ?",
+        "c'est quoi pch ?",
+        "qu'est-ce que pch ?",
+        "qu'est-ce que c'est pch ?",
+        "pch définition",
+        "définition pch",
+        "qu'est-ce qu'pch ?",
+        "pch qu'est-ce que c'est ?",
+        "ça veut dire quoi pch ?",
+        "que signifie pch ?"
       ]
     },
     {
@@ -1931,7 +2076,21 @@
         "quelles sont les conditions pour la pch ?",
         "quelles sont les conditions pour avoir le droit à la pch ?",
         "est-ce qu'il faut un certain taux de handicap pour obtenir la pch ?",
-        "comment savoir si je suis éligible à la prestation de compensation ?"
+        "comment savoir si je suis éligible à la prestation de compensation ?",
+        "quelles sont les conditions pour pch ?",
+        "conditions pch",
+        "qui peut avoir pch ?",
+        "qui a droit à pch ?",
+        "puis-je avoir pch ?",
+        "est-ce que je peux avoir pch ?",
+        "qui peut bénéficier de pch ?",
+        "critères pch",
+        "conditions pour obtenir pch",
+        "quelles conditions pour pch ?",
+        "quelles conditions ?",
+        "les conditions ?",
+        "quelles sont les conditions ?",
+        "conditions ?"
       ]
     },
     {
@@ -1962,7 +2121,14 @@
         "taux pch",
         "pourcentage pch",
         "80% pch",
-        "100% pch"
+        "100% pch",
+        "montant",
+        "quel montant",
+        "combien",
+        "somme",
+        "argent",
+        "montant mensuel",
+        "combien toucher"
       ],
       "related_links": [
         {
@@ -1993,7 +2159,31 @@
         "la pch dépend-elle des revenus ?",
         "pch conditions de ressources",
         "revenus pour toucher pch",
-        "plafond revenus pch"
+        "plafond revenus pch",
+        "c'est combien pch ?",
+        "montant pch",
+        "combien on touche avec pch ?",
+        "quel montant pour pch ?",
+        "combien peut-on toucher avec pch ?",
+        "quel montant ?",
+        "le montant ?",
+        "montant ?",
+        "combien ?",
+        "c'est combien ?",
+        "quel est le montant ?",
+        "à combien ?",
+        "combien je peux avoir ?",
+        "combien vais-je toucher ?",
+        "quelle somme ?",
+        "la somme ?",
+        "argent mensuel",
+        "combien par mois ?",
+        "montant mensuel",
+        "quel montant mensuel ?",
+        "quels montants ?",
+        "les montants ?",
+        "quels sont les montants ?",
+        "montants ?"
       ]
     },
     {
@@ -2090,7 +2280,7 @@
     {
       "id": "pch_demarches",
       "question": "Comment demander la PCH ?",
-      "answer": "Pour demander la PCH : 1) Remplissez le formulaire Cerfa n°15692*01, 2) Joignez une pièce d'identité, un justificatif de domicile, et un certificat médical de moins d'1 an, 3) Déposez le dossier auprès de votre MDPH (en ligne, par courrier ou à l'accueil). La PCH est attribuée pour une durée minimum d'1 an, maximum de 10 ans, et sans limite si votre handicap n'est pas susceptible d'amélioration.",
+      "answer": "**📋 Comment demander la PCH ?**\n\n**Étape 1 : Préparer votre dossier**\n- Remplir le [formulaire Cerfa n°15692*01](https://www.service-public.fr/particuliers/vosdroits/R19993)\n- Joindre un [certificat médical Cerfa n°15695*01](https://www.service-public.fr/particuliers/vosdroits/R19996) (de moins d'1 an)\n- Joindre une photocopie de votre pièce d'identité\n- Joindre un justificatif de domicile\n- Fournir des devis pour les aides techniques, aménagements du logement ou du véhicule si besoin\n\n**Étape 2 : Déposer votre dossier**\n- **En ligne** (recommandé) : [MDPH en ligne](https://mdphenligne.cnsa.fr/)\n- **Par courrier** : Envoi à votre MDPH départementale\n- **Sur place** : Dépôt direct à l'accueil de votre MDPH\n\n**Étape 3 : Évaluation à domicile**\n- Visite d'un professionnel de la MDPH à votre domicile pour évaluer vos besoins\n- Discussion sur vos besoins d'aide humaine, technique, d'aménagement\n\n**Étape 4 : Instruction et décision**\n- Délai de réponse : 4 mois en moyenne\n- Élaboration d'un plan personnalisé de compensation (PPC)\n- Décision de la CDAPH\n\n💡 **Bon à savoir** : La PCH peut couvrir 5 types d'aides (humaine, technique, aménagement logement/véhicule, charges spécifiques, aides animalières).",
       "source": "monparcourshandicap.gouv.fr",
       "keywords": [
         "demander pch",
@@ -2114,7 +2304,15 @@
         "procédure pch",
         "documents pch",
         "pieces joindre pch",
-        "pièces joindre pch"
+        "pièces joindre pch",
+        "conditions pch",
+        "demander",
+        "la demander",
+        "comment demander",
+        "faire demande",
+        "obtenir",
+        "démarches",
+        "procédure"
       ],
       "related_links": [
         {
@@ -2141,7 +2339,44 @@
       "typical_questions": [
         "comment faire une demande de pch ?",
         "comment demander la pch ?",
-        "comment faire une demande la pch ?"
+        "comment faire une demande la pch ?",
+        "comment obtenir pch ?",
+        "comment obtenir l'pch ?",
+        "comment obtenir la pch ?",
+        "comment obtenir le pch ?",
+        "comment avoir pch ?",
+        "obtenir pch",
+        "comment faire demande pch ?",
+        "comment demander pch ?",
+        "démarches pch",
+        "procédure pch",
+        "conditions pch",
+        "qui peut avoir pch ?",
+        "comment faire pour avoir pch ?",
+        "demander pch",
+        "faire une demande pch",
+        "demande pch",
+        "comment la demander ?",
+        "comment le demander ?",
+        "la demander",
+        "le demander",
+        "demander",
+        "comment faire la demande ?",
+        "la demande",
+        "faire la demande",
+        "comment l'obtenir ?",
+        "comment l'avoir ?",
+        "l'obtenir",
+        "pour l'obtenir",
+        "obtenir",
+        "comment faire ?",
+        "démarches ?",
+        "procédure ?",
+        "les démarches",
+        "la procédure",
+        "quelles démarches ?",
+        "les démarches ?",
+        "quelles sont les démarches ?"
       ]
     },
     {
@@ -2255,7 +2490,12 @@
         "peut-on avoir la pch et l'aah en même temps ?",
         "cumul pch aah",
         "pch et aah compatible ?",
-        "pch + aah possible ?"
+        "pch + aah possible ?",
+        "peut-on cumuler avec pch ?",
+        "cumul pch",
+        "pch et autre aide",
+        "peut-on avoir plusieurs aides avec pch ?",
+        "cumuler pch"
       ]
     },
     {
@@ -2440,7 +2680,14 @@
         "définition rqth",
         "rqth définition",
         "expliquer rqth",
-        "rqth explications"
+        "rqth explications",
+        "c'est quoi rqth ?",
+        "qu'est-ce que rqth ?",
+        "qu'est-ce que c'est rqth ?",
+        "qu'est-ce qu'rqth ?",
+        "rqth qu'est-ce que c'est ?",
+        "ça veut dire quoi rqth ?",
+        "que signifie rqth ?"
       ]
     },
     {
@@ -2504,7 +2751,17 @@
         "est-ce que la rqth peut m'aider à trouver un emploi ?",
         "rqth aide à l'emploi",
         "trouver travail avec rqth",
-        "rqth facilite embauche ?"
+        "rqth facilite embauche ?",
+        "quels sont les avantages de rqth ?",
+        "avantages rqth",
+        "à quoi sert rqth ?",
+        "pourquoi demander rqth ?",
+        "ça sert à quoi rqth ?",
+        "que permet rqth ?",
+        "quels avantages ?",
+        "les avantages ?",
+        "quels sont les avantages ?",
+        "avantages ?"
       ]
     },
     {
@@ -2553,13 +2810,27 @@
         "peut-on avoir la rqth sans être reconnu handicapé à 80 % ?",
         "rqth avec moins de 80%",
         "taux incapacité rqth",
-        "rqth sans 80% handicap"
+        "rqth sans 80% handicap",
+        "quelles sont les conditions pour rqth ?",
+        "conditions rqth",
+        "qui peut avoir rqth ?",
+        "qui a droit à rqth ?",
+        "puis-je avoir rqth ?",
+        "est-ce que je peux avoir rqth ?",
+        "qui peut bénéficier de rqth ?",
+        "critères rqth",
+        "conditions pour obtenir rqth",
+        "quelles conditions pour rqth ?",
+        "quelles conditions ?",
+        "les conditions ?",
+        "quelles sont les conditions ?",
+        "conditions ?"
       ]
     },
     {
       "id": "rqth_demarches",
       "question": "Comment demander la RQTH ?",
-      "answer": "Pour demander la RQTH : 1) Remplissez le formulaire Cerfa 15692*01, 2) Joignez un certificat médical (Cerfa 15695*01), votre carte d'identité, un justificatif de domicile, 3) Complétez la section situation professionnelle et cochez la case RQTH, 4) Déposez le dossier auprès de votre MDPH (par courrier, en ligne ou directement). La RQTH est accordée pour 1 à 10 ans renouvelables, ou sans limite de durée si votre handicap n'évoluera jamais.",
+      "answer": "**📋 Comment demander la RQTH ?**\n\n**Étape 1 : Préparer votre dossier**\n- Remplir le [formulaire Cerfa n°15692*01](https://www.service-public.fr/particuliers/vosdroits/R19993)\n- Joindre un [certificat médical Cerfa n°15695*01](https://www.service-public.fr/particuliers/vosdroits/R19996) (de moins d'1 an)\n- Joindre une photocopie de votre pièce d'identité\n- Joindre un justificatif de domicile\n- Documents complémentaires : CV, dernier bulletin de salaire si en poste\n\n**Étape 2 : Déposer votre dossier**\n- **En ligne** (recommandé) : [MDPH en ligne](https://mdphenligne.cnsa.fr/)\n- **Par courrier** : Envoi à votre MDPH départementale\n- **Sur place** : Dépôt direct à l'accueil de votre MDPH\n\n**Étape 3 : Instruction et décision**\n- Délai de réponse : 4 mois en moyenne\n- Évaluation par l'équipe pluridisciplinaire\n- Décision de la CDAPH\n\n**Durée d'attribution :**\n- De 1 à 5 ans selon la situation\n- Possibilité d'attribution définitive si handicap irréversible\n\n💡 **Bon à savoir** : La RQTH ouvre droit à des aménagements de poste, des aides à l'emploi et une protection contre le licenciement.",
       "source": "monparcourshandicap.gouv.fr",
       "keywords": [
         "demander rqth",
@@ -2587,7 +2858,15 @@
         "obtenir reconnaissance travailleur handicape",
         "demander reconnaissance travailleur handicapé",
         "comment obtenir reconnaissance qualité travailleur handicapé",
-        "comment obtenir reconnaissance qualite travailleur handicape"
+        "comment obtenir reconnaissance qualite travailleur handicape",
+        "conditions rqth",
+        "demander",
+        "la demander",
+        "comment demander",
+        "faire demande",
+        "obtenir",
+        "démarches",
+        "procédure"
       ],
       "related_links": [
         {
@@ -2614,7 +2893,43 @@
       "typical_questions": [
         "comment obtenir la rqth ?",
         "comment demander la rqth ?",
-        "comment faire une demande la rqth ?"
+        "comment faire une demande la rqth ?",
+        "comment obtenir rqth ?",
+        "comment obtenir l'rqth ?",
+        "comment obtenir le rqth ?",
+        "comment avoir rqth ?",
+        "obtenir rqth",
+        "comment faire demande rqth ?",
+        "comment demander rqth ?",
+        "démarches rqth",
+        "procédure rqth",
+        "conditions rqth",
+        "qui peut avoir rqth ?",
+        "comment faire pour avoir rqth ?",
+        "demander rqth",
+        "faire une demande rqth",
+        "demande rqth",
+        "comment la demander ?",
+        "comment le demander ?",
+        "la demander",
+        "le demander",
+        "demander",
+        "comment faire la demande ?",
+        "la demande",
+        "faire la demande",
+        "comment l'obtenir ?",
+        "comment l'avoir ?",
+        "l'obtenir",
+        "pour l'obtenir",
+        "obtenir",
+        "comment faire ?",
+        "démarches ?",
+        "procédure ?",
+        "les démarches",
+        "la procédure",
+        "quelles démarches ?",
+        "les démarches ?",
+        "quelles sont les démarches ?"
       ]
     },
     {
@@ -2663,7 +2978,13 @@
         "combien de temps dure une rqth ?",
         "durée validité rqth",
         "rqth combien d'années ?",
-        "validité rqth"
+        "validité rqth",
+        "quelle est la durée de rqth ?",
+        "combien de temps dure rqth ?",
+        "durée rqth",
+        "rqth durée",
+        "pendant combien de temps rqth ?",
+        "combien de temps est valable rqth ?"
       ]
     },
     {
@@ -2689,6 +3010,10 @@
           "chunk_id": "aeeh_conditions"
         },
         {
+          "question": "Quel est le montant de l'AEEH ?",
+          "chunk_id": "aeeh_montants"
+        },
+        {
           "question": "Quels sont les compléments de l'AEEH ?",
           "chunk_id": "aeeh_montants"
         },
@@ -2699,6 +3024,10 @@
         {
           "question": "Peut-on cumuler PCH et AEEH ?",
           "chunk_id": "cumul_pch_aeeh"
+        },
+        {
+          "question": "C'est quoi les compléments AEEH ?",
+          "chunk_id": "aeeh_complements"
         }
       ],
       "typical_questions": [
@@ -2716,7 +3045,14 @@
         "aeeh pour qui ?",
         "parents peuvent demander aeeh ?",
         "aeeh ou pch ?",
-        "choisir entre aeeh et pch"
+        "choisir entre aeeh et pch",
+        "qu'est-ce que c'est aeeh ?",
+        "aeeh définition",
+        "définition aeeh",
+        "qu'est-ce qu'aeeh ?",
+        "aeeh qu'est-ce que c'est ?",
+        "ça veut dire quoi aeeh ?",
+        "que signifie aeeh ?"
       ]
     },
     {
@@ -2765,7 +3101,19 @@
         "aeeh pour quel handicap ?",
         "taux incapacité aeeh",
         "à partir de quel âge aeeh ?",
-        "jusqu'à quel âge aeeh ?"
+        "jusqu'à quel âge aeeh ?",
+        "quelles sont les conditions pour aeeh ?",
+        "conditions aeeh",
+        "qui a droit à aeeh ?",
+        "puis-je avoir aeeh ?",
+        "est-ce que je peux avoir aeeh ?",
+        "qui peut bénéficier de aeeh ?",
+        "conditions pour obtenir aeeh",
+        "quelles conditions pour aeeh ?",
+        "quelles conditions ?",
+        "les conditions ?",
+        "quelles sont les conditions ?",
+        "conditions ?"
       ]
     },
     {
@@ -2778,7 +3126,16 @@
         "aeeh combien",
         "montant aeeh",
         "combien aeeh",
-        "toucher aeeh"
+        "toucher aeeh",
+        "montant",
+        "quel montant",
+        "combien",
+        "somme aeeh",
+        "argent aeeh",
+        "somme",
+        "argent",
+        "montant mensuel",
+        "combien toucher"
       ],
       "related_links": [
         {
@@ -2802,7 +3159,43 @@
         "somme aeeh",
         "aeeh argent mensuel",
         "allocation aeeh montant",
-        "compléments aeeh montants"
+        "compléments aeeh montants",
+        "quel est le montant de aeeh ?",
+        "combien aeeh ?",
+        "c'est combien aeeh ?",
+        "montant aeeh",
+        "combien on touche avec aeeh ?",
+        "quel montant pour aeeh ?",
+        "combien peut-on toucher avec aeeh ?",
+        "quel montant ?",
+        "le montant ?",
+        "montant ?",
+        "combien ?",
+        "c'est combien ?",
+        "quel est le montant ?",
+        "quel montant aeeh ?",
+        "montant de l'aeeh ?",
+        "le montant de l'aeeh ?",
+        "combien pour l'aeeh ?",
+        "montant aeeh base",
+        "aeeh montant de base",
+        "quel est le montant de l'allocation aeeh ?",
+        "à combien s'élève l'aeeh ?",
+        "combien vais-je toucher avec l'aeeh ?",
+        "je peux avoir combien avec l'aeeh ?",
+        "à combien ?",
+        "combien je peux avoir ?",
+        "combien vais-je toucher ?",
+        "quelle somme ?",
+        "la somme ?",
+        "argent mensuel",
+        "combien par mois ?",
+        "montant mensuel",
+        "quel montant mensuel ?",
+        "quels montants ?",
+        "les montants ?",
+        "quels sont les montants ?",
+        "montants ?"
       ]
     },
     {
@@ -2907,13 +3300,18 @@
         "aeeh jusqu'à quel âge ?",
         "durée attribution aeeh",
         "combien d'années aeeh ?",
-        "quand se termine l'aeeh ?"
+        "quand se termine l'aeeh ?",
+        "quelle est la durée de aeeh ?",
+        "combien de temps dure aeeh ?",
+        "aeeh durée",
+        "pendant combien de temps aeeh ?",
+        "combien de temps est valable aeeh ?"
       ]
     },
     {
       "id": "aeeh_demarches",
       "question": "Comment demander l'AEEH ?",
-      "answer": "Pour demander l'AEEH : 1) Remplissez le formulaire Cerfa n°15692*01, 2) Joignez un certificat médical (Cerfa n°15695*01), une pièce d'identité, un justificatif de domicile, et des documents additionnels si besoin, 3) Déposez le dossier auprès de votre MDPH par courrier, en ligne ou en personne. La durée d'attribution varie : pour un taux de 50-80%, c'est 2 à 5 ans ; pour un taux d'au moins 80%, jusqu'aux 20 ans de l'enfant.",
+      "answer": "**📋 Comment demander l'AEEH ?**\n\n**Étape 1 : Préparer votre dossier**\n- Remplir le [formulaire Cerfa n°15692*01](https://www.service-public.fr/particuliers/vosdroits/R19993)\n- Joindre un [certificat médical Cerfa n°15695*01](https://www.service-public.fr/particuliers/vosdroits/R19996) (de moins d'1 an)\n- Joindre une photocopie de votre pièce d'identité\n- Joindre un justificatif de domicile\n- Documents complémentaires si besoin (bilans médicaux, paramédicaux, scolaires)\n\n**Étape 2 : Déposer votre dossier**\n- **En ligne** (recommandé) : [MDPH en ligne](https://mdphenligne.cnsa.fr/)\n- **Par courrier** : Envoi à votre MDPH départementale\n- **Sur place** : Dépôt direct à l'accueil de votre MDPH\n\n**Étape 3 : Instruction et décision**\n- Délai de réponse : 4 mois en moyenne\n- Évaluation par l'équipe pluridisciplinaire de la MDPH\n- Décision de la CDAPH (Commission des Droits et de l'Autonomie des Personnes Handicapées)\n\n**Durée d'attribution :**\n- Taux 50-80% : 2 à 5 ans\n- Taux ≥ 80% : Jusqu'aux 20 ans de l'enfant\n\n💡 **Bon à savoir** : Vous pouvez faire une demande de renouvellement 6 mois avant la fin de vos droits.",
       "source": "monparcourshandicap.gouv.fr",
       "keywords": [
         "demander aeeh",
@@ -2932,7 +3330,22 @@
         "procédure aeeh",
         "documents aeeh",
         "pieces joindre aeeh",
-        "pièces joindre aeeh"
+        "pièces joindre aeeh",
+        "conditions aeeh",
+        "demande aeeh",
+        "déposer dossier aeeh",
+        "cerfa aeeh",
+        "mdph en ligne aeeh",
+        "dossier aeeh documents",
+        "délai réponse aeeh",
+        "où déposer aeeh",
+        "demander",
+        "la demander",
+        "comment demander",
+        "faire demande",
+        "obtenir",
+        "démarches",
+        "procédure"
       ],
       "related_links": [
         {
@@ -2965,7 +3378,42 @@
         "formulaire aeeh",
         "faire demande aeeh",
         "aeeh mdph procédure",
-        "aeeh où s'adresser ?"
+        "aeeh où s'adresser ?",
+        "comment obtenir aeeh ?",
+        "comment obtenir l'aeeh ?",
+        "comment obtenir la aeeh ?",
+        "comment obtenir le aeeh ?",
+        "comment avoir aeeh ?",
+        "comment faire demande aeeh ?",
+        "comment demander aeeh ?",
+        "procédure aeeh",
+        "conditions aeeh",
+        "qui peut avoir aeeh ?",
+        "comment faire pour avoir aeeh ?",
+        "demander aeeh",
+        "faire une demande aeeh",
+        "demande aeeh",
+        "comment la demander ?",
+        "comment le demander ?",
+        "la demander",
+        "le demander",
+        "demander",
+        "comment faire la demande ?",
+        "la demande",
+        "faire la demande",
+        "comment l'obtenir ?",
+        "comment l'avoir ?",
+        "l'obtenir",
+        "pour l'obtenir",
+        "obtenir",
+        "comment faire ?",
+        "démarches ?",
+        "procédure ?",
+        "les démarches",
+        "la procédure",
+        "quelles démarches ?",
+        "les démarches ?",
+        "quelles sont les démarches ?"
       ]
     },
     {
@@ -2999,7 +3447,12 @@
         "aeeh et complément aeeh",
         "aeeh caf autres allocations",
         "aeeh cumulable ?",
-        "cumul aeeh allocations familiales"
+        "cumul aeeh allocations familiales",
+        "peut-on cumuler avec aeeh ?",
+        "cumul aeeh",
+        "aeeh et autre aide",
+        "peut-on avoir plusieurs aides avec aeeh ?",
+        "cumuler aeeh"
       ]
     },
     {
@@ -3013,6 +3466,14 @@
         "carte invalidité"
       ],
       "related_links": [
+        {
+          "question": "Comment obtenir la CMI invalidité ?",
+          "chunk_id": "cmi_invalidite_demarches"
+        },
+        {
+          "question": "Quelles sont les conditions pour la CMI invalidité ?",
+          "chunk_id": "cmi_invalidite_conditions"
+        },
         {
           "question": "C'est quoi AAH ?",
           "chunk_id": "aah_definition"
@@ -3038,7 +3499,17 @@
         "carte handicap invalidité",
         "cmi violette",
         "nouvelle carte handicap invalidité",
-        "cmi invalidité à quoi ça sert ?"
+        "cmi invalidité à quoi ça sert ?",
+        "c'est quoi cmi ?",
+        "qu'est-ce que cmi ?",
+        "qu'est-ce que c'est cmi ?",
+        "cmi c'est quoi ?",
+        "cmi définition",
+        "définition cmi",
+        "qu'est-ce qu'cmi ?",
+        "cmi qu'est-ce que c'est ?",
+        "ça veut dire quoi cmi ?",
+        "que signifie cmi ?"
       ]
     },
     {
@@ -3077,7 +3548,21 @@
         "critères cmi invalidité",
         "handicap 80% cmi invalidité",
         "éligibilité cmi invalidité",
-        "cmi invalidité 80% obligatoire ?"
+        "cmi invalidité 80% obligatoire ?",
+        "quelles sont les conditions pour cmi ?",
+        "conditions cmi",
+        "qui peut avoir cmi ?",
+        "qui a droit à cmi ?",
+        "puis-je avoir cmi ?",
+        "est-ce que je peux avoir cmi ?",
+        "qui peut bénéficier de cmi ?",
+        "critères cmi",
+        "conditions pour obtenir cmi",
+        "quelles conditions pour cmi ?",
+        "quelles conditions ?",
+        "les conditions ?",
+        "quelles sont les conditions ?",
+        "conditions ?"
       ]
     },
     {
@@ -3116,18 +3601,40 @@
         "réductions cmi invalidité",
         "cmi invalidité transports",
         "cmi invalidité impôts",
-        "réductions fiscales cmi invalidité"
+        "réductions fiscales cmi invalidité",
+        "quels sont les avantages de cmi ?",
+        "avantages cmi",
+        "à quoi sert cmi ?",
+        "pourquoi demander cmi ?",
+        "ça sert à quoi cmi ?",
+        "que permet cmi ?",
+        "quels avantages ?",
+        "les avantages ?",
+        "quels sont les avantages ?",
+        "avantages ?"
       ]
     },
     {
       "id": "cmi_invalidite_demarches",
       "question": "CMI - invalidite demarches ?",
-      "answer": "Pour demander la CMI invalidité : 1) Remplissez le formulaire Cerfa n°15692*01 (papier ou en ligne), 2) Joignez votre carte d'identité, un justificatif de domicile, et un certificat médical, 3) Déposez le dossier à la MDPH (en ligne ou par courrier). Après accord, l'Imprimerie nationale vous envoie un courrier d'appel photo. Transmettez votre photo d'identité (moins de 6 mois, format JPEG, 413x531 pixels minimum, 1 Mo maximum). Vous pouvez suivre la fabrication sur www.carte-mobilite-inclusion.fr et recevrez la carte par courrier.",
+      "answer": "**📋 Comment demander la CMI Invalidité ?**\n\n**Étape 1 : Préparer votre dossier**\n- Remplir le [formulaire Cerfa n°15692*01](https://www.service-public.fr/particuliers/vosdroits/R19993)\n- Joindre un [certificat médical Cerfa n°15695*01](https://www.service-public.fr/particuliers/vosdroits/R19996) (de moins d'1 an)\n- Joindre une photocopie de votre pièce d'identité\n- Joindre un justificatif de domicile\n- Joindre une photo d'identité\n\n**Étape 2 : Déposer votre dossier**\n- **En ligne** (recommandé) : [MDPH en ligne](https://mdphenligne.cnsa.fr/)\n- **Par courrier** : Envoi à votre MDPH départementale\n- **Sur place** : Dépôt direct à l'accueil de votre MDPH\n\n**Étape 3 : Instruction et décision**\n- Délai de réponse : 4 mois en moyenne\n- Évaluation du taux d'incapacité (≥ 80% requis)\n- Décision de la CDAPH\n\n**Étape 4 : Fabrication et envoi**\n- La carte est fabriquée par l'Imprimerie Nationale\n- Envoi par courrier sécurisé sous 3 semaines après la décision\n\n💡 **Bon à savoir** : La CMI Invalidité remplace l'ancienne carte d'invalidité et permet de bénéficier de nombreux avantages (transports, fiscalité, etc.).",
       "source": "monparcourshandicap.gouv.fr",
       "keywords": [
         "demander cmi",
         "dossier cmi",
-        "formulaire cmi"
+        "formulaire cmi",
+        "obtenir cmi",
+        "comment obtenir cmi",
+        "démarches cmi",
+        "conditions cmi",
+        "faire demande cmi",
+        "demander",
+        "la demander",
+        "comment demander",
+        "faire demande",
+        "obtenir",
+        "démarches",
+        "procédure"
       ],
       "related_links": [
         {
@@ -3154,7 +3661,44 @@
         "démarches cmi invalidité",
         "dossier cmi invalidité",
         "faire demande cmi invalidité",
-        "procédure cmi invalidité"
+        "procédure cmi invalidité",
+        "comment obtenir cmi ?",
+        "comment obtenir l'cmi ?",
+        "comment obtenir la cmi ?",
+        "comment obtenir le cmi ?",
+        "comment avoir cmi ?",
+        "obtenir cmi",
+        "comment faire demande cmi ?",
+        "comment demander cmi ?",
+        "démarches cmi",
+        "procédure cmi",
+        "conditions cmi",
+        "qui peut avoir cmi ?",
+        "comment faire pour avoir cmi ?",
+        "demander cmi",
+        "faire une demande cmi",
+        "demande cmi",
+        "comment la demander ?",
+        "comment le demander ?",
+        "la demander",
+        "le demander",
+        "demander",
+        "comment faire la demande ?",
+        "la demande",
+        "faire la demande",
+        "comment l'obtenir ?",
+        "comment l'avoir ?",
+        "l'obtenir",
+        "pour l'obtenir",
+        "obtenir",
+        "comment faire ?",
+        "démarches ?",
+        "procédure ?",
+        "les démarches",
+        "la procédure",
+        "quelles démarches ?",
+        "les démarches ?",
+        "quelles sont les démarches ?"
       ]
     },
     {
@@ -3192,7 +3736,13 @@
         "validité cmi invalidité",
         "cmi invalidité à vie",
         "renouvellement cmi invalidité",
-        "cmi invalidité définitive ?"
+        "cmi invalidité définitive ?",
+        "quelle est la durée de cmi ?",
+        "combien de temps dure cmi ?",
+        "durée cmi",
+        "cmi durée",
+        "pendant combien de temps cmi ?",
+        "combien de temps est valable cmi ?"
       ]
     },
     {
@@ -3264,7 +3814,14 @@
         "la mdph dépend de quel organisme ?",
         "mdph et sécurité sociale",
         "différence mdph caf",
-        "différence mdph cpam"
+        "différence mdph cpam",
+        "c'est quoi mdph ?",
+        "qu'est-ce que mdph ?",
+        "qu'est-ce que c'est mdph ?",
+        "mdph c'est quoi ?",
+        "qu'est-ce qu'mdph ?",
+        "ça veut dire quoi mdph ?",
+        "que signifie mdph ?"
       ]
     },
     {
@@ -3354,7 +3911,12 @@
         "démarches obtenir droit",
         "procédure obtenir droit",
         "faire demande droit",
-        "obtenir droits handicap"
+        "obtenir droits handicap",
+        "déposer dossier mdph",
+        "déposer dossier",
+        "envoyer dossier mdph",
+        "transmettre dossier mdph",
+        "où déposer dossier"
       ],
       "related_links": [
         {
@@ -3384,12 +3946,8 @@
         "puis-je envoyer mon dossier mdph par mail ?",
         "puis-je faire une demande mdph pour plusieurs handicaps ?",
         "dois-je obligatoirement fournir un certificat médical ?",
-        "le certificat médical mdph est valable combien de temps ?",
         "certificat médical obligatoire mdph ?",
-        "validité certificat médical mdph",
         "combien de temps certificat médical mdph ?",
-        "combien de temps est valable le certificat médical ?",
-        "durée validité certificat médical mdph",
         "où est-ce que je peux trouver le formulaire de demande mdph à remplir ?",
         "j'ai besoin du formulaire officiel mdph, comment je peux me le procurer ?",
         "quel formulaire dois-je utiliser pour faire ma demande de droits mdph ?",
@@ -3413,7 +3971,17 @@
         "procédure pour obtenir des droits mdph",
         "démarches pour obtenir droits handicap",
         "comment faire reconnaître mon handicap ?",
-        "quelles démarches pour obtenir des aides ?"
+        "quelles démarches pour obtenir des aides ?",
+        "comment déposer un dossier ?",
+        "comment déposer un dossier mdph ?",
+        "déposer un dossier mdph",
+        "déposer dossier mdph",
+        "où déposer le dossier mdph ?",
+        "où déposer mon dossier ?",
+        "comment envoyer mon dossier mdph ?",
+        "envoyer dossier mdph",
+        "où envoyer le dossier mdph ?",
+        "comment transmettre mon dossier mdph ?"
       ]
     },
     {
@@ -3567,7 +4135,12 @@
         "renouvellement pch",
         "refaire demande pch",
         "nouvelle demande pch",
-        "ma pch arrive à expiration"
+        "ma pch arrive à expiration",
+        "comment renouveler renouvellement ?",
+        "renouvellement renouvellement",
+        "renouveler renouvellement",
+        "révision renouvellement",
+        "quand renouveler renouvellement ?"
       ]
     },
     {
@@ -3755,7 +4328,14 @@
         "complément dossier",
         "complement dossier",
         "pièces manquantes",
-        "pieces manquantes"
+        "pieces manquantes",
+        "demander",
+        "la demander",
+        "comment demander",
+        "faire demande",
+        "obtenir",
+        "démarches",
+        "procédure"
       ],
       "related_links": [
         {
@@ -3790,7 +4370,25 @@
         "ajouter documents dossier mdph",
         "dossier mdph incomplet que faire ?",
         "peut-on ajouter une demande à un dossier en cours ?",
-        "changer adresse dossier mdph en cours"
+        "changer adresse dossier mdph en cours",
+        "comment la demander ?",
+        "comment le demander ?",
+        "la demander",
+        "le demander",
+        "demander",
+        "comment faire la demande ?",
+        "la demande",
+        "faire la demande",
+        "comment l'obtenir ?",
+        "comment l'avoir ?",
+        "l'obtenir",
+        "pour l'obtenir",
+        "obtenir",
+        "comment faire ?",
+        "démarches ?",
+        "procédure ?",
+        "les démarches",
+        "la procédure"
       ]
     },
     {
@@ -3866,7 +4464,14 @@
         "c'est quoi mva ?",
         "qu'est-ce que mva ?",
         "définition de mva",
-        "mva c'est quoi ?"
+        "mva c'est quoi ?",
+        "qu'est-ce que c'est mva ?",
+        "mva définition",
+        "définition mva",
+        "qu'est-ce qu'mva ?",
+        "mva qu'est-ce que c'est ?",
+        "ça veut dire quoi mva ?",
+        "que signifie mva ?"
       ]
     },
     {
@@ -3909,7 +4514,19 @@
         "taux pour mva",
         "éligibilité mva",
         "mva pour qui ?",
-        "conditions pour toucher mva"
+        "conditions pour toucher mva",
+        "qui peut avoir mva ?",
+        "qui a droit à mva ?",
+        "puis-je avoir mva ?",
+        "est-ce que je peux avoir mva ?",
+        "qui peut bénéficier de mva ?",
+        "critères mva",
+        "conditions pour obtenir mva",
+        "quelles conditions pour mva ?",
+        "quelles conditions ?",
+        "les conditions ?",
+        "quelles sont les conditions ?",
+        "conditions ?"
       ]
     },
     {
@@ -3920,7 +4537,14 @@
       "keywords": [
         "demander mva",
         "dossier mva",
-        "obtenir mva"
+        "obtenir mva",
+        "demander",
+        "la demander",
+        "comment demander",
+        "faire demande",
+        "obtenir",
+        "démarches",
+        "procédure"
       ],
       "related_links": [
         {
@@ -3948,7 +4572,35 @@
         "obtenir mva",
         "dossier mva",
         "procédure mva",
-        "faire demande mva"
+        "faire demande mva",
+        "comment obtenir mva ?",
+        "comment avoir mva ?",
+        "comment faire demande mva ?",
+        "demander mva",
+        "comment faire pour avoir mva ?",
+        "faire une demande mva",
+        "demande mva",
+        "comment la demander ?",
+        "comment le demander ?",
+        "la demander",
+        "le demander",
+        "demander",
+        "comment faire la demande ?",
+        "la demande",
+        "faire la demande",
+        "comment l'obtenir ?",
+        "comment l'avoir ?",
+        "l'obtenir",
+        "pour l'obtenir",
+        "obtenir",
+        "comment faire ?",
+        "démarches ?",
+        "procédure ?",
+        "les démarches",
+        "la procédure",
+        "quelles démarches ?",
+        "les démarches ?",
+        "quelles sont les démarches ?"
       ]
     },
     {
@@ -3986,7 +4638,12 @@
         "arrêt mva",
         "mva supprimée pourquoi ?",
         "fin de droits mva",
-        "perte mva"
+        "perte mva",
+        "peut-on perdre mva",
+        "mva suspension",
+        "perte majoration vie autonome",
+        "fin mva",
+        "conditions maintien mva"
       ]
     },
     {
@@ -4000,6 +4657,14 @@
         "carte priorité"
       ],
       "related_links": [
+        {
+          "question": "Comment obtenir la CMI priorité ?",
+          "chunk_id": "cmi_priorite_demarches"
+        },
+        {
+          "question": "Quelles sont les conditions pour la CMI priorité ?",
+          "chunk_id": "cmi_priorite_conditions"
+        },
         {
           "question": "C'est quoi AAH ?",
           "chunk_id": "aah_definition"
@@ -4024,7 +4689,17 @@
         "cmi priorité définition",
         "carte orange priorité",
         "cmi priorité pour qui ?",
-        "nouvelle carte priorité"
+        "nouvelle carte priorité",
+        "c'est quoi cmi ?",
+        "qu'est-ce que cmi ?",
+        "qu'est-ce que c'est cmi ?",
+        "cmi c'est quoi ?",
+        "cmi définition",
+        "définition cmi",
+        "qu'est-ce qu'cmi ?",
+        "cmi qu'est-ce que c'est ?",
+        "ça veut dire quoi cmi ?",
+        "que signifie cmi ?"
       ]
     },
     {
@@ -4063,7 +4738,21 @@
         "station debout pénible cmi priorité",
         "fatigue cmi priorité",
         "taux incapacité cmi priorité",
-        "périmètre marche cmi priorité"
+        "périmètre marche cmi priorité",
+        "quelles sont les conditions pour cmi ?",
+        "conditions cmi",
+        "qui peut avoir cmi ?",
+        "qui a droit à cmi ?",
+        "puis-je avoir cmi ?",
+        "est-ce que je peux avoir cmi ?",
+        "qui peut bénéficier de cmi ?",
+        "critères cmi",
+        "conditions pour obtenir cmi",
+        "quelles conditions pour cmi ?",
+        "quelles conditions ?",
+        "les conditions ?",
+        "quelles sont les conditions ?",
+        "conditions ?"
       ]
     },
     {
@@ -4074,7 +4763,20 @@
       "keywords": [
         "demander cmi priorité",
         "dossier cmi priorité",
-        "formulaire cmi priorité"
+        "formulaire cmi priorité",
+        "obtenir cmi",
+        "comment obtenir cmi",
+        "demander cmi",
+        "démarches cmi",
+        "conditions cmi",
+        "faire demande cmi",
+        "demander",
+        "la demander",
+        "comment demander",
+        "faire demande",
+        "obtenir",
+        "démarches",
+        "procédure"
       ],
       "related_links": [
         {
@@ -4100,7 +4802,44 @@
         "demander cmi priorité",
         "démarches cmi priorité",
         "dossier mdph cmi priorité",
-        "procédure cmi priorité"
+        "procédure cmi priorité",
+        "comment obtenir cmi ?",
+        "comment obtenir l'cmi ?",
+        "comment obtenir la cmi ?",
+        "comment obtenir le cmi ?",
+        "comment avoir cmi ?",
+        "obtenir cmi",
+        "comment faire demande cmi ?",
+        "comment demander cmi ?",
+        "démarches cmi",
+        "procédure cmi",
+        "conditions cmi",
+        "qui peut avoir cmi ?",
+        "comment faire pour avoir cmi ?",
+        "demander cmi",
+        "faire une demande cmi",
+        "demande cmi",
+        "comment la demander ?",
+        "comment le demander ?",
+        "la demander",
+        "le demander",
+        "demander",
+        "comment faire la demande ?",
+        "la demande",
+        "faire la demande",
+        "comment l'obtenir ?",
+        "comment l'avoir ?",
+        "l'obtenir",
+        "pour l'obtenir",
+        "obtenir",
+        "comment faire ?",
+        "démarches ?",
+        "procédure ?",
+        "les démarches",
+        "la procédure",
+        "quelles démarches ?",
+        "les démarches ?",
+        "quelles sont les démarches ?"
       ]
     },
     {
@@ -4114,6 +4853,14 @@
         "carte stationnement handicapé"
       ],
       "related_links": [
+        {
+          "question": "Comment obtenir la CMI stationnement ?",
+          "chunk_id": "cmi_stationnement_demarches"
+        },
+        {
+          "question": "Quelles sont les conditions pour la CMI stationnement ?",
+          "chunk_id": "cmi_stationnement_conditions"
+        },
         {
           "question": "C'est quoi AAH ?",
           "chunk_id": "aah_definition"
@@ -4138,7 +4885,17 @@
         "cmi stationnement bleue",
         "carte gic",
         "nouvelle carte stationnement",
-        "macaron handicapé"
+        "macaron handicapé",
+        "c'est quoi cmi ?",
+        "qu'est-ce que cmi ?",
+        "qu'est-ce que c'est cmi ?",
+        "cmi c'est quoi ?",
+        "cmi définition",
+        "définition cmi",
+        "qu'est-ce qu'cmi ?",
+        "cmi qu'est-ce que c'est ?",
+        "ça veut dire quoi cmi ?",
+        "que signifie cmi ?"
       ]
     },
     {
@@ -4176,7 +4933,21 @@
         "carte de stationnement pour qui ?",
         "avoir carte stationnement",
         "obtenir carte stationnement handicapé",
-        "critères carte stationnement"
+        "critères carte stationnement",
+        "quelles sont les conditions pour cmi ?",
+        "conditions cmi",
+        "qui peut avoir cmi ?",
+        "qui a droit à cmi ?",
+        "puis-je avoir cmi ?",
+        "est-ce que je peux avoir cmi ?",
+        "qui peut bénéficier de cmi ?",
+        "critères cmi",
+        "conditions pour obtenir cmi",
+        "quelles conditions pour cmi ?",
+        "quelles conditions ?",
+        "les conditions ?",
+        "quelles sont les conditions ?",
+        "conditions ?"
       ]
     },
     {
@@ -4187,7 +4958,20 @@
       "keywords": [
         "demander cmi stationnement",
         "dossier cmi stationnement",
-        "formulaire cmi stationnement"
+        "formulaire cmi stationnement",
+        "obtenir cmi",
+        "comment obtenir cmi",
+        "demander cmi",
+        "démarches cmi",
+        "conditions cmi",
+        "faire demande cmi",
+        "demander",
+        "la demander",
+        "comment demander",
+        "faire demande",
+        "obtenir",
+        "démarches",
+        "procédure"
       ],
       "related_links": [
         {
@@ -4213,7 +4997,44 @@
         "demander cmi stationnement",
         "démarches cmi stationnement",
         "dossier cmi stationnement mdph",
-        "procédure carte stationnement"
+        "procédure carte stationnement",
+        "comment obtenir cmi ?",
+        "comment obtenir l'cmi ?",
+        "comment obtenir la cmi ?",
+        "comment obtenir le cmi ?",
+        "comment avoir cmi ?",
+        "obtenir cmi",
+        "comment faire demande cmi ?",
+        "comment demander cmi ?",
+        "démarches cmi",
+        "procédure cmi",
+        "conditions cmi",
+        "qui peut avoir cmi ?",
+        "comment faire pour avoir cmi ?",
+        "demander cmi",
+        "faire une demande cmi",
+        "demande cmi",
+        "comment la demander ?",
+        "comment le demander ?",
+        "la demander",
+        "le demander",
+        "demander",
+        "comment faire la demande ?",
+        "la demande",
+        "faire la demande",
+        "comment l'obtenir ?",
+        "comment l'avoir ?",
+        "l'obtenir",
+        "pour l'obtenir",
+        "obtenir",
+        "comment faire ?",
+        "démarches ?",
+        "procédure ?",
+        "les démarches",
+        "la procédure",
+        "quelles démarches ?",
+        "les démarches ?",
+        "quelles sont les démarches ?"
       ]
     },
     {
@@ -4244,7 +5065,14 @@
         "c'est quoi apa ?",
         "qu'est-ce que apa ?",
         "définition de apa",
-        "apa c'est quoi ?"
+        "apa c'est quoi ?",
+        "qu'est-ce que c'est apa ?",
+        "apa définition",
+        "définition apa",
+        "qu'est-ce qu'apa ?",
+        "apa qu'est-ce que c'est ?",
+        "ça veut dire quoi apa ?",
+        "que signifie apa ?"
       ]
     },
     {
@@ -4255,7 +5083,14 @@
       "keywords": [
         "apa montant",
         "apa combien",
-        "montant apa"
+        "montant apa",
+        "montant",
+        "quel montant",
+        "combien",
+        "somme",
+        "argent",
+        "montant mensuel",
+        "combien toucher"
       ],
       "related_links": [
         {
@@ -4279,7 +5114,31 @@
         "somme apa",
         "apa argent",
         "apa montant maximum",
-        "apa combien par mois ?"
+        "apa combien par mois ?",
+        "combien apa ?",
+        "c'est combien apa ?",
+        "combien on touche avec apa ?",
+        "quel montant pour apa ?",
+        "combien peut-on toucher avec apa ?",
+        "quel montant ?",
+        "le montant ?",
+        "montant ?",
+        "combien ?",
+        "c'est combien ?",
+        "quel est le montant ?",
+        "à combien ?",
+        "combien je peux avoir ?",
+        "combien vais-je toucher ?",
+        "quelle somme ?",
+        "la somme ?",
+        "argent mensuel",
+        "combien par mois ?",
+        "montant mensuel",
+        "quel montant mensuel ?",
+        "quels montants ?",
+        "les montants ?",
+        "quels sont les montants ?",
+        "montants ?"
       ]
     },
     {
@@ -4314,7 +5173,18 @@
         "critères apa",
         "éligibilité apa personne âgée",
         "apa pour qui ?",
-        "a partir de quel âge apa ?"
+        "a partir de quel âge apa ?",
+        "qui peut avoir apa ?",
+        "qui a droit à apa ?",
+        "puis-je avoir apa ?",
+        "est-ce que je peux avoir apa ?",
+        "qui peut bénéficier de apa ?",
+        "conditions pour obtenir apa",
+        "quelles conditions pour apa ?",
+        "quelles conditions ?",
+        "les conditions ?",
+        "quelles sont les conditions ?",
+        "conditions ?"
       ]
     },
     {
@@ -4325,7 +5195,14 @@
       "keywords": [
         "demander apa",
         "dossier apa",
-        "formulaire apa"
+        "formulaire apa",
+        "demander",
+        "la demander",
+        "comment demander",
+        "faire demande",
+        "obtenir",
+        "démarches",
+        "procédure"
       ],
       "related_links": [
         {
@@ -4357,7 +5234,36 @@
         "obtenir apa",
         "dossier apa",
         "faire demande apa",
-        "procédure apa personne âgée"
+        "procédure apa personne âgée",
+        "comment obtenir apa ?",
+        "comment avoir apa ?",
+        "comment faire demande apa ?",
+        "demander apa",
+        "procédure apa",
+        "comment faire pour avoir apa ?",
+        "faire une demande apa",
+        "demande apa",
+        "comment la demander ?",
+        "comment le demander ?",
+        "la demander",
+        "le demander",
+        "demander",
+        "comment faire la demande ?",
+        "la demande",
+        "faire la demande",
+        "comment l'obtenir ?",
+        "comment l'avoir ?",
+        "l'obtenir",
+        "pour l'obtenir",
+        "obtenir",
+        "comment faire ?",
+        "démarches ?",
+        "procédure ?",
+        "les démarches",
+        "la procédure",
+        "quelles démarches ?",
+        "les démarches ?",
+        "quelles sont les démarches ?"
       ]
     },
     {
@@ -4395,7 +5301,17 @@
         "allocation invalidité",
         "catégorie 1 2 3 invalidité",
         "différence invalidité handicap",
-        "pension invalidité cpam"
+        "pension invalidité cpam",
+        "c'est quoi pension ?",
+        "qu'est-ce que pension ?",
+        "qu'est-ce que c'est pension ?",
+        "pension c'est quoi ?",
+        "pension définition",
+        "définition pension",
+        "qu'est-ce qu'pension ?",
+        "pension qu'est-ce que c'est ?",
+        "ça veut dire quoi pension ?",
+        "que signifie pension ?"
       ]
     },
     {
@@ -4433,7 +5349,21 @@
         "critères invalidité sécurité sociale",
         "éligibilité pension invalidité",
         "taux invalidité pension",
-        "comment être reconnu invalide ?"
+        "comment être reconnu invalide ?",
+        "quelles sont les conditions pour pension ?",
+        "conditions pension",
+        "qui peut avoir pension ?",
+        "qui a droit à pension ?",
+        "puis-je avoir pension ?",
+        "est-ce que je peux avoir pension ?",
+        "qui peut bénéficier de pension ?",
+        "critères pension",
+        "conditions pour obtenir pension",
+        "quelles conditions pour pension ?",
+        "quelles conditions ?",
+        "les conditions ?",
+        "quelles sont les conditions ?",
+        "conditions ?"
       ]
     },
     {
@@ -4444,7 +5374,14 @@
       "keywords": [
         "pension invalidité montant",
         "pension invalidité combien",
-        "catégorie pension"
+        "catégorie pension",
+        "montant",
+        "quel montant",
+        "combien",
+        "somme",
+        "argent",
+        "montant mensuel",
+        "combien toucher"
       ],
       "related_links": [
         {
@@ -4470,7 +5407,34 @@
         "montant pension invalidité catégorie 1 2 3",
         "pension invalidité combien ?",
         "calcul pension invalidité",
-        "combien touche-t-on en invalidité ?"
+        "combien touche-t-on en invalidité ?",
+        "quel est le montant de pension ?",
+        "combien pension ?",
+        "c'est combien pension ?",
+        "montant pension",
+        "pension combien ?",
+        "combien on touche avec pension ?",
+        "quel montant pour pension ?",
+        "combien peut-on toucher avec pension ?",
+        "quel montant ?",
+        "le montant ?",
+        "montant ?",
+        "combien ?",
+        "c'est combien ?",
+        "quel est le montant ?",
+        "à combien ?",
+        "combien je peux avoir ?",
+        "combien vais-je toucher ?",
+        "quelle somme ?",
+        "la somme ?",
+        "argent mensuel",
+        "combien par mois ?",
+        "montant mensuel",
+        "quel montant mensuel ?",
+        "quels montants ?",
+        "les montants ?",
+        "quels sont les montants ?",
+        "montants ?"
       ]
     },
     {
@@ -4507,7 +5471,12 @@
         "pension invalidité + aah",
         "cumul invalidité handicap",
         "pension invalidité autres aides",
-        "invalidité et aah ensemble ?"
+        "invalidité et aah ensemble ?",
+        "peut-on cumuler avec pension ?",
+        "cumul pension",
+        "pension et autre aide",
+        "peut-on avoir plusieurs aides avec pension ?",
+        "cumuler pension"
       ]
     },
     {
@@ -4518,7 +5487,14 @@
       "keywords": [
         "demander pension invalidité",
         "dossier pension invalidité",
-        "formulaire pension invalidité"
+        "formulaire pension invalidité",
+        "demander",
+        "la demander",
+        "comment demander",
+        "faire demande",
+        "obtenir",
+        "démarches",
+        "procédure"
       ],
       "related_links": [
         {
@@ -4544,7 +5520,39 @@
         "démarches pension invalidité",
         "obtenir pension invalidité",
         "dossier pension invalidité cpam",
-        "procédure pension invalidité"
+        "procédure pension invalidité",
+        "comment obtenir pension ?",
+        "comment avoir pension ?",
+        "comment faire demande pension ?",
+        "comment demander pension ?",
+        "obtenir pension",
+        "demander pension",
+        "démarches pension",
+        "procédure pension",
+        "comment faire pour avoir pension ?",
+        "faire une demande pension",
+        "demande pension",
+        "comment la demander ?",
+        "comment le demander ?",
+        "la demander",
+        "le demander",
+        "demander",
+        "comment faire la demande ?",
+        "la demande",
+        "faire la demande",
+        "comment l'obtenir ?",
+        "comment l'avoir ?",
+        "l'obtenir",
+        "pour l'obtenir",
+        "obtenir",
+        "comment faire ?",
+        "démarches ?",
+        "procédure ?",
+        "les démarches",
+        "la procédure",
+        "quelles démarches ?",
+        "les démarches ?",
+        "quelles sont les démarches ?"
       ]
     },
     {
@@ -4579,7 +5587,14 @@
         "c'est quoi oeth ?",
         "qu'est-ce que oeth ?",
         "définition de oeth",
-        "oeth c'est quoi ?"
+        "oeth c'est quoi ?",
+        "qu'est-ce que c'est oeth ?",
+        "oeth définition",
+        "définition oeth",
+        "qu'est-ce qu'oeth ?",
+        "oeth qu'est-ce que c'est ?",
+        "ça veut dire quoi oeth ?",
+        "que signifie oeth ?"
       ]
     },
     {
@@ -4617,7 +5632,13 @@
         "pénalité oeth",
         "employeur pas quota handicapés",
         "contribution agefiph",
-        "que risque employeur oeth ?"
+        "que risque employeur oeth ?",
+        "quelles sanctions si pas oeth ?",
+        "que risque entreprise sans oeth ?",
+        "pénalités oeth",
+        "sanctions employeur obligation emploi handicap",
+        "oeth sanction c'est quoi ?",
+        "combien coûte sanction oeth ?"
       ]
     },
     {
@@ -4659,7 +5680,17 @@
         "oeth pour l'entreprise",
         "subventions oeth",
         "exonérations oeth",
-        "pourquoi embaucher handicapé ?"
+        "pourquoi embaucher handicapé ?",
+        "quels sont les avantages de oeth ?",
+        "avantages oeth",
+        "à quoi sert oeth ?",
+        "pourquoi demander oeth ?",
+        "ça sert à quoi oeth ?",
+        "que permet oeth ?",
+        "quels avantages ?",
+        "les avantages ?",
+        "quels sont les avantages ?",
+        "avantages ?"
       ]
     },
     {
@@ -4694,7 +5725,14 @@
         "c'est quoi cdaph ?",
         "qu'est-ce que cdaph ?",
         "définition de cdaph",
-        "cdaph c'est quoi ?"
+        "cdaph c'est quoi ?",
+        "qu'est-ce que c'est cdaph ?",
+        "cdaph définition",
+        "définition cdaph",
+        "qu'est-ce qu'cdaph ?",
+        "cdaph qu'est-ce que c'est ?",
+        "ça veut dire quoi cdaph ?",
+        "que signifie cdaph ?"
       ]
     },
     {
@@ -4764,7 +5802,11 @@
         "comment contester une décision de la mdph ?",
         "recours contre décision mdph",
         "faire appel mdph",
-        "contester mdph comment ?"
+        "contester mdph comment ?",
+        "recours recours",
+        "comment faire recours recours ?",
+        "contester refus recours",
+        "faire appel recours"
       ]
     },
     {
@@ -4813,7 +5855,12 @@
         "pourquoi refus mdph ?",
         "ma demande mdph a été rejetée pourquoi ?",
         "quelles sont les raisons d'un refus mdph ?",
-        "pour quelles raisons la mdph refuse ?"
+        "pour quelles raisons la mdph refuse ?",
+        "que faire en cas de refus refus ?",
+        "refus refus",
+        "refus refusé que faire ?",
+        "si refus refusé",
+        "refus rejeté"
       ]
     },
     {
@@ -4949,7 +5996,14 @@
         "c'est quoi aesh ?",
         "qu'est-ce que aesh ?",
         "définition de aesh",
-        "aesh c'est quoi ?"
+        "aesh c'est quoi ?",
+        "qu'est-ce que c'est aesh ?",
+        "aesh définition",
+        "définition aesh",
+        "qu'est-ce qu'aesh ?",
+        "aesh qu'est-ce que c'est ?",
+        "ça veut dire quoi aesh ?",
+        "que signifie aesh ?"
       ]
     },
     {
@@ -4986,7 +6040,17 @@
         "qu'est-ce qu'un pps (projet personnalisé de scolarisation) ?",
         "qu'est-ce qu'un projet personnalisé de scolarisation pour mon enfant handicapé ?",
         "le pps c'est quoi exactement et comment ça aide mon enfant à l'école ?",
-        "l'école parle de pps pour mon fils, je ne comprends pas ce que c'est"
+        "l'école parle de pps pour mon fils, je ne comprends pas ce que c'est",
+        "c'est quoi pps ?",
+        "qu'est-ce que pps ?",
+        "qu'est-ce que c'est pps ?",
+        "pps c'est quoi ?",
+        "pps définition",
+        "définition pps",
+        "qu'est-ce qu'pps ?",
+        "pps qu'est-ce que c'est ?",
+        "ça veut dire quoi pps ?",
+        "que signifie pps ?"
       ]
     },
     {
@@ -5015,6 +6079,10 @@
         "inclusion scolaire"
       ],
       "related_links": [
+        {
+          "question": "Comment obtenir une orientation scolaire ?",
+          "chunk_id": "orientation_scolaire"
+        },
         {
           "question": "C'est quoi AAH ?",
           "chunk_id": "aah_definition"
@@ -5045,7 +6113,14 @@
         "orientation ulis",
         "comment entrer en ulis ?",
         "mon enfant peut-il aller en ulis ?",
-        "démarches ulis"
+        "démarches ulis",
+        "qu'est-ce que c'est ulis ?",
+        "ulis définition",
+        "définition ulis",
+        "qu'est-ce qu'ulis ?",
+        "ulis qu'est-ce que c'est ?",
+        "ça veut dire quoi ulis ?",
+        "que signifie ulis ?"
       ]
     },
     {
@@ -5085,7 +6160,14 @@
         "c'est quoi pai ?",
         "qu'est-ce que pai ?",
         "définition de pai",
-        "pai c'est quoi ?"
+        "pai c'est quoi ?",
+        "qu'est-ce que c'est pai ?",
+        "pai définition",
+        "définition pai",
+        "qu'est-ce qu'pai ?",
+        "pai qu'est-ce que c'est ?",
+        "ça veut dire quoi pai ?",
+        "que signifie pai ?"
       ]
     },
     {
@@ -5127,7 +6209,14 @@
         "c'est quoi esat ?",
         "qu'est-ce que esat ?",
         "définition de esat",
-        "esat c'est quoi ?"
+        "esat c'est quoi ?",
+        "qu'est-ce que c'est esat ?",
+        "esat définition",
+        "définition esat",
+        "qu'est-ce qu'esat ?",
+        "esat qu'est-ce que c'est ?",
+        "ça veut dire quoi esat ?",
+        "que signifie esat ?"
       ]
     },
     {
@@ -5164,7 +6253,14 @@
         "c'est quoi ea ?",
         "qu'est-ce que ea ?",
         "définition de ea",
-        "ea c'est quoi ?"
+        "ea c'est quoi ?",
+        "qu'est-ce que c'est ea ?",
+        "ea définition",
+        "définition ea",
+        "qu'est-ce qu'ea ?",
+        "ea qu'est-ce que c'est ?",
+        "ça veut dire quoi ea ?",
+        "que signifie ea ?"
       ]
     },
     {
@@ -5238,7 +6334,14 @@
         "c'est quoi esrp ?",
         "qu'est-ce que esrp ?",
         "définition de esrp",
-        "esrp c'est quoi ?"
+        "esrp c'est quoi ?",
+        "qu'est-ce que c'est esrp ?",
+        "esrp définition",
+        "définition esrp",
+        "qu'est-ce qu'esrp ?",
+        "esrp qu'est-ce que c'est ?",
+        "ça veut dire quoi esrp ?",
+        "que signifie esrp ?"
       ]
     },
     {
@@ -5273,7 +6376,14 @@
         "c'est quoi rapo ?",
         "qu'est-ce que rapo ?",
         "définition de rapo",
-        "rapo c'est quoi ?"
+        "rapo c'est quoi ?",
+        "qu'est-ce que c'est rapo ?",
+        "rapo définition",
+        "définition rapo",
+        "qu'est-ce qu'rapo ?",
+        "rapo qu'est-ce que c'est ?",
+        "ça veut dire quoi rapo ?",
+        "que signifie rapo ?"
       ]
     },
     {
@@ -5308,7 +6418,14 @@
         "c'est quoi geva ?",
         "qu'est-ce que geva ?",
         "définition de geva",
-        "geva c'est quoi ?"
+        "geva c'est quoi ?",
+        "qu'est-ce que c'est geva ?",
+        "geva définition",
+        "définition geva",
+        "qu'est-ce qu'geva ?",
+        "geva qu'est-ce que c'est ?",
+        "ça veut dire quoi geva ?",
+        "que signifie geva ?"
       ]
     },
     {
@@ -5340,7 +6457,17 @@
         }
       ],
       "typical_questions": [
-        "geva - sco definition ?"
+        "geva - sco definition ?",
+        "c'est quoi geva ?",
+        "qu'est-ce que geva ?",
+        "qu'est-ce que c'est geva ?",
+        "geva c'est quoi ?",
+        "geva définition",
+        "définition geva",
+        "qu'est-ce qu'geva ?",
+        "geva qu'est-ce que c'est ?",
+        "ça veut dire quoi geva ?",
+        "que signifie geva ?"
       ]
     },
     {
@@ -5375,7 +6502,14 @@
         "c'est quoi cesu ?",
         "qu'est-ce que cesu ?",
         "définition de cesu",
-        "cesu c'est quoi ?"
+        "cesu c'est quoi ?",
+        "qu'est-ce que c'est cesu ?",
+        "cesu définition",
+        "définition cesu",
+        "qu'est-ce qu'cesu ?",
+        "cesu qu'est-ce que c'est ?",
+        "ça veut dire quoi cesu ?",
+        "que signifie cesu ?"
       ]
     },
     {
@@ -5410,7 +6544,14 @@
         "c'est quoi ajpp ?",
         "qu'est-ce que ajpp ?",
         "définition de ajpp",
-        "ajpp c'est quoi ?"
+        "ajpp c'est quoi ?",
+        "qu'est-ce que c'est ajpp ?",
+        "ajpp définition",
+        "définition ajpp",
+        "qu'est-ce qu'ajpp ?",
+        "ajpp qu'est-ce que c'est ?",
+        "ça veut dire quoi ajpp ?",
+        "que signifie ajpp ?"
       ]
     },
     {
@@ -5439,7 +6580,17 @@
       "typical_questions": [
         "comment demander un pap ?",
         "difference pap pps",
-        "mon enfant dys peut il avoir un pap ?"
+        "mon enfant dys peut il avoir un pap ?",
+        "c'est quoi pap ?",
+        "qu'est-ce que pap ?",
+        "qu'est-ce que c'est pap ?",
+        "pap c'est quoi ?",
+        "pap définition",
+        "définition pap",
+        "qu'est-ce qu'pap ?",
+        "pap qu'est-ce que c'est ?",
+        "ça veut dire quoi pap ?",
+        "que signifie pap ?"
       ]
     },
     {
@@ -5463,7 +6614,17 @@
       "typical_questions": [
         "qui gère les aesh ?",
         "comment sont organisés les accompagnants scolaires ?",
-        "c'est quoi un pial ?"
+        "c'est quoi un pial ?",
+        "c'est quoi pial ?",
+        "qu'est-ce que pial ?",
+        "qu'est-ce que c'est pial ?",
+        "pial c'est quoi ?",
+        "pial définition",
+        "définition pial",
+        "qu'est-ce qu'pial ?",
+        "pial qu'est-ce que c'est ?",
+        "ça veut dire quoi pial ?",
+        "que signifie pial ?"
       ]
     },
     {
@@ -5498,7 +6659,14 @@
         "c'est quoi segpa ?",
         "qu'est-ce que segpa ?",
         "définition de segpa",
-        "segpa c'est quoi ?"
+        "segpa c'est quoi ?",
+        "qu'est-ce que c'est segpa ?",
+        "segpa définition",
+        "définition segpa",
+        "qu'est-ce qu'segpa ?",
+        "segpa qu'est-ce que c'est ?",
+        "ça veut dire quoi segpa ?",
+        "que signifie segpa ?"
       ]
     },
     {
@@ -5533,7 +6701,14 @@
         "c'est quoi tsa ?",
         "qu'est-ce que tsa ?",
         "définition de tsa",
-        "tsa c'est quoi ?"
+        "tsa c'est quoi ?",
+        "qu'est-ce que c'est tsa ?",
+        "tsa définition",
+        "définition tsa",
+        "qu'est-ce qu'tsa ?",
+        "tsa qu'est-ce que c'est ?",
+        "ça veut dire quoi tsa ?",
+        "que signifie tsa ?"
       ]
     },
     {
@@ -5568,7 +6743,14 @@
         "c'est quoi tnd ?",
         "qu'est-ce que tnd ?",
         "définition de tnd",
-        "tnd c'est quoi ?"
+        "tnd c'est quoi ?",
+        "qu'est-ce que c'est tnd ?",
+        "tnd définition",
+        "définition tnd",
+        "qu'est-ce qu'tnd ?",
+        "tnd qu'est-ce que c'est ?",
+        "ça veut dire quoi tnd ?",
+        "que signifie tnd ?"
       ]
     },
     {
@@ -5603,7 +6785,14 @@
         "c'est quoi cnsa ?",
         "qu'est-ce que cnsa ?",
         "définition de cnsa",
-        "cnsa c'est quoi ?"
+        "cnsa c'est quoi ?",
+        "qu'est-ce que c'est cnsa ?",
+        "cnsa définition",
+        "définition cnsa",
+        "qu'est-ce qu'cnsa ?",
+        "cnsa qu'est-ce que c'est ?",
+        "ça veut dire quoi cnsa ?",
+        "que signifie cnsa ?"
       ]
     },
     {
@@ -5638,7 +6827,14 @@
         "c'est quoi msa ?",
         "qu'est-ce que msa ?",
         "définition de msa",
-        "msa c'est quoi ?"
+        "msa c'est quoi ?",
+        "qu'est-ce que c'est msa ?",
+        "msa définition",
+        "définition msa",
+        "qu'est-ce qu'msa ?",
+        "msa qu'est-ce que c'est ?",
+        "ça veut dire quoi msa ?",
+        "que signifie msa ?"
       ]
     },
     {
@@ -5673,7 +6869,14 @@
         "c'est quoi fiphfp ?",
         "qu'est-ce que fiphfp ?",
         "définition de fiphfp",
-        "fiphfp c'est quoi ?"
+        "fiphfp c'est quoi ?",
+        "qu'est-ce que c'est fiphfp ?",
+        "fiphfp définition",
+        "définition fiphfp",
+        "qu'est-ce qu'fiphfp ?",
+        "fiphfp qu'est-ce que c'est ?",
+        "ça veut dire quoi fiphfp ?",
+        "que signifie fiphfp ?"
       ]
     },
     {
@@ -5705,7 +6908,17 @@
         }
       ],
       "typical_questions": [
-        "france - travail definition ?"
+        "france - travail definition ?",
+        "c'est quoi france ?",
+        "qu'est-ce que france ?",
+        "qu'est-ce que c'est france ?",
+        "france c'est quoi ?",
+        "france définition",
+        "définition france",
+        "qu'est-ce qu'france ?",
+        "france qu'est-ce que c'est ?",
+        "ça veut dire quoi france ?",
+        "que signifie france ?"
       ]
     },
     {
@@ -5734,7 +6947,17 @@
       "typical_questions": [
         "qui peut aider l'école quand un enfant handicapé a des difficultés ?",
         "c'est quoi une emas ?",
-        "qui intervient dans l'école pour le handicap ?"
+        "qui intervient dans l'école pour le handicap ?",
+        "c'est quoi emas ?",
+        "qu'est-ce que emas ?",
+        "qu'est-ce que c'est emas ?",
+        "emas c'est quoi ?",
+        "emas définition",
+        "définition emas",
+        "qu'est-ce qu'emas ?",
+        "emas qu'est-ce que c'est ?",
+        "ça veut dire quoi emas ?",
+        "que signifie emas ?"
       ]
     },
     {
@@ -5769,7 +6992,14 @@
         "c'est quoi gos ?",
         "qu'est-ce que gos ?",
         "définition de gos",
-        "gos c'est quoi ?"
+        "gos c'est quoi ?",
+        "qu'est-ce que c'est gos ?",
+        "gos définition",
+        "définition gos",
+        "qu'est-ce qu'gos ?",
+        "gos qu'est-ce que c'est ?",
+        "ça veut dire quoi gos ?",
+        "que signifie gos ?"
       ]
     },
     {
@@ -5804,7 +7034,14 @@
         "c'est quoi nia ?",
         "qu'est-ce que nia ?",
         "définition de nia",
-        "nia c'est quoi ?"
+        "nia c'est quoi ?",
+        "qu'est-ce que c'est nia ?",
+        "nia définition",
+        "définition nia",
+        "qu'est-ce qu'nia ?",
+        "nia qu'est-ce que c'est ?",
+        "ça veut dire quoi nia ?",
+        "que signifie nia ?"
       ]
     },
     {
@@ -5839,7 +7076,14 @@
         "c'est quoi sdo ?",
         "qu'est-ce que sdo ?",
         "définition de sdo",
-        "sdo c'est quoi ?"
+        "sdo c'est quoi ?",
+        "qu'est-ce que c'est sdo ?",
+        "sdo définition",
+        "définition sdo",
+        "qu'est-ce qu'sdo ?",
+        "sdo qu'est-ce que c'est ?",
+        "ça veut dire quoi sdo ?",
+        "que signifie sdo ?"
       ]
     },
     {
@@ -5873,7 +7117,14 @@
         "c'est quoi rapt ?",
         "qu'est-ce que rapt ?",
         "définition de rapt",
-        "rapt c'est quoi ?"
+        "rapt c'est quoi ?",
+        "qu'est-ce que c'est rapt ?",
+        "rapt définition",
+        "définition rapt",
+        "qu'est-ce qu'rapt ?",
+        "rapt qu'est-ce que c'est ?",
+        "ça veut dire quoi rapt ?",
+        "que signifie rapt ?"
       ]
     },
     {
@@ -5908,7 +7159,14 @@
         "c'est quoi rsdae ?",
         "qu'est-ce que rsdae ?",
         "définition de rsdae",
-        "rsdae c'est quoi ?"
+        "rsdae c'est quoi ?",
+        "qu'est-ce que c'est rsdae ?",
+        "rsdae définition",
+        "définition rsdae",
+        "qu'est-ce qu'rsdae ?",
+        "rsdae qu'est-ce que c'est ?",
+        "ça veut dire quoi rsdae ?",
+        "que signifie rsdae ?"
       ]
     },
     {
@@ -5943,7 +7201,14 @@
         "c'est quoi sld ?",
         "qu'est-ce que sld ?",
         "définition de sld",
-        "sld c'est quoi ?"
+        "sld c'est quoi ?",
+        "qu'est-ce que c'est sld ?",
+        "sld définition",
+        "définition sld",
+        "qu'est-ce qu'sld ?",
+        "sld qu'est-ce que c'est ?",
+        "ça veut dire quoi sld ?",
+        "que signifie sld ?"
       ]
     },
     {
@@ -5980,7 +7245,14 @@
         }
       ],
       "typical_questions": [
-        "handicap - moteur droits ?"
+        "handicap - moteur droits ?",
+        "quels droits pour handicap moteur ?",
+        "handicap moteur quelles aides ?",
+        "personne en fauteuil roulant aides",
+        "handicap mobilité droits",
+        "aides handicap moteur",
+        "que peut demander personne handicap moteur ?",
+        "handicap moteur mdph"
       ]
     },
     {
@@ -6012,7 +7284,14 @@
         }
       ],
       "typical_questions": [
-        "handicap - visuel droits ?"
+        "handicap - visuel droits ?",
+        "quels droits pour handicap visuel ?",
+        "handicap visuel quelles aides ?",
+        "personne aveugle aides",
+        "malvoyant droits",
+        "aides handicap visuel",
+        "que peut demander personne handicap visuel ?",
+        "handicap visuel mdph"
       ]
     },
     {
@@ -6044,7 +7323,14 @@
         }
       ],
       "typical_questions": [
-        "handicap - auditif droits ?"
+        "handicap - auditif droits ?",
+        "quels droits pour handicap auditif ?",
+        "handicap auditif quelles aides ?",
+        "personne sourde aides",
+        "malentendant droits",
+        "aides handicap auditif",
+        "que peut demander personne handicap auditif ?",
+        "handicap auditif mdph"
       ]
     },
     {
@@ -6114,7 +7400,15 @@
         }
       ],
       "typical_questions": [
-        "handicap - psychique droits ?"
+        "handicap - psychique droits ?",
+        "quels droits pour handicap psychique ?",
+        "handicap psychique quelles aides ?",
+        "maladie mentale aides",
+        "troubles psychiques droits",
+        "aides handicap psychique",
+        "que peut demander personne handicap psychique ?",
+        "handicap psychique mdph",
+        "dépression aides mdph"
       ]
     },
     {
@@ -6242,7 +7536,13 @@
         }
       ],
       "typical_questions": [
-        "protection - discrimination handicap ?"
+        "protection - discrimination handicap ?",
+        "comment se protéger discrimination handicap ?",
+        "discriminé à cause handicap que faire ?",
+        "protection contre discrimination handicap",
+        "défendre droits personne handicapée",
+        "discrimination handicap travail",
+        "que faire si discrimination handicap ?"
       ]
     },
     {
@@ -6345,7 +7645,14 @@
         }
       ],
       "typical_questions": [
-        "handicap - permis conduire ?"
+        "handicap - permis conduire ?",
+        "permis conduire handicap",
+        "peut-on passer permis avec handicap ?",
+        "permis adapté handicap",
+        "passer permis en situation handicap",
+        "aide financière permis handicap",
+        "permis de conduire aménagé",
+        "permis handicap moteur"
       ]
     },
     {
@@ -6602,7 +7909,17 @@
         "saisir tribunal mdph",
         "délai recours mdph",
         "contester mdph",
-        "contestation mdph procédure"
+        "contestation mdph procédure",
+        "comment faire un recours mdph",
+        "recours mdph mode d'emploi",
+        "contestation mdph",
+        "mdph recours comment faire",
+        "recours administratif mdph délai",
+        "faire appel décision mdph",
+        "recours recours",
+        "comment faire recours recours ?",
+        "contester refus recours",
+        "faire appel recours"
       ]
     },
     {
@@ -6684,7 +8001,14 @@
         "c'est quoi ajpa ?",
         "qu'est-ce que ajpa ?",
         "définition de ajpa",
-        "ajpa c'est quoi ?"
+        "ajpa c'est quoi ?",
+        "qu'est-ce que c'est ajpa ?",
+        "ajpa définition",
+        "définition ajpa",
+        "qu'est-ce qu'ajpa ?",
+        "ajpa qu'est-ce que c'est ?",
+        "ça veut dire quoi ajpa ?",
+        "que signifie ajpa ?"
       ]
     },
     {
@@ -6839,7 +8163,12 @@
         "aah rqth ensemble",
         "aah sans rqth possible ?",
         "rqth sans aah ?",
-        "faut-il la rqth pour l'aah ?"
+        "faut-il la rqth pour l'aah ?",
+        "peut-on cumuler avec cumul ?",
+        "cumul cumul",
+        "cumul et autre aide",
+        "peut-on avoir plusieurs aides avec cumul ?",
+        "cumuler cumul"
       ]
     },
     {
@@ -6880,7 +8209,12 @@
         "pch ou aeeh pour mon enfant ?",
         "choisir entre pch et aeeh",
         "aeeh complément ou pch ?",
-        "différence pch aeeh enfant"
+        "différence pch aeeh enfant",
+        "peut-on cumuler avec pch ?",
+        "cumul pch",
+        "pch et autre aide",
+        "peut-on avoir plusieurs aides avec pch ?",
+        "cumuler pch"
       ]
     },
     {
@@ -7034,7 +8368,12 @@
         "pch avec aah",
         "cumul aah pch",
         "aah pch ensemble",
-        "toucher aah et pch en même temps ?"
+        "toucher aah et pch en même temps ?",
+        "peut-on cumuler avec cumul ?",
+        "cumul cumul",
+        "cumul et autre aide",
+        "peut-on avoir plusieurs aides avec cumul ?",
+        "cumuler cumul"
       ]
     },
     {
@@ -7061,7 +8400,14 @@
         "aah montant mensuel",
         "montant mensuel aah",
         "combien verse aah",
-        "versement aah"
+        "versement aah",
+        "montant",
+        "quel montant",
+        "combien",
+        "somme",
+        "argent",
+        "montant mensuel",
+        "combien toucher"
       ],
       "related_links": [
         {
@@ -7093,7 +8439,33 @@
         "combien peut-on toucher avec l'aah ?",
         "montant aah",
         "combien touche-t-on avec l'aah ?",
-        "aah combien"
+        "aah combien",
+        "quel est le montant de aah ?",
+        "combien aah ?",
+        "c'est combien aah ?",
+        "aah combien ?",
+        "combien on touche avec aah ?",
+        "quel montant pour aah ?",
+        "combien peut-on toucher avec aah ?",
+        "quel montant ?",
+        "le montant ?",
+        "montant ?",
+        "combien ?",
+        "c'est combien ?",
+        "quel est le montant ?",
+        "à combien ?",
+        "combien je peux avoir ?",
+        "combien vais-je toucher ?",
+        "quelle somme ?",
+        "la somme ?",
+        "argent mensuel",
+        "combien par mois ?",
+        "montant mensuel",
+        "quel montant mensuel ?",
+        "quels montants ?",
+        "les montants ?",
+        "quels sont les montants ?",
+        "montants ?"
       ]
     },
     {
@@ -7185,7 +8557,13 @@
         "aah expire bientôt que faire ?",
         "refaire demande aah",
         "prolongation aah",
-        "aah à vie ou renouvellement ?"
+        "aah à vie ou renouvellement ?",
+        "comment renouveler aah ?",
+        "renouvellement aah",
+        "renouveler aah",
+        "révision aah",
+        "aah renouvellement",
+        "quand renouveler aah ?"
       ]
     },
     {
@@ -7225,7 +8603,13 @@
         "qu'est-ce que la cmi ?",
         "c'est quoi la cmi ?",
         "carte mobilité inclusion c'est quoi ?",
-        "définition cmi"
+        "définition cmi",
+        "qu'est-ce que c'est cmi ?",
+        "cmi définition",
+        "qu'est-ce qu'cmi ?",
+        "cmi qu'est-ce que c'est ?",
+        "ça veut dire quoi cmi ?",
+        "que signifie cmi ?"
       ]
     },
     {
@@ -7313,7 +8697,12 @@
         "comment renouveler une rqth ?",
         "renouvellement rqth",
         "refaire demande rqth",
-        "rqth renouveler avant fin ?"
+        "rqth renouveler avant fin ?",
+        "comment renouveler rqth ?",
+        "renouveler rqth",
+        "révision rqth",
+        "rqth renouvellement",
+        "quand renouveler rqth ?"
       ]
     },
     {
@@ -7375,7 +8764,12 @@
         "combien de temps est valable la cmi ?",
         "durée validité cmi",
         "cmi combien d'années ?",
-        "validité carte mobilité inclusion"
+        "validité carte mobilité inclusion",
+        "quelle est la durée de cmi ?",
+        "combien de temps dure cmi ?",
+        "cmi durée",
+        "pendant combien de temps cmi ?",
+        "combien de temps est valable cmi ?"
       ]
     },
     {
@@ -7473,7 +8867,11 @@
         "faire appel mdph",
         "pas d'accord avec mdph",
         "refus mdph que faire ?",
-        "faire un recours mdph"
+        "faire un recours mdph",
+        "recours recours",
+        "comment faire recours recours ?",
+        "contester refus recours",
+        "faire appel recours"
       ]
     },
     {
@@ -7513,7 +8911,12 @@
         "aeeh pch ensemble",
         "cumul aeeh pch enfant",
         "aeeh base + pch",
-        "choix entre pch et aeeh"
+        "choix entre pch et aeeh",
+        "peut-on cumuler avec cumul ?",
+        "cumul cumul",
+        "cumul et autre aide",
+        "peut-on avoir plusieurs aides avec cumul ?",
+        "cumuler cumul"
       ]
     },
     {
@@ -7694,7 +9097,10 @@
       "source": "service-public.fr (2025), legifrance.gouv.fr",
       "keywords": [
         "complement ressources aah",
-        "complement aah"
+        "complement aah",
+        "complément de ressource",
+        "complement ressource",
+        "complément ressource aah"
       ],
       "related_links": [
         {
@@ -7723,7 +9129,23 @@
         "qu'est-ce que complément de ressources ?",
         "c'est quoi complément de ressources ?",
         "définition de complément de ressources",
-        "complément de ressources c'est quoi ?"
+        "complément de ressources c'est quoi ?",
+        "cpr",
+        "complément de ressources",
+        "cpr aah",
+        "complement ressources aah",
+        "qu'est-ce que le cpr ?",
+        "cpr c'est quoi ?",
+        "peut-on encore demander complément de ressources ?",
+        "complément de ressources supprimé ?",
+        "c'est quoi le complément de ressource ?",
+        "qu'est-ce que le complément de ressource ?",
+        "complément de ressource",
+        "le complément de ressource",
+        "complement de ressource",
+        "c'est quoi complément ressource ?",
+        "complément ressource",
+        "complément ressource aah"
       ]
     },
     {
@@ -7757,7 +9179,13 @@
         "complément aah",
         "majoration aah",
         "aah mva cumul",
-        "aah renforcée"
+        "aah renforcée",
+        "différence aah mva",
+        "qu'est-ce que la mva",
+        "mva et aah différence",
+        "majoration vie autonome",
+        "mva avec aah",
+        "aah plus mva"
       ]
     },
     {
@@ -7853,7 +9281,13 @@
         "vérification situation aah",
         "changement situation aah",
         "actualisation aah",
-        "réévaluation aah"
+        "réévaluation aah",
+        "comment renouveler aah ?",
+        "renouvellement aah",
+        "renouveler aah",
+        "révision aah",
+        "aah renouvellement",
+        "quand renouveler aah ?"
       ]
     },
     {
@@ -7899,7 +9333,17 @@
         "esms définition",
         "types établissements handicap",
         "structure spécialisée handicap",
-        "esms pour qui ?"
+        "esms pour qui ?",
+        "c'est quoi orientation ?",
+        "qu'est-ce que orientation ?",
+        "qu'est-ce que c'est orientation ?",
+        "orientation c'est quoi ?",
+        "orientation définition",
+        "définition orientation",
+        "qu'est-ce qu'orientation ?",
+        "orientation qu'est-ce que c'est ?",
+        "ça veut dire quoi orientation ?",
+        "que signifie orientation ?"
       ]
     },
     {
@@ -7909,7 +9353,37 @@
       "source": "service-public.fr (2025), formulaire Cerfa 15692",
       "keywords": [
         "demande orientation esms",
-        "comment demander esms"
+        "comment demander esms",
+        "orientation sessad",
+        "obtenir orientation sessad",
+        "demander sessad",
+        "démarches sessad",
+        "orientation ime",
+        "obtenir orientation ime",
+        "demander ime",
+        "orientation itep",
+        "obtenir orientation itep",
+        "demander itep",
+        "procédure orientation établissement",
+        "comment obtenir esms",
+        "obtenir orientation esms",
+        "obtenir orientation en esms",
+        "demander orientation esms",
+        "orientation en esms",
+        "orientation établissement",
+        "orientation médico-social",
+        "orientation en établissement",
+        "procédure orientation",
+        "démarches orientation",
+        "comment obtenir orientation",
+        "demande orientation",
+        "demander",
+        "la demander",
+        "comment demander",
+        "faire demande",
+        "obtenir",
+        "démarches",
+        "procédure"
       ],
       "related_links": [
         {
@@ -7935,7 +9409,88 @@
         "demander place établissement spécialisé",
         "démarches orientation médico-sociale",
         "esms mdph procédure",
-        "notification esms"
+        "notification esms",
+        "comment obtenir une orientation en sessad ?",
+        "comment obtenir une orientation sessad ?",
+        "obtenir orientation en sessad",
+        "obtenir orientation sessad",
+        "orientation en sessad",
+        "orientation sessad",
+        "comment avoir le sessad ?",
+        "comment avoir sessad ?",
+        "comment bénéficier du sessad ?",
+        "demander orientation sessad",
+        "démarches orientation sessad",
+        "procédure orientation sessad",
+        "comment faire pour avoir un sessad ?",
+        "comment obtenir une orientation en ime ?",
+        "comment obtenir une orientation ime ?",
+        "obtenir orientation en ime",
+        "obtenir orientation ime",
+        "orientation en ime",
+        "orientation ime",
+        "demander orientation ime",
+        "démarches orientation ime",
+        "comment obtenir une orientation en itep ?",
+        "comment obtenir une orientation itep ?",
+        "obtenir orientation en itep",
+        "obtenir orientation itep",
+        "orientation en itep",
+        "orientation itep",
+        "demander orientation itep",
+        "comment obtenir une orientation en esms ?",
+        "comment obtenir une orientation esms ?",
+        "comment demander une orientation en esms ?",
+        "comment faire une demande d'orientation en esms ?",
+        "comment faire pour obtenir une orientation en esms ?",
+        "obtenir une orientation en esms",
+        "demander une orientation esms",
+        "orientation en esms comment faire ?",
+        "orientation esms démarches",
+        "procédure orientation esms",
+        "démarches orientation esms",
+        "comment obtenir une orientation en établissement ?",
+        "comment obtenir une orientation vers un établissement ?",
+        "comment demander une orientation en établissement médico-social ?",
+        "orientation en établissement comment faire ?",
+        "orientation établissement médico-social",
+        "obtenir orientation établissement",
+        "orientation médico-social",
+        "comment obtenir orientation médico-social ?",
+        "demande orientation médico-social",
+        "orientation esms",
+        "demande orientation",
+        "comment demander orientation ?",
+        "comment obtenir orientation ?",
+        "comment avoir orientation ?",
+        "comment faire demande orientation ?",
+        "obtenir orientation",
+        "demander orientation",
+        "démarches orientation",
+        "procédure orientation",
+        "comment faire pour avoir orientation ?",
+        "faire une demande orientation",
+        "comment la demander ?",
+        "comment le demander ?",
+        "la demander",
+        "le demander",
+        "demander",
+        "comment faire la demande ?",
+        "la demande",
+        "faire la demande",
+        "comment l'obtenir ?",
+        "comment l'avoir ?",
+        "l'obtenir",
+        "pour l'obtenir",
+        "obtenir",
+        "comment faire ?",
+        "démarches ?",
+        "procédure ?",
+        "les démarches",
+        "la procédure",
+        "quelles démarches ?",
+        "les démarches ?",
+        "quelles sont les démarches ?"
       ]
     },
     {
@@ -8411,7 +9966,27 @@
         "majoration aeeh parent isolé",
         "complément aeeh montants",
         "aeeh de base et complément",
-        "catégories compléments aeeh"
+        "catégories compléments aeeh",
+        "c'est quoi les compléments ?",
+        "qu'est-ce que les compléments ?",
+        "les compléments",
+        "compléments",
+        "les compléments aeeh",
+        "compléments aeeh",
+        "qu'est-ce que les compléments aeeh ?",
+        "c'est quoi compléments aeeh ?",
+        "aeeh compléments",
+        "complément aeeh",
+        "les 6 compléments aeeh",
+        "compléments aeeh c'est quoi ?",
+        "à quoi correspondent les compléments aeeh ?",
+        "compléments de l'aeeh",
+        "les compléments de l'aeeh",
+        "qu'est-ce que les compléments de l'aeeh ?",
+        "quels compléments ?",
+        "les compléments ?",
+        "quels sont les compléments ?",
+        "compléments ?"
       ]
     },
     {
@@ -8430,6 +10005,10 @@
         "structure handicap"
       ],
       "related_links": [
+        {
+          "question": "Comment obtenir une orientation en IME ?",
+          "chunk_id": "orientation_esms_demarches"
+        },
         {
           "question": "Retour : C'est quoi PPS ?",
           "chunk_id": "pps_definition"
@@ -8456,7 +10035,17 @@
         "c'est quoi un ime ?",
         "qu'est-ce que un ime ?",
         "définition de un ime",
-        "un ime c'est quoi ?"
+        "un ime c'est quoi ?",
+        "c'est quoi ime ?",
+        "qu'est-ce que ime ?",
+        "qu'est-ce que c'est ime ?",
+        "ime c'est quoi ?",
+        "ime définition",
+        "définition ime",
+        "qu'est-ce qu'ime ?",
+        "ime qu'est-ce que c'est ?",
+        "ça veut dire quoi ime ?",
+        "que signifie ime ?"
       ]
     },
     {
@@ -8485,6 +10074,10 @@
         "institut therapeutique"
       ],
       "related_links": [
+        {
+          "question": "Comment obtenir une orientation en ITEP ?",
+          "chunk_id": "orientation_esms_demarches"
+        },
         {
           "question": "Retour : Scolarisation avec troubles comportement",
           "chunk_id": "scolarisation_troubles_comportement"
@@ -8519,7 +10112,17 @@
         "orientation itep",
         "comment aller en itep ?",
         "comment entrer en itep ?",
-        "démarches itep"
+        "démarches itep",
+        "c'est quoi itep ?",
+        "qu'est-ce que itep ?",
+        "qu'est-ce que c'est itep ?",
+        "itep c'est quoi ?",
+        "itep définition",
+        "définition itep",
+        "qu'est-ce qu'itep ?",
+        "itep qu'est-ce que c'est ?",
+        "ça veut dire quoi itep ?",
+        "que signifie itep ?"
       ]
     },
     {
@@ -8554,6 +10157,10 @@
       ],
       "related_links": [
         {
+          "question": "Comment obtenir une orientation en SESSAD ?",
+          "chunk_id": "orientation_esms_demarches"
+        },
+        {
           "question": "Retour : C'est quoi PPS ?",
           "chunk_id": "pps_definition"
         },
@@ -8579,17 +10186,16 @@
         "qu'est-ce que un sessad ?",
         "définition de un sessad",
         "un sessad c'est quoi ?",
-        "comment obtenir une orientation en sessad ?",
-        "comment obtenir une orientation sessad ?",
-        "obtenir orientation en sessad",
-        "obtenir orientation sessad",
-        "orientation en sessad",
-        "orientation sessad",
-        "comment avoir le sessad ?",
-        "comment avoir sessad ?",
-        "comment bénéficier du sessad ?",
-        "demander sessad",
-        "démarches sessad"
+        "c'est quoi sessad ?",
+        "qu'est-ce que sessad ?",
+        "qu'est-ce que c'est sessad ?",
+        "sessad c'est quoi ?",
+        "sessad définition",
+        "définition sessad",
+        "qu'est-ce qu'sessad ?",
+        "sessad qu'est-ce que c'est ?",
+        "ça veut dire quoi sessad ?",
+        "que signifie sessad ?"
       ]
     },
     {
@@ -8769,12 +10375,58 @@
       "keywords": [
         "mdph",
         "maison départementale personnes handicapées",
-        "qu'est-ce que mdph"
+        "qu'est-ce que mdph",
+        "demande mdph",
+        "faire demande mdph",
+        "première demande mdph",
+        "besoin aide mdph",
+        "demander aide",
+        "comment demander",
+        "démarche mdph",
+        "première demande",
+        "premiere demande",
+        "1ère demande",
+        "débuter mdph",
+        "commencer mdph",
+        "par où commencer"
       ],
       "typical_questions": [
         "c'est quoi la mdph ?",
         "qu'est-ce que la mdph ?",
-        "mdph c'est quoi ?"
+        "mdph c'est quoi ?",
+        "comment faire une demande à la mdph ?",
+        "comment faire une demande mdph ?",
+        "faire une demande mdph",
+        "demande mdph comment faire ?",
+        "première demande mdph",
+        "j'ai besoin d'une aide comment faire ?",
+        "j'ai besoin d'une allocation comment faire ?",
+        "comment demander une aide mdph ?",
+        "comment demander une allocation ?",
+        "demander une aide handicap",
+        "besoin d'aide handicap",
+        "je veux faire une demande mdph",
+        "comment obtenir une aide mdph ?",
+        "quelles aides je peux demander ?",
+        "quelles aides mdph ?",
+        "aides mdph comment demander ?",
+        "par où commencer mdph ?",
+        "première démarche mdph",
+        "débuter avec mdph",
+        "comment faire une première demande ?",
+        "comment faire ma première demande ?",
+        "première demande comment faire ?",
+        "faire une première demande",
+        "ma première demande",
+        "c'est ma première demande",
+        "je fais ma première demande",
+        "comment faire une 1ère demande ?",
+        "1ère demande mdph",
+        "1ere demande",
+        "comment débuter une demande mdph ?",
+        "débuter avec la mdph",
+        "commencer démarches mdph",
+        "comment commencer avec la mdph ?"
       ],
       "related_links": []
     },
@@ -8825,7 +10477,13 @@
         "12 mois",
         "1 an",
         "cerfa 15695",
-        "certificat valable combien temps"
+        "certificat valable combien temps",
+        "validité certificat médical",
+        "durée certificat médical",
+        "certificat périmé",
+        "certificat valable",
+        "combien de temps valable",
+        "validité certificat"
       ],
       "typical_questions": [
         "combien de temps est valable le certificat médical mdph ?",
@@ -8835,7 +10493,30 @@
         "validité cerfa 15695",
         "refaire certificat médical mdph",
         "certificat médical mdph date limite",
-        "mon certificat médical mdph est trop vieux"
+        "mon certificat médical mdph est trop vieux",
+        "quelle est la durée de certificat ?",
+        "combien de temps dure certificat ?",
+        "durée certificat",
+        "certificat durée",
+        "pendant combien de temps certificat ?",
+        "combien de temps est valable certificat ?",
+        "le certificat médical mdph est valable combien de temps ?",
+        "validité certificat médical mdph",
+        "combien de temps est valable le certificat médical ?",
+        "certificat médical valable combien de temps ?",
+        "validité du certificat médical",
+        "durée certificat médical",
+        "le certificat médical est valable combien de temps ?",
+        "combien de temps certificat médical valable ?",
+        "certificat médical périmé",
+        "mon certificat médical est-il encore valable ?",
+        "certificat médical périmé que faire ?",
+        "validité certificat",
+        "durée validité certificat",
+        "certificat valable combien de temps ?",
+        "validité certificat ?",
+        "durée certificat ?",
+        "certificat périmé ?"
       ],
       "related_links": []
     },
@@ -8893,7 +10574,14 @@
         "comment avoir cmi",
         "carte mobilité inclusion",
         "démarches cmi",
-        "demande cmi"
+        "demande cmi",
+        "demander",
+        "la demander",
+        "comment demander",
+        "faire demande",
+        "obtenir",
+        "démarches",
+        "procédure"
       ],
       "typical_questions": [
         "comment obtenir une carte mobilité inclusion ?",
@@ -8906,7 +10594,38 @@
         "demande cmi",
         "obtenir carte mobilité inclusion",
         "faire demande cmi",
-        "cmi comment demander ?"
+        "cmi comment demander ?",
+        "comment obtenir cmi ?",
+        "comment avoir cmi ?",
+        "comment faire demande cmi ?",
+        "comment demander cmi ?",
+        "obtenir cmi",
+        "demander cmi",
+        "démarches cmi",
+        "procédure cmi",
+        "comment faire pour avoir cmi ?",
+        "faire une demande cmi",
+        "comment la demander ?",
+        "comment le demander ?",
+        "la demander",
+        "le demander",
+        "demander",
+        "comment faire la demande ?",
+        "la demande",
+        "faire la demande",
+        "comment l'obtenir ?",
+        "comment l'avoir ?",
+        "l'obtenir",
+        "pour l'obtenir",
+        "obtenir",
+        "comment faire ?",
+        "démarches ?",
+        "procédure ?",
+        "les démarches",
+        "la procédure",
+        "quelles démarches ?",
+        "les démarches ?",
+        "quelles sont les démarches ?"
       ],
       "related_links": []
     },
@@ -8948,7 +10667,13 @@
       "typical_questions": [
         "combien de temps est valable la carte mobilité inclusion ?",
         "quelle est la durée de validité de la cmi ?",
-        "combien de temps dure la cmi ?"
+        "combien de temps dure la cmi ?",
+        "quelle est la durée de cmi ?",
+        "combien de temps dure cmi ?",
+        "durée cmi",
+        "cmi durée",
+        "pendant combien de temps cmi ?",
+        "combien de temps est valable cmi ?"
       ],
       "related_links": []
     },
@@ -8970,7 +10695,13 @@
         "peut-on renouveler une cmi avant la fin ?",
         "renouvellement cmi anticipé",
         "refaire cmi avant expiration",
-        "cmi renouveler quand ?"
+        "cmi renouveler quand ?",
+        "comment renouveler cmi ?",
+        "renouvellement cmi",
+        "renouveler cmi",
+        "révision cmi",
+        "cmi renouvellement",
+        "quand renouveler cmi ?"
       ],
       "related_links": []
     },
@@ -9045,7 +10776,17 @@
         "la carte mobilité inclusion donne-t-elle droit à des réductions ?",
         "quels sont les avantages de la cmi ?",
         "réductions avec la cmi",
-        "avantages carte handicap"
+        "avantages carte handicap",
+        "quels sont les avantages de cmi ?",
+        "avantages cmi",
+        "à quoi sert cmi ?",
+        "pourquoi demander cmi ?",
+        "ça sert à quoi cmi ?",
+        "que permet cmi ?",
+        "quels avantages ?",
+        "les avantages ?",
+        "quels sont les avantages ?",
+        "avantages ?"
       ],
       "related_links": []
     },
@@ -9142,7 +10883,13 @@
       "typical_questions": [
         "peut-on faire une demande mdph pour une personne âgée ?",
         "mdph après 60 ans",
-        "personne âgée handicap mdph"
+        "personne âgée handicap mdph",
+        "mdph pour personne âgée",
+        "peut-on faire demande mdph après 60 ans",
+        "personne âgée handicapée mdph ou apa",
+        "mdph senior",
+        "demande mdph plus de 60 ans",
+        "handicap personne âgée mdph"
       ],
       "related_links": []
     },
@@ -9237,7 +10984,14 @@
         "accompagnant élève",
         "aide scolaire",
         "avs",
-        "obtenir aesh"
+        "obtenir aesh",
+        "demander",
+        "la demander",
+        "comment demander",
+        "faire demande",
+        "obtenir",
+        "démarches",
+        "procédure"
       ],
       "typical_questions": [
         "comment obtenir un aesh pour mon enfant ?",
@@ -9246,7 +11000,38 @@
         "demande aesh",
         "comment obtenir une accompagnante aesh pour aider mon enfant en classe ?",
         "mon enfant a besoin d'aide à l'école, comment demander un aesh à la mdph ?",
-        "quelles démarches pour avoir une auxiliaire de vie scolaire pour mon fils ?"
+        "quelles démarches pour avoir une auxiliaire de vie scolaire pour mon fils ?",
+        "comment obtenir aesh ?",
+        "comment avoir aesh ?",
+        "comment faire demande aesh ?",
+        "comment demander aesh ?",
+        "obtenir aesh",
+        "demander aesh",
+        "démarches aesh",
+        "procédure aesh",
+        "comment faire pour avoir aesh ?",
+        "faire une demande aesh",
+        "comment la demander ?",
+        "comment le demander ?",
+        "la demander",
+        "le demander",
+        "demander",
+        "comment faire la demande ?",
+        "la demande",
+        "faire la demande",
+        "comment l'obtenir ?",
+        "comment l'avoir ?",
+        "l'obtenir",
+        "pour l'obtenir",
+        "obtenir",
+        "comment faire ?",
+        "démarches ?",
+        "procédure ?",
+        "les démarches",
+        "la procédure",
+        "quelles démarches ?",
+        "les démarches ?",
+        "quelles sont les démarches ?"
       ],
       "related_links": []
     },
@@ -9434,7 +11219,17 @@
       "typical_questions": [
         "qu'est ce qu'un ppre ?",
         "qui met en place un ppre ?",
-        "mon enfant peut il avoir un ppre ?"
+        "mon enfant peut il avoir un ppre ?",
+        "c'est quoi ppre ?",
+        "qu'est-ce que ppre ?",
+        "qu'est-ce que c'est ppre ?",
+        "ppre c'est quoi ?",
+        "ppre définition",
+        "définition ppre",
+        "qu'est-ce qu'ppre ?",
+        "ppre qu'est-ce que c'est ?",
+        "ça veut dire quoi ppre ?",
+        "que signifie ppre ?"
       ]
     },
     {
@@ -9462,7 +11257,17 @@
       "typical_questions": [
         "qui remplit le geva sco ?",
         "a quoi sert le geva sco ?",
-        "geva sco première demande mdph"
+        "geva sco première demande mdph",
+        "c'est quoi gevasco ?",
+        "qu'est-ce que gevasco ?",
+        "qu'est-ce que c'est gevasco ?",
+        "gevasco c'est quoi ?",
+        "gevasco définition",
+        "définition gevasco",
+        "qu'est-ce qu'gevasco ?",
+        "gevasco qu'est-ce que c'est ?",
+        "ça veut dire quoi gevasco ?",
+        "que signifie gevasco ?"
       ]
     },
     {
@@ -9490,7 +11295,17 @@
       "typical_questions": [
         "qui coordonne l'aide pour la scolarité d'un enfant handicapé ?",
         "c'est quoi un pas scolarité ?",
-        "comment demander de l'aide pour la scolarité de mon enfant ?"
+        "comment demander de l'aide pour la scolarité de mon enfant ?",
+        "c'est quoi pas ?",
+        "qu'est-ce que pas ?",
+        "qu'est-ce que c'est pas ?",
+        "pas c'est quoi ?",
+        "pas définition",
+        "définition pas",
+        "qu'est-ce qu'pas ?",
+        "pas qu'est-ce que c'est ?",
+        "ça veut dire quoi pas ?",
+        "que signifie pas ?"
       ]
     },
     {
@@ -9540,7 +11355,17 @@
       "typical_questions": [
         "c'est quoi un iem ?",
         "ecole pour handicap moteur enfant",
-        "orientation iem mdph"
+        "orientation iem mdph",
+        "c'est quoi iem ?",
+        "qu'est-ce que iem ?",
+        "qu'est-ce que c'est iem ?",
+        "iem c'est quoi ?",
+        "iem définition",
+        "définition iem",
+        "qu'est-ce qu'iem ?",
+        "iem qu'est-ce que c'est ?",
+        "ça veut dire quoi iem ?",
+        "que signifie iem ?"
       ]
     },
     {
@@ -9564,7 +11389,17 @@
       "typical_questions": [
         "ecole pour enfant malvoyant",
         "etablissement pour enfant sourd",
-        "c'est quoi un ies ?"
+        "c'est quoi un ies ?",
+        "c'est quoi ies ?",
+        "qu'est-ce que ies ?",
+        "qu'est-ce que c'est ies ?",
+        "ies c'est quoi ?",
+        "ies définition",
+        "définition ies",
+        "qu'est-ce qu'ies ?",
+        "ies qu'est-ce que c'est ?",
+        "ça veut dire quoi ies ?",
+        "que signifie ies ?"
       ]
     },
     {
@@ -9588,7 +11423,17 @@
       "typical_questions": [
         "qui participe à l'ess ?",
         "comment demander une ess ?",
-        "réunion pps école"
+        "réunion pps école",
+        "c'est quoi ess ?",
+        "qu'est-ce que ess ?",
+        "qu'est-ce que c'est ess ?",
+        "ess c'est quoi ?",
+        "ess définition",
+        "définition ess",
+        "qu'est-ce qu'ess ?",
+        "ess qu'est-ce que c'est ?",
+        "ça veut dire quoi ess ?",
+        "que signifie ess ?"
       ]
     },
     {
@@ -9610,7 +11455,17 @@
       ],
       "typical_questions": [
         "qui est l enseignant référent ?",
-        "comment contacter l enseignant référent ?"
+        "comment contacter l enseignant référent ?",
+        "c'est quoi enseignant ?",
+        "qu'est-ce que enseignant ?",
+        "qu'est-ce que c'est enseignant ?",
+        "enseignant c'est quoi ?",
+        "enseignant définition",
+        "définition enseignant",
+        "qu'est-ce qu'enseignant ?",
+        "enseignant qu'est-ce que c'est ?",
+        "ça veut dire quoi enseignant ?",
+        "que signifie enseignant ?"
       ]
     },
     {
@@ -9697,7 +11552,12 @@
       ],
       "typical_questions": [
         "quand renouveler mdph enfant ?",
-        "renouvellement aesh"
+        "renouvellement aesh",
+        "comment renouveler renouvellement ?",
+        "renouvellement renouvellement",
+        "renouveler renouvellement",
+        "révision renouvellement",
+        "quand renouveler renouvellement ?"
       ]
     },
     {
@@ -9718,7 +11578,19 @@
       ],
       "typical_questions": [
         "mdph refus que faire ?",
-        "recours mdph enfant"
+        "recours mdph enfant",
+        "mdph a refusé que faire ?",
+        "comment contester refus mdph ?",
+        "recours après refus mdph",
+        "mdph refuse ma demande",
+        "que faire si mdph refuse ?",
+        "refus mdph comment faire recours ?",
+        "contestation décision mdph",
+        "que faire en cas de refus refus ?",
+        "refus refus",
+        "refus refusé que faire ?",
+        "si refus refusé",
+        "refus rejeté"
       ]
     },
     {
@@ -9739,7 +11611,16 @@
       ],
       "typical_questions": [
         "tiers temps brevet handicap",
-        "amenagement bac handicap"
+        "amenagement bac handicap",
+        "tiers temps examen handicap",
+        "aménagements bac handicap",
+        "aménagements brevet handicap",
+        "tiers temps comment demander ?",
+        "aménagements examens scolaires handicap",
+        "tiers temps examen qu'est-ce que c'est ?",
+        "comment obtenir tiers temps ?",
+        "secrétaire examen handicap",
+        "dictée à l'adulte examen"
       ]
     },
     {
@@ -9757,7 +11638,12 @@
         }
       ],
       "typical_questions": [
-        "passage maternelle primaire handicap"
+        "passage maternelle primaire handicap",
+        "passage maternelle primaire enfant handicapé",
+        "entrée cp enfant handicap",
+        "préparer cp enfant handicap",
+        "transition maternelle primaire handicap",
+        "de la maternelle au cp avec handicap"
       ]
     },
     {
@@ -9775,7 +11661,11 @@
         }
       ],
       "typical_questions": [
-        "entrée lycée enfant handicap"
+        "entrée lycée enfant handicap",
+        "passage collège lycée enfant handicapé",
+        "préparer lycée enfant handicap",
+        "transition collège lycée handicap",
+        "du collège au lycée avec handicap"
       ]
     },
     {
@@ -9797,7 +11687,13 @@
         }
       ],
       "typical_questions": [
-        "mon enfant a des difficultés école que faire"
+        "mon enfant a des difficultés école que faire",
+        "mon enfant a des difficultés à l'école",
+        "difficultés scolaires sans reconnaissance handicap",
+        "enfant en difficulté école que faire",
+        "mon enfant ne suit pas à l'école",
+        "aide enfant difficulté scolaire sans mdph",
+        "difficultés apprentissage école"
       ]
     },
     {
@@ -9811,7 +11707,14 @@
       ],
       "typical_questions": [
         "ordinateur mdph enfant",
-        "outil adaptation ecole"
+        "outil adaptation ecole",
+        "ordinateur pour enfant handicapé mdph",
+        "matériel scolaire adapté handicap",
+        "outils adaptés école handicap",
+        "mdph ordinateur enfant",
+        "matériel pédagogique adapté comment obtenir",
+        "logiciels adaptés handicap école",
+        "tablette handicap école mdph"
       ]
     },
     {
@@ -9827,7 +11730,17 @@
         "c est quoi l ecole inclusive ?",
         "c'est quoi l'inclusion scolaire ?",
         "inclusion scolaire définition",
-        "qu'est-ce que l'inclusion scolaire ?"
+        "qu'est-ce que l'inclusion scolaire ?",
+        "c'est quoi inclusion ?",
+        "qu'est-ce que inclusion ?",
+        "qu'est-ce que c'est inclusion ?",
+        "inclusion c'est quoi ?",
+        "inclusion définition",
+        "définition inclusion",
+        "qu'est-ce qu'inclusion ?",
+        "inclusion qu'est-ce que c'est ?",
+        "ça veut dire quoi inclusion ?",
+        "que signifie inclusion ?"
       ]
     },
     {
@@ -9841,7 +11754,16 @@
       ],
       "typical_questions": [
         "aesh cantine",
-        "aide transport handicap ecole"
+        "aide transport handicap ecole",
+        "aide cantine enfant handicap",
+        "aide périscolaire handicap",
+        "cantine enfant handicapé",
+        "activités périscolaires handicap",
+        "aesh cantine périscolaire",
+        "prise en charge cantine handicap",
+        "accompagnement cantine enfant handicap",
+        "est-ce que la mdph finance la cantine ?",
+        "aide pour activités périscolaires ?"
       ]
     },
     {
@@ -9854,7 +11776,13 @@
       ],
       "typical_questions": [
         "aide mdph apres 20 ans",
-        "handicap universite"
+        "handicap universite",
+        "jusqu'à quel âge aide mdph école",
+        "âge limite aide scolaire mdph",
+        "mdph après 18 ans études",
+        "aide mdph université",
+        "aides mdph études supérieures",
+        "mdph étudiant handicapé"
       ]
     },
     {
@@ -10073,7 +12001,12 @@
         "allocation enfant et sessad ensemble",
         "peut-on avoir les deux aeeh sessad ?",
         "aeeh réduit avec sessad ?",
-        "sessad diminue aeeh ?"
+        "sessad diminue aeeh ?",
+        "peut-on cumuler avec cumul ?",
+        "cumul cumul",
+        "cumul et autre aide",
+        "peut-on avoir plusieurs aides avec cumul ?",
+        "cumuler cumul"
       ],
       "related_links": [
         {
@@ -10163,7 +12096,12 @@
         "employeur ne respecte pas rqth",
         "mon patron refuse d'aménager mon poste malgré mon handicap, que faire ?",
         "l'employeur refuse les aménagements demandés par le médecin du travail",
-        "comment faire si mon entreprise ne veut pas adapter mon poste de travail ?"
+        "comment faire si mon entreprise ne veut pas adapter mon poste de travail ?",
+        "que faire en cas de refus refus ?",
+        "refus refus",
+        "refus refusé que faire ?",
+        "si refus refusé",
+        "refus rejeté"
       ],
       "related_links": [
         {
@@ -10209,7 +12147,21 @@
         "critères attribution cmi",
         "j'ai un taux d'incapacité de 60%, puis-je avoir une carte mobilité inclusion ?",
         "faut-il obligatoirement 80% de handicap pour obtenir la cmi invalidité ?",
-        "avec quel niveau de handicap peut-on avoir droit à la carte cmi ?"
+        "avec quel niveau de handicap peut-on avoir droit à la carte cmi ?",
+        "quelles sont les conditions pour cmi ?",
+        "conditions cmi",
+        "qui peut avoir cmi ?",
+        "qui a droit à cmi ?",
+        "puis-je avoir cmi ?",
+        "est-ce que je peux avoir cmi ?",
+        "qui peut bénéficier de cmi ?",
+        "critères cmi",
+        "conditions pour obtenir cmi",
+        "quelles conditions pour cmi ?",
+        "quelles conditions ?",
+        "les conditions ?",
+        "quelles sont les conditions ?",
+        "conditions ?"
       ],
       "related_links": [
         {
@@ -10255,7 +12207,13 @@
         "éviter rupture droits rqth",
         "ma rqth expire dans 6 mois, quand dois-je faire la demande de renouvellement ?",
         "combien de temps avant la fin de mes droits je dois renouveler ma rqth ?",
-        "j'ai peur que ma rqth expire avant le renouvellement, que faire ?"
+        "j'ai peur que ma rqth expire avant le renouvellement, que faire ?",
+        "comment renouveler rqth ?",
+        "renouvellement rqth",
+        "renouveler rqth",
+        "révision rqth",
+        "rqth renouvellement",
+        "quand renouveler rqth ?"
       ],
       "related_links": [
         {
@@ -10440,7 +12398,11 @@
         "recours gracieux mdph comment ça marche ?",
         "qu'est-ce qu'un recours gracieux ?",
         "recours gracieux définition",
-        "différence recours gracieux contentieux"
+        "différence recours gracieux contentieux",
+        "recours recours",
+        "comment faire recours recours ?",
+        "contester refus recours",
+        "faire appel recours"
       ],
       "related_links": [
         {
@@ -10491,7 +12453,11 @@
         "peut-on faire un recours devant le tribunal ?",
         "tribunal mdph",
         "recours contentieux mdph",
-        "saisir tribunal mdph"
+        "saisir tribunal mdph",
+        "recours recours",
+        "comment faire recours recours ?",
+        "contester refus recours",
+        "faire appel recours"
       ],
       "related_links": [
         {
@@ -10611,7 +12577,11 @@
         "aah rejetée",
         "ma demande d'aah a été refusée",
         "pour quelles raisons l'aah peut être refusée ?",
-        "causes refus aah"
+        "causes refus aah",
+        "que faire en cas de refus aah ?",
+        "aah refusé que faire ?",
+        "si aah refusé",
+        "aah rejeté"
       ],
       "keywords": [
         "refus",
@@ -10779,7 +12749,12 @@
         "médecin ne veut pas faire certificat mdph",
         "que faire si médecin refuse certificat ?",
         "médecin refuse dossier mdph",
-        "changer de médecin certificat mdph"
+        "changer de médecin certificat mdph",
+        "que faire en cas de refus certificat ?",
+        "refus certificat",
+        "certificat refusé que faire ?",
+        "si certificat refusé",
+        "certificat rejeté"
       ],
       "keywords": [
         "refuse",
@@ -10941,6 +12916,469 @@
           "chunk_id": "guide_demarrage_enfant_handicape"
         }
       ]
+    },
+    {
+      "id": "qui_peut_faire_demande_mdph",
+      "question": "Qui peut faire une demande à la MDPH ?",
+      "answer": "**Toute personne en situation de handicap** peut faire une demande à la MDPH, quel que soit son âge (enfant, adulte, personne âgée) et quelle que soit sa situation.\n\n**Conditions pour faire une demande :**\n- Présenter un handicap (maladie, déficience, incapacité)\n- Résider en France de manière stable et régulière\n- Aucune limite d'âge (de la naissance à la fin de vie)\n\n**Qui peut déposer physiquement la demande ?**\n\n✅ **La personne elle-même** si elle est majeure et capable\n\n✅ **Un représentant légal** :\n- Parents (pour un enfant mineur)\n- Tuteur (pour une personne sous tutelle)\n- Curateur (avec accord de la personne sous curatelle)\n- Mandataire judiciaire\n\n✅ **Un proche avec procuration** (conjoint, famille) si la personne ne peut pas se déplacer\n\n**⚠️ Important :** La MDPH ne peut pas intervenir tant qu'elle n'a pas reçu une demande de la personne handicapée ou de son représentant légal.\n\n**Pour quelles prestations ?**\nLa demande unique permet d'accéder à l'ensemble des prestations et orientations MDPH :\n- Prestations financières (AAH, PCH, AEEH, MVA...)\n- Cartes (CMI invalidité, priorité, stationnement)\n- Reconnaissance (RQTH, taux d'incapacité)\n- Orientations (ESAT, établissement médico-social)\n- Scolarité (AESH, orientation ULIS, matériel pédagogique adapté)\n\n**Première demande :** Peut être déposée à tout moment, dès que le besoin se fait sentir.\n\n**Renouvellement :** À demander 6 mois avant l'expiration des droits.",
+      "source": "monparcourshandicap.gouv.fr",
+      "keywords": [
+        "qui peut faire demande mdph",
+        "qui peut demander mdph",
+        "conditions demande mdph",
+        "éligibilité mdph",
+        "eligibilite mdph",
+        "qui a droit mdph",
+        "conditions mdph",
+        "demander",
+        "la demander",
+        "comment demander",
+        "faire demande",
+        "obtenir",
+        "démarches",
+        "procédure"
+      ],
+      "related_links": [
+        {
+          "question": "Comment faire un dossier MDPH ?",
+          "chunk_id": "cerfa_15692"
+        },
+        {
+          "question": "Peut-on faire une demande pour quelqu'un d'autre ?",
+          "chunk_id": "demande_pour_autrui"
+        },
+        {
+          "question": "C'est quoi la MDPH ?",
+          "chunk_id": "mdph_definition"
+        },
+        {
+          "question": "Quelles aides peut-on demander ?",
+          "chunk_id": "aides_mdph_liste"
+        }
+      ],
+      "typical_questions": [
+        "qui peut faire une demande à la mdph ?",
+        "qui peut faire une demande mdph ?",
+        "qui peut demander à la mdph ?",
+        "qui a le droit de faire une demande mdph ?",
+        "qui peut bénéficier de la mdph ?",
+        "qui peut bénéficier des aides mdph ?",
+        "quelles sont les conditions pour faire une demande mdph ?",
+        "conditions pour faire une demande mdph",
+        "qui est éligible à la mdph ?",
+        "suis-je éligible à la mdph ?",
+        "ai-je le droit de faire une demande mdph ?",
+        "puis-je faire une demande mdph ?",
+        "qui peut remplir le formulaire mdph ?",
+        "qui peut déposer une demande mdph ?",
+        "est-ce que tout le monde peut faire une demande mdph ?",
+        "y a-t-il des conditions pour la mdph ?",
+        "faut-il des conditions pour la mdph ?",
+        "qui a accès à la mdph ?",
+        "comment la demander ?",
+        "comment le demander ?",
+        "la demander",
+        "le demander",
+        "demander",
+        "comment faire la demande ?",
+        "la demande",
+        "faire la demande",
+        "comment l'obtenir ?",
+        "comment l'avoir ?",
+        "l'obtenir",
+        "pour l'obtenir",
+        "obtenir",
+        "comment faire ?",
+        "démarches ?",
+        "procédure ?",
+        "les démarches",
+        "la procédure"
+      ]
+    },
+    {
+      "id": "dispositif_integre_definition",
+      "question": "C'est quoi un dispositif intégré ?",
+      "answer": "Un **dispositif intégré** est un mode de fonctionnement flexible des établissements et services médico-sociaux (ESMS) qui permet d'adapter l'accompagnement sans nouvelle notification MDPH. Depuis juillet 2024 (décret du 5 juillet 2024), les ESMS peuvent fonctionner en dispositif intégré pour mieux suivre les besoins évolutifs des personnes accompagnées.\n\n**Différence avec un établissement classique :**\n- **Établissement classique** (ex: IME) : structure fixe avec mode d'accueil défini (internat, semi-internat)\n- **Dispositif intégré** (ex: Dispositif IME) : ensemble de modalités flexibles permettant de passer de l'internat au SESSAD ou inversement sans nouvelle décision CDAPH\n\n**Modalités d'accompagnement flexibles :**\n- En milieu ordinaire (domicile, école)\n- En établissement (internat, semi-internat, accueil de jour)\n- Intensité variable (temps plein, temps partiel, séquentiel)\n- Avec ou sans hébergement\n\n**Avantage principal :** Les modalités d'accompagnement peuvent **évoluer plus facilement** pour suivre les besoins, sans nécessiter de nouvelle décision CDAPH lorsque les familles et l'établissement sont d'accord.\n\n**Dispositifs intégrés existants :**\n- Dispositif ITEP (Institut Thérapeutique Éducatif et Pédagogique)\n- Dispositif IME (Institut Médico-Éducatif)\n- Dispositif IEM (Institut d'Éducation Motrice)\n- Dispositif EEAP (Établissement pour Enfants et Adolescents Polyhandicapés)\n\n**Orientation MDPH :** La CDAPH notifie \"en dispositif\" (ex: \"orientation en dispositif ITEP\") plutôt que vers un établissement spécifique. Cela permet à l'équipe médico-sociale de faire évoluer les modalités selon les besoins de la personne.",
+      "source": "monparcourshandicap.gouv.fr",
+      "keywords": [
+        "dispositif intégré",
+        "dispositif integre",
+        "fonctionnement dispositif",
+        "esms dispositif",
+        "modalités flexibles",
+        "modalites flexibles",
+        "dispositif mdph"
+      ],
+      "related_links": [
+        {
+          "question": "C'est quoi un ITEP ?",
+          "chunk_id": "itep_definition"
+        },
+        {
+          "question": "C'est quoi un IME ?",
+          "chunk_id": "ime_definition"
+        },
+        {
+          "question": "C'est quoi un SESSAD ?",
+          "chunk_id": "sessad_definition"
+        },
+        {
+          "question": "Comment obtenir une orientation ?",
+          "chunk_id": "orientation_esms_demarches"
+        }
+      ],
+      "typical_questions": [
+        "c'est quoi un dispositif intégré ?",
+        "qu'est-ce qu'un dispositif intégré ?",
+        "dispositif intégré définition",
+        "différence dispositif et établissement",
+        "différence entre dispositif et établissement médico-social",
+        "dispositif ime c'est quoi ?",
+        "dispositif itep c'est quoi ?",
+        "fonctionnement en dispositif intégré",
+        "c'est quoi dispositif ?",
+        "qu'est-ce que dispositif ?",
+        "qu'est-ce que c'est dispositif ?",
+        "dispositif c'est quoi ?",
+        "dispositif définition",
+        "définition dispositif",
+        "qu'est-ce qu'dispositif ?",
+        "dispositif qu'est-ce que c'est ?",
+        "ça veut dire quoi dispositif ?",
+        "que signifie dispositif ?"
+      ]
+    },
+    {
+      "id": "dispositif_itep",
+      "question": "C'est quoi le dispositif ITEP ?",
+      "answer": "Le **dispositif ITEP** est un mode de fonctionnement intégré qui associe l'ITEP (Institut Thérapeutique Éducatif et Pédagogique) et le SESSAD pour offrir un accompagnement flexible aux enfants et jeunes avec troubles du comportement.\n\n**Fonctionnement :**\nDepuis 2017, certains ITEP fonctionnent en dispositif intégré avec des services SESSAD. Cela permet de faire évoluer les modalités d'accompagnement **sans nouvelle notification MDPH** :\n- Passage de l'internat au SESSAD (retour en famille avec accompagnement à domicile/école)\n- Passage du SESSAD à l'internat modulé (si besoin d'un cadre plus structurant)\n- Ajustement de l'intensité (temps plein/partiel)\n\n**Modalités d'accompagnement disponibles :**\n- **Internat complet** : hébergement permanent à l'ITEP\n- **Internat modulé** : alternance entre l'ITEP et le domicile\n- **Semi-internat** : accueil de jour uniquement\n- **SESSAD** : accompagnement à domicile et à l'école\n\n**Avantage :** Cette flexibilité permet d'adapter l'accompagnement selon l'évolution de l'enfant, sans rupture de parcours et sans refaire une demande MDPH.\n\n**Orientation MDPH :** La CDAPH notifie \"orientation en dispositif ITEP\" (et non vers un ITEP spécifique). L'équipe médico-sociale peut ensuite ajuster les modalités en concertation avec la famille.\n\n**Public concerné :** Enfants et adolescents présentant des difficultés psychologiques dont l'expression (notamment troubles du comportement) perturbe gravement la socialisation et l'apprentissage.",
+      "source": "dossier-mdph.fr",
+      "keywords": [
+        "dispositif itep",
+        "itep dispositif",
+        "itep sessad",
+        "modalités itep",
+        "modalites itep",
+        "internat itep",
+        "sessad itep"
+      ],
+      "related_links": [
+        {
+          "question": "C'est quoi un ITEP ?",
+          "chunk_id": "itep_definition"
+        },
+        {
+          "question": "C'est quoi un SESSAD ?",
+          "chunk_id": "sessad_definition"
+        },
+        {
+          "question": "C'est quoi un dispositif intégré ?",
+          "chunk_id": "dispositif_integre_definition"
+        },
+        {
+          "question": "Comment obtenir une orientation ?",
+          "chunk_id": "orientation_esms_demarches"
+        }
+      ],
+      "typical_questions": [
+        "c'est quoi le dispositif itep ?",
+        "qu'est-ce que le dispositif itep ?",
+        "dispositif itep définition",
+        "différence itep et dispositif itep",
+        "dispositif itep sessad",
+        "comment fonctionne le dispositif itep ?",
+        "itep en dispositif"
+      ]
+    },
+    {
+      "id": "dar_definition",
+      "question": "C'est quoi un DAR ?",
+      "answer": "Le **DAR** (Dispositif d'Autorégulation) est un dispositif innovant qui permet la scolarisation d'élèves avec troubles du spectre de l'autisme (TSA) ou autres troubles du neurodéveloppement (TND) en milieu ordinaire, avec un accompagnement médico-social renforcé.\n\n**Principe :** Le DAR combine scolarisation en classe ordinaire et interventions médico-sociales spécialisées pour favoriser l'autorégulation des élèves. Il complète l'offre de scolarisation pour les élèves TSA, dys, TDAH et TDI.\n\n**Public concerné :**\n- Principalement élèves avec TSA (Troubles du Spectre de l'Autisme) d'âge élémentaire (6-12 ans)\n- Extension progressive aux élèves avec TDAH et dys\n- Développement en cours pour collège et lycée\n\n**Fonctionnement :**\n- Scolarisation en classe ordinaire\n- Accompagnement par une équipe médico-sociale spécialisée (psychologue, éducateur, psychomotricien...)\n- Interventions basées sur les recommandations HAS de bonnes pratiques professionnelles\n- Partenariat école / établissement médico-social / MDPH\n\n**Orientation MDPH :** L'orientation vers un DAR est décidée par la CDAPH après examen du dossier par l'équipe pluridisciplinaire de la MDPH, avec l'accord de la famille. La notification CDAPH indique à la fois le mode de scolarisation et l'orientation vers le service médico-social conventionné avec l'école.\n\n**Déploiement :** Les DAR se déploient progressivement dans les départements depuis la rentrée 2024, suite à la loi du 15 novembre 2024.\n\n**Différence avec UEMA/UEEA :** Le DAR permet une scolarisation en classe ordinaire avec accompagnement, tandis que les UEMA/UEEA sont des unités d'enseignement spécialisées avec effectif réduit (7 élèves).",
+      "source": "education.gouv.fr",
+      "keywords": [
+        "dar",
+        "dispositif autorégulation",
+        "dispositif autoregulation",
+        "autorégulation autisme",
+        "autoregulation autisme",
+        "tsa scolarisation",
+        "tnd scolarisation",
+        "autisme école"
+      ],
+      "related_links": [
+        {
+          "question": "C'est quoi UEMA ?",
+          "chunk_id": "uema_definition"
+        },
+        {
+          "question": "C'est quoi un SESSAD ?",
+          "chunk_id": "sessad_definition"
+        },
+        {
+          "question": "Comment obtenir une orientation ?",
+          "chunk_id": "orientation_esms_demarches"
+        },
+        {
+          "question": "C'est quoi un dispositif intégré ?",
+          "chunk_id": "dispositif_integre_definition"
+        }
+      ],
+      "typical_questions": [
+        "c'est quoi un dar ?",
+        "qu'est-ce qu'un dar ?",
+        "dar définition",
+        "dispositif d'autorégulation",
+        "dispositif autorégulation autisme",
+        "dar autisme",
+        "dar tsa",
+        "comment fonctionne le dar ?",
+        "dar mdph",
+        "dispositif autorégulation",
+        "dar handicap",
+        "qu'est-ce qu'un dispositif d'autorégulation",
+        "dar école",
+        "dispositif dar pour qui",
+        "c'est quoi dar ?",
+        "qu'est-ce que dar ?",
+        "qu'est-ce que c'est dar ?",
+        "dar c'est quoi ?",
+        "définition dar",
+        "qu'est-ce qu'dar ?",
+        "dar qu'est-ce que c'est ?",
+        "ça veut dire quoi dar ?",
+        "que signifie dar ?"
+      ]
+    },
+    {
+      "id": "uema_definition",
+      "question": "C'est quoi UEMA ?",
+      "answer": "Les **UEMA** (Unités d'Enseignement Maternelle Autisme) sont des dispositifs spécialisés qui accueillent de jeunes enfants avec troubles du spectre de l'autisme (TSA) en école maternelle ordinaire.\n\n**Caractéristiques :**\n- **Public :** Enfants avec TSA âgés de 3 à 6 ans\n- **Effectif :** Maximum 7 élèves par UEMA\n- **Localisation :** Classe située dans une école maternelle ordinaire\n- **Enseignement :** Coordonné par un enseignant titulaire du CAPPEI (certificat d'aptitude professionnelle aux pratiques de l'éducation inclusive)\n\n**Objectifs :**\n- Familiarisation avec le milieu scolaire\n- Premiers apprentissages cognitifs et socio-relationnels\n- Développement de l'autonomie\n- Préparation à une scolarisation en milieu ordinaire\n\n**Équipe pluridisciplinaire :**\n- Enseignant coordonnateur (CAPPEI)\n- Professionnels médico-sociaux (éducateurs spécialisés, psychologues, orthophonistes, psychomotriciens...)\n- Accompagnement basé sur les recommandations HAS\n\n**Orientation MDPH :** L'orientation vers une UEMA est décidée par la CDAPH après examen du dossier MDPH par l'équipe pluridisciplinaire. La notification CDAPH précise :\n- L'orientation vers la structure médico-sociale porteuse de l'UEMA\n- Le mode de scolarisation à temps plein dans l'unité d'enseignement située en école ordinaire\n\n**Rattachement :** Les UEMA sont portées par des établissements médico-sociaux (IME, SESSAD...) en partenariat avec l'Éducation Nationale. Elles sont financées par l'ARS (Agence Régionale de Santé).\n\n**Après l'UEMA :** Selon l'évolution de l'enfant, orientation possible vers UEEA (élémentaire), classe ordinaire avec accompagnement, ou autre dispositif adapté.",
+      "source": "education.gouv.fr",
+      "keywords": [
+        "uema",
+        "unité enseignement maternelle autisme",
+        "unite enseignement maternelle autisme",
+        "maternelle autisme",
+        "tsa maternelle",
+        "autisme école maternelle",
+        "3-6 ans autisme"
+      ],
+      "related_links": [
+        {
+          "question": "C'est quoi un DAR ?",
+          "chunk_id": "dar_definition"
+        },
+        {
+          "question": "C'est quoi UEEA ?",
+          "chunk_id": "ueea_definition"
+        },
+        {
+          "question": "C'est quoi un IME ?",
+          "chunk_id": "ime_definition"
+        },
+        {
+          "question": "Comment obtenir une orientation ?",
+          "chunk_id": "orientation_esms_demarches"
+        }
+      ],
+      "typical_questions": [
+        "c'est quoi uema ?",
+        "qu'est-ce qu'une uema ?",
+        "uema définition",
+        "unité d'enseignement maternelle autisme",
+        "uema autisme",
+        "classe maternelle autisme",
+        "école maternelle autisme",
+        "comment intégrer une uema ?",
+        "uema mdph",
+        "qu'est-ce que uema ?",
+        "qu'est-ce que c'est uema ?",
+        "uema c'est quoi ?",
+        "définition uema",
+        "qu'est-ce qu'uema ?",
+        "uema qu'est-ce que c'est ?",
+        "ça veut dire quoi uema ?",
+        "que signifie uema ?"
+      ]
+    },
+    {
+      "id": "ueea_definition",
+      "question": "C'est quoi UEEA ?",
+      "answer": "Les **UEEA** (Unités d'Enseignement Élémentaire Autisme) sont des dispositifs spécialisés qui accueillent des enfants avec troubles du spectre de l'autisme (TSA) en école élémentaire ordinaire.\n\n**Caractéristiques :**\n- **Public :** Enfants avec TSA âgés de 6 à 11 ans (niveau élémentaire)\n- **Effectif :** Maximum 10 élèves par UEEA (peut varier selon les cahiers des charges départementaux)\n- **Localisation :** Classe située dans une école élémentaire ordinaire\n- **Enseignement :** Coordonné par un enseignant titulaire du CAPPEI\n\n**Objectifs :**\n- Apprentissages scolaires adaptés (lecture, écriture, mathématiques)\n- Développement des compétences sociales et relationnelles\n- Inclusion progressive en classe ordinaire selon les capacités de l'enfant\n- Acquisition de l'autonomie\n\n**Équipe pluridisciplinaire :**\n- Enseignant coordonnateur (CAPPEI)\n- Professionnels médico-sociaux (éducateurs spécialisés, psychologues, orthophonistes, psychomotriciens, ergothérapeutes...)\n- Interventions conformes aux recommandations HAS sur l'autisme\n\n**Orientation MDPH :** L'orientation vers une UEEA est décidée par la CDAPH après examen du dossier MDPH. La notification précise :\n- L'orientation vers la structure médico-sociale porteuse\n- Le mode de scolarisation dans l'unité d'enseignement en école ordinaire\n\n**Rattachement :** Les UEEA sont portées par des établissements médico-sociaux (IME, SESSAD...) en convention avec l'Éducation Nationale, financées par l'ARS.\n\n**Parcours :** L'UEEA fait suite à l'UEMA (maternelle) et vise à préparer l'enfant à une scolarisation en milieu ordinaire avec ou sans accompagnement (AESH, SESSAD).\n\n**Différence avec ULIS TSA :** L'UEEA est portée par un établissement médico-social avec équipe pluridisciplinaire renforcée, tandis que l'ULIS est un dispositif de l'Éducation Nationale avec un enseignant spécialisé.",
+      "source": "education.gouv.fr",
+      "keywords": [
+        "ueea",
+        "unité enseignement élémentaire autisme",
+        "unite enseignement elementaire autisme",
+        "élémentaire autisme",
+        "elementaire autisme",
+        "tsa élémentaire",
+        "tsa elementaire",
+        "autisme école élémentaire",
+        "autisme ecole elementaire",
+        "6-11 ans autisme"
+      ],
+      "related_links": [
+        {
+          "question": "C'est quoi UEMA ?",
+          "chunk_id": "uema_definition"
+        },
+        {
+          "question": "C'est quoi un DAR ?",
+          "chunk_id": "dar_definition"
+        },
+        {
+          "question": "C'est quoi ULIS ?",
+          "chunk_id": "ulis_definition"
+        },
+        {
+          "question": "Comment obtenir une orientation ?",
+          "chunk_id": "orientation_esms_demarches"
+        }
+      ],
+      "typical_questions": [
+        "c'est quoi ueea ?",
+        "qu'est-ce qu'une ueea ?",
+        "ueea définition",
+        "unité d'enseignement élémentaire autisme",
+        "ueea autisme",
+        "classe élémentaire autisme",
+        "école élémentaire autisme",
+        "comment intégrer une ueea ?",
+        "ueea mdph",
+        "différence uema ueea",
+        "qu'est-ce que ueea ?",
+        "qu'est-ce que c'est ueea ?",
+        "ueea c'est quoi ?",
+        "définition ueea",
+        "qu'est-ce qu'ueea ?",
+        "ueea qu'est-ce que c'est ?",
+        "ça veut dire quoi ueea ?",
+        "que signifie ueea ?"
+      ]
+    },
+    {
+      "id": "avpf_definition",
+      "question": "C'est quoi l'AVPF pour les aidants ?",
+      "answer": "**👴 AVPF - Assurance Vieillesse des Parents au Foyer**\n\nL'AVPF (Assurance Vieillesse des Parents au Foyer) permet aux aidants familiaux de cotiser pour leur retraite sans travailler, sous certaines conditions.\n\n**🎯 Pour qui ?**\n- Aidants d'une personne handicapée (enfant ou adulte)\n- Bénéficiaires de l'AEEH (base + complément) ou de la PCH (élément aide humaine)\n- Sous condition de ressources et d'activité réduite/nulle\n\n**💰 Avantages :**\n- Validation de trimestres de retraite\n- Cotisation prise en charge par la CAF/MSA\n- Maintien des droits à la retraite malgré l'arrêt ou la réduction d'activité\n\n**📋 Comment en bénéficier ?**\n- Affiliation automatique si vous percevez l'AEEH avec complément\n- Demande auprès de la CAF/MSA si vous percevez la PCH aide humaine\n\n💡 **Bon à savoir** : L'AVPF permet d'éviter une interruption dans la carrière et de valider des trimestres pour la retraite.",
+      "source": "https://www.service-public.fr/particuliers/vosdroits/F15395",
+      "typical_questions": [
+        "c'est quoi l'avpf ?",
+        "qu'est-ce que l'avpf ?",
+        "avpf définition",
+        "avpf aidant",
+        "assurance vieillesse parents au foyer",
+        "avpf pour aidant familial",
+        "cotisation retraite aidant",
+        "trimestres retraite aidant handicap",
+        "comment valider trimestres retraite aidant ?",
+        "droits retraite aidant familial"
+      ],
+      "keywords": [
+        "avpf",
+        "assurance vieillesse",
+        "retraite aidant",
+        "trimestres retraite",
+        "cotisation retraite aidant",
+        "aidant familial retraite"
+      ]
+    },
+    {
+      "id": "actp_definition",
+      "question": "C'est quoi l'ACTP ?",
+      "answer": "**👥 ACTP - Allocation Compensatrice pour Tierce Personne**\n\nL'ACTP (Allocation Compensatrice pour Tierce Personne) a été REMPLACÉE par la PCH (Prestation de Compensation du Handicap) depuis 2006.\n\n**⚠️ Situation actuelle :**\n- L'ACTP n'est plus attribuable aux nouvelles demandes depuis 2006\n- Seules les personnes qui en bénéficiaient avant 2006 peuvent conserver leurs droits\n- Toute nouvelle demande doit se faire via la PCH\n\n**🔄 Qu'est-ce qui remplace l'ACTP ?**\n→ La **PCH (Prestation de Compensation du Handicap)** qui couvre :\n- L'aide humaine\n- Les aides techniques\n- L'aménagement du logement et du véhicule\n- Les charges spécifiques\n- Les aides animalières\n\n**📋 Si vous bénéficiez encore de l'ACTP :**\nVous pouvez choisir de :\n- Conserver votre ACTP (droits maintenus)\n- Ou basculer vers la PCH (choix définitif)\n\n💡 **Pour toute nouvelle demande** : Demandez la PCH auprès de votre MDPH.",
+      "source": "https://www.service-public.fr/particuliers/vosdroits/F12911",
+      "typical_questions": [
+        "c'est quoi l'actp ?",
+        "qu'est-ce que l'actp ?",
+        "actp définition",
+        "allocation compensatrice tierce personne",
+        "actp ou pch",
+        "différence actp pch",
+        "peut-on encore demander actp ?",
+        "actp supprimée",
+        "actp existe encore ?"
+      ],
+      "keywords": [
+        "actp",
+        "allocation compensatrice",
+        "tierce personne",
+        "actp pch",
+        "ancienne allocation handicap"
+      ],
+      "related_links": [
+        {
+          "question": "Comment demander l'ACTP (ou son remplaçant la PCH) ?",
+          "chunk_id": "actp_demarches"
+        },
+        {
+          "question": "Qu'est-ce que la PCH qui a remplacé l'ACTP ?",
+          "chunk_id": "pch_definition"
+        }
+      ]
+    },
+    {
+      "id": "actp_demarches",
+      "question": "Comment demander l'ACTP ?",
+      "answer": "**⚠️ L'ACTP n'est plus attribuable depuis 2006**\n\nL'ACTP (Allocation Compensatrice pour Tierce Personne) a été **remplacée par la PCH** (Prestation de Compensation du Handicap).\n\n**📋 Pour toute nouvelle demande :**\n\nVous devez demander la **PCH (Prestation de Compensation du Handicap)** qui offre les mêmes avantages et plus encore.\n\n**👉 Comment demander la PCH ?**\n\n**Étape 1 : Préparer votre dossier**\n- Remplir le [formulaire Cerfa n°15692*01](https://www.service-public.fr/particuliers/vosdroits/R19993)\n- Joindre un [certificat médical Cerfa n°15695*01](https://www.service-public.fr/particuliers/vosdroits/R19996)\n- Pièce d'identité + justificatif de domicile\n- Devis pour aides techniques/aménagements si besoin\n\n**Étape 2 : Déposer auprès de votre MDPH**\n- En ligne : [MDPH en ligne](https://mdphenligne.cnsa.fr/)\n- Par courrier ou sur place\n\n**Étape 3 : Évaluation à domicile**\n- Un professionnel évalue vos besoins\n- Élaboration d'un plan personnalisé de compensation\n\n💡 **La PCH couvre** : aide humaine, aides techniques, aménagement logement/véhicule, charges spécifiques, aides animalières.",
+      "source": "https://www.service-public.fr/particuliers/vosdroits/F12911",
+      "typical_questions": [
+        "comment demander actp ?",
+        "comment demander l'actp ?",
+        "comment obtenir actp ?",
+        "comment obtenir l'actp ?",
+        "obtenir actp",
+        "demander actp",
+        "démarches actp",
+        "peut-on encore demander actp ?",
+        "actp comment faire ?",
+        "faire demande actp",
+        "comment la demander ?",
+        "comment le demander ?",
+        "la demander",
+        "le demander",
+        "demander",
+        "comment faire la demande ?",
+        "la demande",
+        "faire la demande",
+        "comment l'obtenir ?",
+        "comment l'avoir ?",
+        "l'obtenir",
+        "pour l'obtenir",
+        "obtenir",
+        "comment faire ?",
+        "démarches ?",
+        "procédure ?",
+        "les démarches",
+        "la procédure",
+        "quelles démarches ?",
+        "les démarches ?",
+        "quelles sont les démarches ?"
+      ],
+      "keywords": [
+        "demander actp",
+        "obtenir actp",
+        "démarches actp",
+        "actp demarches",
+        "comment obtenir actp",
+        "demander",
+        "la demander",
+        "comment demander",
+        "faire demande",
+        "obtenir",
+        "démarches",
+        "procédure"
+      ],
+      "related_links": [
+        {
+          "question": "Qu'est-ce que la PCH qui a remplacé l'ACTP ?",
+          "chunk_id": "pch_definition"
+        },
+        {
+          "question": "Comment demander la PCH ?",
+          "chunk_id": "pch_demarches"
+        }
+      ]
     }
   ]
 };
@@ -10973,6 +13411,158 @@
                 const words = normalized.split(/\s+/).filter(w => w.length > 0);
                 return words.filter(w => !this.stopWords.has(w));
             }
+            // ============================================================================
+            // DÉTECTION ET RÉSOLUTION CONTEXTUELLE
+            // ============================================================================
+            detectContextualQuestion(question) {
+                const normalized = question.toLowerCase().trim();
+
+                // Patterns de questions contextuelles (avec pronoms/références vagues)
+                const contextualPatterns = [
+                    // Questions très courtes (contextuelles par nature)
+                    /^quel(le)?s? montants?\s*\??$/i,  // "quel montant ?", "montant ?"
+                    /^(le |la |les? )?montants?\s*\??$/i,  // "le montant ?", "montant ?"
+                    /^combien\s*\??$/i,  // "combien ?"
+                    /^(c['']est )?combien\s*\??$/i,  // "c'est combien ?"
+                    /^(à |a )?combien\s*\??$/i,  // "à combien ?"
+                    /^(quelle |la )?somme\s*\??$/i,  // "quelle somme ?", "la somme ?"
+                    /^(les? |quelles? )?conditions?\s*\??$/i,  // "les conditions ?", "condition ?"
+                    /^(les? |quelles? )?d[ée]marches?\s*\??$/i,  // "les démarches ?", "démarche ?"
+                    /^(la )?proc[ée]dure\s*\??$/i,  // "la procédure ?", "procédure ?"
+                    /^(la |le |l[''])?demande\s*\??$/i,  // "la demande ?", "demande ?"
+                    /^(comment )?obtenir\s*\??$/i,  // "obtenir ?", "comment obtenir ?"
+                    /^(comment )?demander\s*\??$/i,  // "demander ?", "comment demander ?"
+                    /^(la |le |l[''])?dur[ée]e\s*\??$/i,  // "la durée ?", "durée ?"
+                    /^(les? )?avantages?\s*\??$/i,  // "les avantages ?", "avantage ?"
+                    /^comment faire\s*\??$/i,  // "comment faire ?"
+
+                    // Patterns existants
+                    /^(quelles? sont )?les conditions?( pour)?( l['']| la | le )?obtenir/i,
+                    /^comment (l['']| la | le )?obtenir/i,
+                    /^(je )?peux (l['']| la | le )?avoir/i,
+                    /^qui peut (l['']| la | le )?avoir/i,
+                    /^(c['']est )?combien/i,
+                    /^quel(le)?s? (sont )?les? montants?/i,
+                    /^(quelles? sont )?les? d[ée]marches?/i,
+                    /^comment (faire )?(la |le |l['']|cette |ce |cet )?demande/i,
+                    /^comment (le|la|cette|ce|cet|[cç]a) demander/i,
+                    /^comment (le|la|cette|ce|cet|[cç]a) renouveler/i,
+                    /^(pour |pendant )?combien de temps/i,
+                    /^(quelle est )?(la |cette )?dur[ée]e/i,
+                    /^(quels? sont )?les? avantages?/i,
+                    /^[àa] quoi ([cç]a |[cç]ela |cette |ce |cet )?sert/i,
+                    /^qui d[ée]cide/i,
+                    /^qui verse/i,
+                    /^(peut[- ]on |puis[- ]je )?cumuler/i,
+                    /^(c['']est quoi |qu['']est[- ]ce que )?(cette|ce|cet|cela|[cç]a)/i,
+                    /pour (l['']| la | le | cette | ce | cet )?avoir/i,
+                    /de (l['']| la | le | cette | ce | cet )?avoir/i,
+                    /(cette|ce|cet|[cç]a|[cç]ela) (aide|prestation|droit|allocation|carte|orientation)/i,
+                    /obtenir (cette|ce|cet|[cç]a|[cç]ela) (aide|prestation|droit|allocation|carte|orientation)/i
+                ];
+
+                for (const pattern of contextualPatterns) {
+                    if (pattern.test(normalized)) {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+
+            resolveContextualQuestion(question, lastChunkId, chunksData) {
+                if (!lastChunkId) return null;
+
+                const lastChunk = chunksData.find(c => c.id === lastChunkId);
+                if (!lastChunk) return null;
+
+                // Extraire le concept principal du dernier chunk (ex: "aeeh" de "aeeh_definition")
+                const mainConcept = lastChunkId.split('_')[0];
+
+                console.log('[CONTEXT] Résolution contextuelle:', {
+                    question: question,
+                    lastChunk: lastChunkId,
+                    concept: mainConcept
+                });
+
+                // 1. Chercher d'abord dans les related_links du chunk précédent
+                if (lastChunk.related_links && lastChunk.related_links.length > 0) {
+                    const relatedChunkIds = lastChunk.related_links.map(link => link.chunk_id);
+
+                    // Chercher dans les chunks liés
+                    for (const relatedId of relatedChunkIds) {
+                        const relatedChunk = chunksData.find(c => c.id === relatedId);
+                        if (!relatedChunk) continue;
+
+                        // Vérifier si la question correspond aux typical_questions du chunk lié
+                        if (relatedChunk.typical_questions) {
+                            const questionNorm = this.normalizeQuestion(question);
+
+                            for (const typicalQ of relatedChunk.typical_questions) {
+                                const typicalNorm = this.normalizeQuestion(typicalQ);
+                                const similarity = this.calculateQuestionSimilarity(questionNorm, typicalNorm);
+
+                                if (similarity >= 0.7) { // Seuil plus permissif pour contexte
+                                    console.log('[CONTEXT] Match trouvé via related_links:', relatedId);
+                                    return {
+                                        chunkId: relatedId,
+                                        method: 'related_links',
+                                        similarity: similarity,
+                                        fromContext: mainConcept
+                                    };
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 2. Si pas trouvé dans related_links, enrichir la question avec le concept
+                // D'abord nettoyer les démonstratifs et ponctuation
+                let cleanQuestion = question
+                    .replace(/\bcette\s+/gi, '')
+                    .replace(/\bce\s+/gi, '')
+                    .replace(/\bcet\s+/gi, '')
+                    .replace(/(?:^|\s)[cç]a\s+/gi, ' ')  // ça au début ou après espace
+                    .replace(/(?:^|\s)[cç]ela\s+/gi, ' ')  // cela au début ou après espace
+                    .replace(/(^|\s)l[''](?=\w)/gi, '$1')  // l' → supprimé (ex: "comment l'obtenir" → "comment obtenir")
+                    .replace(/[?!.;,]+$/g, '')  // Retirer ponctuation finale
+                    .replace(/\s+/g, ' ')  // Normaliser espaces
+                    .trim();
+
+                const enrichedQuestion = `${cleanQuestion} ${mainConcept}`;
+                console.log('[CONTEXT] Question nettoyée:', cleanQuestion);
+                console.log('[CONTEXT] Question enrichie:', enrichedQuestion);
+
+                // Rechercher avec la question enrichie
+                const result = this.search(enrichedQuestion, 30.0);
+                if (result) {
+                    // Vérifier si le chunk trouvé est pertinent pour le contexte
+                    const chunkIdLower = result.chunk_id.toLowerCase();
+                    const conceptLower = mainConcept.toLowerCase();
+
+                    // Accepter si :
+                    // 1. Le chunk ID contient le concept (ex: "orientation_ime" pour concept "ime")
+                    // 2. OU le chunk contient "orientation" dans son ID avec un bon score (chunks génériques ESMS)
+                    const containsConcept = chunkIdLower.includes(conceptLower);
+                    const isOrientationChunk = chunkIdLower.includes('orientation') && result.score >= 500;
+
+                    if (containsConcept || isOrientationChunk) {
+                        console.log('[CONTEXT] Match trouvé via enrichissement:', result.chunk_id, 'score:', result.score);
+                        return {
+                            chunkId: result.chunk_id,
+                            method: 'enriched_search',
+                            score: result.score,
+                            fromContext: mainConcept
+                        };
+                    } else {
+                        console.log('[CONTEXT] Chunk trouvé mais non pertinent:', result.chunk_id, 'concept:', mainConcept, 'score:', result.score);
+                    }
+                }
+
+                return null;
+            }
+
+
 
             search(question, threshold = 30.0) {
                 // ============================================================================
@@ -11803,7 +14393,43 @@
         // ============================================================================
 
         let chatbot;
-        let navigationHistory = []; // Historique de navigation
+        let navigationHistory = [];
+        // ============================================================================
+        // HISTORIQUE CONVERSATIONNEL (pour résolution contextuelle)
+        // ============================================================================
+        let conversationHistory = [];
+        const MAX_HISTORY_SIZE = 3; // Garder les 3 derniers chunks
+
+        function addToConversationHistory(chunkId, question, mainKeywords) {
+            conversationHistory.unshift({
+                chunkId: chunkId,
+                question: question,
+                keywords: mainKeywords,
+                timestamp: Date.now()
+            });
+
+            // Garder seulement les N derniers
+            if (conversationHistory.length > MAX_HISTORY_SIZE) {
+                conversationHistory = conversationHistory.slice(0, MAX_HISTORY_SIZE);
+            }
+
+            console.log('[HISTORY] Ajouté:', chunkId, '| Taille historique:', conversationHistory.length);
+            console.log('[HISTORY] Historique complet:', conversationHistory.map(h => h.chunkId));
+        }
+
+        function getLastContextKeywords() {
+            if (conversationHistory.length === 0) return [];
+            return conversationHistory[0].keywords || [];
+        }
+
+        function getLastChunkId() {
+            console.log('[HISTORY] getLastChunkId appelé, taille:', conversationHistory.length);
+            if (conversationHistory.length === 0) return null;
+            const lastId = conversationHistory[0].chunkId;
+            console.log('[HISTORY] Dernier chunk ID:', lastId);
+            return lastId;
+        }
+ // Historique de navigation
 
         function initChatbot() {
             if (!chunksData) {
@@ -12104,9 +14730,48 @@
 
             // Afficher la question
             addMessage('user', question);
+            // ============================================================================
+            // RÉSOLUTION CONTEXTUELLE
+            // ============================================================================
+            let contextualResult = null;
+            let isContextual = false;
 
-            // Rechercher la réponse
-            const result = chatbot.search(question, 30.0);
+            // Détecter si c'est une question contextuelle
+            if (chatbot.detectContextualQuestion(question)) {
+                const lastChunkId = getLastChunkId();
+                console.log('[CONTEXT] Question contextuelle détectée, dernier chunk:', lastChunkId);
+
+                if (lastChunkId) {
+                    contextualResult = chatbot.resolveContextualQuestion(question, lastChunkId, chatbot.chunks);
+
+                    if (contextualResult) {
+                        isContextual = true;
+                        console.log('[CONTEXT] Résolution contextuelle réussie:', contextualResult);
+                    }
+                }
+            }
+
+            // Si résolution contextuelle réussie, utiliser ce résultat
+            let result;
+            if (isContextual && contextualResult) {
+                const chunk = chatbot.chunks.find(c => c.id === contextualResult.chunkId);
+                if (chunk) {
+                    result = {
+                        chunk_id: chunk.id,
+                        question: chunk.question,
+                        answer: chunk.answer,
+                        source: chunk.source,
+                        related_links: chunk.related_links || [],
+                        score: contextualResult.score || 10000,
+                        matchType: 'contextual',
+                        contextInfo: contextualResult
+                    };
+                }
+            } else {
+                // Recherche normale
+                result = chatbot.search(question, 30.0);
+            }
+
 
             if (!result || result.score < 50) {
                 const helpMessage = `<p>Désolé, je n'ai pas trouvé de réponse précise à votre question.</p>
@@ -12129,6 +14794,11 @@
 
             // Tracker la question
             trackQuestion(question, result.chunk_id, result.score);
+
+            // Ajouter à l'historique conversationnel
+            const mainKeywords = chatbot.extractKeywords(result.chunk_id);
+            addToConversationHistory(result.chunk_id, question, mainKeywords);
+
 
             // Ajouter à l'historique
             navigationHistory.push({
@@ -12156,6 +14826,20 @@
                     </div>
                 `;
             }
+
+            
+            // Ajouter indicateur de résolution contextuelle
+            if (result.matchType === 'contextual' && result.contextInfo) {
+                const contextConcept = result.contextInfo.fromContext.toUpperCase();
+                const contextMethod = result.contextInfo.method === 'related_links'
+                    ? 'via liens associés'
+                    : 'par enrichissement';
+
+                response = `<div class="resolved-hint">
+                    💡 Question comprise en contexte (<strong>${contextConcept}</strong>, ${contextMethod})
+                </div>` + response;
+            }
+
 
             addMessage('bot', response, `Score : ${result.score.toFixed(0)} | Chunk : ${result.chunk_id}`, result.related_links, {
                 question: question,
@@ -12333,5 +15017,5 @@
         // Fonction pour scroller vers le bas
         // scrollToBottom is now handled per-message by the scroll indicator button onclick
     </script>
-</body>
+<script>window.addEventListener("load",()=>{setTimeout(()=>{const e=document.getElementById("loading-screen");e&&(e.classList.add("fade-out"),setTimeout(()=>e.style.display="none",500))},500)});setTimeout(()=>{const e=document.getElementById("loading-screen");e&&!e.classList.contains("fade-out")&&(e.classList.add("fade-out"),setTimeout(()=>e.style.display="none",500))},5e3);</script></body>
 </html>
