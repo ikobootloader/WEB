@@ -4,8 +4,6 @@
 
 **Version** : 1.5.0
 **Date** : 15 mars 2026
-**Auteur** : Équipe BMAD Project
-**Statut** : Production
 
 ---
 
