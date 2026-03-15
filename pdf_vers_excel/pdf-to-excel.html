@@ -9,7 +9,7 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #1e3a5f 0%, #0d2847 100%);
             min-height: 100vh;
             padding: 20px;
         }
@@ -22,10 +22,20 @@
             overflow: hidden;
         }
         .header {
-            background: linear-gradient(135deg, #6366f1, #4f46e5);
+            background: linear-gradient(135deg, #1e3a5f, #2d5a8f);
             color: white;
             padding: 40px;
             text-align: center;
+            position: relative;
+        }
+        .header::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #e8741e 0%, #e8741e 50%, #1e3a5f 50%, #1e3a5f 100%);
         }
         h1 { font-size: 2rem; margin-bottom: 10px; }
         .subtitle { opacity: 0.9; }
@@ -39,7 +49,7 @@
             cursor: pointer;
             transition: all 0.3s;
         }
-        .upload:hover, .upload.drag { border-color: #6366f1; background: rgba(99,102,241,0.05); }
+        .upload:hover, .upload.drag { border-color: #e8741e; background: rgba(232,116,30,0.05); }
         .btn {
             padding: 14px 28px;
             border: none;
@@ -49,8 +59,8 @@
             transition: all 0.3s;
             font-size: 1rem;
         }
-        .btn-primary { background: #6366f1; color: white; }
-        .btn-primary:hover { background: #4f46e5; transform: translateY(-2px); }
+        .btn-primary { background: #e8741e; color: white; }
+        .btn-primary:hover { background: #d16519; transform: translateY(-2px); }
         .btn-success { background: #10b981; color: white; margin: 0 5px; }
         .btn-success:hover { background: #059669; }
         .hidden { display: none !important; }
@@ -58,7 +68,7 @@
             width: 50px;
             height: 50px;
             border: 4px solid #e2e8f0;
-            border-top-color: #6366f1;
+            border-top-color: #e8741e;
             border-radius: 50%;
             animation: spin 1s linear infinite;
             margin: 30px auto;
@@ -101,7 +111,7 @@
             border: 1px solid #e2e8f0;
         }
         th {
-            background: #6366f1;
+            background: #1e3a5f;
             color: white;
             position: sticky;
             top: 0;
@@ -109,7 +119,7 @@
             z-index: 10;
         }
         tr:nth-child(even) td { background: #f8fafc; }
-        tr:hover td { background: rgba(99,102,241,0.1); }
+        tr:hover td { background: rgba(232,116,30,0.1); }
         .stats {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -126,7 +136,7 @@
         .stat-value {
             font-size: 2rem;
             font-weight: 700;
-            color: #6366f1;
+            color: #e8741e;
             display: block;
         }
         .stat-label {
@@ -148,9 +158,9 @@
             border-radius: 8px;
             border-left: 4px solid;
         }
-        .alert-info { background: #dbeafe; border-color: #3b82f6; color: #1e40af; }
+        .alert-info { background: #e6f0f9; border-color: #1e3a5f; color: #0d2847; }
         .alert-success { background: #d1fae5; border-color: #10b981; color: #065f46; }
-        .alert-warning { background: #fef3c7; border-color: #f59e0b; color: #92400e; }
+        .alert-warning { background: #fef3e6; border-color: #e8741e; color: #8a4411; }
         .page-nav {
             display: flex;
             align-items: center;
@@ -169,8 +179,15 @@
 <body>
     <div class="container">
         <header class="header">
-            <h1>📄 PDF to Excel Converter</h1>
-            <p class="subtitle">Extraction intelligente inspirée de Tabula • 100% client-side</p>
+            <div style="display: flex; align-items: center; justify-content: center; gap: 20px; flex-wrap: wrap;">
+                <div style="background: white; padding: 10px 20px; border-radius: 8px;">
+                    <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjgwIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjx0ZXh0IHg9IjEwIiB5PSI0MCIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjM2IiBmb250LXdlaWdodD0iYm9sZCIgZmlsbD0iI2U4NzQxZSI+T3JuZTwvdGV4dD48dGV4dCB4PSIxMCIgeT0iNjUiIGZvbnQtZmFtaWx5PSJBcmlhbCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIyNCIgZm9udC13ZWlnaHQ9ImJvbGQiIGZpbGw9IiMxZTNhNWYiPk1EQTwvdGV4dD48L3N2Zz4=" alt="Orne MDA" style="height: 60px;">
+                </div>
+                <div>
+                    <h1 style="margin: 0;">PDF to Excel Converter</h1>
+                    <p class="subtitle" style="margin: 5px 0 0 0;">Extraction intelligente de tableaux • 100% sécurisé</p>
+                </div>
+            </div>
         </header>
 
         <main class="main">
@@ -188,7 +205,7 @@
             <section id="processing" class="hidden" style="text-align: center; padding: 80px 40px;">
                 <div class="spinner"></div>
                 <h2 id="status" style="margin: 20px 0;">Chargement...</h2>
-                <p id="progress" style="color: #6366f1; font-weight: 600; font-size: 1.2rem;">0%</p>
+                <p id="progress" style="color: #e8741e; font-weight: 600; font-size: 1.2rem;">0%</p>
                 <p id="details" style="color: #64748b; margin-top: 10px;"></p>
             </section>
 
