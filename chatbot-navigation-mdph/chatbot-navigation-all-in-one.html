@@ -6745,7 +6745,7 @@
     {
       "id": "rsdae_definition",
       "question": "C'est quoi RSDAE ?",
-      "answer": "La RSDAE (anciennement Reconnaissance de la lourdeur du handicap - RLH) est une aide financiere attribuee a l'employeur pour compenser les charges supplementaires liees a l'emploi d'un travailleur handicape dont le handicap genere des surcouts importants. OBJECTIF : Compenser les consequences du handicap sur l'exercice de l'activite professionnelle, favoriser le maintien dans l'emploi des travailleurs handicapes dont le handicap est particulierement lourd, encourager les employeurs a recruter et maintenir en emploi des personnes handicapees. CONDITIONS : Le salarie doit avoir la RQTH, le handicap doit entrainer des charges ou une reduction de la productivite importantes pour l'employeur, la demande est faite par l'employeur (avec accord du salarie). MONTANT DE L'AIDE : Pour le secteur prive : aide versee par l'Agefiph, montant variable selon le taux de lourdeur attribue (de 450 a 900 fois le SMIC horaire par an). Pour le secteur public : aide versee par le FIPHFP. PROCEDURE : Demande aupres de l'Agefiph (prive) ou du FIPHFP (public), instruction du dossier avec analyse des surcouts et de l'impact du handicap, decision prise pour une duree determinee (generalement 3 ans renouvelable). SURCOUTS PRIS EN COMPTE : Amenagements du poste de travail, temps de travail reduit, aide humaine necessaire, baisse de rendement liee au handicap.",
+      "answer": "La **RSDAE** (anciennement Reconnaissance de la Lourdeur du Handicap - RLH) est une aide financière attribuée à l'employeur pour compenser les charges supplémentaires liées à l'emploi d'un travailleur handicapé dont le handicap génère des surcoûts importants.\n\n## 🎯 OBJECTIF\n\nCompenser les conséquences du handicap sur l'exercice de l'activité professionnelle :\n- Favoriser le maintien dans l'emploi des travailleurs handicapés dont le handicap est particulièrement lourd\n- Encourager les employeurs à recruter et maintenir en emploi des personnes handicapées\n\n## ✅ CONDITIONS D'ATTRIBUTION\n\n- Le salarié doit avoir la **RQTH**\n- Le handicap doit entraîner des charges ou une réduction de la productivité importantes pour l'employeur\n- La demande est faite par l'**employeur** (avec accord du salarié)\n\n## 💰 MONTANT DE L'AIDE\n\n**Secteur privé** :\n- Aide versée par l'**Agefiph**\n- Montant variable selon le taux de lourdeur attribué : **450 à 900 fois le SMIC horaire par an**\n\n**Secteur public** :\n- Aide versée par le **FIPHFP**\n\n## 📝 PROCÉDURE\n\n1. Demande auprès de l'Agefiph (privé) ou du FIPHFP (public)\n2. Instruction du dossier avec analyse des surcoûts et de l'impact du handicap\n3. Décision prise pour une durée déterminée (généralement **3 ans renouvelable**)\n\n## 📊 SURCOÛTS PRIS EN COMPTE\n\n- Aménagements du poste de travail\n- Temps de travail réduit\n- Aide humaine nécessaire\n- Baisse de rendement liée au handicap\n\n⚠️ **Important** : Cette aide est destinée à l'**employeur**, pas au salarié handicapé. Elle vise à compenser les coûts supplémentaires pour l'entreprise.\n\nSource : agefiph.fr",
       "source": "agefiph.fr",
       "keywords": [
         "rsdae",
@@ -13030,6 +13030,24 @@
 
                 // Patterns de questions contextuelles (avec pronoms/références vagues)
                 const contextualPatterns = [
+                    // Questions très courtes (contextuelles par nature)
+                    /^quel(le)?s? montants?\s*\??$/i,  // "quel montant ?", "montant ?"
+                    /^(le |la |les? )?montants?\s*\??$/i,  // "le montant ?", "montant ?"
+                    /^combien\s*\??$/i,  // "combien ?"
+                    /^(c['']est )?combien\s*\??$/i,  // "c'est combien ?"
+                    /^(à |a )?combien\s*\??$/i,  // "à combien ?"
+                    /^(quelle |la )?somme\s*\??$/i,  // "quelle somme ?", "la somme ?"
+                    /^(les? |quelles? )?conditions?\s*\??$/i,  // "les conditions ?", "condition ?"
+                    /^(les? |quelles? )?d[ée]marches?\s*\??$/i,  // "les démarches ?", "démarche ?"
+                    /^(la )?proc[ée]dure\s*\??$/i,  // "la procédure ?", "procédure ?"
+                    /^(la |le |l[''])?demande\s*\??$/i,  // "la demande ?", "demande ?"
+                    /^(comment )?obtenir\s*\??$/i,  // "obtenir ?", "comment obtenir ?"
+                    /^(comment )?demander\s*\??$/i,  // "demander ?", "comment demander ?"
+                    /^(la |le |l[''])?dur[ée]e\s*\??$/i,  // "la durée ?", "durée ?"
+                    /^(les? )?avantages?\s*\??$/i,  // "les avantages ?", "avantage ?"
+                    /^comment faire\s*\??$/i,  // "comment faire ?"
+
+                    // Patterns existants
                     /^(quelles? sont )?les conditions?( pour)?( l['']| la | le )?obtenir/i,
                     /^comment (l['']| la | le )?obtenir/i,
                     /^(je )?peux (l['']| la | le )?avoir/i,
@@ -13037,19 +13055,21 @@
                     /^(c['']est )?combien/i,
                     /^quel(le)?s? (sont )?les? montants?/i,
                     /^(quelles? sont )?les? d[ée]marches?/i,
-                    /^comment (faire )?la demande/i,
-                    /^comment (le|la) demander/i,
-                    /^comment (le|la) renouveler/i,
+                    /^comment (faire )?(la |le |l['']|cette |ce |cet )?demande/i,
+                    /^comment (le|la|cette|ce|cet|[cç]a) demander/i,
+                    /^comment (le|la|cette|ce|cet|[cç]a) renouveler/i,
                     /^(pour |pendant )?combien de temps/i,
-                    /^(quelle est )?la dur[ée]e/i,
+                    /^(quelle est )?(la |cette )?dur[ée]e/i,
                     /^(quels? sont )?les? avantages?/i,
-                    /^[àa] quoi ([cç]a |[cç]ela )?sert/i,
+                    /^[àa] quoi ([cç]a |[cç]ela |cette |ce |cet )?sert/i,
                     /^qui d[ée]cide/i,
                     /^qui verse/i,
                     /^(peut[- ]on |puis[- ]je )?cumuler/i,
                     /^(c['']est quoi |qu['']est[- ]ce que )?(cette|ce|cet|cela|[cç]a)/i,
                     /pour (l['']| la | le | cette | ce | cet )?avoir/i,
-                    /de (l['']| la | le | cette | ce | cet )?avoir/i
+                    /de (l['']| la | le | cette | ce | cet )?avoir/i,
+                    /(cette|ce|cet|[cç]a|[cç]ela) (aide|prestation|droit|allocation|carte|orientation)/i,
+                    /obtenir (cette|ce|cet|[cç]a|[cç]ela) (aide|prestation|droit|allocation|carte|orientation)/i
                 ];
 
                 for (const pattern of contextualPatterns) {
@@ -13108,19 +13128,46 @@
                 }
 
                 // 2. Si pas trouvé dans related_links, enrichir la question avec le concept
-                const enrichedQuestion = `${question} ${mainConcept}`;
+                // D'abord nettoyer les démonstratifs et ponctuation
+                let cleanQuestion = question
+                    .replace(/\bcette\s+/gi, '')
+                    .replace(/\bce\s+/gi, '')
+                    .replace(/\bcet\s+/gi, '')
+                    .replace(/(?:^|\s)[cç]a\s+/gi, ' ')  // ça au début ou après espace
+                    .replace(/(?:^|\s)[cç]ela\s+/gi, ' ')  // cela au début ou après espace
+                    .replace(/(^|\s)l[''](?=\w)/gi, '$1')  // l' → supprimé (ex: "comment l'obtenir" → "comment obtenir")
+                    .replace(/[?!.;,]+$/g, '')  // Retirer ponctuation finale
+                    .replace(/\s+/g, ' ')  // Normaliser espaces
+                    .trim();
+
+                const enrichedQuestion = `${cleanQuestion} ${mainConcept}`;
+                console.log('[CONTEXT] Question nettoyée:', cleanQuestion);
                 console.log('[CONTEXT] Question enrichie:', enrichedQuestion);
 
                 // Rechercher avec la question enrichie
                 const result = this.search(enrichedQuestion, 30.0);
-                if (result && result.chunk_id.startsWith(mainConcept)) {
-                    console.log('[CONTEXT] Match trouvé via enrichissement:', result.chunk_id);
-                    return {
-                        chunkId: result.chunk_id,
-                        method: 'enriched_search',
-                        score: result.score,
-                        fromContext: mainConcept
-                    };
+                if (result) {
+                    // Vérifier si le chunk trouvé est pertinent pour le contexte
+                    const chunkIdLower = result.chunk_id.toLowerCase();
+                    const conceptLower = mainConcept.toLowerCase();
+
+                    // Accepter si :
+                    // 1. Le chunk ID contient le concept (ex: "orientation_ime" pour concept "ime")
+                    // 2. OU le chunk contient "orientation" dans son ID avec un bon score (chunks génériques ESMS)
+                    const containsConcept = chunkIdLower.includes(conceptLower);
+                    const isOrientationChunk = chunkIdLower.includes('orientation') && result.score >= 500;
+
+                    if (containsConcept || isOrientationChunk) {
+                        console.log('[CONTEXT] Match trouvé via enrichissement:', result.chunk_id, 'score:', result.score);
+                        return {
+                            chunkId: result.chunk_id,
+                            method: 'enriched_search',
+                            score: result.score,
+                            fromContext: mainConcept
+                        };
+                    } else {
+                        console.log('[CONTEXT] Chunk trouvé mais non pertinent:', result.chunk_id, 'concept:', mainConcept, 'score:', result.score);
+                    }
                 }
 
                 return null;
@@ -13976,6 +14023,9 @@
             if (conversationHistory.length > MAX_HISTORY_SIZE) {
                 conversationHistory = conversationHistory.slice(0, MAX_HISTORY_SIZE);
             }
+
+            console.log('[HISTORY] Ajouté:', chunkId, '| Taille historique:', conversationHistory.length);
+            console.log('[HISTORY] Historique complet:', conversationHistory.map(h => h.chunkId));
         }
 
         function getLastContextKeywords() {
@@ -13984,8 +14034,11 @@
         }
 
         function getLastChunkId() {
+            console.log('[HISTORY] getLastChunkId appelé, taille:', conversationHistory.length);
             if (conversationHistory.length === 0) return null;
-            return conversationHistory[0].chunkId;
+            const lastId = conversationHistory[0].chunkId;
+            console.log('[HISTORY] Dernier chunk ID:', lastId);
+            return lastId;
         }
  // Historique de navigation
 
@@ -14006,34 +14059,102 @@
             console.log('  - resetFeedback()    → Réinitialiser\n');
         }
 
-        // Fonction pour convertir le markdown simple en HTML
+        // Fonction pour convertir le markdown complet en HTML
         function markdownToHtml(text) {
-            return text
-                // Liens [texte](url) - DOIT être avant le gras pour éviter les conflits
-                .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" style="color: #667eea; text-decoration: underline;">$1</a>')
-                // Gras **texte**
-                .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-                // Titres avec émojis (ex: **1️⃣ TITRE**)
-                .replace(/\*\*([0-9]️⃣\s+[^*]+)\*\*/g, '<strong style="display: block; margin-top: 1em; margin-bottom: 0.5em; font-size: 1.1em; color: var(--color-primary);">$1</strong>')
-                // Listes à puces - ou * (convertir en <li>)
-                .replace(/^[\-\*]\s+(.+)$/gm, '<li>$1</li>')
-                // Regrouper les <li> consécutifs dans des <ul> (même avec sauts de ligne)
-                .replace(/(<li>[\s\S]+?<\/li>)(?!\s*<li>)/g, function(match) {
-                    // Supprimer TOUS les sauts de ligne entre les <li> pour éviter les <br>
-                    const cleanedList = match.replace(/\n+/g, '');
-                    return '<ul style="margin: 0.3em 0; padding-left: 1.5em;">' + cleanedList + '</ul>';
-                })
-                // Sauts de ligne doubles = paragraphes
-                .replace(/\n\n/g, '</p><p>')
-                // Sauts de ligne simples
-                .replace(/\n/g, '<br>')
-                // Envelopper dans des paragraphes
-                .replace(/^(.+)/, '<p>$1')
-                .replace(/(.+)$/, '$1</p>')
-                // Nettoyer les <p> vides
-                .replace(/<p>\s*<\/p>/g, '')
-                .replace(/<p><br>/g, '<p>')
-                .replace(/<br><\/p>/g, '</p>');
+            let html = text;
+
+            // 1. Blocs de code ``` (avant tout pour protéger leur contenu)
+            html = html.replace(/```([^\n]*)\n([\s\S]+?)```/g, function(match, lang, code) {
+                return '<pre style="background: var(--color-bg-secondary); padding: 12px; border-radius: 6px; overflow-x: auto; margin: 0.8em 0; border-left: 4px solid var(--color-primary);"><code>' +
+                    code.replace(/</g, '&lt;').replace(/>/g, '&gt;') +
+                    '</code></pre>';
+            });
+
+            // 2. Tableaux markdown (avant les listes pour éviter conflits)
+            html = html.replace(/^\|(.+)\|\s*\n\|[\s\-:]+\|\s*\n((?:\|.+\|\s*\n?)+)/gm, function(match, header, rows) {
+                let tableHtml = '<table style="border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.9em;">';
+
+                // En-tête
+                tableHtml += '<thead><tr style="background: var(--color-bg-secondary); border-bottom: 2px solid var(--color-primary);">';
+                header.split('|').filter(cell => cell.trim()).forEach(cell => {
+                    tableHtml += '<th style="padding: 8px 12px; text-align: left; font-weight: 600;">' + cell.trim() + '</th>';
+                });
+                tableHtml += '</tr></thead><tbody>';
+
+                // Corps
+                rows.trim().split('\n').forEach((row, index) => {
+                    const bgColor = index % 2 === 0 ? 'transparent' : 'var(--color-bg-main)';
+                    tableHtml += '<tr style="background: ' + bgColor + '; border-bottom: 1px solid var(--color-border);">';
+                    row.split('|').filter(cell => cell.trim()).forEach(cell => {
+                        tableHtml += '<td style="padding: 8px 12px;">' + cell.trim() + '</td>';
+                    });
+                    tableHtml += '</tr>';
+                });
+
+                tableHtml += '</tbody></table>';
+                return tableHtml;
+            });
+
+            // 3. Séparateurs horizontaux --- ou ***
+            html = html.replace(/^[\-\*]{3,}\s*$/gm, '<hr style="border: none; border-top: 2px solid var(--color-border); margin: 1.5em 0;">');
+
+            // 4. Titres # (du plus spécifique au plus général)
+            html = html.replace(/^#### (.+)$/gm, '<h4 style="margin-top: 1.2em; margin-bottom: 0.6em; font-size: 1.0em; color: var(--color-text-primary); font-weight: 600;">$1</h4>');
+            html = html.replace(/^### (.+)$/gm, '<h3 style="margin-top: 1.3em; margin-bottom: 0.7em; font-size: 1.1em; color: var(--color-primary); font-weight: 600;">$1</h3>');
+            html = html.replace(/^## (.+)$/gm, '<h2 style="margin-top: 1.4em; margin-bottom: 0.8em; font-size: 1.2em; color: var(--color-primary); font-weight: 700; border-bottom: 2px solid var(--color-primary); padding-bottom: 0.3em;">$1</h2>');
+            html = html.replace(/^# (.+)$/gm, '<h1 style="margin-top: 1.5em; margin-bottom: 0.9em; font-size: 1.3em; color: var(--color-primary); font-weight: 700;">$1</h1>');
+
+            // 5. Citations > (blockquote)
+            html = html.replace(/^>\s+(.+)$/gm, '<blockquote style="border-left: 4px solid var(--color-warning); padding-left: 1em; margin: 1em 0; color: var(--color-text-secondary); font-style: italic;">$1</blockquote>');
+
+            // 6. Liens [texte](url) - AVANT le gras pour éviter les conflits
+            html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" style="color: var(--color-primary-light); text-decoration: underline; font-weight: 500;">$1</a>');
+
+            // 7. Gras **texte**
+            html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+
+            // 8. Italique *texte* ou _texte_
+            html = html.replace(/(?<!\*)\*(?!\*)([^*]+)\*(?!\*)/g, '<em>$1</em>');
+            html = html.replace(/_([^_]+)_/g, '<em>$1</em>');
+
+            // 9. Code inline `code`
+            html = html.replace(/`([^`]+)`/g, '<code style="background: var(--color-bg-secondary); padding: 2px 6px; border-radius: 3px; font-family: monospace; font-size: 0.9em;">$1</code>');
+
+            // 10. Titres avec émojis (ex: **1️⃣ TITRE**)
+            html = html.replace(/<strong>([0-9]️⃣\s+[^<]+)<\/strong>/g, '<strong style="display: block; margin-top: 1em; margin-bottom: 0.5em; font-size: 1.1em; color: var(--color-primary);">$1</strong>');
+
+            // 11. Listes à puces - ou * (convertir en <li>)
+            html = html.replace(/^[\-\*]\s+(.+)$/gm, '<li>$1</li>');
+
+            // 12. Listes numérotées 1. 2. 3.
+            html = html.replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>');
+
+            // 13. Regrouper les <li> consécutifs dans des <ul> ou <ol>
+            html = html.replace(/(<li>[\s\S]+?<\/li>)(?!\s*<li>)/g, function(match) {
+                const cleanedList = match.replace(/\n+/g, '');
+                return '<ul style="margin: 0.5em 0; padding-left: 1.8em; list-style-type: disc;">' + cleanedList + '</ul>';
+            });
+
+            // 14. Sauts de ligne doubles = paragraphes
+            html = html.replace(/\n\n/g, '</p><p>');
+
+            // 15. Sauts de ligne simples
+            html = html.replace(/\n/g, '<br>');
+
+            // 16. Envelopper dans des paragraphes
+            html = html.replace(/^(.+)/, '<p>$1');
+            html = html.replace(/(.+)$/, '$1</p>');
+
+            // 17. Nettoyer les <p> autour des éléments de bloc
+            html = html.replace(/<p>(<h[1-6]|<hr|<table|<pre|<ul|<ol|<blockquote)/g, '$1');
+            html = html.replace(/(<\/h[1-6]>|<\/hr>|<\/table>|<\/pre>|<\/ul>|<\/ol>|<\/blockquote>)<\/p>/g, '$1');
+
+            // 18. Nettoyer les <p> vides
+            html = html.replace(/<p>\s*<\/p>/g, '');
+            html = html.replace(/<p><br>/g, '<p>');
+            html = html.replace(/<br><\/p>/g, '</p>');
+
+            return html;
         }
 
         function addMessage(sender, text, meta = '', relatedLinks = [], feedbackData = null) {
