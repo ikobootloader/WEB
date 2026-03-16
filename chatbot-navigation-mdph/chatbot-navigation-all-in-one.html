@@ -1014,9 +1014,21 @@
         .chatbot-messages::-webkit-scrollbar-thumb:hover {
             background: #764ba2;
         }
-    </style>
+    
+#loading-screen{position:fixed;top:0;left:0;width:100%;height:100%;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:9999;transition:opacity .5s}
+#loading-screen.fade-out{opacity:0;pointer-events:none}
+.loading-content{text-align:center;color:#fff}
+.loading-logo{font-size:4rem;margin-bottom:1.5rem;animation:pulse 2s ease-in-out infinite}
+.loading-title{font-size:1.8rem;font-weight:600;margin-bottom:.5rem}
+.loading-subtitle{font-size:1rem;opacity:.9;margin-bottom:2rem}
+.loading-bar-container{width:300px;height:6px;background:rgba(255,255,255,.3);border-radius:10px;overflow:hidden;margin-bottom:1rem}
+.loading-bar{height:100%;background:#fff;border-radius:10px;width:0;animation:loadingProgress 2s ease-out forwards}
+.loading-text{font-size:.9rem;opacity:.8}
+@keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.05);opacity:.8}}
+@keyframes loadingProgress{0%{width:0}20%{width:30%}50%{width:60%}80%{width:90%}100%{width:100%}}
+</style>
 </head>
-<body>
+<body><div id="loading-screen"><div class="loading-content"><div class="loading-logo">💬</div><div class="loading-title">Chatbot MDPH</div><div class="loading-subtitle">Chargement...</div><div class="loading-bar-container"><div class="loading-bar"></div></div><div class="loading-text">Préparation</div></div></div>
     <div class="chatbot-container">
         <div class="chatbot-header">
             <button class="fullscreen-btn" id="fullscreenBtn" onclick="toggleFullscreen()">
@@ -13051,6 +13063,7 @@
                     // Patterns existants
                     /^(quelles? sont )?les conditions?( pour)?( l['']| la | le )?obtenir/i,
                     /^comment (l['']| la | le )?obtenir/i,
+                    /^comment (l['']| la | le )?avoir/i,  // "comment l'avoir ?"
                     /^(je )?peux (l['']| la | le )?avoir/i,
                     /^qui peut (l['']| la | le )?avoir/i,
                     /^(c['']est )?combien/i,
@@ -14694,5 +14707,5 @@
         // Fonction pour scroller vers le bas
         // scrollToBottom is now handled per-message by the scroll indicator button onclick
     </script>
-</body>
+<script>window.addEventListener("load",()=>{setTimeout(()=>{const e=document.getElementById("loading-screen");e&&(e.classList.add("fade-out"),setTimeout(()=>e.style.display="none",500))},500)});setTimeout(()=>{const e=document.getElementById("loading-screen");e&&!e.classList.contains("fade-out")&&(e.classList.add("fade-out"),setTimeout(()=>e.style.display="none",500))},5e3);</script></body>
 </html>
