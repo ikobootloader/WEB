@@ -811,7 +811,7 @@
             }
 
             .input-wrapper {
-                flex: 3; /* 75% pour le champ texte */
+                flex: 3; /* ~60% pour le champ texte (reste partagé entre 2 boutons) */
             }
 
             #userInput {
@@ -821,11 +821,23 @@
             }
 
             #sendBtn {
-                display: none; /* Masquer le bouton flèche sur mobile */
+                flex: 1; /* Même taille que le bouton micro */
+                min-width: unset;
+                min-height: 60px;
+                font-size: 15px;
+                padding: 8px;
+            }
+
+            #sendBtn span:not(.material-icons) {
+                display: none; /* Masquer le texte "Envoyer" sur mobile */
+            }
+
+            #sendBtn .material-icons {
+                font-size: 26px; /* Même taille d'icône que le micro */
             }
 
             #voiceBtn {
-                flex: 1; /* 25% pour le bouton micro */
+                flex: 1; /* Même taille que le bouton envoyer */
                 min-width: unset;
                 min-height: 60px;
                 font-size: 15px;
@@ -833,7 +845,7 @@
             }
 
             #voiceBtn .material-icons {
-                font-size: 26px; /* Icône légèrement plus petite */
+                font-size: 26px;
             }
 
             /* Masquer le bouton plein écran sur mobile */
@@ -1398,11 +1410,7 @@
         "c'est quoi aah",
         "c est quoi aah",
         "definition aah",
-        "aah definition",
-        "besoin",
-        "aide financière",
-        "mensuelle",
-        "veux"
+        "aah definition"
       ],
       "related_links": [
         {
@@ -5359,7 +5367,11 @@
         "décision négative",
         "pas d'accord",
         "contester decision",
-        "contester décision"
+        "contester décision",
+        "conciliation",
+        "conciliation mdph",
+        "demander conciliation",
+        "concilier"
       ],
       "related_links": [
         {
@@ -5406,7 +5418,12 @@
         "recours recours",
         "comment faire recours recours ?",
         "contester refus recours",
-        "faire appel recours"
+        "faire appel recours",
+        "c'est quoi une conciliation ?",
+        "qu'est-ce qu'une conciliation ?",
+        "conciliation c'est quoi ?",
+        "conciliation mdph",
+        "comment demander une conciliation ?"
       ]
     },
     {
@@ -9517,12 +9534,11 @@
         "aide enfant handicape",
         "prestations enfant handicape",
         "aides pour enfant handicape",
-        "aides enfant",
-        "quelles aides",
-        "aide financiere enfant",
-        "difficile",
-        "besoin aide",
-        "soutien"
+        "aides enfant handicape",
+        "quelles aides enfant handicape",
+        "aide financiere enfant handicape",
+        "besoin aide enfant handicape",
+        "soutien enfant handicape"
       ],
       "related_links": [
         {
@@ -10038,7 +10054,7 @@
         "faire demande mdph",
         "première demande mdph",
         "besoin aide mdph",
-        "demander aide",
+        "demander aide mdph",
         "démarche mdph",
         "première demande",
         "premiere demande",
@@ -10046,13 +10062,9 @@
         "débuter mdph",
         "commencer mdph",
         "par où commencer",
-        "besoin aide",
-        "aide",
-        "besoin",
         "comment faire demande",
-        "faire une demande",
-        "comment faire une demande",
-        "demande"
+        "faire une demande mdph",
+        "comment faire une demande"
       ],
       "typical_questions": [
         "c'est quoi la mdph ?",
@@ -13003,6 +13015,419 @@
           "chunk_id": "pch_demarches"
         }
       ]
+    },
+    {
+      "id": "mtp_definition",
+      "question": "C'est quoi la MTP (Majoration pour Tierce Personne) ?",
+      "answer": "La **MTP (Majoration pour Tierce Personne)** est un complément versé avec la pension d'invalidité pour couvrir les frais liés à l'assistance d'une autre personne pour les actes de la vie courante.\n\n## 💰 MONTANT 2025\n\n**1 288,13 € par mois** (non imposable)\n- Montant revalorisé chaque année en avril\n- Non récupérable sur succession\n\n## ✅ CONDITIONS D'ATTRIBUTION\n\n**Vous devez** :\n- Être titulaire d'une **pension d'invalidité de catégorie 3**\n- Avoir besoin de l'assistance d'une tierce personne pour accomplir les actes ordinaires de la vie courante (s'habiller, se lever, s'asseoir, etc.)\n\n**OU** :\n- Être en **retraite anticipée** pour inaptitude (entre 62 et 67 ans)\n- Être reconnu inapte au travail\n\n## 📝 COMMENT LA DEMANDER ?\n\n**Régime général (salariés et indépendants)** :\n- Demande auprès de votre **CPAM** (caisse primaire d'assurance maladie)\n\n**Régime agricole** :\n- Demande auprès de la **MSA** qui verse votre pension d'invalidité\n\n**Retraite anticipée** :\n- Demande auprès de l'organisme qui verse votre pension de retraite\n\n## ⚠️ IMPORTANT\n\n- La MTP **n'est pas récupérable sur succession** (vos héritiers n'auront pas à rembourser)\n- Depuis le 1er mars 2013, la MTP a été remplacée par la **PCRTP** pour les accidents du travail et maladies professionnelles\n- La MTP continue d'exister pour les pensions d'invalidité du régime général\n\n## 🔗 DIFFÉRENCE AVEC LA PCRTP\n\n- **MTP** : Pour pensions d'invalidité (maladie, accident non professionnel)\n- **PCRTP** : Pour accidents du travail et maladies professionnelles (depuis 2013)\n\nSources : [service-public.fr](https://www.service-public.fr/particuliers/vosdroits/F31434), [monparcourshandicap.gouv.fr](https://www.monparcourshandicap.gouv.fr/glossaire/majoration-pour-tierce-personne)",
+      "source": "service-public.fr, monparcourshandicap.gouv.fr",
+      "keywords": [
+        "mtp",
+        "majoration tierce personne",
+        "majoration pour tierce personne",
+        "tierce personne",
+        "pension invalidité majoration",
+        "assistance tierce personne",
+        "aide tierce personne",
+        "complement pension invalidite",
+        "complément pension invalidité"
+      ],
+      "typical_questions": [
+        "c'est quoi la mtp ?",
+        "qu'est-ce que la mtp ?",
+        "mtp c'est quoi ?",
+        "définition mtp",
+        "mtp définition",
+        "majoration pour tierce personne c'est quoi ?",
+        "qu'est-ce que la majoration pour tierce personne ?",
+        "c'est quoi majoration tierce personne ?",
+        "quel est le montant de la mtp ?",
+        "montant mtp 2025",
+        "combien mtp ?",
+        "comment demander la mtp ?",
+        "comment obtenir la mtp ?",
+        "qui peut avoir la mtp ?",
+        "conditions mtp",
+        "ai-je droit à la mtp ?"
+      ],
+      "related_links": [
+        {
+          "question": "C'est quoi la PCRTP ?",
+          "chunk_id": "pcrtp_definition"
+        },
+        {
+          "question": "C'est quoi l'AAH ?",
+          "chunk_id": "aah_definition"
+        },
+        {
+          "question": "C'est quoi la PCH ?",
+          "chunk_id": "pch_definition"
+        }
+      ]
+    },
+    {
+      "id": "pcrtp_definition",
+      "question": "C'est quoi la PCRTP (Prestation Complémentaire pour Recours à Tierce Personne) ?",
+      "answer": "La **PCRTP (Prestation Complémentaire pour Recours à Tierce Personne)** est une prestation destinée à financer l'assistance d'une personne pour aider à accomplir les actes ordinaires de la vie quotidienne.\n\n## 🎯 À QUI S'ADRESSE LA PCRTP ?\n\n**Bénéficiaires** :\n- Personnes victimes d'un **accident du travail (AT)** ou d'une **maladie professionnelle (MP)**\n- Titulaires d'une rente pour incapacité permanente\n\n## ✅ CONDITIONS D'ATTRIBUTION\n\nVous devez remplir **3 conditions** :\n\n1. **Percevoir une rente AT-MP** (accident du travail - maladie professionnelle)\n2. **Avoir un taux d'incapacité permanente d'au moins 80%**\n3. **Avoir besoin de l'assistance d'une tierce personne** car votre incapacité vous empêche d'accomplir seul(e) au moins 3 actes ordinaires de la vie courante (s'habiller, se lever, s'asseoir, manger, se déplacer, etc.)\n\n**OU** : Présenter des troubles neuropsychiatriques présentant un danger pour vous-même ou autrui\n\n## 💰 MONTANT\n\nLe montant de la PCRTP **varie selon vos besoins d'assistance**. Elle permet une majoration de votre rente AT-MP.\n\n## 📝 DÉMARCHES\n\n**Aucune démarche à effectuer en principe** !\n\nC'est l'**Assurance Maladie** qui détermine directement si vous avez droit à la PCRTP lors de l'évaluation de votre incapacité.\n\n## 👥 RÉGIMES CONCERNÉS\n\n- **Régime général** (salariés)\n- **Régimes agricoles** (salariés agricoles et exploitants)\n\n## ⚠️ CUMUL ET NON-CUMUL\n\n**Non cumulable avec** :\n- **APA** (Allocation Personnalisée d'Autonomie)\n- Autres prestations similaires\n\n💡 **Astuce** : Une personne percevant déjà la PCRTP peut déposer une demande d'APA pour ensuite choisir entre ces 2 prestations, selon celle qui lui convient le mieux.\n\n## 📅 HISTORIQUE\n\n**Depuis le 1er mars 2013** : La PCRTP a remplacé la MTP (Majoration pour Tierce Personne) pour les accidents du travail et maladies professionnelles.\n\n## 🔗 DIFFÉRENCE AVEC LA MTP\n\n| | **MTP** | **PCRTP** |\n|---|---|---|\n| **Pour qui ?** | Pension d'invalidité | Accident travail / Maladie professionnelle |\n| **Depuis quand ?** | Ancien système | Depuis mars 2013 |\n| **Montant** | 1 288,13 €/mois | Variable selon besoins |\n\nSources : [service-public.fr](https://www.service-public.fr/particuliers/vosdroits/F31435), [monparcourshandicap.gouv.fr](https://www.monparcourshandicap.gouv.fr/glossaire/pcrtp)",
+      "source": "service-public.fr, monparcourshandicap.gouv.fr",
+      "keywords": [
+        "pcrtp",
+        "prestation complementaire tierce personne",
+        "prestation complémentaire tierce personne",
+        "recours tierce personne",
+        "accident travail tierce personne",
+        "maladie professionnelle tierce personne",
+        "at-mp tierce personne",
+        "rente at-mp majoration",
+        "assistance tierce personne at"
+      ],
+      "typical_questions": [
+        "c'est quoi la pcrtp ?",
+        "qu'est-ce que la pcrtp ?",
+        "pcrtp c'est quoi ?",
+        "définition pcrtp",
+        "pcrtp définition",
+        "prestation complémentaire recours tierce personne c'est quoi ?",
+        "qu'est-ce que la prestation complémentaire pour recours à tierce personne ?",
+        "comment demander la pcrtp ?",
+        "comment obtenir la pcrtp ?",
+        "qui peut avoir la pcrtp ?",
+        "conditions pcrtp",
+        "ai-je droit à la pcrtp ?",
+        "quelle différence entre mtp et pcrtp ?",
+        "mtp ou pcrtp ?",
+        "pcrtp accident travail",
+        "pcrtp maladie professionnelle"
+      ],
+      "related_links": [
+        {
+          "question": "C'est quoi la MTP ?",
+          "chunk_id": "mtp_definition"
+        },
+        {
+          "question": "C'est quoi l'AAH ?",
+          "chunk_id": "aah_definition"
+        },
+        {
+          "question": "C'est quoi la PCH ?",
+          "chunk_id": "pch_definition"
+        }
+      ]
+    },
+    {
+      "id": "amendement_creton",
+      "question": "C'est quoi l'amendement Creton ?",
+      "answer": "L'**amendement Creton** est une disposition légale (loi du 13 janvier 1989) qui permet à un jeune adulte handicapé de **rester temporairement dans son établissement pour enfants** (IME, ITEP, etc.) **au-delà de 20 ans**, dans l'attente d'une place disponible dans un établissement pour adultes.\n\n## 🎯 OBJECTIF\n\nÉviter toute **rupture de parcours** et maintenir l'accompagnement du jeune adulte tant qu'aucune solution adaptée n'est trouvée dans le secteur adulte (ESAT, FAM, MAS, etc.).\n\n## ✅ CONDITIONS\n\nPour bénéficier de l'amendement Creton, il faut :\n\n1. **Avoir 20 ans ou plus**\n2. **Avoir une décision d'orientation de la CDAPH** vers un établissement ou service pour adultes\n3. **Avoir une autorisation de maintien temporaire** dans l'établissement pour enfants\n4. **Taux d'incapacité d'au moins 80%**\n\n## ⏰ ANTICIPER DÈS 17-18 ANS\n\n**Important** : Il est crucial d'anticiper dès l'âge de **17-18 ans** les démarches d'orientation vers des établissements pour adultes. La demande de maintien en établissement enfant doit être préparée suffisamment en amont avec la personne et sa famille.\n\n## 📊 CHIFFRES\n\nEnviron **10 000 jeunes adultes** bénéficient actuellement de l'amendement Creton en France (contre 5 700 en 2014).\n\n## ⚠️ IMPORTANT\n\nL'amendement Creton **n'est pas un droit automatique**, mais une **solution transitoire**. Il s'agit d'une mesure palliative face au manque de places dans les établissements pour adultes.\n\n## 📝 DÉMARCHES\n\n1. **Avant 20 ans** : Déposer une demande d'orientation vers un établissement pour adultes auprès de la MDPH\n2. **Obtenir une décision de la CDAPH** orientant vers le secteur adulte\n3. **Demander le maintien temporaire** dans l'établissement actuel en attendant une place\n\nSources : [MDPH13](https://www.mdph13.fr), [DREES](https://drees.solidarites-sante.gouv.fr), [Département Isère](https://www.isere.fr)",
+      "source": "MDPH13, DREES, Département Isère",
+      "keywords": [
+        "amendement creton",
+        "creton",
+        "maintien établissement 20 ans",
+        "rester ime après 20 ans",
+        "ime plus de 20 ans",
+        "maintien ime",
+        "établissement enfant après 20 ans",
+        "transition 20 ans établissement",
+        "pas de place établissement adulte",
+        "attente place adulte"
+      ],
+      "typical_questions": [
+        "c'est quoi l'amendement creton ?",
+        "qu'est-ce que l'amendement creton ?",
+        "amendement creton c'est quoi ?",
+        "creton définition",
+        "mon fils a 20 ans peut-il rester en ime ?",
+        "peut-on rester en ime après 20 ans ?",
+        "maintien en établissement après 20 ans",
+        "pas de place en établissement adulte que faire ?",
+        "mon enfant a 20 ans et pas de place en foyer",
+        "comment rester en ime après 20 ans ?",
+        "transition 20 ans handicap",
+        "que faire à 20 ans si pas de place adulte ?"
+      ],
+      "related_links": [
+        {
+          "question": "C'est quoi l'AEEH ?",
+          "chunk_id": "aeeh_definition"
+        },
+        {
+          "question": "Transition 18 ans AEEH vers AAH",
+          "chunk_id": "transition_18ans_aeeh_aah"
+        },
+        {
+          "question": "C'est quoi un IME ?",
+          "chunk_id": "ime_definition"
+        },
+        {
+          "question": "C'est quoi un ESAT ?",
+          "chunk_id": "esat_definition"
+        }
+      ]
+    },
+    {
+      "id": "ueros_definition",
+      "question": "C'est quoi une UEROS ?",
+      "answer": "Une **UEROS** (Unité d'Évaluation, de Réentraînement et d'Orientation Sociale et professionnelle) est une structure médico-sociale spécialisée qui accueille et accompagne les personnes dont le handicap résulte d'un **traumatisme crânien** ou d'une **lésion cérébrale acquise** (AVC, tumeur, anoxie, etc.).\n\n## 🎯 OBJECTIFS\n\nL'UEROS a pour objectifs :\n\n1. **Évaluation complète** des capacités physiques, cognitives et sociales de la personne\n2. **Réentraînement personnalisé** pour améliorer les capacités et compétences\n3. **Construction d'un projet de vie** réaliste et adapté (social et/ou professionnel)\n\n## 👥 POUR QUI ?\n\nLes personnes ayant :\n- Un **traumatisme crânien** ou une **lésion cérébrale acquise** (AVC, tumeur, etc.)\n- Besoin d'un accompagnement pour reconstruire leur projet de vie\n- Une **orientation UEROS délivrée par la MDPH/CDAPH**\n\n## ⏱️ DURÉE\n\n- **Durée maximale** : 24 mois\n- **Parcours modulaire individualisé** : 8 à 26 semaines selon les besoins\n- **Suivi post-UEROS** : minimum 3 ans pour accompagner l'intégration\n\n## 🧑‍⚕️ ÉQUIPE PLURIDISCIPLINAIRE\n\n- Neuropsychologue\n- Ergothérapeute\n- Éducateur spécialisé\n- Médecin\n- Assistant social\n- Psychologue\n\n## 📝 COMMENT Y ACCÉDER ?\n\n1. **Obtenir une orientation MDPH** : Déposer une demande auprès de votre MDPH\n2. **Décision de la CDAPH** : Notification d'orientation vers une UEROS\n3. **Inscription** : Contacter directement l'UEROS avec votre notification\n\n## 📍 OÙ TROUVER UNE UEROS ?\n\nPlusieurs UEROS existent en France (Castelnau-le-Lez, Mulhouse, Saint-Étienne, etc.). Renseignez-vous auprès de votre MDPH ou de la [FAGERH](https://www.fagerh.fr).\n\nSources : [FAGERH](https://www.fagerh.fr), [Mon Parcours Handicap](https://www.monparcourshandicap.gouv.fr)",
+      "source": "FAGERH, Mon Parcours Handicap",
+      "keywords": [
+        "ueros",
+        "unité évaluation réentraînement",
+        "traumatisme crânien orientation",
+        "lésion cérébrale orientation",
+        "avc orientation professionnelle",
+        "réentraînement professionnel traumatisme",
+        "orientation après traumatisme crânien",
+        "orientation après avc",
+        "évaluation capacités professionnelles traumatisme"
+      ],
+      "typical_questions": [
+        "c'est quoi une ueros ?",
+        "qu'est-ce qu'une ueros ?",
+        "ueros définition",
+        "où aller après un traumatisme crânien ?",
+        "orientation professionnelle après avc",
+        "comment être orienté en ueros ?",
+        "ueros pour qui ?",
+        "traumatisme crânien orientation mdph",
+        "réinsertion professionnelle après accident",
+        "évaluation après lésion cérébrale"
+      ],
+      "related_links": [
+        {
+          "question": "C'est quoi la RQTH ?",
+          "chunk_id": "rqth_definition"
+        },
+        {
+          "question": "C'est quoi un ESAT ?",
+          "chunk_id": "esat_definition"
+        },
+        {
+          "question": "Orientation professionnelle",
+          "chunk_id": "orientation_professionnelle"
+        },
+        {
+          "question": "C'est quoi la PCH ?",
+          "chunk_id": "pch_definition"
+        }
+      ]
+    },
+    {
+      "id": "safep_definition",
+      "question": "C'est quoi un SAFEP ?",
+      "answer": "Le **SAFEP** (Service d'Accompagnement Familial et d'Éducation Précoce) est un service médico-social qui accompagne les **jeunes enfants de 0 à 3 ans** présentant une **déficience auditive sévère** ou une **déficience visuelle**.\n\n## 🎯 OBJECTIFS\n\n1. **Dépistage précoce** des troubles sensoriels\n2. **Accompagnement de la famille** dans l'adaptation à la déficience de l'enfant\n3. **Stimulation précoce** adaptée au développement de l'enfant\n4. **Préparation à l'intégration** scolaire ou en structure spécialisée\n\n## 👶 POUR QUI ?\n\nEnfants de **0 à 3 ans** ayant :\n- Une **déficience auditive sévère** (surdité profonde, sévère)\n- Une **déficience visuelle sévère** (cécité, malvoyance importante)\n- Besoin d'un accompagnement précoce spécialisé\n\n## 👥 ÉQUIPE PLURIDISCIPLINAIRE\n\n- Médecin (ORL, ophtalmologiste)\n- Psychologue\n- Orthophoniste\n- Psychomotricien\n- Éducateur spécialisé\n- Assistant social\n\n## 📍 OÙ INTERVIENT LE SAFEP ?\n\nL'équipe intervient :\n- **Au domicile de l'enfant**\n- À la **crèche** ou chez l'**assistante maternelle**\n- Dans les **locaux du SAFEP**\n\n## 📝 COMMENT Y ACCÉDER ?\n\n1. **Déposer une demande** auprès de votre MDPH\n2. **Obtenir une notification d'orientation** de la CDAPH vers un SAFEP\n3. **Contacter le SAFEP** avec votre notification\n\n## ⏰ ET APRÈS 3 ANS ?\n\nÀ partir de 3 ans, l'enfant peut être orienté vers :\n- **SSEFIS** (si déficience auditive) - Service de Soutien à l'Éducation Familiale et à l'Intégration Scolaire\n- **SAAAIS** (si déficience visuelle) - Service d'Aide à l'Acquisition de l'Autonomie et à l'Intégration Scolaire\n\nSources : Surdi Info, Annuaire Action Sociale",
+      "source": "Surdi Info, Annuaire Action Sociale",
+      "keywords": [
+        "safep",
+        "service accompagnement familial éducation précoce",
+        "enfant sourd 0-3 ans",
+        "bébé sourd accompagnement",
+        "enfant aveugle 0-3 ans",
+        "déficience auditive bébé",
+        "déficience visuelle bébé",
+        "dépistage précoce surdité",
+        "accompagnement précoce handicap sensoriel"
+      ],
+      "typical_questions": [
+        "c'est quoi un safep ?",
+        "qu'est-ce qu'un safep ?",
+        "safep définition",
+        "mon bébé est sourd où trouver de l'aide ?",
+        "accompagnement enfant sourd 0-3 ans",
+        "service pour bébé sourd",
+        "mon enfant est malvoyant aide précoce"
+      ],
+      "related_links": [
+        {
+          "question": "C'est quoi un SSEFIS ?",
+          "chunk_id": "ssefis_definition"
+        },
+        {
+          "question": "C'est quoi un SAAAIS ?",
+          "chunk_id": "saaais_definition"
+        },
+        {
+          "question": "C'est quoi l'AEEH ?",
+          "chunk_id": "aeeh_definition"
+        },
+        {
+          "question": "C'est quoi la PCH ?",
+          "chunk_id": "pch_definition"
+        }
+      ]
+    },
+    {
+      "id": "ssefis_definition",
+      "question": "C'est quoi un SSEFIS ?",
+      "answer": "Le **SSEFIS** (Service de Soutien à l'Éducation Familiale et à l'Intégration Scolaire) est un service médico-social qui accompagne les **enfants et jeunes de 3 à 20 ans** présentant une **déficience auditive sévère** (sourds ou malentendants).\n\n## 🎯 OBJECTIFS\n\n1. **Soutien à la scolarisation** en milieu ordinaire ou adapté\n2. **Accompagnement de la famille** dans l'éducation de l'enfant sourd\n3. **Développement de l'autonomie** et des compétences de communication\n4. **Suivi médical et rééducatif** adapté (orthophonie, audioprothèse, etc.)\n\n## 👦 POUR QUI ?\n\nEnfants et adolescents de **3 à 20 ans** ayant :\n- Une **déficience auditive sévère** (surdité profonde, sévère ou moyenne)\n- Une notification d'orientation SSEFIS de la MDPH/CDAPH\n- Besoin d'un accompagnement pour leur scolarité et leur développement\n\n## 👥 ÉQUIPE PLURIDISCIPLINAIRE\n\n- Enseignant spécialisé\n- Orthophoniste\n- Psychologue\n- Éducateur spécialisé\n- Audioprothésiste\n- Codeur LPC ou interprète LSF (selon le mode de communication choisi)\n\n## 📍 OÙ INTERVIENT LE SSEFIS ?\n\nL'équipe intervient :\n- À l'**école** (maternelle, primaire, collège, lycée)\n- Au **domicile**\n- Dans les **locaux du SSEFIS**\n\n## 🗣️ MODES DE COMMUNICATION\n\nLe SSEFIS s'adapte au choix de la famille :\n- **LSF** (Langue des Signes Française)\n- **LPC** (Langue française Parlée Complétée)\n- **Français oral** (avec ou sans aide audio-prothétique)\n- **Communication bilingue** (LSF + français oral)\n\n## 📝 COMMENT Y ACCÉDER ?\n\n1. **Déposer une demande** auprès de votre MDPH\n2. **Obtenir une notification d'orientation** de la CDAPH vers un SSEFIS\n3. **Contacter le SSEFIS** avec votre notification\n\nSources : Mon Parcours Handicap, Annuaire Action Sociale",
+      "source": "Mon Parcours Handicap, Annuaire Action Sociale",
+      "keywords": [
+        "ssefis",
+        "service soutien éducation familiale intégration scolaire",
+        "enfant sourd école",
+        "scolarisation enfant sourd",
+        "accompagnement scolaire surdité",
+        "malentendant école",
+        "déficience auditive scolarité",
+        "lsf école",
+        "lpc école"
+      ],
+      "typical_questions": [
+        "c'est quoi un ssefis ?",
+        "qu'est-ce qu'un ssefis ?",
+        "ssefis définition",
+        "accompagnement enfant sourd à l'école",
+        "mon enfant sourd peut-il aller à l'école normale ?",
+        "aide pour enfant sourd à l'école",
+        "scolarisation enfant malentendant"
+      ],
+      "related_links": [
+        {
+          "question": "C'est quoi un SAFEP ?",
+          "chunk_id": "safep_definition"
+        },
+        {
+          "question": "C'est quoi un SESSAD ?",
+          "chunk_id": "sessad_definition"
+        },
+        {
+          "question": "C'est quoi une AESH ?",
+          "chunk_id": "aesh_definition"
+        },
+        {
+          "question": "C'est quoi l'AEEH ?",
+          "chunk_id": "aeeh_definition"
+        }
+      ]
+    },
+    {
+      "id": "saaais_definition",
+      "question": "C'est quoi un SAAAIS ?",
+      "answer": "Le **SAAAIS** (Service d'Aide à l'Acquisition de l'Autonomie et à l'Intégration Scolaire) est un service médico-social qui accompagne les **enfants et jeunes de 3 à 20 ans** présentant une **déficience visuelle sévère** (aveugles ou malvoyants).\n\n## 🎯 OBJECTIFS\n\n1. **Soutien à la scolarisation** en milieu ordinaire ou adapté\n2. **Développement de l'autonomie** dans les déplacements et la vie quotidienne\n3. **Apprentissage du Braille** et des techniques de compensation\n4. **Aide à l'utilisation d'aides techniques** (loupes, synthèses vocales, etc.)\n\n## 👦 POUR QUI ?\n\nEnfants et adolescents de **3 à 20 ans** ayant :\n- Une **déficience visuelle sévère** (cécité totale ou partielle, malvoyance importante)\n- Une notification d'orientation SAAAIS de la MDPH/CDAPH\n- Besoin d'un accompagnement pour leur scolarité et leur autonomie\n\n## 👥 ÉQUIPE PLURIDISCIPLINAIRE\n\n- Enseignant spécialisé en déficience visuelle\n- Instructeur en locomotion\n- Instructeur en autonomie dans la vie journalière (AVJ)\n- Psychologue\n- Ergothérapeute\n- Transcripteur Braille\n- Ophtalmologiste\n\n## 📍 OÙ INTERVIENT LE SAAAIS ?\n\nL'équipe intervient :\n- À l'**école** (maternelle, primaire, collège, lycée)\n- Au **domicile**\n- Dans les **locaux du SAAAIS**\n- Dans les **lieux de vie** de l'enfant (activités extrascolaires, etc.)\n\n## 📚 ADAPTATIONS PROPOSÉES\n\n- **Braille** (lecture et écriture)\n- **Agrandissement de documents**\n- **Outils informatiques adaptés** (synthèse vocale, logiciels de grossissement)\n- **Techniques de déplacement** (canne blanche, orientation)\n- **Gestes de la vie quotidienne** adaptés\n\n## 📝 COMMENT Y ACCÉDER ?\n\n1. **Déposer une demande** auprès de votre MDPH\n2. **Obtenir une notification d'orientation** de la CDAPH vers un SAAAIS\n3. **Contacter le SAAAIS** avec votre notification\n\nSources : Mon Parcours Handicap, KJER France",
+      "source": "Mon Parcours Handicap, KJER France",
+      "keywords": [
+        "saaais",
+        "service aide acquisition autonomie intégration scolaire",
+        "enfant aveugle école",
+        "scolarisation enfant aveugle",
+        "accompagnement scolaire cécité",
+        "malvoyant école",
+        "déficience visuelle scolarité",
+        "braille école",
+        "canne blanche enfant"
+      ],
+      "typical_questions": [
+        "c'est quoi un saaais ?",
+        "qu'est-ce qu'un saaais ?",
+        "saaais définition",
+        "accompagnement enfant aveugle à l'école",
+        "mon enfant malvoyant peut-il aller à l'école normale ?",
+        "aide pour enfant aveugle à l'école",
+        "scolarisation enfant déficient visuel"
+      ],
+      "related_links": [
+        {
+          "question": "C'est quoi un SAFEP ?",
+          "chunk_id": "safep_definition"
+        },
+        {
+          "question": "C'est quoi un SESSAD ?",
+          "chunk_id": "sessad_definition"
+        },
+        {
+          "question": "C'est quoi une AESH ?",
+          "chunk_id": "aesh_definition"
+        },
+        {
+          "question": "C'est quoi la PCH ?",
+          "chunk_id": "pch_definition"
+        }
+      ]
+    },
+    {
+      "id": "ssad_definition",
+      "question": "C'est quoi un SSAD ?",
+      "answer": "Le **SSAD** (Service de Soins et d'Aide à Domicile) est un service médico-social spécialisé qui accompagne les **enfants et jeunes de 0 à 20 ans** en situation de **polyhandicap** (déficience motrice ET déficience intellectuelle sévères associées).\n\n## 🎯 OBJECTIFS\n\n1. **Accompagnement global** de l'enfant polyhandicapé dans son milieu de vie\n2. **Soutien aux familles** dans la prise en charge quotidienne\n3. **Stimulation et développement** des capacités de l'enfant\n4. **Alternative ou complément** à l'accueil en établissement spécialisé\n\n## 👶 POUR QUI ?\n\nEnfants et jeunes de **0 à 20 ans** présentant un **polyhandicap** :\n- **Déficience motrice sévère** (difficulté ou impossibilité de se déplacer seul)\n- **ET déficience intellectuelle sévère ou profonde**\n- Besoin d'un accompagnement quotidien important\n\n## 👥 ÉQUIPE PLURIDISCIPLINAIRE\n\n- Médecin (pédiatre, neurologue)\n- Kinésithérapeute\n- Ergothérapeute\n- Psychomotricien\n- Orthophoniste\n- Psychologue\n- Éducateur spécialisé\n- Infirmier\n- Assistant social\n\n## 📍 OÙ INTERVIENT LE SSAD ?\n\nL'équipe intervient principalement :\n- **Au domicile** de l'enfant\n- À la **crèche** ou à l'**école** (si scolarisation possible)\n- Dans les **locaux du SSAD** pour certaines activités\n- Dans les **lieux de loisirs**\n\n## 🏥 ACCOMPAGNEMENT PROPOSÉ\n\n- **Soins de rééducation** (kiné, psychomotricité, ergothérapie)\n- **Stimulation sensorielle et cognitive**\n- **Soutien à la scolarisation** (si possible)\n- **Conseils et formation** aux parents\n- **Coordination** avec les professionnels de santé\n- **Aide aux gestes de la vie quotidienne**\n\n## 📝 COMMENT Y ACCÉDER ?\n\n1. **Déposer une demande** auprès de votre MDPH\n2. **Obtenir une notification d'orientation** de la CDAPH vers un SSAD\n3. **Contacter le SSAD** avec votre notification\n\n## ⚠️ DIFFÉRENCE AVEC LE SESSAD\n\nLe **SSAD** est spécialisé pour le **polyhandicap** (handicap moteur + intellectuel sévère), tandis que le **SESSAD** accompagne des enfants avec handicaps variés mais généralement moins sévères.\n\nSources : MDPH 29, MDPH 13, Annuaire Action Sociale",
+      "source": "MDPH 29, MDPH 13, Annuaire Action Sociale",
+      "keywords": [
+        "ssad",
+        "service soins aide domicile",
+        "polyhandicap",
+        "enfant polyhandicapé",
+        "handicap moteur intellectuel",
+        "accompagnement polyhandicap",
+        "soins domicile enfant handicapé"
+      ],
+      "typical_questions": [
+        "c'est quoi un ssad ?",
+        "qu'est-ce qu'un ssad ?",
+        "ssad définition",
+        "accompagnement enfant polyhandicapé",
+        "service pour enfant polyhandicapé",
+        "aide domicile enfant lourdement handicapé",
+        "mon enfant est polyhandicapé où trouver de l'aide ?"
+      ],
+      "related_links": [
+        {
+          "question": "C'est quoi un SESSAD ?",
+          "chunk_id": "sessad_definition"
+        },
+        {
+          "question": "C'est quoi un IME ?",
+          "chunk_id": "ime_definition"
+        },
+        {
+          "question": "C'est quoi la PCH ?",
+          "chunk_id": "pch_definition"
+        },
+        {
+          "question": "C'est quoi l'AEEH ?",
+          "chunk_id": "aeeh_definition"
+        }
+      ]
+    },
+    {
+      "id": "dispositif_autoregulation",
+      "question": "C'est quoi un dispositif d'autorégulation ?",
+      "answer": "Un **dispositif d'autorégulation** (DAR) est un mode de scolarisation inclusif pour les élèves avec **troubles du neurodéveloppement** (TND), particulièrement l'autisme. L'enfant reste **en classe ordinaire** avec ses camarades mais bénéficie d'un accompagnement spécialisé pour développer son autonomie.\n\n## 🎯 OBJECTIFS\n\n1. **Inclusion scolaire** en milieu ordinaire (classe régulière)\n2. **Développement de l'autorégulation** : attention, gestion des émotions, comportement\n3. **Acquisition de l'autonomie** progressive\n4. **Apprentissage adapté** avec soutien individualisé\n\n## 👦 POUR QUI ?\n\nÉlèves présentant des **troubles du neurodéveloppement** (TND) :\n- **Autisme / TSA** (Troubles du Spectre Autistique)\n- **TDAH** (Trouble Déficit de l'Attention avec/sans Hyperactivité)\n- **Troubles DYS** (dyslexie, dyspraxie, dysphasie, etc.)\n- **TDI** (Trouble du Développement Intellectuel)\n\n## 📚 COMMENT ÇA FONCTIONNE ?\n\nL'élève :\n- **Reste dans sa classe ordinaire** avec ses camarades du même âge\n- Bénéficie d'**interventions individualisées** par une équipe médico-sociale\n- Apprend des **techniques d'autorégulation** (gestion attention, émotions, comportements)\n- Développe progressivement son **autonomie**\n\n## 👥 ÉQUIPE D'ACCOMPAGNEMENT\n\nÉquipe médico-sociale intervenant dans l'école :\n- Psychologue\n- Éducateur spécialisé\n- Psychomotricien\n- Ergothérapeute\n- Enseignant référent\n\nEn partenariat avec l'enseignant de la classe.\n\n## 📍 OÙ TROUVER UN DAR ?\n\n**75 nouveaux dispositifs** ouverts en septembre 2025 en France :\n- 19 UEMA (Unité d'Enseignement Maternelle Autisme)\n- 27 UEEA (Unité d'Enseignement Élémentaire Autisme)\n- 29 équipes d'autorégulation (5 en primaire, 20 en collège, 4 en lycée)\n\nRenseignez-vous auprès de votre académie ou MDPH.\n\n## 🌍 ORIGINE\n\nCette méthode vient du **Canada** et a été expérimentée avec succès en France, notamment en **Nouvelle-Aquitaine**.\n\n## 📝 COMMENT Y ACCÉDER ?\n\n1. **Déposer une demande** auprès de votre MDPH\n2. **Obtenir une notification d'orientation** de la CDAPH vers un dispositif d'autorégulation\n3. **Accord de la famille** nécessaire\n4. **Inscription** via l'école et la MDPH\n\n## ⚠️ IMPORTANT\n\nLe DAR est différent :\n- De l'**ULIS** (classe spécialisée à temps partiel)\n- Du **SESSAD** (intervention extérieure)\n- De l'**IME** (établissement spécialisé)\n\nL'enfant reste **à temps plein en classe ordinaire** avec un soutien spécialisé.\n\nSources : Maison de l'Autisme, Ministère Éducation Nationale, Handicap.gouv.fr",
+      "source": "Maison de l'Autisme, Ministère Éducation Nationale, Handicap.gouv.fr",
+      "keywords": [
+        "dispositif autorégulation",
+        "dar",
+        "autorégulation autisme",
+        "autisme école ordinaire",
+        "inclusion scolaire autisme",
+        "tnd école",
+        "tdah école",
+        "troubles neurodéveloppement scolarité",
+        "classe ordinaire autisme"
+      ],
+      "typical_questions": [
+        "c'est quoi un dispositif d'autorégulation ?",
+        "qu'est-ce qu'un dar ?",
+        "autorégulation école définition",
+        "mon enfant autiste peut-il rester en classe normale ?",
+        "dispositif autorégulation pour autisme",
+        "scolarisation autisme classe ordinaire",
+        "comment scolariser enfant autiste école normale ?"
+      ],
+      "related_links": [
+        {
+          "question": "C'est quoi une ULIS ?",
+          "chunk_id": "ulis_definition"
+        },
+        {
+          "question": "C'est quoi un SESSAD ?",
+          "chunk_id": "sessad_definition"
+        },
+        {
+          "question": "C'est quoi une AESH ?",
+          "chunk_id": "aesh_definition"
+        },
+        {
+          "question": "C'est quoi l'AEEH ?",
+          "chunk_id": "aeeh_definition"
+        }
+      ]
     }
   ]
 };
@@ -13334,7 +13759,40 @@
                 // ============================================================================
                 let penalitesFinales = 0;
 
-                // Mots-clés primaires
+                // Mots ultra-génériques qui ne sont pas spécifiques au handicap/MDPH
+                const weakWords = new Set(['aide', 'besoin', 'aider', 'aides', 'besoins', 'demande', 'faire', 'obtenir', 'avoir']);
+
+                // Mots spécifiques qui indiquent un sujet MDPH/handicap précis
+                const strongWords = new Set([
+                    'aah', 'pch', 'rqth', 'aeeh', 'mdph', 'mda', 'cdaph',
+                    'handicap', 'handicapé', 'handicapee', 'handicape',
+                    'orientation', 'esat', 'sessad', 'ime', 'impro', 'ulis',
+                    'avs', 'aesh', 'cmi', 'invalidité', 'invalidite',
+                    'allocation', 'prestation', 'carte', 'reconnaissance',
+                    'compensation', 'insertion', 'travailleur', 'emploi'
+                ]);
+
+                // Compter combien de mots non-stopwords sont génériques vs spécifiques
+                const questionWordsFiltered = this.extractKeywords(question);
+                const hasStrongWord = questionWordsFiltered.some(w => strongWords.has(w.toLowerCase()));
+                const hasOnlyWeakWords = questionWordsFiltered.length > 0 &&
+                    questionWordsFiltered.every(w => weakWords.has(w.toLowerCase()) || !strongWords.has(w.toLowerCase()));
+
+                // Si la question ne contient QUE des mots faibles ET aucun mot fort, pénalité massive
+                if (!hasStrongWord && questionWordsFiltered.length > 0 && questionWordsFiltered.length <= 4) {
+                    penalitesFinales += 1200; // Pénalité très forte pour questions vagues sans contexte
+                }
+
+                // 1. Match de phrases complètes (avant stopwords) pour expressions comme "comment avoir"
+                for (const kw of keywords) {
+                    const kwLower = kw.toLowerCase().trim();
+                    // Pour les keywords avec plusieurs mots, vérifier si la phrase complète est dans la question
+                    if (kwLower.split(/\s+/).length > 1 && questionLower.includes(kwLower)) {
+                        score += 150; // Bonus fort pour match de phrase complète
+                    }
+                }
+
+                // 2. Mots-clés primaires (après stopwords)
                 for (const kw of keywords) {
                     const kwNormalized = this.extractKeywords(kw)[0];
                     if (kwNormalized && questionKwSet.has(kwNormalized)) {
@@ -13342,19 +13800,20 @@
                     }
                 }
 
-                // Bonus si question contient le sigle exact
+                // 3. Bonus si question contient le sigle exact
                 for (const kw of keywords) {
                     if (kw.length <= 5 && questionLower.includes(kw.toLowerCase())) {
                         score += 50;
                     }
                 }
 
-                // BOOST pour chunks _definition
+                // BOOST pour chunks _definition (UNIQUEMENT si score > 0, c'est-à-dire si keyword match)
                 const isDefinitionIntent = questionLower.match(/c[' ]?est quoi|qu[' ]?est[-\s]?ce|definition|expliquer|expliquez|sert a quoi|ca consiste/);
                 const isDefinitionChunk = chunkId.endsWith('_definition');
                 const isShortQuestion = question.trim().length <= 10; // Question très courte (ex: "AAH", "PCH")
 
-                if (isDefinitionIntent && isDefinitionChunk) {
+                // N'applique le boost que si au moins un keyword a matché (score > 0)
+                if (isDefinitionIntent && isDefinitionChunk && score > 0) {
                     score += 900; // Boost TRÈS fort pour favoriser les définitions quand intent détecté
                 }
 
@@ -13393,11 +13852,14 @@
                     score += 500; // Boost très fort pour chunks RQTH si question mentionne RQTH
                 }
 
-                // BOOST SPÉCIAL pour chunks "démarches" quand question = "comment obtenir/demander/faire"
-                const isDemarcheIntent = questionLower.match(/comment (obtenir|demander|faire|avoir)|comment faire pour/);
+                // BOOST SPÉCIAL pour chunks "démarches" quand question = "comment obtenir/demander/faire/avoir"
+                // Accepte aussi les variantes orales : "comment qu'on a", "comment on a", etc.
+                const isDemarcheIntent = questionLower.match(/comment (obtenir|demander|faire|avoir|on a|qu.on a)|comment faire pour/);
                 const isDemarcheChunk = chunkId.endsWith('_demarches');
-                if (isDemarcheIntent && isDemarcheChunk) {
-                    score += 800; // Boost très fort pour chunks démarches si question "comment obtenir/demander"
+                if (isDemarcheIntent && isDemarcheChunk && score > 0) {
+                    // Si la question contient un strong word (aah, pch, etc.), boost complet
+                    // Sinon, boost réduit pour laisser la place aux chunks génériques (guide_demarrage_mdph, cerfa_15692)
+                    score += hasStrongWord ? 1500 : 200; // Boost réduit si question trop générique
                 }
 
                 // BOOST SPÉCIAL pour renouvellement quand question contient "renouveler"
@@ -14082,13 +14544,15 @@
             });
 
             // 2. Tableaux markdown (avant les listes pour éviter conflits)
-            html = html.replace(/^\|(.+)\|\s*\n\|[\s\-:]+\|\s*\n((?:\|.+\|\s*\n?)+)/gm, function(match, header, rows) {
+            // Pattern corrigé : utilise [^\n] au lieu de .+ pour éviter les problèmes de greedy matching
+            html = html.replace(/\|([^\n]+)\n\|[\s\-:]+\|[^\n]*\n((?:\|[^\n]+\n?)+)/g, function(match, header, rows) {
                 let tableHtml = '<table style="border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.9em;">';
 
                 // En-tête
                 tableHtml += '<thead><tr style="background: var(--color-bg-secondary); border-bottom: 2px solid var(--color-primary);">';
-                header.split('|').filter(cell => cell.trim()).forEach(cell => {
-                    tableHtml += '<th style="padding: 8px 12px; text-align: left; font-weight: 600;">' + cell.trim() + '</th>';
+                // Filtre qui garde aussi les cellules vides (comme la première colonne)
+                header.split('|').filter((cell, index, arr) => cell.trim() || index === 1).forEach(cell => {
+                    tableHtml += '<th style="padding: 8px 12px; text-align: left; font-weight: 600; border: 1px solid #ddd;">' + cell.trim() + '</th>';
                 });
                 tableHtml += '</tr></thead><tbody>';
 
@@ -14096,8 +14560,8 @@
                 rows.trim().split('\n').forEach((row, index) => {
                     const bgColor = index % 2 === 0 ? 'transparent' : 'var(--color-bg-main)';
                     tableHtml += '<tr style="background: ' + bgColor + '; border-bottom: 1px solid var(--color-border);">';
-                    row.split('|').filter(cell => cell.trim()).forEach(cell => {
-                        tableHtml += '<td style="padding: 8px 12px;">' + cell.trim() + '</td>';
+                    row.split('|').filter((cell, idx, arr) => cell.trim() || idx === 1).forEach(cell => {
+                        tableHtml += '<td style="padding: 8px 12px; border: 1px solid #ddd;">' + cell.trim() + '</td>';
                     });
                     tableHtml += '</tr>';
                 });
@@ -14463,19 +14927,9 @@
             }
 
 
-            if (!result || result.score < 50) {
-                const helpMessage = `<p>Désolé, je n'ai pas trouvé de réponse précise à votre question.</p>
-<p><strong>💡 Quelques suggestions :</strong></p>
-<ul style="text-align: left; margin: 10px 0;">
-    <li>Reformulez votre question avec des mots-clés simples</li>
-    <li>Utilisez les sigles : AAH, PCH, AEEH, RQTH, MDPH...</li>
-    <li>Posez une question directe : "C'est quoi...", "Comment faire...", "Quelles sont..."</li>
-</ul>
-<div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin-top: 15px; border-radius: 4px;">
-    <strong>📞 Besoin d'aide personnalisée ?</strong><br>
-    Contactez votre <strong>MDPH/MDA locale</strong> :<br>
-    <a href="https://www.monparcourshandicap.gouv.fr/annuaire" target="_blank" style="color: #667eea; text-decoration: underline;">🔗 Trouver votre MDPH</a>
-</div>`;
+            // Seuil de score minimum augmenté à 70 pour éviter les faux positifs
+            if (!result || result.score < 70) {
+                const helpMessage = `<p>Désolé, je n'ai pas trouvé de réponse précise à votre question.</p><p><strong>💡 Quelques suggestions :</strong></p><ul style="text-align: left; margin: 10px 0;"><li>Reformulez votre question avec des mots-clés simples</li><li>Utilisez les sigles : AAH, PCH, AEEH, RQTH, MDPH...</li><li>Posez une question directe : "C'est quoi...", "Comment faire...", "Quelles sont..."</li></ul><div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin-top: 15px; border-radius: 4px;"><strong>📞 Besoin d'aide personnalisée ?</strong><br>Contactez votre <strong>MDPH/MDA locale</strong> :<br><a href="https://www.monparcourshandicap.gouv.fr/annuaire" target="_blank" style="color: #667eea; text-decoration: underline;">🔗 Trouver votre MDPH</a></div>`;
                 addMessage('bot', helpMessage, '', [], null);
                 trackQuestion(question, null, result ? result.score : 0);
                 input.value = '';
@@ -14506,8 +14960,8 @@
                 response += `<div class="source">📚 Source : ${sourceHtml}</div>`;
             }
 
-            // Ajouter un avertissement si le score est faible (entre 50 et 100)
-            if (result.score >= 50 && result.score < 100) {
+            // Ajouter un avertissement si le score est faible (entre 70 et 120)
+            if (result.score >= 70 && result.score < 120) {
                 response += `
                     <div style="background: #fff3cd; border-left: 3px solid #ffc107; padding: 10px; margin-top: 12px; font-size: 0.9em; border-radius: 4px;">
                         ⚠️ Cette réponse pourrait ne pas correspondre exactement à votre question.
