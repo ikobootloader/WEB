@@ -13651,14 +13651,11 @@
                 }
 
                 // ============================================================================
-                // PÉNALITÉ MASSIVE POUR CHUNKS "ATTRAPE-TOUT" (PHASE 1.1 ROADMAP)
+                // ANCIEN SYSTÈME DE PÉNALITÉ DÉSACTIVÉ (2026-03-16)
+                // La pénalité de -75% sur guide_demarrage_* a été retirée après nettoyage
+                // massif de tous les keywords/TQ génériques dans les autres chunks.
+                // Ce nettoyage a rendu cette pénalité obsolète.
                 // ============================================================================
-                // Les chunks guide_demarrage_* doivent SEULEMENT matcher les questions ultra-générales
-                // Pénalité de -75% pour forcer les chunks spécifiques à gagner
-                if (chunkId.includes('guide_demarrage')) {
-                    score = Math.floor(score * 0.25); // Réduit le score à 25% (pénalité de 75%)
-                    console.log(`[SCORING] Pénalité -75% appliquée au chunk ${chunkId}: score réduit à ${score}`);
-                }
 
                 return score + penalitesFinales;
             }
