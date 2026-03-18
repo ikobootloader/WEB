@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gestionnaire de projets</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg:           #f5f4ef;
+    --surface:      #ffffff;
+    --surface2:     #f0efea;
+    --border:       #e2e0d8;
+    --accent:       #1a6b5a;
+    --accent-hover: #145548;
+    --accent-light: rgba(26,107,90,.08);
+    --text:         #1a1a18;
+    --muted:        #7a7870;
+    --low:          #2d9e6b;
+    --low-bg:       rgba(45,158,107,.09);
+    --medium:       #c47d12;
+    --medium-bg:    rgba(196,125,18,.09);
+    --high:         #c43d3d;
+    --high-bg:      rgba(196,61,61,.09);
+    --info:         #2563eb;
+    --info-bg:      rgba(37,99,235,.09);
+    --shadow:       0 1px 3px rgba(0,0,0,.07), 0 4px 16px rgba(0,0,0,.05);
+    --shadow-md:    0 4px 24px rgba(0,0,0,.10);
+    --radius:       12px;
+    --font-head:    'Syne', sans-serif;
+    --font-body:    'DM Sans', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 15px;
+    min-height: 100vh;
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: radial-gradient(circle at 1px 1px, rgba(26,107,90,.07) 1px, transparent 0);
+    background-size: 28px 28px;
+    pointer-events: none; z-index: 0;
+  }
+
+  .app { position: relative; z-index: 1; max-width: 1160px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+
+  /* ── HEADER ── */
+  header {
+    display: flex; align-items: flex-end; justify-content: space-between;
+    flex-wrap: wrap; gap: 1rem;
+    margin-bottom: 2rem; padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .header-left h1 { font-family: var(--font-head); font-weight: 800; font-size: clamp(1.8rem,4vw,2.6rem); letter-spacing:-.02em; line-height:1; }
+  .header-left h1 span { color: var(--accent); }
+  .header-left p { color: var(--muted); margin-top:.35rem; font-size:.875rem; }
+  .header-actions { display:flex; gap:.6rem; flex-wrap:wrap; align-items:center; }
+
+  /* ── STATS ── */
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:.75rem; margin-bottom:1.75rem; }
+  .stat-card {
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    padding:1rem 1.2rem; display:flex; flex-direction:column; gap:.2rem; transition:border-color .2s;
+  }
+  .stat-card:hover { border-color:var(--accent); box-shadow:var(--shadow); }
+  .stat-card .label { font-size:.72rem; font-weight:500; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); }
+  .stat-card .value { font-family:var(--font-head); font-weight:700; font-size:1.7rem; line-height:1; }
+  .stat-card.urgent .value { color:var(--high); }
+  .stat-card.soon   .value { color:var(--medium); }
+  .stat-card.ok     .value { color:var(--low); }
+  .stat-card.arch   .value { color:var(--info); }
+
+  /* ── REFILE BANNER ── */
+  .refile-banner {
+    display:none; align-items:center; gap:1rem;
+    background:#fffbeb; border:1px solid rgba(196,125,18,.35);
+    border-radius:var(--radius); padding:.9rem 1.2rem; margin-bottom:1.5rem; flex-wrap:wrap;
+  }
+  .refile-banner .refile-text { flex:1; font-size:.82rem; color:var(--text); line-height:1.4; }
+  .refile-banner .refile-text strong { color:var(--medium); font-weight:600; }
+
+  /* ── IMPORT BAR ── */
+  .import-bar {
+    display:flex; align-items:center; gap:.75rem;
+    background:var(--accent-light); border:1px dashed rgba(26,107,90,.25);
+    border-radius:var(--radius); padding:.85rem 1.2rem; margin-bottom:1.75rem; flex-wrap:wrap;
+  }
+  .import-bar label { font-size:.78rem; color:var(--muted); font-weight:500; white-space:nowrap; }
+  .import-bar input[type="file"] { font-size:.78rem; color:var(--muted); cursor:pointer; }
+  #importStatus { font-size:.75rem; font-weight:600; }
+  #fsaInfo { font-size:.75rem; }
+
+  /* ── TABS (Tâches / Archives) ── */
+  .page-tabs {
+    display:flex; gap:0; background:var(--surface);
+    border:1px solid var(--border); border-radius:var(--radius);
+    overflow:hidden; margin-bottom:1.5rem; box-shadow:var(--shadow);
+    width:fit-content;
+  }
+  .page-tab {
+    padding:.55rem 1.4rem; border:none; background:transparent;
+    color:var(--muted); font-family:var(--font-body); font-size:.85rem; font-weight:600;
+    cursor:pointer; transition:background .2s, color .2s; display:flex; align-items:center; gap:.5rem;
+  }
+  .page-tab.active { background:var(--accent); color:#fff; }
+  .page-tab:not(.active):hover { background:var(--surface2); color:var(--text); }
+  .page-tab .tab-count {
+    display:inline-flex; align-items:center; justify-content:center;
+    background:rgba(255,255,255,.25); border-radius:99px;
+    font-size:.7rem; font-weight:700; min-width:18px; height:18px; padding:0 5px;
+  }
+  .page-tab:not(.active) .tab-count { background:var(--surface2); color:var(--muted); }
+
+  /* ── TOOLBAR ── */
+  .toolbar {
+    display:flex; align-items:center; justify-content:space-between;
+    gap:1rem; flex-wrap:wrap; margin-bottom:1.25rem;
+  }
+  .toolbar-left { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
+  .filter-tabs {
+    display:flex; gap:.35rem; background:var(--surface); padding:.3rem;
+    border-radius:9999px; border:1px solid var(--border); box-shadow:var(--shadow);
+  }
+  .filter-tab {
+    padding:.35rem .9rem; border-radius:9999px; border:none; background:transparent;
+    color:var(--muted); font-family:var(--font-body); font-size:.8rem; font-weight:500;
+    cursor:pointer; transition:background .2s,color .2s;
+  }
+  .filter-tab.active { background:var(--accent); color:#fff; }
+  .filter-tab:not(.active):hover { color:var(--text); }
+
+  .sort-select, .filter-select {
+    background:var(--surface); border:1px solid var(--border); border-radius:8px;
+    color:var(--text); font-family:var(--font-body); font-size:.8rem;
+    padding:.4rem .75rem; cursor:pointer; outline:none;
+  }
+
+  /* ── MODAL ── */
+  .overlay {
+    display:none; position:fixed; inset:0;
+    background:rgba(0,0,0,.55); backdrop-filter:blur(4px);
+    z-index:100; align-items:center; justify-content:center; padding:1rem;
+  }
+  .overlay.open { display:flex; }
+  .modal {
+    background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow-md);
+    border-radius:16px; padding:2rem; width:100%; max-width:560px;
+    animation:slideUp .25s ease; max-height:90vh; overflow-y:auto;
+  }
+  @keyframes slideUp { from{transform:translateY(20px);opacity:0} to{transform:translateY(0);opacity:1} }
+  .modal-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:1.5rem; }
+  .modal-header h2 { font-family:var(--font-head); font-weight:700; font-size:1.2rem; }
+  .modal-header h2 .edit-badge {
+    display:inline-block; background:var(--medium); color:#1a1a00;
+    font-size:.65rem; padding:.15rem .5rem; border-radius:99px; margin-left:.5rem;
+    vertical-align:middle; font-family:var(--font-body); font-weight:600;
+    text-transform:uppercase; letter-spacing:.05em;
+  }
+  .close-btn {
+    background:var(--surface2); border:1px solid var(--border); color:var(--muted);
+    width:32px; height:32px; border-radius:50%; cursor:pointer; font-size:1.1rem;
+    display:flex; align-items:center; justify-content:center; transition:color .2s,border-color .2s;
+  }
+  .close-btn:hover { color:var(--accent); border-color:var(--accent); }
+
+  /* ── FORM ── */
+  .form-group { margin-bottom:1rem; }
+  .form-group label {
+    display:block; font-size:.75rem; font-weight:500; text-transform:uppercase;
+    letter-spacing:.07em; color:var(--muted); margin-bottom:.4rem;
+  }
+  .form-group input, .form-group textarea, .form-group select {
+    width:100%; background:var(--surface2); border:1px solid var(--border);
+    border-radius:8px; color:var(--text); font-family:var(--font-body);
+    font-size:.9rem; padding:.65rem .9rem; outline:none; transition:border-color .2s;
+  }
+  .form-group input:focus, .form-group textarea:focus, .form-group select:focus { border-color:var(--accent); }
+  .form-group textarea { resize:vertical; min-height:80px; }
+  .form-row { display:grid; grid-template-columns:1fr 1fr; gap:.75rem; }
+  .form-row-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:.75rem; }
+
+  /* Urgency pills */
+  .urgency-pills { display:flex; gap:.5rem; }
+  .urgency-pill {
+    flex:1; padding:.55rem .5rem; border-radius:8px; border:1px solid var(--border);
+    background:var(--surface2); color:var(--muted); font-family:var(--font-body);
+    font-size:.8rem; font-weight:500; cursor:pointer; text-align:center; transition:all .15s;
+  }
+  .urgency-pill[data-value="low"].selected   { border-color:var(--low);    color:var(--low);    background:var(--low-bg); }
+  .urgency-pill[data-value="medium"].selected{ border-color:var(--medium); color:var(--medium); background:var(--medium-bg); }
+  .urgency-pill[data-value="high"].selected  { border-color:var(--high);   color:var(--high);   background:var(--high-bg); }
+
+  /* Status pills */
+  .status-pills { display:flex; gap:.4rem; flex-wrap:wrap; }
+  .status-pill {
+    flex:1; min-width:0; padding:.55rem .4rem; border-radius:8px; border:1px solid var(--border);
+    background:var(--surface2); color:var(--muted); font-family:var(--font-body);
+    font-size:.75rem; font-weight:500; cursor:pointer; text-align:center; transition:all .15s;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .status-pill[data-value="en-cours"].selected     { border-color:var(--info);   color:var(--info);   background:var(--info-bg); }
+  .status-pill[data-value="en-attente"].selected   { border-color:var(--medium); color:var(--medium); background:var(--medium-bg); }
+  .status-pill[data-value="realise"].selected      { border-color:var(--low);    color:var(--low);    background:var(--low-bg); }
+
+  .form-actions { display:flex; gap:.6rem; margin-top:1.5rem; }
+
+  /* ── BUTTONS ── */
+  .btn {
+    display:inline-flex; align-items:center; gap:.4rem; border:none; border-radius:8px;
+    font-family:var(--font-body); font-weight:500; cursor:pointer;
+    padding:.6rem 1.1rem; font-size:.85rem; transition:opacity .15s,transform .1s;
+  }
+  .btn:active { transform:scale(.97); }
+  .btn:hover  { opacity:.88; }
+  .btn-primary   { background:var(--accent); color:#fff; }
+  .btn-primary:hover { background:var(--accent-hover); opacity:1; }
+  .btn-danger    { background:var(--high-bg); color:var(--high); border:1px solid rgba(196,61,61,.25); }
+  .btn-ghost     { background:var(--surface2); color:var(--muted); border:1px solid var(--border); }
+  .btn-ghost:hover { color:var(--text); border-color:#bbb; opacity:1; }
+  .btn-success   { background:var(--low-bg); color:var(--low); border:1px solid rgba(45,158,107,.25); }
+  .btn-outline   { background:transparent; color:var(--accent); border:1px solid var(--accent); }
+  .btn-info      { background:var(--info-bg); color:var(--info); border:1px solid rgba(37,99,235,.25); }
+  .btn-sm        { padding:.4rem .8rem; font-size:.78rem; }
+  .btn-full      { width:100%; justify-content:center; }
+
+  /* ── TASK GRID ── */
+  #tasks, #archives { display:grid; grid-template-columns:repeat(auto-fill,minmax(310px,1fr)); gap:1rem; }
+
+  /* ── TASK CARD ── */
+  .task-card {
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    box-shadow:var(--shadow); padding:1.25rem; display:flex; flex-direction:column; gap:.7rem;
+    transition:transform .2s,border-color .2s,box-shadow .2s;
+    animation:fadeIn .3s ease both; position:relative; overflow:hidden;
+  }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+  .task-card::before {
+    content:''; position:absolute; top:0; left:0; right:0; height:3px;
+    border-radius:var(--radius) var(--radius) 0 0;
+  }
+  .task-card.low::before    { background:var(--low); }
+  .task-card.medium::before { background:var(--medium); }
+  .task-card.high::before   { background:var(--high); }
+  .task-card.archived { opacity:.85; }
+  .task-card:hover { transform:translateY(-3px); border-color:rgba(26,107,90,.3); box-shadow:var(--shadow-md); }
+
+  .card-header { display:flex; align-items:flex-start; justify-content:space-between; gap:.5rem; }
+  .card-index { font-size:.7rem; font-weight:600; color:var(--muted); font-family:var(--font-head); letter-spacing:.04em; text-transform:uppercase; white-space:nowrap; margin-top:.1rem; }
+  .card-title { font-family:var(--font-head); font-weight:700; font-size:1rem; line-height:1.3; flex:1; }
+
+  .card-badges { display:flex; gap:.35rem; flex-wrap:wrap; align-items:center; }
+  .urgency-badge, .status-badge, .requester-badge, .type-badge {
+    font-size:.65rem; font-weight:600; padding:.2rem .5rem; border-radius:99px;
+    text-transform:uppercase; letter-spacing:.05em; white-space:nowrap; flex-shrink:0;
+  }
+  .urgency-badge.low    { background:var(--low-bg);    color:var(--low); }
+  .urgency-badge.medium { background:var(--medium-bg); color:var(--medium); }
+  .urgency-badge.high   { background:var(--high-bg);   color:var(--high); }
+
+  .status-badge.en-cours   { background:var(--info-bg);   color:var(--info); }
+  .status-badge.en-attente { background:var(--medium-bg); color:var(--medium); }
+  .status-badge.realise    { background:var(--low-bg);    color:var(--low); }
+
+  .requester-badge { background:rgba(26,107,90,.1); color:var(--accent); border:1px solid rgba(26,107,90,.2); }
+  .type-badge      { background:var(--surface2); color:var(--muted); border:1px solid var(--border); }
+
+  .card-meta-row { display:flex; gap:.35rem; flex-wrap:wrap; }
+
+  .card-deadline-chip {
+    display:inline-flex; align-items:center; gap:.3rem;
+    background:var(--surface2); border:1px solid var(--border); border-radius:6px;
+    padding:.25rem .6rem; font-size:.75rem; color:var(--muted);
+  }
+  .card-deadline-chip.overdue { color:var(--high); border-color:rgba(196,61,61,.3); }
+  .card-deadline-chip.soon    { color:var(--medium); border-color:rgba(196,125,18,.3); }
+
+  .card-comment {
+    font-size:.82rem; color:var(--muted); line-height:1.5;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+  }
+
+  .progress-wrap { display:flex; flex-direction:column; gap:.3rem; }
+  .progress-info { display:flex; justify-content:space-between; font-size:.7rem; color:var(--muted); }
+  .progress-bar  { height:4px; background:var(--surface2); border-radius:99px; overflow:hidden; }
+  .progress-fill { height:100%; border-radius:99px; transition:width .4s ease; }
+
+  .card-actions { display:flex; gap:.4rem; margin-top:auto; flex-wrap:wrap; }
+
+  /* ── ARCHIVE ZONE ── */
+  .archive-date-chip {
+    display:inline-flex; align-items:center; gap:.3rem;
+    background:var(--info-bg); border:1px solid rgba(37,99,235,.2); border-radius:6px;
+    padding:.25rem .6rem; font-size:.72rem; color:var(--info);
+  }
+
+  /* ── EMPTY STATE ── */
+  .empty-state { grid-column:1/-1; text-align:center; padding:4rem 2rem; color:var(--muted); }
+  .empty-state .big-icon { font-size:3rem; margin-bottom:1rem; opacity:.4; }
+  .empty-state p { font-size:.9rem; margin-top:.4rem; }
+
+  /* ── TOAST ── */
+  #toast {
+    position:fixed; bottom:1.5rem; right:1.5rem;
+    background:var(--text); border:none; border-radius:10px;
+    padding:.75rem 1.2rem; font-size:.82rem; color:var(--bg);
+    box-shadow:0 4px 24px rgba(0,0,0,.18); z-index:200;
+    transform:translateY(10px); opacity:0; transition:all .25s ease; pointer-events:none;
+  }
+  #toast.show { transform:translateY(0); opacity:1; }
+
+  /* ── CONFIRM ── */
+  .confirm-overlay {
+    display:none; position:fixed; inset:0;
+    background:rgba(0,0,0,.7); backdrop-filter:blur(4px);
+    z-index:300; align-items:center; justify-content:center;
+  }
+  .confirm-overlay.open { display:flex; }
+  .confirm-box {
+    background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow-md);
+    border-radius:16px; padding:2rem; max-width:360px; width:90%;
+    animation:slideUp .2s ease; text-align:center;
+  }
+  .confirm-box h3 { font-family:var(--font-head); font-weight:700; margin-bottom:.6rem; }
+  .confirm-box p { color:var(--muted); font-size:.85rem; margin-bottom:1.5rem; line-height:1.5; }
+  .confirm-actions { display:flex; gap:.6rem; justify-content:center; }
+
+  /* ── LOCK SCREEN ── */
+  .lock-screen {
+    display:none; position:fixed; inset:0; background:var(--bg);
+    z-index:500; align-items:center; justify-content:center; padding:1.5rem;
+  }
+  .lock-screen.open { display:flex; }
+  .lock-box {
+    background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow-md);
+    border-radius:20px; padding:2.5rem 2rem; width:100%; max-width:400px;
+    animation:slideUp .3s ease; text-align:center;
+  }
+  .lock-icon { font-size:2.5rem; margin-bottom:1.25rem; display:block; }
+  .lock-box h2 { font-family:var(--font-head); font-weight:800; font-size:1.4rem; margin-bottom:.5rem; }
+  .lock-box p  { color:var(--muted); font-size:.82rem; line-height:1.55; margin-bottom:1.5rem; }
+  .lock-input-wrap { position:relative; margin-bottom:.75rem; }
+  .lock-input-wrap input {
+    width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:10px;
+    color:var(--text); font-family:var(--font-body); font-size:1rem;
+    padding:.75rem 3rem .75rem 1rem; outline:none; transition:border-color .2s; letter-spacing:.08em;
+  }
+  .lock-input-wrap input:focus { border-color:var(--accent); }
+  .toggle-pwd {
+    position:absolute; right:.75rem; top:50%; transform:translateY(-50%);
+    background:none; border:none; cursor:pointer; font-size:1rem; color:var(--muted); padding:.2rem;
+  }
+  .toggle-pwd:hover { color:var(--text); }
+  .lock-error { color:var(--high); font-size:.78rem; font-weight:500; min-height:1.2em; margin-bottom:.75rem; text-align:left; }
+  .lock-chip {
+    display:inline-flex; align-items:center; gap:.35rem; font-size:.7rem;
+    background:var(--accent-light); color:var(--accent); border:1px solid rgba(26,107,90,.2);
+    padding:.25rem .7rem; border-radius:99px; margin-bottom:1.25rem;
+    font-weight:600; letter-spacing:.04em; text-transform:uppercase;
+  }
+  .lock-status-btn {
+    display:inline-flex; align-items:center; gap:.4rem;
+    background:var(--accent-light); border:1px solid rgba(26,107,90,.2); color:var(--accent);
+    border-radius:8px; padding:.4rem .85rem; font-size:.78rem; font-family:var(--font-body);
+    font-weight:600; cursor:pointer; transition:background .15s;
+  }
+  .lock-status-btn:hover { background:rgba(26,107,90,.14); }
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width:6px; }
+  ::-webkit-scrollbar-thumb { background:#ccc; border-radius:99px; }
+
+  @media (max-width:600px) {
+    .form-row, .form-row-3 { grid-template-columns:1fr; }
+    header { flex-direction:column; align-items:flex-start; }
+  }
+</style>
+</head>
+<body>
+
+<div id="appContent" style="display:none">
+<div class="app">
+
+  <!-- REFILE BANNER -->
+  <div class="refile-banner" id="refileBanner">
+    <span style="font-size:1.3rem;flex-shrink:0">⚠️</span>
+    <div class="refile-text">
+      La sauvegarde automatique vers <strong id="refileName">tasks.json</strong> était active.<br>
+      <strong>Cliquez pour re-autoriser l'accès au fichier</strong> et réactiver l'écriture automatique.
+    </div>
+    <button class="btn btn-primary btn-sm" onclick="relinkFile()">📁 Re-lier le fichier</button>
+    <button class="btn btn-ghost btn-sm" onclick="document.getElementById('refileBanner').style.display='none'">Ignorer</button>
+  </div>
+
+  <!-- HEADER -->
+  <header>
+    <div class="header-left">
+      <h1>Projets<span>.</span></h1>
+      <p>Gestionnaire de tâches — stockage chiffré local</p>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-ghost btn-sm" onclick="exportJSON()">⬇ JSON</button>
+      <button class="btn btn-ghost btn-sm" onclick="exportExcel()">⬇ Excel</button>
+      <button class="lock-status-btn" onclick="lockApp()">🔒 Verrouiller</button>
+      <button class="btn btn-ghost btn-sm" onclick="changePassword()">🔑 Changer mdp</button>
+      <button class="btn btn-primary" onclick="openModal()">+ Nouvelle tâche</button>
+    </div>
+  </header>
+
+  <!-- STATS -->
+  <div class="stats" id="statsBar"></div>
+
+  <!-- IMPORT / DISQUE -->
+  <div class="import-bar">
+    <label>📂 Importer :</label>
+    <input type="file" id="jsonLoader" accept=".json">
+    <span id="importStatus"></span>
+    <span id="fsaInfo"></span>
+    <button id="fsaBtn" class="btn btn-outline btn-sm" onclick="linkFile()">📁 Lier un fichier disque</button>
+    <button class="btn btn-ghost btn-sm" onclick="clearAllTasks()">🗑 Tout effacer</button>
+  </div>
+
+  <!-- PAGE TABS -->
+  <div class="page-tabs">
+    <button class="page-tab active" data-page="tasks" onclick="switchPage('tasks')">
+      📋 Tâches en cours <span class="tab-count" id="tabCountTasks">0</span>
+    </button>
+    <button class="page-tab" data-page="archives" onclick="switchPage('archives')">
+      🗄 Archives <span class="tab-count" id="tabCountArchives">0</span>
+    </button>
+  </div>
+
+  <!-- PAGE TÂCHES -->
+  <div id="pageTasks">
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <div class="filter-tabs">
+          <button class="filter-tab active" data-filter="all">Toutes</button>
+          <button class="filter-tab" data-filter="high">Urgentes</button>
+          <button class="filter-tab" data-filter="medium">Moyennes</button>
+          <button class="filter-tab" data-filter="low">Faibles</button>
+        </div>
+        <select class="filter-select" id="filterRequester" onchange="renderTasks()">
+          <option value="all">Tous demandeurs</option>
+          <option value="S3AD">S3AD</option>
+          <option value="SE2S">SE2S</option>
+          <option value="MDA">MDA</option>
+          <option value="Autres">Autres</option>
+        </select>
+        <select class="filter-select" id="filterType" onchange="renderTasks()">
+          <option value="all">Tous types</option>
+          <option value="SOLIS">SOLIS</option>
+          <option value="MULTIGEST">MULTIGEST</option>
+          <option value="BO">BO</option>
+          <option value="Courriers">Courriers</option>
+          <option value="Autres">Autres</option>
+        </select>
+      </div>
+      <select class="sort-select" id="sortSelect" onchange="renderTasks()">
+        <option value="date-asc">Date ajout ↑</option>
+        <option value="date-desc">Date ajout ↓</option>
+        <option value="deadline-asc">Deadline ↑</option>
+        <option value="urgency">Urgence</option>
+      </select>
+    </div>
+    <div id="tasks"></div>
+  </div>
+
+  <!-- PAGE ARCHIVES -->
+  <div id="pageArchives" style="display:none">
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <select class="filter-select" id="archiveFilterRequester" onchange="renderArchives()">
+          <option value="all">Tous demandeurs</option>
+          <option value="S3AD">S3AD</option>
+          <option value="SE2S">SE2S</option>
+          <option value="MDA">MDA</option>
+          <option value="Autres">Autres</option>
+        </select>
+        <select class="filter-select" id="archiveFilterType" onchange="renderArchives()">
+          <option value="all">Tous types</option>
+          <option value="SOLIS">SOLIS</option>
+          <option value="MULTIGEST">MULTIGEST</option>
+          <option value="BO">BO</option>
+          <option value="Courriers">Courriers</option>
+          <option value="Autres">Autres</option>
+        </select>
+      </div>
+      <select class="sort-select" id="archiveSortSelect" onchange="renderArchives()">
+        <option value="date-desc">Date réalisation ↓</option>
+        <option value="date-asc">Date réalisation ↑</option>
+        <option value="urgency">Urgence</option>
+      </select>
+    </div>
+    <div id="archives"></div>
+  </div>
+
+</div><!-- /app -->
+
+<!-- MODAL FORM -->
+<div class="overlay" id="modalOverlay" onclick="handleOverlayClick(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modalTitle">Nouvelle tâche</h2>
+      <button class="close-btn" onclick="closeModal()">✕</button>
+    </div>
+
+    <div class="form-group">
+      <label>Titre *</label>
+      <input id="taskTitle" type="text" placeholder="Ex : Traitement dossier SOLIS" autocomplete="off">
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Demandeur</label>
+        <select id="taskRequester">
+          <option value="">— Sélectionner —</option>
+          <option value="S3AD">S3AD</option>
+          <option value="SE2S">SE2S</option>
+          <option value="MDA">MDA</option>
+          <option value="Autres">Autres</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Type de demande</label>
+        <select id="taskType">
+          <option value="">— Sélectionner —</option>
+          <option value="SOLIS">SOLIS</option>
+          <option value="MULTIGEST">MULTIGEST</option>
+          <option value="BO">BO</option>
+          <option value="Courriers">Courriers</option>
+          <option value="Autres">Autres</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Description</label>
+      <textarea id="taskComment" placeholder="Détails, notes, contexte…"></textarea>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Urgence</label>
+        <div class="urgency-pills">
+          <button class="urgency-pill selected" data-value="low">🟢 Faible</button>
+          <button class="urgency-pill" data-value="medium">🟡 Moy.</button>
+          <button class="urgency-pill" data-value="high">🔴 Haute</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Deadline</label>
+        <input id="deadline" type="date">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Degré de réalisation</label>
+      <div class="status-pills">
+        <button class="status-pill selected" data-value="en-cours">🔵 En cours</button>
+        <button class="status-pill" data-value="en-attente">⏳ En attente</button>
+        <button class="status-pill" data-value="realise">✅ Réalisé</button>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button class="btn btn-primary btn-full" id="submitBtn" onclick="submitForm()">Ajouter la tâche</button>
+      <button class="btn btn-ghost" onclick="closeModal()">Annuler</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRM DIALOG -->
+<div class="confirm-overlay" id="confirmOverlay">
+  <div class="confirm-box">
+    <h3 id="confirmTitle">Confirmer</h3>
+    <p id="confirmMsg">Cette action est irréversible.</p>
+    <div class="confirm-actions">
+      <button class="btn btn-danger" id="confirmYes">Confirmer</button>
+      <button class="btn btn-ghost" onclick="closeConfirm()">Annuler</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script src="app.js"></script>
+</div><!-- /appContent -->
+
+<!-- LOCK SCREEN -->
+<div class="lock-screen" id="lockScreen">
+  <div class="lock-box">
+    <span class="lock-icon">🔐</span>
+    <div class="lock-chip">AES-256-GCM · 100% local</div>
+    <h2 id="lockTitle">Déverrouiller</h2>
+    <p id="lockSub">Entrez votre mot de passe pour déchiffrer vos données localement.</p>
+    <div class="lock-input-wrap">
+      <input type="password" id="lockPassword" placeholder="Mot de passe" autocomplete="current-password">
+      <button class="toggle-pwd" onclick="togglePwd('lockPassword',this)" tabindex="-1">👁</button>
+    </div>
+    <div id="lockConfirmWrap" style="display:none">
+      <div class="lock-input-wrap">
+        <input type="password" id="lockConfirm" placeholder="Confirmer le mot de passe" autocomplete="new-password">
+        <button class="toggle-pwd" onclick="togglePwd('lockConfirm',this)" tabindex="-1">👁</button>
+      </div>
+    </div>
+    <div class="lock-error" id="lockError"></div>
+    <button class="btn btn-primary btn-full" id="lockBtn" onclick="submitPassword()">Déverrouiller</button>
+  </div>
+</div>
+
+</body>
+</html>
