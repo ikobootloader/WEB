@@ -6,16 +6,21 @@
 
 const STORAGE_KEY = 'projets_tasks_v4_enc';
 const SALT_KEY    = 'projets_salt_v4';
+const VERSIONS_KEY = 'projets_versions_v4_enc';
 const ITER_COUNT  = 310_000;
 
 // ── État global ──────────────────────────────────────────────
 let tasks        = [];
+let versions     = {}; // { "SOLIS": "2.4.1", "MULTIGEST": "1.2.0" }
 let editingId    = null;
+let attachedFiles = []; // Fichiers temporaires avant sauvegarde
 let activeFilter = 'all';
 let activePage   = 'tasks';   // 'tasks' | 'archives'
 let cryptoKey    = null;
 let fileHandle   = null;
 let fsaSupported = typeof window.showSaveFilePicker === 'function';
+let currentPage  = 1;
+let itemsPerPage = 12;
 
 // ════════════════════════════════════════════════════════════
 //  DÉMARRAGE
@@ -172,13 +177,16 @@ function hexToBuf(h) { const a = new Uint8Array(h.length/2); for (let i=0;i<a.le
 
 async function loadFromStorage() {
   const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) { tasks = []; return; }
-  tasks = await decrypt(raw);
+  if (!raw) { tasks = []; } else { tasks = await decrypt(raw); }
+
+  const rawVersions = localStorage.getItem(VERSIONS_KEY);
+  if (!rawVersions) { versions = {}; } else { versions = await decrypt(rawVersions); }
 }
 
 async function saveToStorage() {
   if (!cryptoKey) return;
   localStorage.setItem(STORAGE_KEY, await encrypt(tasks));
+  localStorage.setItem(VERSIONS_KEY, await encrypt(versions));
   await writeToFile();
 }
 
@@ -280,10 +288,26 @@ function openModal(id = null) {
     const task = tasks.find(t => t.id === id);
     if (!task) return;
     document.getElementById('taskTitle').value     = task.title;
-    document.getElementById('taskComment').value   = task.comment   || '';
-    document.getElementById('deadline').value      = task.deadline  || '';
-    document.getElementById('taskRequester').value = task.requester || '';
-    document.getElementById('taskType').value      = task.type      || '';
+    document.getElementById('taskComment').value   = task.comment     || '';
+    document.getElementById('deadline').value      = task.deadline    || '';
+    document.getElementById('requestDate').value   = task.requestDate || '';
+    document.getElementById('taskRequester').value = task.requester   || '';
+    document.getElementById('taskType').value      = task.type        || '';
+    document.getElementById('taskOrder').value     = task.order       || '';
+
+    const isRecurring = !!task.recurring;
+    document.getElementById('isRecurring').checked = isRecurring;
+    if (isRecurring) {
+      document.getElementById('recurringFields').style.display = 'block';
+      document.getElementById('recurringFrequency').value = task.recurring.frequency || 'weekly';
+      document.getElementById('recurringInterval').value = task.recurring.interval || 1;
+    } else {
+      document.getElementById('recurringFields').style.display = 'none';
+    }
+
+    // Afficher les fichiers existants
+    renderExistingFiles(task.files || []);
+
     setUrgencyPill(task.urgency || 'low');
     setStatusPill(task.status   || 'en-cours');
     title.innerHTML = 'Modifier la tâche <span class="edit-badge">édition</span>';
@@ -298,7 +322,12 @@ function openModal(id = null) {
   setTimeout(() => document.getElementById('taskTitle').focus(), 100);
 }
 
-function closeModal() { document.getElementById('modalOverlay').classList.remove('open'); editingId = null; }
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('open');
+  editingId = null;
+  attachedFiles = [];
+  document.getElementById('filePreview').innerHTML = '';
+}
 function handleOverlayClick(e) { if (e.target === document.getElementById('modalOverlay')) closeModal(); }
 
 // ════════════════════════════════════════════════════════════
@@ -343,6 +372,7 @@ function initFilterTabs() {
       document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
       activeFilter = tab.dataset.filter;
+      currentPage = 1; // Reset page on filter change
       renderTasks();
     })
   );
@@ -365,8 +395,17 @@ function applyFilters(list, urgFilter, reqFilter, typeFilter) {
 }
 
 function applySort(list, sort) {
-  if      (sort === 'date-asc')     list.sort((a,b) => a.id - b.id);
+  if      (sort === 'order')        list.sort((a,b) => {
+    if (!a.order && !b.order) return a.id - b.id;
+    if (!a.order) return 1;
+    if (!b.order) return -1;
+    // Tri alphanumérique naturel (ex: "2026-1" < "2026-10" < "2026-256")
+    return a.order.localeCompare(b.order, undefined, {numeric: true, sensitivity: 'base'});
+  });
+  else if (sort === 'date-asc')     list.sort((a,b) => a.id - b.id);
   else if (sort === 'date-desc')    list.sort((a,b) => b.id - a.id);
+  else if (sort === 'request-asc')  list.sort((a,b) => { if (!a.requestDate) return 1; if (!b.requestDate) return -1; return new Date(a.requestDate)-new Date(b.requestDate); });
+  else if (sort === 'request-desc') list.sort((a,b) => { if (!a.requestDate) return -1; if (!b.requestDate) return 1; return new Date(b.requestDate)-new Date(a.requestDate); });
   else if (sort === 'deadline-asc') list.sort((a,b) => { if (!a.deadline) return 1; if (!b.deadline) return -1; return new Date(a.deadline)-new Date(b.deadline); });
   else if (sort === 'urgency')      list.sort((a,b) => ({high:0,medium:1,low:2}[a.urgency]??1)-({high:0,medium:1,low:2}[b.urgency]??1));
   return list;
@@ -377,32 +416,56 @@ function applySort(list, sort) {
 // ════════════════════════════════════════════════════════════
 
 async function submitForm() {
-  const title     = document.getElementById('taskTitle').value.trim();
-  const comment   = document.getElementById('taskComment').value.trim();
-  const urgency   = getSelectedUrgency();
-  const status    = getSelectedStatus();
-  const deadline  = document.getElementById('deadline').value;
-  const requester = document.getElementById('taskRequester').value;
-  const type      = document.getElementById('taskType').value;
+  const title       = document.getElementById('taskTitle').value.trim();
+  const comment     = document.getElementById('taskComment').value.trim();
+  const urgency     = getSelectedUrgency();
+  const status      = getSelectedStatus();
+  const deadline    = document.getElementById('deadline').value;
+  const requestDate = document.getElementById('requestDate').value;
+  const requester   = document.getElementById('taskRequester').value;
+  const type        = document.getElementById('taskType').value;
+  const order       = document.getElementById('taskOrder').value.trim() || null;
+
+  const isRecurring = document.getElementById('isRecurring').checked;
+  const recurring = isRecurring ? {
+    frequency: document.getElementById('recurringFrequency').value,
+    interval: parseInt(document.getElementById('recurringInterval').value) || 1
+  } : null;
 
   if (!title) { shake(document.getElementById('taskTitle')); return; }
 
   const wasArchived = editingId && tasks.find(t => t.id === editingId)?.status === 'realise';
+  const now = new Date().toISOString();
 
   if (editingId) {
+    const existingTask = tasks.find(t => t.id === editingId);
+    const existingFiles = existingTask.files || [];
     tasks = tasks.map(t => t.id === editingId
-      ? { ...t, title, comment, urgency, status, deadline, requester, type,
-          archivedAt: status === 'realise' ? (t.archivedAt || new Date().toISOString()) : null }
+      ? { ...t, title, comment, urgency, status, deadline, requestDate, requester, type, order, recurring,
+          files: [...existingFiles, ...attachedFiles],
+          updatedAt: now,
+          archivedAt: status === 'realise' ? (t.archivedAt || now) : null }
       : t
     );
+
+    // Si tâche récurrente marquée comme réalisée, créer la prochaine occurrence
+    if (status === 'realise' && !wasArchived && recurring) {
+      createNextRecurrence(existingTask, recurring);
+    }
+
     showToast('✏️ Tâche modifiée');
   } else {
     tasks.push({
-      id: Date.now(), title, comment, urgency, status, deadline, requester, type,
-      archivedAt: status === 'realise' ? new Date().toISOString() : null
+      id: Date.now(), title, comment, urgency, status, deadline, requestDate, requester, type, order, recurring,
+      files: attachedFiles,
+      createdAt: now,
+      updatedAt: now,
+      archivedAt: status === 'realise' ? now : null
     });
     showToast('✅ Tâche ajoutée');
   }
+
+  attachedFiles = [];
 
   await saveToStorage();
   renderTasks();
@@ -417,8 +480,78 @@ async function submitForm() {
   }
 }
 
+async function markAsCompleted(id) {
+  const now = new Date().toISOString();
+  const task = tasks.find(t => t.id === id);
+
+  tasks = tasks.map(t => t.id === id ? { ...t, status: 'realise', updatedAt: now, archivedAt: now } : t);
+
+  // Si tâche récurrente, créer la prochaine occurrence
+  if (task && task.recurring) {
+    createNextRecurrence(task, task.recurring);
+  }
+
+  await saveToStorage();
+  renderTasks();
+  renderArchives();
+  renderStats();
+  updateTabCounts();
+  showToast('✅ Tâche marquée comme réalisée');
+}
+
+function createNextRecurrence(task, recurring) {
+  if (!recurring) return;
+
+  const now = new Date();
+  let nextDate = new Date();
+
+  switch (recurring.frequency) {
+    case 'daily':
+      nextDate.setDate(nextDate.getDate() + recurring.interval);
+      break;
+    case 'weekly':
+      nextDate.setDate(nextDate.getDate() + (7 * recurring.interval));
+      break;
+    case 'monthly':
+      nextDate.setMonth(nextDate.getMonth() + recurring.interval);
+      break;
+    case 'yearly':
+      nextDate.setFullYear(nextDate.getFullYear() + recurring.interval);
+      break;
+  }
+
+  // Calculer la nouvelle deadline si applicable
+  let newDeadline = null;
+  if (task.deadline) {
+    const oldDeadline = new Date(task.deadline);
+    const diff = oldDeadline - new Date(task.createdAt || task.id);
+    newDeadline = new Date(nextDate.getTime() + diff).toISOString().split('T')[0];
+  }
+
+  const newTask = {
+    id: Date.now() + Math.random(), // Éviter les collisions
+    title: task.title,
+    comment: task.comment,
+    urgency: task.urgency,
+    status: 'en-cours',
+    deadline: newDeadline,
+    requestDate: nextDate.toISOString().split('T')[0],
+    requester: task.requester,
+    type: task.type,
+    order: task.order,
+    recurring: recurring,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    archivedAt: null
+  };
+
+  tasks.push(newTask);
+  showToast('🔄 Prochaine occurrence créée');
+}
+
 async function restoreTask(id) {
-  tasks = tasks.map(t => t.id === id ? { ...t, status: 'en-cours', archivedAt: null } : t);
+  const now = new Date().toISOString();
+  tasks = tasks.map(t => t.id === id ? { ...t, status: 'en-cours', updatedAt: now, archivedAt: null } : t);
   await saveToStorage();
   renderArchives();
   renderTasks();
@@ -468,8 +601,20 @@ function renderTasks() {
   const reqFilter = document.getElementById('filterRequester')?.value || 'all';
   const typeFilter = document.getElementById('filterType')?.value || 'all';
   const sort = document.getElementById('sortSelect')?.value || 'date-asc';
+  const searchQuery = document.getElementById('searchInput')?.value.toLowerCase().trim() || '';
 
   let list = applyFilters(getActiveTasks(), urgFilter, reqFilter, typeFilter);
+
+  // Appliquer la recherche
+  if (searchQuery) {
+    list = list.filter(t =>
+      t.title.toLowerCase().includes(searchQuery) ||
+      (t.comment && t.comment.toLowerCase().includes(searchQuery)) ||
+      (t.requester && t.requester.toLowerCase().includes(searchQuery)) ||
+      (t.type && t.type.toLowerCase().includes(searchQuery))
+    );
+  }
+
   list = applySort(list, sort);
 
   if (!list.length) {
@@ -477,16 +622,51 @@ function renderTasks() {
       <div class="empty-state">
         <div class="big-icon">📋</div>
         <strong>Aucune tâche ici</strong>
-        <p>${urgFilter !== 'all' || reqFilter !== 'all' || typeFilter !== 'all' ? 'Aucune tâche pour ces filtres.' : 'Commencez par créer votre première tâche.'}</p>
+        <p>${urgFilter !== 'all' || reqFilter !== 'all' || typeFilter !== 'all' || searchQuery ? 'Aucune tâche pour ces critères.' : 'Commencez par créer votre première tâche.'}</p>
       </div>`;
+    document.getElementById('pagination').innerHTML = '';
     return;
   }
 
-  list.forEach((task, idx) => {
-    const p  = progressPercent(task.deadline);
-    const dc = deadlineLabel(task.deadline);
-    container.appendChild(buildCard(task, idx, false));
+  // Pagination
+  const totalPages = Math.ceil(list.length / itemsPerPage);
+  if (currentPage > totalPages) currentPage = 1;
+
+  const startIdx = (currentPage - 1) * itemsPerPage;
+  const endIdx = startIdx + itemsPerPage;
+  const paginatedList = list.slice(startIdx, endIdx);
+
+  paginatedList.forEach((task, idx) => {
+    const globalIdx = startIdx + idx;
+    container.appendChild(buildCard(task, globalIdx, false));
   });
+
+  renderPagination(totalPages);
+}
+
+function renderPagination(totalPages) {
+  const paginationEl = document.getElementById('pagination');
+  if (!paginationEl) return;
+
+  if (totalPages <= 1) {
+    paginationEl.innerHTML = '';
+    return;
+  }
+
+  let html = `
+    <button class="btn btn-ghost btn-sm" onclick="goToPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled style="opacity:0.5;cursor:not-allowed"' : ''}>‹ Précédent</button>
+    <span style="font-size:.85rem;color:var(--muted);padding:0 .5rem;">Page ${currentPage} / ${totalPages}</span>
+    <button class="btn btn-ghost btn-sm" onclick="goToPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled style="opacity:0.5;cursor:not-allowed"' : ''}>Suivant ›</button>
+  `;
+
+  paginationEl.innerHTML = html;
+}
+
+function goToPage(page) {
+  const totalPages = Math.ceil(getActiveTasks().length / itemsPerPage);
+  if (page < 1 || page > totalPages) return;
+  currentPage = page;
+  renderTasks();
 }
 
 // ════════════════════════════════════════════════════════════
@@ -536,14 +716,38 @@ function buildCard(task, idx, isArchive) {
   card.className = `task-card ${task.urgency || 'low'}${isArchive ? ' archived' : ''}`;
   card.style.animationDelay = `${idx * 0.04}s`;
 
+  const formatDate = (dateStr) => {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+  };
+
   const archivedDateHtml = isArchive && task.archivedAt
-    ? `<span class="archive-date-chip">✅ Réalisé le ${new Date(task.archivedAt).toLocaleDateString('fr-FR')}</span>`
+    ? `<span class="archive-date-chip" style="background:rgba(45,158,107,.09);border-color:rgba(45,158,107,.2);color:var(--low)">Réalisé: ${formatDate(task.archivedAt)}</span>`
     : '';
+
+  const createdDateHtml = task.id
+    ? `<span class="archive-date-chip" style="background:var(--surface2);border-color:var(--border);color:var(--muted)">Créé: ${formatDate(task.id)}</span>`
+    : '';
+
+  const requestDateHtml = task.requestDate
+    ? `<span class="archive-date-chip" style="background:rgba(37,99,235,.09);border-color:rgba(37,99,235,.2);color:var(--info)">Demandé: ${formatDate(task.requestDate)}</span>`
+    : '';
+
+  const updatedDateHtml = task.updatedAt && task.createdAt && task.updatedAt !== task.createdAt
+    ? `<span class="archive-date-chip" style="background:rgba(196,125,18,.09);border-color:rgba(196,125,18,.2);color:var(--medium)">Modifié: ${formatDate(task.updatedAt)}</span>`
+    : '';
+
+  const recurringFreqLabels = { daily: 'Quotidien', weekly: 'Hebdomadaire', monthly: 'Mensuel', yearly: 'Annuel' };
+  const recurringBadge = task.recurring
+    ? `<span class="type-badge" style="background:rgba(147,51,234,.09);color:#9333ea;border-color:rgba(147,51,234,.2)">🔄 ${recurringFreqLabels[task.recurring.frequency] || task.recurring.frequency}${task.recurring.interval > 1 ? ` (×${task.recurring.interval})` : ''}</span>`
+    : '';
+
+  const displayIndex = task.order || `#${String(idx+1).padStart(2,'0')}`;
 
   card.innerHTML = `
     <div class="card-header">
-      <span class="card-index">#${String(idx+1).padStart(2,'0')}</span>
-      <div class="card-title">${escHtml(task.title)}</div>
+      <span class="card-index">${escHtml(displayIndex)}</span>
+      <div class="card-title" title="${escHtml(task.title)}">${escHtml(task.title)}</div>
     </div>
 
     <div class="card-badges">
@@ -551,23 +755,33 @@ function buildCard(task, idx, isArchive) {
       ${!isArchive ? `<span class="status-badge ${task.status}">${statusLabels[task.status]||task.status}</span>` : ''}
       ${task.requester ? `<span class="requester-badge">${escHtml(task.requester)}</span>` : ''}
       ${task.type      ? `<span class="type-badge">${escHtml(task.type)}</span>` : ''}
+      ${recurringBadge}
     </div>
 
     <div class="card-meta-row">
-      ${task.deadline ? `<div class="card-deadline-chip ${dc.cls}">📅 ${dc.label}</div>` : ''}
+      ${createdDateHtml}
+      ${requestDateHtml}
+      ${updatedDateHtml}
       ${archivedDateHtml}
     </div>
 
-    ${task.comment ? `<p class="card-comment">${escHtml(task.comment)}</p>` : ''}
+    ${task.comment ? `<div class="card-comment">${renderMarkdown(task.comment)}</div>` : ''}
+
+    ${task.files && task.files.length > 0 ? `
+      <div style="display:flex;gap:.3rem;flex-wrap:wrap;align-items:center;margin-bottom:.3rem;">
+        <span style="display:inline-flex;align-items:center;gap:.25rem;font-size:.65rem;color:var(--accent);font-weight:600;background:var(--accent-light);padding:.2rem .45rem;border-radius:5px;border:1px solid rgba(26,107,90,.2);">📎 ${task.files.length} fichier${task.files.length > 1 ? 's' : ''}</span>
+      </div>` : ''}
 
     ${!isArchive && task.deadline ? `
+      <div class="card-deadline-chip ${dc.cls}" style="margin-bottom:.3rem;">${dc.label}</div>
       <div class="progress-wrap">
-        <div class="progress-info"><span>Avancement deadline</span><span>${Math.round(p)}%</span></div>
+        <div class="progress-info"><span>Temps restant</span><span>${Math.round(p)}%</span></div>
         <div class="progress-bar"><div class="progress-fill" style="width:${p}%;background:${progressColor(p)}"></div></div>
       </div>` : ''}
 
     <div class="card-actions">
       <button class="btn btn-ghost btn-sm" onclick="openModal(${task.id})">✏️ Modifier</button>
+      ${!isArchive ? `<button class="btn btn-success btn-sm" onclick="markAsCompleted(${task.id})">✅ Réalisé</button>` : ''}
       ${isArchive ? `<button class="btn btn-info btn-sm" onclick="restoreTask(${task.id})">↩️ Restaurer</button>` : ''}
       <button class="btn btn-danger btn-sm" onclick="confirmDelete(${task.id})">🗑 Supprimer</button>
     </div>
@@ -610,13 +824,162 @@ function resetForm() {
   document.getElementById('taskTitle').value     = '';
   document.getElementById('taskComment').value   = '';
   document.getElementById('deadline').value      = '';
+  document.getElementById('requestDate').value   = new Date().toISOString().split('T')[0]; // Date du jour
   document.getElementById('taskRequester').value = '';
   document.getElementById('taskType').value      = '';
+  document.getElementById('taskOrder').value     = '';
+  document.getElementById('isRecurring').checked = false;
+  document.getElementById('recurringFields').style.display = 'none';
+  document.getElementById('recurringFrequency').value = 'weekly';
+  document.getElementById('recurringInterval').value = '1';
+  document.getElementById('taskFiles').value = '';
+  document.getElementById('filePreview').innerHTML = '';
+  attachedFiles = [];
   setUrgencyPill('low');
   setStatusPill('en-cours');
 }
 
+function toggleRecurringFields() {
+  const isChecked = document.getElementById('isRecurring').checked;
+  document.getElementById('recurringFields').style.display = isChecked ? 'block' : 'none';
+}
+
+// ════════════════════════════════════════════════════════════
+//  GESTION DES FICHIERS JOINTS
+// ════════════════════════════════════════════════════════════
+
+async function handleFileSelection() {
+  const input = document.getElementById('taskFiles');
+  const files = Array.from(input.files);
+
+  for (const file of files) {
+    // Limiter la taille à 5 Mo par fichier
+    if (file.size > 5 * 1024 * 1024) {
+      showToast(`⚠️ ${file.name} est trop volumineux (max 5 Mo)`);
+      continue;
+    }
+
+    const base64 = await fileToBase64(file);
+    attachedFiles.push({
+      name: file.name,
+      type: file.type,
+      size: file.size,
+      data: base64
+    });
+  }
+
+  renderFilePreview();
+  input.value = ''; // Reset input
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderFilePreview() {
+  const container = document.getElementById('filePreview');
+  if (attachedFiles.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+
+  let html = '';
+  attachedFiles.forEach((file, idx) => {
+    const isImage = file.type.startsWith('image/');
+    const icon = isImage ? '🖼️' : file.name.endsWith('.pdf') ? '📄' : '📎';
+    const sizeKB = Math.round(file.size / 1024);
+
+    html += `
+      <div style="display:flex;align-items:center;gap:.5rem;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:.5rem;">
+        <span style="font-size:1.2rem;">${icon}</span>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:.8rem;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(file.name)}</div>
+          <div style="font-size:.7rem;color:var(--muted);">${sizeKB} Ko</div>
+        </div>
+        <button class="btn btn-danger btn-sm" style="padding:.25rem .5rem;font-size:.7rem;" onclick="removeAttachedFile(${idx})">✕</button>
+      </div>`;
+  });
+
+  container.innerHTML = html;
+}
+
+function renderExistingFiles(files) {
+  const container = document.getElementById('filePreview');
+  attachedFiles = [];
+
+  if (!files || files.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+
+  let html = '<div style="margin-bottom:.5rem;font-size:.75rem;color:var(--muted);font-weight:500;">Fichiers existants :</div>';
+  files.forEach((file, idx) => {
+    const isImage = file.type.startsWith('image/');
+    const icon = isImage ? '🖼️' : file.name.endsWith('.pdf') ? '📄' : '📎';
+    const sizeKB = Math.round(file.size / 1024);
+
+    html += `
+      <div style="display:flex;align-items:center;gap:.5rem;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:.5rem;">
+        <span style="font-size:1.2rem;">${icon}</span>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:.8rem;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(file.name)}</div>
+          <div style="font-size:.7rem;color:var(--muted);">${sizeKB} Ko</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" style="padding:.25rem .5rem;font-size:.7rem;" onclick="downloadFile('${escHtml(file.name)}', '${file.data}')">⬇</button>
+        <button class="btn btn-danger btn-sm" style="padding:.25rem .5rem;font-size:.7rem;" onclick="removeExistingFile(${editingId}, ${idx})">✕</button>
+      </div>`;
+  });
+
+  container.innerHTML = html;
+}
+
+function removeAttachedFile(idx) {
+  attachedFiles.splice(idx, 1);
+  renderFilePreview();
+}
+
+async function removeExistingFile(taskId, fileIdx) {
+  tasks = tasks.map(t => {
+    if (t.id === taskId && t.files) {
+      const newFiles = [...t.files];
+      newFiles.splice(fileIdx, 1);
+      return { ...t, files: newFiles, updatedAt: new Date().toISOString() };
+    }
+    return t;
+  });
+
+  await saveToStorage();
+  const task = tasks.find(t => t.id === taskId);
+  renderExistingFiles(task.files || []);
+  showToast('🗑 Fichier supprimé');
+}
+
+function downloadFile(filename, base64Data) {
+  const link = document.createElement('a');
+  link.href = base64Data;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
 const escHtml = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+function renderMarkdown(text) {
+  if (!text || typeof marked === 'undefined') return escHtml(text);
+  try {
+    // Configure marked pour plus de sécurité
+    marked.setOptions({ breaks: true, gfm: true });
+    return marked.parse(text);
+  } catch {
+    return escHtml(text);
+  }
+}
 
 function progressPercent(deadline) {
   if (!deadline) return 0;
@@ -630,10 +993,10 @@ function deadlineLabel(dateStr) {
   const now = new Date(); now.setHours(0,0,0,0);
   const d   = new Date(dateStr); d.setHours(0,0,0,0);
   const dif = Math.round((d-now)/(1000*3600*24));
-  if (dif < 0)   return { label:`En retard de ${Math.abs(dif)} j`, cls:'overdue' };
-  if (dif === 0) return { label:"Aujourd'hui",                      cls:'overdue' };
-  if (dif <= 7)  return { label:`Dans ${dif} j`,                   cls:'soon' };
-  return { label: d.toLocaleDateString('fr-FR'), cls:'' };
+  if (dif < 0)   return { label:`Échéance: En retard de ${Math.abs(dif)} j`, cls:'overdue' };
+  if (dif === 0) return { label:"Échéance: Aujourd'hui",                      cls:'overdue' };
+  if (dif <= 7)  return { label:`Échéance: Dans ${dif} j`,                   cls:'soon' };
+  return { label: `Échéance: ${d.toLocaleDateString('fr-FR')}`, cls:'' };
 }
 
 function shake(el) {
@@ -715,4 +1078,78 @@ function togglePwd(inputId, btn) {
   const inp = document.getElementById(inputId);
   if (inp.type === 'password') { inp.type = 'text'; btn.textContent = '🙈'; }
   else { inp.type = 'password'; btn.textContent = '👁'; }
+}
+
+// ════════════════════════════════════════════════════════════
+//  GESTION DES VERSIONS
+// ════════════════════════════════════════════════════════════
+
+function openVersionsModal() {
+  document.getElementById('versionsOverlay').classList.add('open');
+  renderVersionsList();
+}
+
+function closeVersionsModal() {
+  document.getElementById('versionsOverlay').classList.remove('open');
+  document.getElementById('versionSoftware').value = '';
+  document.getElementById('versionNumber').value = '';
+}
+
+function handleVersionsOverlayClick(e) {
+  if (e.target === document.getElementById('versionsOverlay')) closeVersionsModal();
+}
+
+async function addVersion() {
+  const software = document.getElementById('versionSoftware').value.trim();
+  const number = document.getElementById('versionNumber').value.trim();
+
+  if (!software || !number) {
+    showToast('⚠️ Veuillez remplir tous les champs');
+    return;
+  }
+
+  versions[software] = number;
+  await saveToStorage();
+  renderVersionsList();
+  document.getElementById('versionSoftware').value = '';
+  document.getElementById('versionNumber').value = '';
+  showToast(`✅ Version ${software} ${number} ajoutée`);
+}
+
+async function deleteVersion(software) {
+  delete versions[software];
+  await saveToStorage();
+  renderVersionsList();
+  showToast(`🗑 Version ${software} supprimée`);
+}
+
+function renderVersionsList() {
+  const container = document.getElementById('versionsList');
+  if (!container) return;
+
+  const entries = Object.entries(versions);
+
+  if (entries.length === 0) {
+    container.innerHTML = `
+      <div style="text-align:center;padding:2rem;color:var(--muted);">
+        <div style="font-size:2rem;margin-bottom:0.5rem;opacity:0.4;">📦</div>
+        <p style="font-size:0.85rem;">Aucune version enregistrée</p>
+      </div>`;
+    return;
+  }
+
+  let html = '<div style="display:grid;gap:0.5rem;">';
+  entries.sort((a, b) => a[0].localeCompare(b[0])).forEach(([software, number]) => {
+    html += `
+      <div style="display:flex;align-items:center;justify-content:space-between;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:0.75rem 1rem;">
+        <div>
+          <strong style="font-size:0.9rem;color:var(--text)">${escHtml(software)}</strong>
+          <span style="margin-left:0.75rem;color:var(--accent);font-family:monospace;font-size:0.85rem;">${escHtml(number)}</span>
+        </div>
+        <button class="btn btn-danger btn-sm" onclick="deleteVersion('${escHtml(software)}')">🗑</button>
+      </div>`;
+  });
+  html += '</div>';
+
+  container.innerHTML = html;
 }

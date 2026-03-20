@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
   :root {
     --bg:           #f5f4ef;
@@ -229,7 +230,7 @@
   .btn-success   { background:var(--low-bg); color:var(--low); border:1px solid rgba(45,158,107,.25); }
   .btn-outline   { background:transparent; color:var(--accent); border:1px solid var(--accent); }
   .btn-info      { background:var(--info-bg); color:var(--info); border:1px solid rgba(37,99,235,.25); }
-  .btn-sm        { padding:.4rem .8rem; font-size:.78rem; }
+  .btn-sm        { padding:.35rem .7rem; font-size:.75rem; }
   .btn-full      { width:100%; justify-content:center; }
 
   /* ── TASK GRID ── */
@@ -238,7 +239,7 @@
   /* ── TASK CARD ── */
   .task-card {
     background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
-    box-shadow:var(--shadow); padding:1.25rem; display:flex; flex-direction:column; gap:.7rem;
+    box-shadow:var(--shadow); padding:1rem; display:flex; flex-direction:column; gap:.5rem;
     transition:transform .2s,border-color .2s,box-shadow .2s;
     animation:fadeIn .3s ease both; position:relative; overflow:hidden;
   }
@@ -253,14 +254,14 @@
   .task-card.archived { opacity:.85; }
   .task-card:hover { transform:translateY(-3px); border-color:rgba(26,107,90,.3); box-shadow:var(--shadow-md); }
 
-  .card-header { display:flex; align-items:flex-start; justify-content:space-between; gap:.5rem; }
-  .card-index { font-size:.7rem; font-weight:600; color:var(--muted); font-family:var(--font-head); letter-spacing:.04em; text-transform:uppercase; white-space:nowrap; margin-top:.1rem; }
-  .card-title { font-family:var(--font-head); font-weight:700; font-size:1rem; line-height:1.3; flex:1; }
+  .card-header { display:flex; align-items:flex-start; justify-content:space-between; gap:.5rem; margin-bottom:.4rem; }
+  .card-index { font-size:.65rem; font-weight:600; color:var(--muted); font-family:var(--font-head); letter-spacing:.04em; text-transform:uppercase; white-space:nowrap; margin-top:.15rem; }
+  .card-title { font-family:var(--font-head); font-weight:700; font-size:1rem; line-height:1.25; flex:1; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:help; }
 
-  .card-badges { display:flex; gap:.35rem; flex-wrap:wrap; align-items:center; }
+  .card-badges { display:flex; gap:.35rem; flex-wrap:wrap; align-items:center; margin-bottom:.4rem; justify-content:center; }
   .urgency-badge, .status-badge, .requester-badge, .type-badge {
     font-size:.65rem; font-weight:600; padding:.2rem .5rem; border-radius:99px;
-    text-transform:uppercase; letter-spacing:.05em; white-space:nowrap; flex-shrink:0;
+    text-transform:uppercase; letter-spacing:.03em; white-space:nowrap; flex-shrink:0;
   }
   .urgency-badge.low    { background:var(--low-bg);    color:var(--low); }
   .urgency-badge.medium { background:var(--medium-bg); color:var(--medium); }
@@ -273,34 +274,39 @@
   .requester-badge { background:rgba(26,107,90,.1); color:var(--accent); border:1px solid rgba(26,107,90,.2); }
   .type-badge      { background:var(--surface2); color:var(--muted); border:1px solid var(--border); }
 
-  .card-meta-row { display:flex; gap:.35rem; flex-wrap:wrap; }
+  .card-meta-row { display:flex; gap:.3rem; flex-wrap:wrap; margin-bottom:.4rem; }
 
-  .card-deadline-chip {
-    display:inline-flex; align-items:center; gap:.3rem;
-    background:var(--surface2); border:1px solid var(--border); border-radius:6px;
-    padding:.25rem .6rem; font-size:.75rem; color:var(--muted);
+  .card-deadline-chip, .archive-date-chip {
+    display:inline-flex; align-items:center; gap:.25rem;
+    background:var(--surface2); border:1px solid var(--border); border-radius:5px;
+    padding:.2rem .45rem; font-size:.65rem; color:var(--muted); font-weight:500;
   }
-  .card-deadline-chip.overdue { color:var(--high); border-color:rgba(196,61,61,.3); }
-  .card-deadline-chip.soon    { color:var(--medium); border-color:rgba(196,125,18,.3); }
+  .card-deadline-chip.overdue { color:var(--high); border-color:rgba(196,61,61,.3); background:rgba(196,61,61,.05); }
+  .card-deadline-chip.soon    { color:var(--medium); border-color:rgba(196,125,18,.3); background:rgba(196,125,18,.05); }
 
   .card-comment {
-    font-size:.82rem; color:var(--muted); line-height:1.5;
+    font-size:.8rem; color:var(--muted); line-height:1.5;
     display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+    margin-bottom:.4rem;
   }
 
-  .progress-wrap { display:flex; flex-direction:column; gap:.3rem; }
-  .progress-info { display:flex; justify-content:space-between; font-size:.7rem; color:var(--muted); }
-  .progress-bar  { height:4px; background:var(--surface2); border-radius:99px; overflow:hidden; }
+  /* Markdown dans les commentaires */
+  .card-comment p { margin: 0; }
+  .card-comment strong { font-weight: 600; color: var(--text); }
+  .card-comment em { font-style: italic; }
+  .card-comment code { background: var(--surface2); padding: 0.1rem 0.3rem; border-radius: 3px; font-family: monospace; font-size: 0.85em; }
+  .card-comment a { color: var(--accent); text-decoration: underline; }
+  .card-comment ul, .card-comment ol { margin-left: 1.2rem; }
+  .card-comment li { margin: 0.2rem 0; }
+
+  .progress-wrap { display:flex; flex-direction:column; gap:.25rem; margin-bottom:.3rem; }
+  .progress-info { display:flex; justify-content:space-between; font-size:.65rem; color:var(--muted); }
+  .progress-bar  { height:3px; background:var(--surface2); border-radius:99px; overflow:hidden; }
   .progress-fill { height:100%; border-radius:99px; transition:width .4s ease; }
 
-  .card-actions { display:flex; gap:.4rem; margin-top:auto; flex-wrap:wrap; }
+  .card-actions { display:flex; gap:.4rem; margin-top:auto; flex-wrap:wrap; padding-top:.5rem; border-top:1px solid var(--surface2); justify-content:center; }
 
   /* ── ARCHIVE ZONE ── */
-  .archive-date-chip {
-    display:inline-flex; align-items:center; gap:.3rem;
-    background:var(--info-bg); border:1px solid rgba(37,99,235,.2); border-radius:6px;
-    padding:.25rem .6rem; font-size:.72rem; color:var(--info);
-  }
 
   /* ── EMPTY STATE ── */
   .empty-state { grid-column:1/-1; text-align:center; padding:4rem 2rem; color:var(--muted); }
@@ -407,6 +413,7 @@
       <p>Gestionnaire de tâches — stockage chiffré local</p>
     </div>
     <div class="header-actions">
+      <button class="btn btn-ghost btn-sm" onclick="openVersionsModal()">📦 Versions</button>
       <button class="btn btn-ghost btn-sm" onclick="exportJSON()">⬇ JSON</button>
       <button class="btn btn-ghost btn-sm" onclick="exportExcel()">⬇ Excel</button>
       <button class="lock-status-btn" onclick="lockApp()">🔒 Verrouiller</button>
@@ -440,6 +447,13 @@
 
   <!-- PAGE TÂCHES -->
   <div id="pageTasks">
+    <div class="toolbar" style="margin-bottom:0.75rem;">
+      <input type="text" id="searchInput" placeholder="🔍 Rechercher une tâche..."
+        style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font-body);font-size:.85rem;padding:.5rem .9rem;outline:none;transition:border-color .2s;"
+        oninput="renderTasks()"
+        onfocus="this.style.borderColor='var(--accent)'"
+        onblur="this.style.borderColor='var(--border)'">
+    </div>
     <div class="toolbar">
       <div class="toolbar-left">
         <div class="filter-tabs">
@@ -453,6 +467,8 @@
           <option value="S3AD">S3AD</option>
           <option value="SE2S">SE2S</option>
           <option value="MDA">MDA</option>
+          <option value="PSS">PSS</option>
+          <option value="ASG">ASG</option>
           <option value="Autres">Autres</option>
         </select>
         <select class="filter-select" id="filterType" onchange="renderTasks()">
@@ -465,13 +481,17 @@
         </select>
       </div>
       <select class="sort-select" id="sortSelect" onchange="renderTasks()">
+        <option value="order">Ordre manuel</option>
         <option value="date-asc">Date ajout ↑</option>
         <option value="date-desc">Date ajout ↓</option>
+        <option value="request-asc">Date demande ↑</option>
+        <option value="request-desc">Date demande ↓</option>
         <option value="deadline-asc">Deadline ↑</option>
         <option value="urgency">Urgence</option>
       </select>
     </div>
     <div id="tasks"></div>
+    <div id="pagination" style="display:flex;justify-content:center;align-items:center;gap:.5rem;margin-top:1.5rem;flex-wrap:wrap;"></div>
   </div>
 
   <!-- PAGE ARCHIVES -->
@@ -483,6 +503,8 @@
           <option value="S3AD">S3AD</option>
           <option value="SE2S">SE2S</option>
           <option value="MDA">MDA</option>
+          <option value="PSS">PSS</option>
+          <option value="ASG">ASG</option>
           <option value="Autres">Autres</option>
         </select>
         <select class="filter-select" id="archiveFilterType" onchange="renderArchives()">
@@ -518,6 +540,11 @@
       <input id="taskTitle" type="text" placeholder="Ex : Traitement dossier SOLIS" autocomplete="off">
     </div>
 
+    <div class="form-group">
+      <label>Ordre/Index</label>
+      <input id="taskOrder" type="text" placeholder="Ex : 2026-256" style="max-width:200px;">
+    </div>
+
     <div class="form-row">
       <div class="form-group">
         <label>Demandeur</label>
@@ -526,6 +553,8 @@
           <option value="S3AD">S3AD</option>
           <option value="SE2S">SE2S</option>
           <option value="MDA">MDA</option>
+          <option value="PSS">PSS</option>
+          <option value="ASG">ASG</option>
           <option value="Autres">Autres</option>
         </select>
       </div>
@@ -547,18 +576,31 @@
       <textarea id="taskComment" placeholder="Détails, notes, contexte…"></textarea>
     </div>
 
+    <div class="form-group">
+      <label>Fichiers joints</label>
+      <input type="file" id="taskFiles" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+        style="font-size:.85rem;padding:.5rem;"
+        onchange="handleFileSelection()">
+      <div id="filePreview" style="margin-top:.75rem;display:grid;gap:.5rem;"></div>
+    </div>
+
     <div class="form-row">
       <div class="form-group">
-        <label>Urgence</label>
-        <div class="urgency-pills">
-          <button class="urgency-pill selected" data-value="low">🟢 Faible</button>
-          <button class="urgency-pill" data-value="medium">🟡 Moy.</button>
-          <button class="urgency-pill" data-value="high">🔴 Haute</button>
-        </div>
+        <label>Date de demande</label>
+        <input id="requestDate" type="date">
       </div>
       <div class="form-group">
         <label>Deadline</label>
         <input id="deadline" type="date">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Urgence</label>
+      <div class="urgency-pills">
+        <button class="urgency-pill selected" data-value="low">🟢 Faible</button>
+        <button class="urgency-pill" data-value="medium">🟡 Moy.</button>
+        <button class="urgency-pill" data-value="high">🔴 Haute</button>
       </div>
     </div>
 
@@ -568,6 +610,30 @@
         <button class="status-pill selected" data-value="en-cours">🔵 En cours</button>
         <button class="status-pill" data-value="en-attente">⏳ En attente</button>
         <button class="status-pill" data-value="realise">✅ Réalisé</button>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label style="display:flex;align-items:center;gap:.5rem;">
+        <input type="checkbox" id="isRecurring" onchange="toggleRecurringFields()" style="width:auto;cursor:pointer;">
+        <span>Tâche récurrente</span>
+      </label>
+      <div id="recurringFields" style="display:none;margin-top:.75rem;padding:1rem;background:var(--surface2);border-radius:8px;">
+        <div class="form-row">
+          <div class="form-group" style="margin-bottom:0;">
+            <label>Fréquence</label>
+            <select id="recurringFrequency">
+              <option value="daily">Quotidien</option>
+              <option value="weekly">Hebdomadaire</option>
+              <option value="monthly">Mensuel</option>
+              <option value="yearly">Annuel</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label>Intervalle</label>
+            <input id="recurringInterval" type="number" min="1" value="1" placeholder="Ex: 2 (tous les 2 jours)">
+          </div>
+        </div>
       </div>
     </div>
 
@@ -592,6 +658,27 @@
 
 <!-- TOAST -->
 <div id="toast"></div>
+
+<!-- VERSIONS MODAL -->
+<div class="overlay" id="versionsOverlay" onclick="handleVersionsOverlayClick(event)">
+  <div class="modal" style="max-width:700px;">
+    <div class="modal-header">
+      <h2>📦 Versions des logiciels</h2>
+      <button class="close-btn" onclick="closeVersionsModal()">✕</button>
+    </div>
+
+    <div class="form-group">
+      <label>Ajouter/Modifier une version</label>
+      <div class="form-row-3">
+        <input id="versionSoftware" type="text" placeholder="Logiciel (ex: SOLIS)">
+        <input id="versionNumber" type="text" placeholder="Version (ex: 2.4.1)">
+        <button class="btn btn-primary" onclick="addVersion()">+ Ajouter</button>
+      </div>
+    </div>
+
+    <div id="versionsList" style="margin-top:1rem;"></div>
+  </div>
+</div>
 
 <script src="app.js"></script>
 </div><!-- /appContent -->
