@@ -707,7 +707,6 @@ function renderArchives() {
 
 function buildCard(task, idx, isArchive) {
   const p  = progressPercent(task.deadline);
-  const dc = deadlineLabel(task.deadline);
 
   const urgencyLabels = { low:'Faible', medium:'Moyenne', high:'Urgente' };
   const statusLabels  = { 'en-cours':'En cours', 'en-attente':'En attente', 'realise':'Réalisé' };
@@ -721,62 +720,71 @@ function buildCard(task, idx, isArchive) {
     return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' });
   };
 
-  const archivedDateHtml = isArchive && task.archivedAt
-    ? `<span class="archive-date-chip" style="background:rgba(45,158,107,.09);border-color:rgba(45,158,107,.2);color:var(--low)">Réalisé: ${formatDate(task.archivedAt)}</span>`
-    : '';
-
-  const createdDateHtml = task.id
-    ? `<span class="archive-date-chip" style="background:var(--surface2);border-color:var(--border);color:var(--muted)">Créé: ${formatDate(task.id)}</span>`
-    : '';
-
-  const requestDateHtml = task.requestDate
-    ? `<span class="archive-date-chip" style="background:rgba(37,99,235,.09);border-color:rgba(37,99,235,.2);color:var(--info)">Demandé: ${formatDate(task.requestDate)}</span>`
-    : '';
-
-  const updatedDateHtml = task.updatedAt && task.createdAt && task.updatedAt !== task.createdAt
-    ? `<span class="archive-date-chip" style="background:rgba(196,125,18,.09);border-color:rgba(196,125,18,.2);color:var(--medium)">Modifié: ${formatDate(task.updatedAt)}</span>`
-    : '';
+  // Dates en format compact pour la colonne droite
+  const createdDate = task.id ? formatDate(task.id) : '';
+  const requestDate = task.requestDate ? formatDate(task.requestDate) : '';
+  const updatedDate = task.updatedAt && task.createdAt && task.updatedAt !== task.createdAt ? formatDate(task.updatedAt) : '';
+  const archivedDate = isArchive && task.archivedAt ? formatDate(task.archivedAt) : '';
 
   const recurringFreqLabels = { daily: 'Quotidien', weekly: 'Hebdomadaire', monthly: 'Mensuel', yearly: 'Annuel' };
-  const recurringBadge = task.recurring
-    ? `<span class="type-badge" style="background:rgba(147,51,234,.09);color:#9333ea;border-color:rgba(147,51,234,.2)">🔄 ${recurringFreqLabels[task.recurring.frequency] || task.recurring.frequency}${task.recurring.interval > 1 ? ` (×${task.recurring.interval})` : ''}</span>`
+
+  const displayIndex = task.order ? `#${task.order}` : `#${String(idx+1).padStart(2,'0')}`;
+
+  const recurringText = task.recurring
+    ? `🔄 ${recurringFreqLabels[task.recurring.frequency] || task.recurring.frequency}${task.recurring.interval > 1 ? ` ×${task.recurring.interval}` : ''}`
     : '';
 
-  const displayIndex = task.order || `#${String(idx+1).padStart(2,'0')}`;
-
   card.innerHTML = `
-    <div class="card-header">
+    <div class="card-header-row">
       <span class="card-index">${escHtml(displayIndex)}</span>
-      <div class="card-title" title="${escHtml(task.title)}">${escHtml(task.title)}</div>
+      ${recurringText ? `<span class="card-recurring">${recurringText}</span>` : ''}
+    </div>
+    <div class="card-title" title="${escHtml(task.title)}">${escHtml(task.title)}</div>
+
+    <div class="card-row-badges-dates">
+      <div class="card-badges">
+        <span class="urgency-badge ${task.urgency}">
+          ${task.urgency === 'low' ? '🌿' : task.urgency === 'medium' ? '⚠️' : '🔥'} ${urgencyLabels[task.urgency]||task.urgency}
+        </span>
+        ${!isArchive ? `<span class="status-badge ${task.status}">
+          🔵 ${statusLabels[task.status]||task.status}
+        </span>` : ''}
+        ${task.requester ? `<span class="team-badge">
+          ${task.requester === 'S3AD' ? '📋' : task.requester === 'SE2S' ? '🩺' : '👥'} ${escHtml(task.requester)}
+        </span>` : ''}
+        ${task.type ? `<span class="type-badge">${escHtml(task.type)}</span>` : ''}
+      </div>
+
+      <div class="card-dates-column">
+        ${createdDate ? `<div class="date-item"><span class="date-label">Créé:</span> <span class="date-value">${createdDate}</span></div>` : ''}
+        ${requestDate ? `<div class="date-item"><span class="date-label">Demandé:</span> <span class="date-value">${requestDate}</span></div>` : ''}
+        ${updatedDate ? `<div class="date-item"><span class="date-label">Modifié:</span> <span class="date-value">${updatedDate}</span></div>` : ''}
+        ${archivedDate ? `<div class="date-item"><span class="date-label">Réalisé:</span> <span class="date-value">${archivedDate}</span></div>` : ''}
+      </div>
     </div>
 
-    <div class="card-badges">
-      <span class="urgency-badge ${task.urgency}">${urgencyLabels[task.urgency]||task.urgency}</span>
-      ${!isArchive ? `<span class="status-badge ${task.status}">${statusLabels[task.status]||task.status}</span>` : ''}
-      ${task.requester ? `<span class="requester-badge">${escHtml(task.requester)}</span>` : ''}
-      ${task.type      ? `<span class="type-badge">${escHtml(task.type)}</span>` : ''}
-      ${recurringBadge}
-    </div>
-
-    <div class="card-meta-row">
-      ${createdDateHtml}
-      ${requestDateHtml}
-      ${updatedDateHtml}
-      ${archivedDateHtml}
-    </div>
-
-    ${task.comment ? `<div class="card-comment">${renderMarkdown(task.comment)}</div>` : ''}
-
-    ${task.files && task.files.length > 0 ? `
-      <div style="display:flex;gap:.3rem;flex-wrap:wrap;align-items:center;margin-bottom:.3rem;">
-        <span style="display:inline-flex;align-items:center;gap:.25rem;font-size:.65rem;color:var(--accent);font-weight:600;background:var(--accent-light);padding:.2rem .45rem;border-radius:5px;border:1px solid rgba(26,107,90,.2);">📎 ${task.files.length} fichier${task.files.length > 1 ? 's' : ''}</span>
-      </div>` : ''}
+    ${task.comment ? `<div class="card-comment-wrapper">
+      <div class="card-comment" data-task-id="${task.id}">${renderMarkdown(task.comment)}</div>
+      <div class="comment-actions">
+        <button class="see-more-btn" onclick="toggleComment(${task.id})">Voir plus</button>
+        ${task.files && task.files.length > 0 ? `<span class="files-indicator">📎 ${task.files.length}</span>` : ''}
+      </div>
+    </div>` : task.files && task.files.length > 0 ? `<div class="files-only"><span class="files-indicator">📎 ${task.files.length}</span></div>` : ''}
 
     ${!isArchive && task.deadline ? `
-      <div class="card-deadline-chip ${dc.cls}" style="margin-bottom:.3rem;">${dc.label}</div>
-      <div class="progress-wrap">
-        <div class="progress-info"><span>Temps restant</span><span>${Math.round(p)}%</span></div>
-        <div class="progress-bar"><div class="progress-fill" style="width:${p}%;background:${progressColor(p)}"></div></div>
+      <div class="deadline-section">
+        <div class="deadline-content">
+          <span class="deadline-text">📅 Échéance: ${new Date(task.deadline).toLocaleDateString('fr-FR', {day: '2-digit', month: '2-digit', year: 'numeric'})}</span>
+          <div class="progress-circle-container">
+            <svg class="progress-ring" width="40" height="40">
+              <circle class="progress-ring-circle-bg" cx="20" cy="20" r="16" />
+              <circle class="progress-ring-circle" cx="20" cy="20" r="16"
+                stroke-dasharray="${2 * Math.PI * 16}"
+                stroke-dashoffset="${2 * Math.PI * 16 * (1 - p / 100)}" />
+            </svg>
+            <span class="progress-text">${Math.round(p)}%</span>
+          </div>
+        </div>
       </div>` : ''}
 
     <div class="card-actions">
@@ -978,6 +986,21 @@ function renderMarkdown(text) {
     return marked.parse(text);
   } catch {
     return escHtml(text);
+  }
+}
+
+function toggleComment(taskId) {
+  const wrapper = document.querySelector(`.card-comment[data-task-id="${taskId}"]`)?.parentElement;
+  if (!wrapper) return;
+
+  const btn = wrapper.querySelector('.see-more-btn');
+
+  if (wrapper.classList.contains('expanded')) {
+    wrapper.classList.remove('expanded');
+    btn.textContent = 'Voir plus';
+  } else {
+    wrapper.classList.add('expanded');
+    btn.textContent = 'Voir moins';
   }
 }
 
