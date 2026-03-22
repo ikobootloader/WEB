@@ -7,21 +7,25 @@
 const STORAGE_KEY = 'projets_tasks_v4_enc';
 const SALT_KEY    = 'projets_salt_v4';
 const VERSIONS_KEY = 'projets_versions_v4_enc';
+const PROJECTS_KEY = 'projets_projects_v4_enc';
 const ITER_COUNT  = 310_000;
 
 // ── État global ──────────────────────────────────────────────
 let tasks        = [];
 let versions     = {}; // { "SOLIS": "2.4.1", "MULTIGEST": "1.2.0" }
+let projects     = []; // Liste des projets avec timeline Gantt
 let editingId    = null;
+let editingProjectId = null;
 let attachedFiles = []; // Fichiers temporaires avant sauvegarde
 let activeFilter = 'all';
-let activeView   = 'dashboard';   // 'dashboard' | 'tasks' | 'archives' | 'import-export' | 'settings'
+let activeView   = 'dashboard';   // 'dashboard' | 'tasks' | 'projects' | 'archives' | 'import-export' | 'settings'
 let cryptoKey    = null;
 let fileHandle   = null;
 let fsaSupported = typeof window.showSaveFilePicker === 'function';
 let currentPage  = 1;
 let itemsPerPage = 12;
 let isSubmitting = false; // Protection contre les doubles soumissions
+let ganttViewMode = 'month'; // 'month' | 'weeks'
 
 // ════════════════════════════════════════════════════════════
 //  DÉMARRAGE
@@ -100,6 +104,13 @@ function initEventListeners() {
   document.getElementById('mobileMenuBtn')?.addEventListener('click', toggleMobileMenu);
   document.getElementById('sidebarOverlay')?.addEventListener('click', closeMobileMenu);
 
+  // Projects events
+  document.getElementById('btnNewProject')?.addEventListener('click', () => openProjectModal());
+  document.getElementById('btnSaveProject')?.addEventListener('click', submitProjectForm);
+  document.getElementById('viewMonth')?.addEventListener('click', () => setGanttViewMode('month'));
+  document.getElementById('viewWeeks')?.addEventListener('click', () => setGanttViewMode('weeks'));
+  document.getElementById('projectProgress')?.addEventListener('input', updateProjectProgressBar);
+
   // Global keyboard shortcuts
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
@@ -162,6 +173,8 @@ function updateSidebarCounts() {
 
   if (taskCountEl) taskCountEl.textContent = active.length;
   if (archiveCountEl) archiveCountEl.textContent = archived.length;
+
+  updateProjectCount();
 }
 
 // ════════════════════════════════════════════════════════════
@@ -193,6 +206,7 @@ function switchView(view) {
   const viewMap = {
     'dashboard': 'viewDashboard',
     'tasks': 'viewTasks',
+    'projects': 'viewProjects',
     'archives': 'viewArchives',
     'import-export': 'viewImportExport',
     'settings': 'viewSettings'
@@ -206,6 +220,7 @@ function switchView(view) {
   // Render appropriate content
   if (view === 'dashboard') renderDashboard();
   else if (view === 'tasks') renderTasks();
+  else if (view === 'projects') renderGanttChart();
   else if (view === 'archives') renderArchives();
 }
 
@@ -460,8 +475,13 @@ async function loadFromStorage() {
   const rawVersions = localStorage.getItem(VERSIONS_KEY);
   if (!rawVersions) { versions = {}; } else { versions = await decrypt(rawVersions); }
 
+  const rawProjects = localStorage.getItem(PROJECTS_KEY);
+  if (!rawProjects) { projects = []; } else { projects = await decrypt(rawProjects); }
+
   // Dédoublonner les tâches par ID
   deduplicateTasks();
+
+  updateProjectCount();
 }
 
 function deduplicateTasks() {
@@ -486,6 +506,7 @@ async function saveToStorage() {
   if (!cryptoKey) return;
   localStorage.setItem(STORAGE_KEY, await encrypt(tasks));
   localStorage.setItem(VERSIONS_KEY, await encrypt(versions));
+  localStorage.setItem(PROJECTS_KEY, await encrypt(projects));
   await writeToFile();
 }
 
@@ -535,8 +556,9 @@ async function writeToFile() {
     const data = {
       tasks: tasks,
       versions: versions,
+      projects: projects,
       exportedAt: new Date().toISOString(),
-      format: 'TaskArchitect v4'
+      format: 'TaskMDA v4'
     };
     const writable = await fileHandle.createWritable();
     await writable.write(JSON.stringify(data, null, 2));
@@ -1719,18 +1741,31 @@ function importJSON(e) {
   reader.onload = async ev => {
     try {
       const data = JSON.parse(ev.target.result);
-      if (!Array.isArray(data)) throw new Error();
-      tasks = data;
+
+      // Support both old format (array) and new format (object with tasks/versions/projects)
+      if (Array.isArray(data)) {
+        tasks = data;
+      } else if (data.tasks) {
+        tasks = data.tasks || [];
+        versions = data.versions || {};
+        projects = data.projects || [];
+      } else {
+        throw new Error('Invalid JSON format');
+      }
+
       await saveToStorage();
       updateSidebarCounts();
       if (activeView === 'dashboard') renderDashboard();
       else if (activeView === 'tasks') renderTasks();
+      else if (activeView === 'projects') renderGanttChart();
+
       const statusEl = document.getElementById('importStatus');
       if (statusEl) {
         statusEl.className = 'text-sm text-primary';
-        statusEl.textContent = `✓ ${data.length} tâche(s) importées`;
+        const itemsCount = tasks.length + (projects?.length || 0);
+        statusEl.textContent = `✓ ${tasks.length} tâche(s) + ${projects?.length || 0} projet(s) importé(s)`;
       }
-      showToast(`📂 ${data.length} tâche(s) importées`);
+      showToast(`📂 ${tasks.length} tâche(s) + ${projects?.length || 0} projet(s) importé(s)`);
     } catch {
       const statusEl = document.getElementById('importStatus');
       if (statusEl) {
@@ -1743,7 +1778,14 @@ function importJSON(e) {
 }
 
 function exportJSON() {
-  downloadBlob(new Blob([JSON.stringify(tasks,null,2)],{type:'application/json'}), 'tasks.json');
+  const data = {
+    tasks: tasks,
+    versions: versions,
+    projects: projects,
+    exportedAt: new Date().toISOString(),
+    format: 'TaskArchitect v4'
+  };
+  downloadBlob(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}), 'tasks.json');
   showToast('⬇ JSON exporté (non chiffré)');
 }
 
@@ -1862,4 +1904,411 @@ function renderVersionsList() {
   html += '</div>';
 
   container.innerHTML = html;
+}
+// ════════════════════════════════════════════════════════════
+//  PROJECTS & GANTT CHART
+// ════════════════════════════════════════════════════════════
+
+function openProjectModal(id = null) {
+  editingProjectId = id;
+  const modal = document.getElementById('projectModal');
+  const title = document.getElementById('projectModalTitle');
+
+  if (id) {
+    const project = projects.find(p => p.id === id);
+    if (!project) return;
+
+    title.textContent = 'Modifier le projet';
+    document.getElementById('projectName').value = project.name;
+    document.getElementById('projectStartDate').value = project.startDate;
+    document.getElementById('projectEndDate').value = project.endDate;
+    document.getElementById('projectProgress').value = project.progress;
+    document.getElementById('projectDescription').value = project.description || '';
+    updateProjectProgressBar();
+
+    // Set active status pill
+    document.querySelectorAll('.project-status-pill').forEach(pill => {
+      if (pill.dataset.status === project.status) {
+        pill.classList.add('bg-primary-fixed', 'text-on-primary-fixed-variant', 'border-primary');
+        pill.classList.remove('bg-surface-container', 'text-on-surface-variant', 'border-transparent');
+      } else {
+        pill.classList.remove('bg-primary-fixed', 'text-on-primary-fixed-variant', 'border-primary');
+        pill.classList.add('bg-surface-container', 'text-on-surface-variant', 'border-transparent');
+      }
+    });
+  } else {
+    title.textContent = 'Nouveau projet';
+    resetProjectForm();
+  }
+
+  // Init status pills
+  initProjectStatusPills();
+
+  modal.classList.remove('hidden');
+}
+
+function closeProjectModal() {
+  document.getElementById('projectModal').classList.add('hidden');
+  editingProjectId = null;
+}
+
+function resetProjectForm() {
+  document.getElementById('projectName').value = '';
+  document.getElementById('projectStartDate').value = '';
+  document.getElementById('projectEndDate').value = '';
+  document.getElementById('projectProgress').value = 0;
+  document.getElementById('projectDescription').value = '';
+  updateProjectProgressBar();
+
+  // Reset status pills
+  document.querySelectorAll('.project-status-pill').forEach((pill, idx) => {
+    if (idx === 0) {
+      pill.classList.add('bg-primary-fixed', 'text-on-primary-fixed-variant', 'border-primary');
+      pill.classList.remove('bg-surface-container', 'text-on-surface-variant', 'border-transparent');
+    } else {
+      pill.classList.remove('bg-primary-fixed', 'text-on-primary-fixed-variant', 'border-primary');
+      pill.classList.add('bg-surface-container', 'text-on-surface-variant', 'border-transparent');
+    }
+  });
+}
+
+function initProjectStatusPills() {
+  document.querySelectorAll('.project-status-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      document.querySelectorAll('.project-status-pill').forEach(p => {
+        p.classList.remove('bg-primary-fixed', 'text-on-primary-fixed-variant', 'border-primary');
+        p.classList.add('bg-surface-container', 'text-on-surface-variant', 'border-transparent');
+      });
+      pill.classList.add('bg-primary-fixed', 'text-on-primary-fixed-variant', 'border-primary');
+      pill.classList.remove('bg-surface-container', 'text-on-surface-variant', 'border-transparent');
+    });
+  });
+}
+
+function getSelectedProjectStatus() {
+  const selected = document.querySelector('.project-status-pill.bg-primary-fixed');
+  return selected ? selected.dataset.status : 'en-cours';
+}
+
+function updateProjectProgressBar() {
+  const value = document.getElementById('projectProgress').value;
+  const bar = document.getElementById('projectProgressBar');
+  if (bar) bar.style.width = `${value}%`;
+}
+
+async function submitProjectForm() {
+  const name = document.getElementById('projectName').value.trim();
+  const startDate = document.getElementById('projectStartDate').value;
+  const endDate = document.getElementById('projectEndDate').value;
+  const progress = parseInt(document.getElementById('projectProgress').value) || 0;
+  const description = document.getElementById('projectDescription').value.trim();
+  const status = getSelectedProjectStatus();
+
+  if (!name) {
+    shake(document.getElementById('projectName'));
+    return;
+  }
+
+  if (!startDate || !endDate) {
+    showToast('⚠️ Veuillez renseigner les dates de début et fin');
+    return;
+  }
+
+  if (new Date(endDate) < new Date(startDate)) {
+    showToast('⚠️ La date de fin doit être après la date de début');
+    return;
+  }
+
+  const now = new Date().toISOString();
+
+  if (editingProjectId) {
+    projects = projects.map(p => p.id === editingProjectId
+      ? { ...p, name, startDate, endDate, progress, description, status, updatedAt: now }
+      : p
+    );
+    showToast('✏️ Projet modifié');
+  } else {
+    projects.push({
+      id: Date.now(),
+      name,
+      startDate,
+      endDate,
+      progress,
+      description,
+      status,
+      createdAt: now,
+      updatedAt: now
+    });
+    showToast('✅ Projet ajouté');
+  }
+
+  await saveToStorage();
+  updateProjectCount();
+  renderGanttChart();
+  closeProjectModal();
+}
+
+function updateProjectCount() {
+  const activeProjects = projects.filter(p => p.status !== 'termine');
+  const countEl = document.getElementById('projectCount');
+  if (countEl) countEl.textContent = activeProjects.length;
+}
+
+function setGanttViewMode(mode) {
+  ganttViewMode = mode;
+
+  // Update button states
+  const monthBtn = document.getElementById('viewMonth');
+  const weeksBtn = document.getElementById('viewWeeks');
+
+  if (mode === 'month') {
+    monthBtn.classList.add('bg-primary', 'text-white');
+    monthBtn.classList.remove('text-on-surface-variant');
+    weeksBtn.classList.remove('bg-primary', 'text-white');
+    weeksBtn.classList.add('text-on-surface-variant');
+  } else {
+    weeksBtn.classList.add('bg-primary', 'text-white');
+    weeksBtn.classList.remove('text-on-surface-variant');
+    monthBtn.classList.remove('bg-primary', 'text-white');
+    monthBtn.classList.add('text-on-surface-variant');
+  }
+
+  renderGanttChart();
+}
+
+function renderGanttChart() {
+  const container = document.getElementById('ganttChart');
+  if (!container) return;
+
+  if (projects.length === 0) {
+    container.innerHTML = `
+      <div class="text-center py-16 px-4">
+        <span class="material-symbols-outlined text-6xl text-on-surface-variant mb-4 block opacity-40">folder_open</span>
+        <p class="text-lg font-semibold text-on-surface mb-2">Aucun projet</p>
+        <p class="text-on-surface-variant">Créez votre premier projet pour commencer</p>
+      </div>
+    `;
+    return;
+  }
+
+  // Calculate timeline range
+  const allDates = projects.flatMap(p => [new Date(p.startDate), new Date(p.endDate)]);
+  const minDate = new Date(Math.min(...allDates));
+  const maxDate = new Date(Math.max(...allDates));
+
+  // Extend range to show full context
+  if (ganttViewMode === 'month') {
+    minDate.setMonth(minDate.getMonth() - 1);
+    maxDate.setMonth(maxDate.getMonth() + 1);
+  } else {
+    minDate.setDate(minDate.getDate() - 14); // 2 weeks before
+    maxDate.setDate(maxDate.getDate() + 14); // 2 weeks after
+  }
+
+  const timeLabels = ganttViewMode === 'month'
+    ? getMonthsBetween(minDate, maxDate)
+    : getWeeksBetween(minDate, maxDate);
+
+  // Build HTML
+  let html = '<div class="min-w-[800px]">';
+
+  // Header row with time labels (months or weeks)
+  html += '<div class="grid gap-0 border-b border-surface-container" style="grid-template-columns: 250px 1fr;">';
+  html += '<div class="p-4 bg-surface-container-lowest font-bold text-sm uppercase tracking-wide text-on-surface-variant sticky left-0 z-10">Nom du projet</div>';
+  html += '<div class="flex">';
+  timeLabels.forEach(label => {
+    html += `<div class="flex-1 text-center p-4 bg-surface-container-lowest font-semibold text-sm uppercase tracking-wide text-on-surface-variant border-l border-surface-container">${label}</div>`;
+  });
+  html += '</div>';
+  html += '</div>';
+
+  // Project rows
+  projects.forEach(project => {
+    const statusColors = {
+      'en-cours': { bg: '#006c4a', text: '#ffffff', label: 'EN COURS', dot: '#006c4a' },
+      'planifie': { bg: '#6366f1', text: '#ffffff', label: 'PLANIFIÉ', dot: '#6366f1' },
+      'urgent': { bg: '#ef4444', text: '#ffffff', label: 'URGENT', dot: '#ef4444' },
+      'termine': { bg: '#9ca3af', text: '#ffffff', label: 'TERMINÉ', dot: '#9ca3af' }
+    };
+
+    const color = statusColors[project.status] || statusColors['en-cours'];
+
+    html += '<div class="grid gap-0 border-b border-surface-container hover:bg-surface-container/30 transition-colors" style="grid-template-columns: 250px 1fr;">';
+
+    // Project name column
+    html += `
+      <div class="p-4 sticky left-0 z-10 bg-surface-container-low group">
+        <div class="flex items-center justify-between">
+          <div>
+            <h4 class="font-bold text-on-surface mb-1">${escHtml(project.name)}</h4>
+            <div class="flex items-center gap-1.5 text-xs">
+              <span class="w-2 h-2 rounded-full" style="background-color: ${color.dot}"></span>
+              <span class="font-semibold" style="color: ${color.dot}">${color.label}</span>
+            </div>
+          </div>
+          <button onclick="openProjectModal(${project.id})" class="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-surface-container rounded-lg transition-all">
+            <span class="material-symbols-outlined text-sm text-on-surface-variant">edit</span>
+          </button>
+        </div>
+      </div>
+    `;
+
+    // Timeline column
+    html += '<div class="relative p-4">';
+    const bar = calculateBarPosition(project, minDate, maxDate, timeLabels.length);
+    html += `
+      <div class="absolute top-1/2 -translate-y-1/2 h-10 rounded-full shadow-sm flex items-center justify-center px-4 font-semibold text-sm transition-all hover:shadow-md cursor-pointer"
+           style="left: ${bar.left}%; width: ${bar.width}%; background-color: ${color.bg}; color: ${color.text};"
+           onclick="openProjectModal(${project.id})"
+           title="${escHtml(project.name)} - ${project.progress}%">
+        <span>${project.progress}%</span>
+      </div>
+    `;
+    html += '</div>';
+
+    html += '</div>';
+  });
+
+  html += '</div>';
+  container.innerHTML = html;
+
+  // Render mobile card view
+  renderProjectCards();
+}
+
+function renderProjectCards() {
+  const container = document.getElementById('projectCardList');
+  if (!container) return;
+
+  if (projects.length === 0) {
+    container.innerHTML = `
+      <div class="text-center py-16 px-4">
+        <span class="material-symbols-outlined text-6xl text-on-surface-variant mb-4 block opacity-40">folder_open</span>
+        <p class="text-lg font-semibold text-on-surface mb-2">Aucun projet</p>
+        <p class="text-on-surface-variant">Créez votre premier projet pour commencer</p>
+      </div>
+    `;
+    return;
+  }
+
+  const statusColors = {
+    'en-cours': { bg: 'bg-[#006c4a]', text: 'text-white', label: 'EN COURS', dot: '#006c4a' },
+    'planifie': { bg: 'bg-[#6366f1]', text: 'text-white', label: 'PLANIFIÉ', dot: '#6366f1' },
+    'urgent': { bg: 'bg-[#ef4444]', text: 'text-white', label: 'URGENT', dot: '#ef4444' },
+    'termine': { bg: 'bg-[#9ca3af]', text: 'text-white', label: 'TERMINÉ', dot: '#9ca3af' }
+  };
+
+  let html = '';
+  projects.forEach(project => {
+    const color = statusColors[project.status] || statusColors['en-cours'];
+    const startDate = new Date(project.startDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+    const endDate = new Date(project.endDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+
+    // Calculate days remaining
+    const today = new Date();
+    const end = new Date(project.endDate);
+    const daysRemaining = Math.ceil((end - today) / (1000 * 60 * 60 * 24));
+    const daysText = daysRemaining > 0 ? `${daysRemaining} jours restants` : `Échéance dépassée de ${Math.abs(daysRemaining)} jours`;
+    const daysColor = daysRemaining > 0 ? 'text-on-surface-variant' : 'text-error';
+
+    html += `
+      <div class="bg-surface-container-low rounded-2xl p-4 shadow-sm hover:shadow-md transition-all" onclick="openProjectModal(${project.id})">
+        <!-- Header -->
+        <div class="flex items-start justify-between mb-3">
+          <div class="flex-1">
+            <h3 class="font-bold text-on-surface text-lg mb-2">${escHtml(project.name)}</h3>
+            <div class="flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full" style="background-color: ${color.dot}"></span>
+              <span class="text-xs font-semibold" style="color: ${color.dot}">${color.label}</span>
+            </div>
+          </div>
+          <button onclick="event.stopPropagation(); openProjectModal(${project.id})" class="p-2 hover:bg-surface-container rounded-lg transition-colors">
+            <span class="material-symbols-outlined text-lg text-on-surface-variant">edit</span>
+          </button>
+        </div>
+
+        <!-- Dates -->
+        <div class="flex items-center gap-4 mb-3 text-sm">
+          <div class="flex items-center gap-1.5 text-on-surface-variant">
+            <span class="material-symbols-outlined text-base">event</span>
+            <span>${startDate} → ${endDate}</span>
+          </div>
+        </div>
+
+        <!-- Days remaining -->
+        <div class="mb-3 text-sm ${daysColor} font-medium">
+          ${daysText}
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="mb-2">
+          <div class="flex items-center justify-between text-sm mb-1">
+            <span class="text-on-surface-variant font-medium">Progression</span>
+            <span class="font-bold text-on-surface">${project.progress}%</span>
+          </div>
+          <div class="w-full h-2 bg-surface-container rounded-full overflow-hidden">
+            <div class="${color.bg} h-full rounded-full transition-all" style="width: ${project.progress}%"></div>
+          </div>
+        </div>
+
+        ${project.description ? `
+        <div class="mt-3 pt-3 border-t border-surface-container">
+          <p class="text-sm text-on-surface-variant line-clamp-2">${escHtml(project.description)}</p>
+        </div>
+        ` : ''}
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
+}
+
+function getMonthsBetween(start, end) {
+  const months = [];
+  const monthNames = ['JAN', 'FÉV', 'MAR', 'AVR', 'MAI', 'JUIN', 'JUIL', 'AOÛT', 'SEP', 'OCT', 'NOV', 'DÉC'];
+
+  const current = new Date(start);
+  while (current <= end) {
+    months.push(monthNames[current.getMonth()]);
+    current.setMonth(current.getMonth() + 1);
+  }
+
+  return months;
+}
+
+function getWeeksBetween(start, end) {
+  const weeks = [];
+  const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
+
+  // Start from the Monday of the week containing start date
+  const current = new Date(start);
+  const day = current.getDay();
+  const diff = current.getDate() - day + (day === 0 ? -6 : 1); // Adjust to Monday
+  current.setDate(diff);
+
+  let weekNumber = 1;
+  while (current <= end) {
+    const weekStart = current.getDate();
+    const month = monthNames[current.getMonth()];
+    weeks.push(`S${weekNumber} ${month}`);
+
+    current.setDate(current.getDate() + 7); // Next week
+    weekNumber++;
+  }
+
+  return weeks;
+}
+
+function calculateBarPosition(project, minDate, maxDate, totalMonths) {
+  const projectStart = new Date(project.startDate);
+  const projectEnd = new Date(project.endDate);
+
+  const totalDays = (maxDate - minDate) / (1000 * 60 * 60 * 24);
+  const startDays = (projectStart - minDate) / (1000 * 60 * 60 * 24);
+  const durationDays = (projectEnd - projectStart) / (1000 * 60 * 60 * 24);
+
+  const left = (startDays / totalDays) * 100;
+  const width = (durationDays / totalDays) * 100;
+
+  return { left: Math.max(0, left), width: Math.min(100 - left, width) };
 }

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TaskArchitect | Gestion de Projets</title>
+<title>TaskMDA | Gestion de Projets</title>
 
 <!-- Fonts -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -115,10 +115,10 @@
 <aside id="sidebar" class="fixed left-0 top-0 h-full flex flex-col p-4 bg-surface-container-low h-screen w-64 border-r-0 z-50 transform -translate-x-full lg:translate-x-0 transition-transform duration-300">
   <div class="flex items-center gap-3 px-2 mb-8">
     <div class="w-10 h-10 bg-primary-gradient rounded-xl flex items-center justify-center text-white">
-      <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">architecture</span>
+      <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">account_balance</span>
     </div>
     <div>
-      <h1 class="text-xl font-bold text-primary font-headline leading-tight">TaskArchitect</h1>
+      <h1 class="text-xl font-bold text-primary font-headline leading-tight">TaskMDA</h1>
       <p class="text-[10px] uppercase tracking-wider text-on-surface-variant font-semibold">Gestion de Projets</p>
     </div>
   </div>
@@ -138,6 +138,12 @@
       <span class="material-symbols-outlined">assignment_turned_in</span>
       <span class="text-sm font-medium">Mes tâches</span>
       <span class="ml-auto bg-primary text-white text-xs px-2 py-0.5 rounded-full" id="taskCount">0</span>
+    </a>
+
+    <a id="navProjects" class="nav-item flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-primary hover:bg-surface-container rounded-lg transition-colors cursor-pointer" href="#projects">
+      <span class="material-symbols-outlined">folder_open</span>
+      <span class="text-sm font-medium">Projets</span>
+      <span class="ml-auto bg-primary text-white text-xs px-2 py-0.5 rounded-full" id="projectCount">0</span>
     </a>
 
     <a id="navArchives" class="nav-item flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-primary hover:bg-surface-container rounded-lg transition-colors cursor-pointer" href="#archives">
@@ -312,6 +318,38 @@
 
       <div id="archives" class="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <!-- Archived tasks will be inserted here -->
+      </div>
+    </section>
+
+    <!-- Projects View -->
+    <section id="viewProjects" class="view-section hidden">
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-6 gap-4">
+        <div>
+          <h2 class="text-2xl md:text-3xl font-extrabold font-headline tracking-tight text-on-surface">Projets en cours</h2>
+          <p class="text-on-surface-variant mt-1">Visualisez l'avancement et les échéances de vos initiatives stratégiques.</p>
+        </div>
+        <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+          <button id="btnNewProject" class="px-4 py-2 bg-primary-gradient text-white rounded-xl font-semibold flex items-center justify-center gap-2 shadow-sm hover:shadow-md transition-all">
+            <span class="material-symbols-outlined text-lg">add</span>
+            <span>Nouveau projet</span>
+          </button>
+          <div class="hidden lg:flex bg-surface-container-low rounded-xl p-1">
+            <button id="viewMonth" class="px-3 py-1.5 rounded-lg text-sm font-semibold transition-all bg-primary text-white">MOIS</button>
+            <button id="viewWeeks" class="px-3 py-1.5 rounded-lg text-sm font-semibold transition-all text-on-surface-variant hover:bg-surface-container">SEMAINES</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mobile Card View -->
+      <div id="projectCardList" class="lg:hidden space-y-4">
+        <!-- Project cards will be rendered here on mobile -->
+      </div>
+
+      <!-- Desktop Gantt Chart -->
+      <div class="hidden lg:block bg-surface-container-low rounded-2xl overflow-hidden shadow-sm">
+        <div id="ganttChart" class="overflow-x-auto">
+          <!-- Gantt chart will be rendered here on desktop -->
+        </div>
       </div>
     </section>
 
@@ -594,6 +632,93 @@
 <!-- Toast Notification -->
 <div id="toast" class="fixed bottom-8 right-8 bg-on-surface text-inverse-on-surface px-6 py-3 rounded-xl shadow-lg transform translate-y-32 opacity-0 transition-all duration-300 z-50">
   <span id="toastMsg"></span>
+</div>
+
+<!-- Project Modal -->
+<div id="projectModal" class="fixed inset-0 bg-black/40 backdrop-blur-md z-[100] hidden flex items-center justify-center p-4">
+  <div class="bg-surface-container-lowest rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto mx-4">
+    <div class="sticky top-0 bg-surface-container-lowest border-b border-surface-container p-4 md:p-6 flex justify-between items-center">
+      <h2 id="projectModalTitle" class="text-xl md:text-2xl font-bold font-headline">Nouveau projet</h2>
+      <button onclick="closeProjectModal()" class="w-10 h-10 flex items-center justify-center hover:bg-surface-container rounded-lg transition-colors">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+
+    <div class="p-4 md:p-6 space-y-4">
+      <div>
+        <label class="block text-sm font-semibold mb-2">Nom du projet *</label>
+        <input id="projectName" type="text" placeholder="Ex: Refonte Site Web" class="w-full px-4 py-2 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none">
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-semibold mb-2">Date de début *</label>
+          <input id="projectStartDate" type="date" class="w-full px-4 py-2 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none">
+        </div>
+
+        <div>
+          <label class="block text-sm font-semibold mb-2">Date de fin *</label>
+          <input id="projectEndDate" type="date" class="w-full px-4 py-2 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-semibold mb-2">Statut</label>
+          <div class="flex flex-col gap-2" id="projectStatusPills">
+            <button type="button" class="project-status-pill px-4 py-2 rounded-xl text-sm font-semibold transition-all bg-primary-fixed text-on-primary-fixed-variant border-2 border-primary" data-status="en-cours">
+              <span class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-primary"></span>
+                EN COURS
+              </span>
+            </button>
+            <button type="button" class="project-status-pill px-4 py-2 rounded-xl text-sm font-semibold transition-all bg-surface-container text-on-surface-variant border-2 border-transparent" data-status="planifie">
+              <span class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-[#6366f1]"></span>
+                PLANIFIÉ
+              </span>
+            </button>
+            <button type="button" class="project-status-pill px-4 py-2 rounded-xl text-sm font-semibold transition-all bg-surface-container text-on-surface-variant border-2 border-transparent" data-status="urgent">
+              <span class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-[#ef4444]"></span>
+                URGENT
+              </span>
+            </button>
+            <button type="button" class="project-status-pill px-4 py-2 rounded-xl text-sm font-semibold transition-all bg-surface-container text-on-surface-variant border-2 border-transparent" data-status="termine">
+              <span class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-surface-container-high"></span>
+                TERMINÉ
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-sm font-semibold mb-2">Progression (%)</label>
+          <input id="projectProgress" type="number" min="0" max="100" value="0" class="w-full px-4 py-2 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none">
+          <div class="mt-2">
+            <div class="w-full h-2 bg-surface-container rounded-full overflow-hidden">
+              <div id="projectProgressBar" class="h-full bg-primary-gradient transition-all" style="width: 0%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-sm font-semibold mb-2">Description</label>
+        <textarea id="projectDescription" rows="3" placeholder="Description du projet..." class="w-full px-4 py-2 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none resize-none"></textarea>
+      </div>
+
+      <div class="flex gap-3 pt-4">
+        <button id="btnSaveProject" class="flex-1 px-6 py-3 bg-primary-gradient text-white rounded-xl font-bold">
+          Enregistrer
+        </button>
+        <button onclick="closeProjectModal()" class="flex-1 px-6 py-3 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold">
+          Annuler
+        </button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- Versions Modal -->
