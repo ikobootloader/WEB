@@ -96,14 +96,46 @@ function initEventListeners() {
     document.getElementById('recurringFields').classList.toggle('hidden', !e.target.checked);
   });
 
+  // Mobile menu
+  document.getElementById('mobileMenuBtn')?.addEventListener('click', toggleMobileMenu);
+  document.getElementById('sidebarOverlay')?.addEventListener('click', closeMobileMenu);
+
   // Global keyboard shortcuts
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') closeModal();
+    if (e.key === 'Escape') {
+      closeModal();
+      closeMobileMenu();
+    }
     if (e.key === 'Enter' && document.querySelector('#modalOverlay:not(.hidden)')) {
       const lockScreen = document.querySelector('#modalOverlay:not(.hidden)');
       if (lockScreen) submitPassword();
     }
   });
+}
+
+// ════════════════════════════════════════════════════════════
+//  MOBILE MENU
+// ════════════════════════════════════════════════════════════
+
+function toggleMobileMenu() {
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+
+  if (sidebar.classList.contains('-translate-x-full')) {
+    sidebar.classList.remove('-translate-x-full');
+    overlay.classList.remove('hidden');
+  } else {
+    sidebar.classList.add('-translate-x-full');
+    overlay.classList.add('hidden');
+  }
+}
+
+function closeMobileMenu() {
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+
+  sidebar.classList.add('-translate-x-full');
+  overlay.classList.add('hidden');
 }
 
 function initNavigation() {
@@ -112,6 +144,7 @@ function initNavigation() {
       e.preventDefault();
       const view = item.getAttribute('href').substring(1);
       switchView(view);
+      closeMobileMenu(); // Fermer le menu mobile après navigation
     });
   });
 }
@@ -1319,7 +1352,7 @@ function getDeadlineProgress(task) {
           />
         </svg>
         <div class="absolute inset-0 flex items-center justify-center">
-          <span class="text-[10px] font-bold ${colorClass}">${Math.abs(daysRemaining)}j</span>
+          <span class="text-[10px] font-bold ${colorClass}">${Math.abs(daysRemaining)} j</span>
         </div>
       </div>
     </div>

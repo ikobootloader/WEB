@@ -106,8 +106,13 @@
 
 <body class="bg-background font-body text-on-surface flex min-h-screen">
 
+<!-- Mobile Menu Button -->
+<button id="mobileMenuBtn" class="fixed top-4 left-4 z-[60] lg:hidden w-10 h-10 flex items-center justify-center bg-primary-gradient text-white rounded-xl shadow-lg">
+  <span class="material-symbols-outlined">menu</span>
+</button>
+
 <!-- Sidebar Navigation -->
-<aside id="sidebar" class="fixed left-0 top-0 h-full flex flex-col p-4 bg-surface-container-low h-screen w-64 border-r-0 z-50">
+<aside id="sidebar" class="fixed left-0 top-0 h-full flex flex-col p-4 bg-surface-container-low h-screen w-64 border-r-0 z-50 transform -translate-x-full lg:translate-x-0 transition-transform duration-300">
   <div class="flex items-center gap-3 px-2 mb-8">
     <div class="w-10 h-10 bg-primary-gradient rounded-xl flex items-center justify-center text-white">
       <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">architecture</span>
@@ -155,25 +160,28 @@
   </div>
 </aside>
 
+<!-- Overlay pour fermer la sidebar sur mobile -->
+<div id="sidebarOverlay" class="fixed inset-0 bg-black/50 z-40 hidden lg:hidden"></div>
+
 <!-- Main Content -->
-<main id="mainContent" class="flex-1 ml-64 min-h-screen flex flex-col bg-surface">
+<main id="mainContent" class="flex-1 lg:ml-64 min-h-screen flex flex-col bg-surface">
 
   <!-- Top Navigation Bar -->
-  <header class="w-full h-16 sticky top-0 z-40 bg-surface/80 backdrop-blur-xl flex items-center justify-between px-8 shadow-sm">
-    <div class="flex items-center gap-6 flex-1">
+  <header class="w-full h-16 sticky top-0 z-40 bg-surface/80 backdrop-blur-xl flex items-center justify-between px-4 lg:px-8 shadow-sm">
+    <div class="flex items-center gap-3 lg:gap-6 flex-1 ml-12 lg:ml-0">
       <div class="relative w-full max-w-md">
         <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-xl">search</span>
         <input id="searchInput" class="w-full bg-surface-container-low border-none rounded-xl pl-10 pr-4 py-2 text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all" placeholder="Rechercher des tâches, projets..." type="text"/>
       </div>
     </div>
-    <div class="flex items-center gap-4">
-      <button id="btnNotifications" class="w-10 h-10 flex items-center justify-center text-on-surface-variant hover:text-primary transition-all">
+    <div class="flex items-center gap-2 lg:gap-4">
+      <button id="btnNotifications" class="w-10 h-10 hidden sm:flex items-center justify-center text-on-surface-variant hover:text-primary transition-all">
         <span class="material-symbols-outlined">notifications</span>
       </button>
-      <button id="btnHelp" class="w-10 h-10 flex items-center justify-center text-on-surface-variant hover:text-primary transition-all">
+      <button id="btnHelp" class="w-10 h-10 hidden sm:flex items-center justify-center text-on-surface-variant hover:text-primary transition-all">
         <span class="material-symbols-outlined">help_outline</span>
       </button>
-      <div class="h-6 w-[1px] bg-surface-container mx-2"></div>
+      <div class="h-6 w-[1px] bg-surface-container mx-2 hidden sm:block"></div>
       <button id="btnFsaHeader" title="État liaison fichier JSON" class="w-10 h-10 flex items-center justify-center bg-tertiary-container text-on-tertiary-container rounded-xl hover:bg-tertiary-container/80 transition-all">
         <span class="material-symbols-outlined text-xl">link_off</span>
       </button>
@@ -181,13 +189,13 @@
   </header>
 
   <!-- Content Area -->
-  <div class="p-8 max-w-7xl mx-auto w-full space-y-8 flex-1">
+  <div class="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6 lg:space-y-8 flex-1">
 
     <!-- Dashboard View -->
     <section id="viewDashboard" class="view-section">
       <div class="flex justify-between items-end mb-6">
         <div>
-          <h2 class="text-3xl font-extrabold font-headline tracking-tight text-on-surface">Tableau de bord</h2>
+          <h2 class="text-2xl md:text-3xl font-extrabold font-headline tracking-tight text-on-surface">Tableau de bord</h2>
           <p class="text-on-surface-variant mt-1" id="dashboardSummary">Chargement...</p>
         </div>
         <div class="flex gap-2">
@@ -201,7 +209,7 @@
       </div>
 
       <!-- Statistics Cards -->
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8">
         <div class="bg-surface-container-low p-6 rounded-xl border-l-4 border-primary flex justify-between items-center">
           <div>
             <p class="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest mb-1">Total des tâches</p>
@@ -248,7 +256,7 @@
     <section id="viewTasks" class="view-section hidden">
       <div class="flex justify-between items-end mb-6">
         <div>
-          <h2 class="text-3xl font-extrabold font-headline tracking-tight text-on-surface">Mes tâches</h2>
+          <h2 class="text-2xl md:text-3xl font-extrabold font-headline tracking-tight text-on-surface">Mes tâches</h2>
           <p class="text-on-surface-variant mt-1">Gérez toutes vos tâches en cours</p>
         </div>
         <div class="flex gap-2">
@@ -297,7 +305,7 @@
     <section id="viewArchives" class="view-section hidden">
       <div class="flex justify-between items-end mb-6">
         <div>
-          <h2 class="text-3xl font-extrabold font-headline tracking-tight text-on-surface">Archives</h2>
+          <h2 class="text-2xl md:text-3xl font-extrabold font-headline tracking-tight text-on-surface">Archives</h2>
           <p class="text-on-surface-variant mt-1">Tâches terminées et archivées</p>
         </div>
       </div>
@@ -310,7 +318,7 @@
     <!-- Import/Export View -->
     <section id="viewImportExport" class="view-section hidden">
       <div class="mb-6">
-        <h2 class="text-3xl font-extrabold font-headline tracking-tight text-on-surface">Import & Export</h2>
+        <h2 class="text-2xl md:text-3xl font-extrabold font-headline tracking-tight text-on-surface">Import & Export</h2>
         <p class="text-on-surface-variant mt-1">Gérez vos données</p>
       </div>
 
@@ -369,7 +377,7 @@
     <!-- Settings View -->
     <section id="viewSettings" class="view-section hidden">
       <div class="mb-6">
-        <h2 class="text-3xl font-extrabold font-headline tracking-tight text-on-surface">Paramètres</h2>
+        <h2 class="text-2xl md:text-3xl font-extrabold font-headline tracking-tight text-on-surface">Paramètres</h2>
         <p class="text-on-surface-variant mt-1">Configuration de l'application</p>
       </div>
 
@@ -424,15 +432,15 @@
 
 <!-- Task Modal -->
 <div id="modalOverlay" class="fixed inset-0 bg-on-surface/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-  <div class="bg-surface-container-lowest rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-    <div class="sticky top-0 bg-surface-container-lowest border-b border-surface-container p-6 flex justify-between items-center">
-      <h2 id="modalTitle" class="text-2xl font-bold font-headline">Nouvelle tâche</h2>
+  <div class="bg-surface-container-lowest rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto mx-4">
+    <div class="sticky top-0 bg-surface-container-lowest border-b border-surface-container p-4 md:p-6 flex justify-between items-center">
+      <h2 id="modalTitle" class="text-xl md:text-2xl font-bold font-headline">Nouvelle tâche</h2>
       <button onclick="closeModal()" class="w-10 h-10 flex items-center justify-center hover:bg-surface-container rounded-lg transition-colors">
         <span class="material-symbols-outlined">close</span>
       </button>
     </div>
 
-    <div class="p-6 space-y-4">
+    <div class="p-4 md:p-6 space-y-4">
       <!-- Form will be dynamically populated -->
       <div>
         <label class="block text-sm font-semibold mb-2">Ordre / Index</label>
@@ -444,7 +452,7 @@
         <input id="taskTitle" type="text" placeholder="Titre de la tâche" class="w-full px-4 py-3 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none" required>
       </div>
 
-      <div class="grid grid-cols-2 gap-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label class="block text-sm font-semibold mb-2">Urgence</label>
           <div class="flex gap-2" id="urgencyPills">
@@ -473,7 +481,7 @@
         </div>
       </div>
 
-      <div class="grid grid-cols-2 gap-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label class="block text-sm font-semibold mb-2">Demandeur</label>
           <input id="taskRequester" type="text" placeholder="Ex: S3AD, SE2S" list="requesterList" class="w-full px-4 py-2 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none">
@@ -500,7 +508,7 @@
         </div>
       </div>
 
-      <div class="grid grid-cols-2 gap-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label class="block text-sm font-semibold mb-2">Date demande</label>
           <input id="taskRequestDate" type="date" class="w-full px-4 py-2 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none">
@@ -524,7 +532,7 @@
           <span class="text-sm font-semibold">Tâche récurrente</span>
         </label>
         <div id="recurringFields" class="hidden mt-3 p-4 bg-surface-container-low rounded-xl space-y-3">
-          <div class="grid grid-cols-2 gap-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label class="block text-xs font-semibold mb-1">Fréquence</label>
               <select id="recurringFrequency" class="w-full px-3 py-2 bg-surface-container border-none rounded-lg text-sm">
@@ -569,7 +577,7 @@
 
 <!-- Confirmation Modal -->
 <div id="confirmOverlay" class="fixed inset-0 bg-on-surface/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-  <div class="bg-surface-container-lowest rounded-xl shadow-2xl w-full max-w-md p-6">
+  <div class="bg-surface-container-lowest rounded-xl shadow-2xl w-full max-w-md p-6 mx-4">
     <h3 id="confirmTitle" class="text-xl font-bold mb-2"></h3>
     <p id="confirmMsg" class="text-on-surface-variant mb-6"></p>
     <div class="flex gap-3">
@@ -590,7 +598,7 @@
 
 <!-- Versions Modal -->
 <div id="versionsOverlay" onclick="handleVersionsOverlayClick(event)" class="fixed inset-0 bg-black/40 backdrop-blur-md z-[100] hidden flex items-center justify-center p-4">
-  <div class="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-2xl p-6" onclick="event.stopPropagation()">
+  <div class="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-2xl p-4 md:p-6 mx-4" onclick="event.stopPropagation()">
     <div class="flex justify-between items-center mb-6">
       <h2 class="text-2xl font-bold font-headline flex items-center gap-2">
         <span class="material-symbols-outlined text-primary">package_2</span>
@@ -603,7 +611,7 @@
 
     <div class="mb-6">
       <label class="block text-sm font-semibold mb-2">Ajouter/Modifier une version</label>
-      <div class="grid grid-cols-3 gap-3">
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <input id="versionSoftware" type="text" placeholder="Logiciel (ex: SOLIS)" class="px-4 py-2 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none">
         <input id="versionNumber" type="text" placeholder="Version (ex: 2.4.1)" class="px-4 py-2 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none">
         <button onclick="addVersion()" class="px-4 py-2 bg-primary-gradient text-white rounded-xl font-semibold flex items-center justify-center gap-2">
