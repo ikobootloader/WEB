@@ -376,13 +376,17 @@ function renderDashboard() {
         const daysRemaining = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
 
         const card = document.createElement('div');
-        card.className = 'bg-surface-container-low rounded-xl p-4 border-l-4 hover:shadow-md transition-all cursor-pointer';
+        card.className = 'bg-surface-container-low rounded-xl p-4 border-l-4 hover:shadow-md transition-all cursor-pointer group relative';
         card.style.borderColor = color.bg;
-        card.onclick = () => switchView('projects');
+        card.onclick = (e) => {
+          // Prevent navigation if clicking on action buttons
+          if (e.target.closest('.action-btn')) return;
+          switchView('projects');
+        };
 
         card.innerHTML = `
           <div class="flex items-start justify-between mb-3">
-            <div class="flex-1">
+            <div class="flex-1 pr-20">
               <h4 class="font-bold text-on-surface mb-1">${escHtml(project.name)}</h4>
               <div class="flex items-center gap-2 flex-wrap">
                 <span class="w-2 h-2 rounded-full" style="background-color: ${color.dot}"></span>
@@ -391,6 +395,19 @@ function renderDashboard() {
                   `<span class="text-[10px] px-2 py-0.5 bg-surface-container rounded-full text-on-surface-variant">${escHtml(req)}</span>`
                 ).join('')}
               </div>
+            </div>
+
+            <!-- Action buttons on hover -->
+            <div class="absolute top-3 right-3 opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-all">
+              <button onclick="event.stopPropagation(); openProjectModal(${project.id})" title="Modifier le projet" class="action-btn p-1.5 hover:bg-surface-container rounded-lg transition-colors">
+                <span class="material-symbols-outlined text-sm text-on-surface-variant">edit</span>
+              </button>
+              <button onclick="event.stopPropagation(); quickArchiveProject(${project.id})" title="Archiver le projet" class="action-btn p-1.5 hover:bg-surface-container rounded-lg transition-colors">
+                <span class="material-symbols-outlined text-sm text-on-surface-variant">archive</span>
+              </button>
+              <button onclick="event.stopPropagation(); deleteProject(${project.id})" title="Supprimer le projet" class="action-btn p-1.5 hover:bg-error-container rounded-lg transition-colors">
+                <span class="material-symbols-outlined text-sm text-error">delete</span>
+              </button>
             </div>
           </div>
           <div class="space-y-2">
@@ -3124,6 +3141,55 @@ async function restoreProject(id) {
   }
 }
 
+async function quickArchiveProject(id) {
+  const project = projects.find(p => p.id === id);
+  if (!project || project.archivedAt) return;
+
+  if (!confirm(`Archiver le projet "${project.name}" ?\n\nVous pourrez le restaurer depuis l'onglet Archives.`)) return;
+
+  // Archive the project
+  const projectName = project.name;
+  project.archivedAt = new Date().toISOString();
+
+  await saveToStorage();
+  updateProjectCount();
+
+  // Refresh current view
+  if (activeView === 'dashboard') {
+    renderDashboard();
+  } else if (activeView === 'projects') {
+    renderGanttChart();
+    renderProjectCards();
+  }
+
+  showToast(`📦 Le projet "${projectName}" a été archivé avec succès`);
+}
+
+async function deleteProject(id) {
+  const project = projects.find(p => p.id === id);
+  if (!project) return;
+
+  if (!confirm(`⚠️ ATTENTION : Supprimer définitivement le projet "${project.name}" ?\n\nCette action est irréversible !`)) return;
+
+  const projectName = project.name;
+  projects = projects.filter(p => p.id !== id);
+
+  await saveToStorage();
+  updateProjectCount();
+
+  showToast(`🗑️ Le projet "${projectName}" a été supprimé définitivement`);
+
+  // Refresh current view
+  if (activeView === 'dashboard') {
+    renderDashboard();
+  } else if (activeView === 'archives') {
+    renderArchives();
+  } else if (activeView === 'projects') {
+    renderGanttChart();
+    renderProjectCards();
+  }
+}
+
 function resetProjectForm() {
   document.getElementById('projectName').value = '';
   document.getElementById('projectStartDate').value = '';
@@ -3291,7 +3357,15 @@ async function submitProjectForm() {
 
   await saveToStorage();
   updateProjectCount();
-  renderGanttChart();
+
+  // Refresh current view
+  if (activeView === 'dashboard') {
+    renderDashboard();
+  } else if (activeView === 'projects') {
+    renderGanttChart();
+    renderProjectCards();
+  }
+
   closeProjectModal();
 }
 
@@ -3459,15 +3533,26 @@ function renderGanttChart() {
     html += `
       <div class="w-48 lg:w-64 p-3 lg:p-6 border-r border-surface-container shrink-0 relative">
         <div class="absolute left-0 top-0 bottom-0 w-1" style="background-color: ${color.bar}"></div>
-        <h4 class="font-headline font-bold text-on-surface mb-1 text-sm lg:text-base truncate">${escHtml(project.name)}</h4>
+
+        <!-- Action buttons on hover (top right) -->
+        <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-all">
+          <button onclick="openProjectModal(${project.id})" title="Modifier le projet" class="p-1 hover:bg-surface-container rounded-lg transition-colors">
+            <span class="material-symbols-outlined text-sm text-on-surface-variant">edit</span>
+          </button>
+          <button onclick="quickArchiveProject(${project.id})" title="Archiver le projet" class="p-1 hover:bg-surface-container rounded-lg transition-colors">
+            <span class="material-symbols-outlined text-sm text-on-surface-variant">archive</span>
+          </button>
+          <button onclick="deleteProject(${project.id})" title="Supprimer le projet" class="p-1 hover:bg-error-container rounded-lg transition-colors">
+            <span class="material-symbols-outlined text-sm text-error">delete</span>
+          </button>
+        </div>
+
+        <h4 class="font-headline font-bold text-on-surface mb-1 text-sm lg:text-base truncate pr-24" title="${escHtml(project.name)}">${escHtml(project.name)}</h4>
         <div class="flex items-center gap-2 mb-1">
           <span class="w-2 h-2 rounded-full shrink-0" style="background-color: ${color.dot}"></span>
           <span class="text-[10px] lg:text-[11px] font-medium text-on-surface-variant uppercase tracking-tighter">${color.label}</span>
         </div>
         <div class="flex flex-wrap gap-1">${requesterBadges}</div>
-        <button onclick="openProjectModal(${project.id})" class="absolute top-2 lg:top-4 right-2 lg:right-4 opacity-0 group-hover:opacity-100 p-1 lg:p-1.5 hover:bg-surface-container rounded-lg transition-all">
-          <span class="material-symbols-outlined text-sm text-on-surface-variant">edit</span>
-        </button>
       </div>
     `;
 
