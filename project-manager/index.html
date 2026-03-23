@@ -199,6 +199,7 @@
 
     <!-- Dashboard View -->
     <section id="viewDashboard" class="view-section">
+      <div id="normalDashboard">
       <div class="flex justify-between items-end mb-6">
         <div>
           <h2 class="text-2xl md:text-3xl font-extrabold font-headline tracking-tight text-on-surface">Tableau de bord</h2>
@@ -214,47 +215,100 @@
         </div>
       </div>
 
-      <!-- Statistics Cards -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8">
-        <div class="bg-surface-container-low p-6 rounded-xl border-l-4 border-primary flex justify-between items-center">
-          <div>
-            <p class="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest mb-1">Total des tâches</p>
-            <p class="text-3xl font-extrabold font-headline" id="statTotal">0</p>
+      <!-- Tasks Section -->
+      <div class="space-y-4 mb-8">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary">task_alt</span>
+          <h3 class="text-xl font-bold font-headline text-on-surface">Tâches</h3>
+        </div>
+
+        <!-- Tasks Statistics Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div class="bg-surface-container-low p-6 rounded-xl border-l-4 border-primary flex justify-between items-center">
+            <div>
+              <p class="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest mb-1">Actives</p>
+              <p class="text-3xl font-extrabold font-headline" id="statTotal">0</p>
+            </div>
+            <div class="w-12 h-12 rounded-full bg-primary-fixed flex items-center justify-center text-primary">
+              <span class="material-symbols-outlined">list_alt</span>
+            </div>
           </div>
-          <div class="w-12 h-12 rounded-full bg-primary-fixed flex items-center justify-center text-primary">
-            <span class="material-symbols-outlined">list_alt</span>
+
+          <div class="bg-surface-container-low p-6 rounded-xl border-l-4 border-tertiary flex justify-between items-center">
+            <div>
+              <p class="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest mb-1">Urgentes</p>
+              <p class="text-3xl font-extrabold font-headline text-tertiary" id="statUrgent">0</p>
+            </div>
+            <div class="w-12 h-12 rounded-full bg-tertiary-container flex items-center justify-center text-on-tertiary-container">
+              <span class="material-symbols-outlined">priority_high</span>
+            </div>
+          </div>
+
+          <div class="bg-surface-container-low p-6 rounded-xl border-l-4 border-primary-container flex justify-between items-center">
+            <div>
+              <p class="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest mb-1">Terminées</p>
+              <p class="text-3xl font-extrabold font-headline" id="statCompleted">0</p>
+            </div>
+            <div class="w-12 h-12 rounded-full bg-primary-fixed flex items-center justify-center text-on-primary-fixed-variant">
+              <span class="material-symbols-outlined">check_circle</span>
+            </div>
           </div>
         </div>
 
-        <div class="bg-surface-container-low p-6 rounded-xl border-l-4 border-tertiary flex justify-between items-center">
-          <div>
-            <p class="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest mb-1">Urgentes</p>
-            <p class="text-3xl font-extrabold font-headline text-tertiary" id="statUrgent">0</p>
-          </div>
-          <div class="w-12 h-12 rounded-full bg-tertiary-container flex items-center justify-center text-on-tertiary-container">
-            <span class="material-symbols-outlined">priority_high</span>
-          </div>
-        </div>
-
-        <div class="bg-surface-container-low p-6 rounded-xl border-l-4 border-primary-container flex justify-between items-center">
-          <div>
-            <p class="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest mb-1">Terminées</p>
-            <p class="text-3xl font-extrabold font-headline" id="statCompleted">0</p>
-          </div>
-          <div class="w-12 h-12 rounded-full bg-primary-fixed flex items-center justify-center text-on-primary-fixed-variant">
-            <span class="material-symbols-outlined">check_circle</span>
-          </div>
+        <!-- Recent Tasks -->
+        <div id="dashboardTasks" class="grid grid-cols-1 xl:grid-cols-2 gap-6 mt-4">
+          <!-- Tasks will be inserted here -->
         </div>
       </div>
 
-      <!-- Recent Tasks -->
-      <div class="space-y-6">
+      <!-- Projects Section -->
+      <div class="space-y-4">
         <div class="flex items-center justify-between">
-          <h3 class="text-xl font-bold font-headline text-on-surface">Tâches récentes</h3>
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary">folder_open</span>
+            <h3 class="text-xl font-bold font-headline text-on-surface">Projets</h3>
+          </div>
+          <a href="#projects" class="text-sm text-primary font-semibold hover:underline">Voir tout →</a>
         </div>
-        <div id="dashboardTasks" class="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          <!-- Tasks will be inserted here -->
+
+        <!-- Projects Statistics Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div class="bg-surface-container-low p-6 rounded-xl border-l-4 border-primary flex justify-between items-center">
+            <div>
+              <p class="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest mb-1">En cours</p>
+              <p class="text-3xl font-extrabold font-headline" id="statProjectsActive">0</p>
+            </div>
+            <div class="w-12 h-12 rounded-full bg-primary-fixed flex items-center justify-center text-primary">
+              <span class="material-symbols-outlined">pending_actions</span>
+            </div>
+          </div>
+
+          <div class="bg-surface-container-low p-6 rounded-xl border-l-4 border-tertiary flex justify-between items-center">
+            <div>
+              <p class="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest mb-1">Urgents</p>
+              <p class="text-3xl font-extrabold font-headline text-tertiary" id="statProjectsUrgent">0</p>
+            </div>
+            <div class="w-12 h-12 rounded-full bg-tertiary-container flex items-center justify-center text-on-tertiary-container">
+              <span class="material-symbols-outlined">warning</span>
+            </div>
+          </div>
+
+          <div class="bg-surface-container-low p-6 rounded-xl border-l-4 border-primary-container flex justify-between items-center">
+            <div>
+              <p class="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest mb-1">Terminés</p>
+              <p class="text-3xl font-extrabold font-headline" id="statProjectsCompleted">0</p>
+            </div>
+            <div class="w-12 h-12 rounded-full bg-primary-fixed flex items-center justify-center text-on-primary-fixed-variant">
+              <span class="material-symbols-outlined">done_all</span>
+            </div>
+          </div>
         </div>
+
+        <!-- Active Projects Cards -->
+        <div id="dashboardProjects" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-4">
+          <!-- Projects will be inserted here -->
+        </div>
+      </div>
       </div>
     </section>
 
@@ -312,12 +366,30 @@
       <div class="flex justify-between items-end mb-6">
         <div>
           <h2 class="text-2xl md:text-3xl font-extrabold font-headline tracking-tight text-on-surface">Archives</h2>
-          <p class="text-on-surface-variant mt-1">Tâches terminées et archivées</p>
+          <p class="text-on-surface-variant mt-1">Tâches et projets terminés et archivés</p>
         </div>
       </div>
 
-      <div id="archives" class="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <!-- Archived tasks will be inserted here -->
+      <!-- Archived Tasks Section -->
+      <div class="mb-8">
+        <div class="flex items-center gap-2 mb-4">
+          <span class="material-symbols-outlined text-primary">task_alt</span>
+          <h3 class="text-xl font-bold font-headline text-on-surface">Tâches archivées</h3>
+        </div>
+        <div id="archives" class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <!-- Archived tasks will be inserted here -->
+        </div>
+      </div>
+
+      <!-- Archived Projects Section -->
+      <div>
+        <div class="flex items-center gap-2 mb-4">
+          <span class="material-symbols-outlined text-primary">folder_open</span>
+          <h3 class="text-xl font-bold font-headline text-on-surface">Projets archivés</h3>
+        </div>
+        <div id="archivedProjects" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <!-- Archived projects will be inserted here -->
+        </div>
       </div>
     </section>
 
@@ -346,8 +418,8 @@
       </div>
 
       <!-- Desktop Gantt Chart -->
-      <div class="hidden lg:block bg-surface-container-low rounded-2xl overflow-hidden shadow-sm">
-        <div id="ganttChart" class="overflow-x-auto">
+      <div class="hidden lg:block bg-surface-container-low rounded-2xl shadow-sm">
+        <div id="ganttChart" class="overflow-x-auto overflow-y-hidden">
           <!-- Gantt chart will be rendered here on desktop -->
         </div>
       </div>
@@ -438,6 +510,26 @@
         </button>
         <div id="refileBanner" class="hidden mt-4 p-4 bg-tertiary-container text-on-tertiary-container rounded-xl">
           <p class="text-sm font-semibold">⚠️ Fichier déconnecté — Reliez-le pour continuer la sauvegarde auto</p>
+        </div>
+      </div>
+
+      <!-- Custom Lists Management -->
+      <div class="bg-surface-container-low p-6 rounded-xl mb-6">
+        <h3 class="text-lg font-bold mb-2 flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary">list</span>
+          Listes personnalisées
+        </h3>
+        <p class="text-sm text-on-surface-variant mb-4">Personnalisez les demandeurs et types de demandes</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <button onclick="openRequestersModal()" class="px-4 py-3 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold flex items-center justify-center gap-2">
+            <span class="material-symbols-outlined">group</span>
+            <span>Gérer les demandeurs</span>
+          </button>
+          <button onclick="openTypesModal()" class="px-4 py-3 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold flex items-center justify-center gap-2">
+            <span class="material-symbols-outlined">category</span>
+            <span>Gérer les types</span>
+          </button>
         </div>
       </div>
 
@@ -662,6 +754,38 @@
         </div>
       </div>
 
+      <div>
+        <label class="block text-sm font-semibold mb-2">Demandeurs</label>
+        <div class="space-y-2">
+          <!-- Selected requesters badges -->
+          <div id="selectedRequesters" class="flex flex-wrap gap-2 min-h-[32px] p-2 bg-surface-container-low rounded-xl">
+            <span class="text-sm text-on-surface-variant">Aucun demandeur sélectionné</span>
+          </div>
+
+          <!-- Requester pills -->
+          <div class="flex flex-wrap gap-2">
+            <button type="button" class="requester-pill px-3 py-1.5 rounded-full text-xs font-semibold transition-all bg-surface-container text-on-surface-variant hover:bg-surface-container-high border-2 border-transparent" data-requester="S3AD">
+              S3AD
+            </button>
+            <button type="button" class="requester-pill px-3 py-1.5 rounded-full text-xs font-semibold transition-all bg-surface-container text-on-surface-variant hover:bg-surface-container-high border-2 border-transparent" data-requester="SE2S">
+              SE2S
+            </button>
+            <button type="button" class="requester-pill px-3 py-1.5 rounded-full text-xs font-semibold transition-all bg-surface-container text-on-surface-variant hover:bg-surface-container-high border-2 border-transparent" data-requester="MDA">
+              MDA
+            </button>
+            <button type="button" class="requester-pill px-3 py-1.5 rounded-full text-xs font-semibold transition-all bg-surface-container text-on-surface-variant hover:bg-surface-container-high border-2 border-transparent" data-requester="PSS">
+              PSS
+            </button>
+            <button type="button" class="requester-pill px-3 py-1.5 rounded-full text-xs font-semibold transition-all bg-surface-container text-on-surface-variant hover:bg-surface-container-high border-2 border-transparent" data-requester="ASG">
+              ASG
+            </button>
+            <button type="button" class="requester-pill px-3 py-1.5 rounded-full text-xs font-semibold transition-all bg-surface-container text-on-surface-variant hover:bg-surface-container-high border-2 border-transparent" data-requester="Autres">
+              Autres
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label class="block text-sm font-semibold mb-2">Statut</label>
@@ -709,12 +833,18 @@
         <textarea id="projectDescription" rows="3" placeholder="Description du projet..." class="w-full px-4 py-2 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none resize-none"></textarea>
       </div>
 
-      <div class="flex gap-3 pt-4">
-        <button id="btnSaveProject" class="flex-1 px-6 py-3 bg-primary-gradient text-white rounded-xl font-bold">
-          Enregistrer
-        </button>
-        <button onclick="closeProjectModal()" class="flex-1 px-6 py-3 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold">
-          Annuler
+      <div class="flex flex-col gap-3 pt-4">
+        <div class="flex gap-3">
+          <button id="btnSaveProject" class="flex-1 px-6 py-3 bg-primary-gradient text-white rounded-xl font-bold">
+            Enregistrer
+          </button>
+          <button onclick="closeProjectModal()" class="flex-1 px-6 py-3 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold">
+            Annuler
+          </button>
+        </div>
+        <button id="btnArchiveProject" class="w-full px-6 py-3 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold text-on-surface-variant hidden">
+          <span class="material-symbols-outlined text-base align-middle mr-1">archive</span>
+          Archiver le projet
         </button>
       </div>
     </div>
@@ -747,6 +877,63 @@
     </div>
 
     <div id="versionsList" class="space-y-2"></div>
+  </div>
+</div>
+
+<!-- Requesters Modal -->
+<div id="requestersOverlay" onclick="handleRequestersOverlayClick(event)" class="fixed inset-0 bg-black/40 backdrop-blur-md z-[100] hidden flex items-center justify-center p-4">
+  <div class="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-3xl p-4 md:p-6 mx-4 max-h-[90vh] flex flex-col" onclick="event.stopPropagation()">
+    <div class="flex justify-between items-center mb-6 shrink-0">
+      <h2 class="text-2xl font-bold font-headline flex items-center gap-2">
+        <span class="material-symbols-outlined text-primary">group</span>
+        Gestion des demandeurs
+      </h2>
+      <button onclick="closeRequestersModal()" class="w-10 h-10 flex items-center justify-center hover:bg-surface-container rounded-lg transition-colors">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+
+    <div class="mb-6 shrink-0">
+      <label class="block text-sm font-semibold mb-2">Ajouter un demandeur</label>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <input id="requesterName" type="text" placeholder="Nom (ex: S3AD)" class="px-4 py-2 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none">
+        <input id="requesterEmail" type="email" placeholder="Email (optionnel)" class="px-4 py-2 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none">
+        <button onclick="addRequester()" class="px-4 py-2 bg-primary-gradient text-white rounded-xl font-semibold flex items-center justify-center gap-2">
+          <span class="material-symbols-outlined">add</span>
+          Ajouter
+        </button>
+      </div>
+    </div>
+
+    <div id="requestersList" class="space-y-2 overflow-y-auto"></div>
+  </div>
+</div>
+
+<!-- Types Modal -->
+<div id="typesOverlay" onclick="handleTypesOverlayClick(event)" class="fixed inset-0 bg-black/40 backdrop-blur-md z-[100] hidden flex items-center justify-center p-4">
+  <div class="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-2xl p-4 md:p-6 mx-4 max-h-[90vh] flex flex-col" onclick="event.stopPropagation()">
+    <div class="flex justify-between items-center mb-6 shrink-0">
+      <h2 class="text-2xl font-bold font-headline flex items-center gap-2">
+        <span class="material-symbols-outlined text-primary">category</span>
+        Gestion des types
+      </h2>
+      <button onclick="closeTypesModal()" class="w-10 h-10 flex items-center justify-center hover:bg-surface-container rounded-lg transition-colors">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+
+    <div class="mb-6 shrink-0">
+      <label class="block text-sm font-semibold mb-2">Ajouter un type</label>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <input id="typeName" type="text" placeholder="Type (ex: SOLIS)" class="px-4 py-2 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none">
+        <button onclick="addType()" class="px-4 py-2 bg-primary-gradient text-white rounded-xl font-semibold flex items-center justify-center gap-2">
+          <span class="material-symbols-outlined">add</span>
+          Ajouter
+        </button>
+      </div>
+    </div>
+
+    <div id="typesList" class="space-y-2 overflow-y-auto"></div>
   </div>
 </div>
 

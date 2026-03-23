@@ -8,12 +8,24 @@ const STORAGE_KEY = 'projets_tasks_v4_enc';
 const SALT_KEY    = 'projets_salt_v4';
 const VERSIONS_KEY = 'projets_versions_v4_enc';
 const PROJECTS_KEY = 'projets_projects_v4_enc';
+const CONFIG_KEY = 'projets_config_v4_enc';
 const ITER_COUNT  = 310_000;
 
 // ── État global ──────────────────────────────────────────────
 let tasks        = [];
 let versions     = {}; // { "SOLIS": "2.4.1", "MULTIGEST": "1.2.0" }
 let projects     = []; // Liste des projets avec timeline Gantt
+let config       = {   // Configuration personnalisée
+  requesters: [        // Liste des demandeurs avec emails
+    { name: 'S3AD', email: '' },
+    { name: 'SE2S', email: '' },
+    { name: 'MDA', email: '' },
+    { name: 'PSS', email: '' },
+    { name: 'ASG', email: '' },
+    { name: 'Autres', email: '' }
+  ],
+  types: ['SOLIS', 'MULTIGEST', 'BO', 'Courriers', 'Autres']  // Liste des types de demande
+};
 let editingId    = null;
 let editingProjectId = null;
 let attachedFiles = []; // Fichiers temporaires avant sauvegarde
@@ -75,8 +87,11 @@ function initEventListeners() {
   // File attachments
   document.getElementById('taskFiles')?.addEventListener('change', handleFileSelection);
 
-  // Search
-  document.getElementById('searchInput')?.addEventListener('input', handleSearch);
+  // Search - listen to multiple events to catch all cases
+  const searchInput = document.getElementById('searchInput');
+  searchInput?.addEventListener('input', handleSearch);
+  searchInput?.addEventListener('keyup', handleSearch);
+  searchInput?.addEventListener('search', handleSearch); // For when clearing with X button
 
   // Sort
   document.getElementById('sortSelect')?.addEventListener('change', () => renderTasks());
@@ -107,6 +122,7 @@ function initEventListeners() {
   // Projects events
   document.getElementById('btnNewProject')?.addEventListener('click', () => openProjectModal());
   document.getElementById('btnSaveProject')?.addEventListener('click', submitProjectForm);
+  document.getElementById('btnArchiveProject')?.addEventListener('click', archiveProject);
   document.getElementById('viewMonth')?.addEventListener('click', () => setGanttViewMode('month'));
   document.getElementById('viewWeeks')?.addEventListener('click', () => setGanttViewMode('weeks'));
   document.getElementById('projectProgress')?.addEventListener('input', updateProjectProgressBar);
@@ -234,27 +250,120 @@ function renderDashboard() {
   const urgent = active.filter(t => t.urgency === 'high');
   const completed = archived.filter(t => t.status === 'realise');
 
-  // Update statistics cards
+  // Update tasks statistics cards
   document.getElementById('statTotal').textContent = active.length;
   document.getElementById('statUrgent').textContent = urgent.length;
   document.getElementById('statCompleted').textContent = completed.length;
 
-  // Update summary text
+  // Update projects statistics cards
+  const activeProjectsList = getActiveProjects();
+  const activeProjects = activeProjectsList.filter(p => p.status !== 'termine');
+  const urgentProjects = activeProjectsList.filter(p => p.status === 'urgent');
+  const completedProjects = activeProjectsList.filter(p => p.status === 'termine');
+
+  document.getElementById('statProjectsActive').textContent = activeProjects.length;
+  document.getElementById('statProjectsUrgent').textContent = urgentProjects.length;
+  document.getElementById('statProjectsCompleted').textContent = completedProjects.length;
+
+  // Update summary text with tasks and projects
   const summaryEl = document.getElementById('dashboardSummary');
   if (summaryEl) {
-    if (active.length === 0) {
-      summaryEl.textContent = "Aucune tâche active. Créez votre première tâche !";
+    const activeProjects = getActiveProjects().filter(p => p.status !== 'termine');
+    const urgentProjects = getActiveProjects().filter(p => p.status === 'urgent');
+
+    if (active.length === 0 && activeProjects.length === 0) {
+      summaryEl.textContent = "Aucune tâche ni projet actif. Commencez dès maintenant !";
     } else {
-      const urgentText = urgent.length === 0 ? "aucune urgente" :
-                         urgent.length === 1 ? "1 urgente" :
-                         `${urgent.length} urgentes`;
-      summaryEl.textContent = `${active.length} tâche${active.length > 1 ? 's' : ''} active${active.length > 1 ? 's' : ''}, ${urgentText}`;
+      let summary = '';
+
+      // Tasks summary
+      if (active.length > 0) {
+        const urgentText = urgent.length === 0 ? "aucune urgente" :
+                           urgent.length === 1 ? "1 urgente" :
+                           `${urgent.length} urgentes`;
+        summary = `${active.length} tâche${active.length > 1 ? 's' : ''} active${active.length > 1 ? 's' : ''}, ${urgentText}`;
+      }
+
+      // Projects summary
+      if (activeProjects.length > 0) {
+        if (summary) summary += ' • ';
+        const projectUrgentText = urgentProjects.length > 0
+          ? `, ${urgentProjects.length} urgent${urgentProjects.length > 1 ? 's' : ''}`
+          : '';
+        summary += `${activeProjects.length} projet${activeProjects.length > 1 ? 's' : ''} en cours${projectUrgentText}`;
+      }
+
+      summaryEl.textContent = summary;
     }
   }
 
   // Update sidebar navigation badges
   document.getElementById('taskCount').textContent = active.length;
-  document.getElementById('archiveCount').textContent = archived.length;
+  // Archive count is updated by updateProjectCount to include both tasks and projects
+  updateProjectCount();
+
+  // Render active projects (max 3)
+  const projectsContainer = document.getElementById('dashboardProjects');
+  if (projectsContainer) {
+    const activeProjects = getActiveProjects().filter(p => p.status !== 'termine').slice(0, 3);
+
+    if (activeProjects.length === 0) {
+      projectsContainer.innerHTML = `
+        <div class="col-span-full text-center py-8">
+          <span class="material-symbols-outlined text-5xl text-on-surface-variant mb-2 block opacity-40">folder_open</span>
+          <p class="text-on-surface-variant text-sm">Aucun projet actif</p>
+        </div>
+      `;
+    } else {
+      projectsContainer.innerHTML = '';
+      activeProjects.forEach(project => {
+        const statusColors = {
+          'en-cours': { bg: '#006c4a', label: 'EN COURS', dot: '#006c4a' },
+          'planifie': { bg: '#6366f1', label: 'PLANIFIÉ', dot: '#6366f1' },
+          'urgent': { bg: '#ef4444', label: 'URGENT', dot: '#ef4444' }
+        };
+        const color = statusColors[project.status] || statusColors['en-cours'];
+
+        const endDate = new Date(project.endDate);
+        const today = new Date();
+        const daysRemaining = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
+
+        const card = document.createElement('div');
+        card.className = 'bg-surface-container-low rounded-xl p-4 border-l-4 hover:shadow-md transition-all cursor-pointer';
+        card.style.borderColor = color.bg;
+        card.onclick = () => switchView('projects');
+
+        card.innerHTML = `
+          <div class="flex items-start justify-between mb-3">
+            <div class="flex-1">
+              <h4 class="font-bold text-on-surface mb-1">${escHtml(project.name)}</h4>
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="w-2 h-2 rounded-full" style="background-color: ${color.dot}"></span>
+                <span class="text-[11px] font-semibold uppercase tracking-tight" style="color: ${color.dot}">${color.label}</span>
+                ${(project.requesters || (project.requester ? [project.requester] : [])).map(req =>
+                  `<span class="text-[10px] px-2 py-0.5 bg-surface-container rounded-full text-on-surface-variant">${escHtml(req)}</span>`
+                ).join('')}
+              </div>
+            </div>
+          </div>
+          <div class="space-y-2">
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-on-surface-variant">Progression</span>
+              <span class="font-bold text-on-surface">${project.progress}%</span>
+            </div>
+            <div class="w-full h-1.5 bg-surface-container rounded-full overflow-hidden">
+              <div class="h-full rounded-full transition-all" style="width: ${project.progress}%; background-color: ${color.bg}"></div>
+            </div>
+            <div class="text-xs ${daysRemaining > 0 ? 'text-on-surface-variant' : 'text-error'} font-medium">
+              ${daysRemaining > 0 ? `${daysRemaining} jours restants` : `Échéance dépassée`}
+            </div>
+          </div>
+        `;
+
+        projectsContainer.appendChild(card);
+      });
+    }
+  }
 
   // Render recent tasks (last 6 active tasks)
   const container = document.getElementById('dashboardTasks');
@@ -393,6 +502,10 @@ async function submitPassword() {
     const sidebar = document.getElementById('sidebar');
     const mainContent = document.getElementById('mainContent');
     if (sidebar) sidebar.style.display = 'flex';
+
+    // Initialize custom lists in forms
+    updateRequesterSelects();
+    updateTypeSelects();
     if (mainContent) mainContent.style.display = 'block';
 
     // Show dashboard
@@ -478,6 +591,24 @@ async function loadFromStorage() {
   const rawProjects = localStorage.getItem(PROJECTS_KEY);
   if (!rawProjects) { projects = []; } else { projects = await decrypt(rawProjects); }
 
+  const rawConfig = localStorage.getItem(CONFIG_KEY);
+  if (!rawConfig) {
+    // Default config if not exists
+    config = {
+      requesters: [
+        { name: 'S3AD', email: '' },
+        { name: 'SE2S', email: '' },
+        { name: 'MDA', email: '' },
+        { name: 'PSS', email: '' },
+        { name: 'ASG', email: '' },
+        { name: 'Autres', email: '' }
+      ],
+      types: ['SOLIS', 'MULTIGEST', 'BO', 'Courriers', 'Autres']
+    };
+  } else {
+    config = await decrypt(rawConfig);
+  }
+
   // Dédoublonner les tâches par ID
   deduplicateTasks();
 
@@ -507,6 +638,7 @@ async function saveToStorage() {
   localStorage.setItem(STORAGE_KEY, await encrypt(tasks));
   localStorage.setItem(VERSIONS_KEY, await encrypt(versions));
   localStorage.setItem(PROJECTS_KEY, await encrypt(projects));
+  localStorage.setItem(CONFIG_KEY, await encrypt(config));
   await writeToFile();
 }
 
@@ -557,6 +689,7 @@ async function writeToFile() {
       tasks: tasks,
       versions: versions,
       projects: projects,
+      config: config,
       exportedAt: new Date().toISOString(),
       format: 'TaskMDA v4'
     };
@@ -821,6 +954,14 @@ function getArchivedTasks() {
   return tasks.filter(t => t.status === 'realise');
 }
 
+function getActiveProjects() {
+  return projects.filter(p => !p.archivedAt);
+}
+
+function getArchivedProjects() {
+  return projects.filter(p => p.archivedAt);
+}
+
 function applyFilters(list, urgFilter, reqFilter, typeFilter) {
   if (urgFilter && urgFilter !== 'all') list = list.filter(t => t.urgency === urgFilter);
   if (reqFilter && reqFilter !== 'all') list = list.filter(t => t.requester === reqFilter);
@@ -899,7 +1040,7 @@ async function submitForm() {
         createNextRecurrence(existingTask, recurring);
       }
 
-      showToast('✏️ Tâche modifiée');
+      showToast(`✏️ La tâche "${title}" a été modifiée avec succès`);
     } else {
       tasks.push({
         id: Date.now(), title, comment, urgency, status, deadline, requestDate, requester, type, order, recurring,
@@ -908,7 +1049,7 @@ async function submitForm() {
         updatedAt: now,
         archivedAt: status === 'realise' ? now : null
       });
-      showToast('✅ Tâche ajoutée');
+      showToast(`✅ La tâche "${title}" a été créée avec succès`);
     }
 
     attachedFiles = [];
@@ -929,7 +1070,7 @@ async function submitForm() {
 
     // Si la tâche vient d'être réalisée, basculer vers archives
     if (status === 'realise' && !wasArchived) {
-      showToast('🗄 Tâche archivée — consultez l\'onglet Archives');
+      showToast(`🗄 La tâche "${title}" a été archivée — consultez l'onglet Archives`);
     }
   } finally {
     isSubmitting = false;
@@ -943,7 +1084,7 @@ async function markAsCompleted(id) {
 
   // Vérifier si la tâche n'est pas déjà archivée (éviter les doublons)
   if (task && task.status === 'realise' && task.archivedAt) {
-    showToast('⚠️ Tâche déjà archivée');
+    showToast(`⚠️ La tâche "${task.title}" est déjà archivée`);
     return;
   }
 
@@ -957,14 +1098,209 @@ async function markAsCompleted(id) {
   await saveToStorage();
   updateSidebarCounts();
 
+  // Propose d'envoyer un email au demandeur si un email est configuré
+  if (task && task.requester) {
+    const requester = config.requesters.find(r => r.name === task.requester);
+    if (requester && requester.email) {
+      // Show confirmation modal for email sending
+      showEmailConfirmation(task, requester.email);
+    }
+  }
+
   // Automatically switch to archives view to show the completed task
   if (activeView === 'tasks' || activeView === 'dashboard') {
-    showToast('✅ Tâche marquée comme réalisée et archivée');
+    showToast(`✅ La tâche "${task.title}" a été marquée comme réalisée et archivée`);
     switchView('archives');
   } else {
     // If already in archives, just refresh
     renderArchives();
-    showToast('✅ Tâche marquée comme réalisée');
+    showToast(`✅ La tâche "${task.title}" a été marquée comme réalisée`);
+  }
+}
+
+function showEmailConfirmation(task, email) {
+  const content = `
+    <div class="space-y-4">
+      <p class="text-on-surface-variant">
+        Souhaitez-vous notifier <strong class="text-on-surface">${escHtml(task.requester)}</strong>
+        (<a href="mailto:${escHtml(email)}" class="text-primary hover:underline">${escHtml(email)}</a>)
+        que la tâche <strong class="text-on-surface">"${escHtml(task.title)}"</strong> a été réalisée ?
+      </p>
+      <div class="flex gap-3">
+        <button onclick="sendTaskCompletionEmail(${task.id}); document.getElementById('tempModal').remove();"
+                class="flex-1 px-6 py-3 bg-primary-gradient text-white rounded-xl font-bold hover:opacity-90 transition-opacity">
+          <span class="material-symbols-outlined text-base align-middle mr-2">email</span>
+          Envoyer l'email
+        </button>
+        <button onclick="document.getElementById('tempModal').remove()"
+                class="flex-1 px-6 py-3 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold transition-colors">
+          Ignorer
+        </button>
+      </div>
+    </div>
+  `;
+
+  showModal('📧 Notification au demandeur', content);
+}
+
+function canSendEmailForTask(task) {
+  if (!task || !task.requester) return false;
+  const requester = config.requesters.find(r => r.name === task.requester);
+  return requester && requester.email && requester.email.trim().length > 0;
+}
+
+function sendTaskCompletionEmail(taskId) {
+  const task = tasks.find(t => t.id === taskId);
+  if (!task) return;
+
+  const requester = config.requesters.find(r => r.name === task.requester);
+  if (!requester || !requester.email) {
+    showToast(`⚠️ Aucun email configuré pour le demandeur "${task.requester}"`);
+    return;
+  }
+
+  // Format dates
+  const requestDate = task.requestDate
+    ? new Date(task.requestDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+    : 'Non spécifiée';
+
+  const deadline = task.deadline
+    ? new Date(task.deadline).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+    : 'Non spécifiée';
+
+  const completedDate = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+
+  // Urgency label
+  const urgencyLabels = { low: 'Faible', medium: 'Moyenne', high: 'Haute' };
+  const urgency = urgencyLabels[task.urgency] || task.urgency;
+
+  // Build email subject (simple, sans emojis pour éviter les problèmes d'encodage)
+  const subject = encodeURIComponent(`Tache realisee : ${task.title}`);
+
+  // Build email body with proper line breaks (%0D%0A for Windows, %0A for Unix)
+  let bodyText = `Bonjour,%0D%0A%0D%0A`;
+  bodyText += `Nous vous informons que la tache suivante a ete realisee :%0D%0A%0D%0A`;
+  bodyText += `========================================%0D%0A`;
+  bodyText += `TITRE%0D%0A`;
+  bodyText += `${encodeURIComponent(task.title)}%0D%0A%0D%0A`;
+
+  if (task.comment) {
+    // Clean description and encode properly
+    bodyText += `DESCRIPTION%0D%0A`;
+    bodyText += `${encodeURIComponent(task.comment).replace(/%0A/g, '%0D%0A')}%0D%0A%0D%0A`;
+  }
+
+  bodyText += `INFORMATIONS%0D%0A`;
+  bodyText += `- Date de demande : ${encodeURIComponent(requestDate)}%0D%0A`;
+  bodyText += `- Date d'echeance : ${encodeURIComponent(deadline)}%0D%0A`;
+  bodyText += `- Date de realisation : ${encodeURIComponent(completedDate)}%0D%0A`;
+  bodyText += `- Urgence : ${encodeURIComponent(urgency)}%0D%0A`;
+
+  if (task.type) {
+    bodyText += `- Type : ${encodeURIComponent(task.type)}%0D%0A`;
+  }
+
+  if (task.order) {
+    bodyText += `- Reference : ${encodeURIComponent(task.order)}%0D%0A`;
+  }
+
+  bodyText += `========================================%0D%0A%0D%0A`;
+  bodyText += `Cordialement,%0D%0A`;
+  bodyText += `TaskMDA - Gestion de taches`;
+
+  // Open email client (no need to encode bodyText again as we already used %0D%0A)
+  window.location.href = `mailto:${requester.email}?subject=${subject}&body=${bodyText}`;
+
+  showToast('📧 Client email ouvert');
+}
+
+function sendTaskInquiryEmail(taskId) {
+  const task = tasks.find(t => t.id === taskId);
+  if (!task) return;
+
+  const requester = config.requesters.find(r => r.name === task.requester);
+  if (!requester || !requester.email) {
+    showToast(`⚠️ Aucun email configuré pour le demandeur "${task.requester}"`);
+    return;
+  }
+
+  // Format dates
+  const requestDate = task.requestDate
+    ? new Date(task.requestDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+    : 'Non specifiee';
+
+  const deadline = task.deadline
+    ? new Date(task.deadline).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+    : 'Non specifiee';
+
+  // Urgency label
+  const urgencyLabels = { low: 'Faible', medium: 'Moyenne', high: 'Haute' };
+  const urgency = urgencyLabels[task.urgency] || task.urgency;
+
+  // Status label
+  const statusLabels = { 'en-cours': 'En cours', 'en-attente': 'En attente', 'realise': 'Realise' };
+  const status = statusLabels[task.status] || task.status;
+
+  // Build email subject
+  const subject = encodeURIComponent(`Demande d'informations : ${task.title}`);
+
+  // Build email body with proper line breaks
+  let bodyText = `Bonjour,%0D%0A%0D%0A`;
+  bodyText += `Nous revenons vers vous concernant la tache suivante et aurions besoin de precisions supplementaires :%0D%0A%0D%0A`;
+  bodyText += `========================================%0D%0A`;
+  bodyText += `TITRE%0D%0A`;
+  bodyText += `${encodeURIComponent(task.title)}%0D%0A%0D%0A`;
+
+  if (task.comment) {
+    bodyText += `DESCRIPTION%0D%0A`;
+    bodyText += `${encodeURIComponent(task.comment).replace(/%0A/g, '%0D%0A')}%0D%0A%0D%0A`;
+  }
+
+  bodyText += `INFORMATIONS%0D%0A`;
+  bodyText += `- Statut : ${encodeURIComponent(status)}%0D%0A`;
+  bodyText += `- Date de demande : ${encodeURIComponent(requestDate)}%0D%0A`;
+  bodyText += `- Date d'echeance : ${encodeURIComponent(deadline)}%0D%0A`;
+  bodyText += `- Urgence : ${encodeURIComponent(urgency)}%0D%0A`;
+
+  if (task.type) {
+    bodyText += `- Type : ${encodeURIComponent(task.type)}%0D%0A`;
+  }
+
+  if (task.order) {
+    bodyText += `- Reference : ${encodeURIComponent(task.order)}%0D%0A`;
+  }
+
+  bodyText += `========================================%0D%0A%0D%0A`;
+  bodyText += `Pourriez-vous nous apporter les informations suivantes :%0D%0A`;
+  bodyText += `%0D%0A`;
+  bodyText += `[Votre message ici]%0D%0A`;
+  bodyText += `%0D%0A%0D%0A`;
+  bodyText += `Cordialement,%0D%0A`;
+  bodyText += `TaskMDA - Gestion de taches`;
+
+  // Open email client
+  window.location.href = `mailto:${requester.email}?subject=${subject}&body=${bodyText}`;
+
+  showToast('📧 Client email ouvert');
+}
+
+async function restoreTask(id) {
+  const task = tasks.find(t => t.id === id);
+  if (!task || !task.archivedAt) return;
+
+  // Restaurer la tâche : supprimer archivedAt et remettre le statut à 'en-cours'
+  tasks = tasks.map(t => t.id === id ? { ...t, status: 'en-cours', archivedAt: null, updatedAt: new Date().toISOString() } : t);
+
+  await saveToStorage();
+  updateSidebarCounts();
+
+  showToast('♻️ Tâche restaurée');
+
+  // Refresh current view
+  if (activeView === 'archives') {
+    renderArchives();
+  } else {
+    renderTasks();
   }
 }
 
@@ -1124,11 +1460,186 @@ function renderTasks() {
 function handleSearch() {
   currentPage = 1; // Reset to first page on search
 
-  // Switch to tasks view to show search results
-  if (activeView !== 'tasks') {
-    switchView('tasks');
-  } else {
+  const searchQuery = document.getElementById('searchInput')?.value.toLowerCase().trim() || '';
+
+  // Search in current view
+  if (activeView === 'tasks') {
     renderTasks();
+  } else if (activeView === 'projects') {
+    renderGanttChart();
+  } else if (activeView === 'dashboard') {
+    // From dashboard: always use renderGlobalSearchResults to handle show/hide
+    renderGlobalSearchResults();
+  } else {
+    // If in another view without search, switch to tasks
+    switchView('tasks');
+  }
+}
+
+function renderGlobalSearchResults() {
+  const searchQuery = document.getElementById('searchInput')?.value.toLowerCase().trim() || '';
+
+  const dashboardContainer = document.getElementById('viewDashboard');
+  if (!dashboardContainer) return;
+
+  // Check if search results container exists
+  let searchContainer = document.getElementById('globalSearchResults');
+  const normalDashboard = document.getElementById('normalDashboard');
+
+  if (!searchQuery) {
+    // Show normal dashboard, hide search results
+    if (searchContainer) searchContainer.classList.add('hidden');
+    if (normalDashboard) {
+      normalDashboard.classList.remove('hidden');
+      renderDashboard(); // Refresh dashboard data
+    }
+    return;
+  }
+
+  // Search in tasks
+  const matchingTasks = getActiveTasks().filter(t => {
+    const matchTitle = t.title?.toLowerCase().includes(searchQuery);
+    const matchComment = t.comment?.toLowerCase().includes(searchQuery);
+    const matchRequester = t.requester?.toLowerCase().includes(searchQuery);
+    const matchType = t.type?.toLowerCase().includes(searchQuery);
+    return matchTitle || matchComment || matchRequester || matchType;
+  });
+
+  // Search in projects
+  const matchingProjects = getActiveProjects().filter(p => {
+    const matchName = p.name?.toLowerCase().includes(searchQuery);
+    const matchDescription = p.description?.toLowerCase().includes(searchQuery);
+    const matchRequesters = p.requesters?.some(r => r.toLowerCase().includes(searchQuery));
+    const matchStatus = p.status?.toLowerCase().includes(searchQuery);
+    return matchName || matchDescription || matchRequesters || matchStatus;
+  });
+
+  // Hide normal dashboard
+  if (normalDashboard) normalDashboard.classList.add('hidden');
+
+  // Create or update search results container
+  if (!searchContainer) {
+    searchContainer = document.createElement('div');
+    searchContainer.id = 'globalSearchResults';
+    dashboardContainer.appendChild(searchContainer);
+  }
+  searchContainer.classList.remove('hidden');
+
+  // Populate search results
+  searchContainer.innerHTML = `
+    <div class="mb-6">
+      <h2 class="text-2xl md:text-3xl font-extrabold font-headline tracking-tight text-on-surface mb-2">
+        Résultats de recherche : "${escHtml(searchQuery)}"
+      </h2>
+      <p class="text-on-surface-variant">
+        ${matchingTasks.length} tâche${matchingTasks.length > 1 ? 's' : ''} •
+        ${matchingProjects.length} projet${matchingProjects.length > 1 ? 's' : ''}
+      </p>
+    </div>
+
+    <!-- Tasks Results -->
+    ${matchingTasks.length > 0 ? `
+    <div class="mb-8">
+      <div class="flex items-center gap-2 mb-4">
+        <span class="material-symbols-outlined text-primary">task_alt</span>
+        <h3 class="text-xl font-bold font-headline text-on-surface">Tâches trouvées (${matchingTasks.length})</h3>
+      </div>
+      <div id="searchTasksResults" class="grid grid-cols-1 xl:grid-cols-2 gap-6"></div>
+    </div>
+    ` : `
+    <div class="mb-8">
+      <div class="flex items-center gap-2 mb-4">
+        <span class="material-symbols-outlined text-on-surface-variant">task_alt</span>
+        <h3 class="text-xl font-bold font-headline text-on-surface-variant">Aucune tâche trouvée</h3>
+      </div>
+    </div>
+    `}
+
+    <!-- Projects Results -->
+    ${matchingProjects.length > 0 ? `
+    <div>
+      <div class="flex items-center gap-2 mb-4">
+        <span class="material-symbols-outlined text-primary">folder_open</span>
+        <h3 class="text-xl font-bold font-headline text-on-surface">Projets trouvés (${matchingProjects.length})</h3>
+      </div>
+      <div id="searchProjectsResults" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+    </div>
+    ` : `
+    <div>
+      <div class="flex items-center gap-2 mb-4">
+        <span class="material-symbols-outlined text-on-surface-variant">folder_open</span>
+        <h3 class="text-xl font-bold font-headline text-on-surface-variant">Aucun projet trouvé</h3>
+      </div>
+    </div>
+    `}
+  `;
+
+  // Render matching tasks
+  if (matchingTasks.length > 0) {
+    const tasksContainer = document.getElementById('searchTasksResults');
+    matchingTasks.slice(0, 10).forEach((task, idx) => {
+      tasksContainer.appendChild(buildCard(task, idx, false));
+    });
+  }
+
+  // Render matching projects
+  if (matchingProjects.length > 0) {
+    const projectsContainer = document.getElementById('searchProjectsResults');
+    const statusColors = {
+      'en-cours': { bg: 'bg-[#006c4a]', text: 'text-white', label: 'EN COURS', dot: '#006c4a' },
+      'planifie': { bg: 'bg-[#6366f1]', text: 'text-white', label: 'PLANIFIÉ', dot: '#6366f1' },
+      'urgent': { bg: 'bg-[#ef4444]', text: 'text-white', label: 'URGENT', dot: '#ef4444' },
+      'termine': { bg: 'bg-[#9ca3af]', text: 'text-white', label: 'TERMINÉ', dot: '#9ca3af' }
+    };
+
+    matchingProjects.slice(0, 10).forEach(project => {
+      const color = statusColors[project.status] || statusColors['en-cours'];
+      const startDate = new Date(project.startDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+      const endDate = new Date(project.endDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+
+      const requesters = project.requesters || (project.requester ? [project.requester] : []);
+      const requesterBadges = requesters.map(req =>
+        `<span class="text-xs px-2 py-0.5 bg-surface-container rounded-full text-on-surface-variant font-semibold">${escHtml(req)}</span>`
+      ).join('');
+
+      const projectCard = `
+        <div class="bg-surface-container-low rounded-2xl p-4 shadow-sm hover:shadow-md transition-all cursor-pointer" onclick="openProjectModal(${project.id})">
+          <div class="flex items-start justify-between mb-3">
+            <div class="flex-1">
+              <h3 class="font-bold text-on-surface text-lg mb-2">${escHtml(project.name)}</h3>
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="w-2 h-2 rounded-full" style="background-color: ${color.dot}"></span>
+                <span class="text-xs font-medium text-on-surface-variant uppercase">${color.label}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-2 mb-3">
+            <div class="flex items-center gap-2 text-sm text-on-surface-variant">
+              <span class="material-symbols-outlined text-base">calendar_month</span>
+              <span>${startDate} → ${endDate}</span>
+            </div>
+          </div>
+
+          ${requesters.length > 0 ? `
+          <div class="flex flex-wrap gap-2 mb-3">
+            ${requesterBadges}
+          </div>
+          ` : ''}
+
+          <div class="pt-3 border-t border-surface-container">
+            <div class="flex items-center justify-between text-sm mb-2">
+              <span class="text-on-surface-variant font-medium">Progression</span>
+              <span class="font-bold text-on-surface">${project.progress}%</span>
+            </div>
+            <div class="w-full h-2 bg-surface-container rounded-full overflow-hidden">
+              <div class="${color.bg} h-full rounded-full transition-all" style="width: ${project.progress}%"></div>
+            </div>
+          </div>
+        </div>
+      `;
+      projectsContainer.innerHTML += projectCard;
+    });
   }
 }
 
@@ -1183,10 +1694,103 @@ function renderArchives() {
         <strong>Aucune tâche archivée</strong>
         <p>Les tâches marquées "Réalisé" apparaîtront ici.</p>
       </div>`;
+  } else {
+    list.forEach((task, idx) => container.appendChild(buildCard(task, idx, true)));
+  }
+
+  // Render archived projects (always, regardless of archived tasks)
+  renderArchivedProjects();
+}
+
+function renderArchivedProjects() {
+  const container = document.getElementById('archivedProjects');
+  if (!container) return;
+
+  const archivedProjects = getArchivedProjects();
+
+  if (archivedProjects.length === 0) {
+    container.innerHTML = `
+      <div class="col-span-full text-center py-8">
+        <span class="material-symbols-outlined text-5xl text-on-surface-variant mb-2 block opacity-40">folder_open</span>
+        <p class="text-on-surface-variant text-sm">Aucun projet archivé</p>
+      </div>
+    `;
     return;
   }
 
-  list.forEach((task, idx) => container.appendChild(buildCard(task, idx, true)));
+  const statusColors = {
+    'en-cours': { bg: 'bg-[#006c4a]', text: 'text-white', label: 'EN COURS', dot: '#006c4a' },
+    'planifie': { bg: 'bg-[#6366f1]', text: 'text-white', label: 'PLANIFIÉ', dot: '#6366f1' },
+    'urgent': { bg: 'bg-[#ef4444]', text: 'text-white', label: 'URGENT', dot: '#ef4444' },
+    'termine': { bg: 'bg-[#9ca3af]', text: 'text-white', label: 'TERMINÉ', dot: '#9ca3af' }
+  };
+
+  let html = '';
+  archivedProjects.forEach(project => {
+    const color = statusColors[project.status] || statusColors['termine'];
+    const startDate = new Date(project.startDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+    const endDate = new Date(project.endDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+    const archivedDate = project.archivedAt ? new Date(project.archivedAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+
+    const requesters = project.requesters || (project.requester ? [project.requester] : []);
+    const requesterBadges = requesters.map(req =>
+      `<span class="text-xs px-2 py-0.5 bg-surface-container rounded-full text-on-surface-variant font-semibold">${escHtml(req)}</span>`
+    ).join('');
+
+    html += `
+      <div class="bg-surface-container-low rounded-2xl p-4 shadow-sm opacity-75 group">
+        <div class="flex items-start justify-between mb-3">
+          <div class="flex-1">
+            <h3 class="font-bold text-on-surface text-lg mb-2">${escHtml(project.name)}</h3>
+            <div class="flex items-center gap-2 mb-2">
+              <span class="w-2 h-2 rounded-full" style="background-color: ${color.dot}"></span>
+              <span class="text-xs font-medium text-on-surface-variant uppercase">${color.label}</span>
+            </div>
+          </div>
+          <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button onclick="restoreProject(${project.id})" title="Restaurer le projet" class="p-2 hover:bg-surface-container-high rounded-lg text-on-surface-variant hover:text-primary transition-colors">
+              <span class="material-symbols-outlined text-sm">restore</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="space-y-2 mb-3">
+          <div class="flex items-center gap-2 text-sm text-on-surface-variant">
+            <span class="material-symbols-outlined text-base">calendar_month</span>
+            <span>${startDate} → ${endDate}</span>
+          </div>
+          <div class="flex items-center gap-2 text-sm text-on-surface-variant">
+            <span class="material-symbols-outlined text-base">archive</span>
+            <span>Archivé le ${archivedDate}</span>
+          </div>
+        </div>
+
+        ${requesters.length > 0 ? `
+        <div class="flex flex-wrap gap-2 mb-3">
+          ${requesterBadges}
+        </div>
+        ` : ''}
+
+        <div class="pt-3 border-t border-surface-container">
+          <div class="flex items-center justify-between text-sm mb-2">
+            <span class="text-on-surface-variant font-medium">Progression</span>
+            <span class="font-bold text-on-surface">${project.progress}%</span>
+          </div>
+          <div class="w-full h-2 bg-surface-container rounded-full overflow-hidden">
+            <div class="${color.bg} h-full rounded-full transition-all" style="width: ${project.progress}%"></div>
+          </div>
+        </div>
+
+        ${project.description ? `
+        <div class="mt-3 pt-3 border-t border-surface-container">
+          <p class="text-sm text-on-surface-variant line-clamp-2">${escHtml(project.description)}</p>
+        </div>
+        ` : ''}
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
 }
 
 // ════════════════════════════════════════════════════════════
@@ -1260,8 +1864,14 @@ function buildCard(task, idx, isArchive) {
         <button onclick="openModal(${task.id})" title="Modifier la tâche" class="p-2 hover:bg-surface-container-low rounded-lg text-on-surface-variant hover:text-primary transition-colors">
           <span class="material-symbols-outlined text-sm">edit</span>
         </button>
+        ${!isArchive && task.requester && canSendEmailForTask(task) ? `<button onclick="sendTaskInquiryEmail(${task.id})" title="Contacter le demandeur" class="p-2 hover:bg-surface-container-low rounded-lg text-on-surface-variant hover:text-primary transition-colors">
+          <span class="material-symbols-outlined text-sm">email</span>
+        </button>` : ''}
         ${!isArchive ? `<button onclick="markAsCompleted(${task.id})" title="Marquer comme réalisé" class="p-2 hover:bg-surface-container-low rounded-lg text-on-surface-variant hover:text-primary transition-colors">
           <span class="material-symbols-outlined text-sm">check</span>
+        </button>` : ''}
+        ${isArchive && task.requester && canSendEmailForTask(task) ? `<button onclick="sendTaskCompletionEmail(${task.id})" title="Notifier le demandeur par email" class="p-2 hover:bg-surface-container-low rounded-lg text-on-surface-variant hover:text-primary transition-colors">
+          <span class="material-symbols-outlined text-sm">email</span>
         </button>` : ''}
         ${isArchive ? `<button onclick="restoreTask(${task.id})" title="Restaurer la tâche" class="p-2 hover:bg-surface-container-low rounded-lg text-on-surface-variant hover:text-primary transition-colors">
           <span class="material-symbols-outlined text-sm">restore</span>
@@ -1631,8 +2241,22 @@ function showHelpModal() {
         <p class="text-sm text-on-surface-variant">Attachez jusqu'à 5 fichiers par tâche (max 5 Mo chacun). Ils sont stockés en base64 dans le localStorage.</p>
       </div>
       <div>
-        <h3 class="font-bold text-lg mb-2">📊 Export</h3>
-        <p class="text-sm text-on-surface-variant">Exportez vos tâches en JSON ou Excel depuis l'onglet Import/Export.</p>
+        <h3 class="font-bold text-lg mb-2">📊 Gestion de projets</h3>
+        <p class="text-sm text-on-surface-variant">Visualisez vos projets avec un diagramme de Gantt interactif. Basculez entre vue mensuelle et hebdomadaire pour une meilleure visibilité.</p>
+      </div>
+      <div>
+        <h3 class="font-bold text-lg mb-2">♻️ Archives</h3>
+        <p class="text-sm text-on-surface-variant">Archivez vos tâches et projets terminés. Vous pouvez les restaurer à tout moment en passant la souris sur la carte et en cliquant sur l'icône de restauration.</p>
+      </div>
+      <div>
+        <h3 class="font-bold text-lg mb-2">📥📤 Import/Export</h3>
+        <p class="text-sm text-on-surface-variant">Exportez vos tâches et projets en JSON ou Excel depuis l'onglet Import/Export. Le format JSON inclut toutes vos données (tâches, projets, versions).</p>
+      </div>
+      <div class="pt-4 border-t border-outline-variant">
+        <p class="text-xs text-on-surface-variant text-center">
+          <strong>TaskMDA</strong> — Application développée par <strong>Frédérick MURAT</strong><br>
+          Mars 2026 • Licence MIT
+        </p>
       </div>
     </div>
   `;
@@ -1702,14 +2326,14 @@ function showModal(title, content) {
 
   const modalHTML = `
     <div id="tempModal" class="fixed inset-0 bg-black/40 backdrop-blur-md z-[100] flex items-center justify-center p-4">
-      <div class="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-2xl p-6" onclick="event.stopPropagation()">
-        <div class="flex justify-between items-center mb-6">
+      <div class="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col" onclick="event.stopPropagation()">
+        <div class="flex justify-between items-center p-6 pb-4 shrink-0">
           <h2 class="text-2xl font-bold font-headline">${title}</h2>
           <button onclick="document.getElementById('tempModal').remove()" class="w-10 h-10 flex items-center justify-center hover:bg-surface-container rounded-lg transition-colors">
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
-        <div>${content}</div>
+        <div class="px-6 pb-6 overflow-y-auto">${content}</div>
       </div>
     </div>
   `;
@@ -1749,12 +2373,18 @@ function importJSON(e) {
         tasks = data.tasks || [];
         versions = data.versions || {};
         projects = data.projects || [];
+        // Import config if available, otherwise keep current
+        if (data.config) {
+          config = data.config;
+        }
       } else {
         throw new Error('Invalid JSON format');
       }
 
       await saveToStorage();
       updateSidebarCounts();
+      updateRequesterSelects();
+      updateTypeSelects();
       if (activeView === 'dashboard') renderDashboard();
       else if (activeView === 'tasks') renderTasks();
       else if (activeView === 'projects') renderGanttChart();
@@ -1782,8 +2412,9 @@ function exportJSON() {
     tasks: tasks,
     versions: versions,
     projects: projects,
+    config: config,
     exportedAt: new Date().toISOString(),
-    format: 'TaskArchitect v4'
+    format: 'TaskMDA v4'
   };
   downloadBlob(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}), 'tasks.json');
   showToast('⬇ JSON exporté (non chiffré)');
@@ -1905,6 +2536,269 @@ function renderVersionsList() {
 
   container.innerHTML = html;
 }
+
+// ════════════════════════════════════════════════════════════
+//  GESTION DES DEMANDEURS
+// ════════════════════════════════════════════════════════════
+
+function openRequestersModal() {
+  document.getElementById('requestersOverlay').classList.remove('hidden');
+  renderRequestersList();
+}
+
+function closeRequestersModal() {
+  document.getElementById('requestersOverlay').classList.add('hidden');
+  document.getElementById('requesterName').value = '';
+  document.getElementById('requesterEmail').value = '';
+}
+
+function handleRequestersOverlayClick(e) {
+  if (e.target === document.getElementById('requestersOverlay')) closeRequestersModal();
+}
+
+async function addRequester() {
+  const name = document.getElementById('requesterName').value.trim();
+  const email = document.getElementById('requesterEmail').value.trim();
+
+  if (!name) {
+    showToast('⚠️ Veuillez saisir un nom');
+    return;
+  }
+
+  // Check if already exists
+  if (config.requesters.some(r => r.name.toLowerCase() === name.toLowerCase())) {
+    showToast('⚠️ Ce demandeur existe déjà');
+    return;
+  }
+
+  config.requesters.push({ name, email: email || '' });
+  await saveToStorage();
+  renderRequestersList();
+  document.getElementById('requesterName').value = '';
+  document.getElementById('requesterEmail').value = '';
+  showToast(`✅ Demandeur ${name} ajouté`);
+
+  // Refresh forms that use requesters
+  updateRequesterSelects();
+}
+
+async function deleteRequester(name) {
+  if (!confirm(`Supprimer le demandeur "${name}" ?\n\nAttention : cela ne supprimera pas les tâches associées.`)) return;
+
+  config.requesters = config.requesters.filter(r => r.name !== name);
+  await saveToStorage();
+  renderRequestersList();
+  showToast(`🗑 Demandeur ${name} supprimé`);
+
+  // Refresh forms
+  updateRequesterSelects();
+}
+
+async function updateRequester(oldName, newName, newEmail) {
+  const requester = config.requesters.find(r => r.name === oldName);
+  if (!requester) return;
+
+  if (!newName.trim()) {
+    showToast('⚠️ Le nom ne peut pas être vide');
+    return;
+  }
+
+  // Check if new name already exists (but not the same one)
+  if (newName !== oldName && config.requesters.some(r => r.name.toLowerCase() === newName.toLowerCase())) {
+    showToast('⚠️ Ce nom existe déjà');
+    return;
+  }
+
+  requester.name = newName.trim();
+  requester.email = newEmail.trim();
+
+  await saveToStorage();
+  renderRequestersList();
+  showToast(`✏️ Demandeur mis à jour`);
+
+  // Refresh forms
+  updateRequesterSelects();
+}
+
+function renderRequestersList() {
+  const container = document.getElementById('requestersList');
+  if (!container) return;
+
+  if (config.requesters.length === 0) {
+    container.innerHTML = `
+      <div class="text-center py-8 text-on-surface-variant">
+        <div class="text-4xl mb-2 opacity-40">👥</div>
+        <p class="text-sm">Aucun demandeur enregistré</p>
+      </div>`;
+    return;
+  }
+
+  let html = '<div class="space-y-2">';
+  config.requesters.forEach((requester) => {
+    html += `
+      <div class="bg-surface-container p-4 rounded-xl flex items-center gap-3">
+        <div class="flex-1">
+          <input type="text"
+                 value="${escHtml(requester.name)}"
+                 id="req_name_${escHtml(requester.name)}"
+                 class="w-full px-3 py-1.5 bg-surface-container-low border-none rounded-lg focus:ring-2 focus:ring-primary/20 outline-none font-semibold mb-2">
+          <input type="email"
+                 value="${escHtml(requester.email || '')}"
+                 id="req_email_${escHtml(requester.name)}"
+                 placeholder="Email (optionnel)"
+                 class="w-full px-3 py-1.5 bg-surface-container-low border-none rounded-lg focus:ring-2 focus:ring-primary/20 outline-none text-sm">
+        </div>
+        <button onclick="updateRequester('${escHtml(requester.name)}', document.getElementById('req_name_${escHtml(requester.name)}').value, document.getElementById('req_email_${escHtml(requester.name)}').value)"
+                class="px-3 py-2 bg-primary-gradient text-white rounded-lg font-semibold flex items-center gap-1 text-sm">
+          <span class="material-symbols-outlined text-base">save</span>
+          Enreg.
+        </button>
+        <button onclick="deleteRequester('${escHtml(requester.name)}')"
+                class="w-9 h-9 flex items-center justify-center hover:bg-error-container hover:text-on-error-container rounded-lg transition-colors">
+          <span class="material-symbols-outlined">delete</span>
+        </button>
+      </div>`;
+  });
+  html += '</div>';
+
+  container.innerHTML = html;
+}
+
+// ════════════════════════════════════════════════════════════
+//  GESTION DES TYPES
+// ════════════════════════════════════════════════════════════
+
+function openTypesModal() {
+  document.getElementById('typesOverlay').classList.remove('hidden');
+  renderTypesList();
+}
+
+function closeTypesModal() {
+  document.getElementById('typesOverlay').classList.add('hidden');
+  document.getElementById('typeName').value = '';
+}
+
+function handleTypesOverlayClick(e) {
+  if (e.target === document.getElementById('typesOverlay')) closeTypesModal();
+}
+
+async function addType() {
+  const name = document.getElementById('typeName').value.trim();
+
+  if (!name) {
+    showToast('⚠️ Veuillez saisir un type');
+    return;
+  }
+
+  // Check if already exists
+  if (config.types.some(t => t.toLowerCase() === name.toLowerCase())) {
+    showToast('⚠️ Ce type existe déjà');
+    return;
+  }
+
+  config.types.push(name);
+  await saveToStorage();
+  renderTypesList();
+  document.getElementById('typeName').value = '';
+  showToast(`✅ Type ${name} ajouté`);
+
+  // Refresh forms
+  updateTypeSelects();
+}
+
+async function deleteType(name) {
+  if (!confirm(`Supprimer le type "${name}" ?\n\nAttention : cela ne supprimera pas les tâches associées.`)) return;
+
+  config.types = config.types.filter(t => t !== name);
+  await saveToStorage();
+  renderTypesList();
+  showToast(`🗑 Type ${name} supprimé`);
+
+  // Refresh forms
+  updateTypeSelects();
+}
+
+async function updateType(oldName, newName) {
+  const index = config.types.findIndex(t => t === oldName);
+  if (index === -1) return;
+
+  if (!newName.trim()) {
+    showToast('⚠️ Le nom ne peut pas être vide');
+    return;
+  }
+
+  // Check if new name already exists (but not the same one)
+  if (newName !== oldName && config.types.some(t => t.toLowerCase() === newName.toLowerCase())) {
+    showToast('⚠️ Ce nom existe déjà');
+    return;
+  }
+
+  config.types[index] = newName.trim();
+
+  await saveToStorage();
+  renderTypesList();
+  showToast(`✏️ Type mis à jour`);
+
+  // Refresh forms
+  updateTypeSelects();
+}
+
+function renderTypesList() {
+  const container = document.getElementById('typesList');
+  if (!container) return;
+
+  if (config.types.length === 0) {
+    container.innerHTML = `
+      <div class="text-center py-8 text-on-surface-variant">
+        <div class="text-4xl mb-2 opacity-40">📋</div>
+        <p class="text-sm">Aucun type enregistré</p>
+      </div>`;
+    return;
+  }
+
+  let html = '<div class="space-y-2">';
+  config.types.forEach((type) => {
+    html += `
+      <div class="bg-surface-container p-4 rounded-xl flex items-center gap-3">
+        <input type="text"
+               value="${escHtml(type)}"
+               id="type_${escHtml(type)}"
+               class="flex-1 px-3 py-2 bg-surface-container-low border-none rounded-lg focus:ring-2 focus:ring-primary/20 outline-none font-semibold">
+        <button onclick="updateType('${escHtml(type)}', document.getElementById('type_${escHtml(type)}').value)"
+                class="px-3 py-2 bg-primary-gradient text-white rounded-lg font-semibold flex items-center gap-1">
+          <span class="material-symbols-outlined text-base">save</span>
+          Enregistrer
+        </button>
+        <button onclick="deleteType('${escHtml(type)}')"
+                class="w-9 h-9 flex items-center justify-center hover:bg-error-container hover:text-on-error-container rounded-lg transition-colors">
+          <span class="material-symbols-outlined">delete</span>
+        </button>
+      </div>`;
+  });
+  html += '</div>';
+
+  container.innerHTML = html;
+}
+
+// Update datalists in forms when config changes
+function updateRequesterSelects() {
+  const datalist = document.getElementById('requesterList');
+  if (!datalist) return;
+
+  datalist.innerHTML = config.requesters.map(r =>
+    `<option value="${escHtml(r.name)}">`
+  ).join('');
+}
+
+function updateTypeSelects() {
+  const datalist = document.getElementById('typeList');
+  if (!datalist) return;
+
+  datalist.innerHTML = config.types.map(t =>
+    `<option value="${escHtml(t)}">`
+  ).join('');
+}
+
 // ════════════════════════════════════════════════════════════
 //  PROJECTS & GANTT CHART
 // ════════════════════════════════════════════════════════════
@@ -1913,6 +2807,7 @@ function openProjectModal(id = null) {
   editingProjectId = id;
   const modal = document.getElementById('projectModal');
   const title = document.getElementById('projectModalTitle');
+  const archiveBtn = document.getElementById('btnArchiveProject');
 
   if (id) {
     const project = projects.find(p => p.id === id);
@@ -1924,6 +2819,11 @@ function openProjectModal(id = null) {
     document.getElementById('projectEndDate').value = project.endDate;
     document.getElementById('projectProgress').value = project.progress;
     document.getElementById('projectDescription').value = project.description || '';
+
+    // Handle legacy single requester or new multiple requesters
+    const requesters = project.requesters || (project.requester ? [project.requester] : []);
+    setSelectedRequesters(requesters);
+
     updateProjectProgressBar();
 
     // Set active status pill
@@ -1936,9 +2836,17 @@ function openProjectModal(id = null) {
         pill.classList.add('bg-surface-container', 'text-on-surface-variant', 'border-transparent');
       }
     });
+
+    // Show archive button if not already archived
+    if (!project.archivedAt) {
+      archiveBtn.classList.remove('hidden');
+    } else {
+      archiveBtn.classList.add('hidden');
+    }
   } else {
     title.textContent = 'Nouveau projet';
     resetProjectForm();
+    archiveBtn.classList.add('hidden');
   }
 
   // Init status pills
@@ -1950,6 +2858,43 @@ function openProjectModal(id = null) {
 function closeProjectModal() {
   document.getElementById('projectModal').classList.add('hidden');
   editingProjectId = null;
+}
+
+async function archiveProject() {
+  if (!editingProjectId) return;
+
+  const project = projects.find(p => p.id === editingProjectId);
+  if (!project || project.archivedAt) return;
+
+  // Archive the project
+  project.archivedAt = new Date().toISOString();
+
+  await saveToStorage();
+  closeProjectModal();
+  updateProjectCount();
+  renderGanttChart();
+  renderProjectCards();
+  showToast('📦 Projet archivé');
+}
+
+async function restoreProject(id) {
+  const project = projects.find(p => p.id === id);
+  if (!project || !project.archivedAt) return;
+
+  // Restaurer le projet : supprimer archivedAt
+  projects = projects.map(p => p.id === id ? { ...p, archivedAt: null, updatedAt: new Date().toISOString() } : p);
+
+  await saveToStorage();
+  updateProjectCount();
+
+  showToast('♻️ Projet restauré');
+
+  // Refresh current view
+  if (activeView === 'archives') {
+    renderArchives();
+  } else if (activeView === 'projects') {
+    renderGanttChart();
+  }
 }
 
 function resetProjectForm() {
@@ -1970,9 +2915,13 @@ function resetProjectForm() {
       pill.classList.add('bg-surface-container', 'text-on-surface-variant', 'border-transparent');
     }
   });
+
+  // Reset requester pills
+  setSelectedRequesters([]);
 }
 
 function initProjectStatusPills() {
+  // Status pills (single selection)
   document.querySelectorAll('.project-status-pill').forEach(pill => {
     pill.addEventListener('click', () => {
       document.querySelectorAll('.project-status-pill').forEach(p => {
@@ -1983,6 +2932,75 @@ function initProjectStatusPills() {
       pill.classList.remove('bg-surface-container', 'text-on-surface-variant', 'border-transparent');
     });
   });
+
+  // Requester pills (multiple selection)
+  document.querySelectorAll('.requester-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      pill.classList.toggle('bg-primary');
+      pill.classList.toggle('text-white');
+      pill.classList.toggle('border-primary');
+      pill.classList.toggle('bg-surface-container');
+      pill.classList.toggle('text-on-surface-variant');
+      updateSelectedRequestersDisplay();
+    });
+  });
+}
+
+function updateSelectedRequestersDisplay() {
+  const container = document.getElementById('selectedRequesters');
+  const selectedPills = document.querySelectorAll('.requester-pill.bg-primary');
+
+  if (selectedPills.length === 0) {
+    container.innerHTML = '<span class="text-sm text-on-surface-variant">Aucun demandeur sélectionné</span>';
+  } else {
+    container.innerHTML = '';
+    selectedPills.forEach(pill => {
+      const badge = document.createElement('span');
+      badge.className = 'px-3 py-1 bg-primary text-white rounded-full text-xs font-semibold flex items-center gap-1.5';
+      badge.innerHTML = `
+        ${pill.dataset.requester}
+        <button type="button" class="hover:bg-primary-container/20 rounded-full p-0.5 transition-colors" onclick="event.stopPropagation(); removeRequester('${pill.dataset.requester}')">
+          <span class="material-symbols-outlined text-sm">close</span>
+        </button>
+      `;
+      container.appendChild(badge);
+    });
+  }
+}
+
+function removeRequester(requester) {
+  const pill = document.querySelector(`.requester-pill[data-requester="${requester}"]`);
+  if (pill) {
+    pill.classList.remove('bg-primary', 'text-white', 'border-primary');
+    pill.classList.add('bg-surface-container', 'text-on-surface-variant');
+    updateSelectedRequestersDisplay();
+  }
+}
+
+function getSelectedRequesters() {
+  const selectedPills = document.querySelectorAll('.requester-pill.bg-primary');
+  return Array.from(selectedPills).map(pill => pill.dataset.requester);
+}
+
+function setSelectedRequesters(requesters) {
+  // Reset all pills
+  document.querySelectorAll('.requester-pill').forEach(pill => {
+    pill.classList.remove('bg-primary', 'text-white', 'border-primary');
+    pill.classList.add('bg-surface-container', 'text-on-surface-variant');
+  });
+
+  // Select specified requesters
+  if (requesters && requesters.length > 0) {
+    requesters.forEach(req => {
+      const pill = document.querySelector(`.requester-pill[data-requester="${req}"]`);
+      if (pill) {
+        pill.classList.add('bg-primary', 'text-white', 'border-primary');
+        pill.classList.remove('bg-surface-container', 'text-on-surface-variant');
+      }
+    });
+  }
+
+  updateSelectedRequestersDisplay();
 }
 
 function getSelectedProjectStatus() {
@@ -2002,6 +3020,7 @@ async function submitProjectForm() {
   const endDate = document.getElementById('projectEndDate').value;
   const progress = parseInt(document.getElementById('projectProgress').value) || 0;
   const description = document.getElementById('projectDescription').value.trim();
+  const requesters = getSelectedRequesters();
   const status = getSelectedProjectStatus();
 
   if (!name) {
@@ -2023,7 +3042,7 @@ async function submitProjectForm() {
 
   if (editingProjectId) {
     projects = projects.map(p => p.id === editingProjectId
-      ? { ...p, name, startDate, endDate, progress, description, status, updatedAt: now }
+      ? { ...p, name, startDate, endDate, progress, description, requesters, status, updatedAt: now }
       : p
     );
     showToast('✏️ Projet modifié');
@@ -2035,6 +3054,7 @@ async function submitProjectForm() {
       endDate,
       progress,
       description,
+      requesters,
       status,
       createdAt: now,
       updatedAt: now
@@ -2049,9 +3069,15 @@ async function submitProjectForm() {
 }
 
 function updateProjectCount() {
-  const activeProjects = projects.filter(p => p.status !== 'termine');
+  const activeProjects = getActiveProjects().filter(p => p.status !== 'termine');
   const countEl = document.getElementById('projectCount');
   if (countEl) countEl.textContent = activeProjects.length;
+
+  // Update archive count to include both tasks and projects
+  const archivedTasks = getArchivedTasks().length;
+  const archivedProjects = getArchivedProjects().length;
+  const archiveCountEl = document.getElementById('archiveCount');
+  if (archiveCountEl) archiveCountEl.textContent = archivedTasks + archivedProjects;
 }
 
 function setGanttViewMode(mode) {
@@ -2080,7 +3106,21 @@ function renderGanttChart() {
   const container = document.getElementById('ganttChart');
   if (!container) return;
 
-  if (projects.length === 0) {
+  let activeProjects = getActiveProjects();
+
+  // Apply search filter
+  const searchQuery = document.getElementById('searchInput')?.value.toLowerCase().trim() || '';
+  if (searchQuery) {
+    activeProjects = activeProjects.filter(p => {
+      const matchName = p.name?.toLowerCase().includes(searchQuery);
+      const matchDescription = p.description?.toLowerCase().includes(searchQuery);
+      const matchRequesters = p.requesters?.some(r => r.toLowerCase().includes(searchQuery));
+      const matchStatus = p.status?.toLowerCase().includes(searchQuery);
+      return matchName || matchDescription || matchRequesters || matchStatus;
+    });
+  }
+
+  if (activeProjects.length === 0) {
     container.innerHTML = `
       <div class="text-center py-16 px-4">
         <span class="material-symbols-outlined text-6xl text-on-surface-variant mb-4 block opacity-40">folder_open</span>
@@ -2092,7 +3132,7 @@ function renderGanttChart() {
   }
 
   // Calculate timeline range
-  const allDates = projects.flatMap(p => [new Date(p.startDate), new Date(p.endDate)]);
+  const allDates = activeProjects.flatMap(p => [new Date(p.startDate), new Date(p.endDate)]);
   const minDate = new Date(Math.min(...allDates));
   const maxDate = new Date(Math.max(...allDates));
 
@@ -2109,59 +3149,69 @@ function renderGanttChart() {
     ? getMonthsBetween(minDate, maxDate)
     : getWeeksBetween(minDate, maxDate);
 
-  // Build HTML
-  let html = '<div class="min-w-[800px]">';
+  // Build HTML with responsive grid
+  const totalColumns = timeLabels.length;
+  let html = '';
 
   // Header row with time labels (months or weeks)
-  html += '<div class="grid gap-0 border-b border-surface-container" style="grid-template-columns: 250px 1fr;">';
-  html += '<div class="p-4 bg-surface-container-lowest font-bold text-sm uppercase tracking-wide text-on-surface-variant sticky left-0 z-10">Nom du projet</div>';
-  html += '<div class="flex">';
+  html += '<div class="flex border-b border-surface-container overflow-hidden">';
+  html += '<div class="w-48 lg:w-64 p-3 lg:p-4 font-label text-[10px] font-bold text-on-surface-variant uppercase tracking-widest border-r border-surface-container shrink-0">Nom du projet</div>';
+  html += '<div class="flex-1 grid border-l border-surface-container/30" style="grid-template-columns: repeat(' + totalColumns + ', minmax(0, 1fr));">';
   timeLabels.forEach(label => {
-    html += `<div class="flex-1 text-center p-4 bg-surface-container-lowest font-semibold text-sm uppercase tracking-wide text-on-surface-variant border-l border-surface-container">${label}</div>`;
+    html += `<div class="p-2 lg:p-4 font-label text-[9px] lg:text-[10px] font-bold text-on-surface-variant text-center border-r border-surface-container/30 last:border-r-0">${label}</div>`;
   });
   html += '</div>';
   html += '</div>';
 
-  // Project rows
-  projects.forEach(project => {
+  // Project rows (wrapped in divide-y container)
+  html += '<div class="divide-y divide-surface-container">';
+
+  activeProjects.forEach(project => {
     const statusColors = {
-      'en-cours': { bg: '#006c4a', text: '#ffffff', label: 'EN COURS', dot: '#006c4a' },
-      'planifie': { bg: '#6366f1', text: '#ffffff', label: 'PLANIFIÉ', dot: '#6366f1' },
-      'urgent': { bg: '#ef4444', text: '#ffffff', label: 'URGENT', dot: '#ef4444' },
-      'termine': { bg: '#9ca3af', text: '#ffffff', label: 'TERMINÉ', dot: '#9ca3af' }
+      'en-cours': { bg: '#006c4a', bgGradient: 'linear-gradient(135deg, #006c4a 0%, #3fb687 100%)', text: '#ffffff', label: 'EN COURS', dot: '#006c4a', bar: '#006c4a' },
+      'planifie': { bg: '#6366f1', bgGradient: '#6366f1', text: '#ffffff', label: 'PLANIFIÉ', dot: '#6366f1', bar: '#6366f1' },
+      'urgent': { bg: '#ef4444', bgGradient: '#ef4444', text: '#ffffff', label: 'URGENT', dot: '#ef4444', bar: '#ef4444' },
+      'termine': { bg: '#9ca3af', bgGradient: '#9ca3af', text: '#ffffff', label: 'TERMINÉ', dot: '#9ca3af', bar: '#9ca3af' }
     };
 
     const color = statusColors[project.status] || statusColors['en-cours'];
 
-    html += '<div class="grid gap-0 border-b border-surface-container hover:bg-surface-container/30 transition-colors" style="grid-template-columns: 250px 1fr;">';
+    html += '<div class="flex group hover:bg-surface-container-low transition-colors duration-200 overflow-hidden">';
 
-    // Project name column
+    // Project name column with vertical colored bar
+    const requesters = project.requesters || (project.requester ? [project.requester] : []);
+    const requesterBadges = requesters.map(req =>
+      `<span class="text-[8px] lg:text-[10px] px-1.5 lg:px-2 py-0.5 bg-surface-container rounded-full text-on-surface-variant font-semibold">${escHtml(req)}</span>`
+    ).join('');
+
     html += `
-      <div class="p-4 sticky left-0 z-10 bg-surface-container-low group">
-        <div class="flex items-center justify-between">
-          <div>
-            <h4 class="font-bold text-on-surface mb-1">${escHtml(project.name)}</h4>
-            <div class="flex items-center gap-1.5 text-xs">
-              <span class="w-2 h-2 rounded-full" style="background-color: ${color.dot}"></span>
-              <span class="font-semibold" style="color: ${color.dot}">${color.label}</span>
-            </div>
-          </div>
-          <button onclick="openProjectModal(${project.id})" class="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-surface-container rounded-lg transition-all">
-            <span class="material-symbols-outlined text-sm text-on-surface-variant">edit</span>
-          </button>
+      <div class="w-48 lg:w-64 p-3 lg:p-6 border-r border-surface-container shrink-0 relative">
+        <div class="absolute left-0 top-0 bottom-0 w-1" style="background-color: ${color.bar}"></div>
+        <h4 class="font-headline font-bold text-on-surface mb-1 text-sm lg:text-base truncate">${escHtml(project.name)}</h4>
+        <div class="flex items-center gap-2 mb-1">
+          <span class="w-2 h-2 rounded-full shrink-0" style="background-color: ${color.dot}"></span>
+          <span class="text-[10px] lg:text-[11px] font-medium text-on-surface-variant uppercase tracking-tighter">${color.label}</span>
         </div>
+        <div class="flex flex-wrap gap-1">${requesterBadges}</div>
+        <button onclick="openProjectModal(${project.id})" class="absolute top-2 lg:top-4 right-2 lg:right-4 opacity-0 group-hover:opacity-100 p-1 lg:p-1.5 hover:bg-surface-container rounded-lg transition-all">
+          <span class="material-symbols-outlined text-sm text-on-surface-variant">edit</span>
+        </button>
       </div>
     `;
 
-    // Timeline column
-    html += '<div class="relative p-4">';
+    // Timeline column with responsive grid
+    html += '<div class="flex-1 relative h-20 lg:h-24 py-6 lg:py-8 grid" style="grid-template-columns: repeat(' + totalColumns + ', minmax(0, 1fr));">';
     const bar = calculateBarPosition(project, minDate, maxDate, timeLabels.length);
+    const barStyle = project.status === 'en-cours'
+      ? `background: ${color.bgGradient}`
+      : `background-color: ${color.bg}`;
+
     html += `
-      <div class="absolute top-1/2 -translate-y-1/2 h-10 rounded-full shadow-sm flex items-center justify-center px-4 font-semibold text-sm transition-all hover:shadow-md cursor-pointer"
-           style="left: ${bar.left}%; width: ${bar.width}%; background-color: ${color.bg}; color: ${color.text};"
+      <div class="absolute h-6 lg:h-8 rounded-full flex items-center justify-center px-2 lg:px-4 shadow-sm cursor-pointer transition-all hover:shadow-md col-span-full"
+           style="left: ${bar.left}%; width: ${bar.width}%; ${barStyle}; color: ${color.text}; top: 50%; transform: translateY(-50%);"
            onclick="openProjectModal(${project.id})"
            title="${escHtml(project.name)} - ${project.progress}%">
-        <span>${project.progress}%</span>
+        <span class="text-[10px] lg:text-[11px] font-bold">${project.progress}%</span>
       </div>
     `;
     html += '</div>';
@@ -2180,7 +3230,21 @@ function renderProjectCards() {
   const container = document.getElementById('projectCardList');
   if (!container) return;
 
-  if (projects.length === 0) {
+  let activeProjects = getActiveProjects();
+
+  // Apply search filter
+  const searchQuery = document.getElementById('searchInput')?.value.toLowerCase().trim() || '';
+  if (searchQuery) {
+    activeProjects = activeProjects.filter(p => {
+      const matchName = p.name?.toLowerCase().includes(searchQuery);
+      const matchDescription = p.description?.toLowerCase().includes(searchQuery);
+      const matchRequesters = p.requesters?.some(r => r.toLowerCase().includes(searchQuery));
+      const matchStatus = p.status?.toLowerCase().includes(searchQuery);
+      return matchName || matchDescription || matchRequesters || matchStatus;
+    });
+  }
+
+  if (activeProjects.length === 0) {
     container.innerHTML = `
       <div class="text-center py-16 px-4">
         <span class="material-symbols-outlined text-6xl text-on-surface-variant mb-4 block opacity-40">folder_open</span>
@@ -2199,7 +3263,7 @@ function renderProjectCards() {
   };
 
   let html = '';
-  projects.forEach(project => {
+  activeProjects.forEach(project => {
     const color = statusColors[project.status] || statusColors['en-cours'];
     const startDate = new Date(project.startDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
     const endDate = new Date(project.endDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -2217,9 +3281,14 @@ function renderProjectCards() {
         <div class="flex items-start justify-between mb-3">
           <div class="flex-1">
             <h3 class="font-bold text-on-surface text-lg mb-2">${escHtml(project.name)}</h3>
-            <div class="flex items-center gap-1.5">
-              <span class="w-2 h-2 rounded-full" style="background-color: ${color.dot}"></span>
-              <span class="text-xs font-semibold" style="color: ${color.dot}">${color.label}</span>
+            <div class="flex items-center gap-2 flex-wrap">
+              <div class="flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full" style="background-color: ${color.dot}"></span>
+                <span class="text-xs font-semibold" style="color: ${color.dot}">${color.label}</span>
+              </div>
+              ${(project.requesters || (project.requester ? [project.requester] : [])).map(req =>
+                `<span class="text-xs px-2 py-0.5 bg-surface-container rounded-full text-on-surface-variant font-semibold">${escHtml(req)}</span>`
+              ).join('')}
             </div>
           </div>
           <button onclick="event.stopPropagation(); openProjectModal(${project.id})" class="p-2 hover:bg-surface-container rounded-lg transition-colors">
@@ -2268,8 +3337,20 @@ function getMonthsBetween(start, end) {
   const monthNames = ['JAN', 'FÉV', 'MAR', 'AVR', 'MAI', 'JUIN', 'JUIL', 'AOÛT', 'SEP', 'OCT', 'NOV', 'DÉC'];
 
   const current = new Date(start);
+  const currentYear = new Date().getFullYear();
+  const spansMultipleYears = start.getFullYear() !== end.getFullYear();
+
   while (current <= end) {
-    months.push(monthNames[current.getMonth()]);
+    const monthName = monthNames[current.getMonth()];
+    const year = current.getFullYear();
+
+    // Show year if: timeline spans multiple years OR project year is not current year
+    if (spansMultipleYears || year !== currentYear) {
+      months.push(`${monthName} ${year}`);
+    } else {
+      months.push(monthName);
+    }
+
     current.setMonth(current.getMonth() + 1);
   }
 
@@ -2286,14 +3367,45 @@ function getWeeksBetween(start, end) {
   const diff = current.getDate() - day + (day === 0 ? -6 : 1); // Adjust to Monday
   current.setDate(diff);
 
-  let weekNumber = 1;
+  const currentYear = new Date().getFullYear();
+  const spansMultipleYears = start.getFullYear() !== end.getFullYear();
+
+  let lastMonth = -1;
+  let weekInMonth = 0;
+  let isFirstWeekOfNewMonth = false;
+
   while (current <= end) {
-    const weekStart = current.getDate();
-    const month = monthNames[current.getMonth()];
-    weeks.push(`S${weekNumber} ${month}`);
+    const currentMonth = current.getMonth();
+    const month = monthNames[currentMonth];
+    const year = current.getFullYear();
+
+    // Check if month changed
+    if (currentMonth !== lastMonth) {
+      weekInMonth = 1;
+      lastMonth = currentMonth;
+      isFirstWeekOfNewMonth = true;
+    } else {
+      weekInMonth++;
+      isFirstWeekOfNewMonth = false;
+    }
+
+    // Format: Show "Month S1" for first week, then "S2", "S3", etc.
+    let label;
+    if (isFirstWeekOfNewMonth) {
+      // First occurrence of this month: show "Month S1" (and year if needed)
+      if (spansMultipleYears || year !== currentYear) {
+        label = `${month} ${year} S1`;
+      } else {
+        label = `${month} S1`;
+      }
+    } else {
+      // Subsequent weeks in same month: show week number
+      label = `S${weekInMonth}`;
+    }
+
+    weeks.push(label);
 
     current.setDate(current.getDate() + 7); // Next week
-    weekNumber++;
   }
 
   return weeks;

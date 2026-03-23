@@ -1,6 +1,8 @@
-# Gestionnaire de Projets 📋
+# TaskMDA 🏛️
 
-Application web de gestion de tâches 100% locale, sans serveur ni base de données. Toutes les données sont chiffrées dans le navigateur avant d'être stockées dans le `localStorage`.
+Application web de gestion de tâches et projets 100% locale, sans serveur ni base de données. Toutes les données sont chiffrées dans le navigateur avant d'être stockées dans le `localStorage`.
+
+**TaskMDA** est conçu pour les collectivités et administrations publiques avec un système de gestion de projets intégré via diagramme de Gantt.
 
 ---
 
@@ -53,9 +55,29 @@ Interface redesignée avec le système de design **"Emerald Flux"** :
 - **Navigation fluide** :
   - 📊 Tableau de bord - vue d'ensemble et statistiques
   - ✅ Mes tâches - tâches actives avec compteur dynamique
+  - 📁 Projets - gestion de projets avec Gantt
   - 🗄️ Archives - tâches terminées avec compteur dynamique
   - 📥📤 Import/Export - gestion des données
   - ⚙️ Paramètres - configuration et sécurité
+
+### 📁 Gestion de projets (Gantt)
+- **Diagramme de Gantt interactif** : visualisation timeline des projets
+- **Vues multiples** :
+  - 🖥️ **Desktop** : Gantt complet avec barres de progression et timeline
+  - 📱 **Mobile** : vue cartes optimisée pour petits écrans
+- **Toggle MOIS/SEMAINES** : affichage par mois ou par semaines
+- **Statuts colorés** :
+  - 🟢 EN COURS (#006c4a) - projet actif
+  - 🔵 PLANIFIÉ (#6366f1) - projet à venir
+  - 🔴 URGENT (#ef4444) - projet urgent
+  - ⚪ TERMINÉ (#9ca3af) - projet complété
+- **Informations projet** :
+  - Nom, dates de début/fin, progression (0-100%)
+  - Description détaillée
+  - Calcul automatique des jours restants
+- **Édition rapide** : clic sur barre ou carte pour modifier
+- **Responsive design** : adaptation automatique mobile/desktop
+- **Stockage chiffré** : projets sauvegardés avec chiffrement AES-256-GCM
 
 ### 📦 Gestion des versions logicielles
 - **Registre des versions** : suivi des versions de SOLIS, MULTIGEST, BO, etc.
@@ -163,7 +185,9 @@ Le bouton header affiche en temps réel l'état de la liaison :
 
 ---
 
-## Format des tâches (JSON)
+## Format des données (JSON)
+
+### Tâches
 
 ```json
 {
@@ -195,6 +219,34 @@ Le bouton header affiche en temps réel l'état de la liaison :
 }
 ```
 
+### Projets
+
+```json
+{
+  "id": 1773318557563,
+  "name": "Nom du projet",
+  "status": "en-cours | planifie | urgent | termine",
+  "startDate": "2026-03-01",
+  "endDate": "2026-06-30",
+  "progress": 75,
+  "description": "Description détaillée du projet",
+  "createdAt": "2026-03-01T10:00:00.000Z",
+  "updatedAt": "2026-03-20T15:30:00.000Z"
+}
+```
+
+### Format d'export complet
+
+```json
+{
+  "tasks": [...],
+  "versions": {...},
+  "projects": [...],
+  "exportedAt": "2026-03-22T12:00:00.000Z",
+  "format": "TaskMDA v4"
+}
+```
+
 ---
 
 ## Technologies utilisées
@@ -211,6 +263,32 @@ Le bouton header affiche en temps réel l'état de la liaison :
 ---
 
 ## Changelog
+
+### 🏛️ Version 4.0 - TaskMDA (Mars 2026)
+
+**Refonte identité**
+- 🏛️ Rebranding : TaskArchitect → **TaskMDA**
+- 🏢 Nouvelle icône `account_balance` (collectivité/administration)
+- 🎯 Positionnement : gestion de projets pour administrations publiques
+
+**Gestion de projets - Gantt**
+- 📊 **Diagramme de Gantt interactif** avec timeline visuelle
+- 🔄 **Toggle MOIS/SEMAINES** : basculer entre vue mensuelle et hebdomadaire
+- 📱 **Responsive design avancé** :
+  - Desktop : Gantt complet avec scroll horizontal
+  - Mobile : cartes empilées optimisées
+- 🎨 **4 statuts colorés** : EN COURS, PLANIFIÉ, URGENT, TERMINÉ
+- 📈 **Barres de progression** colorées selon le statut
+- 📅 **Calcul automatique** : jours restants avant échéance
+- ✏️ **Édition rapide** : clic sur barre/carte pour modifier
+- 💾 **Stockage chiffré** : projets dans localStorage avec AES-256-GCM
+- 📤 **Import/Export** : projets inclus dans les exports JSON
+
+**Améliorations responsive**
+- 📱 Vue mobile optimisée pour la rubrique Projets
+- 🎴 Cartes empilées avec toutes les infos (dates, progression, statut)
+- 🖥️ Gantt complet affiché uniquement sur desktop (≥1024px)
+- 📏 Adaptation automatique selon la taille d'écran
 
 ### 🎨 Version 3.0 - Emerald Flux (Mars 2026)
 
