@@ -533,6 +533,26 @@
         </div>
       </div>
 
+      <!-- Email Templates Management -->
+      <div class="bg-surface-container-low p-6 rounded-xl mb-6">
+        <h3 class="text-lg font-bold mb-2 flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary">mail</span>
+          Templates d'emails
+        </h3>
+        <p class="text-sm text-on-surface-variant mb-4">Personnalisez les modèles d'emails envoyés aux demandeurs</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <button onclick="openEmailTemplateModal('completion')" class="px-4 py-3 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold flex items-center justify-center gap-2">
+            <span class="material-symbols-outlined">check_circle</span>
+            <span>Email de réalisation</span>
+          </button>
+          <button onclick="openEmailTemplateModal('inquiry')" class="px-4 py-3 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold flex items-center justify-center gap-2">
+            <span class="material-symbols-outlined">help</span>
+            <span>Email de demande d'infos</span>
+          </button>
+        </div>
+      </div>
+
       <!-- Security & Encryption -->
       <div class="bg-surface-container-low p-6 rounded-xl">
         <h3 class="text-lg font-bold mb-4">Sécurité & Chiffrement</h3>
@@ -722,8 +742,9 @@
 </div>
 
 <!-- Toast Notification -->
-<div id="toast" class="fixed bottom-8 right-8 bg-on-surface text-inverse-on-surface px-6 py-3 rounded-xl shadow-lg transform translate-y-32 opacity-0 transition-all duration-300 z-50">
-  <span id="toastMsg"></span>
+<div id="toast" class="fixed bottom-8 right-8 backdrop-blur-xl border border-primary/30 text-on-surface px-6 py-3.5 rounded-xl shadow-2xl transform translate-y-32 opacity-0 transition-all duration-300 z-50 flex items-center gap-3" style="background-color: rgb(133 248 196 / 0.95);">
+  <div class="w-1 h-8 bg-primary rounded-full"></div>
+  <span id="toastMsg" class="font-medium text-sm"></span>
 </div>
 
 <!-- Project Modal -->
@@ -937,6 +958,65 @@
   </div>
 </div>
 
+<!-- Email Template Editor Modal -->
+<div id="emailTemplateOverlay" onclick="handleEmailTemplateOverlayClick(event)" class="fixed inset-0 bg-black/40 backdrop-blur-md z-[100] hidden flex items-center justify-center p-4">
+  <div class="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-4xl p-4 md:p-6 mx-4 max-h-[90vh] flex flex-col" onclick="event.stopPropagation()">
+    <div class="flex justify-between items-center mb-6 shrink-0">
+      <h2 class="text-2xl font-bold font-headline flex items-center gap-2">
+        <span class="material-symbols-outlined text-primary">edit_note</span>
+        <span id="emailTemplateTitle">Modifier le template</span>
+      </h2>
+      <button onclick="closeEmailTemplateModal()" class="w-10 h-10 flex items-center justify-center hover:bg-surface-container rounded-lg transition-colors">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+
+    <div class="overflow-y-auto flex-1 space-y-4">
+      <div class="bg-surface-container p-4 rounded-xl">
+        <h3 class="text-sm font-bold mb-2 flex items-center gap-2">
+          <span class="material-symbols-outlined text-sm">info</span>
+          Variables disponibles
+        </h3>
+        <p class="text-xs text-on-surface-variant mb-3">
+          Utilisez ces variables dans votre template. Elles seront automatiquement remplacées par les vraies valeurs :
+        </p>
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs font-mono">
+          <code class="bg-surface-container-low px-2 py-1 rounded">{{TITLE}}</code>
+          <code class="bg-surface-container-low px-2 py-1 rounded">{{DESCRIPTION}}</code>
+          <code class="bg-surface-container-low px-2 py-1 rounded">{{REQUEST_DATE}}</code>
+          <code class="bg-surface-container-low px-2 py-1 rounded">{{DEADLINE}}</code>
+          <code class="bg-surface-container-low px-2 py-1 rounded">{{URGENCY}}</code>
+          <code class="bg-surface-container-low px-2 py-1 rounded">{{STATUS}}</code>
+          <code class="bg-surface-container-low px-2 py-1 rounded">{{TYPE}}</code>
+          <code class="bg-surface-container-low px-2 py-1 rounded">{{ORDER}}</code>
+          <code class="bg-surface-container-low px-2 py-1 rounded">{{COMPLETION_DATE}}</code>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-sm font-semibold mb-2">Objet de l'email</label>
+        <input id="templateSubject" type="text" class="w-full px-4 py-3 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none" placeholder="Ex: Tache realisee : {{TITLE}}">
+      </div>
+
+      <div>
+        <label class="block text-sm font-semibold mb-2">Corps de l'email</label>
+        <textarea id="templateBody" rows="14" class="w-full px-4 py-3 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none font-mono text-sm resize-none" placeholder="Bonjour,&#10;&#10;Votre message ici..."></textarea>
+      </div>
+
+      <div class="flex gap-3 pt-2">
+        <button onclick="saveEmailTemplate()" class="flex-1 px-6 py-3 bg-primary-gradient text-white rounded-xl font-semibold flex items-center justify-center gap-2">
+          <span class="material-symbols-outlined">save</span>
+          Enregistrer le template
+        </button>
+        <button onclick="resetEmailTemplate()" class="px-6 py-3 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold flex items-center justify-center gap-2">
+          <span class="material-symbols-outlined">refresh</span>
+          Réinitialiser
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Main JavaScript -->
 <script src="app.js"></script>
 
@@ -971,6 +1051,12 @@
 
   .view-section {
     animation: fadeIn 0.3s ease;
+  }
+
+  /* Toast notification */
+  #toast.show {
+    transform: translateY(0);
+    opacity: 1;
   }
 </style>
 

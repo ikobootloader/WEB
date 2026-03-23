@@ -24,7 +24,54 @@ let config       = {   // Configuration personnalisée
     { name: 'ASG', email: '' },
     { name: 'Autres', email: '' }
   ],
-  types: ['SOLIS', 'MULTIGEST', 'BO', 'Courriers', 'Autres']  // Liste des types de demande
+  types: ['SOLIS', 'MULTIGEST', 'BO', 'Courriers', 'Autres'],  // Liste des types de demande
+  emailTemplates: {    // Templates d'emails personnalisables
+    completion: {
+      subject: 'Tache realisee : {{TITLE}}',
+      body: `Bonjour,
+
+Nous vous informons que la tache suivante a ete realisee :
+
+========================================
+TITRE
+{{TITLE}}
+
+{{DESCRIPTION}}INFORMATIONS
+- Date de demande : {{REQUEST_DATE}}
+- Date d'echeance : {{DEADLINE}}
+- Date de realisation : {{COMPLETION_DATE}}
+- Urgence : {{URGENCY}}
+{{TYPE}}{{ORDER}}========================================
+
+Cordialement,
+TaskMDA - Gestion de taches`
+    },
+    inquiry: {
+      subject: 'Demande d\'informations : {{TITLE}}',
+      body: `Bonjour,
+
+Nous revenons vers vous concernant la tache suivante et aurions besoin de precisions supplementaires :
+
+========================================
+TITRE
+{{TITLE}}
+
+{{DESCRIPTION}}INFORMATIONS
+- Statut : {{STATUS}}
+- Date de demande : {{REQUEST_DATE}}
+- Date d'echeance : {{DEADLINE}}
+- Urgence : {{URGENCY}}
+{{TYPE}}{{ORDER}}========================================
+
+Pourriez-vous nous apporter les informations suivantes :
+
+[Votre message ici]
+
+
+Cordialement,
+TaskMDA - Gestion de taches`
+    }
+  }
 };
 let editingId    = null;
 let editingProjectId = null;
@@ -547,7 +594,7 @@ async function changePassword() {
   localStorage.setItem(SALT_KEY, bufToHex(salt));
   cryptoKey = await deriveKey(newPwd, salt);
   await saveToStorage();
-  showToast('🔑 Mot de passe mis à jour');
+  showToast('🔑 Le mot de passe a été changé avec succès');
 }
 
 // ════════════════════════════════════════════════════════════
@@ -603,10 +650,105 @@ async function loadFromStorage() {
         { name: 'ASG', email: '' },
         { name: 'Autres', email: '' }
       ],
-      types: ['SOLIS', 'MULTIGEST', 'BO', 'Courriers', 'Autres']
+      types: ['SOLIS', 'MULTIGEST', 'BO', 'Courriers', 'Autres'],
+      emailTemplates: {
+        completion: {
+          subject: 'Tache realisee : {{TITLE}}',
+          body: `Bonjour,
+
+Nous vous informons que la tache suivante a ete realisee :
+
+========================================
+TITRE
+{{TITLE}}
+
+{{DESCRIPTION}}INFORMATIONS
+- Date de demande : {{REQUEST_DATE}}
+- Date d'echeance : {{DEADLINE}}
+- Date de realisation : {{COMPLETION_DATE}}
+- Urgence : {{URGENCY}}
+{{TYPE}}{{ORDER}}========================================
+
+Cordialement,
+TaskMDA - Gestion de taches`
+        },
+        inquiry: {
+          subject: 'Demande d\'informations : {{TITLE}}',
+          body: `Bonjour,
+
+Nous revenons vers vous concernant la tache suivante et aurions besoin de precisions supplementaires :
+
+========================================
+TITRE
+{{TITLE}}
+
+{{DESCRIPTION}}INFORMATIONS
+- Statut : {{STATUS}}
+- Date de demande : {{REQUEST_DATE}}
+- Date d'echeance : {{DEADLINE}}
+- Urgence : {{URGENCY}}
+{{TYPE}}{{ORDER}}========================================
+
+Pourriez-vous nous apporter les informations suivantes :
+
+[Votre message ici]
+
+Cordialement,
+TaskMDA - Gestion de taches`
+        }
+      }
     };
   } else {
     config = await decrypt(rawConfig);
+    // Ensure emailTemplates exist for backwards compatibility
+    if (!config.emailTemplates) {
+      config.emailTemplates = {
+        completion: {
+          subject: 'Tache realisee : {{TITLE}}',
+          body: `Bonjour,
+
+Nous vous informons que la tache suivante a ete realisee :
+
+========================================
+TITRE
+{{TITLE}}
+
+{{DESCRIPTION}}INFORMATIONS
+- Date de demande : {{REQUEST_DATE}}
+- Date d'echeance : {{DEADLINE}}
+- Date de realisation : {{COMPLETION_DATE}}
+- Urgence : {{URGENCY}}
+{{TYPE}}{{ORDER}}========================================
+
+Cordialement,
+TaskMDA - Gestion de taches`
+        },
+        inquiry: {
+          subject: 'Demande d\'informations : {{TITLE}}',
+          body: `Bonjour,
+
+Nous revenons vers vous concernant la tache suivante et aurions besoin de precisions supplementaires :
+
+========================================
+TITRE
+{{TITLE}}
+
+{{DESCRIPTION}}INFORMATIONS
+- Statut : {{STATUS}}
+- Date de demande : {{REQUEST_DATE}}
+- Date d'echeance : {{DEADLINE}}
+- Urgence : {{URGENCY}}
+{{TYPE}}{{ORDER}}========================================
+
+Pourriez-vous nous apporter les informations suivantes :
+
+[Votre message ici]
+
+Cordialement,
+TaskMDA - Gestion de taches`
+        }
+      };
+    }
   }
 
   // Dédoublonner les tâches par ID
@@ -656,7 +798,7 @@ async function linkFile() {
     localStorage.setItem('fsa_filename', fileHandle.name);
     updateFsaBtnState();
     await writeToFile();
-    showToast('📁 Fichier lié — sauvegarde automatique activée');
+    showToast(`📁 Fichier "${fileHandle.name}" lié avec succès — sauvegarde automatique activée`);
   } catch(e) { if (e.name !== 'AbortError') showToast('❌ ' + e.message); }
 }
 
@@ -664,7 +806,7 @@ async function unlinkFile() {
   fileHandle = null;
   localStorage.removeItem('fsa_filename');
   updateFsaBtnState();
-  showToast('🔗 Liaison fichier supprimée');
+  showToast('🔗 La liaison avec le fichier a été supprimée — sauvegarde automatique désactivée');
 }
 
 async function relinkFile() {
@@ -1159,59 +1301,19 @@ function sendTaskCompletionEmail(taskId) {
     return;
   }
 
-  // Format dates
-  const requestDate = task.requestDate
-    ? new Date(task.requestDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
-    : 'Non spécifiée';
+  // Get template and replace variables
+  const template = config.emailTemplates.completion;
+  const subject = replaceTemplateVariables(template.subject, task);
+  const body = replaceTemplateVariables(template.body, task);
 
-  const deadline = task.deadline
-    ? new Date(task.deadline).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
-    : 'Non spécifiée';
+  // URL encode for mailto
+  const encodedSubject = encodeURIComponent(subject);
+  const encodedBody = encodeURIComponent(body).replace(/%0A/g, '%0D%0A');
 
-  const completedDate = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+  // Open email client
+  window.location.href = `mailto:${requester.email}?subject=${encodedSubject}&body=${encodedBody}`;
 
-  // Urgency label
-  const urgencyLabels = { low: 'Faible', medium: 'Moyenne', high: 'Haute' };
-  const urgency = urgencyLabels[task.urgency] || task.urgency;
-
-  // Build email subject (simple, sans emojis pour éviter les problèmes d'encodage)
-  const subject = encodeURIComponent(`Tache realisee : ${task.title}`);
-
-  // Build email body with proper line breaks (%0D%0A for Windows, %0A for Unix)
-  let bodyText = `Bonjour,%0D%0A%0D%0A`;
-  bodyText += `Nous vous informons que la tache suivante a ete realisee :%0D%0A%0D%0A`;
-  bodyText += `========================================%0D%0A`;
-  bodyText += `TITRE%0D%0A`;
-  bodyText += `${encodeURIComponent(task.title)}%0D%0A%0D%0A`;
-
-  if (task.comment) {
-    // Clean description and encode properly
-    bodyText += `DESCRIPTION%0D%0A`;
-    bodyText += `${encodeURIComponent(task.comment).replace(/%0A/g, '%0D%0A')}%0D%0A%0D%0A`;
-  }
-
-  bodyText += `INFORMATIONS%0D%0A`;
-  bodyText += `- Date de demande : ${encodeURIComponent(requestDate)}%0D%0A`;
-  bodyText += `- Date d'echeance : ${encodeURIComponent(deadline)}%0D%0A`;
-  bodyText += `- Date de realisation : ${encodeURIComponent(completedDate)}%0D%0A`;
-  bodyText += `- Urgence : ${encodeURIComponent(urgency)}%0D%0A`;
-
-  if (task.type) {
-    bodyText += `- Type : ${encodeURIComponent(task.type)}%0D%0A`;
-  }
-
-  if (task.order) {
-    bodyText += `- Reference : ${encodeURIComponent(task.order)}%0D%0A`;
-  }
-
-  bodyText += `========================================%0D%0A%0D%0A`;
-  bodyText += `Cordialement,%0D%0A`;
-  bodyText += `TaskMDA - Gestion de taches`;
-
-  // Open email client (no need to encode bodyText again as we already used %0D%0A)
-  window.location.href = `mailto:${requester.email}?subject=${subject}&body=${bodyText}`;
-
-  showToast('📧 Client email ouvert');
+  showToast(`📧 Email de notification prêt pour la tâche "${task.title}"`);
 }
 
 function sendTaskInquiryEmail(taskId) {
@@ -1224,64 +1326,19 @@ function sendTaskInquiryEmail(taskId) {
     return;
   }
 
-  // Format dates
-  const requestDate = task.requestDate
-    ? new Date(task.requestDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
-    : 'Non specifiee';
+  // Get template and replace variables
+  const template = config.emailTemplates.inquiry;
+  const subject = replaceTemplateVariables(template.subject, task);
+  const body = replaceTemplateVariables(template.body, task);
 
-  const deadline = task.deadline
-    ? new Date(task.deadline).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
-    : 'Non specifiee';
-
-  // Urgency label
-  const urgencyLabels = { low: 'Faible', medium: 'Moyenne', high: 'Haute' };
-  const urgency = urgencyLabels[task.urgency] || task.urgency;
-
-  // Status label
-  const statusLabels = { 'en-cours': 'En cours', 'en-attente': 'En attente', 'realise': 'Realise' };
-  const status = statusLabels[task.status] || task.status;
-
-  // Build email subject
-  const subject = encodeURIComponent(`Demande d'informations : ${task.title}`);
-
-  // Build email body with proper line breaks
-  let bodyText = `Bonjour,%0D%0A%0D%0A`;
-  bodyText += `Nous revenons vers vous concernant la tache suivante et aurions besoin de precisions supplementaires :%0D%0A%0D%0A`;
-  bodyText += `========================================%0D%0A`;
-  bodyText += `TITRE%0D%0A`;
-  bodyText += `${encodeURIComponent(task.title)}%0D%0A%0D%0A`;
-
-  if (task.comment) {
-    bodyText += `DESCRIPTION%0D%0A`;
-    bodyText += `${encodeURIComponent(task.comment).replace(/%0A/g, '%0D%0A')}%0D%0A%0D%0A`;
-  }
-
-  bodyText += `INFORMATIONS%0D%0A`;
-  bodyText += `- Statut : ${encodeURIComponent(status)}%0D%0A`;
-  bodyText += `- Date de demande : ${encodeURIComponent(requestDate)}%0D%0A`;
-  bodyText += `- Date d'echeance : ${encodeURIComponent(deadline)}%0D%0A`;
-  bodyText += `- Urgence : ${encodeURIComponent(urgency)}%0D%0A`;
-
-  if (task.type) {
-    bodyText += `- Type : ${encodeURIComponent(task.type)}%0D%0A`;
-  }
-
-  if (task.order) {
-    bodyText += `- Reference : ${encodeURIComponent(task.order)}%0D%0A`;
-  }
-
-  bodyText += `========================================%0D%0A%0D%0A`;
-  bodyText += `Pourriez-vous nous apporter les informations suivantes :%0D%0A`;
-  bodyText += `%0D%0A`;
-  bodyText += `[Votre message ici]%0D%0A`;
-  bodyText += `%0D%0A%0D%0A`;
-  bodyText += `Cordialement,%0D%0A`;
-  bodyText += `TaskMDA - Gestion de taches`;
+  // URL encode for mailto
+  const encodedSubject = encodeURIComponent(subject);
+  const encodedBody = encodeURIComponent(body).replace(/%0A/g, '%0D%0A');
 
   // Open email client
-  window.location.href = `mailto:${requester.email}?subject=${subject}&body=${bodyText}`;
+  window.location.href = `mailto:${requester.email}?subject=${encodedSubject}&body=${encodedBody}`;
 
-  showToast('📧 Client email ouvert');
+  showToast(`📧 Email de demande d'informations prêt pour la tâche "${task.title}"`);
 }
 
 async function restoreTask(id) {
@@ -1294,7 +1351,7 @@ async function restoreTask(id) {
   await saveToStorage();
   updateSidebarCounts();
 
-  showToast('♻️ Tâche restaurée');
+  showToast(`♻️ La tâche "${task.title}" a été restaurée avec succès`);
 
   // Refresh current view
   if (activeView === 'archives') {
@@ -1351,7 +1408,7 @@ function createNextRecurrence(task, recurring) {
   };
 
   tasks.push(newTask);
-  showToast('🔄 Prochaine occurrence créée');
+  showToast(`🔄 Prochaine occurrence créée pour la tâche récurrente "${task.title}"`);
 }
 
 async function restoreTask(id) {
@@ -1375,6 +1432,7 @@ function confirmDelete(id) {
   document.getElementById('confirmMsg').textContent   = `Supprimer « ${task.title} » ? Cette action est irréversible.`;
   document.getElementById('confirmOverlay').classList.remove('hidden');
   document.getElementById('confirmYes').onclick = async () => {
+    const taskTitle = task.title;
     tasks = tasks.filter(t => t.id !== id);
     await saveToStorage();
     updateSidebarCounts();
@@ -1382,7 +1440,7 @@ function confirmDelete(id) {
     else if (activeView === 'tasks') renderTasks();
     else if (activeView === 'archives') renderArchives();
     closeConfirm();
-    showToast('🗑 Tâche supprimée');
+    showToast(`🗑 La tâche "${taskTitle}" a été supprimée définitivement`);
   };
 }
 
@@ -1394,13 +1452,14 @@ function clearAllTasks() {
   document.getElementById('confirmMsg').textContent   = `${tasks.length} tâche(s) seront supprimées définitivement.`;
   document.getElementById('confirmOverlay').classList.add('open');
   document.getElementById('confirmYes').onclick = async () => {
+    const count = tasks.length;
     tasks = [];
     await saveToStorage();
     if (activeView === 'dashboard') renderDashboard();
     else if (activeView === 'tasks') renderTasks();
     else if (activeView === 'archives') renderArchives();
     closeConfirm();
-    showToast('🗑 Toutes les tâches effacées');
+    showToast(`🗑 Toutes les tâches ont été effacées définitivement (${count} tâche(s))`);
   };
 }
 
@@ -2156,7 +2215,7 @@ async function removeExistingFile(taskId, fileIdx) {
   await saveToStorage();
   const task = tasks.find(t => t.id === taskId);
   renderExistingFiles(task.files || []);
-  showToast('🗑 Fichier supprimé');
+  showToast(`🗑 Le fichier "${file.name}" a été supprimé`);
 }
 
 function downloadFile(filename, base64Data) {
@@ -2417,7 +2476,7 @@ function exportJSON() {
     format: 'TaskMDA v4'
   };
   downloadBlob(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}), 'tasks.json');
-  showToast('⬇ JSON exporté (non chiffré)');
+  showToast(`⬇ Export JSON réussi (${tasks.length} tâche(s) + ${projects.length} projet(s))`);
 }
 
 function exportExcel() {
@@ -2436,7 +2495,7 @@ function exportExcel() {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Tâches');
   XLSX.writeFile(wb, 'tasks.xlsx');
-  showToast('⬇ Excel exporté');
+  showToast(`⬇ Export Excel réussi (${tasks.length} tâche(s))`);
 }
 
 function downloadBlob(blob, name) {
@@ -2496,14 +2555,14 @@ async function addVersion() {
   renderVersionsList();
   document.getElementById('versionSoftware').value = '';
   document.getElementById('versionNumber').value = '';
-  showToast(`✅ Version ${software} ${number} ajoutée`);
+  showToast(`✅ La version ${software} ${number} a été enregistrée avec succès`);
 }
 
 async function deleteVersion(software) {
   delete versions[software];
   await saveToStorage();
   renderVersionsList();
-  showToast(`🗑 Version ${software} supprimée`);
+  showToast(`🗑 La version ${software} a été supprimée avec succès`);
 }
 
 function renderVersionsList() {
@@ -2576,7 +2635,7 @@ async function addRequester() {
   renderRequestersList();
   document.getElementById('requesterName').value = '';
   document.getElementById('requesterEmail').value = '';
-  showToast(`✅ Demandeur ${name} ajouté`);
+  showToast(`✅ Le demandeur "${name}" a été ajouté avec succès`);
 
   // Refresh forms that use requesters
   updateRequesterSelects();
@@ -2588,7 +2647,7 @@ async function deleteRequester(name) {
   config.requesters = config.requesters.filter(r => r.name !== name);
   await saveToStorage();
   renderRequestersList();
-  showToast(`🗑 Demandeur ${name} supprimé`);
+  showToast(`🗑 Le demandeur "${name}" a été supprimé avec succès`);
 
   // Refresh forms
   updateRequesterSelects();
@@ -2614,7 +2673,7 @@ async function updateRequester(oldName, newName, newEmail) {
 
   await saveToStorage();
   renderRequestersList();
-  showToast(`✏️ Demandeur mis à jour`);
+  showToast(`✏️ Le demandeur "${newName}" a été mis à jour avec succès`);
 
   // Refresh forms
   updateRequesterSelects();
@@ -2700,7 +2759,7 @@ async function addType() {
   await saveToStorage();
   renderTypesList();
   document.getElementById('typeName').value = '';
-  showToast(`✅ Type ${name} ajouté`);
+  showToast(`✅ Le type "${name}" a été ajouté avec succès`);
 
   // Refresh forms
   updateTypeSelects();
@@ -2712,7 +2771,7 @@ async function deleteType(name) {
   config.types = config.types.filter(t => t !== name);
   await saveToStorage();
   renderTypesList();
-  showToast(`🗑 Type ${name} supprimé`);
+  showToast(`🗑 Le type "${name}" a été supprimé avec succès`);
 
   // Refresh forms
   updateTypeSelects();
@@ -2737,7 +2796,7 @@ async function updateType(oldName, newName) {
 
   await saveToStorage();
   renderTypesList();
-  showToast(`✏️ Type mis à jour`);
+  showToast(`✏️ Le type "${newName}" a été mis à jour avec succès`);
 
   // Refresh forms
   updateTypeSelects();
@@ -2797,6 +2856,173 @@ function updateTypeSelects() {
   datalist.innerHTML = config.types.map(t =>
     `<option value="${escHtml(t)}">`
   ).join('');
+}
+
+// ════════════════════════════════════════════════════════════
+//  GESTION DES TEMPLATES D'EMAILS
+// ════════════════════════════════════════════════════════════
+
+let currentTemplateType = null; // 'completion' or 'inquiry'
+
+const defaultTemplates = {
+  completion: {
+    subject: 'Tache realisee : {{TITLE}}',
+    body: `Bonjour,
+
+Nous vous informons que la tache suivante a ete realisee :
+
+========================================
+TITRE
+{{TITLE}}
+
+{{DESCRIPTION}}INFORMATIONS
+- Date de demande : {{REQUEST_DATE}}
+- Date d'echeance : {{DEADLINE}}
+- Date de realisation : {{COMPLETION_DATE}}
+- Urgence : {{URGENCY}}
+{{TYPE}}{{ORDER}}========================================
+
+Cordialement,
+TaskMDA - Gestion de taches`
+  },
+  inquiry: {
+    subject: 'Demande d\'informations : {{TITLE}}',
+    body: `Bonjour,
+
+Nous revenons vers vous concernant la tache suivante et aurions besoin de precisions supplementaires :
+
+========================================
+TITRE
+{{TITLE}}
+
+{{DESCRIPTION}}INFORMATIONS
+- Statut : {{STATUS}}
+- Date de demande : {{REQUEST_DATE}}
+- Date d'echeance : {{DEADLINE}}
+- Urgence : {{URGENCY}}
+{{TYPE}}{{ORDER}}========================================
+
+Pourriez-vous nous apporter les informations suivantes :
+
+[Votre message ici]
+
+Cordialement,
+TaskMDA - Gestion de taches`
+  }
+};
+
+function openEmailTemplateModal(templateType) {
+  currentTemplateType = templateType;
+
+  const titles = {
+    completion: 'Template : Email de réalisation',
+    inquiry: 'Template : Email de demande d\'informations'
+  };
+
+  document.getElementById('emailTemplateTitle').textContent = titles[templateType] || 'Modifier le template';
+  document.getElementById('emailTemplateOverlay').classList.remove('hidden');
+
+  // Load current template values
+  const template = config.emailTemplates[templateType];
+  document.getElementById('templateSubject').value = template.subject;
+  document.getElementById('templateBody').value = template.body;
+}
+
+function closeEmailTemplateModal() {
+  document.getElementById('emailTemplateOverlay').classList.add('hidden');
+  currentTemplateType = null;
+}
+
+function handleEmailTemplateOverlayClick(e) {
+  if (e.target === document.getElementById('emailTemplateOverlay')) {
+    closeEmailTemplateModal();
+  }
+}
+
+async function saveEmailTemplate() {
+  if (!currentTemplateType) return;
+
+  const subject = document.getElementById('templateSubject').value.trim();
+  const body = document.getElementById('templateBody').value.trim();
+
+  if (!subject || !body) {
+    showToast('⚠️ Veuillez remplir l\'objet et le corps de l\'email');
+    return;
+  }
+
+  // Save to config
+  config.emailTemplates[currentTemplateType] = { subject, body };
+  await saveToStorage();
+
+  const typeNames = {
+    completion: 'réalisation',
+    inquiry: 'demande d\'informations'
+  };
+
+  showToast(`✅ Le template d'email de ${typeNames[currentTemplateType]} a été enregistré avec succès`);
+  closeEmailTemplateModal();
+}
+
+async function resetEmailTemplate() {
+  if (!currentTemplateType) return;
+
+  if (!confirm('Réinitialiser ce template à sa valeur par défaut ?')) return;
+
+  const defaultTemplate = defaultTemplates[currentTemplateType];
+
+  document.getElementById('templateSubject').value = defaultTemplate.subject;
+  document.getElementById('templateBody').value = defaultTemplate.body;
+
+  showToast('🔄 Le template a été réinitialisé (cliquez sur "Enregistrer" pour confirmer)');
+}
+
+// Helper function to replace template variables with actual task data
+function replaceTemplateVariables(template, task) {
+  let text = template;
+
+  // Replace {{TITLE}}
+  text = text.replace(/\{\{TITLE\}\}/g, task.title || '');
+
+  // Replace {{DESCRIPTION}} (with conditional display)
+  if (task.comment && task.comment.trim()) {
+    text = text.replace(/\{\{DESCRIPTION\}\}/g, `DESCRIPTION\n${task.comment}\n\n`);
+  } else {
+    text = text.replace(/\{\{DESCRIPTION\}\}/g, '');
+  }
+
+  // Replace {{REQUEST_DATE}}
+  text = text.replace(/\{\{REQUEST_DATE\}\}/g, task.requestDate || 'Non specifiee');
+
+  // Replace {{DEADLINE}}
+  text = text.replace(/\{\{DEADLINE\}\}/g, task.deadline || 'Non specifiee');
+
+  // Replace {{COMPLETION_DATE}}
+  const completionDate = task.archivedAt ? new Date(task.archivedAt).toLocaleDateString('fr-FR') : new Date().toLocaleDateString('fr-FR');
+  text = text.replace(/\{\{COMPLETION_DATE\}\}/g, completionDate);
+
+  // Replace {{URGENCY}}
+  const urgencyLabels = { high: 'Haute', medium: 'Moyenne', low: 'Faible' };
+  text = text.replace(/\{\{URGENCY\}\}/g, urgencyLabels[task.urgency] || task.urgency || 'Non specifiee');
+
+  // Replace {{STATUS}}
+  const statusLabels = { 'en-cours': 'En cours', 'en-attente': 'En attente', 'realise': 'Realisee' };
+  text = text.replace(/\{\{STATUS\}\}/g, statusLabels[task.status] || task.status || 'Non specifie');
+
+  // Replace {{TYPE}} (with conditional display)
+  if (task.type && task.type.trim()) {
+    text = text.replace(/\{\{TYPE\}\}/g, `- Type : ${task.type}\n`);
+  } else {
+    text = text.replace(/\{\{TYPE\}\}/g, '');
+  }
+
+  // Replace {{ORDER}} (with conditional display)
+  if (task.order && task.order.trim()) {
+    text = text.replace(/\{\{ORDER\}\}/g, `- Reference : ${task.order}\n`);
+  } else {
+    text = text.replace(/\{\{ORDER\}\}/g, '');
+  }
+
+  return text;
 }
 
 // ════════════════════════════════════════════════════════════
@@ -2867,6 +3093,7 @@ async function archiveProject() {
   if (!project || project.archivedAt) return;
 
   // Archive the project
+  const projectName = project.name;
   project.archivedAt = new Date().toISOString();
 
   await saveToStorage();
@@ -2874,7 +3101,7 @@ async function archiveProject() {
   updateProjectCount();
   renderGanttChart();
   renderProjectCards();
-  showToast('📦 Projet archivé');
+  showToast(`📦 Le projet "${projectName}" a été archivé avec succès`);
 }
 
 async function restoreProject(id) {
@@ -2887,7 +3114,7 @@ async function restoreProject(id) {
   await saveToStorage();
   updateProjectCount();
 
-  showToast('♻️ Projet restauré');
+  showToast(`♻️ Le projet "${project.name}" a été restauré avec succès`);
 
   // Refresh current view
   if (activeView === 'archives') {
@@ -3045,7 +3272,7 @@ async function submitProjectForm() {
       ? { ...p, name, startDate, endDate, progress, description, requesters, status, updatedAt: now }
       : p
     );
-    showToast('✏️ Projet modifié');
+    showToast(`✏️ Le projet "${name}" a été modifié avec succès`);
   } else {
     projects.push({
       id: Date.now(),
@@ -3059,7 +3286,7 @@ async function submitProjectForm() {
       createdAt: now,
       updatedAt: now
     });
-    showToast('✅ Projet ajouté');
+    showToast(`✅ Le projet "${name}" a été créé avec succès`);
   }
 
   await saveToStorage();
@@ -3089,14 +3316,14 @@ function setGanttViewMode(mode) {
 
   if (mode === 'month') {
     monthBtn.classList.add('bg-primary', 'text-white');
-    monthBtn.classList.remove('text-on-surface-variant');
+    monthBtn.classList.remove('text-on-surface-variant', 'hover:bg-surface-container');
     weeksBtn.classList.remove('bg-primary', 'text-white');
-    weeksBtn.classList.add('text-on-surface-variant');
+    weeksBtn.classList.add('text-on-surface-variant', 'hover:bg-surface-container');
   } else {
     weeksBtn.classList.add('bg-primary', 'text-white');
-    weeksBtn.classList.remove('text-on-surface-variant');
+    weeksBtn.classList.remove('text-on-surface-variant', 'hover:bg-surface-container');
     monthBtn.classList.remove('bg-primary', 'text-white');
-    monthBtn.classList.add('text-on-surface-variant');
+    monthBtn.classList.add('text-on-surface-variant', 'hover:bg-surface-container');
   }
 
   renderGanttChart();
@@ -3154,14 +3381,59 @@ function renderGanttChart() {
   let html = '';
 
   // Header row with time labels (months or weeks)
-  html += '<div class="flex border-b border-surface-container overflow-hidden">';
-  html += '<div class="w-48 lg:w-64 p-3 lg:p-4 font-label text-[10px] font-bold text-on-surface-variant uppercase tracking-widest border-r border-surface-container shrink-0">Nom du projet</div>';
-  html += '<div class="flex-1 grid border-l border-surface-container/30" style="grid-template-columns: repeat(' + totalColumns + ', minmax(0, 1fr));">';
-  timeLabels.forEach(label => {
-    html += `<div class="p-2 lg:p-4 font-label text-[9px] lg:text-[10px] font-bold text-on-surface-variant text-center border-r border-surface-container/30 last:border-r-0">${label}</div>`;
-  });
-  html += '</div>';
-  html += '</div>';
+  if (ganttViewMode === 'month') {
+    // Mode MOIS : affichage simple sur une ligne
+    html += '<div class="flex border-b border-surface-container overflow-hidden">';
+    html += '<div class="w-48 lg:w-64 p-3 lg:p-4 font-label text-[10px] font-bold text-on-surface-variant uppercase tracking-widest border-r border-surface-container shrink-0">Nom du projet</div>';
+    html += '<div class="flex-1 grid border-l border-surface-container/30" style="grid-template-columns: repeat(' + totalColumns + ', minmax(0, 1fr));">';
+    timeLabels.forEach(label => {
+      html += `<div class="p-2 lg:p-4 font-label text-[9px] lg:text-[10px] font-bold text-on-surface-variant text-center border-r border-surface-container/30 last:border-r-0">${label}</div>`;
+    });
+    html += '</div>';
+    html += '</div>';
+  } else {
+    // Mode SEMAINES : affichage sur deux lignes (mois + semaines)
+    // Ligne 1 : Les mois (avec fusion des colonnes pour chaque mois)
+    html += '<div class="flex border-b border-surface-container/50 overflow-hidden">';
+    html += '<div class="w-48 lg:w-64 font-label text-[10px] font-bold text-on-surface-variant uppercase tracking-widest border-r border-surface-container shrink-0"></div>';
+    html += '<div class="flex-1 flex border-l border-surface-container/30">';
+
+    // Grouper les semaines par mois
+    let currentMonthLabel = null;
+    let currentMonthSpan = 0;
+
+    timeLabels.forEach((weekData, index) => {
+      if (weekData.monthLabel !== currentMonthLabel) {
+        // Afficher le mois précédent si nécessaire
+        if (currentMonthLabel !== null) {
+          html += `<div class="p-2 lg:p-3 font-label text-[9px] lg:text-[10px] font-bold text-on-surface-variant text-center border-r border-surface-container/30 bg-surface-container/30" style="flex: 0 0 ${(100 / totalColumns) * currentMonthSpan}%;">${currentMonthLabel}</div>`;
+        }
+        // Commencer un nouveau mois
+        currentMonthLabel = weekData.monthLabel;
+        currentMonthSpan = 1;
+      } else {
+        currentMonthSpan++;
+      }
+
+      // Dernier élément : afficher le mois en cours
+      if (index === timeLabels.length - 1) {
+        html += `<div class="p-2 lg:p-3 font-label text-[9px] lg:text-[10px] font-bold text-on-surface-variant text-center border-r-0 bg-surface-container/30" style="flex: 0 0 ${(100 / totalColumns) * currentMonthSpan}%;">${currentMonthLabel}</div>`;
+      }
+    });
+
+    html += '</div>';
+    html += '</div>';
+
+    // Ligne 2 : Les numéros de semaines
+    html += '<div class="flex border-b border-surface-container overflow-hidden">';
+    html += '<div class="w-48 lg:w-64 p-3 lg:p-4 font-label text-[10px] font-bold text-on-surface-variant uppercase tracking-widest border-r border-surface-container shrink-0">Nom du projet</div>';
+    html += '<div class="flex-1 grid border-l border-surface-container/30" style="grid-template-columns: repeat(' + totalColumns + ', minmax(0, 1fr));">';
+    timeLabels.forEach(weekData => {
+      html += `<div class="p-2 lg:p-4 font-label text-[9px] lg:text-[10px] font-bold text-on-surface-variant text-center border-r border-surface-container/30 last:border-r-0">S${weekData.weekNumber}</div>`;
+    });
+    html += '</div>';
+    html += '</div>';
+  }
 
   // Project rows (wrapped in divide-y container)
   html += '<div class="divide-y divide-surface-container">';
@@ -3371,39 +3643,32 @@ function getWeeksBetween(start, end) {
   const spansMultipleYears = start.getFullYear() !== end.getFullYear();
 
   let lastMonth = -1;
+  let lastYear = -1;
   let weekInMonth = 0;
-  let isFirstWeekOfNewMonth = false;
 
   while (current <= end) {
     const currentMonth = current.getMonth();
     const month = monthNames[currentMonth];
     const year = current.getFullYear();
 
-    // Check if month changed
-    if (currentMonth !== lastMonth) {
+    // Check if month/year changed
+    if (currentMonth !== lastMonth || year !== lastYear) {
       weekInMonth = 1;
       lastMonth = currentMonth;
-      isFirstWeekOfNewMonth = true;
+      lastYear = year;
     } else {
       weekInMonth++;
-      isFirstWeekOfNewMonth = false;
     }
 
-    // Format: Show "Month S1" for first week, then "S2", "S3", etc.
-    let label;
-    if (isFirstWeekOfNewMonth) {
-      // First occurrence of this month: show "Month S1" (and year if needed)
-      if (spansMultipleYears || year !== currentYear) {
-        label = `${month} ${year} S1`;
-      } else {
-        label = `${month} S1`;
-      }
-    } else {
-      // Subsequent weeks in same month: show week number
-      label = `S${weekInMonth}`;
-    }
+    // Store week data with month and year info
+    const weekData = {
+      month: currentMonth,
+      year: year,
+      monthLabel: (spansMultipleYears || year !== currentYear) ? `${month} ${year}` : month,
+      weekNumber: weekInMonth
+    };
 
-    weeks.push(label);
+    weeks.push(weekData);
 
     current.setDate(current.getDate() + 7); // Next week
   }
