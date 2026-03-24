@@ -716,7 +716,8 @@
           <input type="checkbox" id="isRecurring" class="rounded border-outline-variant">
           <span class="text-sm font-semibold">Tâche récurrente</span>
         </label>
-        <div id="recurringFields" class="hidden mt-3 p-4 bg-surface-container-low rounded-xl space-y-3">
+        <div id="recurringFields" class="hidden mt-3 p-4 bg-surface-container-low rounded-xl space-y-4">
+          <!-- Fréquence et Intervalle -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label class="block text-xs font-semibold mb-1">Fréquence</label>
@@ -729,8 +730,74 @@
             </div>
             <div>
               <label class="block text-xs font-semibold mb-1">Intervalle</label>
-              <input id="recurringInterval" type="number" min="1" value="1" class="w-full px-3 py-2 bg-surface-container border-none rounded-lg text-sm">
+              <input id="recurringInterval" type="number" min="1" value="1" class="w-full px-3 py-2 bg-surface-container border-none rounded-lg text-sm" placeholder="Ex: 2">
             </div>
+          </div>
+
+          <!-- Jour de la semaine (pour hebdomadaire) -->
+          <div id="weeklyDayField" class="hidden">
+            <label class="block text-xs font-semibold mb-2">Jour de la semaine</label>
+            <select id="recurringWeekday" class="w-full px-3 py-2 bg-surface-container border-none rounded-lg text-sm">
+              <option value="1">Lundi</option>
+              <option value="2">Mardi</option>
+              <option value="3">Mercredi</option>
+              <option value="4">Jeudi</option>
+              <option value="5">Vendredi</option>
+              <option value="6">Samedi</option>
+              <option value="0">Dimanche</option>
+            </select>
+          </div>
+
+          <!-- Jour du mois (pour mensuel) -->
+          <div id="monthlyDayField" class="hidden">
+            <label class="block text-xs font-semibold mb-2">Jour du mois</label>
+            <select id="recurringMonthday" class="w-full px-3 py-2 bg-surface-container border-none rounded-lg text-sm">
+              <option value="1">1er</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+              <option value="6">6</option>
+              <option value="7">7</option>
+              <option value="8">8</option>
+              <option value="9">9</option>
+              <option value="10">10</option>
+              <option value="11">11</option>
+              <option value="12">12</option>
+              <option value="13">13</option>
+              <option value="14">14</option>
+              <option value="15">15</option>
+              <option value="16">16</option>
+              <option value="17">17</option>
+              <option value="18">18</option>
+              <option value="19">19</option>
+              <option value="20">20</option>
+              <option value="21">21</option>
+              <option value="22">22</option>
+              <option value="23">23</option>
+              <option value="24">24</option>
+              <option value="25">25</option>
+              <option value="26">26</option>
+              <option value="27">27</option>
+              <option value="28">28</option>
+              <option value="-1">Dernier jour</option>
+            </select>
+          </div>
+
+          <!-- Récurrence infinie -->
+          <div>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="recurringInfinite" class="rounded border-outline-variant">
+              <span class="text-xs font-medium text-on-surface-variant">Récurrence sans fin</span>
+            </label>
+            <p class="text-xs text-on-surface-variant mt-1 ml-6">La tâche se régénérera indéfiniment</p>
+          </div>
+
+          <!-- Date de fin (si pas infini) -->
+          <div id="recurringEndField">
+            <label class="block text-xs font-semibold mb-1">Date de fin de la récurrence (optionnel)</label>
+            <input id="recurringEndDate" type="date" class="w-full px-3 py-2 bg-surface-container border-none rounded-lg text-sm">
+            <p class="text-xs text-on-surface-variant mt-1">Laisser vide pour aucune limite</p>
           </div>
         </div>
       </div>

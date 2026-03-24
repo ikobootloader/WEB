@@ -170,6 +170,20 @@ function initEventListeners() {
     document.getElementById('recurringFields').classList.toggle('hidden', !e.target.checked);
   });
 
+  // Recurring frequency change - show/hide specific fields
+  document.getElementById('recurringFrequency')?.addEventListener('change', updateRecurringFields);
+
+  // Recurring infinite toggle
+  document.getElementById('recurringInfinite')?.addEventListener('change', (e) => {
+    const endField = document.getElementById('recurringEndField');
+    if (endField) {
+      endField.classList.toggle('hidden', e.target.checked);
+      if (e.target.checked) {
+        document.getElementById('recurringEndDate').value = '';
+      }
+    }
+  });
+
   // Mobile menu
   document.getElementById('mobileMenuBtn')?.addEventListener('click', toggleMobileMenu);
   document.getElementById('sidebarOverlay')?.addEventListener('click', closeMobileMenu);
@@ -584,6 +598,9 @@ async function submitPassword() {
     switchView('dashboard');
     updateFsaBtnState();
     showRefileBannerIfNeeded();
+
+    // Initialize notification system
+    initNotificationSystem();
 
   } catch {
     err.textContent = mode === 'unlock' ? 'Mot de passe incorrect.' : 'Erreur inattendue.';
@@ -1023,6 +1040,30 @@ function openModal(id = null) {
       recurringFields.classList.remove('hidden');
       document.getElementById('recurringFrequency').value = task.recurring.frequency || 'weekly';
       document.getElementById('recurringInterval').value = task.recurring.interval || 1;
+
+      // Set weekday if applicable
+      if (task.recurring.weekday !== null && task.recurring.weekday !== undefined) {
+        document.getElementById('recurringWeekday').value = task.recurring.weekday.toString();
+      }
+
+      // Set monthday if applicable
+      if (task.recurring.monthday !== null && task.recurring.monthday !== undefined) {
+        document.getElementById('recurringMonthday').value = task.recurring.monthday.toString();
+      }
+
+      // Set infinite and endDate
+      const isInfinite = task.recurring.infinite || false;
+      document.getElementById('recurringInfinite').checked = isInfinite;
+      document.getElementById('recurringEndDate').value = task.recurring.endDate || '';
+
+      // Show/hide end date field based on infinite
+      const endField = document.getElementById('recurringEndField');
+      if (endField) {
+        endField.classList.toggle('hidden', isInfinite);
+      }
+
+      // Update conditional fields visibility
+      updateRecurringFields();
     } else {
       recurringFields.classList.add('hidden');
     }
@@ -1194,8 +1235,21 @@ async function submitForm() {
     const isRecurring = document.getElementById('isRecurring').checked;
     const recurring = isRecurring ? {
       frequency: document.getElementById('recurringFrequency').value,
-      interval: parseInt(document.getElementById('recurringInterval').value) || 1
+      interval: parseInt(document.getElementById('recurringInterval').value) || 1,
+      weekday: document.getElementById('recurringWeekday')?.value ? parseInt(document.getElementById('recurringWeekday').value) : null,
+      monthday: document.getElementById('recurringMonthday')?.value ? parseInt(document.getElementById('recurringMonthday').value) : null,
+      infinite: document.getElementById('recurringInfinite')?.checked || false,
+      endDate: document.getElementById('recurringEndDate')?.value || null
     } : null;
+
+    // Si tâche récurrente avec jour spécifique, calculer la prochaine date
+    let calculatedRequestDate = requestDate;
+    if (isRecurring && recurring) {
+      const nextDate = calculateNextRecurrenceDate(recurring);
+      if (nextDate) {
+        calculatedRequestDate = nextDate.toISOString().split('T')[0];
+      }
+    }
 
     // Validation du titre
     if (!title) {
@@ -1234,7 +1288,7 @@ async function submitForm() {
       const existingTask = tasks.find(t => t.id === editingId);
       const existingFiles = existingTask.files || [];
       tasks = tasks.map(t => t.id === editingId
-        ? { ...t, title, comment, urgency, status, deadline, requestDate, requester, type, order, recurring,
+        ? { ...t, title, comment, urgency, status, deadline, requestDate: calculatedRequestDate, requester, type, order, recurring,
             files: [...existingFiles, ...attachedFiles],
             updatedAt: now,
             archivedAt: status === 'realise' ? (t.archivedAt || now) : null }
@@ -1249,13 +1303,20 @@ async function submitForm() {
       showToast(`✏️ La tâche "${title}" a été modifiée avec succès`);
     } else {
       tasks.push({
-        id: Date.now(), title, comment, urgency, status, deadline, requestDate, requester, type, order, recurring,
+        id: Date.now(), title, comment, urgency, status, deadline, requestDate: calculatedRequestDate, requester, type, order, recurring,
         files: attachedFiles,
         createdAt: now,
         updatedAt: now,
         archivedAt: status === 'realise' ? now : null
       });
-      showToast(`✅ La tâche "${title}" a été créée avec succès`);
+
+      // Message personnalisé si tâche récurrente avec jour spécifique
+      if (isRecurring && recurring && (recurring.weekday !== null || recurring.monthday !== null)) {
+        const dateLabel = new Date(calculatedRequestDate).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+        showToast(`✅ Tâche récurrente créée : première occurrence le ${dateLabel}`);
+      } else {
+        showToast(`✅ La tâche "${title}" a été créée avec succès`);
+      }
     }
 
     attachedFiles = [];
@@ -1425,25 +1486,100 @@ async function restoreTask(id) {
   }
 }
 
-function createNextRecurrence(task, recurring) {
-  if (!recurring) return;
+function calculateNextRecurrenceDate(recurring) {
+  if (!recurring) return null;
 
-  const now = new Date();
-  let nextDate = new Date();
+  const today = new Date();
+  let nextDate = new Date(today);
 
   switch (recurring.frequency) {
     case 'daily':
+      // Pour quotidien, la prochaine occurrence est demain
       nextDate.setDate(nextDate.getDate() + recurring.interval);
       break;
+
     case 'weekly':
-      nextDate.setDate(nextDate.getDate() + (7 * recurring.interval));
+      // Si un jour de la semaine est spécifié
+      if (recurring.weekday !== null && recurring.weekday !== undefined) {
+        const targetWeekday = recurring.weekday; // 0=Dimanche, 1=Lundi, etc.
+        const currentWeekday = today.getDay();
+
+        // Calculer les jours jusqu'au prochain jour cible
+        let daysUntilTarget = targetWeekday - currentWeekday;
+        if (daysUntilTarget <= 0) {
+          daysUntilTarget += 7; // Passer à la semaine suivante
+        }
+
+        nextDate.setDate(today.getDate() + daysUntilTarget);
+      } else {
+        // Par défaut : ajouter des semaines
+        nextDate.setDate(nextDate.getDate() + (7 * recurring.interval));
+      }
       break;
+
     case 'monthly':
-      nextDate.setMonth(nextDate.getMonth() + recurring.interval);
+      // Si un jour du mois est spécifié
+      if (recurring.monthday !== null && recurring.monthday !== undefined) {
+        // Passer au mois suivant d'abord
+        nextDate.setMonth(nextDate.getMonth() + recurring.interval);
+
+        if (recurring.monthday === -1) {
+          // Dernier jour du mois
+          nextDate.setMonth(nextDate.getMonth() + 1);
+          nextDate.setDate(0); // Définit au dernier jour du mois précédent
+        } else {
+          // Jour spécifique du mois
+          const daysInMonth = new Date(nextDate.getFullYear(), nextDate.getMonth() + 1, 0).getDate();
+          const targetDay = Math.min(recurring.monthday, daysInMonth);
+          nextDate.setDate(targetDay);
+        }
+      } else {
+        // Par défaut : ajouter des mois
+        nextDate.setMonth(nextDate.getMonth() + recurring.interval);
+      }
       break;
+
     case 'yearly':
+      // Ajouter des années
       nextDate.setFullYear(nextDate.getFullYear() + recurring.interval);
       break;
+
+    default:
+      return null;
+  }
+
+  return nextDate;
+}
+
+function createNextRecurrence(task, recurring) {
+  if (!recurring) return;
+
+  // Check if end date is reached
+  if (recurring.endDate && !recurring.infinite) {
+    const endDate = new Date(recurring.endDate);
+    const today = new Date();
+    if (today > endDate) {
+      showToast(`⏸️ Récurrence terminée pour "${task.title}" (date de fin atteinte)`);
+      return;
+    }
+  }
+
+  const now = new Date();
+
+  // Utiliser la fonction centralisée pour calculer la prochaine date
+  const nextDate = calculateNextRecurrenceDate(recurring);
+  if (!nextDate) {
+    console.error('Impossible de calculer la prochaine occurrence');
+    return;
+  }
+
+  // Check if next date exceeds end date
+  if (recurring.endDate && !recurring.infinite) {
+    const endDate = new Date(recurring.endDate);
+    if (nextDate > endDate) {
+      showToast(`⏸️ Récurrence terminée pour "${task.title}" (date de fin atteinte)`);
+      return;
+    }
   }
 
   // Calculer la nouvelle deadline si applicable
@@ -1472,7 +1608,10 @@ function createNextRecurrence(task, recurring) {
   };
 
   tasks.push(newTask);
-  showToast(`🔄 Prochaine occurrence créée pour la tâche récurrente "${task.title}"`);
+
+  const infiniteLabel = recurring.infinite ? ' (infinie)' : '';
+  const endDateLabel = recurring.endDate && !recurring.infinite ? ` (jusqu'au ${new Date(recurring.endDate).toLocaleDateString('fr-FR')})` : '';
+  showToast(`🔄 Prochaine occurrence créée pour "${task.title}"${infiniteLabel}${endDateLabel}`);
 }
 
 async function restoreTask(id) {
@@ -1578,6 +1717,146 @@ function applyAppearanceSettings() {
   } else {
     document.body.classList.remove('high-contrast');
     if (highContrastToggle) highContrastToggle.checked = false;
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+//  SYSTÈME DE NOTIFICATIONS
+// ════════════════════════════════════════════════════════════
+
+function checkNotifications() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  let notifications = [];
+
+  // Check for recurring tasks due today
+  const activeTasks = getActiveTasks();
+  activeTasks.forEach(task => {
+    if (task.recurring && task.requestDate) {
+      const taskDate = new Date(task.requestDate);
+      taskDate.setHours(0, 0, 0, 0);
+
+      if (taskDate.getTime() === today.getTime()) {
+        notifications.push({
+          type: 'recurring_task',
+          title: `🔄 Tâche récurrente aujourd'hui`,
+          message: `"${task.title}" est prévue pour aujourd'hui`,
+          taskId: task.id
+        });
+      }
+    }
+  });
+
+  // Check for projects ending today
+  const activeProjects = getActiveProjects();
+  activeProjects.forEach(project => {
+    if (project.endDate) {
+      const endDate = new Date(project.endDate);
+      endDate.setHours(0, 0, 0, 0);
+
+      if (endDate.getTime() === today.getTime()) {
+        notifications.push({
+          type: 'project_end',
+          title: `🏁 Fin de projet aujourd'hui`,
+          message: `Le projet "${project.name}" se termine aujourd'hui`,
+          projectId: project.id
+        });
+      }
+    }
+  });
+
+  // Check for projects ending in next 3 days
+  const threeDaysLater = new Date(today);
+  threeDaysLater.setDate(threeDaysLater.getDate() + 3);
+
+  activeProjects.forEach(project => {
+    if (project.endDate) {
+      const endDate = new Date(project.endDate);
+      endDate.setHours(0, 0, 0, 0);
+
+      if (endDate > today && endDate <= threeDaysLater) {
+        const daysLeft = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
+        notifications.push({
+          type: 'project_ending_soon',
+          title: `⏰ Projet se termine bientôt`,
+          message: `Le projet "${project.name}" se termine dans ${daysLeft} jour(s)`,
+          projectId: project.id
+        });
+      }
+    }
+  });
+
+  // Display notifications if any
+  if (notifications.length > 0) {
+    displayNotifications(notifications);
+  }
+
+  return notifications;
+}
+
+function displayNotifications(notifications) {
+  // Check if browser supports notifications
+  if (!('Notification' in window)) {
+    console.log('Notifications non supportées par ce navigateur');
+    return;
+  }
+
+  // Request permission if needed
+  if (Notification.permission === 'default') {
+    Notification.requestPermission().then(permission => {
+      if (permission === 'granted') {
+        sendBrowserNotifications(notifications);
+      }
+    });
+  } else if (Notification.permission === 'granted') {
+    sendBrowserNotifications(notifications);
+  }
+
+  // Also show in-app notification
+  showNotificationsSummary(notifications);
+}
+
+function sendBrowserNotifications(notifications) {
+  notifications.forEach((notif, index) => {
+    setTimeout(() => {
+      new Notification(notif.title, {
+        body: notif.message,
+        icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><text y="20" font-size="20">🏛️</text></svg>',
+        badge: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><text y="20" font-size="20">🏛️</text></svg>',
+        tag: `taskmda-${notif.type}-${notif.taskId || notif.projectId}`,
+        requireInteraction: false
+      });
+    }, index * 1000); // Stagger notifications by 1 second
+  });
+}
+
+function showNotificationsSummary(notifications) {
+  if (notifications.length === 0) return;
+
+  const summary = notifications.map(n => `${n.title}: ${n.message}`).join('\n');
+  showToast(`🔔 ${notifications.length} notification(s) - Voir les détails`, 5000);
+
+  // Log to console for debugging
+  console.log('📬 Notifications TaskMDA:', notifications);
+}
+
+// Check notifications on load and every hour
+function initNotificationSystem() {
+  // Check immediately
+  checkNotifications();
+
+  // Check every hour
+  setInterval(checkNotifications, 60 * 60 * 1000);
+
+  // Also check when switching views
+  const originalSwitchView = window.switchView;
+  if (originalSwitchView) {
+    window.switchView = function(...args) {
+      const result = originalSwitchView.apply(this, args);
+      checkNotifications();
+      return result;
+    };
   }
 }
 
@@ -2190,6 +2469,18 @@ function resetForm() {
   document.getElementById('recurringFields').classList.add('hidden');
   document.getElementById('recurringFrequency').value = 'weekly';
   document.getElementById('recurringInterval').value  = '1';
+  document.getElementById('recurringWeekday').value = new Date().getDay().toString();
+  document.getElementById('recurringMonthday').value = new Date().getDate().toString();
+  document.getElementById('recurringInfinite').checked = false;
+  document.getElementById('recurringEndDate').value = '';
+
+  // Hide conditional fields
+  const weeklyField = document.getElementById('weeklyDayField');
+  const monthlyField = document.getElementById('monthlyDayField');
+  const endField = document.getElementById('recurringEndField');
+  if (weeklyField) weeklyField.classList.add('hidden');
+  if (monthlyField) monthlyField.classList.add('hidden');
+  if (endField) endField.classList.remove('hidden');
 
   const taskFiles = document.getElementById('taskFiles');
   if (taskFiles) taskFiles.value = '';
@@ -2210,6 +2501,35 @@ function toggleRecurringFields() {
   const fields = document.getElementById('recurringFields');
   if (fields) {
     fields.classList.toggle('hidden', !isChecked);
+  }
+}
+
+function updateRecurringFields() {
+  const frequency = document.getElementById('recurringFrequency').value;
+  const weeklyField = document.getElementById('weeklyDayField');
+  const monthlyField = document.getElementById('monthlyDayField');
+
+  // Hide all conditional fields
+  if (weeklyField) weeklyField.classList.add('hidden');
+  if (monthlyField) monthlyField.classList.add('hidden');
+
+  // Show relevant field based on frequency
+  if (frequency === 'weekly' && weeklyField) {
+    weeklyField.classList.remove('hidden');
+    // Set default to current day of week if not set
+    const weekdaySelect = document.getElementById('recurringWeekday');
+    if (weekdaySelect && !weekdaySelect.value) {
+      const today = new Date().getDay(); // 0=Sunday, 1=Monday, etc.
+      weekdaySelect.value = today.toString();
+    }
+  } else if (frequency === 'monthly' && monthlyField) {
+    monthlyField.classList.remove('hidden');
+    // Set default to current day of month if not set
+    const monthdaySelect = document.getElementById('recurringMonthday');
+    if (monthdaySelect && !monthdaySelect.value) {
+      const today = new Date().getDate();
+      monthdaySelect.value = today.toString();
+    }
   }
 }
 
