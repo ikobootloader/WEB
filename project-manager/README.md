@@ -15,6 +15,8 @@ Interface redesignée avec le système de design **"Emerald Flux"** :
 - **Glassmorphisme** : modaux avec fond flou et transparence subtile
 - **Gradients** : boutons d'action avec dégradés linéaires pour un effet premium
 - **Animations fluides** : transitions et effets hover soignés
+- **Mode sombre** : thème sombre harmonieux avec excellent contraste
+- **Accessibilité** : mode contraste renforcé pour une meilleure lisibilité
 
 ---
 
@@ -32,6 +34,11 @@ Interface redesignée avec le système de design **"Emerald Flux"** :
   - 🟠 Orange : plus de 75% du temps écoulé
   - 🔴 Rouge vif : moins de 2 jours restants
   - ⛔ Rouge erreur : échéance dépassée
+- **Validation des formulaires** : messages d'erreur explicites pour les champs obligatoires
+  - Titre obligatoire avec message et focus automatique
+  - Demandeur obligatoire
+  - Type de tâche obligatoire
+  - Animation shake sur les champs en erreur
 
 ### 🔄 Tâches récurrentes
 - **Fréquences configurables** : quotidien, hebdomadaire, mensuel, annuel
@@ -66,6 +73,8 @@ Interface redesignée avec le système de design **"Emerald Flux"** :
   - 🖥️ **Desktop** : Gantt complet avec barres de progression et timeline
   - 📱 **Mobile** : vue cartes optimisée pour petits écrans
 - **Toggle MOIS/SEMAINES** : affichage par mois ou par semaines
+  - Vue mois : colonnes mensuelles avec année
+  - **Vue semaines** : header sur deux lignes (mois + année / numéros de semaines)
 - **Statuts colorés** :
   - 🟢 EN COURS (#006c4a) - projet actif
   - 🔵 PLANIFIÉ (#6366f1) - projet à venir
@@ -74,10 +83,35 @@ Interface redesignée avec le système de design **"Emerald Flux"** :
 - **Informations projet** :
   - Nom, dates de début/fin, progression (0-100%)
   - Description détaillée
+  - Demandeurs multiples
   - Calcul automatique des jours restants
-- **Édition rapide** : clic sur barre ou carte pour modifier
+- **Actions rapides** :
+  - ✏️ **Édition** : modifier le projet
+  - 📦 **Archivage** : archiver le projet rapidement
+  - 🗑️ **Suppression** : supprimer définitivement
+  - Boutons visibles au survol en haut à droite des cartouches
+- **Validation des formulaires** : messages d'erreur explicites
+  - Nom du projet obligatoire
+  - Date de début obligatoire
+  - Date de fin obligatoire
+  - Cohérence des dates (fin après début)
+  - Au moins un demandeur obligatoire
+- **Tooltip informatif** : titre complet du projet au survol (utile si tronqué)
 - **Responsive design** : adaptation automatique mobile/desktop
 - **Stockage chiffré** : projets sauvegardés avec chiffrement AES-256-GCM
+
+### 📧 Notifications par email
+- **Templates personnalisables** : modèles d'emails pour tâches complétées et demandes de renseignements
+- **Variables dynamiques** :
+  - `{{TITLE}}` : titre de la tâche
+  - `{{REQUESTER}}` : demandeur
+  - `{{TYPE}}` : type de tâche
+  - `{{URGENCY}}` : niveau d'urgence
+  - `{{STATUS}}` : statut
+  - `{{DEADLINE}}` : date limite
+  - `{{COMMENT}}` : commentaire
+- **Configuration dans Paramètres** : personnalisation des sujets et corps des emails
+- **Boutons d'envoi rapide** : directement depuis les cartouches de tâches
 
 ### 📦 Gestion des versions logicielles
 - **Registre des versions** : suivi des versions de SOLIS, MULTIGEST, BO, etc.
@@ -92,6 +126,9 @@ Interface redesignée avec le système de design **"Emerald Flux"** :
 - **Support clavier** : touche Entrée pour valider le mot de passe
 - **Affichage/masquage** : bouton œil pour voir le mot de passe en clair
 - **Import JSON** et **export JSON / Excel** (.xlsx)
+  - **Export Excel multi-feuilles** : tâches sur une feuille, projets sur une autre
+  - Fichier nommé `TaskMDA_Export.xlsx`
+  - Toast affichant le nombre de tâches et projets exportés
 - **Sauvegarde automatique** sur disque (File System Access API - Chrome/Edge)
 - **Indicateur FSA** : bouton header montrant l'état de liaison au fichier JSON
   - 🔴 Orange : non lié
@@ -105,33 +142,86 @@ Interface redesignée avec le système de design **"Emerald Flux"** :
   - Total des tâches actives
   - Nombre de tâches urgentes
   - Tâches complétées (archives)
+  - Projets actifs avec statistiques
   - Résumé textuel intelligent
 - **Indicateurs visuels** : badges d'urgence (🌿/⚠️/🔥), statut, demandeur, type, récurrence
 - **Compteurs temps réel** : mise à jour instantanée des badges sidebar après chaque action
-- **Affichage des 6 dernières tâches** sur le dashboard
+- **Affichage des dernières tâches et projets** sur le dashboard
 - **Barre de progression circulaire** : visualisation de l'approche de la deadline avec tooltip informatif
+- **Cartes projets sur Dashboard** : aperçu rapide avec boutons d'action (éditer, archiver, supprimer)
+
+### 🎨 Apparence personnalisable
+- **Mode sombre** : thème sombre complet et harmonieux
+  - Palette cohérente : #121212 → #3a3a3a
+  - Excellent contraste pour textes et icônes
+  - Badges de statut parfaitement lisibles
+  - Header et sidebar harmonisés
+  - Formulaires et inputs stylisés
+- **Mode contraste renforcé** : bordures et contrastes renforcés pour meilleure lisibilité
+- **Combinaison possible** : mode sombre + contraste renforcé
+- **Persistance** : préférences sauvegardées dans le config chiffré
 
 ---
 
-## Améliorations UX/UI (Mars 2026)
+## Comparatif README vs Application actuelle
 
-### Interface modernisée
-- ✨ **Design "Emerald Flux"** : palette raffinée, typographie duale, tonal layering
-- 🎨 **Badges colorés** : urgence, statut, demandeur et type clairement identifiables
-- 🔘 **Boutons avec gradients** : effet premium sur les actions principales
-- 🌫️ **Glassmorphisme** : modaux avec fond flou et transparence
-- 📱 **Responsive design** : adaptation tablette/mobile
-- ⚡ **Animations fluides** : transitions et hover effects soignés
+### ✅ Fonctionnalités documentées ET implémentées
 
-### Corrections et optimisations
-- 🐛 **Fix filtres d'urgence** : dégradé CSS corrigé pour affichage correct du texte
-- 🐛 **Fix badge demandeur** : suppression du doublon (affiché uniquement en bas)
-- 🐛 **Fix boutons header** : notifications, aide et FSA fonctionnels
-- 🐛 **Fix modal de suppression** : utilisation correcte de la classe 'hidden'
-- 🐛 **Fix icône expand_more** : padding corrigé pour éviter le chevauchement avec le texte
-- 🚀 **Compteurs sidebar dynamiques** : mise à jour instantanée après création/suppression/archivage
-- 🛡️ **Protection doublons** : vérification anti-archivage multiple
-- ⌨️ **Support clavier** : Entrée fonctionne sur les champs de mot de passe
+| Fonctionnalité | Status | Notes |
+|---|---|---|
+| Gestion complète des tâches | ✅ | Création, édition, suppression, archivage |
+| Tâches récurrentes | ✅ | Toutes fréquences avec intervalles personnalisés |
+| Fichiers joints | ✅ | Support complet avec limite 5 Mo |
+| Recherche et filtrage | ✅ | Temps réel avec filtres d'urgence |
+| Markdown dans descriptions | ✅ | Support complet via Marked.js |
+| Gantt interactif | ✅ | Vue mois/semaines, responsive |
+| Chiffrement AES-256-GCM | ✅ | Toutes données chiffrées localement |
+| Import/Export JSON | ✅ | Format TaskMDA v4 |
+| Export Excel | ✅ | Multi-feuilles (tâches + projets) |
+| File System Access API | ✅ | Sauvegarde auto Chrome/Edge |
+| Indicateur FSA header | ✅ | États colorés (vert/orange/gris) |
+| Compteurs sidebar dynamiques | ✅ | Mise à jour temps réel |
+| Design Emerald Flux | ✅ | Complet avec glassmorphisme |
+| Responsive design | ✅ | Desktop, tablette, mobile |
+| Gestionnaire de versions | ✅ | Modal avec CRUD complet |
+
+### 🆕 Fonctionnalités NON documentées (nouvelles)
+
+| Fonctionnalité | Description | Importance |
+|---|---|---|
+| **Mode sombre** | Thème sombre harmonieux avec palette cohérente | ⭐⭐⭐ |
+| **Mode contraste renforcé** | Amélioration accessibilité | ⭐⭐⭐ |
+| **Validation formulaires** | Messages d'erreur explicites + focus automatique | ⭐⭐⭐ |
+| **Vue semaines 2 lignes** | Header Gantt avec mois et semaines séparés | ⭐⭐ |
+| **Actions rapides projets** | Boutons éditer/archiver/supprimer au survol | ⭐⭐⭐ |
+| **Tooltip titre projet** | Affichage titre complet si tronqué | ⭐⭐ |
+| **Notifications email** | Templates personnalisables avec variables | ⭐⭐⭐ |
+| **Demandeurs multiples projets** | Support de plusieurs demandeurs par projet | ⭐⭐ |
+| **Refresh Dashboard après édition** | Synchronisation automatique des vues | ⭐⭐ |
+| **Export Excel amélioré** | Feuilles séparées + compteur toast | ⭐⭐ |
+| **Badges lisibles mode sombre** | Contraste optimisé pour tous les badges | ⭐⭐⭐ |
+| **Toast harmonisé** | Fond vert avec glassmorphisme | ⭐ |
+
+### 📝 Écarts entre documentation et implémentation
+
+| Élément documenté | État réel | Action |
+|---|---|---|
+| "Affichage des 6 dernières tâches" | Nombre variable selon l'espace | ✅ Corrigé dans nouveau README |
+| Vue semaines simple ligne | Maintenant sur 2 lignes (mois + semaines) | ✅ Corrigé dans nouveau README |
+| Export Excel simple | Maintenant multi-feuilles (tâches + projets) | ✅ Corrigé dans nouveau README |
+| Pas de mode sombre | Mode sombre complet implémenté | ✅ Ajouté au nouveau README |
+| Pas de validation formulaire | Validation complète avec messages | ✅ Ajouté au nouveau README |
+| Projets sans actions rapides | Boutons éditer/archiver/supprimer | ✅ Ajouté au nouveau README |
+| Pas de notifications email | Templates email personnalisables | ✅ Ajouté au nouveau README |
+
+### 🎯 Impact utilisateur
+
+**Améliorations majeures non documentées** :
+1. **Mode sombre** : confort visuel considérable pour usage prolongé
+2. **Validation formulaires** : prévient les erreurs de saisie, améliore l'UX
+3. **Actions rapides projets** : gain de temps significatif dans la gestion
+4. **Notifications email** : communication facilitée avec les demandeurs
+5. **Contraste renforcé** : accessibilité améliorée pour tous les utilisateurs
 
 ---
 
@@ -140,6 +230,7 @@ Interface redesignée avec le système de design **"Emerald Flux"** :
 ```
 ├── index.html        — Interface utilisateur avec design Emerald Flux
 ├── app.js           — Logique applicative (crypto, CRUD, rendu, import/export)
+├── README.md        — Documentation complète (ce fichier)
 └── model/
     ├── DESIGN.md    — Spécifications du design system Emerald Flux
     └── code.html    — Archive de la précédente version
@@ -167,6 +258,14 @@ Le bouton header affiche en temps réel l'état de la liaison :
 - 🔴 **Orange** : aucun fichier lié
 - 🟢 **Vert** : fichier lié et synchronisé
 - ⚠️ **Gris** : API non supportée (Firefox)
+
+### Personnalisation de l'apparence
+
+Dans **Paramètres** > **Apparence** :
+1. Activer le **Mode sombre** pour un thème sombre harmonieux
+2. Activer le **Contraste renforcé** pour améliorer la lisibilité
+3. Les deux modes peuvent être combinés
+4. Les préférences sont sauvegardées automatiquement
 
 ---
 
@@ -230,8 +329,33 @@ Le bouton header affiche en temps réel l'état de la liaison :
   "endDate": "2026-06-30",
   "progress": 75,
   "description": "Description détaillée du projet",
+  "requesters": ["S3AD", "SE2S"],
   "createdAt": "2026-03-01T10:00:00.000Z",
-  "updatedAt": "2026-03-20T15:30:00.000Z"
+  "updatedAt": "2026-03-20T15:30:00.000Z",
+  "archivedAt": null
+}
+```
+
+### Configuration
+
+```json
+{
+  "requesters": ["S3AD", "SE2S", "MDA", "PSS", "ASG"],
+  "types": ["SOLIS", "MULTIGEST", "BO", "Courriers"],
+  "emailTemplates": {
+    "completion": {
+      "subject": "Tâche réalisée : {{TITLE}}",
+      "body": "Bonjour,\n\nLa tâche suivante a été réalisée..."
+    },
+    "inquiry": {
+      "subject": "Demande de renseignements : {{TITLE}}",
+      "body": "Bonjour,\n\nJe souhaiterais obtenir..."
+    }
+  },
+  "appearance": {
+    "darkMode": false,
+    "highContrast": false
+  }
 }
 ```
 
@@ -242,8 +366,9 @@ Le bouton header affiche en temps réel l'état de la liaison :
   "tasks": [...],
   "versions": {...},
   "projects": [...],
-  "exportedAt": "2026-03-22T12:00:00.000Z",
-  "format": "TaskMDA v4"
+  "config": {...},
+  "exportedAt": "2026-03-24T12:00:00.000Z",
+  "format": "TaskMDA v4.5"
 }
 ```
 
@@ -253,9 +378,9 @@ Le bouton header affiche en temps réel l'état de la liaison :
 
 - **Vanilla JS (ES2022+)** — aucune dépendance JS applicative
 - **Web Crypto API** (natif navigateur) — chiffrement AES-256-GCM
-- **[SheetJS / xlsx](https://sheetjs.com/)** — export Excel
+- **[SheetJS / xlsx](https://sheetjs.com/)** — export Excel multi-feuilles
 - **[Marked.js](https://marked.js.org/)** — rendu Markdown
-- **[Tailwind CSS](https://tailwindcss.com/)** — framework CSS utility-first
+- **[Tailwind CSS](https://tailwindcss.com/)** — framework CSS utility-first avec dark mode
 - **File System Access API** — sauvegarde automatique sur disque (Chrome/Edge)
 - **Google Fonts** : Manrope (display), Inter (interface)
 - **Material Symbols Outlined** — icônes Google
@@ -263,6 +388,49 @@ Le bouton header affiche en temps réel l'état de la liaison :
 ---
 
 ## Changelog
+
+### 🌙 Version 4.5 - Dark Mode & Validation (Mars 2026)
+
+**Apparence personnalisable**
+- 🌙 **Mode sombre** : thème sombre complet et harmonieux
+  - Palette cohérente (#121212 → #3a3a3a)
+  - Excellent contraste pour tous les éléments
+  - Badges de statut parfaitement lisibles
+  - Header et sidebar harmonisés
+- 🔲 **Mode contraste renforcé** : bordures et contrastes améliorés
+- 💾 **Persistance** : préférences sauvegardées dans config chiffré
+- 🎨 **Toggle dans Paramètres** : activation/désactivation facile
+
+**Validation des formulaires**
+- ✅ **Formulaire tâche** : validation complète avec messages explicites
+  - Titre obligatoire + focus automatique
+  - Demandeur obligatoire
+  - Type de tâche obligatoire
+- ✅ **Formulaire projet** : validation renforcée
+  - Nom obligatoire
+  - Date de début obligatoire
+  - Date de fin obligatoire
+  - Cohérence des dates (fin après début)
+  - Au moins un demandeur obligatoire
+- ⚡ **Animation shake** : effet visuel sur champs en erreur
+- 🎯 **Focus automatique** : curseur positionné sur le champ problématique
+
+**Améliorations UX projets**
+- 🔘 **Actions rapides** : boutons éditer/archiver/supprimer au survol
+- 💡 **Tooltip titre** : affichage titre complet si tronqué
+- 🔄 **Refresh automatique** : synchronisation Dashboard après modifications
+- 📊 **Vue semaines améliorée** : header sur 2 lignes (mois + semaines)
+
+**Notifications email**
+- 📧 **Templates personnalisables** : modèles pour tâches complétées et demandes
+- 🔤 **Variables dynamiques** : TITLE, REQUESTER, TYPE, URGENCY, etc.
+- ⚙️ **Configuration** : personnalisation dans Paramètres
+- 📤 **Envoi rapide** : boutons directement sur les cartouches
+
+**Export amélioré**
+- 📊 **Excel multi-feuilles** : tâches et projets sur feuilles séparées
+- 📝 **Fichier renommé** : `TaskMDA_Export.xlsx`
+- 💬 **Toast détaillé** : affichage nombre de tâches et projets exportés
 
 ### 🏛️ Version 4.0 - TaskMDA (Mars 2026)
 
@@ -328,6 +496,23 @@ Le bouton header affiche en temps réel l'état de la liaison :
 10. 📦 Gestionnaire de versions logicielles (modal)
 11. 🔄 Tâches récurrentes avec fréquences paramétrables
 12. 📎 Association de fichiers aux tâches (images, PDF, docs)
+
+---
+
+## Roadmap future (suggestions)
+
+### Fonctionnalités potentielles
+
+- 🔔 **Notifications navigateur** : rappels pour deadlines approchantes
+- 📊 **Graphiques avancés** : statistiques visuelles (Chart.js)
+- 🏷️ **Tags personnalisés** : étiquettes libres sur tâches
+- 📋 **Templates de tâches** : modèles pré-remplis réutilisables
+- 🔗 **Liens entre tâches** : dépendances et relations
+- 📱 **PWA** : installation comme application mobile
+- 🌐 **Multi-langues** : support i18n (EN, FR, ES, DE)
+- 👥 **Collaboration** : partage sécurisé entre utilisateurs
+- 📆 **Vue calendrier** : affichage type agenda
+- 🎨 **Thèmes personnalisés** : palettes de couleurs au choix
 
 ---
 
