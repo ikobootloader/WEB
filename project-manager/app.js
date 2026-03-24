@@ -71,6 +71,10 @@ Pourriez-vous nous apporter les informations suivantes :
 Cordialement,
 TaskMDA - Gestion de taches`
     }
+  },
+  appearance: {       // Préférences d'apparence
+    darkMode: false,
+    highContrast: false
   }
 };
 let editingId    = null;
@@ -130,6 +134,10 @@ function initEventListeners() {
   document.getElementById('btnChangePassword')?.addEventListener('click', changePassword);
   document.getElementById('btnLockApp')?.addEventListener('click', lockApp);
   document.getElementById('btnClearAll')?.addEventListener('click', clearAllTasks);
+
+  // Appearance events
+  document.getElementById('darkModeToggle')?.addEventListener('change', toggleDarkMode);
+  document.getElementById('highContrastToggle')?.addEventListener('change', toggleHighContrast);
 
   // File attachments
   document.getElementById('taskFiles')?.addEventListener('change', handleFileSelection);
@@ -713,6 +721,10 @@ Pourriez-vous nous apporter les informations suivantes :
 Cordialement,
 TaskMDA - Gestion de taches`
         }
+      },
+      appearance: {
+        darkMode: false,
+        highContrast: false
       }
     };
   } else {
@@ -766,12 +778,22 @@ TaskMDA - Gestion de taches`
         }
       };
     }
+    // Ensure appearance settings exist for backwards compatibility
+    if (!config.appearance) {
+      config.appearance = {
+        darkMode: false,
+        highContrast: false
+      };
+    }
   }
 
   // Dédoublonner les tâches par ID
   deduplicateTasks();
 
   updateProjectCount();
+
+  // Apply appearance settings
+  applyAppearanceSettings();
 }
 
 function deduplicateTasks() {
@@ -1175,8 +1197,33 @@ async function submitForm() {
       interval: parseInt(document.getElementById('recurringInterval').value) || 1
     } : null;
 
+    // Validation du titre
     if (!title) {
-      shake(document.getElementById('taskTitle'));
+      const titleInput = document.getElementById('taskTitle');
+      shake(titleInput);
+      showToast('⚠️ Le titre de la tâche est obligatoire');
+      titleInput.focus();
+      return;
+    }
+
+    // Validation de la deadline (optionnelle mais avertissement si absente)
+    if (!deadline) {
+      // Pour les tâches, la deadline n'est pas strictement obligatoire,
+      // mais on peut afficher un avertissement si l'utilisateur le souhaite
+      // console.log('⚠️ Aucune deadline définie pour cette tâche');
+    }
+
+    // Validation du demandeur
+    if (!requester) {
+      showToast('⚠️ Veuillez sélectionner un demandeur');
+      document.getElementById('taskRequester').focus();
+      return;
+    }
+
+    // Validation du type
+    if (!type) {
+      showToast('⚠️ Veuillez sélectionner un type de tâche');
+      document.getElementById('taskType').focus();
       return;
     }
 
@@ -1478,6 +1525,60 @@ function clearAllTasks() {
     closeConfirm();
     showToast(`🗑 Toutes les tâches ont été effacées définitivement (${count} tâche(s))`);
   };
+}
+
+// ════════════════════════════════════════════════════════════
+//  APPARENCE — DARK MODE & HIGH CONTRAST
+// ════════════════════════════════════════════════════════════
+
+async function toggleDarkMode(e) {
+  const enabled = e.target.checked;
+  config.appearance.darkMode = enabled;
+
+  if (enabled) {
+    document.documentElement.classList.add('dark');
+  } else {
+    document.documentElement.classList.remove('dark');
+  }
+
+  await saveToStorage();
+  showToast(enabled ? '🌙 Mode sombre activé' : '☀️ Mode clair activé');
+}
+
+async function toggleHighContrast(e) {
+  const enabled = e.target.checked;
+  config.appearance.highContrast = enabled;
+
+  if (enabled) {
+    document.body.classList.add('high-contrast');
+  } else {
+    document.body.classList.remove('high-contrast');
+  }
+
+  await saveToStorage();
+  showToast(enabled ? '🔲 Contraste renforcé activé' : '🔳 Contraste normal activé');
+}
+
+function applyAppearanceSettings() {
+  // Apply dark mode - on <html> element for Tailwind
+  const darkModeToggle = document.getElementById('darkModeToggle');
+  if (config.appearance?.darkMode) {
+    document.documentElement.classList.add('dark');
+    if (darkModeToggle) darkModeToggle.checked = true;
+  } else {
+    document.documentElement.classList.remove('dark');
+    if (darkModeToggle) darkModeToggle.checked = false;
+  }
+
+  // Apply high contrast - on <body> element
+  const highContrastToggle = document.getElementById('highContrastToggle');
+  if (config.appearance?.highContrast) {
+    document.body.classList.add('high-contrast');
+    if (highContrastToggle) highContrastToggle.checked = true;
+  } else {
+    document.body.classList.remove('high-contrast');
+    if (highContrastToggle) highContrastToggle.checked = false;
+  }
 }
 
 // ════════════════════════════════════════════════════════════
@@ -2497,22 +2598,47 @@ function exportJSON() {
 }
 
 function exportExcel() {
+  const wb = XLSX.utils.book_new();
+
+  // Feuille 1 : Tâches
   const statusLabels  = { 'en-cours':'En cours', 'en-attente':'En attente', 'realise':'Réalisé' };
   const urgencyLabels = { low:'Faible', medium:'Moyenne', high:'Urgente' };
-  const ws = XLSX.utils.json_to_sheet(tasks.map(t => ({
+  const wsTasks = XLSX.utils.json_to_sheet(tasks.map(t => ({
+    Ordre:       t.order       || '',
     Titre:       t.title,
     Demandeur:   t.requester   || '',
     Type:        t.type        || '',
     Urgence:     urgencyLabels[t.urgency] || t.urgency,
     Statut:      statusLabels[t.status]  || t.status,
+    Date_demande: t.requestDate || '',
     Deadline:    t.deadline    || '',
     Commentaire: t.comment     || '',
     Archivé_le:  t.archivedAt  ? new Date(t.archivedAt).toLocaleDateString('fr-FR') : ''
   })));
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Tâches');
-  XLSX.writeFile(wb, 'tasks.xlsx');
-  showToast(`⬇ Export Excel réussi (${tasks.length} tâche(s))`);
+  XLSX.utils.book_append_sheet(wb, wsTasks, 'Tâches');
+
+  // Feuille 2 : Projets
+  const projectStatusLabels = {
+    'en-cours': 'En cours',
+    'planifie': 'Planifié',
+    'urgent': 'Urgent',
+    'termine': 'Terminé'
+  };
+  const wsProjects = XLSX.utils.json_to_sheet(projects.map(p => ({
+    Nom:         p.name,
+    Demandeurs:  (p.requesters || []).join(', '),
+    Statut:      projectStatusLabels[p.status] || p.status,
+    Date_début:  p.startDate ? new Date(p.startDate).toLocaleDateString('fr-FR') : '',
+    Date_fin:    p.endDate ? new Date(p.endDate).toLocaleDateString('fr-FR') : '',
+    Progression: p.progress + '%',
+    Description: p.description || '',
+    Archivé_le:  p.archivedAt ? new Date(p.archivedAt).toLocaleDateString('fr-FR') : ''
+  })));
+  XLSX.utils.book_append_sheet(wb, wsProjects, 'Projets');
+
+  // Export
+  XLSX.writeFile(wb, 'TaskMDA_Export.xlsx');
+  showToast(`⬇ Export Excel réussi (${tasks.length} tâche(s) + ${projects.length} projet(s))`);
 }
 
 function downloadBlob(blob, name) {
@@ -3316,18 +3442,45 @@ async function submitProjectForm() {
   const requesters = getSelectedRequesters();
   const status = getSelectedProjectStatus();
 
+  // Validation du nom
   if (!name) {
-    shake(document.getElementById('projectName'));
+    const nameInput = document.getElementById('projectName');
+    shake(nameInput);
+    showToast('⚠️ Le nom du projet est obligatoire');
+    nameInput.focus();
     return;
   }
 
-  if (!startDate || !endDate) {
-    showToast('⚠️ Veuillez renseigner les dates de début et fin');
+  // Validation de la date de début
+  if (!startDate) {
+    const startDateInput = document.getElementById('projectStartDate');
+    shake(startDateInput);
+    showToast('⚠️ La date de début est obligatoire');
+    startDateInput.focus();
     return;
   }
 
+  // Validation de la date de fin
+  if (!endDate) {
+    const endDateInput = document.getElementById('projectEndDate');
+    shake(endDateInput);
+    showToast('⚠️ La date de fin est obligatoire');
+    endDateInput.focus();
+    return;
+  }
+
+  // Validation de la cohérence des dates
   if (new Date(endDate) < new Date(startDate)) {
+    const endDateInput = document.getElementById('projectEndDate');
+    shake(endDateInput);
     showToast('⚠️ La date de fin doit être après la date de début');
+    endDateInput.focus();
+    return;
+  }
+
+  // Validation des demandeurs
+  if (!requesters || requesters.length === 0) {
+    showToast('⚠️ Veuillez sélectionner au moins un demandeur');
     return;
   }
 
