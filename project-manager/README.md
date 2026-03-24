@@ -1,6 +1,6 @@
 # TaskMDA 🏛️
 
-Application web de gestion de tâches et projets 100% locale, sans serveur ni base de données. Toutes les données sont chiffrées dans le navigateur avant d'être stockées dans le `localStorage`.
+Application web de gestion de tâches et projets **100% locale**, sans serveur ni base de données. Toutes les données sont chiffrées avec **AES-256-GCM** dans le navigateur avant d'être stockées dans **IndexedDB**.
 
 **TaskMDA** est conçu pour les collectivités et administrations publiques avec un système de gestion de projets intégré via diagramme de Gantt.
 
@@ -119,21 +119,23 @@ Interface redesignée avec le système de design **"Emerald Flux"** :
 - **Stockage chiffré** : versions sauvegardées avec chiffrement AES-256-GCM
 - **Accès rapide** : depuis l'onglet Import/Export
 
-### 🔒 Sécurité et données
-- **Chiffrement AES-256-GCM** — les données ne quittent jamais votre appareil
+### 🔒 Sécurité et stockage
+- **Stockage IndexedDB** — persistant et local, capacité plusieurs GB
+- **Chiffrement AES-256-GCM** — toutes les données chiffrées localement
+  - Tâches, projets, versions, configuration : tout est chiffré
+  - Seul le sel cryptographique reste en clair (requis pour dérivation)
 - **Dérivation de clé PBKDF2-SHA256** (310 000 itérations, conforme OWASP 2024)
 - **Verrouillage / déverrouillage** par mot de passe à chaque session
 - **Support clavier** : touche Entrée pour valider le mot de passe
 - **Affichage/masquage** : bouton œil pour voir le mot de passe en clair
-- **Import JSON** et **export JSON / Excel** (.xlsx)
-  - **Export Excel multi-feuilles** : tâches sur une feuille, projets sur une autre
+- **Import/Export JSON** : sauvegarde manuelle de toutes les données
+  - Export non chiffré pour portabilité et lisibilité
+  - Import avec chiffrement automatique vers IndexedDB
+- **Export Excel (.xlsx)** : export multi-feuilles
+  - Tâches sur une feuille, projets sur une autre
   - Fichier nommé `TaskMDA_Export.xlsx`
   - Toast affichant le nombre de tâches et projets exportés
-- **Sauvegarde automatique** sur disque (File System Access API - Chrome/Edge)
-- **Indicateur FSA** : bouton header montrant l'état de liaison au fichier JSON
-  - 🔴 Orange : non lié
-  - 🟢 Vert : lié et synchronisé
-  - ⚠️ Gris : non supporté (Firefox)
+- **Migration automatique** : transfert transparent depuis localStorage (ancienne version)
 - **Dédoublonnage automatique** : suppression des tâches dupliquées au chargement
 - **Protection anti-double-clic** : évite les créations/suppressions multiples accidentelles
 
@@ -176,10 +178,10 @@ Interface redesignée avec le système de design **"Emerald Flux"** :
 | Markdown dans descriptions | ✅ | Support complet via Marked.js |
 | Gantt interactif | ✅ | Vue mois/semaines, responsive |
 | Chiffrement AES-256-GCM | ✅ | Toutes données chiffrées localement |
-| Import/Export JSON | ✅ | Format TaskMDA v4 |
+| Stockage IndexedDB | ✅ | Persistant, performant, local |
+| Migration automatique | ✅ | Depuis localStorage vers IndexedDB |
+| Import/Export JSON | ✅ | Format TaskMDA v5 |
 | Export Excel | ✅ | Multi-feuilles (tâches + projets) |
-| File System Access API | ✅ | Sauvegarde auto Chrome/Edge |
-| Indicateur FSA header | ✅ | États colorés (vert/orange/gris) |
 | Compteurs sidebar dynamiques | ✅ | Mise à jour temps réel |
 | Design Emerald Flux | ✅ | Complet avec glassmorphisme |
 | Responsive design | ✅ | Desktop, tablette, mobile |
@@ -202,17 +204,16 @@ Interface redesignée avec le système de design **"Emerald Flux"** :
 | **Badges lisibles mode sombre** | Contraste optimisé pour tous les badges | ⭐⭐⭐ |
 | **Toast harmonisé** | Fond vert avec glassmorphisme | ⭐ |
 
-### 📝 Écarts entre documentation et implémentation
+### 📝 Changements majeurs v5.0
 
-| Élément documenté | État réel | Action |
+| Ancien système | Nouveau système | Impact |
 |---|---|---|
-| "Affichage des 6 dernières tâches" | Nombre variable selon l'espace | ✅ Corrigé dans nouveau README |
-| Vue semaines simple ligne | Maintenant sur 2 lignes (mois + semaines) | ✅ Corrigé dans nouveau README |
-| Export Excel simple | Maintenant multi-feuilles (tâches + projets) | ✅ Corrigé dans nouveau README |
-| Pas de mode sombre | Mode sombre complet implémenté | ✅ Ajouté au nouveau README |
-| Pas de validation formulaire | Validation complète avec messages | ✅ Ajouté au nouveau README |
-| Projets sans actions rapides | Boutons éditer/archiver/supprimer | ✅ Ajouté au nouveau README |
-| Pas de notifications email | Templates email personnalisables | ✅ Ajouté au nouveau README |
+| localStorage (5-10 MB) | IndexedDB (plusieurs GB) | ✅ Plus de capacité |
+| Opérations synchrones | Opérations asynchrones | ✅ Meilleures performances |
+| File System Access API | Supprimé | ✅ Interface simplifiée |
+| Indicateur FSA header | Supprimé | ✅ Interface épurée |
+| Sauvegarde auto fichier | Supprimée | ⚠️ Utiliser Export JSON manuel |
+| Format export v4 | Format export v5 | ✅ Migration automatique |
 
 ### 🎯 Impact utilisateur
 
@@ -240,24 +241,23 @@ Interface redesignée avec le système de design **"Emerald Flux"** :
 
 ## Démarrage
 
-Aucune installation requise. Ouvrez simplement `index.html` dans un navigateur moderne (Chrome, Firefox, Edge, Safari).
+**Aucune installation requise.** Ouvrez simplement `index.html` dans un navigateur moderne (Chrome, Firefox, Edge, Safari).
 
-> ⚠️ Le chiffrement repose sur la **Web Crypto API**, disponible uniquement en contexte sécurisé (`https://` ou `localhost`). L'ouverture directe via `file://` peut ne pas fonctionner selon le navigateur.
+L'application fonctionne **100% en local** :
+- ✅ Aucun serveur requis
+- ✅ Aucune connexion internet nécessaire
+- ✅ Toutes les données stockées dans IndexedDB (local au navigateur)
+- ✅ Chiffrement AES-256-GCM côté client uniquement
 
 Au premier lancement, vous devrez créer un mot de passe (4 caractères minimum). Ce mot de passe chiffre toutes vos données localement — **il n'est jamais stocké ni transmis**.
 
-### File System Access API (Chrome/Edge uniquement)
+### Migration automatique
 
-Pour activer la sauvegarde automatique sur disque :
-1. Aller dans **Paramètres** > **Sauvegarde automatique**
-2. Cliquer sur **"Choisir un répertoire et lier le fichier JSON"**
-3. Sélectionner un dossier et nommer le fichier (ex: `tasks.json`)
-4. L'icône header devient verte 🟢 : toute modification est auto-sauvegardée
-
-Le bouton header affiche en temps réel l'état de la liaison :
-- 🔴 **Orange** : aucun fichier lié
-- 🟢 **Vert** : fichier lié et synchronisé
-- ⚠️ **Gris** : API non supportée (Firefox)
+Si vous utilisez déjà TaskMDA avec localStorage (ancienne version) :
+- Au premier lancement, vos données seront **automatiquement migrées** vers IndexedDB
+- Aucune perte de données
+- Le mot de passe reste le même
+- Un message de confirmation s'affichera dans la console du navigateur
 
 ### Personnalisation de l'apparence
 
@@ -269,7 +269,9 @@ Dans **Paramètres** > **Apparence** :
 
 ---
 
-## Sécurité
+## Sécurité et stockage
+
+### Chiffrement
 
 | Élément | Détail |
 |---|---|
@@ -279,8 +281,27 @@ Dans **Paramètres** > **Apparence** :
 | IV | 12 octets aléatoires par chiffrement |
 | Stockage de la clé | En mémoire uniquement (jamais persistée) |
 | Transit réseau | Aucun |
+
+### Stockage IndexedDB
+
+| Élément | Détail |
+|---|---|
+| Base de données | `TaskMDA_DB` |
+| Object Store | `encrypted_data` |
+| Clés stockées | `salt`, `tasks`, `versions`, `projects`, `config` |
+| Données chiffrées | ✅ Tâches, projets, versions, configuration |
+| Données en clair | Uniquement le sel (requis pour dérivation) |
+| Capacité | Plusieurs GB (selon navigateur) |
+| Performance | Opérations asynchrones (non-bloquantes) |
+
+### Protections
+
+| Élément | Détail |
+|---|---|
 | Protection doublons | Dédoublonnage automatique au chargement |
 | Protection double-clic | Variable de verrouillage lors des soumissions |
+| Migration automatique | Transfert transparent depuis localStorage |
+| Validation formulaires | Messages d'erreur explicites avec focus |
 
 ---
 
@@ -368,7 +389,7 @@ Dans **Paramètres** > **Apparence** :
   "projects": [...],
   "config": {...},
   "exportedAt": "2026-03-24T12:00:00.000Z",
-  "format": "TaskMDA v4.5"
+  "format": "TaskMDA v5"
 }
 ```
 
@@ -377,17 +398,49 @@ Dans **Paramètres** > **Apparence** :
 ## Technologies utilisées
 
 - **Vanilla JS (ES2022+)** — aucune dépendance JS applicative
+- **IndexedDB** (natif navigateur) — stockage local persistant
 - **Web Crypto API** (natif navigateur) — chiffrement AES-256-GCM
 - **[SheetJS / xlsx](https://sheetjs.com/)** — export Excel multi-feuilles
 - **[Marked.js](https://marked.js.org/)** — rendu Markdown
 - **[Tailwind CSS](https://tailwindcss.com/)** — framework CSS utility-first avec dark mode
-- **File System Access API** — sauvegarde automatique sur disque (Chrome/Edge)
 - **Google Fonts** : Manrope (display), Inter (interface)
 - **Material Symbols Outlined** — icônes Google
 
 ---
 
 ## Changelog
+
+### 💾 Version 5.0 - IndexedDB Migration (Mars 2026)
+
+**Migration vers IndexedDB**
+- 💾 **Remplacement de localStorage par IndexedDB**
+  - Meilleure performance pour gros volumes de données
+  - Capacité de stockage augmentée (plusieurs GB vs 5-10 MB)
+  - Opérations asynchrones (non-bloquantes)
+  - Support natif des transactions ACID
+- 🔄 **Migration automatique** : transfert transparent depuis localStorage
+  - Détection automatique des données existantes
+  - Migration au premier lancement
+  - Nettoyage automatique de localStorage
+  - Aucune perte de données
+- 🔐 **Chiffrement conservé** : AES-256-GCM pour toutes les données
+  - Tâches chiffrées
+  - Projets chiffrés
+  - Versions chiffrées
+  - Configuration chiffrée
+  - Seul le sel reste en clair (requis pour dérivation)
+- 🗑️ **Suppression File System Access API** : système de liaison fichier JSON externe retiré
+  - IndexedDB stocke déjà tout localement
+  - Pas besoin de lier un fichier externe
+  - Interface simplifiée
+  - Export/Import JSON manuel toujours disponible
+
+**Avantages IndexedDB**
+- ⚡ Plus rapide que localStorage
+- 📊 Meilleure gestion de gros volumes
+- 🔒 Toujours 100% local et chiffré
+- 🌐 Compatible tous navigateurs modernes
+- 📱 Fonctionne sans serveur
 
 ### 🌙 Version 4.5 - Dark Mode & Validation (Mars 2026)
 

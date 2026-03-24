@@ -1,14 +1,21 @@
 // ══════════════════════════════════════════════════════════════
 //  GESTIONNAIRE DE PROJETS — app.js
-//  Stockage : localStorage + AES-256-GCM (Web Crypto API native)
+//  Stockage : IndexedDB + AES-256-GCM (Web Crypto API native)
 //  + File System Access API (sauvegarde automatique sur disque)
 // ══════════════════════════════════════════════════════════════
 
-const STORAGE_KEY = 'projets_tasks_v4_enc';
-const SALT_KEY    = 'projets_salt_v4';
-const VERSIONS_KEY = 'projets_versions_v4_enc';
-const PROJECTS_KEY = 'projets_projects_v4_enc';
-const CONFIG_KEY = 'projets_config_v4_enc';
+// IndexedDB Configuration
+const DB_NAME = 'TaskMDA_DB';
+const DB_VERSION = 1;
+const STORE_NAME = 'encrypted_data';
+
+// Legacy keys for migration from localStorage
+const LEGACY_STORAGE_KEY = 'projets_tasks_v4_enc';
+const LEGACY_SALT_KEY    = 'projets_salt_v4';
+const LEGACY_VERSIONS_KEY = 'projets_versions_v4_enc';
+const LEGACY_PROJECTS_KEY = 'projets_projects_v4_enc';
+const LEGACY_CONFIG_KEY = 'projets_config_v4_enc';
+
 const ITER_COUNT  = 310_000;
 
 // ── État global ──────────────────────────────────────────────
@@ -83,8 +90,6 @@ let attachedFiles = []; // Fichiers temporaires avant sauvegarde
 let activeFilter = 'all';
 let activeView   = 'dashboard';   // 'dashboard' | 'tasks' | 'projects' | 'archives' | 'import-export' | 'settings'
 let cryptoKey    = null;
-let fileHandle   = null;
-let fsaSupported = typeof window.showSaveFilePicker === 'function';
 let currentPage  = 1;
 let itemsPerPage = 12;
 let isSubmitting = false; // Protection contre les doubles soumissions
@@ -94,7 +99,7 @@ let ganttViewMode = 'month'; // 'month' | 'weeks'
 //  DÉMARRAGE
 // ════════════════════════════════════════════════════════════
 
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
   initUI();
   initEventListeners();
 
@@ -104,7 +109,14 @@ window.addEventListener('DOMContentLoaded', () => {
   if (sidebar) sidebar.style.display = 'none';
   if (mainContent) mainContent.style.display = 'none';
 
-  const hasSavedData = !!localStorage.getItem(STORAGE_KEY);
+  // Initialize IndexedDB
+  await initDB();
+
+  // Migrate from localStorage if needed
+  await migrateFromLocalStorage();
+
+  // Check if data exists in IndexedDB
+  const hasSavedData = !!(await idbGet('salt'));
   if (hasSavedData) {
     showLockScreen('unlock');
   } else {
@@ -152,7 +164,6 @@ function initEventListeners() {
   document.getElementById('sortSelect')?.addEventListener('change', () => renderTasks());
 
   // Header buttons
-  document.getElementById('btnFsaHeader')?.addEventListener('click', handleFsaHeaderClick);
   document.getElementById('btnHelp')?.addEventListener('click', showHelpModal);
   document.getElementById('btnNotifications')?.addEventListener('click', showNotifications);
 
@@ -569,12 +580,12 @@ async function submitPassword() {
   try {
     if (mode === 'create') {
       const salt = crypto.getRandomValues(new Uint8Array(16));
-      localStorage.setItem(SALT_KEY, bufToHex(salt));
+      await idbSet('salt', bufToHex(salt));
       cryptoKey = await deriveKey(pwd, salt);
       tasks = window.initialTasks || [];
       await saveToStorage();
     } else {
-      const saltHex = localStorage.getItem(SALT_KEY);
+      const saltHex = await idbGet('salt');
       if (!saltHex) { err.textContent = 'Données corrompues (sel manquant).'; return; }
       cryptoKey = await deriveKey(pwd, hexToBuf(saltHex));
       await loadFromStorage();
@@ -596,8 +607,6 @@ async function submitPassword() {
 
     // Show dashboard
     switchView('dashboard');
-    updateFsaBtnState();
-    showRefileBannerIfNeeded();
 
     // Initialize notification system
     initNotificationSystem();
@@ -633,7 +642,7 @@ async function changePassword() {
   if (!newPwd || newPwd.length < 4) { showToast('❌ Trop court'); return; }
   if (prompt('Confirmer :') !== newPwd) { showToast('❌ Ne correspond pas'); return; }
   const salt = crypto.getRandomValues(new Uint8Array(16));
-  localStorage.setItem(SALT_KEY, bufToHex(salt));
+  await idbSet('salt', bufToHex(salt));
   cryptoKey = await deriveKey(newPwd, salt);
   await saveToStorage();
   showToast('🔑 Le mot de passe a été changé avec succès');
@@ -667,20 +676,156 @@ const bufToHex = b => Array.from(b).map(x => x.toString(16).padStart(2,'0')).joi
 function hexToBuf(h) { const a = new Uint8Array(h.length/2); for (let i=0;i<a.length;i++) a[i]=parseInt(h.slice(i*2,i*2+2),16); return a; }
 
 // ════════════════════════════════════════════════════════════
+//  INDEXEDDB WRAPPER
+// ════════════════════════════════════════════════════════════
+
+let db = null;
+
+async function initDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      db = request.result;
+      resolve(db);
+    };
+
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+
+      // Create object store if it doesn't exist
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: 'key' });
+      }
+    };
+  });
+}
+
+async function idbGet(key) {
+  if (!db) await initDB();
+
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([STORE_NAME], 'readonly');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.get(key);
+
+    request.onsuccess = () => resolve(request.result ? request.result.value : null);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function idbSet(key, value) {
+  if (!db) await initDB();
+
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([STORE_NAME], 'readwrite');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.put({ key, value });
+
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function idbRemove(key) {
+  if (!db) await initDB();
+
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([STORE_NAME], 'readwrite');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.delete(key);
+
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function idbClear() {
+  if (!db) await initDB();
+
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([STORE_NAME], 'readwrite');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.clear();
+
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+}
+
+// ════════════════════════════════════════════════════════════
+//  MIGRATION FROM LOCALSTORAGE
+// ════════════════════════════════════════════════════════════
+
+async function migrateFromLocalStorage() {
+  // Check if data exists in localStorage
+  const hasLegacyData = !!localStorage.getItem(LEGACY_STORAGE_KEY);
+  if (!hasLegacyData) return false;
+
+  console.log('🔄 Migration des données depuis localStorage vers IndexedDB...');
+
+  try {
+    // Migrate salt
+    const salt = localStorage.getItem(LEGACY_SALT_KEY);
+    if (salt) {
+      await idbSet('salt', salt);
+    }
+
+    // Migrate encrypted data
+    const tasks = localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (tasks) {
+      await idbSet('tasks', tasks);
+    }
+
+    const versions = localStorage.getItem(LEGACY_VERSIONS_KEY);
+    if (versions) {
+      await idbSet('versions', versions);
+    }
+
+    const projects = localStorage.getItem(LEGACY_PROJECTS_KEY);
+    if (projects) {
+      await idbSet('projects', projects);
+    }
+
+    const config = localStorage.getItem(LEGACY_CONFIG_KEY);
+    if (config) {
+      await idbSet('config', config);
+    }
+
+    console.log('✅ Migration réussie ! Nettoyage de localStorage...');
+
+    // Clear legacy localStorage data
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
+    localStorage.removeItem(LEGACY_SALT_KEY);
+    localStorage.removeItem(LEGACY_VERSIONS_KEY);
+    localStorage.removeItem(LEGACY_PROJECTS_KEY);
+    localStorage.removeItem(LEGACY_CONFIG_KEY);
+
+    console.log('✅ localStorage nettoyé');
+
+    return true;
+  } catch (error) {
+    console.error('❌ Erreur lors de la migration:', error);
+    return false;
+  }
+}
+
+// ════════════════════════════════════════════════════════════
 //  STOCKAGE
 // ════════════════════════════════════════════════════════════
 
 async function loadFromStorage() {
-  const raw = localStorage.getItem(STORAGE_KEY);
+  const raw = await idbGet('tasks');
   if (!raw) { tasks = []; } else { tasks = await decrypt(raw); }
 
-  const rawVersions = localStorage.getItem(VERSIONS_KEY);
+  const rawVersions = await idbGet('versions');
   if (!rawVersions) { versions = {}; } else { versions = await decrypt(rawVersions); }
 
-  const rawProjects = localStorage.getItem(PROJECTS_KEY);
+  const rawProjects = await idbGet('projects');
   if (!rawProjects) { projects = []; } else { projects = await decrypt(rawProjects); }
 
-  const rawConfig = localStorage.getItem(CONFIG_KEY);
+  const rawConfig = await idbGet('config');
   if (!rawConfig) {
     // Default config if not exists
     config = {
@@ -833,180 +978,12 @@ function deduplicateTasks() {
 
 async function saveToStorage() {
   if (!cryptoKey) return;
-  localStorage.setItem(STORAGE_KEY, await encrypt(tasks));
-  localStorage.setItem(VERSIONS_KEY, await encrypt(versions));
-  localStorage.setItem(PROJECTS_KEY, await encrypt(projects));
-  localStorage.setItem(CONFIG_KEY, await encrypt(config));
-  await writeToFile();
+  await idbSet('tasks', await encrypt(tasks));
+  await idbSet('versions', await encrypt(versions));
+  await idbSet('projects', await encrypt(projects));
+  await idbSet('config', await encrypt(config));
 }
 
-// ════════════════════════════════════════════════════════════
-//  FILE SYSTEM ACCESS API
-// ════════════════════════════════════════════════════════════
-
-async function linkFile() {
-  if (!fsaSupported) { showToast('⚠️ Non supporté sur Firefox — utilisez Chrome/Edge'); return; }
-  try {
-    fileHandle = await window.showSaveFilePicker({
-      suggestedName: 'tasks.json',
-      types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }],
-    });
-    localStorage.setItem('fsa_filename', fileHandle.name);
-    updateFsaBtnState();
-    await writeToFile();
-    showToast(`📁 Fichier "${fileHandle.name}" lié avec succès — sauvegarde automatique activée`);
-  } catch(e) { if (e.name !== 'AbortError') showToast('❌ ' + e.message); }
-}
-
-async function unlinkFile() {
-  fileHandle = null;
-  localStorage.removeItem('fsa_filename');
-  updateFsaBtnState();
-  showToast('🔗 La liaison avec le fichier a été supprimée — sauvegarde automatique désactivée');
-}
-
-async function relinkFile() {
-  if (!fsaSupported) return;
-  try {
-    fileHandle = await window.showSaveFilePicker({
-      suggestedName: localStorage.getItem('fsa_filename') || 'tasks.json',
-      types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }],
-    });
-    localStorage.setItem('fsa_filename', fileHandle.name);
-    document.getElementById('refileBanner').style.display = 'none';
-    updateFsaBtnState();
-    await writeToFile();
-    showToast('✅ Sauvegarde auto réactivée → ' + fileHandle.name);
-  } catch(e) { if (e.name !== 'AbortError') showToast('❌ ' + e.message); }
-}
-
-async function writeToFile() {
-  if (!fileHandle) return;
-  try {
-    const data = {
-      tasks: tasks,
-      versions: versions,
-      projects: projects,
-      config: config,
-      exportedAt: new Date().toISOString(),
-      format: 'TaskMDA v4'
-    };
-    const writable = await fileHandle.createWritable();
-    await writable.write(JSON.stringify(data, null, 2));
-    await writable.close();
-  } catch(e) {
-    if (e.name === 'NotAllowedError' || e.name === 'SecurityError') {
-      showToast('⚠️ Permission fichier expirée — re-liez le fichier');
-      fileHandle = null;
-      updateFsaBtnState();
-      showRefileBannerIfNeeded();
-    }
-  }
-}
-
-function showRefileBannerIfNeeded() {
-  const banner = document.getElementById('refileBanner');
-  if (!banner) return;
-
-  const fname = localStorage.getItem('fsa_filename');
-  if (fsaSupported && fname && !fileHandle) {
-    // Update banner text with filename
-    banner.querySelector('p').textContent = `⚠️ Fichier "${fname}" déconnecté — Reliez-le pour continuer la sauvegarde auto`;
-    banner.classList.remove('hidden');
-  } else {
-    banner.classList.add('hidden');
-  }
-}
-
-function updateFsaBtnState() {
-  const btn = document.getElementById('fsaBtn');
-  const statusDiv = document.getElementById('fsaStatus');
-  const fileNameSpan = document.getElementById('fsaFileName');
-
-  if (!btn) return;
-
-  // Get button content elements
-  const icon = btn.querySelector('.material-symbols-outlined');
-  const text = btn.querySelector('span:last-child');
-
-  if (!fsaSupported) {
-    if (icon) icon.textContent = 'warning';
-    if (text) text.textContent = 'Non supporté (utilisez Chrome/Edge)';
-    btn.disabled = true;
-    btn.className = 'w-full px-4 py-3 bg-surface-container text-on-surface-variant rounded-xl font-semibold flex items-center justify-center gap-2 opacity-50 cursor-not-allowed';
-    if (statusDiv) statusDiv.classList.add('hidden');
-    return;
-  }
-
-  if (fileHandle) {
-    // Show status
-    if (statusDiv) statusDiv.classList.remove('hidden');
-    if (fileNameSpan) fileNameSpan.textContent = fileHandle.name;
-
-    // Update button to unlink
-    if (icon) icon.textContent = 'link_off';
-    if (text) text.textContent = `Délier ${fileHandle.name}`;
-    btn.onclick = unlinkFile;
-    btn.className = 'w-full px-4 py-3 bg-surface-container hover:bg-surface-container-high text-on-surface rounded-xl font-semibold flex items-center justify-center gap-2 transition-colors';
-  } else {
-    // Hide status
-    if (statusDiv) statusDiv.classList.add('hidden');
-
-    // Update button to link
-    if (icon) icon.textContent = 'folder_open';
-    if (text) text.textContent = 'Choisir un répertoire et lier le fichier JSON';
-    btn.onclick = linkFile;
-    btn.className = 'w-full px-4 py-3 bg-primary-gradient text-white rounded-xl font-semibold flex items-center justify-center gap-2';
-  }
-
-  // Also update header button
-  updateFsaHeaderBtn();
-}
-
-function updateFsaHeaderBtn() {
-  const headerBtn = document.getElementById('btnFsaHeader');
-  if (!headerBtn) return;
-
-  const icon = headerBtn.querySelector('.material-symbols-outlined');
-
-  if (!fsaSupported) {
-    if (icon) icon.textContent = 'warning';
-    headerBtn.title = 'File System Access non supporté';
-    headerBtn.className = 'w-10 h-10 flex items-center justify-center bg-surface-container text-on-surface-variant rounded-xl cursor-not-allowed';
-    headerBtn.disabled = true;
-  } else if (fileHandle) {
-    // Linked state - green/success appearance with filled icon
-    if (icon) {
-      icon.textContent = 'link';
-      icon.style.fontVariationSettings = "'FILL' 1"; // Filled version
-    }
-    headerBtn.title = `Fichier lié : ${fileHandle.name}`;
-    headerBtn.className = 'w-10 h-10 flex items-center justify-center bg-primary-fixed text-primary rounded-xl hover:bg-primary-fixed-dim transition-all';
-    headerBtn.disabled = false;
-  } else {
-    // Not linked - warning appearance
-    if (icon) {
-      icon.textContent = 'link_off';
-      icon.style.fontVariationSettings = "'FILL' 0"; // Outlined version
-    }
-    headerBtn.title = 'Aucun fichier lié - Cliquez pour lier';
-    headerBtn.className = 'w-10 h-10 flex items-center justify-center bg-tertiary-container text-on-tertiary-container rounded-xl hover:bg-tertiary-container/80 transition-all';
-    headerBtn.disabled = false;
-  }
-}
-
-function handleFsaHeaderClick() {
-  // Navigate to settings view
-  switchView('settings');
-
-  // Scroll to FSA section if needed
-  setTimeout(() => {
-    const fsaSection = document.getElementById('fsaBtn');
-    if (fsaSection) {
-      fsaSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-  }, 100);
-}
 
 // ════════════════════════════════════════════════════════════
 //  MODAL
