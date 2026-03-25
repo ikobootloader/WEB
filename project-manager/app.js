@@ -2530,8 +2530,8 @@ function buildCard(task, idx, isArchive) {
 
     <h4 class="${titleSize} font-bold text-on-surface ${taskViewMode === 4 ? 'mb-1 line-clamp-2' : 'mb-2'}">${escHtml(task.title)}</h4>
 
-    ${task.comment && taskViewMode <= 3 ? `
-      <p class="${commentTextSize} text-secondary-improved ${taskViewMode === 4 ? 'mb-1' : 'mb-4'} break-words leading-relaxed">${escHtml(truncatedComment)}</p>
+    ${task.comment && taskViewMode !== 3 && taskViewMode !== 4 ? `
+      <p class="${commentTextSize} text-secondary-improved mb-4 break-words leading-relaxed">${escHtml(truncatedComment)}</p>
     ` : ''}
 
     ${showFullMetadata && (createdDate || requestDate || updatedDate) ? `
