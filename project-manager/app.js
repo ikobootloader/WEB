@@ -48,7 +48,7 @@ TITRE
 - Date d'echeance : {{DEADLINE}}
 - Date de realisation : {{COMPLETION_DATE}}
 - Urgence : {{URGENCY}}
-{{TYPE}}{{ORDER}}========================================
+{{SUJET}}{{ORDER}}========================================
 
 Cordialement,
 TaskMDA - Gestion de taches`
@@ -68,7 +68,7 @@ TITRE
 - Date de demande : {{REQUEST_DATE}}
 - Date d'echeance : {{DEADLINE}}
 - Urgence : {{URGENCY}}
-{{TYPE}}{{ORDER}}========================================
+{{SUJET}}{{ORDER}}========================================
 
 Pourriez-vous nous apporter les informations suivantes :
 
@@ -962,7 +962,7 @@ TITRE
 - Date d'echeance : {{DEADLINE}}
 - Date de realisation : {{COMPLETION_DATE}}
 - Urgence : {{URGENCY}}
-{{TYPE}}{{ORDER}}========================================
+{{SUJET}}{{ORDER}}========================================
 
 Cordialement,
 TaskMDA - Gestion de taches`
@@ -982,7 +982,7 @@ TITRE
 - Date de demande : {{REQUEST_DATE}}
 - Date d'echeance : {{DEADLINE}}
 - Urgence : {{URGENCY}}
-{{TYPE}}{{ORDER}}========================================
+{{SUJET}}{{ORDER}}========================================
 
 Pourriez-vous nous apporter les informations suivantes :
 
@@ -1017,7 +1017,7 @@ TITRE
 - Date d'echeance : {{DEADLINE}}
 - Date de realisation : {{COMPLETION_DATE}}
 - Urgence : {{URGENCY}}
-{{TYPE}}{{ORDER}}========================================
+{{SUJET}}{{ORDER}}========================================
 
 Cordialement,
 TaskMDA - Gestion de taches`
@@ -1037,7 +1037,7 @@ TITRE
 - Date de demande : {{REQUEST_DATE}}
 - Date d'echeance : {{DEADLINE}}
 - Urgence : {{URGENCY}}
-{{TYPE}}{{ORDER}}========================================
+{{SUJET}}{{ORDER}}========================================
 
 Pourriez-vous nous apporter les informations suivantes :
 
@@ -3586,7 +3586,7 @@ TITRE
 - Date d'echeance : {{DEADLINE}}
 - Date de realisation : {{COMPLETION_DATE}}
 - Urgence : {{URGENCY}}
-{{TYPE}}{{ORDER}}========================================
+{{SUJET}}{{ORDER}}========================================
 
 Cordialement,
 TaskMDA - Gestion de taches`
@@ -3606,7 +3606,7 @@ TITRE
 - Date de demande : {{REQUEST_DATE}}
 - Date d'echeance : {{DEADLINE}}
 - Urgence : {{URGENCY}}
-{{TYPE}}{{ORDER}}========================================
+{{SUJET}}{{ORDER}}========================================
 
 Pourriez-vous nous apporter les informations suivantes :
 
@@ -3714,9 +3714,16 @@ function replaceTemplateVariables(template, task) {
   const statusLabels = { 'en-cours': 'En cours', 'en-attente': 'En attente', 'realise': 'Realisee' };
   text = text.replace(/\{\{STATUS\}\}/g, statusLabels[task.status] || task.status || 'Non specifie');
 
-  // Replace {{TYPE}} (with conditional display)
+  // Replace {{SUJET}} (with conditional display)
   if (task.type && task.type.trim()) {
-    text = text.replace(/\{\{TYPE\}\}/g, `- Type : ${task.type}\n`);
+    text = text.replace(/\{\{SUJET\}\}/g, `- Sujet : ${task.type}\n`);
+  } else {
+    text = text.replace(/\{\{SUJET\}\}/g, '');
+  }
+
+  // Legacy support for {{TYPE}}
+  if (task.type && task.type.trim()) {
+    text = text.replace(/\{\{TYPE\}\}/g, `- Sujet : ${task.type}\n`);
   } else {
     text = text.replace(/\{\{TYPE\}\}/g, '');
   }
