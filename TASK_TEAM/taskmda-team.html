@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="fr" class="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TaskMDA Team | Solo et Collaboratif</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            primary: "#002b6b",
+            "primary-container": "#1a428a",
+            secondary: "#ff8928",
+            surface: "#f9f9ff",
+            "surface-low": "#f2f3fc",
+            "surface-mid": "#ecedf6"
+          }
+        }
+      }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/idb@8.0.0/build/umd.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
+  <script>
+    window.uuidv4 = function() {
+      return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0;
+        const v = c === "x" ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    };
+  </script>
+  <link rel="stylesheet" href="taskmda-team.css">
+  <script src="taskmda-crypto.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-left flex items-center gap-3">
+      <button id="mobile-menu-btn" class="lg:hidden text-slate-600 hover:text-primary" aria-label="Ouvrir le menu">
+        <span class="material-symbols-outlined">menu</span>
+      </button>
+      <span class="material-symbols-outlined text-primary text-3xl">account_balance</span>
+      <div>
+        <div class="font-extrabold text-lg text-primary" style="font-family: Manrope, sans-serif;">TaskMDA Team</div>
+        <div class="text-xs text-slate-500">Espace collaboratif administration</div>
+      </div>
+    </div>
+    <div class="topbar-right flex items-center gap-4 flex-wrap">
+      <div class="search-wrap topbar-search">
+        <span class="material-symbols-outlined text-slate-400 text-base">search</span>
+        <input id="search-input" type="text" placeholder="Rechercher...">
+      </div>
+      <button id="btn-theme-toggle" class="theme-toggle-btn" aria-label="Activer le mode sombre" title="Activer le mode sombre">
+        <span id="theme-toggle-icon" class="material-symbols-outlined text-xl">dark_mode</span>
+      </button>
+      <div id="sync-status" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-100 text-red-700 text-sm font-semibold">
+        <span class="material-symbols-outlined text-base">cloud_off</span>
+        <span>Non connecté</span>
+      </div>
+      <button id="btn-link-folder" class="px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-semibold hover:bg-slate-50">
+        Lier un dossier
+      </button>
+      <button id="btn-unlink-folder" class="hidden px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-semibold hover:bg-slate-50">
+        Délier
+      </button>
+      <button id="btn-notifications" class="relative px-2 py-1 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50" aria-label="Notifications">
+        <span class="material-symbols-outlined text-xl">notifications</span>
+        <span id="notif-badge" class="hidden absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[10px] font-bold flex items-center justify-center">0</span>
+      </button>
+      <div id="user-info" class="hidden flex items-center gap-2">
+        <div id="user-avatar" class="w-9 h-9 rounded-full text-white text-sm font-bold grid place-items-center bg-primary"></div>
+        <div id="user-name" class="text-sm font-semibold text-slate-700"></div>
+        <button id="btn-edit-user-name" class="text-slate-400 hover:text-primary" title="Modifier le nom">
+          <span class="material-symbols-outlined text-sm">edit</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div id="notifications-panel" class="hidden fixed top-16 right-3 sm:right-6 z-50 w-[min(96vw,420px)] bg-white border border-slate-200 rounded-2xl shadow-2xl">
+    <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+      <h3 class="font-bold text-slate-800">Notifications</h3>
+      <div class="flex items-center gap-2">
+        <button id="btn-notif-mark-read" class="text-xs px-2 py-1 rounded-lg bg-slate-100 text-slate-700 font-semibold">Tout lire</button>
+        <button id="btn-notif-clear" class="text-xs px-2 py-1 rounded-lg bg-slate-100 text-slate-700 font-semibold">Vider</button>
+      </div>
+    </div>
+    <div id="notifications-list" class="max-h-[55vh] overflow-y-auto p-3 space-y-2">
+      <p class="text-sm text-slate-500 text-center py-6">Aucune notification</p>
+    </div>
+  </div>
+
+  <div id="setup-screen" class="hidden p-6">
+    <div class="panel setup-card">
+      <div class="flex flex-col md:flex-row gap-8">
+        <div class="md:w-1/2">
+          <h1 class="section-title text-3xl font-extrabold text-primary mb-3">Configurer TaskMDA Team</h1>
+          <p class="text-slate-600 mb-4">Version finale solo + collaboratif, sans serveur, avec chiffrement local et E2E.</p>
+          <ul class="space-y-3 text-sm">
+            <li class="bg-surface-low rounded-xl p-3"><strong>1.</strong> Ouvrir dans Chrome/Edge</li>
+            <li class="bg-surface-low rounded-xl p-3"><strong>2.</strong> Choisir un dossier partagé</li>
+            <li class="bg-surface-low rounded-xl p-3"><strong>3.</strong> Créer des projets privés ou partagés</li>
+          </ul>
+          <p id="setup-error" class="hidden mt-4 text-red-700 font-semibold"></p>
+            </div>
+          </div>
+        <div class="md:w-1/2 flex flex-col justify-center">
+          <button id="btn-select-folder" class="btn-primary py-4 px-5 text-white text-lg font-bold rounded-xl">
+            Sélectionner le dossier partagé
+          </button>
+          <button id="btn-continue-local" class="mt-3 py-3 px-5 rounded-xl border border-slate-300 text-slate-700 text-base font-semibold bg-white hover:bg-slate-50">
+            Continuer sans dossier partagé (mode solo)
+          </button>
+          <p class="text-xs text-slate-500 mt-3">
+            Compatibilité: Chrome/Edge modernes (File System Access API).
+          </p>
+            </div>
+          </div>
+          <div id="project-sequential-nav" class="project-sequential-nav hidden">
+            <button id="btn-project-prev" type="button" class="project-sequential-btn text-left">
+              <span class="material-symbols-outlined text-base">arrow_back</span>
+              <span id="project-prev-label" class="truncate">Projet précédent</span>
+            </button>
+            <button id="btn-project-next" type="button" class="project-sequential-btn text-right justify-end">
+              <span id="project-next-label" class="truncate">Projet suivant</span>
+              <span class="material-symbols-outlined text-base">arrow_forward</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <main id="main-content" class="hidden app-shell">
+    <aside id="sidebar" class="sidebar">
+      <nav class="space-y-1">
+        <a href="#" id="nav-dashboard" class="nav-link active"><span class="material-symbols-outlined">dashboard</span>Tableau de bord</a>
+        <a href="#" id="nav-projects" class="nav-link"><span class="material-symbols-outlined">folder_shared</span>Mes projets</a>
+        <a href="#" id="nav-tasks" class="nav-link"><span class="material-symbols-outlined">assignment</span>Tâches</a>
+        <a href="#" id="nav-calendar" class="nav-link"><span class="material-symbols-outlined">calendar_today</span>Calendrier</a>
+        <a href="#" id="nav-docs" class="nav-link"><span class="material-symbols-outlined">description</span>Documents</a>
+        <a href="#" id="nav-settings" class="nav-link"><span class="material-symbols-outlined">tune</span>Référentiels</a>
+      </nav>
+      <button id="sidebar-create-project" class="sidebar-cta">Nouveau Projet</button>
+      <button id="sidebar-link-folder" class="mt-2 w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-semibold hover:bg-slate-50">
+        Lier / changer dossier partagé
+      </button>
+      <div class="sidebar-footer">
+        <button id="sidebar-logout" class="sidebar-logout-btn">
+          <span class="material-symbols-outlined">logout</span>
+          <span>Déconnexion</span>
+        </button>
+      </div>
+    </aside>
+
+    <section class="content">
+      <div class="workspace max-w-7xl mx-auto">
+        <div id="dashboard-head" class="dashboard-head flex justify-between items-center mb-6">
+          <h2 id="dashboard-title" class="section-title text-3xl font-extrabold text-primary">Tableau de bord</h2>
+        </div>
+
+        <div class="dashboard-bento mb-6">
+          <div id="dashboard-stats" class="panel dashboard-glance p-5">
+            <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-4">En un coup d'oeil</p>
+            <div class="space-y-2">
+              <div class="dashboard-stat-row">
+                <div class="dashboard-stat-label">
+                  <span class="dashboard-stat-icon dashboard-stat-icon-projects material-symbols-outlined">folder_open</span>
+                  <span>Projets actifs</span>
+                </div>
+                <p id="stat-projects" class="text-xl font-extrabold text-primary">0</p>
+              </div>
+              <div class="dashboard-stat-row">
+                <div class="dashboard-stat-label">
+                  <span class="dashboard-stat-icon dashboard-stat-icon-tasks material-symbols-outlined">task_alt</span>
+                  <span>Taches en cours</span>
+                </div>
+                <p id="stat-tasks" class="text-xl font-extrabold text-primary">0</p>
+              </div>
+              <div class="dashboard-stat-row">
+                <div class="dashboard-stat-label">
+                  <span class="dashboard-stat-icon dashboard-stat-icon-messages material-symbols-outlined">mail</span>
+                  <span>Messages</span>
+                </div>
+                <p id="stat-messages" class="text-xl font-extrabold text-primary">0</p>
+              </div>
+              <div class="dashboard-stat-row">
+                <div class="dashboard-stat-label">
+                  <span class="dashboard-stat-icon dashboard-stat-icon-members material-symbols-outlined">group</span>
+                  <span>Membres</span>
+                </div>
+                <p id="stat-members" class="text-xl font-extrabold text-primary">1</p>
+              </div>
+            </div>
+          </div>
+
+        <div id="dashboard-quick-actions" class="panel dashboard-hero p-6">
+          <h3 class="section-title text-2xl font-extrabold mb-2 text-white">Démarrage rapide</h3>
+          <p class="text-blue-100 mb-6 max-w-xl">Créez un projet solo ou collaboratif chiffré E2E, puis pilotez via Liste/Kanban/Timeline/Documents/Discussion.</p>
+          <div class="flex flex-wrap gap-3">
+            <button id="btn-create-project" class="dashboard-hero-cta px-5 py-3 rounded-xl font-semibold">Créer un nouveau projet</button>
+          </div>
+        </div>
+        </div>
+
+        <div id="projects-list" class="mt-4 hidden">
+          <div class="flex items-center justify-between gap-3 mb-4">
+            <h3 class="section-title text-2xl font-extrabold">Mes projets</h3>
+            <div class="inline-flex items-center gap-1 rounded-xl bg-slate-100 p-1">
+              <button id="projects-view-grid" class="p-2 rounded-lg text-slate-600" title="Vue grille" aria-label="Vue grille">
+                <span class="material-symbols-outlined text-[20px]">grid_view</span>
+              </button>
+              <button id="projects-view-list" class="p-2 rounded-lg text-slate-600" title="Vue liste" aria-label="Vue liste">
+                <span class="material-symbols-outlined text-[20px]">view_list</span>
+              </button>
+            </div>
+          </div>
+          <div id="projects-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+          <div id="projects-pagination" class="mt-4 flex items-center justify-between gap-3 text-sm text-slate-600"></div>
+        </div>
+
+        <div id="global-hub" class="mt-4 hidden">
+          <div class="global-hub-head mb-3">
+            <h3 id="global-hub-title" class="section-title text-2xl font-extrabold mb-1">Vue transverse</h3>
+            <p id="global-hub-subtitle" class="text-sm text-slate-500">Tous projets confondus, y compris les éléments hors projet.</p>
+          </div>
+
+          <div id="global-tasks-section" class="panel p-6 hidden">
+            <div class="mb-3 flex items-center gap-2 text-xs overflow-x-auto">
+              <button id="global-tasks-view-cards" class="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 font-semibold whitespace-nowrap">Cartes</button>
+              <button id="global-tasks-view-list" class="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 font-semibold whitespace-nowrap">Liste</button>
+              <button id="global-tasks-view-kanban" class="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 font-semibold whitespace-nowrap">Kanban</button>
+              <button id="global-tasks-view-timeline" class="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 font-semibold whitespace-nowrap">Timeline</button>
+            </div>
+            <div class="mb-4 grid grid-cols-1 md:grid-cols-4 gap-2">
+              <input id="global-task-search" type="text" placeholder="Recherche tâches (titre, projet, thème)" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+              <select id="global-task-status" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                <option value="all">Tous statuts</option>
+                <option value="todo">À faire</option>
+                <option value="en-cours">En cours</option>
+                <option value="termine">Terminé</option>
+              </select>
+              <input id="global-task-theme" type="text" placeholder="Filtre thématique" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+              <button id="btn-global-add-task" class="btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold">Nouvelle tâche hors projet</button>
+            </div>
+            <div id="global-tasks-container" class="space-y-3"></div>
+            <div id="global-tasks-pagination" class="mt-4 flex items-center justify-between gap-3 text-sm text-slate-600"></div>
+          </div>
+
+          <div id="global-calendar-section" class="panel p-6 hidden">
+            <div class="mb-3 flex items-center gap-2 text-xs">
+              <button id="global-calendar-view-list" class="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 font-semibold">Vue liste</button>
+              <button id="global-calendar-view-grid" class="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 font-semibold">Vue calendrier</button>
+            </div>
+            <div class="mb-4 grid grid-cols-1 md:grid-cols-3 gap-2">
+              <input id="global-calendar-search" type="text" placeholder="Recherche par thématique/sujet/projet" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+              <select id="global-calendar-month" class="px-3 py-2 border border-slate-300 rounded-lg text-sm"></select>
+              <button id="global-calendar-reset" class="px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold">Réinitialiser</button>
+            </div>
+            <div id="global-calendar-item-form" class="mb-4 grid grid-cols-1 md:grid-cols-5 gap-2">
+              <input id="global-calendar-item-title" type="text" placeholder="Sujet hors projet" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+              <input id="global-calendar-item-date" type="date" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+              <input id="global-calendar-item-theme" type="text" placeholder="Thématique" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+              <select id="global-calendar-item-mode" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                <option value="private">Solo</option>
+                <option value="shared">Collaboratif</option>
+              </select>
+              <input id="global-calendar-item-notes" type="text" placeholder="Description courte" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+              <button id="btn-global-calendar-add" class="btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold md:col-span-5">Ajouter info hors projet</button>
+            </div>
+            <div id="global-calendar-list-wrap">
+              <div id="global-calendar-container" class="space-y-3"></div>
+            </div>
+            <div id="global-calendar-grid-wrap" class="hidden">
+              <div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <div id="global-calendar-grid" class="grid grid-cols-7 gap-1 text-xs"></div>
+              </div>
+              <div id="global-calendar-day-details" class="mt-3 space-y-2"></div>
+            </div>
+          </div>
+
+            <div id="global-docs-section" class="panel p-6 hidden">
+              <div class="mb-4 grid grid-cols-1 md:grid-cols-5 gap-2">
+                <input id="global-doc-search" type="text" placeholder="Recherche document/projet/thématique" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                <input id="global-doc-theme" type="text" placeholder="Thématique (hors projet)" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                <select id="global-doc-mode" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  <option value="private">Solo</option>
+                  <option value="shared">Collaboratif</option>
+                </select>
+                <input id="global-doc-files" type="file" multiple class="px-3 py-2 border border-slate-300 rounded-lg bg-slate-50 text-sm">
+                <button id="btn-global-doc-add" class="btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold">Ajouter doc hors projet</button>
+                <button id="global-doc-reset" class="px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold">Réinitialiser</button>
+            </div>
+            <div id="global-docs-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+          </div>
+
+          <div id="global-settings-section" class="panel p-6 hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <h4 class="font-bold text-slate-800 mb-3">Thématiques globales</h4>
+                <div class="flex gap-2 mb-3">
+                  <input id="global-theme-name-input" type="text" placeholder="Ex: Juridique" class="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  <button id="btn-global-theme-add" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Ajouter</button>
+                </div>
+                <div id="global-themes-admin-list" class="space-y-2"></div>
+              </div>
+              <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <h4 class="font-bold text-slate-800 mb-3">Groupes globaux</h4>
+                <div class="grid grid-cols-1 gap-2 mb-3">
+                  <input id="global-group-name-input" type="text" placeholder="Nom du groupe" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  <input id="global-group-description-input" type="text" placeholder="Description (optionnelle)" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  <select id="global-group-members-input" multiple class="px-3 py-2 border border-slate-300 rounded-lg text-sm min-h-[96px]"></select>
+                  <button id="btn-global-group-add" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Ajouter</button>
+                </div>
+                <div id="global-groups-admin-list" class="space-y-2"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="project-detail" class="mt-4 hidden">
+          <button id="btn-back-to-dashboard" class="mb-4 text-primary flex items-center gap-2 back-dashboard-link">
+            <span class="material-symbols-outlined">arrow_back</span>
+            <span class="back-dashboard-link-text">Retour au tableau de bord</span>
+          </button>
+
+          <div id="project-overview-panel" class="panel p-6 mb-5">
+            <div class="flex items-start justify-between gap-3">
+              <h2 id="project-title" class="section-title text-3xl font-extrabold mb-2"></h2>
+              <div class="flex items-center gap-2">
+                <button id="btn-edit-project" class="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold">Modifier</button>
+                <button id="btn-delete-project" class="px-3 py-1.5 rounded-lg border border-red-200 text-red-700 text-sm font-semibold">Supprimer</button>
+              </div>
+            </div>
+            <p id="project-description-display" class="text-slate-600 mb-4"></p>
+            <div class="flex items-center gap-4 text-sm text-slate-500">
+              <span class="flex items-center gap-1"><span class="material-symbols-outlined text-base">calendar_today</span><span id="project-date"></span></span>
+              <span class="flex items-center gap-1"><span class="material-symbols-outlined text-base">group</span><span id="project-members-count">0 membres</span></span>
+            </div>
+            <div id="project-kpis" class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-2">
+              <div class="rounded-xl bg-slate-50 px-3 py-2">
+                <p class="text-[11px] font-semibold text-slate-500 uppercase">Tâches</p>
+                <p id="project-kpi-tasks" class="text-lg font-extrabold text-primary">0</p>
+              </div>
+              <div class="rounded-xl bg-slate-50 px-3 py-2">
+                <p class="text-[11px] font-semibold text-slate-500 uppercase">Terminées</p>
+                <p id="project-kpi-done" class="text-lg font-extrabold text-emerald-700">0</p>
+              </div>
+              <div class="rounded-xl bg-slate-50 px-3 py-2">
+                <p class="text-[11px] font-semibold text-slate-500 uppercase">Messages</p>
+                <p id="project-kpi-messages" class="text-lg font-extrabold text-primary">0</p>
+              </div>
+            </div>
+            <div class="mt-4 flex flex-wrap gap-2">
+              <button id="btn-email-project-status" class="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold">Email statut projet</button>
+              <button id="btn-email-project-complete" class="px-3 py-1.5 rounded-lg border border-emerald-200 text-emerald-700 text-sm font-semibold">Email projet achevé</button>
+            </div>
+            <div class="project-detail-mode-tabs mt-5">
+              <button id="project-mode-work" class="project-mode-tab view-tab-active">Travail</button>
+              <button id="project-mode-settings" class="project-mode-tab">Paramètres du projet</button>
+            </div>
+            <div id="project-settings-panel" class="hidden">
+            <div class="mt-5 border-t border-slate-100 pt-4 project-collab-block">
+              <div class="flex items-center justify-between gap-3 mb-3">
+                <h3 class="font-bold text-slate-800">Membres du projet</h3>
+                <span class="text-xs text-slate-500">Collaboration</span>
+              </div>
+              <div id="project-members-list" class="space-y-2 mb-4"></div>
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+                <input id="member-name-input" type="text" list="member-name-options" placeholder="Nom du membre" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                <datalist id="member-name-options"></datalist>
+                <select id="member-role-input" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  <option value="member">Membre</option>
+                  <option value="manager">Manager</option>
+                  <option value="owner">Owner</option>
+                </select>
+                <button id="btn-add-member" class="btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold">Ajouter membre</button>
+              </div>
+              <div class="mt-4 rounded-xl border border-slate-200 bg-white p-3">
+                <div class="flex items-center justify-between gap-2 mb-2">
+                  <h4 class="font-bold text-slate-800">Groupes utilisateurs</h4>
+                  <span class="text-[11px] text-slate-500">Distincts des groupes thématiques</span>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-2 mb-3">
+                  <input id="user-group-name-input" type="text" placeholder="Nom du groupe utilisateurs" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  <select id="user-group-members-input" multiple class="px-3 py-2 border border-slate-300 rounded-lg text-sm min-h-[96px] lg:col-span-2"></select>
+                </div>
+                <div class="flex flex-wrap gap-2 mb-3">
+                  <button id="btn-create-user-group" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Créer groupe utilisateurs</button>
+                  <button id="btn-update-user-group" class="px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold">Mettre à jour sélection</button>
+                </div>
+                <div id="project-user-groups-list" class="space-y-2"></div>
+              </div>
+            </div>
+            <div class="mt-5 border-t border-slate-100 pt-4 project-admin-block">
+              <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <h4 class="font-bold text-slate-800 mb-3">Invitations (utilisateurs/agents)</h4>
+                  <div class="grid grid-cols-1 gap-2 mb-3">
+                    <input id="invite-name-input" type="text" placeholder="Nom invité" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    <input id="invite-email-input" type="email" placeholder="Email professionnel" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <select id="invite-type-input" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                        <option value="user">Utilisateur</option>
+                        <option value="agent">Agent</option>
+                      </select>
+                      <select id="invite-role-input" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                        <option value="member">Membre</option>
+                        <option value="manager">Manager</option>
+                        <option value="owner">Owner</option>
+                      </select>
+                      <button id="btn-send-invite" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Inviter</button>
+                    </div>
+                  </div>
+                  <div id="project-invites-list" class="space-y-2"></div>
+                </div>
+                <div class="space-y-4">
+                  <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <h4 class="font-bold text-slate-800 mb-3">Groupes sur-mesure</h4>
+                    <div class="grid grid-cols-1 gap-2 mb-3">
+                      <input id="group-name-input" type="text" placeholder="Nom du groupe" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                      <input id="group-description-input" type="text" placeholder="Description courte" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                      <button id="btn-create-group" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Créer groupe</button>
+                    </div>
+                    <div id="project-groups-list" class="space-y-2"></div>
+                  </div>
+                  <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <h4 class="font-bold text-slate-800 mb-3">Sujets / Thématiques</h4>
+                    <div class="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 mb-3">
+                      <input id="theme-name-input" type="text" placeholder="Ex: Juridique, RH, Budget" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                      <button id="btn-add-theme" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Ajouter</button>
+                    </div>
+                    <div id="project-themes-list" class="flex flex-wrap gap-2"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="mt-5 border-t border-slate-100 pt-4">
+              <div class="rounded-xl border border-slate-200 bg-white p-4">
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                  <h3 class="font-bold text-slate-800">Matrice des permissions</h3>
+                  <div id="project-permission-role-badge" class="text-xs font-semibold px-2 py-1 rounded-full bg-slate-100 text-slate-700">Role: -</div>
+                </div>
+                <p class="text-xs text-slate-500 mb-3">Audit rapide des droits par action: owner, manager, member.</p>
+                <div id="project-permission-summary" class="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3"></div>
+                <button id="btn-toggle-permissions-details" class="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold mb-3">Voir le détail des droits</button>
+                <div id="project-permissions-details" class="hidden overflow-x-auto">
+                  <table class="min-w-full text-sm">
+                    <thead>
+                      <tr class="text-left text-slate-500 border-b border-slate-200">
+                        <th class="py-2 pr-3 font-semibold">Action</th>
+                        <th class="py-2 px-2 font-semibold">Owner</th>
+                        <th class="py-2 px-2 font-semibold">Manager</th>
+                        <th class="py-2 px-2 font-semibold">Member</th>
+                      </tr>
+                    </thead>
+                    <tbody id="project-permissions-matrix"></tbody>
+                  </table>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-3">Note: certaines actions manager sont limitees aux membres (pas d'escalade owner/manager).</p>
+              </div>
+            </div>
+            </div>
+          </div>
+
+          <div id="project-work-panel" class="panel p-6 mb-6">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+              <div class="flex items-center gap-2 overflow-x-auto" role="tablist" aria-label="Vues du projet">
+                <button id="view-list" role="tab" aria-controls="task-list-section" aria-selected="false" class="px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Liste</button>
+                <button id="view-kanban" role="tab" aria-controls="kanban-section" aria-selected="false" class="px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Kanban</button>
+                <button id="view-timeline" role="tab" aria-controls="timeline-section" aria-selected="false" class="px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Timeline</button>
+                <button id="view-docs" role="tab" aria-controls="documents-section" aria-selected="false" class="px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Documents</button>
+                <button id="view-chat" role="tab" aria-controls="discussion-section" aria-selected="false" class="px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Discussion</button>
+                <button id="view-activity" role="tab" aria-controls="activity-section" aria-selected="false" class="px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Activité</button>
+              </div>
+              <button id="btn-add-task" class="btn-primary px-4 py-2 text-white font-semibold rounded-lg transition-all flex items-center justify-center gap-2">
+                <span class="material-symbols-outlined">add</span>
+                <span>Nouvelle tâche</span>
+              </button>
+            </div>
+
+            <div id="task-list-section">
+              <div id="tasks-container" class="space-y-4"><p class="text-slate-500 text-center py-8">Aucune tâche pour le moment</p></div>
+              <div id="tasks-pagination" class="mt-4 flex items-center justify-between gap-3 text-sm text-slate-600"></div>
+              <div id="archived-tasks-section" class="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div class="flex items-center justify-between gap-3 mb-3">
+                  <h4 class="font-bold text-slate-800">Archives <span id="archived-tasks-count" class="text-slate-500">(0)</span></h4>
+                  <button id="btn-toggle-archived-tasks" class="px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-700 text-xs font-semibold">Afficher</button>
+                </div>
+                <div id="archived-tasks-container" class="hidden space-y-2">
+                  <p class="text-sm text-slate-500">Aucune tâche archivée.</p>
+                </div>
+              </div>
+            </div>
+            <div id="kanban-section" class="hidden"><div id="kanban-board" class="grid grid-cols-1 lg:grid-cols-3 gap-4"></div></div>
+            <div id="timeline-section" class="hidden">
+              <div class="mb-3 flex flex-wrap items-center gap-2 text-xs">
+                <button id="timeline-filter-all" class="px-2 py-1 rounded bg-slate-100 font-semibold">Toutes</button>
+                <button id="timeline-filter-milestone" class="px-2 py-1 rounded bg-slate-100 font-semibold">Jalons</button>
+                <button id="timeline-filter-urgent" class="px-2 py-1 rounded bg-slate-100 font-semibold">Urgentes</button>
+                <button id="timeline-filter-overdue" class="px-2 py-1 rounded bg-slate-100 font-semibold">En retard</button>
+              </div>
+              <div class="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <div class="flex items-center justify-between gap-3 mb-3">
+                  <div class="flex items-center gap-2">
+                    <button id="calendar-prev-month" class="px-2 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-semibold">◀</button>
+                    <button id="calendar-next-month" class="px-2 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-semibold">▶</button>
+                    <button id="calendar-today" class="px-3 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-semibold">Aujourd'hui</button>
+                  </div>
+                  <p id="calendar-month-label" class="text-sm font-bold text-slate-800"></p>
+                </div>
+                <div id="calendar-grid" class="grid grid-cols-7 gap-1 text-xs"></div>
+              </div>
+              <div id="calendar-day-agenda" class="mb-4"></div>
+              <div id="timeline-container" class="space-y-3"></div>
+            </div>
+            <div id="documents-section" class="hidden">
+              <div class="mb-4 grid grid-cols-1 md:grid-cols-4 gap-2">
+                <input id="docs-search-input" type="text" placeholder="Rechercher un document" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                <select id="docs-type-filter" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  <option value="all">Tous les types</option>
+                  <option value="image">Images</option>
+                  <option value="pdf">PDF</option>
+                  <option value="office">Office</option>
+                  <option value="other">Autres</option>
+                </select>
+                <select id="docs-sort" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  <option value="recent">Plus récents</option>
+                  <option value="oldest">Plus anciens</option>
+                  <option value="name">Nom A-Z</option>
+                  <option value="size-desc">Taille décroissante</option>
+                  <option value="size-asc">Taille croissante</option>
+                </select>
+                <button id="docs-filter-reset" class="px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold">Réinitialiser</button>
+              </div>
+              <div id="documents-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+            </div>
+
+            <div id="discussion-section" class="hidden">
+              <h3 class="section-title text-2xl font-extrabold mb-6">Messagerie</h3>
+              <div class="mb-4 grid grid-cols-1 md:grid-cols-3 gap-2">
+                <input id="chat-search-input" type="text" placeholder="Rechercher dans les messages" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                <label class="inline-flex items-center gap-2 px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
+                  <input id="chat-filter-mine" type="checkbox">
+                  <span>Mes messages uniquement</span>
+                </label>
+                <button id="chat-filter-reset" class="px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold">Réinitialiser</button>
+              </div>
+              <div id="messages-container" class="space-y-4 mb-6 max-h-96 overflow-y-auto"><p class="text-slate-500 text-center py-8">Aucun message</p></div>
+              <div class="space-y-3">
+                <div class="flex items-center justify-between gap-3">
+                  <p class="text-xs text-slate-500">Markdown supporté. Envoi rapide: Ctrl+Entrée</p>
+                  <div class="flex items-center gap-2">
+                    <button id="btn-toggle-emoji-picker" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700">Émojis</button>
+                    <button id="btn-toggle-message-preview" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700">Aperçu</button>
+                  </div>
+                </div>
+                <textarea id="message-input" rows="3" placeholder="Votre message..."
+                  class="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"></textarea>
+                <div id="emoji-picker-panel" class="hidden emoji-picker-panel" aria-label="Sélecteur d'émojis"></div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <input id="message-files" type="file" multiple class="w-full px-3 py-2 border border-slate-300 rounded-lg bg-slate-50 text-sm">
+                  <div id="message-files-list" class="text-xs text-slate-500 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">Aucun fichier sélectionné</div>
+                </div>
+              <div id="message-preview" class="hidden markdown-content p-4 rounded-lg bg-slate-50 border border-slate-200 text-sm"></div>
+                <div class="flex justify-end">
+                  <button id="btn-send-message" class="btn-primary px-6 py-3 text-white font-semibold rounded-lg flex items-center gap-2">
+                    <span class="material-symbols-outlined">send</span><span>Envoyer</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div id="activity-section" class="hidden">
+              <h3 class="section-title text-2xl font-extrabold mb-4">Journal d'activité</h3>
+              <div class="mb-4 grid grid-cols-1 md:grid-cols-4 gap-2">
+                <select id="activity-filter-type" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  <option value="all">Tous les types</option>
+                  <option value="CREATE_TASK">Création tâche</option>
+                  <option value="UPDATE_TASK">Modification tâche</option>
+                  <option value="DELETE_TASK">Suppression tâche</option>
+                  <option value="SEND_MESSAGE">Nouveau message</option>
+                  <option value="UPDATE_MESSAGE">Message modifié</option>
+                  <option value="DELETE_MESSAGE">Message supprimé</option>
+                  <option value="CREATE_PROJECT">Création projet</option>
+                  <option value="UPDATE_PROJECT">Modification projet</option>
+                  <option value="DELETE_PROJECT">Suppression projet</option>
+                  <option value="ADD_MEMBER">Ajout membre</option>
+                  <option value="REMOVE_MEMBER">Retrait membre</option>
+                  <option value="CREATE_INVITE">Invitation créée</option>
+                  <option value="UPDATE_INVITE">Mise à jour invitation</option>
+                  <option value="CREATE_USER_GROUP">Création groupe utilisateurs</option>
+                  <option value="UPDATE_USER_GROUP">Mise à jour groupe utilisateurs</option>
+                  <option value="DELETE_USER_GROUP">Suppression groupe utilisateurs</option>
+                  <option value="CREATE_GROUP">Création groupe</option>
+                  <option value="DELETE_GROUP">Suppression groupe</option>
+                  <option value="ADD_THEME">Ajout thématique</option>
+                  <option value="REMOVE_THEME">Retrait thématique</option>
+                </select>
+                <input id="activity-filter-author" type="text" placeholder="Filtrer par auteur" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                <select id="activity-filter-period" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  <option value="all">Toute période</option>
+                  <option value="24h">Dernières 24h</option>
+                  <option value="7d">Derniers 7 jours</option>
+                  <option value="30d">Derniers 30 jours</option>
+                </select>
+                <button id="activity-filter-reset" class="px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold">Réinitialiser</button>
+              </div>
+              <div id="activity-container" class="space-y-3"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="modal-new-project" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl p-8 max-w-md w-full mx-auto my-2 sm:my-4 max-h-[92vh] overflow-y-auto overscroll-contain">
+      <h3 class="section-title text-2xl font-extrabold mb-6">Nouveau projet</h3>
+      <div class="space-y-4">
+        <div><label class="block text-sm font-semibold mb-2">Nom du projet *</label><input id="project-name" type="text" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"></div>
+        <div><label class="block text-sm font-semibold mb-2">Description</label><textarea id="project-description-input" rows="3" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"></textarea></div>
+        <div><label class="block text-sm font-semibold mb-2">Statut</label><select id="project-status" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"><option value="en-cours">En cours</option><option value="planifie">Planifié</option><option value="urgent">Urgent</option><option value="termine">Terminé</option></select></div>
+        <div>
+          <label class="block text-sm font-semibold mb-2">Groupes globaux à associer</label>
+          <select id="project-group-presets" multiple class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary min-h-[96px]"></select>
+          <p class="text-[11px] text-slate-500 mt-1">Optionnel. Ces groupes seront ajoutés au projet dès sa création.</p>
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-2">Type de projet</label>
+          <label class="flex items-center gap-2 p-3 rounded-lg border border-slate-300"><input type="radio" name="sharing-mode" value="private" checked> <span>Privé (solo)</span></label>
+          <label class="flex items-center gap-2 p-3 rounded-lg border border-slate-300 mt-2"><input type="radio" name="sharing-mode" value="shared"> <span>Partagé (collaboratif E2E)</span></label>
+        </div>
+        <div id="passphrase-section" class="hidden"><label class="block text-sm font-semibold mb-2">Passphrase (optionnel)</label><input id="project-passphrase" type="text" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"></div>
+      </div>
+      <div class="flex gap-4 mt-6">
+        <button id="btn-cancel-project" class="flex-1 px-4 py-3 border border-slate-300 rounded-lg font-semibold">Annuler</button>
+        <button id="btn-save-project" class="flex-1 btn-primary px-4 py-3 text-white font-semibold rounded-lg">Créer</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-new-task" class="task-modal hidden fixed inset-0 bg-black/50 flex items-start md:items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
+    <div class="task-modal-panel bg-white rounded-2xl p-8 max-w-md w-full mx-auto my-2 sm:my-4 md:my-0 max-h-[92vh] overflow-y-auto overscroll-contain">
+      <h3 class="section-title text-2xl font-extrabold mb-6">Nouvelle tâche</h3>
+      <div class="space-y-4">
+        <div><label class="block text-sm font-semibold mb-2">Titre</label><input id="task-title" type="text" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"></div>
+        <div>
+          <label class="block text-sm font-semibold mb-2">Assigné à (membres du projet)</label>
+          <select id="task-assignee" multiple class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary min-h-[92px]"></select>
+          <label class="block text-sm font-semibold mt-3 mb-2">Assignation manuelle (hors membres)</label>
+          <textarea id="task-assignee-manual" rows="2" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Une ligne par nom, ou noms séparés par des virgules"></textarea>
+        </div>
+        <div><label class="block text-sm font-semibold mb-2">Description</label><textarea id="task-description" rows="3" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"></textarea></div>
+        <div><label class="block text-sm font-semibold mb-2">Date de demande</label><input id="task-request-date" type="date" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"></div>
+        <div><label class="block text-sm font-semibold mb-2">Échéance</label><input id="task-due-date" type="date" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"></div>
+        <div><label class="block text-sm font-semibold mb-2">Statut</label><select id="task-status" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"><option value="todo">À faire</option><option value="en-cours">En cours</option><option value="termine">Terminé</option></select></div>
+        <div><label class="block text-sm font-semibold mb-2">Urgence</label><select id="task-urgency" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"><option value="low">Basse</option><option value="medium">Moyenne</option><option value="high">Haute</option></select></div>
+        <div id="task-project-metadata-wrap">
+          <label class="block text-sm font-semibold mb-2">Thématique</label>
+          <input id="task-theme" type="text" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Sujet principal de la tâche">
+          <label class="block text-sm font-semibold mt-3 mb-2">Groupe</label>
+          <select id="task-group" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+            <option value="">Aucun groupe</option>
+          </select>
+        </div>
+        <div id="task-standalone-mode-wrap" class="hidden">
+          <label class="block text-sm font-semibold mb-2">Mode hors projet</label>
+          <select id="task-standalone-mode" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+            <option value="private">Solo</option>
+            <option value="shared">Collaboratif</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-2">Sous-tâches (une ligne = une sous-tâche)</label>
+          <textarea id="task-subtasks" rows="3" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Ex: Rédiger note&#10;Valider avec service juridique"></textarea>
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-2">Pièces jointes</label>
+          <input id="task-files" type="file" multiple class="w-full px-3 py-2 border border-slate-300 rounded-lg bg-slate-50">
+          <label class="mt-2 inline-flex items-center gap-2 text-sm text-slate-700"><input id="task-share-docs" type="checkbox" checked> <span>Partager dans l'espace documentaire</span></label>
+        </div>
+      </div>
+      <div class="flex gap-4 mt-6">
+        <button id="btn-cancel-task" class="flex-1 px-4 py-3 border border-slate-300 rounded-lg font-semibold">Annuler</button>
+        <button id="btn-save-task" class="flex-1 btn-primary px-4 py-3 text-white font-semibold rounded-lg">Créer</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-doc-preview" class="hidden fixed inset-0 bg-black/60 z-50 p-3 sm:p-6 overflow-y-auto">
+    <div class="max-w-5xl mx-auto bg-white rounded-2xl p-4 sm:p-6">
+      <div class="flex items-center justify-between mb-3">
+        <h3 id="doc-preview-title" class="section-title text-xl font-extrabold">Aperçu document</h3>
+        <button id="btn-close-doc-preview" class="px-3 py-1 rounded-lg border border-slate-300 text-sm font-semibold">Fermer</button>
+      </div>
+      <div id="doc-preview-content" class="min-h-[320px] bg-slate-50 border border-slate-200 rounded-xl p-3"></div>
+    </div>
+  </div>
+
+  <div id="mobile-overlay" class="hidden fixed inset-0 bg-black/40 z-40"></div>
+
+  <div id="modal-edit-user-name" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl p-8 max-w-md w-full mx-auto my-2 sm:my-4 max-h-[92vh] overflow-y-auto overscroll-contain">
+      <h3 class="section-title text-2xl font-extrabold mb-4">Profil & sauvegarde</h3>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-semibold mb-2">Nom affiché</label>
+          <input id="edit-user-name-input" type="text" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-2">Photo de profil (optionnel)</label>
+          <div class="flex items-center gap-3">
+            <input id="profile-photo-input" type="file" accept="image/*" class="w-full px-3 py-2 border border-slate-300 rounded-lg bg-slate-50 text-sm">
+            <button id="btn-remove-profile-photo" class="px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold">Retirer</button>
+          </div>
+          <p class="text-[11px] text-slate-500 mt-1">PNG/JPG, max 2 Mo.</p>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <p class="text-sm font-semibold text-slate-700 mb-2">Sauvegarde / restauration</p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <button id="btn-export-user-json" class="px-3 py-2 rounded-lg bg-white border border-slate-300 text-slate-700 text-sm font-semibold">Exporter JSON</button>
+            <button id="btn-import-user-json" class="px-3 py-2 rounded-lg bg-white border border-slate-300 text-slate-700 text-sm font-semibold">Importer JSON</button>
+            <button id="btn-export-excel" class="sm:col-span-2 px-3 py-2 rounded-lg bg-white border border-slate-300 text-slate-700 text-sm font-semibold">Exporter projets+tâches (Excel CSV)</button>
+          </div>
+          <input id="import-user-json-input" type="file" accept="application/json" class="hidden">
+        </div>
+      </div>
+      <div class="flex gap-4 mt-6">
+        <button id="btn-cancel-user-name" class="flex-1 px-4 py-3 border border-slate-300 rounded-lg font-semibold">Annuler</button>
+        <button id="btn-save-user-name" class="flex-1 btn-primary px-4 py-3 text-white font-semibold rounded-lg">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-edit-project" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl p-8 max-w-md w-full mx-auto my-2 sm:my-4 max-h-[92vh] overflow-y-auto overscroll-contain">
+      <h3 class="section-title text-2xl font-extrabold mb-6">Modifier le projet</h3>
+      <div class="space-y-4">
+        <div><label class="block text-sm font-semibold mb-2">Nom du projet *</label><input id="edit-project-name" type="text" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"></div>
+        <div><label class="block text-sm font-semibold mb-2">Description</label><textarea id="edit-project-description" rows="3" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"></textarea></div>
+        <div><label class="block text-sm font-semibold mb-2">Statut</label><select id="edit-project-status" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"><option value="en-cours">En cours</option><option value="planifie">Planifié</option><option value="urgent">Urgent</option><option value="termine">Terminé</option></select></div>
+        <div>
+          <label class="block text-sm font-semibold mb-2">Associer des groupes globaux</label>
+          <select id="edit-project-group-presets" multiple class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary min-h-[96px]"></select>
+          <p class="text-[11px] text-slate-500 mt-1">Les groupes sélectionnés seront ajoutés au projet (sans supprimer les groupes existants).</p>
+        </div>
+      </div>
+      <div class="flex gap-4 mt-6">
+        <button id="btn-cancel-edit-project" class="flex-1 px-4 py-3 border border-slate-300 rounded-lg font-semibold">Annuler</button>
+        <button id="btn-save-edit-project" class="flex-1 btn-primary px-4 py-3 text-white font-semibold rounded-lg">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="lockScreen" class="hidden fixed inset-0 bg-gradient-to-br from-primary to-primary-container flex items-center justify-center z-[100]" data-mode="unlock">
+    <div class="bg-white rounded-3xl shadow-2xl p-12 max-w-md w-full mx-4">
+      <div class="text-center mb-8">
+        <span class="material-symbols-outlined text-8xl text-primary mb-4 inline-block">lock</span>
+        <h2 id="lockTitle" class="text-3xl font-bold text-gray-900 mb-2" style="font-family: Manrope, sans-serif;">Déverrouiller</h2>
+        <p id="lockSub" class="text-gray-600">Entrez votre mot de passe pour déchiffrer vos données localement.</p>
+      </div>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-semibold mb-2 text-gray-700">Mot de passe</label>
+          <div class="relative">
+            <input id="lockPassword" type="password" class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-primary transition-colors">
+            <button id="toggleLockPassword" type="button" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-primary"><span class="material-symbols-outlined">visibility</span></button>
+          </div>
+        </div>
+        <div id="lockConfirmWrap" class="hidden"><label class="block text-sm font-semibold mb-2 text-gray-700">Confirmer</label><input id="lockConfirm" type="password" class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-primary transition-colors"></div>
+        <p id="lockError" class="text-red-600 text-sm font-semibold hidden"></p>
+        <button id="lockBtn" class="btn-primary w-full py-4 text-white font-bold rounded-lg transition-all flex items-center justify-center gap-3"><span class="material-symbols-outlined">lock_open</span><span>Déverrouiller</span></button>
+      </div>
+    </div>
+  </div>
+
+  <div id="loading" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50"><div class="spinner"></div></div>
+  <div id="toast" class="hidden fixed bottom-6 right-6 bg-primary text-white px-6 py-4 rounded-lg shadow-xl z-50"></div>
+
+  <script src="taskmda-ui.js?v=20260325-02"></script>
+  <script src="taskmda-theme.js?v=20260325-02"></script>
+  <script src="taskmda-notifications.js?v=20260325-02"></script>
+  <script src="taskmda-tasks.js?v=20260325-02"></script>
+  <script src="taskmda-team.js?v=20260325-02"></script>
+</body>
+</html>
