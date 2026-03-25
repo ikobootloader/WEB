@@ -516,6 +516,41 @@ function renderDashboard() {
       container.appendChild(buildCard(task, tasks.indexOf(task), false));
     });
   }
+
+  // Check if backup reminder should be shown
+  checkBackupReminder();
+}
+
+async function checkBackupReminder() {
+  const banner = document.getElementById('backupReminderBanner');
+  if (!banner) return;
+
+  const lastDismissed = await idbGet('backupReminderDismissed');
+
+  if (lastDismissed) {
+    const dismissedDate = new Date(lastDismissed);
+    const now = new Date();
+    const daysSinceDismissed = Math.floor((now - dismissedDate) / (1000 * 60 * 60 * 24));
+
+    // Show again after 7 days
+    if (daysSinceDismissed < 7) {
+      banner.style.display = 'none';
+    } else {
+      banner.style.display = 'flex';
+    }
+  } else {
+    // First time - show the banner
+    banner.style.display = 'flex';
+  }
+}
+
+async function dismissBackupReminder() {
+  const banner = document.getElementById('backupReminderBanner');
+  if (banner) {
+    banner.style.display = 'none';
+    // Save dismissal date
+    await idbSet('backupReminderDismissed', new Date().toISOString());
+  }
 }
 
 function initFilterButtons() {

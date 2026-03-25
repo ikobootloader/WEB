@@ -233,6 +233,22 @@
         </div>
       </div>
 
+      <!-- Backup Reminder Banner -->
+      <div id="backupReminderBanner" class="bg-primary-fixed border-l-4 border-primary rounded-xl p-4 mb-6 flex items-start gap-3">
+        <span class="material-symbols-outlined text-primary text-2xl flex-shrink-0">cloud_upload</span>
+        <div class="flex-1">
+          <h4 class="font-bold text-on-primary-fixed mb-1">💾 Sauvegardez régulièrement vos données</h4>
+          <p class="text-sm text-on-primary-fixed-variant mb-3">Vos données sont stockées localement dans IndexedDB avec chiffrement AES-256-GCM. Bien que persistantes, elles peuvent être supprimées si vous effacez les "Cookies et données de site" dans votre navigateur.</p>
+          <button onclick="document.getElementById('navImportExport').click()" class="px-4 py-2 bg-primary text-on-primary rounded-lg text-sm font-semibold hover:bg-primary-container transition-colors flex items-center gap-2">
+            <span class="material-symbols-outlined text-base">download</span>
+            Exporter maintenant
+          </button>
+        </div>
+        <button onclick="dismissBackupReminder()" class="text-on-primary-fixed-variant hover:text-on-primary-fixed transition-colors flex-shrink-0" title="Masquer pendant 7 jours">
+          <span class="material-symbols-outlined text-xl">close</span>
+        </button>
+      </div>
+
       <!-- Tasks Section -->
       <div class="space-y-4 mb-8">
         <div class="flex items-center justify-between mb-4">
@@ -506,6 +522,34 @@
       <div class="mb-6">
         <h2 class="text-2xl md:text-3xl font-extrabold font-headline tracking-tight text-on-surface">Import & Export</h2>
         <p class="text-on-surface-variant mt-1">Gérez vos données</p>
+      </div>
+
+      <!-- Data Persistence Information -->
+      <div class="bg-surface-container-low border-l-4 border-secondary rounded-xl p-5 mb-6">
+        <div class="flex items-start gap-3">
+          <span class="material-symbols-outlined text-secondary text-2xl flex-shrink-0">info</span>
+          <div>
+            <h4 class="font-bold text-on-surface mb-2">Protection et persistance de vos données</h4>
+            <ul class="text-sm text-on-surface-variant space-y-2">
+              <li class="flex items-start gap-2">
+                <span class="material-symbols-outlined text-base text-primary flex-shrink-0 mt-0.5">check_circle</span>
+                <span><strong>Stockage local sécurisé :</strong> Vos données sont chiffrées avec AES-256-GCM et stockées dans IndexedDB (pas sur un serveur distant)</span>
+              </li>
+              <li class="flex items-start gap-2">
+                <span class="material-symbols-outlined text-base text-primary flex-shrink-0 mt-0.5">check_circle</span>
+                <span><strong>Persistance du cache :</strong> Vos données survivent au vidage classique du cache navigateur</span>
+              </li>
+              <li class="flex items-start gap-2">
+                <span class="material-symbols-outlined text-base text-on-tertiary-container flex-shrink-0 mt-0.5">warning</span>
+                <span><strong>Attention :</strong> Si vous effacez les "Cookies et données de site" dans les paramètres de votre navigateur, toutes vos données TaskMDA seront supprimées définitivement</span>
+              </li>
+              <li class="flex items-start gap-2">
+                <span class="material-symbols-outlined text-base text-primary flex-shrink-0 mt-0.5">recommend</span>
+                <span><strong>Recommandation :</strong> Exportez régulièrement vos données en JSON pour créer une sauvegarde externe en cas de perte accidentelle</span>
+              </li>
+            </ul>
+          </div>
+        </div>
       </div>
 
       <!-- Versions Section -->
