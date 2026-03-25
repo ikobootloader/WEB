@@ -25,8 +25,13 @@ Interface redesignée avec le système de design **"Emerald Flux"** :
 ### 🎯 Gestion des tâches
 - **Création / édition / suppression** de tâches avec titre, description, niveau d'urgence et deadline
 - **Bouton "Réalisé"** directement sur chaque cartouche pour archivage rapide
-- **Champs étendus** : demandeur (S3AD, SE2S, MDA, PSS, ASG, Autres), type de demande (SOLIS, MULTIGEST, BO, Courriers, Autres), date de demande
+- **Champs étendus** : demandeur (S3AD, SE2S, MDA, PSS, ASG, Autres), sujet de demande (SOLIS, MULTIGEST, BO, Courriers, Autres), date de demande
 - **Ordre/Index manuel** : possibilité de définir un ordre personnalisé (ex: 2026-1, 2026-2, etc.)
+- **Modes d'affichage multiples** : 4 vues différentes (1, 2, 3, 4 colonnes) avec adaptation du niveau de détail
+  - Vue 1 colonne : détails complets avec descriptions longues
+  - Vue 2 colonnes : vue équilibrée avec descriptions moyennes
+  - Vue 3 colonnes : vue compacte sans descriptif (230px de hauteur)
+  - Vue 4 colonnes : vue ultra-compacte pour vue d'ensemble
 - **Dates automatiques** : affichage de la date de création, modification et archivage
 - **Descriptions Markdown** : formatage riche avec gras, italique, listes, liens, code
 - **Indicateur de progression** : cercle de progression coloré affichant les jours restants avant l'échéance
@@ -37,7 +42,7 @@ Interface redesignée avec le système de design **"Emerald Flux"** :
 - **Validation des formulaires** : messages d'erreur explicites pour les champs obligatoires
   - Titre obligatoire avec message et focus automatique
   - Demandeur obligatoire
-  - Type de tâche obligatoire
+  - Sujet de tâche obligatoire
   - Animation shake sur les champs en erreur
 
 ### 🔄 Tâches récurrentes
@@ -55,10 +60,11 @@ Interface redesignée avec le système de design **"Emerald Flux"** :
 - **Compteur visuel** : badge affichant le nombre de fichiers joints
 
 ### 🔍 Organisation et recherche
-- **Moteur de recherche** : recherche en temps réel dans titre, description, demandeur, type
+- **Moteur de recherche** : recherche en temps réel dans titre, description, demandeur, sujet
 - **Filtrage avancé** : par urgence (Faible, Moyenne, Haute)
 - **Tri multiple** : ordre manuel, date d'ajout, date de demande, deadline, urgence
 - **Pagination** : affichage par lots de 12 tâches
+- **Préférences de vue persistantes** : mémorisation du mode d'affichage choisi (1-4 colonnes)
 - **Navigation fluide** :
   - 📊 Tableau de bord - vue d'ensemble et statistiques
   - ✅ Mes tâches - tâches actives avec compteur dynamique
@@ -105,11 +111,12 @@ Interface redesignée avec le système de design **"Emerald Flux"** :
 - **Variables dynamiques** :
   - `{{TITLE}}` : titre de la tâche
   - `{{REQUESTER}}` : demandeur
-  - `{{TYPE}}` : type de tâche
+  - `{{SUJET}}` : sujet de la tâche (anciennement TYPE)
   - `{{URGENCY}}` : niveau d'urgence
   - `{{STATUS}}` : statut
   - `{{DEADLINE}}` : date limite
   - `{{COMMENT}}` : commentaire
+  - Support rétro-compatible de `{{TYPE}}`
 - **Configuration dans Paramètres** : personnalisation des sujets et corps des emails
 - **Boutons d'envoi rapide** : directement depuis les cartouches de tâches
 
@@ -146,11 +153,13 @@ Interface redesignée avec le système de design **"Emerald Flux"** :
   - Tâches complétées (archives)
   - Projets actifs avec statistiques
   - Résumé textuel intelligent
-- **Indicateurs visuels** : badges d'urgence (🌿/⚠️/🔥), statut, demandeur, type, récurrence
+  - Statistics Cards avec bordures fines (bottom et right) pour meilleure visibilité
+- **Indicateurs visuels** : badges d'urgence (🌿/⚠️/🔥), statut, demandeur, sujet, récurrence
 - **Compteurs temps réel** : mise à jour instantanée des badges sidebar après chaque action
 - **Affichage des dernières tâches et projets** sur le dashboard
 - **Barre de progression circulaire** : visualisation de l'approche de la deadline avec tooltip informatif
-- **Cartes projets sur Dashboard** : aperçu rapide avec boutons d'action (éditer, archiver, supprimer)
+- **Cartes projets sur Dashboard** : aperçu rapide avec boutons d'action (éditer, archiver, supprimer) et bordures fines
+- **Navigation rapide** : liens "Voir tout →" discrets pour accéder aux vues complètes
 
 ### 🎨 Apparence personnalisable
 - **Mode sombre** : thème sombre complet et harmonieux
@@ -203,6 +212,11 @@ Interface redesignée avec le système de design **"Emerald Flux"** :
 | **Export Excel amélioré** | Feuilles séparées + compteur toast | ⭐⭐ |
 | **Badges lisibles mode sombre** | Contraste optimisé pour tous les badges | ⭐⭐⭐ |
 | **Toast harmonisé** | Fond vert avec glassmorphisme | ⭐ |
+| **Vues multiples tâches** | 4 modes d'affichage (1/2/3/4 colonnes) avec préférence persistante | ⭐⭐⭐ |
+| **Troncature intelligente texte** | Texte tronqué en JS pour éviter débordement | ⭐⭐ |
+| **Bordures Statistics Cards** | Bordures fines bottom/right pour meilleure visibilité | ⭐⭐ |
+| **Terminologie "Sujets"** | Remplacement de "Types" par "Sujets" dans l'UI | ⭐⭐ |
+| **Navigation rapide Dashboard** | Liens "Voir tout" discrets vers vues complètes | ⭐⭐ |
 
 ### 📝 Changements majeurs v5.0
 
@@ -318,7 +332,7 @@ Dans **Paramètres** > **Apparence** :
   "deadline": "2026-04-12",
   "requestDate": "2026-03-20",
   "requester": "S3AD | SE2S | MDA | PSS | ASG | Autres",
-  "type": "SOLIS | MULTIGEST | BO | Courriers | Autres",
+  "type": "SOLIS | MULTIGEST | BO | Courriers | Autres (renommé en 'sujet' dans l'UI)",
   "comment": "Description avec support **Markdown**",
   "order": "2026-1",
   "recurring": {
@@ -362,7 +376,7 @@ Dans **Paramètres** > **Apparence** :
 ```json
 {
   "requesters": ["S3AD", "SE2S", "MDA", "PSS", "ASG"],
-  "types": ["SOLIS", "MULTIGEST", "BO", "Courriers"],
+  "types": ["SOLIS", "MULTIGEST", "BO", "Courriers"],  // Appelé "sujets" dans l'interface
   "emailTemplates": {
     "completion": {
       "subject": "Tâche réalisée : {{TITLE}}",
