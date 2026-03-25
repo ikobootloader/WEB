@@ -428,10 +428,11 @@ function renderDashboard() {
     } else {
       projectsContainer.innerHTML = '';
       activeProjects.forEach(project => {
+        // Enhanced colors for WCAG AA compliance
         const statusColors = {
-          'en-cours': { bg: '#006c4a', label: 'EN COURS', dot: '#006c4a' },
-          'planifie': { bg: '#6366f1', label: 'PLANIFIÉ', dot: '#6366f1' },
-          'urgent': { bg: '#ef4444', label: 'URGENT', dot: '#ef4444' }
+          'en-cours': { bg: '#0891b2', label: 'EN COURS', dot: '#0891b2', border: '#0891b2' },
+          'planifie': { bg: '#6366f1', label: 'PLANIFIÉ', dot: '#6366f1', border: '#6366f1' },
+          'urgent': { bg: '#dc2626', label: 'URGENT', dot: '#dc2626', border: '#dc2626' }
         };
         const color = statusColors[project.status] || statusColors['en-cours'];
 
@@ -440,8 +441,10 @@ function renderDashboard() {
         const daysRemaining = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
 
         const card = document.createElement('div');
-        card.className = 'bg-surface-container-low rounded-xl p-4 border-l-4 hover:shadow-md transition-all cursor-pointer group relative';
-        card.style.borderColor = color.bg;
+        card.className = 'bg-surface-container-low rounded-xl p-4 border-l-[5px] hover:shadow-md transition-all cursor-pointer group relative';
+        card.style.borderLeft = `5px solid ${color.border}`;
+        card.style.borderBottom = '1px solid rgba(0, 0, 0, 0.1)';
+        card.style.borderRight = '1px solid rgba(0, 0, 0, 0.1)';
         card.onclick = (e) => {
           // Prevent navigation if clicking on action buttons
           if (e.target.closest('.action-btn')) return;
@@ -2285,11 +2288,12 @@ function renderArchivedProjects() {
     return;
   }
 
+  // Enhanced colors for WCAG AA compliance
   const statusColors = {
-    'en-cours': { bg: 'bg-[#006c4a]', text: 'text-white', label: 'EN COURS', dot: '#006c4a' },
-    'planifie': { bg: 'bg-[#6366f1]', text: 'text-white', label: 'PLANIFIÉ', dot: '#6366f1' },
-    'urgent': { bg: 'bg-[#ef4444]', text: 'text-white', label: 'URGENT', dot: '#ef4444' },
-    'termine': { bg: 'bg-[#9ca3af]', text: 'text-white', label: 'TERMINÉ', dot: '#9ca3af' }
+    'en-cours': { bg: 'bg-[#0891b2]', text: 'text-white', label: 'EN COURS', dot: '#0891b2', border: '#0891b2' },
+    'planifie': { bg: 'bg-[#6366f1]', text: 'text-white', label: 'PLANIFIÉ', dot: '#6366f1', border: '#6366f1' },
+    'urgent': { bg: 'bg-[#dc2626]', text: 'text-white', label: 'URGENT', dot: '#dc2626', border: '#dc2626' },
+    'termine': { bg: 'bg-[#16a34a]', text: 'text-white', label: 'TERMINÉ', dot: '#16a34a', border: '#16a34a' }
   };
 
   let html = '';
@@ -2305,7 +2309,7 @@ function renderArchivedProjects() {
     ).join('');
 
     html += `
-      <div class="bg-surface-container-low rounded-2xl p-4 shadow-sm opacity-75 group">
+      <div class="bg-surface-container-low rounded-2xl p-4 shadow-sm opacity-75 group border-l-[5px]" style="border-color: ${color.border}">
         <div class="flex items-start justify-between mb-3">
           <div class="flex-1">
             <h3 class="font-bold text-on-surface text-lg mb-2">${escHtml(project.name)}</h3>
@@ -2361,6 +2365,61 @@ function renderArchivedProjects() {
 }
 
 // ════════════════════════════════════════════════════════════
+//  TRONCATURE INTELLIGENTE DU TEXTE
+// ════════════════════════════════════════════════════════════
+
+/**
+ * Calcule le nombre de caractères maximum pour un texte selon le mode de vue
+ * Pour éviter overflow hidden qui coupe les jambages descendants
+ */
+function calculateMaxTextLength(viewMode) {
+  // Estimation basée sur la largeur réelle des colonnes
+  // Augmentation significative pour permettre 3 lignes complètes
+  const charsPerLine = {
+    1: 150, // 1 colonne = texte très large
+    2: 100,  // 2 colonnes = texte moyennement large
+    3: 85,  // 3 colonnes = environ 85 caractères par ligne
+    4: 40   // 4 colonnes = texte très compact
+  };
+
+  const linesPerView = {
+    1: 4, // 4 lignes
+    2: 2, // 2 lignes
+    3: 3, // 3 lignes
+    4: 1  // 1 ligne
+  };
+
+  const charsPerLineForMode = charsPerLine[viewMode] || 85;
+  const lines = linesPerView[viewMode] || 3;
+
+  return charsPerLineForMode * lines;
+}
+
+/**
+ * Tronque intelligemment un texte pour qu'il tienne dans l'espace alloué
+ * sans être coupé par overflow hidden
+ */
+function truncateText(text, viewMode) {
+  if (!text) return '';
+
+  const maxLength = calculateMaxTextLength(viewMode);
+
+  if (text.length <= maxLength) {
+    return text;
+  }
+
+  // Tronquer au dernier espace avant maxLength pour éviter de couper un mot
+  let truncated = text.substring(0, maxLength);
+  const lastSpace = truncated.lastIndexOf(' ');
+
+  if (lastSpace > maxLength * 0.8) { // Si l'espace est assez proche
+    truncated = truncated.substring(0, lastSpace);
+  }
+
+  return truncated + '...';
+}
+
+// ════════════════════════════════════════════════════════════
 //  CONSTRUCTION D'UNE CARTE
 // ════════════════════════════════════════════════════════════
 
@@ -2370,17 +2429,19 @@ function buildCard(task, idx, isArchive) {
   const urgencyLabels = { low:'Faible', medium:'Moyenne', high:'Urgente' };
   const statusLabels  = { 'en-cours':'En cours', 'en-attente':'En attente', 'realise':'Réalisé' };
 
+  // Enhanced border colors for better contrast (WCAG AA)
   const urgencyColors = {
-    low: 'border-secondary-fixed',
-    medium: 'border-primary-container',
-    high: 'border-tertiary'
+    low: 'border-[#0891b2]',      // Cyan - stronger contrast
+    medium: 'border-[#f59e0b]',   // Orange - more visible
+    high: 'border-[#dc2626]'      // Red - high contrast
   };
 
-  // Adapter le padding selon le mode de vue
-  const paddingClass = taskViewMode === 4 ? 'p-4' : taskViewMode === 1 ? 'p-8' : 'p-6';
+  // Adapter le padding et hauteur selon le mode de vue
+  const paddingClass = taskViewMode === 4 ? 'p-3' : taskViewMode === 1 ? 'p-8' : 'p-6';
+  const heightClass = taskViewMode === 4 ? 'task-card-compact' : taskViewMode === 3 ? 'task-card-standard' : '';
 
   const card = document.createElement('div');
-  card.className = `group bg-surface-container-lowest ${paddingClass} rounded-xl relative border-l-4 ${urgencyColors[task.urgency || 'low']} shadow-sm hover:shadow-md transition-all duration-300 task-card`;
+  card.className = `group bg-surface-container-lowest ${paddingClass} rounded-xl relative border-l-4 ${urgencyColors[task.urgency || 'low']} shadow-sm hover:shadow-md transition-all duration-300 task-card ${heightClass}`;
   card.style.animationDelay = `${idx * 0.04}s`;
 
   const formatDate = (dateStr) => {
@@ -2402,29 +2463,34 @@ function buildCard(task, idx, isArchive) {
     ? `🔄 ${recurringFreqLabels[task.recurring.frequency] || task.recurring.frequency}${task.recurring.interval > 1 ? ` ×${task.recurring.interval}` : ''}`
     : '';
 
+  // WCAG AA compliant badge colors
   const urgencyChipBg = {
-    low: 'bg-secondary-container text-on-secondary-container',
-    medium: 'bg-secondary-container text-on-secondary-container',
-    high: 'bg-tertiary-container text-on-tertiary-container'
+    low: 'badge-urgency-low',
+    medium: 'badge-urgency-medium',
+    high: 'badge-urgency-high'
   };
 
   const statusChipBg = {
-    'en-cours': 'bg-primary-fixed text-on-primary-fixed-variant',
-    'en-attente': 'bg-secondary-container text-on-secondary-container',
-    'realise': 'bg-primary-fixed text-on-primary-fixed-variant'
+    'en-cours': 'badge-status-encours',
+    'en-attente': 'badge-status-enattente',
+    'realise': 'badge-status-realise'
   };
 
   // Déterminer le niveau de détail selon le mode de vue
-  const titleSize = taskViewMode === 1 ? 'text-xl' : taskViewMode === 4 ? 'text-base' : 'text-lg';
-  const commentMaxLength = taskViewMode === 1 ? 300 : taskViewMode === 2 ? 150 : taskViewMode === 3 ? 100 : 60;
+  const titleSize = taskViewMode === 1 ? 'text-xl' : taskViewMode === 4 ? 'text-sm' : 'text-lg';
+  const commentTextSize = taskViewMode === 1 ? 'text-base' : 'text-sm'; // Taille lisible
   const showFullMetadata = taskViewMode === 1; // Montrer dates complètes en mode détaillé
-  const badgeSize = taskViewMode === 4 ? 'px-2 py-0.5 text-[9px]' : 'px-3 py-1 text-[10px]';
+  const badgeSize = taskViewMode === 4 ? 'px-2 py-0.5 text-[8px]' : 'px-3 py-1 text-[10px]';
+  const gapSize = taskViewMode === 4 ? 'gap-1' : 'gap-2';
+
+  // Tronquer le texte intelligemment pour qu'il ne soit pas coupé par overflow
+  const truncatedComment = truncateText(task.comment, taskViewMode);
 
   card.innerHTML = `
-    <div class="flex justify-between items-start ${taskViewMode === 4 ? 'mb-2' : 'mb-4'}">
-      <div class="flex flex-wrap gap-2">
+    <div class="flex justify-between items-start ${taskViewMode === 4 ? 'mb-1' : 'mb-4'}">
+      <div class="flex flex-wrap ${gapSize}">
         <span class="${badgeSize} ${urgencyChipBg[task.urgency || 'low']} font-bold rounded-full uppercase tracking-tight">
-          ${task.urgency === 'low' ? '🌿' : task.urgency === 'medium' ? '⚠️' : '🔥'} ${taskViewMode === 4 ? '' : urgencyLabels[task.urgency]||task.urgency}
+          ${task.urgency === 'low' ? '🌿' : task.urgency === 'medium' ? '⚠️' : '🔥'}${taskViewMode === 4 ? '' : ' ' + (urgencyLabels[task.urgency]||task.urgency)}
         </span>
         ${!isArchive && taskViewMode !== 4 ? `<span class="${badgeSize} ${statusChipBg[task.status] || 'bg-secondary-container text-on-secondary-container'} font-bold rounded-full uppercase tracking-tight">
           ${statusLabels[task.status]||task.status}
@@ -2462,10 +2528,10 @@ function buildCard(task, idx, isArchive) {
       <span class="text-xs text-on-surface-variant font-semibold">${escHtml(displayIndex)}</span>
     </div>` : ''}
 
-    <h4 class="${titleSize} font-bold text-on-surface ${taskViewMode === 4 ? 'mb-1' : 'mb-2'}">${escHtml(task.title)}</h4>
+    <h4 class="${titleSize} font-bold text-on-surface ${taskViewMode === 4 ? 'mb-1 line-clamp-2' : 'mb-2'}">${escHtml(task.title)}</h4>
 
     ${task.comment && taskViewMode <= 3 ? `
-      <p class="text-sm text-on-surface-variant ${taskViewMode === 4 ? 'mb-2' : 'mb-6'} ${taskViewMode === 1 ? 'line-clamp-4' : 'line-clamp-2'}">${escHtml(task.comment.substring(0, commentMaxLength))}${task.comment.length > commentMaxLength ? '...' : ''}</p>
+      <p class="${commentTextSize} text-secondary-improved ${taskViewMode === 4 ? 'mb-1' : 'mb-4'} break-words leading-relaxed">${escHtml(truncatedComment)}</p>
     ` : ''}
 
     ${showFullMetadata && (createdDate || requestDate || updatedDate) ? `
@@ -2476,18 +2542,19 @@ function buildCard(task, idx, isArchive) {
       </div>
     ` : ''}
 
-    <div class="flex items-center justify-between mt-auto ${taskViewMode === 4 ? 'pt-2' : 'pt-4'} border-t border-surface-container-low">
-      <div class="flex items-center ${taskViewMode === 4 ? 'gap-2' : 'gap-4'}">
-        ${task.requester && taskViewMode !== 4 ? `<div class="flex items-center gap-1.5 text-xs text-on-surface-variant">
-          <span class="material-symbols-outlined text-base">folder</span>
-          <span>${escHtml(task.requester)}</span>
+    <div class="flex items-center justify-between mt-auto ${taskViewMode === 4 ? 'pt-1 border-t-0' : 'pt-4 border-t'} border-surface-container-low">
+      <div class="flex items-center ${taskViewMode === 4 ? 'gap-1.5' : 'gap-4'} overflow-hidden">
+        ${task.requester && taskViewMode !== 4 ? `<div class="flex items-center gap-1.5 text-xs text-secondary-improved overflow-hidden">
+          <span class="material-symbols-outlined text-base flex-shrink-0">folder</span>
+          <span class="truncate">${escHtml(task.requester)}</span>
         </div>` : ''}
-        ${task.files && task.files.length > 0 ? `<div class="flex items-center gap-1.5 text-xs text-on-surface-variant">
-          <span class="material-symbols-outlined ${taskViewMode === 4 ? 'text-sm' : 'text-base'}">attach_file</span>
+        ${task.files && task.files.length > 0 ? `<div class="flex items-center gap-1 ${taskViewMode === 4 ? 'text-[10px]' : 'text-xs'} text-secondary-improved">
+          <span class="material-symbols-outlined ${taskViewMode === 4 ? 'text-xs' : 'text-base'}">attach_file</span>
           <span>${task.files.length}</span>
         </div>` : ''}
       </div>
-      ${task.deadline && !isArchive ? getDeadlineProgress(task) : ''}
+      ${task.deadline && !isArchive && taskViewMode !== 4 ? getDeadlineProgress(task) : ''}
+      ${task.deadline && !isArchive && taskViewMode === 4 ? getDeadlineProgressCompact(task) : ''}
     </div>
   `;
   return card;
@@ -2570,6 +2637,42 @@ function getDeadlineProgress(task) {
         <div class="absolute inset-0 flex items-center justify-center">
           <span class="text-[10px] font-bold ${colorClass}">${Math.abs(daysRemaining)} j</span>
         </div>
+      </div>
+    </div>
+  `;
+}
+
+function getDeadlineProgressCompact(task) {
+  if (!task.deadline) return '';
+
+  const now = new Date();
+  const deadline = new Date(task.deadline);
+
+  // Calculer les jours restants
+  const daysRemaining = Math.ceil((deadline - now) / (1000 * 60 * 60 * 24));
+
+  // Déterminer la couleur selon l'urgence
+  let colorClass = 'text-primary';
+  let bgClass = 'bg-primary-fixed';
+
+  if (daysRemaining < 0) {
+    colorClass = 'text-white';
+    bgClass = 'bg-error';
+  } else if (daysRemaining <= 2) {
+    colorClass = 'text-white';
+    bgClass = 'bg-tertiary';
+  } else if (daysRemaining <= 7) {
+    colorClass = 'text-white';
+    bgClass = 'bg-[#f59e0b]'; // Orange warning
+  }
+
+  const deadlineFormatted = new Date(task.deadline).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+  const daysLabel = Math.abs(daysRemaining) > 1 ? 'j' : 'j';
+
+  return `
+    <div class="flex items-center gap-1">
+      <div class="${bgClass} ${colorClass} px-1.5 py-0.5 rounded text-[9px] font-bold" title="Échéance : ${deadlineFormatted}">
+        ${Math.abs(daysRemaining)}${daysLabel}
       </div>
     </div>
   `;

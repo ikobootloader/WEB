@@ -122,6 +122,76 @@
   .dark .view-btn.active {
     background: rgba(104, 219, 169, 0.15);
   }
+
+  /* Standard mode (3 columns) - fixed height */
+  .task-card-standard {
+    height: 250px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Compact mode (4 columns) - height optimization */
+  .task-card-compact {
+    max-height: 150px;
+    min-height: 120px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Text styling for task descriptions */
+  .task-card p {
+    line-height: 1.5;
+    word-wrap: break-word;
+    overflow: hidden;
+    /* Max height for 3 lines: line-height 1.5 * font-size * 3 lines */
+    max-height: 4.5em; /* 1.5 * 3 lignes = 4.5em */
+  }
+
+  /* Improved contrasts for WCAG AA compliance */
+  .border-l-4 {
+    border-left-width: 5px !important; /* Stronger border visibility */
+  }
+
+  /* Enhanced badge contrasts */
+  .badge-urgency-low {
+    background-color: #0891b2 !important;
+    color: #ffffff !important;
+  }
+  .badge-urgency-medium {
+    background-color: #f59e0b !important;
+    color: #ffffff !important;
+  }
+  .badge-urgency-high {
+    background-color: #dc2626 !important;
+    color: #ffffff !important;
+  }
+
+  /* Enhanced status badges */
+  .badge-status-encours {
+    background-color: #006c4a !important;
+    color: #ffffff !important;
+  }
+  .badge-status-enattente {
+    background-color: #6366f1 !important;
+    color: #ffffff !important;
+  }
+  .badge-status-realise {
+    background-color: #16a34a !important;
+    color: #ffffff !important;
+  }
+
+  /* Better text contrast */
+  .text-secondary-improved {
+    color: #334155 !important; /* Darker for better readability */
+  }
+
+  /* Stronger card shadows */
+  .task-card {
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06) !important;
+  }
+  .task-card:hover {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+  }
 </style>
 </head>
 
@@ -257,8 +327,9 @@
             <h3 class="text-xl font-bold font-headline text-on-surface">Tâches</h3>
           </div>
 
-          <!-- View Mode Controls for Dashboard -->
-          <div class="flex gap-2 items-center">
+          <div class="flex items-center gap-4">
+            <!-- View Mode Controls for Dashboard -->
+            <div class="flex gap-2 items-center">
             <button class="view-btn w-9 h-9 rounded-lg flex items-center justify-center text-sm font-semibold transition-all hover:bg-surface-container-high" data-view="1" title="Vue détaillée (1 colonne)">
               <span class="material-symbols-outlined text-xl">view_agenda</span>
             </button>
@@ -271,12 +342,16 @@
             <button class="view-btn w-9 h-9 rounded-lg flex items-center justify-center text-sm font-semibold transition-all hover:bg-surface-container-high" data-view="4" title="Vue compacte (4 colonnes)">
               <span class="material-symbols-outlined text-xl">grid_view</span>
             </button>
+            </div>
+
+            <!-- View All Tasks Link -->
+            <a href="#tasks" onclick="document.getElementById('navTasks').click()" class="text-sm text-primary font-semibold hover:underline">Voir tout →</a>
           </div>
         </div>
 
         <!-- Tasks Statistics Cards -->
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div class="bg-surface-container-low p-6 rounded-xl border-l-4 border-primary flex justify-between items-center">
+          <div class="bg-surface-container-low p-6 rounded-xl flex justify-between items-center" style="border-left: 5px solid #0891b2; border-bottom: 1px solid rgba(0, 0, 0, 0.1); border-right: 1px solid rgba(0, 0, 0, 0.1);">
             <div>
               <p class="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest mb-1">Actives</p>
               <p class="text-3xl font-extrabold font-headline" id="statTotal">0</p>
@@ -286,7 +361,7 @@
             </div>
           </div>
 
-          <div class="bg-surface-container-low p-6 rounded-xl border-l-4 border-tertiary flex justify-between items-center">
+          <div class="bg-surface-container-low p-6 rounded-xl flex justify-between items-center" style="border-left: 5px solid #dc2626; border-bottom: 1px solid rgba(0, 0, 0, 0.1); border-right: 1px solid rgba(0, 0, 0, 0.1);">
             <div>
               <p class="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest mb-1">Urgentes</p>
               <p class="text-3xl font-extrabold font-headline text-tertiary" id="statUrgent">0</p>
@@ -296,7 +371,7 @@
             </div>
           </div>
 
-          <div class="bg-surface-container-low p-6 rounded-xl border-l-4 border-primary-container flex justify-between items-center">
+          <div class="bg-surface-container-low p-6 rounded-xl flex justify-between items-center" style="border-left: 5px solid #16a34a; border-bottom: 1px solid rgba(0, 0, 0, 0.1); border-right: 1px solid rgba(0, 0, 0, 0.1);">
             <div>
               <p class="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest mb-1">Terminées</p>
               <p class="text-3xl font-extrabold font-headline" id="statCompleted">0</p>
@@ -320,12 +395,12 @@
             <span class="material-symbols-outlined text-primary">folder_open</span>
             <h3 class="text-xl font-bold font-headline text-on-surface">Projets</h3>
           </div>
-          <a href="#projects" class="text-sm text-primary font-semibold hover:underline">Voir tout →</a>
+          <a href="#projects" onclick="document.getElementById('navProjects').click()" class="text-sm text-primary font-semibold hover:underline">Voir tout →</a>
         </div>
 
         <!-- Projects Statistics Cards -->
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div class="bg-surface-container-low p-6 rounded-xl border-l-4 border-primary flex justify-between items-center">
+          <div class="bg-surface-container-low p-6 rounded-xl flex justify-between items-center" style="border-left: 5px solid #0891b2; border-bottom: 1px solid rgba(0, 0, 0, 0.1); border-right: 1px solid rgba(0, 0, 0, 0.1);">
             <div>
               <p class="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest mb-1">En cours</p>
               <p class="text-3xl font-extrabold font-headline" id="statProjectsActive">0</p>
@@ -335,7 +410,7 @@
             </div>
           </div>
 
-          <div class="bg-surface-container-low p-6 rounded-xl border-l-4 border-tertiary flex justify-between items-center">
+          <div class="bg-surface-container-low p-6 rounded-xl flex justify-between items-center" style="border-left: 5px solid #dc2626; border-bottom: 1px solid rgba(0, 0, 0, 0.1); border-right: 1px solid rgba(0, 0, 0, 0.1);">
             <div>
               <p class="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest mb-1">Urgents</p>
               <p class="text-3xl font-extrabold font-headline text-tertiary" id="statProjectsUrgent">0</p>
@@ -345,7 +420,7 @@
             </div>
           </div>
 
-          <div class="bg-surface-container-low p-6 rounded-xl border-l-4 border-primary-container flex justify-between items-center">
+          <div class="bg-surface-container-low p-6 rounded-xl flex justify-between items-center" style="border-left: 5px solid #16a34a; border-bottom: 1px solid rgba(0, 0, 0, 0.1); border-right: 1px solid rgba(0, 0, 0, 0.1);">
             <div>
               <p class="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest mb-1">Terminés</p>
               <p class="text-3xl font-extrabold font-headline" id="statProjectsCompleted">0</p>
