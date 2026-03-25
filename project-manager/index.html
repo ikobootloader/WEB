@@ -181,8 +181,9 @@
       </div>
     </div>
     <div class="flex items-center gap-2 lg:gap-4">
-      <button id="btnNotifications" class="w-10 h-10 hidden sm:flex items-center justify-center text-on-surface-variant hover:text-primary transition-all">
+      <button id="btnNotifications" class="w-10 h-10 hidden sm:flex items-center justify-center text-on-surface-variant hover:text-primary transition-all relative">
         <span class="material-symbols-outlined">notifications</span>
+        <span id="notificationBadge" class="hidden absolute top-0 right-0 w-5 h-5 bg-tertiary text-white text-xs font-bold rounded-full flex items-center justify-center"></span>
       </button>
       <button id="btnHelp" class="w-10 h-10 hidden sm:flex items-center justify-center text-on-surface-variant hover:text-primary transition-all">
         <span class="material-symbols-outlined">help_outline</span>

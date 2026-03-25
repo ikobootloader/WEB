@@ -271,6 +271,35 @@ function updateSidebarCounts() {
   if (archiveCountEl) archiveCountEl.textContent = archived.length;
 
   updateProjectCount();
+  updateNotificationBadge();
+}
+
+function updateNotificationBadge() {
+  const badge = document.getElementById('notificationBadge');
+  if (!badge) return;
+
+  // Count urgent tasks and approaching deadlines
+  const activeTasks = getActiveTasks();
+  const urgentTasks = activeTasks.filter(t => t.urgency === 'high');
+
+  const now = new Date();
+  const threeDays = 3 * 24 * 60 * 60 * 1000;
+
+  const approachingDeadline = activeTasks.filter(t => {
+    if (!t.deadline) return false;
+    const deadlineDate = new Date(t.deadline);
+    const diff = deadlineDate - now;
+    return diff > 0 && diff <= threeDays;
+  });
+
+  const totalNotifications = urgentTasks.length + approachingDeadline.length;
+
+  if (totalNotifications > 0) {
+    badge.textContent = totalNotifications > 9 ? '9+' : totalNotifications;
+    badge.classList.remove('hidden');
+  } else {
+    badge.classList.add('hidden');
+  }
 }
 
 // ════════════════════════════════════════════════════════════
@@ -604,6 +633,9 @@ async function submitPassword() {
     updateRequesterSelects();
     updateTypeSelects();
     if (mainContent) mainContent.style.display = 'block';
+
+    // Update sidebar counts and notification badge
+    updateSidebarCounts();
 
     // Show dashboard
     switchView('dashboard');
@@ -1779,18 +1811,12 @@ function displayNotifications(notifications) {
     return;
   }
 
-  // Request permission if needed
-  if (Notification.permission === 'default') {
-    Notification.requestPermission().then(permission => {
-      if (permission === 'granted') {
-        sendBrowserNotifications(notifications);
-      }
-    });
-  } else if (Notification.permission === 'granted') {
+  // Only send browser notifications if already granted (don't ask every time)
+  if (Notification.permission === 'granted') {
     sendBrowserNotifications(notifications);
   }
 
-  // Also show in-app notification
+  // Show in-app notification (always)
   showNotificationsSummary(notifications);
 }
 
@@ -2699,20 +2725,26 @@ function showHelpModal() {
   const content = `
     <div class="space-y-4">
       <div>
-        <h3 class="font-bold text-lg mb-2">🔐 Sécurité</h3>
-        <p class="text-sm text-on-surface-variant">Vos données sont chiffrées localement avec AES-256-GCM. Sans votre mot de passe, elles sont illisibles.</p>
+        <h3 class="font-bold text-lg mb-2">🔐 Sécurité et stockage</h3>
+        <p class="text-sm text-on-surface-variant mb-2">Vos données sont chiffrées localement avec <strong>AES-256-GCM</strong> et stockées dans <strong>IndexedDB</strong>.</p>
+        <ul class="text-xs text-on-surface-variant space-y-1 ml-4">
+          <li>• Chiffrement : PBKDF2 avec 310 000 itérations</li>
+          <li>• Stockage : 100% local dans votre navigateur</li>
+          <li>• Aucune connexion serveur requise</li>
+          <li>• Sans votre mot de passe, les données sont illisibles</li>
+        </ul>
       </div>
       <div>
-        <h3 class="font-bold text-lg mb-2">💾 Sauvegarde automatique</h3>
-        <p class="text-sm text-on-surface-variant">Vos tâches sont enregistrées dans le localStorage. Pour une sauvegarde automatique dans un fichier JSON, allez dans Paramètres → Liaison fichier et sélectionnez un répertoire.</p>
+        <h3 class="font-bold text-lg mb-2">💾 Sauvegarde des données</h3>
+        <p class="text-sm text-on-surface-variant">Vos données sont automatiquement sauvegardées dans IndexedDB. Pour une sauvegarde externe, utilisez <strong>Export JSON</strong> dans Import/Export.</p>
       </div>
       <div>
         <h3 class="font-bold text-lg mb-2">🔄 Tâches récurrentes</h3>
-        <p class="text-sm text-on-surface-variant">Créez des tâches qui se répètent automatiquement (quotidien, hebdomadaire, mensuel, annuel).</p>
+        <p class="text-sm text-on-surface-variant">Créez des tâches qui se répètent automatiquement (quotidien, hebdomadaire, mensuel, annuel) avec intervalles personnalisés.</p>
       </div>
       <div>
         <h3 class="font-bold text-lg mb-2">📎 Pièces jointes</h3>
-        <p class="text-sm text-on-surface-variant">Attachez jusqu'à 5 fichiers par tâche (max 5 Mo chacun). Ils sont stockés en base64 dans le localStorage.</p>
+        <p class="text-sm text-on-surface-variant">Attachez jusqu'à 5 fichiers par tâche (max 5 Mo chacun). Ils sont chiffrés et stockés avec vos données.</p>
       </div>
       <div>
         <h3 class="font-bold text-lg mb-2">📊 Gestion de projets</h3>
@@ -2724,12 +2756,12 @@ function showHelpModal() {
       </div>
       <div>
         <h3 class="font-bold text-lg mb-2">📥📤 Import/Export</h3>
-        <p class="text-sm text-on-surface-variant">Exportez vos tâches et projets en JSON ou Excel depuis l'onglet Import/Export. Le format JSON inclut toutes vos données (tâches, projets, versions).</p>
+        <p class="text-sm text-on-surface-variant">Exportez vos données en JSON ou Excel depuis Import/Export. Le format JSON inclut toutes vos données chiffrées (tâches, projets, versions, configuration).</p>
       </div>
       <div class="pt-4 border-t border-outline-variant">
         <p class="text-xs text-on-surface-variant text-center">
-          <strong>TaskMDA</strong> — Application développée par <strong>Frédérick MURAT</strong><br>
-          Mars 2026 • Licence MIT
+          <strong>TaskMDA v5.0</strong> — Application développée par <strong>Frédérick MURAT</strong><br>
+          Mars 2026 • Licence MIT • Stockage IndexedDB
         </p>
       </div>
     </div>
@@ -2739,6 +2771,12 @@ function showHelpModal() {
 }
 
 function showNotifications() {
+  // Hide notification badge when user views notifications
+  const badge = document.getElementById('notificationBadge');
+  if (badge) {
+    badge.classList.add('hidden');
+  }
+
   // Count urgent and approaching deadline tasks
   const activeTasks = getActiveTasks();
   const urgentTasks = activeTasks.filter(t => t.urgency === 'high');
