@@ -89,6 +89,7 @@ let editingProjectId = null;
 let attachedFiles = []; // Fichiers temporaires avant sauvegarde
 let activeFilter = 'all';
 let activeView   = 'dashboard';   // 'dashboard' | 'tasks' | 'projects' | 'archives' | 'import-export' | 'settings'
+let taskViewMode = 3; // 1 (détaillé) | 2 | 3 (défaut) | 4 (compact)
 let cryptoKey    = null;
 let currentPage  = 1;
 let itemsPerPage = 12;
@@ -129,6 +130,7 @@ function initUI() {
   initStatusPills();
   initNavigation();
   initFilterButtons();
+  initViewButtons();
 }
 
 function initEventListeners() {
@@ -524,6 +526,42 @@ function initFilterButtons() {
       btn.classList.add('active');
       currentPage = 1;
       renderTasks();
+    });
+  });
+}
+
+function initViewButtons() {
+  document.querySelectorAll('.view-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      taskViewMode = parseInt(btn.dataset.view);
+      document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      // Mettre à jour les classes de grille pour tous les conteneurs de tâches
+      const gridClasses = {
+        1: 'grid-cols-1',
+        2: 'grid-cols-1 xl:grid-cols-2',
+        3: 'grid-cols-1 xl:grid-cols-3',
+        4: 'grid-cols-1 xl:grid-cols-4'
+      };
+
+      ['tasks', 'dashboardTasks', 'archives'].forEach(containerId => {
+        const container = document.getElementById(containerId);
+        if (container) {
+          // Retirer toutes les anciennes classes de grille
+          container.className = container.className.replace(/grid-cols-\d+/g, '').replace(/xl:grid-cols-\d+/g, '').trim();
+          // Ajouter les nouvelles classes
+          container.className = `grid ${gridClasses[taskViewMode]} gap-6${containerId === 'dashboardTasks' ? ' mt-4' : ''}`;
+        }
+      });
+
+      // Sauvegarder la préférence
+      saveViewPreference();
+
+      // Re-render pour ajuster le niveau de détail
+      if (activeView === 'dashboard') renderDashboard();
+      else if (activeView === 'tasks') renderTasks();
+      else if (activeView === 'archives') renderArchives();
     });
   });
 }
@@ -981,6 +1019,18 @@ TaskMDA - Gestion de taches`
     }
   }
 
+  // Load view preference
+  const savedViewMode = await idbGet('taskViewMode');
+  if (savedViewMode !== null) {
+    taskViewMode = savedViewMode;
+    // Update active button
+    document.querySelectorAll('.view-btn').forEach(btn => {
+      btn.classList.toggle('active', parseInt(btn.dataset.view) === taskViewMode);
+    });
+    // Apply grid classes
+    updateGridClasses();
+  }
+
   // Dédoublonner les tâches par ID
   deduplicateTasks();
 
@@ -1014,6 +1064,29 @@ async function saveToStorage() {
   await idbSet('versions', await encrypt(versions));
   await idbSet('projects', await encrypt(projects));
   await idbSet('config', await encrypt(config));
+}
+
+async function saveViewPreference() {
+  await idbSet('taskViewMode', taskViewMode);
+}
+
+function updateGridClasses() {
+  const gridClasses = {
+    1: 'grid-cols-1',
+    2: 'grid-cols-1 xl:grid-cols-2',
+    3: 'grid-cols-1 xl:grid-cols-3',
+    4: 'grid-cols-1 xl:grid-cols-4'
+  };
+
+  ['tasks', 'dashboardTasks', 'archives'].forEach(containerId => {
+    const container = document.getElementById(containerId);
+    if (container) {
+      // Retirer toutes les anciennes classes de grille
+      container.className = container.className.replace(/grid-cols-\d+/g, '').replace(/xl:grid-cols-\d+/g, '').trim();
+      // Ajouter les nouvelles classes
+      container.className = `grid ${gridClasses[taskViewMode]} gap-6${containerId === 'dashboardTasks' ? ' mt-4' : ''}`;
+    }
+  });
 }
 
 
@@ -2268,8 +2341,11 @@ function buildCard(task, idx, isArchive) {
     high: 'border-tertiary'
   };
 
+  // Adapter le padding selon le mode de vue
+  const paddingClass = taskViewMode === 4 ? 'p-4' : taskViewMode === 1 ? 'p-8' : 'p-6';
+
   const card = document.createElement('div');
-  card.className = `group bg-surface-container-lowest p-6 rounded-xl relative border-l-4 ${urgencyColors[task.urgency || 'low']} shadow-sm hover:shadow-md transition-all duration-300 task-card`;
+  card.className = `group bg-surface-container-lowest ${paddingClass} rounded-xl relative border-l-4 ${urgencyColors[task.urgency || 'low']} shadow-sm hover:shadow-md transition-all duration-300 task-card`;
   card.style.animationDelay = `${idx * 0.04}s`;
 
   const formatDate = (dateStr) => {
@@ -2303,62 +2379,76 @@ function buildCard(task, idx, isArchive) {
     'realise': 'bg-primary-fixed text-on-primary-fixed-variant'
   };
 
+  // Déterminer le niveau de détail selon le mode de vue
+  const titleSize = taskViewMode === 1 ? 'text-xl' : taskViewMode === 4 ? 'text-base' : 'text-lg';
+  const commentMaxLength = taskViewMode === 1 ? 300 : taskViewMode === 2 ? 150 : taskViewMode === 3 ? 100 : 60;
+  const showFullMetadata = taskViewMode === 1; // Montrer dates complètes en mode détaillé
+  const badgeSize = taskViewMode === 4 ? 'px-2 py-0.5 text-[9px]' : 'px-3 py-1 text-[10px]';
+
   card.innerHTML = `
-    <div class="flex justify-between items-start mb-4">
+    <div class="flex justify-between items-start ${taskViewMode === 4 ? 'mb-2' : 'mb-4'}">
       <div class="flex flex-wrap gap-2">
-        <span class="px-3 py-1 ${urgencyChipBg[task.urgency || 'low']} text-[10px] font-bold rounded-full uppercase tracking-tight">
-          ${task.urgency === 'low' ? '🌿' : task.urgency === 'medium' ? '⚠️' : '🔥'} ${urgencyLabels[task.urgency]||task.urgency}
+        <span class="${badgeSize} ${urgencyChipBg[task.urgency || 'low']} font-bold rounded-full uppercase tracking-tight">
+          ${task.urgency === 'low' ? '🌿' : task.urgency === 'medium' ? '⚠️' : '🔥'} ${taskViewMode === 4 ? '' : urgencyLabels[task.urgency]||task.urgency}
         </span>
-        ${!isArchive ? `<span class="px-3 py-1 ${statusChipBg[task.status] || 'bg-secondary-container text-on-secondary-container'} text-[10px] font-bold rounded-full uppercase tracking-tight">
+        ${!isArchive && taskViewMode !== 4 ? `<span class="${badgeSize} ${statusChipBg[task.status] || 'bg-secondary-container text-on-secondary-container'} font-bold rounded-full uppercase tracking-tight">
           ${statusLabels[task.status]||task.status}
         </span>` : ''}
-        ${task.type ? `<span class="px-3 py-1 bg-surface-container text-on-surface-variant text-[10px] font-bold rounded-full uppercase tracking-tight">
+        ${task.type && taskViewMode !== 4 ? `<span class="${badgeSize} bg-surface-container text-on-surface-variant font-bold rounded-full uppercase tracking-tight">
           ${escHtml(task.type)}
         </span>` : ''}
-        ${recurringText ? `<span class="px-3 py-1 bg-surface-container text-on-surface-variant text-[10px] font-bold rounded-full tracking-tight">
+        ${recurringText && taskViewMode <= 2 ? `<span class="${badgeSize} bg-surface-container text-on-surface-variant font-bold rounded-full tracking-tight">
           ${recurringText}
         </span>` : ''}
       </div>
       <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button onclick="openModal(${task.id})" title="Modifier la tâche" class="p-2 hover:bg-surface-container-low rounded-lg text-on-surface-variant hover:text-primary transition-colors">
-          <span class="material-symbols-outlined text-sm">edit</span>
+        <button onclick="openModal(${task.id})" title="Modifier la tâche" class="${taskViewMode === 4 ? 'p-1' : 'p-2'} hover:bg-surface-container-low rounded-lg text-on-surface-variant hover:text-primary transition-colors">
+          <span class="material-symbols-outlined ${taskViewMode === 4 ? 'text-xs' : 'text-sm'}">edit</span>
         </button>
-        ${!isArchive && task.requester && canSendEmailForTask(task) ? `<button onclick="sendTaskInquiryEmail(${task.id})" title="Contacter le demandeur" class="p-2 hover:bg-surface-container-low rounded-lg text-on-surface-variant hover:text-primary transition-colors">
+        ${!isArchive && task.requester && canSendEmailForTask(task) && taskViewMode <= 2 ? `<button onclick="sendTaskInquiryEmail(${task.id})" title="Contacter le demandeur" class="p-2 hover:bg-surface-container-low rounded-lg text-on-surface-variant hover:text-primary transition-colors">
           <span class="material-symbols-outlined text-sm">email</span>
         </button>` : ''}
-        ${!isArchive ? `<button onclick="markAsCompleted(${task.id})" title="Marquer comme réalisé" class="p-2 hover:bg-surface-container-low rounded-lg text-on-surface-variant hover:text-primary transition-colors">
-          <span class="material-symbols-outlined text-sm">check</span>
+        ${!isArchive ? `<button onclick="markAsCompleted(${task.id})" title="Marquer comme réalisé" class="${taskViewMode === 4 ? 'p-1' : 'p-2'} hover:bg-surface-container-low rounded-lg text-on-surface-variant hover:text-primary transition-colors">
+          <span class="material-symbols-outlined ${taskViewMode === 4 ? 'text-xs' : 'text-sm'}">check</span>
         </button>` : ''}
-        ${isArchive && task.requester && canSendEmailForTask(task) ? `<button onclick="sendTaskCompletionEmail(${task.id})" title="Notifier le demandeur par email" class="p-2 hover:bg-surface-container-low rounded-lg text-on-surface-variant hover:text-primary transition-colors">
+        ${isArchive && task.requester && canSendEmailForTask(task) && taskViewMode <= 2 ? `<button onclick="sendTaskCompletionEmail(${task.id})" title="Notifier le demandeur par email" class="p-2 hover:bg-surface-container-low rounded-lg text-on-surface-variant hover:text-primary transition-colors">
           <span class="material-symbols-outlined text-sm">email</span>
         </button>` : ''}
-        ${isArchive ? `<button onclick="restoreTask(${task.id})" title="Restaurer la tâche" class="p-2 hover:bg-surface-container-low rounded-lg text-on-surface-variant hover:text-primary transition-colors">
+        ${isArchive && taskViewMode !== 4 ? `<button onclick="restoreTask(${task.id})" title="Restaurer la tâche" class="p-2 hover:bg-surface-container-low rounded-lg text-on-surface-variant hover:text-primary transition-colors">
           <span class="material-symbols-outlined text-sm">restore</span>
         </button>` : ''}
-        <button onclick="confirmDelete(${task.id})" title="Supprimer la tâche" class="p-2 hover:bg-surface-container-low rounded-lg text-on-surface-variant hover:text-tertiary transition-colors">
-          <span class="material-symbols-outlined text-sm">delete</span>
+        <button onclick="confirmDelete(${task.id})" title="Supprimer la tâche" class="${taskViewMode === 4 ? 'p-1' : 'p-2'} hover:bg-surface-container-low rounded-lg text-on-surface-variant hover:text-tertiary transition-colors">
+          <span class="material-symbols-outlined ${taskViewMode === 4 ? 'text-xs' : 'text-sm'}">delete</span>
         </button>
       </div>
     </div>
 
-    <div class="mb-2 flex items-center gap-2">
+    ${taskViewMode !== 4 ? `<div class="mb-2 flex items-center gap-2">
       <span class="text-xs text-on-surface-variant font-semibold">${escHtml(displayIndex)}</span>
-    </div>
+    </div>` : ''}
 
-    <h4 class="text-lg font-bold text-on-surface mb-2">${escHtml(task.title)}</h4>
+    <h4 class="${titleSize} font-bold text-on-surface ${taskViewMode === 4 ? 'mb-1' : 'mb-2'}">${escHtml(task.title)}</h4>
 
-    ${task.comment ? `
-      <p class="text-sm text-on-surface-variant mb-6 line-clamp-2">${escHtml(task.comment.substring(0, 150))}${task.comment.length > 150 ? '...' : ''}</p>
+    ${task.comment && taskViewMode <= 3 ? `
+      <p class="text-sm text-on-surface-variant ${taskViewMode === 4 ? 'mb-2' : 'mb-6'} ${taskViewMode === 1 ? 'line-clamp-4' : 'line-clamp-2'}">${escHtml(task.comment.substring(0, commentMaxLength))}${task.comment.length > commentMaxLength ? '...' : ''}</p>
     ` : ''}
 
-    <div class="flex items-center justify-between mt-auto pt-4 border-t border-surface-container-low">
-      <div class="flex items-center gap-4">
-        ${task.requester ? `<div class="flex items-center gap-1.5 text-xs text-on-surface-variant">
+    ${showFullMetadata && (createdDate || requestDate || updatedDate) ? `
+      <div class="mb-4 flex flex-wrap gap-3 text-xs text-on-surface-variant">
+        ${createdDate ? `<div class="flex items-center gap-1"><span class="material-symbols-outlined text-sm">schedule</span> Créé: ${createdDate}</div>` : ''}
+        ${requestDate ? `<div class="flex items-center gap-1"><span class="material-symbols-outlined text-sm">event</span> Demandé: ${requestDate}</div>` : ''}
+        ${updatedDate ? `<div class="flex items-center gap-1"><span class="material-symbols-outlined text-sm">update</span> Modifié: ${updatedDate}</div>` : ''}
+      </div>
+    ` : ''}
+
+    <div class="flex items-center justify-between mt-auto ${taskViewMode === 4 ? 'pt-2' : 'pt-4'} border-t border-surface-container-low">
+      <div class="flex items-center ${taskViewMode === 4 ? 'gap-2' : 'gap-4'}">
+        ${task.requester && taskViewMode !== 4 ? `<div class="flex items-center gap-1.5 text-xs text-on-surface-variant">
           <span class="material-symbols-outlined text-base">folder</span>
           <span>${escHtml(task.requester)}</span>
         </div>` : ''}
         ${task.files && task.files.length > 0 ? `<div class="flex items-center gap-1.5 text-xs text-on-surface-variant">
-          <span class="material-symbols-outlined text-base">attach_file</span>
+          <span class="material-symbols-outlined ${taskViewMode === 4 ? 'text-sm' : 'text-base'}">attach_file</span>
           <span>${task.files.length}</span>
         </div>` : ''}
       </div>

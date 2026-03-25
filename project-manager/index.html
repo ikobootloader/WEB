@@ -101,6 +101,27 @@
   .task-card {
     animation: fadeIn 0.3s ease both;
   }
+
+  /* View mode buttons */
+  .view-btn {
+    color: var(--color-on-surface-variant);
+    background: transparent;
+  }
+  .view-btn:hover {
+    color: var(--color-primary);
+  }
+  .view-btn.active {
+    color: var(--color-primary);
+    background: var(--color-primary-fixed);
+  }
+
+  /* Dark mode support */
+  .dark .view-btn {
+    color: var(--color-on-surface-variant);
+  }
+  .dark .view-btn.active {
+    background: rgba(104, 219, 169, 0.15);
+  }
 </style>
 </head>
 
@@ -214,9 +235,27 @@
 
       <!-- Tasks Section -->
       <div class="space-y-4 mb-8">
-        <div class="flex items-center gap-2">
-          <span class="material-symbols-outlined text-primary">task_alt</span>
-          <h3 class="text-xl font-bold font-headline text-on-surface">Tâches</h3>
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary">task_alt</span>
+            <h3 class="text-xl font-bold font-headline text-on-surface">Tâches</h3>
+          </div>
+
+          <!-- View Mode Controls for Dashboard -->
+          <div class="flex gap-2 items-center">
+            <button class="view-btn w-9 h-9 rounded-lg flex items-center justify-center text-sm font-semibold transition-all hover:bg-surface-container-high" data-view="1" title="Vue détaillée (1 colonne)">
+              <span class="material-symbols-outlined text-xl">view_agenda</span>
+            </button>
+            <button class="view-btn w-9 h-9 rounded-lg flex items-center justify-center text-sm font-semibold transition-all hover:bg-surface-container-high" data-view="2" title="Vue 2 colonnes">
+              <span class="material-symbols-outlined text-xl">view_day</span>
+            </button>
+            <button class="view-btn active w-9 h-9 rounded-lg flex items-center justify-center text-sm font-semibold transition-all hover:bg-surface-container-high" data-view="3" title="Vue 3 colonnes">
+              <span class="material-symbols-outlined text-xl">view_week</span>
+            </button>
+            <button class="view-btn w-9 h-9 rounded-lg flex items-center justify-center text-sm font-semibold transition-all hover:bg-surface-container-high" data-view="4" title="Vue compacte (4 colonnes)">
+              <span class="material-symbols-outlined text-xl">grid_view</span>
+            </button>
+          </div>
         </div>
 
         <!-- Tasks Statistics Cards -->
@@ -253,7 +292,7 @@
         </div>
 
         <!-- Recent Tasks -->
-        <div id="dashboardTasks" class="grid grid-cols-1 xl:grid-cols-2 gap-6 mt-4">
+        <div id="dashboardTasks" class="grid grid-cols-1 xl:grid-cols-3 gap-6 mt-4">
           <!-- Tasks will be inserted here -->
         </div>
       </div>
@@ -331,24 +370,46 @@
         </div>
       </div>
 
-      <!-- Filters -->
-      <div class="flex gap-3 mb-6 flex-wrap">
-        <button class="filter-btn active px-4 py-2 rounded-full text-sm font-semibold transition-all" data-filter="all">
-          Toutes
-        </button>
-        <button class="filter-btn px-4 py-2 rounded-full text-sm font-semibold transition-all" data-filter="low">
-          🌿 Faible
-        </button>
-        <button class="filter-btn px-4 py-2 rounded-full text-sm font-semibold transition-all" data-filter="medium">
-          ⚠️ Moyenne
-        </button>
-        <button class="filter-btn px-4 py-2 rounded-full text-sm font-semibold transition-all" data-filter="high">
-          🔥 Haute
-        </button>
+      <!-- Filters and View Controls -->
+      <div class="flex gap-3 mb-6 flex-wrap items-center">
+        <!-- Urgency Filters -->
+        <div class="flex gap-3 flex-wrap">
+          <button class="filter-btn active px-4 py-2 rounded-full text-sm font-semibold transition-all" data-filter="all">
+            Toutes
+          </button>
+          <button class="filter-btn px-4 py-2 rounded-full text-sm font-semibold transition-all" data-filter="low">
+            🌿 Faible
+          </button>
+          <button class="filter-btn px-4 py-2 rounded-full text-sm font-semibold transition-all" data-filter="medium">
+            ⚠️ Moyenne
+          </button>
+          <button class="filter-btn px-4 py-2 rounded-full text-sm font-semibold transition-all" data-filter="high">
+            🔥 Haute
+          </button>
+        </div>
+
+        <!-- Separator -->
+        <div class="h-8 w-px bg-outline-variant"></div>
+
+        <!-- View Mode Controls -->
+        <div class="flex gap-2 items-center">
+          <button class="view-btn w-9 h-9 rounded-lg flex items-center justify-center text-sm font-semibold transition-all hover:bg-surface-container-high" data-view="1" title="Vue détaillée (1 colonne)">
+            <span class="material-symbols-outlined text-xl">view_agenda</span>
+          </button>
+          <button class="view-btn w-9 h-9 rounded-lg flex items-center justify-center text-sm font-semibold transition-all hover:bg-surface-container-high" data-view="2" title="Vue 2 colonnes">
+            <span class="material-symbols-outlined text-xl">view_day</span>
+          </button>
+          <button class="view-btn active w-9 h-9 rounded-lg flex items-center justify-center text-sm font-semibold transition-all hover:bg-surface-container-high" data-view="3" title="Vue 3 colonnes">
+            <span class="material-symbols-outlined text-xl">view_week</span>
+          </button>
+          <button class="view-btn w-9 h-9 rounded-lg flex items-center justify-center text-sm font-semibold transition-all hover:bg-surface-container-high" data-view="4" title="Vue compacte (4 colonnes)">
+            <span class="material-symbols-outlined text-xl">grid_view</span>
+          </button>
+        </div>
       </div>
 
       <!-- Tasks Container -->
-      <div id="tasks" class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+      <div id="tasks" class="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <!-- Tasks will be inserted here -->
       </div>
 
@@ -369,11 +430,29 @@
 
       <!-- Archived Tasks Section -->
       <div class="mb-8">
-        <div class="flex items-center gap-2 mb-4">
-          <span class="material-symbols-outlined text-primary">task_alt</span>
-          <h3 class="text-xl font-bold font-headline text-on-surface">Tâches archivées</h3>
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary">task_alt</span>
+            <h3 class="text-xl font-bold font-headline text-on-surface">Tâches archivées</h3>
+          </div>
+
+          <!-- View Mode Controls for Archives -->
+          <div class="flex gap-2 items-center">
+            <button class="view-btn w-9 h-9 rounded-lg flex items-center justify-center text-sm font-semibold transition-all hover:bg-surface-container-high" data-view="1" title="Vue détaillée (1 colonne)">
+              <span class="material-symbols-outlined text-xl">view_agenda</span>
+            </button>
+            <button class="view-btn w-9 h-9 rounded-lg flex items-center justify-center text-sm font-semibold transition-all hover:bg-surface-container-high" data-view="2" title="Vue 2 colonnes">
+              <span class="material-symbols-outlined text-xl">view_day</span>
+            </button>
+            <button class="view-btn active w-9 h-9 rounded-lg flex items-center justify-center text-sm font-semibold transition-all hover:bg-surface-container-high" data-view="3" title="Vue 3 colonnes">
+              <span class="material-symbols-outlined text-xl">view_week</span>
+            </button>
+            <button class="view-btn w-9 h-9 rounded-lg flex items-center justify-center text-sm font-semibold transition-all hover:bg-surface-container-high" data-view="4" title="Vue compacte (4 colonnes)">
+              <span class="material-symbols-outlined text-xl">grid_view</span>
+            </button>
+          </div>
         </div>
-        <div id="archives" class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <div id="archives" class="grid grid-cols-1 xl:grid-cols-3 gap-6">
           <!-- Archived tasks will be inserted here -->
         </div>
       </div>
