@@ -209,8 +209,8 @@
       <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">account_balance</span>
     </div>
     <div>
-      <h1 class="text-xl font-bold text-primary font-headline leading-tight">TaskMDA</h1>
-      <p class="text-[10px] uppercase tracking-wider text-on-surface-variant font-semibold">Gestion de Projets</p>
+      <h1 id="appName" class="text-xl font-bold text-primary font-headline leading-tight">TaskMDA</h1>
+      <p id="appTagline" class="text-[10px] uppercase tracking-wider text-on-surface-variant font-semibold">Gestion de Projets</p>
     </div>
   </div>
 
@@ -733,11 +733,12 @@
       <div class="bg-surface-container-low p-6 rounded-xl mb-6">
         <h3 class="text-lg font-bold mb-2 flex items-center gap-2">
           <span class="material-symbols-outlined text-primary">mail</span>
-          Templates d'emails
+          Templates d'emails & Signature
         </h3>
-        <p class="text-sm text-on-surface-variant mb-4">Personnalisez les modèles d'emails envoyés aux demandeurs</p>
+        <p class="text-sm text-on-surface-variant mb-4">Personnalisez les modèles d'emails et votre signature</p>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Email Templates Buttons -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
           <button onclick="openEmailTemplateModal('completion')" class="px-4 py-3 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold flex items-center justify-center gap-2">
             <span class="material-symbols-outlined">check_circle</span>
             <span>Email de réalisation</span>
@@ -745,6 +746,72 @@
           <button onclick="openEmailTemplateModal('inquiry')" class="px-4 py-3 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold flex items-center justify-center gap-2">
             <span class="material-symbols-outlined">help</span>
             <span>Email de demande d'infos</span>
+          </button>
+        </div>
+
+        <!-- Email Signature Section -->
+        <div class="border-t border-surface-container pt-6">
+          <h4 class="text-md font-bold mb-3 flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary text-lg">signature</span>
+            Signature email
+          </h4>
+
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-semibold mb-2">Texte de la signature</label>
+              <textarea id="emailSignatureText" rows="4" class="w-full px-4 py-3 bg-surface-container border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none text-sm" placeholder="Ex: Cordialement,&#10;Prénom NOM&#10;Service XYZ&#10;Administration"></textarea>
+            </div>
+
+            <div>
+              <label class="block text-sm font-semibold mb-2">Logo / Image de signature (optionnel)</label>
+              <p class="text-xs text-on-surface-variant mb-2">Ajoutez le logo de votre administration (max 500 Ko, formats: PNG, JPG, SVG)</p>
+              <input type="file" id="signatureImageInput" accept="image/png,image/jpeg,image/jpg,image/svg+xml" class="hidden">
+              <div class="flex gap-3">
+                <button onclick="document.getElementById('signatureImageInput').click()" class="px-4 py-2 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold flex items-center gap-2">
+                  <span class="material-symbols-outlined">upload</span>
+                  Choisir une image
+                </button>
+                <button onclick="removeSignatureImage()" class="px-4 py-2 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold flex items-center gap-2 text-error">
+                  <span class="material-symbols-outlined">delete</span>
+                  Supprimer l'image
+                </button>
+              </div>
+              <div id="signatureImagePreview" class="mt-3 hidden">
+                <p class="text-xs text-on-surface-variant mb-2">Aperçu :</p>
+                <img id="signatureImagePreviewImg" src="" alt="Signature" class="max-w-xs max-h-32 border border-surface-container rounded-xl">
+              </div>
+            </div>
+
+            <button onclick="saveEmailSignature()" class="w-full px-4 py-3 bg-primary-gradient text-white rounded-xl font-semibold flex items-center justify-center gap-2">
+              <span class="material-symbols-outlined">save</span>
+              Enregistrer la signature
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- App Branding Settings -->
+      <div class="bg-surface-container-low p-6 rounded-xl mb-6">
+        <h3 class="text-lg font-bold mb-2 flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary">badge</span>
+          Identité de l'application
+        </h3>
+        <p class="text-sm text-on-surface-variant mb-4">Personnalisez le nom et le descriptif affichés en haut à gauche</p>
+
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm font-semibold mb-2">Nom de l'application</label>
+            <input id="appNameInput" type="text" placeholder="Ex: TaskMDA" class="w-full px-4 py-3 bg-surface-container border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none">
+          </div>
+
+          <div>
+            <label class="block text-sm font-semibold mb-2">Descriptif / Tagline</label>
+            <input id="appTaglineInput" type="text" placeholder="Ex: Gestion de Projets" class="w-full px-4 py-3 bg-surface-container border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none">
+          </div>
+
+          <button onclick="saveAppBranding()" class="w-full px-4 py-3 bg-primary-gradient text-white rounded-xl font-semibold flex items-center justify-center gap-2">
+            <span class="material-symbols-outlined">save</span>
+            Enregistrer l'identité
           </button>
         </div>
       </div>
@@ -781,6 +848,55 @@
               <div class="w-11 h-6 bg-surface-container-high peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
             </label>
           </div>
+        </div>
+      </div>
+
+      <!-- File System Access - Automatic Backup -->
+      <div class="bg-surface-container-low p-6 rounded-xl mb-6">
+        <h3 class="text-lg font-bold mb-2 flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary">folder_open</span>
+          Sauvegarde automatique sur disque
+        </h3>
+        <p class="text-sm text-on-surface-variant mb-4">Liez un dossier local pour sauvegarder automatiquement vos données</p>
+
+        <!-- Connection Status -->
+        <div class="flex items-center justify-between p-4 bg-surface-container rounded-xl mb-4">
+          <div class="flex items-center gap-3">
+            <span class="material-symbols-outlined text-primary">sync</span>
+            <div>
+              <h4 class="font-semibold text-on-surface">Statut de connexion</h4>
+              <p class="text-xs text-on-surface-variant flex items-center gap-2">
+                <span id="fsaStatus" class="w-3 h-3 rounded-full bg-gray-400"></span>
+                <span id="fsaStatusText">Non connecté</span>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- FSA Actions -->
+        <div class="space-y-3">
+          <button onclick="linkBackupFolder()" class="w-full px-4 py-3 bg-primary-gradient text-white rounded-xl font-semibold flex items-center justify-center gap-2">
+            <span class="material-symbols-outlined">link</span>
+            Lier un dossier de sauvegarde
+          </button>
+
+          <button id="btnRestoreFromFolder" onclick="restoreFromLinkedFolder()" class="hidden w-full px-4 py-3 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold flex items-center justify-center gap-2">
+            <span class="material-symbols-outlined">restore</span>
+            Restaurer depuis le dossier
+          </button>
+
+          <button id="btnUnlinkFolder" onclick="unlinkBackupFolder()" class="hidden w-full px-4 py-3 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold flex items-center justify-center gap-2 text-error">
+            <span class="material-symbols-outlined">link_off</span>
+            Délier le dossier
+          </button>
+        </div>
+
+        <!-- Info Box -->
+        <div class="mt-4 p-3 bg-primary/10 rounded-xl">
+          <p class="text-xs text-on-surface-variant leading-relaxed">
+            <span class="material-symbols-outlined text-xs align-middle">info</span>
+            Une fois lié, le dossier conservera automatiquement une copie de toutes vos données (tâches, projets, configuration) même si votre navigateur efface le cache.
+          </p>
         </div>
       </div>
 
@@ -864,28 +980,61 @@
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label class="block text-sm font-semibold mb-2">Demandeur</label>
-          <input id="taskRequester" type="text" placeholder="Ex: S3AD, SE2S" list="requesterList" class="w-full px-4 py-2 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none">
-          <datalist id="requesterList">
-            <option value="S3AD">
-            <option value="SE2S">
-            <option value="MDA">
-            <option value="PSS">
-            <option value="ASG">
-            <option value="Autres">
-          </datalist>
+          <label class="block text-sm font-semibold mb-2">Demandeur(s)</label>
+          <div id="requesterCheckboxes" class="p-3 bg-surface-container-low rounded-xl space-y-2">
+            <label class="flex items-center gap-2 cursor-pointer hover:bg-surface-container px-2 py-1 rounded">
+              <input type="checkbox" value="S3AD" class="requester-checkbox">
+              <span class="text-sm">S3AD</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer hover:bg-surface-container px-2 py-1 rounded">
+              <input type="checkbox" value="SE2S" class="requester-checkbox">
+              <span class="text-sm">SE2S</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer hover:bg-surface-container px-2 py-1 rounded">
+              <input type="checkbox" value="MDA" class="requester-checkbox">
+              <span class="text-sm">MDA</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer hover:bg-surface-container px-2 py-1 rounded">
+              <input type="checkbox" value="PSS" class="requester-checkbox">
+              <span class="text-sm">PSS</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer hover:bg-surface-container px-2 py-1 rounded">
+              <input type="checkbox" value="ASG" class="requester-checkbox">
+              <span class="text-sm">ASG</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer hover:bg-surface-container px-2 py-1 rounded">
+              <input type="checkbox" value="Autres" class="requester-checkbox">
+              <span class="text-sm">Autres</span>
+            </label>
+          </div>
+          <input id="taskRequester" type="hidden">
         </div>
 
         <div>
-          <label class="block text-sm font-semibold mb-2">Sujet</label>
-          <input id="taskType" type="text" placeholder="Ex: SOLIS, MULTIGEST" list="typeList" class="w-full px-4 py-2 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none">
-          <datalist id="typeList">
-            <option value="SOLIS">
-            <option value="MULTIGEST">
-            <option value="BO">
-            <option value="Courriers">
-            <option value="Autres">
-          </datalist>
+          <label class="block text-sm font-semibold mb-2">Sujet(s)</label>
+          <div id="typeCheckboxes" class="p-3 bg-surface-container-low rounded-xl space-y-2">
+            <label class="flex items-center gap-2 cursor-pointer hover:bg-surface-container px-2 py-1 rounded">
+              <input type="checkbox" value="SOLIS" class="type-checkbox">
+              <span class="text-sm">SOLIS</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer hover:bg-surface-container px-2 py-1 rounded">
+              <input type="checkbox" value="MULTIGEST" class="type-checkbox">
+              <span class="text-sm">MULTIGEST</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer hover:bg-surface-container px-2 py-1 rounded">
+              <input type="checkbox" value="BO" class="type-checkbox">
+              <span class="text-sm">BO</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer hover:bg-surface-container px-2 py-1 rounded">
+              <input type="checkbox" value="Courriers" class="type-checkbox">
+              <span class="text-sm">Courriers</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer hover:bg-surface-container px-2 py-1 rounded">
+              <input type="checkbox" value="Autres" class="type-checkbox">
+              <span class="text-sm">Autres</span>
+            </label>
+          </div>
+          <input id="taskType" type="hidden">
         </div>
       </div>
 
@@ -1017,6 +1166,132 @@
         </button>
         <button type="button" onclick="closeModal()" class="px-6 py-3 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold">
           Annuler
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Task Detail View Modal -->
+<div id="taskDetailOverlay" onclick="handleTaskDetailOverlayClick(event)" class="fixed inset-0 bg-black/40 backdrop-blur-md z-[100] hidden flex items-center justify-center p-4">
+  <div class="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-4xl mx-4 max-h-[90vh] flex flex-col" onclick="event.stopPropagation()">
+    <!-- Header -->
+    <div class="flex justify-between items-start p-6 border-b border-surface-container shrink-0">
+      <div class="flex-1 pr-4">
+        <div class="flex items-center gap-3 mb-3">
+          <span id="detailBadgeUrgency" class="px-3 py-1 rounded-full text-xs font-bold uppercase"></span>
+          <span id="detailBadgeStatus" class="px-3 py-1 rounded-full text-xs font-bold uppercase"></span>
+          <span id="detailBadgeType" class="px-2 py-1 bg-surface-container text-on-surface-variant rounded-full text-[10px] font-bold uppercase"></span>
+          <span id="detailBadgeRecurring" class="px-2 py-1 bg-surface-container text-on-surface-variant rounded-full text-[10px]"></span>
+        </div>
+        <h2 id="detailTitle" class="text-2xl font-bold font-headline text-on-surface mb-2"></h2>
+        <div id="detailIndex" class="text-sm text-on-surface-variant font-semibold"></div>
+      </div>
+      <button onclick="closeTaskDetailModal()" class="w-10 h-10 flex items-center justify-center hover:bg-surface-container rounded-lg transition-colors shrink-0">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+
+    <!-- Content -->
+    <div class="overflow-y-auto flex-1 p-6 space-y-6">
+      <!-- Description -->
+      <div id="detailDescriptionSection" class="hidden">
+        <h3 class="text-sm font-bold text-on-surface-variant uppercase tracking-wider mb-2 flex items-center gap-2">
+          <span class="material-symbols-outlined text-base">description</span>
+          Description
+        </h3>
+        <div id="detailDescription" class="prose prose-sm max-w-none bg-surface-container-low p-4 rounded-xl text-on-surface"></div>
+      </div>
+
+      <!-- Metadata Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Requester -->
+        <div id="detailRequesterSection" class="hidden">
+          <h3 class="text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">Demandeur</h3>
+          <div id="detailRequester" class="flex items-center gap-2 text-on-surface">
+            <span class="material-symbols-outlined text-primary">folder</span>
+            <span class="font-semibold"></span>
+          </div>
+        </div>
+
+        <!-- Request Date -->
+        <div id="detailRequestDateSection" class="hidden">
+          <h3 class="text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">Date de demande</h3>
+          <div id="detailRequestDate" class="flex items-center gap-2 text-on-surface">
+            <span class="material-symbols-outlined text-primary">event</span>
+            <span class="font-semibold"></span>
+          </div>
+        </div>
+
+        <!-- Deadline -->
+        <div id="detailDeadlineSection" class="hidden">
+          <h3 class="text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">Échéance</h3>
+          <div id="detailDeadline" class="flex items-center gap-2 text-on-surface">
+            <span class="material-symbols-outlined text-primary">alarm</span>
+            <span class="font-semibold"></span>
+          </div>
+        </div>
+
+        <!-- Created At -->
+        <div id="detailCreatedSection" class="hidden">
+          <h3 class="text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">Date de création</h3>
+          <div id="detailCreated" class="flex items-center gap-2 text-on-surface">
+            <span class="material-symbols-outlined text-primary">schedule</span>
+            <span class="font-semibold"></span>
+          </div>
+        </div>
+
+        <!-- Updated At -->
+        <div id="detailUpdatedSection" class="hidden">
+          <h3 class="text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">Dernière modification</h3>
+          <div id="detailUpdated" class="flex items-center gap-2 text-on-surface">
+            <span class="material-symbols-outlined text-primary">update</span>
+            <span class="font-semibold"></span>
+          </div>
+        </div>
+
+        <!-- Archived At -->
+        <div id="detailArchivedSection" class="hidden">
+          <h3 class="text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">Date d'archivage</h3>
+          <div id="detailArchived" class="flex items-center gap-2 text-on-surface">
+            <span class="material-symbols-outlined text-primary">inventory</span>
+            <span class="font-semibold"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Attached Files -->
+      <div id="detailFilesSection" class="hidden">
+        <h3 class="text-sm font-bold text-on-surface-variant uppercase tracking-wider mb-3 flex items-center gap-2">
+          <span class="material-symbols-outlined text-base">attach_file</span>
+          Fichiers joints (<span id="detailFilesCount">0</span>)
+        </h3>
+        <div id="detailFilesList" class="space-y-2"></div>
+      </div>
+    </div>
+
+    <!-- Footer with action buttons -->
+    <div class="border-t border-surface-container p-6 shrink-0">
+      <div class="flex justify-end gap-3">
+        <button id="detailBtnEmail" onclick="sendTaskInquiryEmailFromDetail()" class="px-4 py-2 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold flex items-center gap-2 hidden">
+          <span class="material-symbols-outlined text-sm">email</span>
+          Contacter
+        </button>
+        <button id="detailBtnEdit" onclick="editTaskFromDetail()" class="px-4 py-2 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold flex items-center gap-2">
+          <span class="material-symbols-outlined text-sm">edit</span>
+          Modifier
+        </button>
+        <button id="detailBtnComplete" onclick="markAsCompletedFromDetail()" class="px-4 py-2 bg-primary-gradient text-white rounded-xl font-semibold flex items-center gap-2 hidden">
+          <span class="material-symbols-outlined text-sm">check</span>
+          Marquer réalisé
+        </button>
+        <button id="detailBtnRestore" onclick="restoreTaskFromDetail()" class="px-4 py-2 bg-primary-gradient text-white rounded-xl font-semibold flex items-center gap-2 hidden">
+          <span class="material-symbols-outlined text-sm">restore</span>
+          Restaurer
+        </button>
+        <button id="detailBtnDelete" onclick="deleteTaskFromDetail()" class="px-4 py-2 bg-error text-white rounded-xl font-semibold flex items-center gap-2">
+          <span class="material-symbols-outlined text-sm">delete</span>
+          Supprimer
         </button>
       </div>
     </div>
@@ -1679,6 +1954,112 @@
       <span class="material-symbols-outlined">lock_open</span>
       <span>Déverrouiller</span>
     </button>
+  </div>
+</div>
+
+<!-- Project Detail View Modal -->
+<div id="projectDetailOverlay" onclick="handleProjectDetailOverlayClick(event)" class="fixed inset-0 bg-black/40 backdrop-blur-md z-[100] hidden flex items-center justify-center p-4">
+  <div class="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-4xl mx-4 max-h-[90vh] flex flex-col" onclick="event.stopPropagation()">
+    <!-- Header -->
+    <div class="flex justify-between items-start p-6 border-b border-surface-container shrink-0">
+      <div class="flex-1 pr-4">
+        <h2 id="projectDetailTitle" class="text-2xl font-bold font-headline text-on-surface mb-2"></h2>
+        <div class="flex items-center gap-2 flex-wrap">
+          <span id="projectDetailStatus" class="px-3 py-1 rounded-full text-xs font-bold"></span>
+          <span id="projectDetailRequesters" class="text-sm text-on-surface-variant"></span>
+        </div>
+      </div>
+      <button onclick="closeProjectDetailModal()" class="w-10 h-10 flex items-center justify-center hover:bg-surface-container rounded-lg transition-colors shrink-0">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+
+    <!-- Content -->
+    <div class="overflow-y-auto flex-1 p-6 space-y-6">
+      <!-- Description -->
+      <div id="projectDetailDescriptionSection" class="hidden">
+        <h3 class="text-sm font-bold text-on-surface-variant uppercase tracking-wider mb-2 flex items-center gap-2">
+          <span class="material-symbols-outlined text-base">description</span>
+          Description
+        </h3>
+        <div id="projectDetailDescription" class="prose prose-sm max-w-none bg-surface-container-low p-4 rounded-xl text-on-surface"></div>
+      </div>
+
+      <!-- Metadata Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Start Date -->
+        <div id="projectDetailStartSection">
+          <h3 class="text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">Date de début</h3>
+          <div id="projectDetailStart" class="flex items-center gap-2 text-on-surface">
+            <span class="material-symbols-outlined text-primary">play_arrow</span>
+            <span class="font-semibold"></span>
+          </div>
+        </div>
+
+        <!-- End Date -->
+        <div id="projectDetailEndSection">
+          <h3 class="text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">Date de fin</h3>
+          <div id="projectDetailEnd" class="flex items-center gap-2 text-on-surface">
+            <span class="material-symbols-outlined text-primary">stop</span>
+            <span class="font-semibold"></span>
+          </div>
+        </div>
+
+        <!-- Created At -->
+        <div id="projectDetailCreatedSection">
+          <h3 class="text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">Date de création</h3>
+          <div id="projectDetailCreated" class="flex items-center gap-2 text-on-surface">
+            <span class="material-symbols-outlined text-primary">schedule</span>
+            <span class="font-semibold"></span>
+          </div>
+        </div>
+
+        <!-- Archived At -->
+        <div id="projectDetailArchivedSection" class="hidden">
+          <h3 class="text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">Date d'archivage</h3>
+          <div id="projectDetailArchived" class="flex items-center gap-2 text-on-surface">
+            <span class="material-symbols-outlined text-primary">inventory</span>
+            <span class="font-semibold"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Progress -->
+      <div>
+        <h3 class="text-sm font-bold text-on-surface-variant uppercase tracking-wider mb-3 flex items-center gap-2">
+          <span class="material-symbols-outlined text-base">trending_up</span>
+          Progression
+        </h3>
+        <div class="flex items-center gap-3">
+          <div class="flex-1 bg-surface-container-low rounded-full h-3 overflow-hidden">
+            <div id="projectDetailProgressBar" class="bg-primary-gradient h-full transition-all duration-300" style="width: 0%"></div>
+          </div>
+          <span id="projectDetailProgressText" class="text-sm font-bold text-on-surface">0%</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer with action buttons -->
+    <div class="border-t border-surface-container p-6 shrink-0">
+      <div class="flex justify-end gap-3">
+        <button id="projectDetailBtnEdit" onclick="editProjectFromDetail()" class="px-4 py-2 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold flex items-center gap-2">
+          <span class="material-symbols-outlined text-sm">edit</span>
+          Modifier
+        </button>
+        <button id="projectDetailBtnArchive" onclick="archiveProjectFromDetail()" class="px-4 py-2 bg-primary-gradient text-white rounded-xl font-semibold flex items-center gap-2 hidden">
+          <span class="material-symbols-outlined text-sm">inventory_2</span>
+          Archiver
+        </button>
+        <button id="projectDetailBtnRestore" onclick="restoreProjectFromDetail()" class="px-4 py-2 bg-primary-gradient text-white rounded-xl font-semibold flex items-center gap-2 hidden">
+          <span class="material-symbols-outlined text-sm">restore</span>
+          Restaurer
+        </button>
+        <button id="projectDetailBtnDelete" onclick="deleteProjectFromDetail()" class="px-4 py-2 bg-error text-white rounded-xl font-semibold flex items-center gap-2">
+          <span class="material-symbols-outlined text-sm">delete</span>
+          Supprimer
+        </button>
+      </div>
+    </div>
   </div>
 </div>
 

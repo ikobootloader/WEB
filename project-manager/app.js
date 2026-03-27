@@ -1,8 +1,8 @@
-// ══════════════════════════════════════════════════════════════
-//  GESTIONNAIRE DE PROJETS — app.js
+﻿// ..............................................................
+//  GESTIONNAIRE DE PROJETS ?" app.js
 //  Stockage : IndexedDB + AES-256-GCM (Web Crypto API native)
 //  + File System Access API (sauvegarde automatique sur disque)
-// ══════════════════════════════════════════════════════════════
+// ..............................................................
 
 // IndexedDB Configuration
 const DB_NAME = 'TaskMDA_DB';
@@ -18,7 +18,7 @@ const LEGACY_CONFIG_KEY = 'projets_config_v4_enc';
 
 const ITER_COUNT  = 310_000;
 
-// ── État global ──────────────────────────────────────────────
+// "?"? ?tat global "?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?
 let tasks        = [];
 let versions     = {}; // { "SOLIS": "2.4.1", "MULTIGEST": "1.2.0" }
 let projects     = []; // Liste des projets avec timeline Gantt
@@ -82,6 +82,14 @@ TaskMDA - Gestion de taches`
   appearance: {       // Préférences d'apparence
     darkMode: false,
     highContrast: false
+  },
+  emailSignature: {   // Signature email personnalisable
+    text: '',
+    image: null       // { data: base64, type: mime, name: filename }
+  },
+  branding: {         // Personnalisation de l'identité
+    appName: 'TaskMDA',
+    appTagline: 'Gestion de Projets'
   }
 };
 let editingId    = null;
@@ -94,11 +102,13 @@ let cryptoKey    = null;
 let currentPage  = 1;
 let itemsPerPage = 12;
 let isSubmitting = false; // Protection contre les doubles soumissions
+let isMarkingCompleted = false; // Protection contre les doubles clics sur "Marquer réalisé"
+let isSaving = false; // Protection contre les sauvegardes simultanées
 let ganttViewMode = 'month'; // 'month' | 'weeks'
 
-// ════════════════════════════════════════════════════════════
-//  DÉMARRAGE
-// ════════════════════════════════════════════════════════════
+// ............................................................
+//  D?MARRAGE
+// ............................................................
 
 window.addEventListener('DOMContentLoaded', async () => {
   initUI();
@@ -112,6 +122,12 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   // Initialize IndexedDB
   await initDB();
+
+  // Initialize FSA database
+  await initFSADB();
+
+  // Check and restore folder connection
+  await checkFolderConnection();
 
   // Migrate from localStorage if needed
   await migrateFromLocalStorage();
@@ -131,6 +147,10 @@ function initUI() {
   initNavigation();
   initFilterButtons();
   initViewButtons();
+  applyAppearanceSettings();
+  updateAppBranding();  // Apply custom app name and tagline
+  initProjectStatusPills();
+  checkBackupReminder();
 }
 
 function initEventListeners() {
@@ -181,6 +201,10 @@ function initEventListeners() {
   // Recurring task toggle
   document.getElementById('isRecurring')?.addEventListener('change', (e) => {
     document.getElementById('recurringFields').classList.toggle('hidden', !e.target.checked);
+    // Mettre à jour les champs spécifiques (hebdo/mensuel) si activé
+    if (e.target.checked) {
+      updateRecurringFields();
+    }
   });
 
   // Recurring frequency change - show/hide specific fields
@@ -195,6 +219,21 @@ function initEventListeners() {
         document.getElementById('recurringEndDate').value = '';
       }
     }
+  });
+
+  // Multi-select for Requesters and Types
+  document.querySelectorAll('.requester-checkbox').forEach(checkbox => {
+    checkbox.addEventListener('change', () => {
+      const selected = Array.from(document.querySelectorAll('.requester-checkbox:checked')).map(cb => cb.value);
+      document.getElementById('taskRequester').value = selected.join(', ');
+    });
+  });
+
+  document.querySelectorAll('.type-checkbox').forEach(checkbox => {
+    checkbox.addEventListener('change', () => {
+      const selected = Array.from(document.querySelectorAll('.type-checkbox:checked')).map(cb => cb.value);
+      document.getElementById('taskType').value = selected.join(', ');
+    });
   });
 
   // Mobile menu
@@ -222,9 +261,9 @@ function initEventListeners() {
   });
 }
 
-// ════════════════════════════════════════════════════════════
+// ............................................................
 //  MOBILE MENU
-// ════════════════════════════════════════════════════════════
+// ............................................................
 
 function toggleMobileMenu() {
   const sidebar = document.getElementById('sidebar');
@@ -258,9 +297,9 @@ function initNavigation() {
   });
 }
 
-// ════════════════════════════════════════════════════════════
+// ............................................................
 //  SIDEBAR COUNTS UPDATE
-// ════════════════════════════════════════════════════════════
+// ............................................................
 
 function updateSidebarCounts() {
   const active = getActiveTasks();
@@ -304,9 +343,9 @@ function updateNotificationBadge() {
   }
 }
 
-// ════════════════════════════════════════════════════════════
+// ............................................................
 //  NAVIGATION PAR VUES
-// ════════════════════════════════════════════════════════════
+// ............................................................
 
 function switchView(view) {
   activeView = view;
@@ -349,11 +388,15 @@ function switchView(view) {
   else if (view === 'tasks') renderTasks();
   else if (view === 'projects') renderGanttChart();
   else if (view === 'archives') renderArchives();
+  else if (view === 'settings') {
+    loadEmailSignature();
+    loadAppBrandingSettings();
+  }
 }
 
-// ════════════════════════════════════════════════════════════
+// ............................................................
 //  RENDU DASHBOARD
-// ════════════════════════════════════════════════════════════
+// ............................................................
 
 function renderDashboard() {
   const active = getActiveTasks();
@@ -604,9 +647,9 @@ function initViewButtons() {
   });
 }
 
-// ════════════════════════════════════════════════════════════
-//  ÉCRAN DE VERROUILLAGE
-// ════════════════════════════════════════════════════════════
+// ............................................................
+//  ?CRAN DE VERROUILLAGE
+// ............................................................
 
 function showLockScreen(mode) {
   const screen = document.getElementById('lockScreen');
@@ -680,7 +723,7 @@ async function submitPassword() {
 
   btn.disabled = true;
   const btnText = btn.querySelector('span:last-child');
-  if (btnText) btnText.textContent = 'Chargement…';
+  if (btnText) btnText.textContent = 'Chargement...';
 
   try {
     if (mode === 'create') {
@@ -747,18 +790,18 @@ function lockApp() {
 
 async function changePassword() {
   const newPwd = prompt('Nouveau mot de passe (4 car. min) :');
-  if (!newPwd || newPwd.length < 4) { showToast('❌ Trop court'); return; }
-  if (prompt('Confirmer :') !== newPwd) { showToast('❌ Ne correspond pas'); return; }
+  if (!newPwd || newPwd.length < 4) { showToast('Trop court'); return; }
+  if (prompt('Confirmer :') !== newPwd) { showToast('Ne correspond pas'); return; }
   const salt = crypto.getRandomValues(new Uint8Array(16));
   await idbSet('salt', bufToHex(salt));
   cryptoKey = await deriveKey(newPwd, salt);
   await saveToStorage();
-  showToast('🔑 Le mot de passe a été changé avec succès');
+  showToast('Le mot de passe a été changé avec succès');
 }
 
-// ════════════════════════════════════════════════════════════
-//  CRYPTO — PBKDF2 → AES-256-GCM
-// ════════════════════════════════════════════════════════════
+// ............................................................
+//  CRYPTO ?" PBKDF2 → AES-256-GCM
+// ............................................................
 
 async function deriveKey(password, salt) {
   const raw = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey']);
@@ -783,9 +826,9 @@ async function decrypt(stored) {
 const bufToHex = b => Array.from(b).map(x => x.toString(16).padStart(2,'0')).join('');
 function hexToBuf(h) { const a = new Uint8Array(h.length/2); for (let i=0;i<a.length;i++) a[i]=parseInt(h.slice(i*2,i*2+2),16); return a; }
 
-// ════════════════════════════════════════════════════════════
+// ............................................................
 //  INDEXEDDB WRAPPER
-// ════════════════════════════════════════════════════════════
+// ............................................................
 
 let db = null;
 
@@ -862,9 +905,310 @@ async function idbClear() {
   });
 }
 
-// ════════════════════════════════════════════════════════════
+// ............................................................
+//  FILE SYSTEM ACCESS API (FSA) - SAUVEGARDE AUTOMATIQUE
+// ............................................................
+
+const FSA_DB_NAME = 'TaskMDA_FSA';
+const FSA_DB_VERSION = 1;
+const FSA_STORE_NAME = 'directory_handles';
+let fsaDB = null;
+
+// ?tat de connexion FSA
+let linkedDirectoryHandle = null;
+let fsaConnected = false;
+
+// Initialiser la base FSA pour stocker le DirectoryHandle
+async function initFSADB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(FSA_DB_NAME, FSA_DB_VERSION);
+
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      fsaDB = request.result;
+      resolve(fsaDB);
+    };
+
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains(FSA_STORE_NAME)) {
+        db.createObjectStore(FSA_STORE_NAME);
+      }
+    };
+  });
+}
+
+// Récupérer le DirectoryHandle stocké
+async function getStoredDirectoryHandle() {
+  if (!fsaDB) await initFSADB();
+
+  return new Promise((resolve, reject) => {
+    const transaction = fsaDB.transaction([FSA_STORE_NAME], 'readonly');
+    const store = transaction.objectStore(FSA_STORE_NAME);
+    const request = store.get('backup-folder');
+
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+// Stocker le DirectoryHandle
+async function storeDirectoryHandle(dirHandle) {
+  if (!fsaDB) await initFSADB();
+
+  return new Promise((resolve, reject) => {
+    const transaction = fsaDB.transaction([FSA_STORE_NAME], 'readwrite');
+    const store = transaction.objectStore(FSA_STORE_NAME);
+    const request = store.put(dirHandle, 'backup-folder');
+
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+}
+
+// Supprimer le DirectoryHandle stocké
+async function removeStoredDirectoryHandle() {
+  if (!fsaDB) await initFSADB();
+
+  return new Promise((resolve, reject) => {
+    const transaction = fsaDB.transaction([FSA_STORE_NAME], 'readwrite');
+    const store = transaction.objectStore(FSA_STORE_NAME);
+    const request = store.delete('backup-folder');
+
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+}
+
+// Vérifier les permissions du dossier
+async function verifyDirectoryPermission(dirHandle, requestIfNeeded = false) {
+  const opts = { mode: 'readwrite' };
+
+  // Vérifier la permission actuelle
+  if ((await dirHandle.queryPermission(opts)) === 'granted') {
+    return true;
+  }
+
+  // Demander la permission si nécessaire
+  if (requestIfNeeded && (await dirHandle.requestPermission(opts)) === 'granted') {
+    return true;
+  }
+
+  return false;
+}
+
+// Lier un dossier de sauvegarde
+async function linkBackupFolder() {
+  try {
+    // Vérifier le support FSA
+    if (!('showDirectoryPicker' in window)) {
+      alert('Votre navigateur ne supporte pas l\'API File System Access.\nVeuillez utiliser Chrome, Edge ou un navigateur compatible.');
+      return false;
+    }
+
+    // Ouvrir le sélecteur de dossier
+    const dirHandle = await window.showDirectoryPicker({
+      mode: 'readwrite',
+      startIn: 'documents'
+    });
+
+    // Vérifier les permissions
+    const hasPermission = await verifyDirectoryPermission(dirHandle, true);
+    if (!hasPermission) {
+      alert('Permission refusée pour accéder au dossier.');
+      return false;
+    }
+
+    // Stocker le handle
+    await storeDirectoryHandle(dirHandle);
+    linkedDirectoryHandle = dirHandle;
+    fsaConnected = true;
+
+    // Mettre à jour l'UI
+    updateFSAStatus();
+
+    // Sauvegarder immédiatement
+    await saveToLinkedFolder();
+
+    alert('Dossier de sauvegarde lié avec succès !\nVos données seront automatiquement sauvegardées dans ce dossier.');
+    return true;
+
+  } catch (err) {
+    if (err.name !== 'AbortError') {
+      console.error('Erreur lors de la liaison du dossier:', err);
+      alert('Erreur lors de la liaison du dossier: ' + err.message);
+    }
+    return false;
+  }
+}
+
+// Délier le dossier de sauvegarde
+async function unlinkBackupFolder() {
+  try {
+    await removeStoredDirectoryHandle();
+    linkedDirectoryHandle = null;
+    fsaConnected = false;
+    updateFSAStatus();
+    alert('Dossier de sauvegarde délié avec succès.');
+  } catch (err) {
+    console.error('Erreur lors du déliage du dossier:', err);
+    alert('Erreur lors du déliage du dossier: ' + err.message);
+  }
+}
+
+// Vérifier et restaurer la connexion au dossier au démarrage
+async function checkFolderConnection() {
+  try {
+    const dirHandle = await getStoredDirectoryHandle();
+    if (!dirHandle) {
+      fsaConnected = false;
+      updateFSAStatus();
+      return false;
+    }
+
+    // Vérifier les permissions (sans demander)
+    const hasPermission = await verifyDirectoryPermission(dirHandle, false);
+    if (hasPermission) {
+      linkedDirectoryHandle = dirHandle;
+      fsaConnected = true;
+      updateFSAStatus();
+      console.log('✅ Connexion au dossier de sauvegarde restaurée');
+      return true;
+    } else {
+      fsaConnected = false;
+      updateFSAStatus();
+      console.log('⚠️ Permission dossier perdue - reconnexion manuelle nécessaire');
+      return false;
+    }
+  } catch (err) {
+    console.error('Erreur lors de la vérification du dossier:', err);
+    fsaConnected = false;
+    updateFSAStatus();
+    return false;
+  }
+}
+
+// Sauvegarder toutes les données dans le dossier lié
+async function saveToLinkedFolder() {
+  if (!linkedDirectoryHandle || !fsaConnected) return;
+
+  try {
+    // Préparer les données
+    const data = {
+      tasks: tasks,
+      projects: projects,
+      versions: versions,
+      config: config,
+      exportDate: new Date().toISOString(),
+      appVersion: '1.0.0'
+    };
+
+    // Créer/écrire le fichier de sauvegarde complète
+    const fileHandle = await linkedDirectoryHandle.getFileHandle('taskmda-backup.json', { create: true });
+    const writable = await fileHandle.createWritable();
+    await writable.write(JSON.stringify(data, null, 2));
+    await writable.close();
+
+    // Créer des fichiers séparés pour chaque type de données
+    await writeFSAFile(linkedDirectoryHandle, 'taskmda-tasks.json', tasks);
+    await writeFSAFile(linkedDirectoryHandle, 'taskmda-projects.json', projects);
+    await writeFSAFile(linkedDirectoryHandle, 'taskmda-versions.json', versions);
+    await writeFSAFile(linkedDirectoryHandle, 'taskmda-config.json', config);
+
+    console.log('✅ Sauvegarde automatique effectuée dans le dossier lié');
+
+  } catch (err) {
+    console.error('Erreur lors de la sauvegarde dans le dossier:', err);
+    // Ne pas alerter l'utilisateur pour chaque erreur de sauvegarde auto
+  }
+}
+
+// Fonction utilitaire pour écrire un fichier JSON
+async function writeFSAFile(dirHandle, filename, data) {
+  const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
+  const writable = await fileHandle.createWritable();
+  await writable.write(JSON.stringify(data, null, 2));
+  await writable.close();
+}
+
+// Restaurer les données depuis le dossier lié
+async function restoreFromLinkedFolder() {
+  if (!linkedDirectoryHandle || !fsaConnected) {
+    alert('Aucun dossier de sauvegarde lié.');
+    return;
+  }
+
+  try {
+    // Vérifier les permissions
+    const hasPermission = await verifyDirectoryPermission(linkedDirectoryHandle, true);
+    if (!hasPermission) {
+      alert('Permission refusée pour accéder au dossier.');
+      return;
+    }
+
+    // Lire le fichier de sauvegarde complète
+    const fileHandle = await linkedDirectoryHandle.getFileHandle('taskmda-backup.json');
+    const file = await fileHandle.getFile();
+    const content = await file.text();
+    const data = JSON.parse(content);
+
+    // Demander confirmation
+    const confirm = window.confirm(
+      `Restaurer les données depuis le dossier ?\n\n` +
+      `Date d'export: ${new Date(data.exportDate).toLocaleString()}\n` +
+      `Tâches: ${data.tasks?.length || 0}\n` +
+      `Projets: ${data.projects?.length || 0}\n\n` +
+      `⚠️ Cette action écrasera vos données actuelles !`
+    );
+
+    if (!confirm) return;
+
+    // Restaurer les données
+    if (data.tasks) tasks = data.tasks;
+    if (data.projects) projects = data.projects;
+    if (data.versions) versions = data.versions;
+    if (data.config) config = { ...config, ...data.config };
+
+    // Sauvegarder dans IndexedDB
+    await saveToStorage();
+
+    // Rafraîchir l'affichage
+    renderCurrentView();
+    updateSidebarCounts();
+
+    alert('Données restaurées avec succès depuis le dossier de sauvegarde !');
+
+  } catch (err) {
+    console.error('Erreur lors de la restauration depuis le dossier:', err);
+    alert('Erreur lors de la restauration: ' + err.message);
+  }
+}
+
+// Mettre à jour l'indicateur de statut FSA dans l'UI
+function updateFSAStatus() {
+  const statusIndicator = document.getElementById('fsaStatus');
+  const statusText = document.getElementById('fsaStatusText');
+  const btnLink = document.getElementById('btnLinkFolder');
+  const btnUnlink = document.getElementById('btnUnlinkFolder');
+  const btnRestore = document.getElementById('btnRestoreFromFolder');
+
+  if (statusIndicator && statusText) {
+    if (fsaConnected) {
+      statusIndicator.className = 'w-3 h-3 rounded-full bg-green-500';
+      statusText.textContent = 'Connecté';
+    } else {
+      statusIndicator.className = 'w-3 h-3 rounded-full bg-gray-400';
+      statusText.textContent = 'Non connecté';
+    }
+  }
+
+  if (btnUnlink) btnUnlink.classList.toggle('hidden', !fsaConnected);
+  if (btnRestore) btnRestore.classList.toggle('hidden', !fsaConnected);
+}
+
+// ............................................................
 //  MIGRATION FROM LOCALSTORAGE
-// ════════════════════════════════════════════════════════════
+// ............................................................
 
 async function migrateFromLocalStorage() {
   // Check if data exists in localStorage
@@ -919,9 +1263,9 @@ async function migrateFromLocalStorage() {
   }
 }
 
-// ════════════════════════════════════════════════════════════
+// ............................................................
 //  STOCKAGE
-// ════════════════════════════════════════════════════════════
+// ............................................................
 
 async function loadFromStorage() {
   const raw = await idbGet('tasks');
@@ -995,6 +1339,14 @@ TaskMDA - Gestion de taches`
       appearance: {
         darkMode: false,
         highContrast: false
+      },
+      emailSignature: {
+        text: '',
+        image: null
+      },
+      branding: {
+        appName: 'TaskMDA',
+        appTagline: 'Gestion de Projets'
       }
     };
   } else {
@@ -1055,6 +1407,20 @@ TaskMDA - Gestion de taches`
         highContrast: false
       };
     }
+    // Ensure email signature exists for backwards compatibility
+    if (!config.emailSignature) {
+      config.emailSignature = {
+        text: '',
+        image: null
+      };
+    }
+    // Ensure branding exists for backwards compatibility
+    if (!config.branding) {
+      config.branding = {
+        appName: 'TaskMDA',
+        appTagline: 'Gestion de Projets'
+      };
+    }
   }
 
   // Load view preference
@@ -1091,17 +1457,35 @@ function deduplicateTasks() {
 
   const duplicatesCount = tasks.length - deduplicated.length;
   if (duplicatesCount > 0) {
-    console.log(`🧹 ${duplicatesCount} doublon(s) supprimé(s)`);
+    console.log(`Y ${duplicatesCount} doublon(s) supprimé(s)`);
     tasks = deduplicated;
   }
 }
 
 async function saveToStorage() {
   if (!cryptoKey) return;
-  await idbSet('tasks', await encrypt(tasks));
-  await idbSet('versions', await encrypt(versions));
-  await idbSet('projects', await encrypt(projects));
-  await idbSet('config', await encrypt(config));
+
+  // Protection contre les sauvegardes simultanées
+  if (isSaving) {
+    console.warn('Sauvegarde déjà en cours, opération ignorée');
+    return;
+  }
+
+  isSaving = true;
+
+  try {
+    await idbSet('tasks', await encrypt(tasks));
+    await idbSet('versions', await encrypt(versions));
+    await idbSet('projects', await encrypt(projects));
+    await idbSet('config', await encrypt(config));
+
+    // Sauvegarde automatique dans le dossier lié (si connecté)
+    if (fsaConnected && linkedDirectoryHandle) {
+      await saveToLinkedFolder();
+    }
+  } finally {
+    isSaving = false;
+  }
 }
 
 async function saveViewPreference() {
@@ -1128,9 +1512,9 @@ function updateGridClasses() {
 }
 
 
-// ════════════════════════════════════════════════════════════
+// ............................................................
 //  MODAL
-// ════════════════════════════════════════════════════════════
+// ............................................................
 
 function openModal(id = null) {
   editingId = id;
@@ -1149,9 +1533,21 @@ function openModal(id = null) {
     document.getElementById('taskComment').value       = task.comment     || '';
     document.getElementById('taskDeadline').value      = task.deadline    || '';
     document.getElementById('taskRequestDate').value   = task.requestDate || '';
-    document.getElementById('taskRequester').value     = task.requester   || '';
-    document.getElementById('taskType').value          = task.type        || '';
     document.getElementById('taskOrder').value         = task.order       || '';
+
+    // Set requester checkboxes
+    const requesters = (task.requester || '').split(',').map(r => r.trim()).filter(Boolean);
+    document.querySelectorAll('.requester-checkbox').forEach(cb => {
+      cb.checked = requesters.includes(cb.value);
+    });
+    document.getElementById('taskRequester').value = task.requester || '';
+
+    // Set type checkboxes
+    const types = (task.type || '').split(',').map(t => t.trim()).filter(Boolean);
+    document.querySelectorAll('.type-checkbox').forEach(cb => {
+      cb.checked = types.includes(cb.value);
+    });
+    document.getElementById('taskType').value = task.type || '';
 
     const isRecurring = !!task.recurring;
     document.getElementById('isRecurring').checked = isRecurring;
@@ -1217,9 +1613,361 @@ function closeModal() {
 }
 function handleOverlayClick(e) { if (e.target === document.getElementById('modalOverlay')) closeModal(); }
 
-// ════════════════════════════════════════════════════════════
+// ............................................................
+//  TASK DETAIL VIEW MODAL
+// ............................................................
+
+let currentDetailTaskId = null;
+
+function openTaskDetailModal(taskId, isArchive = false) {
+  console.log('Y" [openTaskDetailModal] taskId:', taskId, 'isArchive:', isArchive);
+  currentDetailTaskId = taskId;
+  const task = tasks.find(t => t.id === taskId);
+  if (!task) return;
+  console.log('Y" [openTaskDetailModal] task.status:', task.status, 'task.archivedAt:', task.archivedAt);
+
+  const overlay = document.getElementById('taskDetailOverlay');
+
+  // Update title and index
+  document.getElementById('detailTitle').textContent = task.title || 'Sans titre';
+  const displayIndex = task.order ? `#${task.order}` : `#${String(taskId).padStart(2,'0')}`;
+  document.getElementById('detailIndex').textContent = displayIndex;
+
+  // Update badges
+  const urgencyLabels = { low:'Faible', medium:'Moyenne', high:'Urgente' };
+  const statusLabels  = { 'en-cours':'En cours', 'en-attente':'En attente', 'realise':'Réalisé' };
+
+  const urgencyBadge = document.getElementById('detailBadgeUrgency');
+  const urgencyColors = { low: 'badge-urgency-low', medium: 'badge-urgency-medium', high: 'badge-urgency-high' };
+  urgencyBadge.className = `px-3 py-1 rounded-full text-xs font-bold uppercase ${urgencyColors[task.urgency || 'low']}`;
+  urgencyBadge.textContent = `${task.urgency === 'low' ? '🌿' : task.urgency === 'medium' ? '⚠️' : '🔥'} ${urgencyLabels[task.urgency] || task.urgency}`;
+
+  const statusBadge = document.getElementById('detailBadgeStatus');
+  const statusColors = { 'en-cours': 'badge-status-encours', 'en-attente': 'badge-status-enattente', 'realise': 'badge-status-realise' };
+  statusBadge.className = `px-3 py-1 rounded-full text-xs font-bold uppercase ${statusColors[task.status] || 'bg-surface-container text-on-surface-variant'}`;
+  statusBadge.textContent = statusLabels[task.status] || task.status;
+
+  const typeBadge = document.getElementById('detailBadgeType');
+  if (task.type) {
+    typeBadge.textContent = task.type;
+    typeBadge.classList.remove('hidden');
+  } else {
+    typeBadge.classList.add('hidden');
+  }
+
+  const recurringBadge = document.getElementById('detailBadgeRecurring');
+  if (task.recurring) {
+    const recurringFreqLabels = { daily: 'Quotidien', weekly: 'Hebdomadaire', monthly: 'Mensuel', yearly: 'Annuel' };
+    recurringBadge.textContent = `🔄 ${recurringFreqLabels[task.recurring.frequency] || task.recurring.frequency}`;
+    recurringBadge.classList.remove('hidden');
+  } else {
+    recurringBadge.classList.add('hidden');
+  }
+
+  // Update description
+  const descSection = document.getElementById('detailDescriptionSection');
+  const descContent = document.getElementById('detailDescription');
+  if (task.comment && task.comment.trim()) {
+    descContent.innerHTML = marked.parse(task.comment);
+    descSection.classList.remove('hidden');
+  } else {
+    descSection.classList.add('hidden');
+  }
+
+  // Format date helper
+  const formatDate = (dateStr) => {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  };
+
+  // Update requester
+  const requesterSection = document.getElementById('detailRequesterSection');
+  const requesterContent = document.getElementById('detailRequester');
+  if (task.requester) {
+    requesterContent.querySelector('span:last-child').textContent = task.requester;
+    requesterSection.classList.remove('hidden');
+  } else {
+    requesterSection.classList.add('hidden');
+  }
+
+  // Update request date
+  const requestDateSection = document.getElementById('detailRequestDateSection');
+  const requestDateContent = document.getElementById('detailRequestDate');
+  if (task.requestDate) {
+    requestDateContent.querySelector('span:last-child').textContent = formatDate(task.requestDate);
+    requestDateSection.classList.remove('hidden');
+  } else {
+    requestDateSection.classList.add('hidden');
+  }
+
+  // Update deadline
+  const deadlineSection = document.getElementById('detailDeadlineSection');
+  const deadlineContent = document.getElementById('detailDeadline');
+  if (task.deadline) {
+    deadlineContent.querySelector('span:last-child').textContent = formatDate(task.deadline);
+    deadlineSection.classList.remove('hidden');
+  } else {
+    deadlineSection.classList.add('hidden');
+  }
+
+  // Update created date
+  const createdSection = document.getElementById('detailCreatedSection');
+  const createdContent = document.getElementById('detailCreated');
+  if (task.createdAt || task.id) {
+    const createdDate = task.createdAt ? formatDate(task.createdAt) : formatDate(task.id);
+    createdContent.querySelector('span:last-child').textContent = createdDate;
+    createdSection.classList.remove('hidden');
+  } else {
+    createdSection.classList.add('hidden');
+  }
+
+  // Update updated date
+  const updatedSection = document.getElementById('detailUpdatedSection');
+  const updatedContent = document.getElementById('detailUpdated');
+  if (task.updatedAt && task.createdAt && task.updatedAt !== task.createdAt) {
+    updatedContent.querySelector('span:last-child').textContent = formatDate(task.updatedAt);
+    updatedSection.classList.remove('hidden');
+  } else {
+    updatedSection.classList.add('hidden');
+  }
+
+  // Update archived date
+  const archivedSection = document.getElementById('detailArchivedSection');
+  const archivedContent = document.getElementById('detailArchived');
+  if (isArchive && task.archivedAt) {
+    archivedContent.querySelector('span:last-child').textContent = formatDate(task.archivedAt);
+    archivedSection.classList.remove('hidden');
+  } else {
+    archivedSection.classList.add('hidden');
+  }
+
+  // Update files
+  const filesSection = document.getElementById('detailFilesSection');
+  const filesList = document.getElementById('detailFilesList');
+  const filesCount = document.getElementById('detailFilesCount');
+  if (task.files && task.files.length > 0) {
+    filesCount.textContent = task.files.length;
+    filesList.innerHTML = task.files.map((file, idx) => `
+      <div class="flex items-center justify-between p-3 bg-surface-container rounded-lg">
+        <div class="flex items-center gap-3">
+          <span class="material-symbols-outlined text-primary">description</span>
+          <div>
+            <p class="font-semibold text-sm">${escHtml(file.name)}</p>
+            <p class="text-xs text-on-surface-variant">${(file.size / 1024).toFixed(1)} Ko</p>
+          </div>
+        </div>
+        <a href="${file.data}" download="${file.name}" class="px-3 py-1.5 bg-primary-gradient text-white rounded-lg text-xs font-semibold flex items-center gap-1">
+          <span class="material-symbols-outlined text-sm">download</span>
+          Télécharger
+        </a>
+      </div>
+    `).join('');
+    filesSection.classList.remove('hidden');
+  } else {
+    filesSection.classList.add('hidden');
+  }
+
+  // Update action buttons based on context
+  const btnEmail = document.getElementById('detailBtnEmail');
+  const btnComplete = document.getElementById('detailBtnComplete');
+  const btnRestore = document.getElementById('detailBtnRestore');
+
+  console.log('YZ [openTaskDetailModal] Configuration des boutons - isArchive:', isArchive);
+
+  if (isArchive) {
+    console.log('YZ [openTaskDetailModal] Mode ARCHIVE - cachant btnComplete');
+    btnEmail.classList.add('hidden');
+    btnComplete.classList.add('hidden');
+    btnRestore.classList.remove('hidden');
+    console.log('YZ [openTaskDetailModal] btnComplete classes après:', btnComplete.className);
+  } else {
+    console.log('YZ [openTaskDetailModal] Mode ACTIF - affichant btnComplete');
+    btnComplete.classList.remove('hidden');
+    btnRestore.classList.add('hidden');
+    if (task.requester && canSendEmailForTask(task)) {
+      btnEmail.classList.remove('hidden');
+    } else {
+      btnEmail.classList.add('hidden');
+    }
+    console.log('YZ [openTaskDetailModal] btnComplete classes après:', btnComplete.className);
+  }
+
+  overlay.classList.remove('hidden');
+}
+
+function closeTaskDetailModal() {
+  document.getElementById('taskDetailOverlay').classList.add('hidden');
+  currentDetailTaskId = null;
+}
+
+function handleTaskDetailOverlayClick(e) {
+  if (e.target === document.getElementById('taskDetailOverlay')) {
+    closeTaskDetailModal();
+  }
+}
+
+// Action button handlers
+function editTaskFromDetail() {
+  const taskId = currentDetailTaskId;
+  closeTaskDetailModal();
+  openModal(taskId);
+}
+
+async function markAsCompletedFromDetail() {
+  if (!currentDetailTaskId) return;
+  const taskId = currentDetailTaskId;
+  closeTaskDetailModal();
+  await markAsCompleted(taskId);
+}
+
+async function restoreTaskFromDetail() {
+  if (!currentDetailTaskId) return;
+  const taskId = currentDetailTaskId;
+  closeTaskDetailModal();
+  await restoreTask(taskId);
+}
+
+function deleteTaskFromDetail() {
+  if (!currentDetailTaskId) return;
+  const taskId = currentDetailTaskId;
+  closeTaskDetailModal();
+  confirmDelete(taskId);
+}
+
+function sendTaskInquiryEmailFromDetail() {
+  if (!currentDetailTaskId) return;
+  sendTaskInquiryEmail(currentDetailTaskId);
+}
+
+// ............................................................
+//  PROJECT DETAIL MODAL
+// ............................................................
+
+let currentDetailProjectId = null;
+
+function openProjectDetailModal(projectId, isArchive = false) {
+  console.log('🔍 [openProjectDetailModal] projectId:', projectId, 'isArchive:', isArchive);
+  currentDetailProjectId = projectId;
+  const project = projects.find(p => p.id === projectId);
+  if (!project) return;
+
+  const overlay = document.getElementById('projectDetailOverlay');
+
+  // Update title
+  document.getElementById('projectDetailTitle').textContent = project.name || 'Sans titre';
+
+  // Update status badge
+  const statusBadge = document.getElementById('projectDetailStatus');
+  const statusColors = { active: 'bg-green-600 text-white', archived: 'bg-gray-600 text-white' };
+  statusBadge.className = `px-3 py-1 rounded-full text-xs font-bold ${statusColors[project.status] || 'bg-surface-container text-on-surface-variant'}`;
+  statusBadge.textContent = project.status === 'active' ? 'Actif' : 'Archivé';
+
+  // Update requesters
+  const requesters = project.requesters && project.requesters.length > 0
+    ? `Demandeurs: ${project.requesters.join(', ')}`
+    : '';
+  document.getElementById('projectDetailRequesters').textContent = requesters;
+
+  // Update description
+  const descSection = document.getElementById('projectDetailDescriptionSection');
+  const descContent = document.getElementById('projectDetailDescription');
+  if (project.description && project.description.trim()) {
+    descContent.innerHTML = marked.parse(project.description);
+    descSection.classList.remove('hidden');
+  } else {
+    descSection.classList.add('hidden');
+  }
+
+  // Format date helper
+  const formatDate = (dateStr) => {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
+  };
+
+  // Update start date
+  document.getElementById('projectDetailStart').querySelector('span:last-child').textContent =
+    project.start ? formatDate(project.start) : 'Non définie';
+
+  // Update end date
+  document.getElementById('projectDetailEnd').querySelector('span:last-child').textContent =
+    project.end ? formatDate(project.end) : 'Non définie';
+
+  // Update created date
+  const createdDate = project.createdAt ? formatDate(project.createdAt) :
+    (project.id ? formatDate(project.id) : 'Non définie');
+  document.getElementById('projectDetailCreated').querySelector('span:last-child').textContent = createdDate;
+
+  // Update archived date
+  const archivedSection = document.getElementById('projectDetailArchivedSection');
+  const archivedContent = document.getElementById('projectDetailArchived');
+  if (isArchive && project.archivedAt) {
+    archivedContent.querySelector('span:last-child').textContent = formatDate(project.archivedAt);
+    archivedSection.classList.remove('hidden');
+  } else {
+    archivedSection.classList.add('hidden');
+  }
+
+  // Update progress
+  const progress = project.progress || 0;
+  document.getElementById('projectDetailProgressBar').style.width = `${progress}%`;
+  document.getElementById('projectDetailProgressText').textContent = `${progress}%`;
+
+  // Update action buttons based on context
+  const btnArchive = document.getElementById('projectDetailBtnArchive');
+  const btnRestore = document.getElementById('projectDetailBtnRestore');
+
+  if (isArchive) {
+    btnArchive.classList.add('hidden');
+    btnRestore.classList.remove('hidden');
+  } else {
+    btnArchive.classList.remove('hidden');
+    btnRestore.classList.add('hidden');
+  }
+
+  overlay.classList.remove('hidden');
+}
+
+function closeProjectDetailModal() {
+  document.getElementById('projectDetailOverlay').classList.add('hidden');
+  currentDetailProjectId = null;
+}
+
+function handleProjectDetailOverlayClick(event) {
+  if (event.target.id === 'projectDetailOverlay') {
+    closeProjectDetailModal();
+  }
+}
+
+function editProjectFromDetail() {
+  const projectId = currentDetailProjectId;
+  closeProjectDetailModal();
+  openProjectModal(projectId);
+}
+
+async function archiveProjectFromDetail() {
+  if (!currentDetailProjectId) return;
+  const projectId = currentDetailProjectId;
+  closeProjectDetailModal();
+  await archiveProject(projectId);
+}
+
+async function restoreProjectFromDetail() {
+  if (!currentDetailProjectId) return;
+  const projectId = currentDetailProjectId;
+  closeProjectDetailModal();
+  await restoreProject(projectId);
+}
+
+async function deleteProjectFromDetail() {
+  if (!currentDetailProjectId) return;
+  const projectId = currentDetailProjectId;
+  closeProjectDetailModal();
+  await confirmDeleteProject(projectId);
+}
+
+// ............................................................
 //  PILLS
-// ════════════════════════════════════════════════════════════
+// ............................................................
 
 function initUrgencyPills() {
   document.querySelectorAll('.urgency-pill').forEach(pill =>
@@ -1271,9 +2019,9 @@ function getSelectedStatus() {
   return document.querySelector('.status-pill.active')?.dataset.status || 'en-cours';
 }
 
-// ════════════════════════════════════════════════════════════
+// ............................................................
 //  FILTRE + TRI
-// ════════════════════════════════════════════════════════════
+// ............................................................
 
 function initFilterTabs() {
   document.querySelectorAll('.filter-tab').forEach(tab =>
@@ -1287,9 +2035,38 @@ function initFilterTabs() {
   );
 }
 
+function toLocalDateInputValue(dateLike = new Date()) {
+  const d = new Date(dateLike);
+  if (Number.isNaN(d.getTime())) return '';
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function parseDateInputValue(value) {
+  if (!value || typeof value !== 'string') return null;
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const parsed = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function isTaskScheduledInFuture(task, referenceDate = new Date()) {
+  const taskDate = parseDateInputValue(task?.requestDate);
+  if (!taskDate) return false;
+  const ref = new Date(referenceDate);
+  ref.setHours(0, 0, 0, 0);
+  return taskDate.getTime() > ref.getTime();
+}
+
 function getActiveTasks() {
-  // Tâches actives = tout sauf "réalisé"
-  return tasks.filter(t => t.status !== 'realise');
+  // Taches actives = non realisees et prevues au plus tard aujourd'hui
+  const activeTasks = tasks.filter(t => t.status !== 'realise' && !isTaskScheduledInFuture(t));
+  console.log('Y"Z [getActiveTasks] Total tasks:', tasks.length);
+  console.log('Y"Z [getActiveTasks] Active tasks:', activeTasks.length, activeTasks.map(t => ({ id: t.id, title: t.title, status: t.status })));
+  console.log('Y"Z [getActiveTasks] All statuses:', tasks.map(t => ({ id: t.id, status: t.status, title: t.title })));
+  return activeTasks;
 }
 
 function getArchivedTasks() {
@@ -1329,9 +2106,9 @@ function applySort(list, sort) {
   return list;
 }
 
-// ════════════════════════════════════════════════════════════
+// ............................................................
 //  CRUD
-// ════════════════════════════════════════════════════════════
+// ............................................................
 
 async function submitForm() {
   // Protection contre les doubles soumissions
@@ -1362,20 +2139,15 @@ async function submitForm() {
       endDate: document.getElementById('recurringEndDate')?.value || null
     } : null;
 
-    // Si tâche récurrente avec jour spécifique, calculer la prochaine date
-    let calculatedRequestDate = requestDate;
-    if (isRecurring && recurring) {
-      const nextDate = calculateNextRecurrenceDate(recurring);
-      if (nextDate) {
-        calculatedRequestDate = nextDate.toISOString().split('T')[0];
-      }
-    }
+    // Conserver la date demandée saisie par l'utilisateur.
+    // Pour une nouvelle tâche sans date, utiliser aujourd'hui comme valeur par défaut.
+    let calculatedRequestDate = requestDate || toLocalDateInputValue(new Date());
 
     // Validation du titre
     if (!title) {
       const titleInput = document.getElementById('taskTitle');
       shake(titleInput);
-      showToast('⚠️ Le titre de la tâche est obligatoire');
+      showToast('Le titre de la tâche est obligatoire');
       titleInput.focus();
       return;
     }
@@ -1389,14 +2161,14 @@ async function submitForm() {
 
     // Validation du demandeur
     if (!requester) {
-      showToast('⚠️ Veuillez sélectionner un demandeur');
+      showToast('Veuillez sélectionner un demandeur');
       document.getElementById('taskRequester').focus();
       return;
     }
 
     // Validation du type
     if (!type) {
-      showToast('⚠️ Veuillez sélectionner un type de tâche');
+      showToast('Veuillez sélectionner un type de tâche');
       document.getElementById('taskType').focus();
       return;
     }
@@ -1457,7 +2229,7 @@ async function submitForm() {
 
     // Si la tâche vient d'être réalisée, basculer vers archives
     if (status === 'realise' && !wasArchived) {
-      showToast(`🗄 La tâche "${title}" a été archivée — consultez l'onglet Archives`);
+      showToast(`La tâche "${title}" a été archivée - consultez l'onglet Archives`);
     }
   } finally {
     isSubmitting = false;
@@ -1466,42 +2238,82 @@ async function submitForm() {
 }
 
 async function markAsCompleted(id) {
-  const now = new Date().toISOString();
-  const task = tasks.find(t => t.id === id);
-
-  // Vérifier si la tâche n'est pas déjà archivée (éviter les doublons)
-  if (task && task.status === 'realise' && task.archivedAt) {
-    showToast(`⚠️ La tâche "${task.title}" est déjà archivée`);
+  // Protection contre les doubles clics
+  if (isMarkingCompleted) {
     return;
   }
+  isMarkingCompleted = true;
 
-  tasks = tasks.map(t => t.id === id ? { ...t, status: 'realise', updatedAt: now, archivedAt: now } : t);
+  try {
+    const now = new Date().toISOString();
 
-  // Si tâche récurrente, créer la prochaine occurrence
-  if (task && task.recurring) {
-    createNextRecurrence(task, task.recurring);
-  }
+    console.log('Y" [DEBUG] ID reçu:', id, 'Type:', typeof id);
+    console.log('Y" [DEBUG] Liste des IDs dans tasks:', tasks.map(t => ({ id: t.id, type: typeof t.id, title: t.title })));
 
-  await saveToStorage();
-  updateSidebarCounts();
+    // Convertir l'ID en nombre pour une comparaison fiable
+    const numId = Number(id);
+    const task = tasks.find(t => Number(t.id) === numId || t.id === id);
 
-  // Propose d'envoyer un email au demandeur si un email est configuré
-  if (task && task.requester) {
-    const requester = config.requesters.find(r => r.name === task.requester);
-    if (requester && requester.email) {
-      // Show confirmation modal for email sending
-      showEmailConfirmation(task, requester.email);
+    // Vérifier que la tâche existe
+    if (!task) {
+      console.error('❌ [DEBUG] Tâche introuvable! ID recherché:', id);
+      console.error('❌ [DEBUG] IDs disponibles:', tasks.map(t => t.id));
+      showToast('che introuvable');
+      return;
     }
-  }
 
-  // Automatically switch to archives view to show the completed task
-  if (activeView === 'tasks' || activeView === 'dashboard') {
+    console.log('✅ [DEBUG] Tâche trouvée:', { id: task.id, title: task.title, urgency: task.urgency, status: task.status, recurring: task.recurring });
+
+    // Empecher l'archivage d'une occurrence planifiee dans le futur
+    if (isTaskScheduledInFuture(task)) {
+      showToast(`⏳ Cette occurrence est planifiée pour le ${formatDate(task.requestDate)} et ne peut pas être archivée avant cette date`);
+      return;
+    }
+
+    // Vérifier si la tâche n'est pas déjà archivée (éviter les doublons)
+    if (task.status === 'realise' && task.archivedAt) {
+      console.warn('⚠️ [DEBUG] Tâche déjà archivée:', task.title);
+      showToast(`⚠️ La tâche "${task.title}" est déjà archivée`);
+      return;
+    }
+
+    console.log('Y" [DEBUG] Nombre de tâches AVANT:', tasks.length);
+
+    // Si tâche récurrente, créer la prochaine occurrence AVANT de modifier la tâche actuelle
+    if (task.recurring) {
+      console.log('🔄 [DEBUG] Création prochaine occurrence');
+      createNextRecurrence(task, task.recurring);
+      console.log('Y" [DEBUG] Nombre de tâches APR^S createNextRecurrence:', tasks.length);
+    }
+
+    // Modifier la tâche pour la marquer comme réalisée
+    console.log('🔄 [DEBUG] Modification du statut...');
+    tasks = tasks.map(t => (Number(t.id) === numId || t.id === id) ? { ...t, status: 'realise', updatedAt: now, archivedAt: now } : t);
+
+    console.log('Y" [DEBUG] Nombre de tâches APR^S map:', tasks.length);
+    console.log('Y"S [DEBUG] Actives:', tasks.filter(t => t.status !== 'realise').length, 'Archivées:', tasks.filter(t => t.status === 'realise').length);
+
+    await saveToStorage();
+    updateSidebarCounts();
+
+    // Propose d'envoyer un email au demandeur si un email est configuré
+    if (task.requester) {
+      const requester = config.requesters.find(r => r.name === task.requester);
+      if (requester && requester.email) {
+        // Show confirmation modal for email sending
+        showEmailConfirmation(task, requester.email);
+      }
+    }
+
+    // SOLUTION D?FINITIVE : basculer IMM?DIATEMENT vers les archives
+    // Cela évite tous les problèmes de rafraîchissement des vues tasks/dashboard
     showToast(`✅ La tâche "${task.title}" a été marquée comme réalisée et archivée`);
     switchView('archives');
-  } else {
-    // If already in archives, just refresh
-    renderArchives();
-    showToast(`✅ La tâche "${task.title}" a été marquée comme réalisée`);
+  } finally {
+    // Réinitialiser le flag après un court délai
+    setTimeout(() => {
+      isMarkingCompleted = false;
+    }, 500);
   }
 }
 
@@ -1527,7 +2339,7 @@ function showEmailConfirmation(task, email) {
     </div>
   `;
 
-  showModal('📧 Notification au demandeur', content);
+  showModal('Y" Notification au demandeur', content);
 }
 
 function canSendEmailForTask(task) {
@@ -1558,7 +2370,7 @@ function sendTaskCompletionEmail(taskId) {
   // Open email client
   window.location.href = `mailto:${requester.email}?subject=${encodedSubject}&body=${encodedBody}`;
 
-  showToast(`📧 Email de notification prêt pour la tâche "${task.title}"`);
+  showToast(`Email de notification prêt pour la tâche "${task.title}"`);
 }
 
 function sendTaskInquiryEmail(taskId) {
@@ -1583,7 +2395,7 @@ function sendTaskInquiryEmail(taskId) {
   // Open email client
   window.location.href = `mailto:${requester.email}?subject=${encodedSubject}&body=${encodedBody}`;
 
-  showToast(`📧 Email de demande d'informations prêt pour la tâche "${task.title}"`);
+  showToast(`Email de demande d'informations prêt pour la tâche "${task.title}"`);
 }
 
 async function restoreTask(id) {
@@ -1596,7 +2408,7 @@ async function restoreTask(id) {
   await saveToStorage();
   updateSidebarCounts();
 
-  showToast(`♻️ La tâche "${task.title}" a été restaurée avec succès`);
+  showToast(`↩️ La tâche "${task.title}" a été restaurée avec succès`);
 
   // Refresh current view
   if (activeView === 'archives') {
@@ -1606,11 +2418,12 @@ async function restoreTask(id) {
   }
 }
 
-function calculateNextRecurrenceDate(recurring) {
+function calculateNextRecurrenceDate(recurring, fromDate = new Date()) {
   if (!recurring) return null;
 
-  const today = new Date();
-  let nextDate = new Date(today);
+  const baseDate = typeof fromDate === 'string' ? (parseDateInputValue(fromDate) || new Date(fromDate)) : new Date(fromDate);
+  if (Number.isNaN(baseDate.getTime())) return null;
+  let nextDate = new Date(baseDate);
 
   switch (recurring.frequency) {
     case 'daily':
@@ -1622,7 +2435,7 @@ function calculateNextRecurrenceDate(recurring) {
       // Si un jour de la semaine est spécifié
       if (recurring.weekday !== null && recurring.weekday !== undefined) {
         const targetWeekday = recurring.weekday; // 0=Dimanche, 1=Lundi, etc.
-        const currentWeekday = today.getDay();
+        const currentWeekday = baseDate.getDay();
 
         // Calculer les jours jusqu'au prochain jour cible
         let daysUntilTarget = targetWeekday - currentWeekday;
@@ -1630,7 +2443,7 @@ function calculateNextRecurrenceDate(recurring) {
           daysUntilTarget += 7; // Passer à la semaine suivante
         }
 
-        nextDate.setDate(today.getDate() + daysUntilTarget);
+        nextDate.setDate(baseDate.getDate() + daysUntilTarget);
       } else {
         // Par défaut : ajouter des semaines
         nextDate.setDate(nextDate.getDate() + (7 * recurring.interval));
@@ -1686,8 +2499,9 @@ function createNextRecurrence(task, recurring) {
 
   const now = new Date();
 
-  // Utiliser la fonction centralisée pour calculer la prochaine date
-  const nextDate = calculateNextRecurrenceDate(recurring);
+  // Utiliser la date de l'occurrence terminée comme base de calcul
+  const recurrenceBaseDate = task.requestDate || task.createdAt || task.updatedAt || task.id;
+  const nextDate = calculateNextRecurrenceDate(recurring, recurrenceBaseDate);
   if (!nextDate) {
     console.error('Impossible de calculer la prochaine occurrence');
     return;
@@ -1707,17 +2521,17 @@ function createNextRecurrence(task, recurring) {
   if (task.deadline) {
     const oldDeadline = new Date(task.deadline);
     const diff = oldDeadline - new Date(task.createdAt || task.id);
-    newDeadline = new Date(nextDate.getTime() + diff).toISOString().split('T')[0];
+    newDeadline = toLocalDateInputValue(new Date(nextDate.getTime() + diff));
   }
 
   const newTask = {
-    id: Date.now() + Math.random(), // Éviter les collisions
+    id: Date.now() + Math.floor(Math.random() * 10000), // ?viter les collisions avec un entier
     title: task.title,
     comment: task.comment,
     urgency: task.urgency,
     status: 'en-cours',
     deadline: newDeadline,
-    requestDate: nextDate.toISOString().split('T')[0],
+    requestDate: toLocalDateInputValue(nextDate),
     requester: task.requester,
     type: task.type,
     order: task.order,
@@ -1745,7 +2559,7 @@ async function restoreTask(id) {
   else if (activeView === 'archives') renderArchives();
   else if (activeView === 'tasks') renderTasks();
 
-  showToast('↩️ Tâche restaurée en cours');
+  showToast('che restaurée en cours');
 }
 
 function confirmDelete(id) {
@@ -1763,7 +2577,7 @@ function confirmDelete(id) {
     else if (activeView === 'tasks') renderTasks();
     else if (activeView === 'archives') renderArchives();
     closeConfirm();
-    showToast(`🗑 La tâche "${taskTitle}" a été supprimée définitivement`);
+    showToast(`🗑️ La tâche "${taskTitle}" a été supprimée définitivement`);
   };
 }
 
@@ -1782,13 +2596,13 @@ function clearAllTasks() {
     else if (activeView === 'tasks') renderTasks();
     else if (activeView === 'archives') renderArchives();
     closeConfirm();
-    showToast(`🗑 Toutes les tâches ont été effacées définitivement (${count} tâche(s))`);
+    showToast(`🗑️ Toutes les tâches ont été effacées définitivement (${count} tâche(s))`);
   };
 }
 
-// ════════════════════════════════════════════════════════════
-//  APPARENCE — DARK MODE & HIGH CONTRAST
-// ════════════════════════════════════════════════════════════
+// ............................................................
+//  APPARENCE ?" DARK MODE & HIGH CONTRAST
+// ............................................................
 
 async function toggleDarkMode(e) {
   const enabled = e.target.checked;
@@ -1801,7 +2615,7 @@ async function toggleDarkMode(e) {
   }
 
   await saveToStorage();
-  showToast(enabled ? '🌙 Mode sombre activé' : '☀️ Mode clair activé');
+  showToast(enabled ? 'Mode sombre activé' : 'Mode clair activé');
 }
 
 async function toggleHighContrast(e) {
@@ -1815,7 +2629,7 @@ async function toggleHighContrast(e) {
   }
 
   await saveToStorage();
-  showToast(enabled ? '🔲 Contraste renforcé activé' : '🔳 Contraste normal activé');
+  showToast(enabled ? 'Contraste renforcé activé' : 'Contraste normal activé');
 }
 
 function applyAppearanceSettings() {
@@ -1840,9 +2654,9 @@ function applyAppearanceSettings() {
   }
 }
 
-// ════════════════════════════════════════════════════════════
-//  SYSTÈME DE NOTIFICATIONS
-// ════════════════════════════════════════════════════════════
+// ............................................................
+//  SYST^ME DE NOTIFICATIONS
+// ............................................................
 
 function checkNotifications() {
   const today = new Date();
@@ -1878,7 +2692,7 @@ function checkNotifications() {
       if (endDate.getTime() === today.getTime()) {
         notifications.push({
           type: 'project_end',
-          title: `🏁 Fin de projet aujourd'hui`,
+          title: `Y Fin de projet aujourd'hui`,
           message: `Le projet "${project.name}" se termine aujourd'hui`,
           projectId: project.id
         });
@@ -1936,8 +2750,8 @@ function sendBrowserNotifications(notifications) {
     setTimeout(() => {
       new Notification(notif.title, {
         body: notif.message,
-        icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><text y="20" font-size="20">🏛️</text></svg>',
-        badge: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><text y="20" font-size="20">🏛️</text></svg>',
+        icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><text y="20" font-size="20">Y>️</text></svg>',
+        badge: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><text y="20" font-size="20">Y>️</text></svg>',
         tag: `taskmda-${notif.type}-${notif.taskId || notif.projectId}`,
         requireInteraction: false
       });
@@ -1949,10 +2763,10 @@ function showNotificationsSummary(notifications) {
   if (notifications.length === 0) return;
 
   const summary = notifications.map(n => `${n.title}: ${n.message}`).join('\n');
-  showToast(`🔔 ${notifications.length} notification(s) - Voir les détails`, 5000);
+  showToast(`🔄 ${notifications.length} notification(s) - Voir les détails`, 5000);
 
   // Log to console for debugging
-  console.log('📬 Notifications TaskMDA:', notifications);
+  console.log('Y" Notifications TaskMDA:', notifications);
 }
 
 // Check notifications on load and every hour
@@ -1974,19 +2788,22 @@ function initNotificationSystem() {
   }
 }
 
-// ════════════════════════════════════════════════════════════
-//  RENDU — TÂCHES ACTIVES
-// ════════════════════════════════════════════════════════════
+// ............................................................
+//  RENDU ?" T,CHES ACTIVES
+// ............................................................
 
 function renderTasks() {
+  console.log('Y"< [renderTasks] DÉBUT du rendu des tâches');
   const container = document.getElementById('tasks');
   container.innerHTML = '';
+  console.log('Y"< [renderTasks] Conteneur vidé');
 
   const urgFilter = activeFilter;
   const sort = document.getElementById('sortSelect')?.value || 'date-asc';
   const searchQuery = document.getElementById('searchInput')?.value.toLowerCase().trim() || '';
 
   let list = applyFilters(getActiveTasks(), urgFilter, 'all', 'all');
+  console.log('Y"< [renderTasks] Après filtres, liste:', list.length, 'tâches', list.map(t => t.title));
 
   // Appliquer la recherche
   if (searchQuery) {
@@ -2238,9 +3055,9 @@ function goToPage(page) {
   renderTasks();
 }
 
-// ════════════════════════════════════════════════════════════
-//  RENDU — ARCHIVES
-// ════════════════════════════════════════════════════════════
+// ............................................................
+//  RENDU ?" ARCHIVES
+// ............................................................
 
 function renderArchives() {
   const container = document.getElementById('archives');
@@ -2260,7 +3077,7 @@ function renderArchives() {
   if (!list.length) {
     container.innerHTML = `
       <div class="empty-state">
-        <div class="big-icon">🗄</div>
+        <div class="big-icon">Y-"</div>
         <strong>Aucune tâche archivée</strong>
         <p>Les tâches marquées "Réalisé" apparaîtront ici.</p>
       </div>`;
@@ -2309,7 +3126,7 @@ function renderArchivedProjects() {
     ).join('');
 
     html += `
-      <div class="bg-surface-container-low rounded-2xl p-4 shadow-sm opacity-75 group border-l-[5px]" style="border-color: ${color.border}">
+      <div class="bg-surface-container-low rounded-2xl p-4 shadow-sm opacity-75 group border-l-[5px] cursor-pointer" style="border-color: ${color.border}" onclick="openProjectDetailModal(${project.id}, true)">
         <div class="flex items-start justify-between mb-3">
           <div class="flex-1">
             <h3 class="font-bold text-on-surface text-lg mb-2">${escHtml(project.name)}</h3>
@@ -2319,7 +3136,7 @@ function renderArchivedProjects() {
             </div>
           </div>
           <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button onclick="restoreProject(${project.id})" title="Restaurer le projet" class="p-2 hover:bg-surface-container-high rounded-lg text-on-surface-variant hover:text-primary transition-colors">
+            <button onclick="event.stopPropagation(); restoreProject(${project.id})" title="Restaurer le projet" class="p-2 hover:bg-surface-container-high rounded-lg text-on-surface-variant hover:text-primary transition-colors">
               <span class="material-symbols-outlined text-sm">restore</span>
             </button>
           </div>
@@ -2364,9 +3181,9 @@ function renderArchivedProjects() {
   container.innerHTML = html;
 }
 
-// ════════════════════════════════════════════════════════════
+// ............................................................
 //  TRONCATURE INTELLIGENTE DU TEXTE
-// ════════════════════════════════════════════════════════════
+// ............................................................
 
 /**
  * Calcule le nombre de caractères maximum pour un texte selon le mode de vue
@@ -2419,9 +3236,9 @@ function truncateText(text, viewMode) {
   return truncated + '...';
 }
 
-// ════════════════════════════════════════════════════════════
+// ............................................................
 //  CONSTRUCTION D'UNE CARTE
-// ════════════════════════════════════════════════════════════
+// ............................................................
 
 function buildCard(task, idx, isArchive) {
   const p  = progressPercent(task.deadline);
@@ -2441,8 +3258,15 @@ function buildCard(task, idx, isArchive) {
   const heightClass = taskViewMode === 4 ? 'task-card-compact' : taskViewMode === 3 ? 'task-card-standard' : '';
 
   const card = document.createElement('div');
-  card.className = `group bg-surface-container-lowest ${paddingClass} rounded-xl relative border-l-4 ${urgencyColors[task.urgency || 'low']} shadow-sm hover:shadow-md transition-all duration-300 task-card ${heightClass}`;
+  card.className = `group bg-surface-container-lowest ${paddingClass} rounded-xl relative border-l-4 ${urgencyColors[task.urgency || 'low']} shadow-sm hover:shadow-md transition-all duration-300 task-card ${heightClass} cursor-pointer`;
   card.style.animationDelay = `${idx * 0.04}s`;
+
+  // Make card clickable to open detail modal
+  card.onclick = (e) => {
+    // Don't open modal if clicking on action buttons
+    if (e.target.closest('button')) return;
+    openTaskDetailModal(task.id, isArchive);
+  };
 
   const formatDate = (dateStr) => {
     const d = new Date(dateStr);
@@ -2460,7 +3284,7 @@ function buildCard(task, idx, isArchive) {
   const displayIndex = task.order ? `#${task.order}` : `#${String(idx+1).padStart(2,'0')}`;
 
   const recurringText = task.recurring
-    ? `🔄 ${recurringFreqLabels[task.recurring.frequency] || task.recurring.frequency}${task.recurring.interval > 1 ? ` ×${task.recurring.interval}` : ''}`
+    ? `🔄 ${recurringFreqLabels[task.recurring.frequency] || task.recurring.frequency}${task.recurring.interval > 1 ? ` -${task.recurring.interval}` : ''}`
     : '';
 
   // WCAG AA compliant badge colors
@@ -2490,7 +3314,7 @@ function buildCard(task, idx, isArchive) {
     <div class="flex justify-between items-start ${taskViewMode === 4 ? 'mb-1' : 'mb-4'}">
       <div class="flex flex-wrap ${gapSize}">
         <span class="${badgeSize} ${urgencyChipBg[task.urgency || 'low']} font-bold rounded-full uppercase tracking-tight">
-          ${task.urgency === 'low' ? '🌿' : task.urgency === 'medium' ? '⚠️' : '🔥'}${taskViewMode === 4 ? '' : ' ' + (urgencyLabels[task.urgency]||task.urgency)}
+          ${taskViewMode === 4 ? (urgencyLabels[task.urgency]||task.urgency) : (task.urgency === 'low' ? '🌿' : task.urgency === 'medium' ? '⚠️' : '🔥') + ' ' + (urgencyLabels[task.urgency]||task.urgency)}
         </span>
         ${!isArchive && taskViewMode !== 4 ? `<span class="${badgeSize} ${statusChipBg[task.status] || 'bg-secondary-container text-on-secondary-container'} font-bold rounded-full uppercase tracking-tight">
           ${statusLabels[task.status]||task.status}
@@ -2503,22 +3327,22 @@ function buildCard(task, idx, isArchive) {
         </span>` : ''}
       </div>
       <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button onclick="openModal(${task.id})" title="Modifier la tâche" class="${taskViewMode === 4 ? 'p-1' : 'p-2'} hover:bg-surface-container-low rounded-lg text-on-surface-variant hover:text-primary transition-colors">
+        <button onclick="event.stopPropagation(); openModal(${task.id})" title="Modifier la tâche" class="${taskViewMode === 4 ? 'p-1' : 'p-2'} hover:bg-surface-container-low rounded-lg text-on-surface-variant hover:text-primary transition-colors">
           <span class="material-symbols-outlined ${taskViewMode === 4 ? 'text-xs' : 'text-sm'}">edit</span>
         </button>
-        ${!isArchive && task.requester && canSendEmailForTask(task) && taskViewMode <= 2 ? `<button onclick="sendTaskInquiryEmail(${task.id})" title="Contacter le demandeur" class="p-2 hover:bg-surface-container-low rounded-lg text-on-surface-variant hover:text-primary transition-colors">
+        ${!isArchive && task.requester && canSendEmailForTask(task) && taskViewMode <= 2 ? `<button onclick="event.stopPropagation(); sendTaskInquiryEmail(${task.id})" title="Contacter le demandeur" class="p-2 hover:bg-surface-container-low rounded-lg text-on-surface-variant hover:text-primary transition-colors">
           <span class="material-symbols-outlined text-sm">email</span>
         </button>` : ''}
-        ${!isArchive ? `<button onclick="markAsCompleted(${task.id})" title="Marquer comme réalisé" class="${taskViewMode === 4 ? 'p-1' : 'p-2'} hover:bg-surface-container-low rounded-lg text-on-surface-variant hover:text-primary transition-colors">
+        ${!isArchive ? `<button onclick="event.stopPropagation(); markAsCompleted(${task.id})" title="Marquer comme réalisé" class="${taskViewMode === 4 ? 'p-1' : 'p-2'} hover:bg-surface-container-low rounded-lg text-on-surface-variant hover:text-primary transition-colors">
           <span class="material-symbols-outlined ${taskViewMode === 4 ? 'text-xs' : 'text-sm'}">check</span>
         </button>` : ''}
-        ${isArchive && task.requester && canSendEmailForTask(task) && taskViewMode <= 2 ? `<button onclick="sendTaskCompletionEmail(${task.id})" title="Notifier le demandeur par email" class="p-2 hover:bg-surface-container-low rounded-lg text-on-surface-variant hover:text-primary transition-colors">
+        ${isArchive && task.requester && canSendEmailForTask(task) && taskViewMode <= 2 ? `<button onclick="event.stopPropagation(); sendTaskCompletionEmail(${task.id})" title="Notifier le demandeur par email" class="p-2 hover:bg-surface-container-low rounded-lg text-on-surface-variant hover:text-primary transition-colors">
           <span class="material-symbols-outlined text-sm">email</span>
         </button>` : ''}
-        ${isArchive && taskViewMode !== 4 ? `<button onclick="restoreTask(${task.id})" title="Restaurer la tâche" class="p-2 hover:bg-surface-container-low rounded-lg text-on-surface-variant hover:text-primary transition-colors">
+        ${isArchive && taskViewMode !== 4 ? `<button onclick="event.stopPropagation(); restoreTask(${task.id})" title="Restaurer la tâche" class="p-2 hover:bg-surface-container-low rounded-lg text-on-surface-variant hover:text-primary transition-colors">
           <span class="material-symbols-outlined text-sm">restore</span>
         </button>` : ''}
-        <button onclick="confirmDelete(${task.id})" title="Supprimer la tâche" class="${taskViewMode === 4 ? 'p-1' : 'p-2'} hover:bg-surface-container-low rounded-lg text-on-surface-variant hover:text-tertiary transition-colors">
+        <button onclick="event.stopPropagation(); confirmDelete(${task.id})" title="Supprimer la tâche" class="${taskViewMode === 4 ? 'p-1' : 'p-2'} hover:bg-surface-container-low rounded-lg text-on-surface-variant hover:text-tertiary transition-colors">
           <span class="material-symbols-outlined ${taskViewMode === 4 ? 'text-xs' : 'text-sm'}">delete</span>
         </button>
       </div>
@@ -2560,9 +3384,9 @@ function buildCard(task, idx, isArchive) {
   return card;
 }
 
-// ════════════════════════════════════════════════════════════
+// ............................................................
 //  DEADLINE PROGRESS INDICATOR
-// ════════════════════════════════════════════════════════════
+// ............................................................
 
 function getDeadlineProgress(task) {
   if (!task.deadline) return '';
@@ -2678,24 +3502,27 @@ function getDeadlineProgressCompact(task) {
   `;
 }
 
-// ════════════════════════════════════════════════════════════
+// ............................................................
 //  STATS + COMPTEURS ONGLETS
-// ════════════════════════════════════════════════════════════
+// ............................................................
 
 // Removed obsolete functions - replaced by renderDashboard()
 
-// ════════════════════════════════════════════════════════════
+// ............................................................
 //  UTILITAIRES
-// ════════════════════════════════════════════════════════════
+// ............................................................
 
 function resetForm() {
   document.getElementById('taskTitle').value         = '';
   document.getElementById('taskComment').value       = '';
   document.getElementById('taskDeadline').value      = '';
-  document.getElementById('taskRequestDate').value   = new Date().toISOString().split('T')[0]; // Date du jour
+  document.getElementById('taskRequestDate').value   = toLocalDateInputValue(new Date()); // Date du jour
   document.getElementById('taskRequester').value     = '';
   document.getElementById('taskType').value          = '';
   document.getElementById('taskOrder').value         = '';
+
+  // Reset checkboxes
+  document.querySelectorAll('.requester-checkbox, .type-checkbox').forEach(cb => cb.checked = false);
   document.getElementById('isRecurring').checked     = false;
   document.getElementById('recurringFields').classList.add('hidden');
   document.getElementById('recurringFrequency').value = 'weekly';
@@ -2764,9 +3591,9 @@ function updateRecurringFields() {
   }
 }
 
-// ════════════════════════════════════════════════════════════
+// ............................................................
 //  GESTION DES FICHIERS JOINTS
-// ════════════════════════════════════════════════════════════
+// ............................................................
 
 async function handleFileSelection() {
   const input = document.getElementById('taskFiles');
@@ -2884,7 +3711,7 @@ async function removeExistingFile(taskId, fileIdx) {
   await saveToStorage();
   const task = tasks.find(t => t.id === taskId);
   renderExistingFiles(task.files || []);
-  showToast(`🗑 Le fichier "${file.name}" a été supprimé`);
+  showToast(`🗑️ Le fichier "${file.name}" a été supprimé`);
 }
 
 function downloadFile(filename, base64Data) {
@@ -2953,17 +3780,17 @@ function showHelpModal() {
   const content = `
     <div class="space-y-4">
       <div>
-        <h3 class="font-bold text-lg mb-2">🔐 Sécurité et stockage</h3>
+        <h3 class="font-bold text-lg mb-2">Y" Sécurité et stockage</h3>
         <p class="text-sm text-on-surface-variant mb-2">Vos données sont chiffrées localement avec <strong>AES-256-GCM</strong> et stockées dans <strong>IndexedDB</strong>.</p>
         <ul class="text-xs text-on-surface-variant space-y-1 ml-4">
-          <li>• Chiffrement : PBKDF2 avec 310 000 itérations</li>
-          <li>• Stockage : 100% local dans votre navigateur</li>
-          <li>• Aucune connexion serveur requise</li>
+          <li>? Chiffrement : PBKDF2 avec 310 000 itérations</li>
+          <li>? Stockage : 100% local dans votre navigateur</li>
+          <li>? Aucune connexion serveur requise</li>
           <li>• Sans votre mot de passe, les données sont illisibles</li>
         </ul>
       </div>
       <div>
-        <h3 class="font-bold text-lg mb-2">💾 Sauvegarde des données</h3>
+        <h3 class="font-bold text-lg mb-2">Y' Sauvegarde des données</h3>
         <p class="text-sm text-on-surface-variant">Vos données sont automatiquement sauvegardées dans IndexedDB. Pour une sauvegarde externe, utilisez <strong>Export JSON</strong> dans Import/Export.</p>
       </div>
       <div>
@@ -2971,24 +3798,24 @@ function showHelpModal() {
         <p class="text-sm text-on-surface-variant">Créez des tâches qui se répètent automatiquement (quotidien, hebdomadaire, mensuel, annuel) avec intervalles personnalisés.</p>
       </div>
       <div>
-        <h3 class="font-bold text-lg mb-2">📎 Pièces jointes</h3>
+        <h3 class="font-bold text-lg mb-2">Y"Z Pièces jointes</h3>
         <p class="text-sm text-on-surface-variant">Attachez jusqu'à 5 fichiers par tâche (max 5 Mo chacun). Ils sont chiffrés et stockés avec vos données.</p>
       </div>
       <div>
-        <h3 class="font-bold text-lg mb-2">📊 Gestion de projets</h3>
+        <h3 class="font-bold text-lg mb-2">Y"S Gestion de projets</h3>
         <p class="text-sm text-on-surface-variant">Visualisez vos projets avec un diagramme de Gantt interactif. Basculez entre vue mensuelle et hebdomadaire pour une meilleure visibilité.</p>
       </div>
       <div>
-        <h3 class="font-bold text-lg mb-2">♻️ Archives</h3>
+        <h3 class="font-bold text-lg mb-2">↩️ Archives</h3>
         <p class="text-sm text-on-surface-variant">Archivez vos tâches et projets terminés. Vous pouvez les restaurer à tout moment en passant la souris sur la carte et en cliquant sur l'icône de restauration.</p>
       </div>
       <div>
-        <h3 class="font-bold text-lg mb-2">📥📤 Import/Export</h3>
+        <h3 class="font-bold text-lg mb-2">Y"Y" Import/Export</h3>
         <p class="text-sm text-on-surface-variant">Exportez vos données en JSON ou Excel depuis Import/Export. Le format JSON inclut toutes vos données chiffrées (tâches, projets, versions, configuration).</p>
       </div>
       <div class="pt-4 border-t border-outline-variant">
         <p class="text-xs text-on-surface-variant text-center">
-          <strong>TaskMDA v5.0</strong> — Application développée par <strong>Frédérick MURAT</strong><br>
+          <strong>TaskMDA v5.0</strong> - Application développée par <strong>Frédérick MURAT</strong><br>
           Mars 2026 • Licence MIT • Stockage IndexedDB
         </p>
       </div>
@@ -3095,9 +3922,9 @@ function showToast(msg) {
   _toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
 }
 
-// ════════════════════════════════════════════════════════════
+// ............................................................
 //  IMPORT / EXPORT
-// ════════════════════════════════════════════════════════════
+// ............................................................
 
 function importJSON(e) {
   const file = e.target.files[0]; if (!file) return;
@@ -3140,7 +3967,7 @@ function importJSON(e) {
       const statusEl = document.getElementById('importStatus');
       if (statusEl) {
         statusEl.className = 'text-sm text-error';
-        statusEl.textContent = '✗ JSON invalide';
+        statusEl.textContent = '❌- JSON invalide';
       }
     }
   };
@@ -3157,7 +3984,7 @@ function exportJSON() {
     format: 'TaskMDA v4'
   };
   downloadBlob(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}), 'tasks.json');
-  showToast(`⬇ Export JSON réussi (${tasks.length} tâche(s) + ${projects.length} projet(s))`);
+  showToast(`Export JSON réussi (${tasks.length} tâche(s) + ${projects.length} projet(s))`);
 }
 
 function exportExcel() {
@@ -3176,7 +4003,7 @@ function exportExcel() {
     Date_demande: t.requestDate || '',
     Deadline:    t.deadline    || '',
     Commentaire: t.comment     || '',
-    Archivé_le:  t.archivedAt  ? new Date(t.archivedAt).toLocaleDateString('fr-FR') : ''
+    'Archive_le':  t.archivedAt  ? new Date(t.archivedAt).toLocaleDateString('fr-FR') : ''
   })));
   XLSX.utils.book_append_sheet(wb, wsTasks, 'Tâches');
 
@@ -3191,17 +4018,17 @@ function exportExcel() {
     Nom:         p.name,
     Demandeurs:  (p.requesters || []).join(', '),
     Statut:      projectStatusLabels[p.status] || p.status,
-    Date_début:  p.startDate ? new Date(p.startDate).toLocaleDateString('fr-FR') : '',
+    'Date_debut':  p.startDate ? new Date(p.startDate).toLocaleDateString('fr-FR') : '',
     Date_fin:    p.endDate ? new Date(p.endDate).toLocaleDateString('fr-FR') : '',
     Progression: p.progress + '%',
     Description: p.description || '',
-    Archivé_le:  p.archivedAt ? new Date(p.archivedAt).toLocaleDateString('fr-FR') : ''
+    'Archive_le':  p.archivedAt ? new Date(p.archivedAt).toLocaleDateString('fr-FR') : ''
   })));
   XLSX.utils.book_append_sheet(wb, wsProjects, 'Projets');
 
   // Export
   XLSX.writeFile(wb, 'TaskMDA_Export.xlsx');
-  showToast(`⬇ Export Excel réussi (${tasks.length} tâche(s) + ${projects.length} projet(s))`);
+  showToast(`Export Excel réussi (${tasks.length} tâche(s) + ${projects.length} projet(s))`);
 }
 
 function downloadBlob(blob, name) {
@@ -3210,12 +4037,12 @@ function downloadBlob(blob, name) {
   document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
 }
 
-// ── Anim shake ──────────────────────────────────────────────
+// "?"? Anim shake "?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?
 document.head.insertAdjacentHTML('beforeend',`<style>
   @keyframes shake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-6px)} 40%{transform:translateX(6px)} 60%{transform:translateX(-4px)} 80%{transform:translateX(4px)} }
 </style>`);
 
-// ── Show/hide password ───────────────────────────────────────
+// "?"? Show/hide password "?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?
 function togglePwd(inputId, btn) {
   const inp = document.getElementById(inputId);
   const icon = btn.querySelector('.material-symbols-outlined');
@@ -3228,9 +4055,9 @@ function togglePwd(inputId, btn) {
   }
 }
 
-// ════════════════════════════════════════════════════════════
+// ............................................................
 //  GESTION DES VERSIONS
-// ════════════════════════════════════════════════════════════
+// ............................................................
 
 function openVersionsModal() {
   document.getElementById('versionsOverlay').classList.remove('hidden');
@@ -3252,7 +4079,7 @@ async function addVersion() {
   const number = document.getElementById('versionNumber').value.trim();
 
   if (!software || !number) {
-    showToast('⚠️ Veuillez remplir tous les champs');
+    showToast('Veuillez remplir tous les champs');
     return;
   }
 
@@ -3268,7 +4095,7 @@ async function deleteVersion(software) {
   delete versions[software];
   await saveToStorage();
   renderVersionsList();
-  showToast(`🗑 La version ${software} a été supprimée avec succès`);
+  showToast(`🗑️ La version ${software} a été supprimée avec succès`);
 }
 
 function renderVersionsList() {
@@ -3280,7 +4107,7 @@ function renderVersionsList() {
   if (entries.length === 0) {
     container.innerHTML = `
       <div style="text-align:center;padding:2rem;color:var(--muted);">
-        <div style="font-size:2rem;margin-bottom:0.5rem;opacity:0.4;">📦</div>
+        <div style="font-size:2rem;margin-bottom:0.5rem;opacity:0.4;">Y"</div>
         <p style="font-size:0.85rem;">Aucune version enregistrée</p>
       </div>`;
     return;
@@ -3294,7 +4121,7 @@ function renderVersionsList() {
           <strong style="font-size:0.9rem;color:var(--text)">${escHtml(software)}</strong>
           <span style="margin-left:0.75rem;color:var(--accent);font-family:monospace;font-size:0.85rem;">${escHtml(number)}</span>
         </div>
-        <button class="btn btn-danger btn-sm" onclick="deleteVersion('${escHtml(software)}')">🗑</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteVersion('${escHtml(software)}')">🗑️</button>
       </div>`;
   });
   html += '</div>';
@@ -3302,9 +4129,9 @@ function renderVersionsList() {
   container.innerHTML = html;
 }
 
-// ════════════════════════════════════════════════════════════
+// ............................................................
 //  GESTION DES DEMANDEURS
-// ════════════════════════════════════════════════════════════
+// ............................................................
 
 function openRequestersModal() {
   document.getElementById('requestersOverlay').classList.remove('hidden');
@@ -3326,13 +4153,13 @@ async function addRequester() {
   const email = document.getElementById('requesterEmail').value.trim();
 
   if (!name) {
-    showToast('⚠️ Veuillez saisir un nom');
+    showToast('Veuillez saisir un nom');
     return;
   }
 
   // Check if already exists
   if (config.requesters.some(r => r.name.toLowerCase() === name.toLowerCase())) {
-    showToast('⚠️ Ce demandeur existe déjà');
+    showToast('Ce demandeur existe déjà');
     return;
   }
 
@@ -3353,7 +4180,7 @@ async function deleteRequester(name) {
   config.requesters = config.requesters.filter(r => r.name !== name);
   await saveToStorage();
   renderRequestersList();
-  showToast(`🗑 Le demandeur "${name}" a été supprimé avec succès`);
+  showToast(`🗑️ Le demandeur "${name}" a été supprimé avec succès`);
 
   // Refresh forms
   updateRequesterSelects();
@@ -3364,13 +4191,13 @@ async function updateRequester(oldName, newName, newEmail) {
   if (!requester) return;
 
   if (!newName.trim()) {
-    showToast('⚠️ Le nom ne peut pas être vide');
+    showToast('Le nom ne peut pas être vide');
     return;
   }
 
   // Check if new name already exists (but not the same one)
   if (newName !== oldName && config.requesters.some(r => r.name.toLowerCase() === newName.toLowerCase())) {
-    showToast('⚠️ Ce nom existe déjà');
+    showToast('Ce nom existe déjà');
     return;
   }
 
@@ -3392,7 +4219,7 @@ function renderRequestersList() {
   if (config.requesters.length === 0) {
     container.innerHTML = `
       <div class="text-center py-8 text-on-surface-variant">
-        <div class="text-4xl mb-2 opacity-40">👥</div>
+        <div class="text-4xl mb-2 opacity-40">Y'</div>
         <p class="text-sm">Aucun demandeur enregistré</p>
       </div>`;
     return;
@@ -3429,9 +4256,9 @@ function renderRequestersList() {
   container.innerHTML = html;
 }
 
-// ════════════════════════════════════════════════════════════
+// ............................................................
 //  GESTION DES TYPES
-// ════════════════════════════════════════════════════════════
+// ............................................................
 
 function openTypesModal() {
   document.getElementById('typesOverlay').classList.remove('hidden');
@@ -3451,13 +4278,13 @@ async function addType() {
   const name = document.getElementById('typeName').value.trim();
 
   if (!name) {
-    showToast('⚠️ Veuillez saisir un type');
+    showToast('Veuillez saisir un type');
     return;
   }
 
   // Check if already exists
   if (config.types.some(t => t.toLowerCase() === name.toLowerCase())) {
-    showToast('⚠️ Ce type existe déjà');
+    showToast('Ce type existe déjà');
     return;
   }
 
@@ -3477,7 +4304,7 @@ async function deleteType(name) {
   config.types = config.types.filter(t => t !== name);
   await saveToStorage();
   renderTypesList();
-  showToast(`🗑 Le type "${name}" a été supprimé avec succès`);
+  showToast(`🗑️ Le type "${name}" a été supprimé avec succès`);
 
   // Refresh forms
   updateTypeSelects();
@@ -3488,13 +4315,13 @@ async function updateType(oldName, newName) {
   if (index === -1) return;
 
   if (!newName.trim()) {
-    showToast('⚠️ Le nom ne peut pas être vide');
+    showToast('Le nom ne peut pas être vide');
     return;
   }
 
   // Check if new name already exists (but not the same one)
   if (newName !== oldName && config.types.some(t => t.toLowerCase() === newName.toLowerCase())) {
-    showToast('⚠️ Ce nom existe déjà');
+    showToast('Ce nom existe déjà');
     return;
   }
 
@@ -3515,7 +4342,7 @@ function renderTypesList() {
   if (config.types.length === 0) {
     container.innerHTML = `
       <div class="text-center py-8 text-on-surface-variant">
-        <div class="text-4xl mb-2 opacity-40">📋</div>
+        <div class="text-4xl mb-2 opacity-40">Y"<</div>
         <p class="text-sm">Aucun type enregistré</p>
       </div>`;
     return;
@@ -3564,9 +4391,9 @@ function updateTypeSelects() {
   ).join('');
 }
 
-// ════════════════════════════════════════════════════════════
+// ............................................................
 //  GESTION DES TEMPLATES D'EMAILS
-// ════════════════════════════════════════════════════════════
+// ............................................................
 
 let currentTemplateType = null; // 'completion' or 'inquiry'
 
@@ -3652,7 +4479,7 @@ async function saveEmailTemplate() {
   const body = document.getElementById('templateBody').value.trim();
 
   if (!subject || !body) {
-    showToast('⚠️ Veuillez remplir l\'objet et le corps de l\'email');
+    showToast('Veuillez remplir l\'objet et le corps de l\'email');
     return;
   }
 
@@ -3679,7 +4506,7 @@ async function resetEmailTemplate() {
   document.getElementById('templateSubject').value = defaultTemplate.subject;
   document.getElementById('templateBody').value = defaultTemplate.body;
 
-  showToast('🔄 Le template a été réinitialisé (cliquez sur "Enregistrer" pour confirmer)');
+  showToast('Le template a été réinitialisé (cliquez sur "Enregistrer" pour confirmer)');
 }
 
 // Helper function to replace template variables with actual task data
@@ -3735,12 +4562,193 @@ function replaceTemplateVariables(template, task) {
     text = text.replace(/\{\{ORDER\}\}/g, '');
   }
 
+  // Add signature if configured
+  if (config.emailSignature) {
+    const signature = buildEmailSignature();
+    if (signature) {
+      text += '\n\n' + signature;
+    }
+  }
+
   return text;
 }
 
-// ════════════════════════════════════════════════════════════
+// ............................................................
+//  EMAIL SIGNATURE MANAGEMENT
+// ............................................................
+
+function buildEmailSignature() {
+  if (!config.emailSignature) return '';
+
+  let signature = '';
+
+  if (config.emailSignature.text) {
+    signature = config.emailSignature.text;
+  }
+
+  // Note: Image is stored as base64 but can't be embedded in mailto: links
+  // We'll include a note about the image for reference
+  if (config.emailSignature.image) {
+    signature += '\n\n[Logo de signature attaché]';
+  }
+
+  return signature;
+}
+
+async function saveEmailSignature() {
+  const text = document.getElementById('emailSignatureText').value.trim();
+
+  if (!config.emailSignature) {
+    config.emailSignature = {};
+  }
+
+  config.emailSignature.text = text;
+
+  await saveToStorage();
+  showToast('Signature email enregistrée avec succès');
+}
+
+function removeSignatureImage() {
+  if (!config.emailSignature) return;
+
+  config.emailSignature.image = null;
+
+  document.getElementById('signatureImagePreview').classList.add('hidden');
+  document.getElementById('signatureImageInput').value = '';
+
+  saveToStorage();
+  showToast('Image de signature supprimée');
+}
+
+// Handle signature image upload
+document.addEventListener('DOMContentLoaded', () => {
+  const imageInput = document.getElementById('signatureImageInput');
+  if (imageInput) {
+    imageInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      // Check file size (max 500 KB)
+      if (file.size > 500 * 1024) {
+        showToast('image ne doit pas dépasser 500 Ko');
+        e.target.value = '';
+        return;
+      }
+
+      // Check file type
+      if (!file.type.match(/^image\/(png|jpeg|jpg|svg\+xml)$/)) {
+        showToast('Format d\'image non supporté (PNG, JPG, SVG uniquement)');
+        e.target.value = '';
+        return;
+      }
+
+      // Read file as base64
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const base64 = event.target.result;
+
+        if (!config.emailSignature) {
+          config.emailSignature = {};
+        }
+
+        config.emailSignature.image = {
+          data: base64,
+          type: file.type,
+          name: file.name
+        };
+
+        // Show preview
+        const preview = document.getElementById('signatureImagePreview');
+        const previewImg = document.getElementById('signatureImagePreviewImg');
+        previewImg.src = base64;
+        preview.classList.remove('hidden');
+
+        await saveToStorage();
+        showToast('Image de signature ajoutée');
+      };
+
+      reader.readAsDataURL(file);
+    });
+  }
+});
+
+// Load signature on settings view
+function loadEmailSignature() {
+  const textArea = document.getElementById('emailSignatureText');
+  const preview = document.getElementById('signatureImagePreview');
+  const previewImg = document.getElementById('signatureImagePreviewImg');
+
+  if (textArea && config.emailSignature?.text) {
+    textArea.value = config.emailSignature.text;
+  }
+
+  if (preview && config.emailSignature?.image) {
+    previewImg.src = config.emailSignature.image.data;
+    preview.classList.remove('hidden');
+  } else if (preview) {
+    preview.classList.add('hidden');
+  }
+}
+
+// ............................................................
+//  APP BRANDING MANAGEMENT
+// ............................................................
+
+async function saveAppBranding() {
+  const name = document.getElementById('appNameInput').value.trim();
+  const tagline = document.getElementById('appTaglineInput').value.trim();
+
+  if (!name) {
+    showToast('Le nom de l\'application ne peut pas être vide');
+    return;
+  }
+
+  if (!config.branding) {
+    config.branding = {};
+  }
+
+  config.branding.appName = name;
+  config.branding.appTagline = tagline;
+
+  await saveToStorage();
+  updateAppBranding();
+  showToast('Identité de l\'application enregistrée');
+}
+
+function updateAppBranding() {
+  const appName = document.getElementById('appName');
+  const appTagline = document.getElementById('appTagline');
+
+  if (appName && config.branding?.appName) {
+    appName.textContent = config.branding.appName;
+  }
+
+  if (appTagline) {
+    if (config.branding?.appTagline) {
+      appTagline.textContent = config.branding.appTagline;
+    } else if (!config.branding?.appName) {
+      // Keep default if no custom branding
+      appTagline.textContent = 'Gestion de Projets';
+    }
+  }
+}
+
+function loadAppBrandingSettings() {
+  const nameInput = document.getElementById('appNameInput');
+  const taglineInput = document.getElementById('appTaglineInput');
+
+  if (nameInput) {
+    nameInput.value = config.branding?.appName || 'TaskMDA';
+  }
+
+  if (taglineInput) {
+    taglineInput.value = config.branding?.appTagline || 'Gestion de Projets';
+  }
+}
+
+// ............................................................
 //  PROJECTS & GANTT CHART
-// ════════════════════════════════════════════════════════════
+// ............................................................
 
 function openProjectModal(id = null) {
   editingProjectId = id;
@@ -3814,7 +4822,7 @@ async function archiveProject() {
   updateProjectCount();
   renderGanttChart();
   renderProjectCards();
-  showToast(`📦 Le projet "${projectName}" a été archivé avec succès`);
+  showToast(`Y" Le projet "${projectName}" a été archivé avec succès`);
 }
 
 async function restoreProject(id) {
@@ -3827,7 +4835,7 @@ async function restoreProject(id) {
   await saveToStorage();
   updateProjectCount();
 
-  showToast(`♻️ Le projet "${project.name}" a été restauré avec succès`);
+  showToast(`↩️ Le projet "${project.name}" a été restauré avec succès`);
 
   // Refresh current view
   if (activeView === 'archives') {
@@ -3858,7 +4866,7 @@ async function quickArchiveProject(id) {
     renderProjectCards();
   }
 
-  showToast(`📦 Le projet "${projectName}" a été archivé avec succès`);
+  showToast(`Y" Le projet "${projectName}" a été archivé avec succès`);
 }
 
 async function deleteProject(id) {
@@ -4016,7 +5024,7 @@ async function submitProjectForm() {
   if (!name) {
     const nameInput = document.getElementById('projectName');
     shake(nameInput);
-    showToast('⚠️ Le nom du projet est obligatoire');
+    showToast('Le nom du projet est obligatoire');
     nameInput.focus();
     return;
   }
@@ -4025,7 +5033,7 @@ async function submitProjectForm() {
   if (!startDate) {
     const startDateInput = document.getElementById('projectStartDate');
     shake(startDateInput);
-    showToast('⚠️ La date de début est obligatoire');
+    showToast('La date de début est obligatoire');
     startDateInput.focus();
     return;
   }
@@ -4034,7 +5042,7 @@ async function submitProjectForm() {
   if (!endDate) {
     const endDateInput = document.getElementById('projectEndDate');
     shake(endDateInput);
-    showToast('⚠️ La date de fin est obligatoire');
+    showToast('La date de fin est obligatoire');
     endDateInput.focus();
     return;
   }
@@ -4043,14 +5051,14 @@ async function submitProjectForm() {
   if (new Date(endDate) < new Date(startDate)) {
     const endDateInput = document.getElementById('projectEndDate');
     shake(endDateInput);
-    showToast('⚠️ La date de fin doit être après la date de début');
+    showToast('La date de fin doit être après la date de début');
     endDateInput.focus();
     return;
   }
 
   // Validation des demandeurs
   if (!requesters || requesters.length === 0) {
-    showToast('⚠️ Veuillez sélectionner au moins un demandeur');
+    showToast('Veuillez sélectionner au moins un demandeur');
     return;
   }
 
@@ -4289,7 +5297,7 @@ function renderGanttChart() {
     html += `
       <div class="absolute h-6 lg:h-8 rounded-full flex items-center justify-center px-2 lg:px-4 shadow-sm cursor-pointer transition-all hover:shadow-md col-span-full"
            style="left: ${bar.left}%; width: ${bar.width}%; ${barStyle}; color: ${color.text}; top: 50%; transform: translateY(-50%);"
-           onclick="openProjectModal(${project.id})"
+           onclick="openProjectDetailModal(${project.id}, false)"
            title="${escHtml(project.name)} - ${project.progress}%">
         <span class="text-[10px] lg:text-[11px] font-bold">${project.progress}%</span>
       </div>
@@ -4356,7 +5364,7 @@ function renderProjectCards() {
     const daysColor = daysRemaining > 0 ? 'text-on-surface-variant' : 'text-error';
 
     html += `
-      <div class="bg-surface-container-low rounded-2xl p-4 shadow-sm hover:shadow-md transition-all" onclick="openProjectModal(${project.id})">
+      <div class="bg-surface-container-low rounded-2xl p-4 shadow-sm hover:shadow-md transition-all cursor-pointer" onclick="openProjectDetailModal(${project.id}, false)">
         <!-- Header -->
         <div class="flex items-start justify-between mb-3">
           <div class="flex-1">
@@ -4497,3 +5505,8 @@ function calculateBarPosition(project, minDate, maxDate, totalMonths) {
 
   return { left: Math.max(0, left), width: Math.min(100 - left, width) };
 }
+
+
+
+
+
