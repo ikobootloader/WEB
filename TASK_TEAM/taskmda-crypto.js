@@ -13,6 +13,7 @@
 
   const STORAGE_KEY_ENCRYPTED = 'taskmda-team-encrypted-data';
   const SALT_KEY = 'taskmda-team-salt';
+  const RECOVERY_KEY_BLOB = 'taskmda-team-recovery-blob';
   const ITER_COUNT = 310_000; // PBKDF2 iterations (OWASP 2024)
 
   let cryptoKey = null; // Clé de chiffrement en mémoire uniquement
@@ -31,6 +32,23 @@
     );
     return crypto.subtle.deriveKey(
       { name: 'PBKDF2', salt, iterations: ITER_COUNT, hash: 'SHA-256' },
+      raw,
+      { name: 'AES-GCM', length: 256 },
+      true,
+      ['encrypt', 'decrypt']
+    );
+  }
+
+  async function deriveRecoveryKey(recoveryCode, salt) {
+    const raw = await crypto.subtle.importKey(
+      'raw',
+      new TextEncoder().encode(String(recoveryCode || '').trim()),
+      'PBKDF2',
+      false,
+      ['deriveKey']
+    );
+    return crypto.subtle.deriveKey(
+      { name: 'PBKDF2', salt, iterations: 210_000, hash: 'SHA-256' },
       raw,
       { name: 'AES-GCM', length: 256 },
       false,
@@ -58,6 +76,100 @@
       hexToBuf(ctHex)
     );
     return JSON.parse(new TextDecoder().decode(plain));
+  }
+
+  async function encryptWithAesKey(data, key) {
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const payload = new TextEncoder().encode(JSON.stringify(data));
+    const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, payload);
+    return { iv: bufToHex(iv), ct: bufToHex(new Uint8Array(ct)) };
+  }
+
+  async function decryptWithAesKey(stored, key) {
+    const iv = hexToBuf(stored.iv || '');
+    const ct = hexToBuf(stored.ct || '');
+    const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
+    return JSON.parse(new TextDecoder().decode(plain));
+  }
+
+  function generateRecoveryCode() {
+    const bytes = crypto.getRandomValues(new Uint8Array(12));
+    const chunks = [];
+    for (let i = 0; i < bytes.length; i += 3) {
+      chunks.push(Array.from(bytes.slice(i, i + 3)).map(x => x.toString(16).padStart(2, '0')).join('').toUpperCase());
+    }
+    return chunks.join('-');
+  }
+
+  async function setupRecoveryForCurrentKey() {
+    if (!cryptoKey) throw new Error('Crypto key not initialized');
+    const recoveryCode = generateRecoveryCode();
+    const recoverySalt = crypto.getRandomValues(new Uint8Array(16));
+    const recoveryKey = await deriveRecoveryKey(recoveryCode, recoverySalt);
+    const rawKey = await crypto.subtle.exportKey('raw', cryptoKey);
+    const wrapped = await encryptWithAesKey({
+      keyHex: bufToHex(new Uint8Array(rawKey))
+    }, recoveryKey);
+    localStorage.setItem(RECOVERY_KEY_BLOB, JSON.stringify({
+      version: 1,
+      saltHex: bufToHex(recoverySalt),
+      wrapped
+    }));
+    return recoveryCode;
+  }
+
+  async function rotatePassword(newPassword) {
+    if (!cryptoKey) throw new Error('Crypto key not initialized');
+    const pwd = String(newPassword || '');
+    if (pwd.length < 4) throw new Error('Le mot de passe doit contenir au moins 4 caractères');
+    const payload = await loadEncryptedData();
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const nextKey = await deriveKey(pwd, salt);
+    localStorage.setItem(SALT_KEY, bufToHex(salt));
+    cryptoKey = nextKey;
+    await saveEncryptedData(payload || { config: {}, version: '1.0-encrypted', updatedAt: Date.now() });
+    const recoveryCode = await setupRecoveryForCurrentKey();
+    return { recoveryCode };
+  }
+
+  async function recoverAccessWithRecoveryCode(recoveryCode, newPassword) {
+    const blobRaw = localStorage.getItem(RECOVERY_KEY_BLOB);
+    if (!blobRaw) throw new Error('Aucune clé de récupération enregistrée');
+    const blob = JSON.parse(blobRaw);
+    const recoverySalt = hexToBuf(String(blob?.saltHex || ''));
+    const recoveryKey = await deriveRecoveryKey(recoveryCode, recoverySalt);
+    const unwrapped = await decryptWithAesKey(blob.wrapped, recoveryKey);
+    const rawHex = String(unwrapped?.keyHex || '').trim();
+    if (!rawHex) throw new Error('Clé de récupération invalide');
+    const recoveredKey = await crypto.subtle.importKey(
+      'raw',
+      hexToBuf(rawHex),
+      { name: 'AES-GCM' },
+      true,
+      ['encrypt', 'decrypt']
+    );
+    cryptoKey = recoveredKey;
+    await loadEncryptedData();
+    return await rotatePassword(newPassword);
+  }
+
+  async function verifyPassword(password) {
+    const saltHex = localStorage.getItem(SALT_KEY);
+    if (!saltHex) return false;
+    const encrypted = localStorage.getItem(STORAGE_KEY_ENCRYPTED);
+    if (!encrypted) return false;
+    try {
+      const testKey = await deriveKey(password, hexToBuf(saltHex));
+      const [ivHex, ctHex] = encrypted.split(':');
+      await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: hexToBuf(ivHex) },
+        testKey,
+        hexToBuf(ctHex)
+      );
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   const bufToHex = b => Array.from(b).map(x => x.toString(16).padStart(2,'0')).join('');
@@ -119,6 +231,7 @@
     const lockBtn = document.getElementById('lockBtn');
     const lockIcon = lockBtn?.querySelector('.material-symbols-outlined');
     const lockText = lockBtn?.querySelector('span:last-child');
+    const forgotBtn = document.getElementById('lockForgotBtn');
 
     if (mode === 'create') {
       const lockTitle = document.getElementById('lockTitle');
@@ -130,6 +243,7 @@
       if (lockConfirmWrap) lockConfirmWrap.classList.remove('hidden');
       if (lockIcon) lockIcon.textContent = 'lock_open';
       if (lockText) lockText.textContent = 'Créer & déverrouiller';
+      if (forgotBtn) forgotBtn.classList.add('hidden');
     } else {
       const lockTitle = document.getElementById('lockTitle');
       const lockSub = document.getElementById('lockSub');
@@ -140,6 +254,7 @@
       if (lockConfirmWrap) lockConfirmWrap.classList.add('hidden');
       if (lockIcon) lockIcon.textContent = 'lock_open';
       if (lockText) lockText.textContent = 'Déverrouiller';
+      if (forgotBtn) forgotBtn.classList.remove('hidden');
     }
 
     screen.classList.remove('hidden');
@@ -199,11 +314,13 @@
         createdAt: Date.now()
       });
 
+      const recoveryCode = await setupRecoveryForCurrentKey();
+
       hideLockScreen();
 
       // Call success callback if provided
       if (typeof onSuccess === 'function') {
-        onSuccess({ isNewUser: true });
+        onSuccess({ isNewUser: true, recoveryCode });
       }
     } else {
       // Unlock existing data
@@ -286,6 +403,38 @@
         if (e.key === 'Enter') {
           e.preventDefault();
           document.getElementById('lockBtn')?.click();
+        }
+      });
+    }
+
+    const forgotBtn = document.getElementById('lockForgotBtn');
+    if (forgotBtn) {
+      forgotBtn.addEventListener('click', async () => {
+        try {
+          const code = window.prompt('Saisissez votre clé de récupération');
+          if (!code) return;
+          const newPwd = window.prompt('Nouveau mot de passe (min 4 caractères)');
+          if (!newPwd) return;
+          const confirmPwd = window.prompt('Confirmez le nouveau mot de passe');
+          if (!confirmPwd) return;
+          if (newPwd !== confirmPwd) {
+            const lockError = document.getElementById('lockError');
+            if (lockError) {
+              lockError.textContent = '❌ Les mots de passe ne correspondent pas';
+              lockError.classList.remove('hidden');
+            }
+            return;
+          }
+          const result = await recoverAccessWithRecoveryCode(code, newPwd);
+          alert(`Accès restauré. Nouvelle clé de récupération:\n\n${result.recoveryCode}\n\nConservez-la hors ligne.`);
+          hideLockScreen();
+          window.dispatchEvent(new CustomEvent('taskmda-crypto-recovered'));
+        } catch (error) {
+          const lockError = document.getElementById('lockError');
+          if (lockError) {
+            lockError.textContent = '❌ Clé de récupération invalide';
+            lockError.classList.remove('hidden');
+          }
         }
       });
     }
@@ -456,6 +605,10 @@
     showLockScreen,
     hideLockScreen,
     submitPassword,
+    rotatePassword,
+    setupRecoveryForCurrentKey,
+    recoverAccessWithRecoveryCode,
+    verifyPassword,
 
     // Initialisation de l'UI
     initCryptoUI,
@@ -468,6 +621,10 @@
     // Vérifier si un salt existe (= mot de passe configuré)
     hasSalt() {
       return !!localStorage.getItem(SALT_KEY);
+    },
+
+    hasRecoveryKey() {
+      return !!localStorage.getItem(RECOVERY_KEY_BLOB);
     },
 
     // Vérifier si la clé crypto est initialisée

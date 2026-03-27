@@ -1,4 +1,4 @@
-    // ============================================================================
+﻿    // ============================================================================
     // TASKMDA TEAM - STANDALONE VERSION
     // Toutes les fonctionnalités event-sourcing dans un seul fichier HTML
     // ============================================================================
@@ -28,12 +28,22 @@
       console.log(...args);
     }
 
+    // ----------------------------------------------------------------------------
+    // FRONT MODULE BOUNDARIES (maintenabilite)
+    // - taskmda-ui.js: helpers UI generiques (modales, editeur, utilitaires visuels)
+    // - taskmda-theme.js: theming, dark mode, tokens visuels
+    // - taskmda-notifications.js: centre de notifications + persistance
+    // - taskmda-tasks.js: rendu/operations taches (listes, kanban, timeline)
+    // - taskmda-social.js: templates UI social (messagerie hors projet + fil d info)
+    // - taskmda-team.js: orchestration applicative, data flow, synchronisation FSA
+    // ----------------------------------------------------------------------------
+
     // ============================================================================
     // MODULE 1: DATABASE (IndexedDB)
     // ============================================================================
 
     const DB_NAME = 'taskmda-team-standalone';
-    const DB_VERSION = 7; // Incremente: + annuaire local auto-alimente + groupes utilisateurs
+    const DB_VERSION = 11; // + fil d'information transverse (posts + mentions)
     const DATA_EXPORT_STORES = {
       events: 'eventId',
       processedEvents: 'eventId',
@@ -44,9 +54,13 @@
       globalTasks: 'id',
       globalDocs: 'id',
       globalCalendarItems: 'id',
+      globalMessages: 'messageId',
+      globalPosts: 'postId',
       globalThemes: 'themeKey',
       globalGroups: 'groupKey',
-      directoryUsers: 'userId'
+      softwareVersions: 'softwareId',
+      directoryUsers: 'userId',
+      appSettings: 'key'
     };
     let dbInstance = null;
 
@@ -119,6 +133,22 @@
               globalCalendarItems.createIndex('theme', 'theme');
             }
 
+            // Messagerie hors projet (directe entre agents connus)
+            if (!db.objectStoreNames.contains('globalMessages')) {
+              const globalMessages = db.createObjectStore('globalMessages', { keyPath: 'messageId' });
+              globalMessages.createIndex('createdAt', 'createdAt');
+              globalMessages.createIndex('conversationId', 'conversationId');
+              globalMessages.createIndex('toUserId', 'toUserId');
+              globalMessages.createIndex('fromUserId', 'fromUserId');
+            }
+
+            // Fil d'information transverse (micro-posts + mentions + references)
+            if (!db.objectStoreNames.contains('globalPosts')) {
+              const globalPosts = db.createObjectStore('globalPosts', { keyPath: 'postId' });
+              globalPosts.createIndex('createdAt', 'createdAt');
+              globalPosts.createIndex('authorUserId', 'authorUserId');
+            }
+
             // Catalogue global des thematiques reutilisables
             if (!db.objectStoreNames.contains('globalThemes')) {
               const globalThemes = db.createObjectStore('globalThemes', { keyPath: 'themeKey' });
@@ -131,6 +161,18 @@
               const globalGroups = db.createObjectStore('globalGroups', { keyPath: 'groupKey' });
               globalGroups.createIndex('name', 'name');
               globalGroups.createIndex('updatedAt', 'updatedAt');
+            }
+
+            // Registre global des versions logicielles metier
+            if (!db.objectStoreNames.contains('softwareVersions')) {
+              const softwareVersions = db.createObjectStore('softwareVersions', { keyPath: 'softwareId' });
+              softwareVersions.createIndex('softwareName', 'softwareName');
+              softwareVersions.createIndex('updatedAt', 'updatedAt');
+            }
+
+            // Parametres globaux de l'application (branding + admin)
+            if (!db.objectStoreNames.contains('appSettings')) {
+              db.createObjectStore('appSettings', { keyPath: 'key' });
             }
 
             debugLog('Database initialized');
@@ -165,6 +207,7 @@
     async function putEncrypted(storeName, obj, idField) {
       const db = getDatabase();
 
+      return await runWithLoading(async () => {
       if (window.TaskMDACrypto && window.TaskMDACrypto.isUnlocked()) {
         const encrypted = await window.TaskMDACrypto.encryptForDB(obj, idField);
         return await db.put(storeName, encrypted);
@@ -172,11 +215,17 @@
         // Fallback sans chiffrement si non déverrouillé
         return await db.put(storeName, obj);
       }
+      });
     }
 
     /**
      * Lecture déchiffrée depuis IndexedDB
      */
+    async function deleteFromStore(storeName, key) {
+      const db = getDatabase();
+      return await runWithLoading(async () => db.delete(storeName, key));
+    }
+
     async function getDecrypted(storeName, id, idField) {
       if (!isValidIdbKey(id)) return null;
       const db = getDatabase();
@@ -256,13 +305,32 @@
       CREATE_INVITE: 'CREATE_INVITE',
       UPDATE_INVITE: 'UPDATE_INVITE',
       CREATE_GROUP: 'CREATE_GROUP',
+      UPDATE_GROUP: 'UPDATE_GROUP',
       DELETE_GROUP: 'DELETE_GROUP',
       CREATE_USER_GROUP: 'CREATE_USER_GROUP',
       UPDATE_USER_GROUP: 'UPDATE_USER_GROUP',
       DELETE_USER_GROUP: 'DELETE_USER_GROUP',
       ADD_THEME: 'ADD_THEME',
-      REMOVE_THEME: 'REMOVE_THEME'
+      REMOVE_THEME: 'REMOVE_THEME',
+      CREATE_DOCUMENT: 'CREATE_DOCUMENT',
+      DELETE_DOCUMENT: 'DELETE_DOCUMENT',
+      LOCK_RESOURCE: 'LOCK_RESOURCE',
+      UNLOCK_RESOURCE: 'UNLOCK_RESOURCE'
     };
+
+    const DEFAULT_LOCK_TTL_MS = 10 * 60 * 1000;
+
+    function pruneResourceLocksMap(lockMap, now = Date.now()) {
+      const source = (lockMap && typeof lockMap === 'object') ? lockMap : {};
+      const next = {};
+      Object.entries(source).forEach(([key, value]) => {
+        if (!value || typeof value !== 'object') return;
+        const expiresAt = Number(value.expiresAt || 0);
+        if (!Number.isFinite(expiresAt) || expiresAt <= now) return;
+        next[key] = value;
+      });
+      return next;
+    }
 
     // ============================================================================
     // MODULE 3: EVENT STORE
@@ -303,11 +371,73 @@
       // Appliquer à l'état
       await applyEventToState(event);
       await ingestDirectoryFromEvent(event);
+      await maybeNotifyCollaboratorEvent(event);
 
       // Marquer comme traité (chiffré)
       await putEncrypted('processedEvents', { eventId: event.eventId, processedAt: Date.now() }, 'eventId');
 
       debugLog('Event processed:', event.type);
+    }
+
+    async function mirrorCreationEventToGlobalFeed(event, state) {
+      if (!event || !state?.project || state.project.deletedAt) return;
+      const isProjectCreate = event.type === EventTypes.CREATE_PROJECT;
+      const isTaskCreate = event.type === EventTypes.CREATE_TASK;
+      if (!isProjectCreate && !isTaskCreate) return;
+      if (!hasProjectAccess(state)) return;
+
+      const sourceEventId = String(event.eventId || '').trim();
+      if (!sourceEventId) return;
+      const postId = `auto-event-${sourceEventId}`;
+      const existing = await getDecrypted('globalPosts', postId, 'postId');
+      if (existing) return;
+
+      const projectName = String(state.project.name || 'Projet').trim() || 'Projet';
+      const authorUserId = String(event.author || '').trim();
+      const authorIdentity = resolveKnownUserIdentity(authorUserId, fallbackDirectoryName(authorUserId));
+      const authorName = authorIdentity?.name || fallbackDirectoryName(authorUserId);
+
+      const refs = [{ type: 'project', id: event.projectId, label: projectName }];
+      let content = `Nouveau projet créé: ${projectName}`;
+      let autoKind = 'project-created';
+
+      if (isTaskCreate) {
+        const taskId = String(event.payload?.taskId || '').trim();
+        const createdTask = (state.tasks || []).find((task) => String(task.taskId || '') === taskId);
+        const taskTitle = String(createdTask?.title || event.payload?.title || 'Tâche').trim() || 'Tâche';
+        const taskRef = buildGlobalTaskRef({
+          sourceType: 'project',
+          sourceProjectId: event.projectId,
+          taskId,
+          id: null
+        });
+        refs.push({ type: 'task', id: taskRef, label: `${taskTitle} • ${projectName}` });
+        content = `Nouvelle tâche créée: ${taskTitle}\nProjet: ${projectName}`;
+        autoKind = 'task-created';
+      }
+
+      const autoPost = {
+        postId,
+        authorUserId,
+        authorName,
+        content,
+        mentions: [],
+        refs,
+        createdAt: Number(event.timestamp || Date.now()),
+        source: sharedFolderHandle ? 'shared' : 'local',
+        isAuto: true,
+        autoKind,
+        sourceEventId
+      };
+
+      await putEncrypted('globalPosts', autoPost, 'postId');
+      knownGlobalPostIds.add(postId);
+      if (sharedFolderHandle) {
+        await writeGlobalFeedPostToSharedFolder(autoPost);
+      }
+      if (workspaceMode === 'global' && globalWorkspaceView === 'feed') {
+        await renderGlobalFeed();
+      }
     }
 
     async function applyEventToState(event) {
@@ -321,6 +451,8 @@
         groups: [],
         userGroups: [],
         themes: [],
+        documents: [],
+        resourceLocks: {},
         project: null
       };
 
@@ -331,6 +463,20 @@
       if (!Array.isArray(state.groups)) state.groups = [];
       if (!Array.isArray(state.userGroups)) state.userGroups = [];
       if (!Array.isArray(state.themes)) state.themes = [];
+      if (!Array.isArray(state.documents)) state.documents = [];
+      if (!state.resourceLocks || typeof state.resourceLocks !== 'object') state.resourceLocks = {};
+      state.resourceLocks = pruneResourceLocksMap(state.resourceLocks);
+      const themesToUpsert = [];
+      const registerTheme = (rawTheme) => {
+        const theme = String(rawTheme || '').trim();
+        if (!theme) return;
+        if (!state.themes.find(t => normalizeSearch(t) === normalizeSearch(theme))) {
+          state.themes.push(theme);
+        }
+        if (!themesToUpsert.some(t => normalizeSearch(t) === normalizeSearch(theme))) {
+          themesToUpsert.push(theme);
+        }
+      };
 
       // Appliquer selon le type
       switch (event.type) {
@@ -342,7 +488,6 @@
             createdAt: event.timestamp
           };
           break;
-
         case EventTypes.UPDATE_PROJECT:
           if (state.project) {
             state.project = { ...state.project, ...event.payload.changes, updatedAt: event.timestamp };
@@ -362,12 +507,14 @@
             createdBy: event.payload.createdBy || event.author,
             createdAt: event.timestamp
           });
+          registerTheme(event.payload?.theme);
           break;
 
         case EventTypes.UPDATE_TASK:
           state.tasks = state.tasks.map(t =>
             t.taskId === event.payload.taskId ? { ...t, ...event.payload.changes, updatedAt: event.timestamp } : t
           );
+          registerTheme(event.payload?.changes?.theme);
           break;
 
         case EventTypes.DELETE_TASK:
@@ -428,6 +575,14 @@
           }
           break;
 
+        case EventTypes.UPDATE_GROUP:
+          state.groups = state.groups.map(g =>
+            g.groupId === event.payload.groupId
+              ? { ...g, ...event.payload.changes, updatedAt: event.timestamp }
+              : g
+          );
+          break;
+
         case EventTypes.DELETE_GROUP:
           state.groups = state.groups.filter(g => g.groupId !== event.payload.groupId);
           state.tasks = state.tasks.map(t => t.groupId === event.payload.groupId ? { ...t, groupId: null } : t);
@@ -457,17 +612,68 @@
           break;
 
         case EventTypes.ADD_THEME:
-          if (!state.themes.find(t => normalizeSearch(t) === normalizeSearch(event.payload.theme))) {
-            state.themes.push(event.payload.theme);
-          }
+          registerTheme(event.payload?.theme);
           break;
 
         case EventTypes.REMOVE_THEME:
           state.themes = state.themes.filter(t => normalizeSearch(t) !== normalizeSearch(event.payload.theme));
           break;
+
+        case EventTypes.CREATE_DOCUMENT:
+          if (!state.documents.find(d => d.docId === event.payload.docId)) {
+            state.documents.push({
+              ...event.payload,
+              createdBy: event.author,
+              createdAt: event.timestamp
+            });
+          }
+          break;
+
+        case EventTypes.DELETE_DOCUMENT:
+          state.documents = state.documents.filter(d => d.docId !== event.payload.docId);
+          break;
+
+        case EventTypes.LOCK_RESOURCE: {
+          const resourceType = String(event.payload?.resourceType || '').trim();
+          const resourceId = String(event.payload?.resourceId || '').trim();
+          if (!resourceType || !resourceId) break;
+          const key = `${resourceType}:${resourceId}`;
+          const ttlMs = Math.max(30 * 1000, Math.min(60 * 60 * 1000, Number(event.payload?.ttlMs || 0) || DEFAULT_LOCK_TTL_MS));
+          const lockId = String(event.payload?.lockId || '').trim() || uuidv4();
+          state.resourceLocks[key] = {
+            resourceType,
+            resourceId,
+            lockId,
+            ownerUserId: String(event.payload?.ownerUserId || event.author || '').trim(),
+            ownerName: String(event.payload?.ownerName || '').trim(),
+            scope: String(event.payload?.scope || '').trim(),
+            updatedAt: event.timestamp,
+            expiresAt: event.timestamp + ttlMs
+          };
+          break;
+        }
+
+        case EventTypes.UNLOCK_RESOURCE: {
+          const resourceType = String(event.payload?.resourceType || '').trim();
+          const resourceId = String(event.payload?.resourceId || '').trim();
+          if (!resourceType || !resourceId) break;
+          const key = `${resourceType}:${resourceId}`;
+          const existing = state.resourceLocks[key];
+          if (!existing) break;
+          const wantedLockId = String(event.payload?.lockId || '').trim();
+          const ownerUserId = String(event.payload?.ownerUserId || event.author || '').trim();
+          if (wantedLockId && String(existing.lockId || '') !== wantedLockId) break;
+          if (ownerUserId && String(existing.ownerUserId || '') !== ownerUserId) break;
+          delete state.resourceLocks[key];
+          break;
+        }
       }
 
       state.lastUpdated = Date.now();
+      for (const theme of themesToUpsert) {
+        await upsertGlobalTheme(theme);
+      }
+      await mirrorCreationEventToGlobalFeed(event, state);
 
       // Sauvegarder l'état (chiffré)
       await putEncrypted('localState', state, 'projectId');
@@ -477,11 +683,16 @@
       if (!state || !state.project || state.project.deletedAt) return false;
       const members = Array.isArray(state.members) ? state.members : [];
       const normalizedMode = normalizeSharingMode(state.project.sharingMode, 'private');
+      const readAccess = normalizeProjectReadAccess(
+        state.project.readAccess,
+        normalizedMode === 'private' ? 'private' : 'members'
+      );
       const isMember = members.some(m => m.userId === userId);
       if (isMember) return true;
       if (state.project.createdBy && state.project.createdBy === userId) return true;
-      if (members.length === 0 && !state.project.createdBy) return true; // compatibilitÃ© anciens jeux de donnÃ©es
+      if (members.length === 0 && !state.project.createdBy) return true; // compatibilité anciens jeux de données
       if (normalizedMode === 'private') return false;
+      if (readAccess === 'public') return true;
       return false;
     }
 
@@ -489,6 +700,11 @@
       if (!isValidIdbKey(projectId)) return null;
       const state = await getDecrypted('localState', projectId, 'projectId');
       if (!state) return null;
+      if (!state.resourceLocks || typeof state.resourceLocks !== 'object') {
+        state.resourceLocks = {};
+      } else {
+        state.resourceLocks = pruneResourceLocksMap(state.resourceLocks);
+      }
       if (options.ignoreAccessCheck) return state;
       return hasProjectAccess(state) ? state : null;
     }
@@ -564,6 +780,136 @@
       }
 
       return user;
+    }
+
+    const DEFAULT_APP_BRANDING = Object.freeze({
+      appName: 'NEXUS MDA',
+      appSubtitle: 'Espace collaboratif MDA'
+    });
+
+    const DEFAULT_PROJECT_ROLE_CATALOG = Object.freeze([
+      { roleKey: 'owner', label: 'Proprietaire', baseRole: 'owner', isSystem: true },
+      { roleKey: 'manager', label: 'Manager', baseRole: 'manager', isSystem: true },
+      { roleKey: 'member', label: 'Membre', baseRole: 'member', isSystem: true }
+    ]);
+
+    function normalizeProjectRoleBase(role) {
+      return role === 'owner' || role === 'manager' || role === 'member' ? role : 'member';
+    }
+
+    function normalizeProjectRoleCatalog(rawCatalog = []) {
+      const defaultsByKey = new Map(DEFAULT_PROJECT_ROLE_CATALOG.map(item => [item.roleKey, item]));
+      const merged = new Map(DEFAULT_PROJECT_ROLE_CATALOG.map(item => [item.roleKey, { ...item }]));
+      (Array.isArray(rawCatalog) ? rawCatalog : []).forEach((item) => {
+        const inputKey = String(item?.roleKey || '').trim();
+        const fallbackKey = defaultsByKey.has(inputKey) ? inputKey : `custom:${normalizeCatalogKey(item?.label || '')}`;
+        const roleKey = fallbackKey || `custom:${uuidv4()}`;
+        const baseRole = normalizeProjectRoleBase(item?.baseRole || roleKey);
+        const defaultEntry = defaultsByKey.get(roleKey);
+        const label = String(item?.label || defaultEntry?.label || '').trim() || (defaultEntry?.label || 'Role');
+        if (defaultEntry) {
+          merged.set(roleKey, {
+            roleKey,
+            label,
+            baseRole,
+            isSystem: true
+          });
+          return;
+        }
+        merged.set(roleKey, {
+          roleKey,
+          label,
+          baseRole,
+          isSystem: false
+        });
+      });
+      return Array.from(merged.values())
+        .filter(item => item && item.roleKey && item.label)
+        .sort((a, b) => {
+          if (a.isSystem && !b.isSystem) return -1;
+          if (!a.isSystem && b.isSystem) return 1;
+          return String(a.label || '').localeCompare(String(b.label || ''), 'fr');
+        });
+    }
+
+    function getProjectRoleCatalog() {
+      return normalizeProjectRoleCatalog(appBranding?.roleCatalog || []);
+    }
+
+    function getBaseProjectRoleLabel(baseRole) {
+      const normalized = normalizeProjectRoleBase(baseRole);
+      if (normalized === 'owner') return 'Proprietaire';
+      if (normalized === 'manager') return 'Manager';
+      return 'Membre';
+    }
+
+    function getProjectRoleMeta(role) {
+      const roleKey = String(role || '').trim();
+      const catalog = getProjectRoleCatalog();
+      const byKey = new Map(catalog.map(item => [String(item.roleKey || ''), item]));
+      const exact = roleKey ? byKey.get(roleKey) : null;
+      if (exact) {
+        return {
+          roleKey: exact.roleKey,
+          label: exact.label,
+          baseRole: normalizeProjectRoleBase(exact.baseRole),
+          isSystem: Boolean(exact.isSystem)
+        };
+      }
+      const baseRole = normalizeProjectRoleBase(roleKey);
+      const base = byKey.get(baseRole) || DEFAULT_PROJECT_ROLE_CATALOG.find(item => item.roleKey === baseRole);
+      return {
+        roleKey: baseRole,
+        label: base?.label || getBaseProjectRoleLabel(baseRole),
+        baseRole,
+        isSystem: true
+      };
+    }
+
+    function getProjectRoleLabel(role) {
+      return getProjectRoleMeta(role).label;
+    }
+
+    function normalizeAppBrandingConfig(raw = {}) {
+      const appName = String(raw?.appName || '').trim() || DEFAULT_APP_BRANDING.appName;
+      const appSubtitle = String(raw?.appSubtitle || '').trim() || DEFAULT_APP_BRANDING.appSubtitle;
+      const adminUserId = String(raw?.adminUserId || '').trim() || '';
+      const updatedAt = Number(raw?.updatedAt || 0) || Date.now();
+      const roleCatalog = normalizeProjectRoleCatalog(raw?.roleCatalog || []);
+      return { appName, appSubtitle, adminUserId, roleCatalog, updatedAt };
+    }
+
+    async function getAppBrandingConfig() {
+      const row = await getDecrypted('appSettings', 'branding', 'key');
+      return row ? normalizeAppBrandingConfig(row) : null;
+    }
+
+    async function saveAppBrandingConfig(config, options = {}) {
+      const normalized = normalizeAppBrandingConfig(config);
+      await putEncrypted('appSettings', {
+        key: 'branding',
+        ...normalized
+      }, 'key');
+      appBranding = normalized;
+      applyAppBrandingToHeader();
+      if (options.sync !== false) {
+        await writeAppBrandingToSharedFolder();
+      }
+      return normalized;
+    }
+
+    function applyAppBrandingToHeader() {
+      const effective = normalizeAppBrandingConfig(appBranding || {});
+      const titleEl = document.getElementById('app-header-name');
+      const subtitleEl = document.getElementById('app-header-subtitle');
+      if (titleEl) titleEl.textContent = effective.appName;
+      if (subtitleEl) subtitleEl.textContent = effective.appSubtitle;
+      document.title = `${effective.appName} | Solo et Collaboratif`;
+    }
+
+    function isAppAdmin(userId = currentUser?.userId) {
+      if (!userId) return false;
+      return String(appBranding?.adminUserId || '') === String(userId);
     }
 
     function getCurrentUserId() {
@@ -749,6 +1095,9 @@
     let isPolling = false;
     let pollInterval = null;
     let knownEventIds = new Set();
+    let sharedWriteQueue = [];
+    let sharedWriteQueuedIds = new Set();
+    let isSharedWriteProcessing = false;
 
     function isFileSystemSupported() {
       return 'showDirectoryPicker' in window;
@@ -784,7 +1133,7 @@
             }
           }
         });
-        await db.put('handles', { key: 'sharedFolder', handle });
+        await runWithLoading(async () => db.put('handles', { key: 'sharedFolder', handle }));
       } catch (error) {
         console.warn('Could not save handle:', error);
       }
@@ -799,7 +1148,7 @@
             }
           }
         });
-        await db.delete('handles', 'sharedFolder');
+        await runWithLoading(async () => db.delete('handles', 'sharedFolder'));
       } catch (error) {
         console.warn('Could not clear saved handle:', error);
       }
@@ -814,10 +1163,60 @@
         const eventsDir = await projectDir.getDirectoryHandle('events', { create: true });
         const snapshotsDir = await projectDir.getDirectoryHandle('snapshots', { create: true });
 
-        projectFolders.set(projectId, { eventsDir, snapshotsDir });
+        projectFolders.set(projectId, { projectDir, eventsDir, snapshotsDir });
         debugLog('Project registered:', projectId);
       } catch (error) {
         console.error('Error registering project:', error);
+      }
+    }
+
+    async function writeProjectSharedKeyToFolder(projectId, sharedKeyHex) {
+      const key = String(sharedKeyHex || '').trim();
+      if (!projectId || !key) return;
+      const folders = projectFolders.get(projectId);
+      if (!folders?.projectDir) return;
+      try {
+        const keyFile = await folders.projectDir.getFileHandle('shared-key.json', { create: true });
+        const writable = await keyFile.createWritable();
+        const payload = {
+          type: 'taskmda_shared_key',
+          version: 1,
+          projectId,
+          sharedKey: key,
+          updatedAt: Date.now(),
+          updatedBy: currentUser?.userId || ''
+        };
+        await writable.write(JSON.stringify(payload, null, 2));
+        await writable.close();
+      } catch (error) {
+        console.warn('Unable to persist project shared key in folder:', error);
+      }
+    }
+
+    async function importProjectSharedKeyFromFolder(projectId) {
+      if (!projectId) return null;
+      const folders = projectFolders.get(projectId);
+      if (!folders?.projectDir) return null;
+      try {
+        const keyFile = await folders.projectDir.getFileHandle('shared-key.json', { create: false });
+        const file = await keyFile.getFile();
+        const content = await file.text();
+        const parsed = JSON.parse(content || '{}');
+        const sharedKey = String(parsed?.sharedKey || '').trim();
+        if (!sharedKey) return null;
+        const row = {
+          projectId,
+          sharedKey,
+          passphrase: null,
+          createdAt: Number(parsed?.updatedAt || Date.now()) || Date.now()
+        };
+        await putEncrypted('sharedKeys', row, 'projectId');
+        return row;
+      } catch (error) {
+        if (error?.name !== 'NotFoundError') {
+          console.warn('Unable to import project shared key from folder:', error);
+        }
+        return null;
       }
     }
 
@@ -825,8 +1224,15 @@
      * Découvre et charge tous les projets existants dans le dossier partagé
      * Appelé lors de la connexion initiale au dossier
      */
-    async function discoverAndLoadExistingProjects() {
-      if (!sharedFolderHandle) return;
+    async function discoverAndLoadExistingProjects(options = {}) {
+      const stats = {
+        projectsFound: 0,
+        projectsLoaded: 0,
+        projectsSkippedMissingKey: 0,
+        eventsLoaded: 0
+      };
+      if (!sharedFolderHandle) return stats;
+      const shouldRebuildLocal = options.rebuildLocal === true;
 
       debugLog('Discovering existing projects...');
 
@@ -849,9 +1255,19 @@
           debugLog(`Loading ${events.length} events from project ${projectId}`);
 
           // Traiter tous les événements dans l'ordre chronologique
-          for (const event of events) {
-            await processEvent(event);
-            knownEventIds.add(event.eventId);
+          if (shouldRebuildLocal) {
+            const db = getDatabase();
+            await deleteFromStore('localState', projectId);
+            for (const event of events) {
+              await applyEventToState(event);
+              await maybeNotifyCollaboratorEvent(event);
+              knownEventIds.add(event.eventId);
+            }
+          } else {
+            for (const event of events) {
+              await processEvent(event);
+              knownEventIds.add(event.eventId);
+            }
           }
         }
 
@@ -859,6 +1275,76 @@
       } catch (error) {
         console.error('❌ Error discovering projects:', error);
       }
+    }
+
+    // Override: rechargement robuste des projets collaboratifs
+    async function discoverAndLoadExistingProjects(options = {}) {
+      const stats = {
+        projectsFound: 0,
+        projectsLoaded: 0,
+        projectsSkippedMissingKey: 0,
+        eventsLoaded: 0
+      };
+      if (!sharedFolderHandle) return stats;
+      const shouldRebuildLocal = options.rebuildLocal === true;
+
+      debugLog('Discovering existing projects...');
+
+      try {
+        const projectsDir = await sharedFolderHandle.getDirectoryHandle('projects', { create: true });
+
+        for await (const entry of projectsDir.values()) {
+          if (entry.kind !== 'directory') continue;
+          stats.projectsFound += 1;
+
+          const projectId = entry.name;
+          debugLog('Found project:', projectId);
+          await registerProject(projectId);
+
+          let sharedKeyData = await getDecrypted('sharedKeys', projectId, 'projectId');
+          if (!sharedKeyData) {
+            sharedKeyData = await importProjectSharedKeyFromFolder(projectId);
+          }
+          if (sharedKeyData?.sharedKey) {
+            await writeProjectSharedKeyToFolder(projectId, sharedKeyData.sharedKey);
+          }
+
+          const events = await readEventsFromSharedFolder(projectId, false);
+          debugLog(`Loading ${events.length} events from project ${projectId}`);
+          stats.eventsLoaded += events.length;
+          if (events.length > 0) {
+            stats.projectsLoaded += 1;
+          } else if (!sharedKeyData) {
+            stats.projectsSkippedMissingKey += 1;
+          }
+
+          if (shouldRebuildLocal) {
+            const db = getDatabase();
+            await deleteFromStore('localState', projectId);
+            for (const event of events) {
+              await applyEventToState(event);
+              await maybeNotifyCollaboratorEvent(event);
+              knownEventIds.add(event.eventId);
+            }
+          } else {
+            for (const event of events) {
+              await processEvent(event);
+              knownEventIds.add(event.eventId);
+            }
+          }
+
+          const refreshedState = await getProjectState(projectId, { ignoreAccessCheck: true });
+          if (refreshedState && !hasProjectAccess(refreshedState)) {
+            const db = getDatabase();
+            await deleteFromStore('localState', projectId);
+          }
+        }
+
+        debugLog('All existing projects loaded');
+      } catch (error) {
+        console.error('Error discovering projects:', error);
+      }
+      return stats;
     }
 
     async function getSavedSharedFolderHandle() {
@@ -878,21 +1364,51 @@
       }
     }
 
-    async function connectSharedFolderHandle(handle, showNotice = true) {
+    async function connectSharedFolderHandle(handle, showNotice = true, options = {}) {
       if (!handle) return false;
       sharedFolderHandle = handle;
       projectFolders = new Map();
       knownEventIds = new Set();
-      await discoverAndLoadExistingProjects();
+      sharedWriteQueue = [];
+      sharedWriteQueuedIds = new Set();
+      isSharedWriteProcessing = false;
+      updateBackgroundSyncStatus('idle', 0);
+      await loadAppBrandingConfig({ ensureRemote: true });
+      const loadStats = await discoverAndLoadExistingProjects(options);
+      await syncGlobalMessagesFromSharedFolder();
+      await syncGlobalFeedFromSharedFolder();
       if (!isPolling) startPolling();
       updateSyncStatus('connected');
       await refreshStats();
       await renderProjects();
+      ensureAutoEncryptedUserBackupToSharedFolder({ force: true, silent: true });
       if (showNotice) {
-        showToast('Connecte au dossier partage');
+        if ((loadStats?.projectsFound || 0) === 0) {
+          showToast('Dossier connecté, aucun projet collaboratif détecté');
+        } else {
+          const loaded = Number(loadStats?.projectsLoaded || 0);
+          const skipped = Number(loadStats?.projectsSkippedMissingKey || 0);
+          showToast(`Dossier connecté: ${loaded} projet(s) chargé(s), ${skipped} ignoré(s)`);
+          if (skipped > 0) {
+            addNotification(
+              'Synchronisation',
+              'Certains projets n ont pas pu etre lus (cle partagee manquante)',
+              null,
+              { targetView: 'settings' }
+            );
+          }
+        }
         addNotification('Connexion', 'Dossier partage connecte', null);
       }
       return true;
+    }
+
+    function askCollaborativeReload(sourceLabel = 'liaison') {
+      return confirm(
+        `Recharger les projets/tâches collaboratifs (${sourceLabel}) ?\n\n` +
+        'Oui = reconstruction locale depuis le dossier lié.\n' +
+        'Non = connexion sans reconstruction immédiate.'
+      );
     }
 
     async function tryConnectSavedFolder() {
@@ -911,7 +1427,8 @@
           updateFolderButtons();
           return false;
         }
-        await connectSharedFolderHandle(savedHandle, false);
+        const shouldReload = askCollaborativeReload('reconnexion automatique');
+        await connectSharedFolderHandle(savedHandle, false, { rebuildLocal: shouldReload });
         return true;
       } catch (error) {
         console.warn('Saved folder re-connection failed:', error);
@@ -925,6 +1442,10 @@
       sharedFolderHandle = null;
       projectFolders = new Map();
       knownEventIds = new Set();
+      sharedWriteQueue = [];
+      sharedWriteQueuedIds = new Set();
+      isSharedWriteProcessing = false;
+      updateBackgroundSyncStatus('idle', 0);
       stopPolling();
       if (forgetSavedHandle) {
         await clearSavedSharedFolderHandle();
@@ -936,16 +1457,104 @@
       showToast('Mode solo actif');
     }
 
-    async function writeEventToSharedFolder(projectId, event) {
-      const folders = projectFolders.get(projectId);
-      if (!folders) return;
+    async function readAppBrandingFromSharedFolder() {
+      if (!sharedFolderHandle) return null;
+      try {
+        const configDir = await sharedFolderHandle.getDirectoryHandle('config', { create: true });
+        const fileHandle = await configDir.getFileHandle('app-branding.json', { create: false });
+        const file = await fileHandle.getFile();
+        const content = await file.text();
+        const parsed = JSON.parse(content);
+        if (!parsed || parsed.type !== 'taskmda_app_branding') return null;
+        return normalizeAppBrandingConfig(parsed.payload || {});
+      } catch (error) {
+        if (error?.name !== 'NotFoundError') {
+          console.warn('App branding shared config read failed:', error);
+        }
+        return null;
+      }
+    }
 
+    async function writeAppBrandingToSharedFolder() {
+      if (!sharedFolderHandle || !appBranding) return;
+      try {
+        const configDir = await sharedFolderHandle.getDirectoryHandle('config', { create: true });
+        const fileHandle = await configDir.getFileHandle('app-branding.json', { create: true });
+        const writable = await fileHandle.createWritable();
+        const payload = {
+          type: 'taskmda_app_branding',
+          version: 1,
+          payload: normalizeAppBrandingConfig(appBranding),
+          updatedBy: currentUser?.userId || '',
+          updatedAt: Date.now()
+        };
+        await writable.write(JSON.stringify(payload, null, 2));
+        await writable.close();
+      } catch (error) {
+        console.warn('App branding shared config write failed:', error);
+      }
+    }
+
+    async function loadAppBrandingConfig(options = {}) {
+      const local = await getAppBrandingConfig();
+      if (local) {
+        appBranding = local;
+      } else {
+        appBranding = normalizeAppBrandingConfig({
+          appName: DEFAULT_APP_BRANDING.appName,
+          appSubtitle: DEFAULT_APP_BRANDING.appSubtitle,
+          adminUserId: currentUser?.userId || '',
+          updatedAt: Date.now()
+        });
+        await saveAppBrandingConfig(appBranding, { sync: false });
+      }
+
+      if (sharedFolderHandle) {
+        const remote = await readAppBrandingFromSharedFolder();
+        if (remote && (!appBranding?.updatedAt || remote.updatedAt >= appBranding.updatedAt)) {
+          appBranding = remote;
+          await saveAppBrandingConfig(appBranding, { sync: false });
+        } else if (!remote && options.ensureRemote !== false) {
+          await writeAppBrandingToSharedFolder();
+        }
+      }
+
+      if (!String(appBranding?.adminUserId || '').trim() && currentUser?.userId) {
+        appBranding = normalizeAppBrandingConfig({
+          ...(appBranding || {}),
+          adminUserId: currentUser.userId,
+          updatedAt: Date.now()
+        });
+        await saveAppBrandingConfig(appBranding, { sync: !!sharedFolderHandle });
+      }
+
+      applyAppBrandingToHeader();
+      return appBranding;
+    }
+
+    async function writeEventToSharedFolderNow(projectId, event) {
+      const folders = projectFolders.get(projectId);
+      if (!folders) return false;
       try {
         // Récupérer la clé partagée du projet
-        const sharedKeyData = await getDecrypted('sharedKeys', projectId, 'projectId');
-        if (!sharedKeyData) {
-          console.warn('No shared key for project (might be private):', projectId);
-          return;
+        let sharedKeyData = await getDecrypted('sharedKeys', projectId, 'projectId');
+        if (!sharedKeyData?.sharedKey) {
+          sharedKeyData = await importProjectSharedKeyFromFolder(projectId);
+        }
+
+        if (!sharedKeyData?.sharedKey) {
+          const fileName = `${event.timestamp}_${event.eventId}.json`;
+          const fileHandle = await folders.eventsDir.getFileHandle(fileName, { create: true });
+          const writable = await fileHandle.createWritable();
+          await writable.write(JSON.stringify({
+            ...event,
+            version: 'v1-clear-fallback'
+          }));
+          await writable.close();
+          knownEventIds.add(event.eventId);
+          console.warn('Shared key unavailable, writing clear fallback event:', projectId, event?.type);
+          debugLog('Fallback event written to shared folder:', fileName);
+          return true;
         }
 
         const sharedKey = await window.TaskMDACrypto.importSharedKey(sharedKeyData.sharedKey);
@@ -970,9 +1579,61 @@
 
         knownEventIds.add(event.eventId);
         debugLog('E2E encrypted event written to shared folder:', fileName);
+        return true;
       } catch (error) {
         console.error('Error writing encrypted event:', error);
+        return false;
       }
+    }
+
+    async function processSharedWriteQueue() {
+      if (isSharedWriteProcessing || !sharedFolderHandle) return;
+      isSharedWriteProcessing = true;
+      updateBackgroundSyncStatus('syncing', sharedWriteQueue.length);
+      try {
+        while (sharedWriteQueue.length > 0 && sharedFolderHandle) {
+          const item = sharedWriteQueue[0];
+          const synced = await writeEventToSharedFolderNow(item.projectId, item.event);
+          if (synced) {
+            sharedWriteQueue.shift();
+            if (item.queueKey) sharedWriteQueuedIds.delete(item.queueKey);
+            updateBackgroundSyncStatus(sharedWriteQueue.length > 0 ? 'syncing' : 'idle', sharedWriteQueue.length);
+            continue;
+          }
+
+          item.attempts = Number(item.attempts || 0) + 1;
+          updateBackgroundSyncStatus('queued', sharedWriteQueue.length);
+          if (item.attempts >= 3) {
+            sharedWriteQueue.shift();
+            if (item.queueKey) sharedWriteQueuedIds.delete(item.queueKey);
+            addNotification('Synchronisation', `Evenement non synchronise: ${item.event?.type || 'inconnu'}`, item.projectId);
+            updateBackgroundSyncStatus('error', Math.max(sharedWriteQueue.length, 1));
+            continue;
+          }
+          await new Promise(resolve => setTimeout(resolve, Math.min(1200 * item.attempts, 4000)));
+        }
+      } finally {
+        isSharedWriteProcessing = false;
+        updateBackgroundSyncStatus(sharedWriteQueue.length > 0 ? 'queued' : 'idle', sharedWriteQueue.length);
+      }
+    }
+
+    async function writeEventToSharedFolder(projectId, event) {
+      if (!sharedFolderHandle || !event?.eventId || !projectId) return false;
+      const folders = projectFolders.get(projectId);
+      if (!folders) return false;
+      const queueKey = `${projectId}:${event.eventId}`;
+      if (sharedWriteQueuedIds.has(queueKey)) return true;
+      sharedWriteQueuedIds.add(queueKey);
+      sharedWriteQueue.push({
+        projectId,
+        event,
+        attempts: 0,
+        queueKey
+      });
+      updateBackgroundSyncStatus('queued', sharedWriteQueue.length);
+      processSharedWriteQueue();
+      return true;
     }
 
     async function readEventsFromSharedFolder(projectId, onlyNew = true) {
@@ -983,12 +1644,9 @@
 
       // Récupérer la clé partagée du projet
       const sharedKeyData = await getDecrypted('sharedKeys', projectId, 'projectId');
-      if (!sharedKeyData) {
-        console.warn('No shared key for project:', projectId);
-        return [];
-      }
-
-      const sharedKey = await window.TaskMDACrypto.importSharedKey(sharedKeyData.sharedKey);
+      const sharedKey = sharedKeyData?.sharedKey
+        ? await window.TaskMDACrypto.importSharedKey(sharedKeyData.sharedKey)
+        : null;
 
       try {
         for await (const entry of folders.eventsDir.values()) {
@@ -1003,6 +1661,7 @@
           // Vérifier le format
           if (wrapper.version === 'v1-e2e-encrypted' && wrapper.encrypted) {
             // Nouveau format : chiffré E2E
+            if (!sharedKey) continue;
             event = await window.TaskMDACrypto.decryptWithSharedKey(wrapper.encrypted, sharedKey);
           } else if (wrapper.eventId && wrapper.type) {
             // Ancien format : JSON clair (compatibilité)
@@ -1034,9 +1693,11 @@
             debugLog('New event from shared folder:', event.type);
             await processEvent(event);
             knownEventIds.add(event.eventId);
-            notifyNewEvent(projectId);
+            notifyNewEvent(projectId, event);
           }
         }
+        await syncGlobalMessagesFromSharedFolder();
+        await syncGlobalFeedFromSharedFolder();
       }, 5000); // 5 secondes
 
       debugLog('Polling started');
@@ -1056,11 +1717,67 @@
     // ============================================================================
 
     let currentUser = null;
+    let appBranding = null;
     let pendingProfilePhotoDataUrl = '';
     let pendingProfilePhotoDirty = false;
+    let loadingCounter = 0;
+    let backgroundSyncState = 'idle';
+    let loadingVisible = false;
+    let loadingShowTimer = null;
+    let loadingHideTimer = null;
+    let loadingLastShownAt = 0;
+    const LOADING_SHOW_DELAY_MS = 120;
+    const LOADING_MIN_VISIBLE_MS = 220;
 
     function showLoading(show) {
-      document.getElementById('loading').classList.toggle('hidden', !show);
+      const loader = document.getElementById('loading');
+      if (!loader) return;
+      if (show) {
+        if (loadingHideTimer) {
+          clearTimeout(loadingHideTimer);
+          loadingHideTimer = null;
+        }
+        if (loadingVisible || loadingShowTimer) return;
+        loadingShowTimer = setTimeout(() => {
+          loadingShowTimer = null;
+          if (loadingCounter <= 0) return;
+          loader.classList.remove('hidden');
+          loadingVisible = true;
+          loadingLastShownAt = Date.now();
+        }, LOADING_SHOW_DELAY_MS);
+        return;
+      }
+
+      if (loadingShowTimer) {
+        clearTimeout(loadingShowTimer);
+        loadingShowTimer = null;
+      }
+      if (!loadingVisible) {
+        loader.classList.add('hidden');
+        return;
+      }
+      const elapsed = Date.now() - loadingLastShownAt;
+      const waitMs = Math.max(0, LOADING_MIN_VISIBLE_MS - elapsed);
+      if (loadingHideTimer) {
+        clearTimeout(loadingHideTimer);
+      }
+      loadingHideTimer = setTimeout(() => {
+        loadingHideTimer = null;
+        if (loadingCounter > 0) return;
+        loader.classList.add('hidden');
+        loadingVisible = false;
+      }, waitMs);
+    }
+
+    async function runWithLoading(action) {
+      loadingCounter += 1;
+      showLoading(true);
+      try {
+        return await action();
+      } finally {
+        loadingCounter = Math.max(0, loadingCounter - 1);
+        showLoading(loadingCounter > 0);
+      }
     }
 
     function showSetupError(message) {
@@ -1072,6 +1789,7 @@
     function showMainContent() {
       document.getElementById('setup-screen').classList.add('hidden');
       document.getElementById('main-content').classList.remove('hidden');
+      initSidebarCollapsedState();
       setActiveSidebarNav('dashboard');
       startDueReminders();
       startBackupReminders();
@@ -1144,6 +1862,86 @@
       document.getElementById('mobile-overlay')?.classList.add('hidden');
     }
 
+    const SIDEBAR_COMPACT_STORAGE_KEY = 'taskmda_sidebar_compact';
+    let sidebarTransitionTimer = null;
+
+    function updateSidebarCollapseButton() {
+      const main = document.getElementById('main-content');
+      const btn = document.getElementById('btn-sidebar-collapse');
+      const icon = document.getElementById('sidebar-collapse-icon');
+      const label = document.getElementById('sidebar-collapse-label');
+      if (!main || !btn || !icon || !label) return;
+      const collapsed = main.classList.contains('sidebar-collapsed');
+      icon.textContent = collapsed ? 'left_panel_open' : 'left_panel_close';
+      label.textContent = collapsed ? 'Déplier' : 'Réduire';
+      const action = collapsed ? 'Déplier' : 'Réduire';
+      btn.setAttribute('aria-label', `${action} la barre latérale`);
+      btn.setAttribute('title', `${action} la barre latérale`);
+
+      document.querySelectorAll('.nav-link').forEach((link) => {
+        const text = String(link.querySelector('.nav-link-label')?.textContent || '').trim();
+        if (!text) return;
+        if (collapsed) {
+          link.setAttribute('title', text);
+          link.setAttribute('aria-label', text);
+        } else {
+          link.removeAttribute('title');
+          link.removeAttribute('aria-label');
+        }
+      });
+
+      ['sidebar-create-project', 'sidebar-link-folder', 'sidebar-logout'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const text = String(el.textContent || '').replace(/\s+/g, ' ').trim();
+        if (!text) return;
+        if (collapsed) {
+          el.setAttribute('title', text);
+          el.setAttribute('aria-label', text);
+        } else {
+          el.removeAttribute('title');
+          el.removeAttribute('aria-label');
+        }
+      });
+    }
+
+    function applySidebarCollapsedState(collapsed, persist = true) {
+      const main = document.getElementById('main-content');
+      if (!main) return;
+      const isMobile = window.matchMedia('(max-width: 1023px)').matches;
+      const shouldCollapse = !isMobile && !!collapsed;
+      main.classList.toggle('sidebar-collapsed', shouldCollapse);
+      updateSidebarCollapseButton();
+      if (persist) {
+        if (shouldCollapse) {
+          localStorage.setItem(SIDEBAR_COMPACT_STORAGE_KEY, '1');
+        } else {
+          localStorage.removeItem(SIDEBAR_COMPACT_STORAGE_KEY);
+        }
+      }
+    }
+
+    function initSidebarCollapsedState() {
+      const saved = localStorage.getItem(SIDEBAR_COMPACT_STORAGE_KEY) === '1';
+      applySidebarCollapsedState(saved, false);
+    }
+
+    function toggleSidebarCollapsed() {
+      const main = document.getElementById('main-content');
+      if (!main) return;
+      const nextCollapsed = !main.classList.contains('sidebar-collapsed');
+      main.classList.remove('sidebar-transitioning-collapse', 'sidebar-transitioning-expand');
+      main.classList.add('sidebar-transitioning', nextCollapsed ? 'sidebar-transitioning-collapse' : 'sidebar-transitioning-expand');
+      if (sidebarTransitionTimer) {
+        clearTimeout(sidebarTransitionTimer);
+      }
+      sidebarTransitionTimer = setTimeout(() => {
+        main.classList.remove('sidebar-transitioning', 'sidebar-transitioning-collapse', 'sidebar-transitioning-expand');
+        sidebarTransitionTimer = null;
+      }, 260);
+      applySidebarCollapsedState(nextCollapsed, true);
+    }
+
     function updateSyncStatus(status) {
       const statusEl = document.getElementById('sync-status');
       const statusConfig = {
@@ -1159,6 +1957,28 @@
         <span>${config.text}</span>
       `;
       updateFolderButtons();
+    }
+
+    function updateBackgroundSyncStatus(state = 'idle', pendingCount = sharedWriteQueue.length) {
+      const indicator = document.getElementById('bg-sync-indicator');
+      if (!indicator) return;
+      backgroundSyncState = state;
+      const count = Math.max(0, Number(pendingCount || 0));
+      const countEl = indicator.querySelector('[data-bg-sync-count]');
+      const textEl = indicator.querySelector('[data-bg-sync-text]');
+      indicator.classList.remove('hidden', 'is-idle', 'is-queued', 'is-syncing', 'is-error');
+      if (state === 'idle' && count === 0) {
+        indicator.classList.add('hidden', 'is-idle');
+        return;
+      }
+      const mode = state === 'error' ? 'is-error' : (state === 'syncing' ? 'is-syncing' : 'is-queued');
+      indicator.classList.add(mode);
+      if (countEl) countEl.textContent = String(count);
+      if (textEl) {
+        textEl.textContent = state === 'error'
+          ? 'Synchronisation en attente'
+          : (state === 'syncing' ? 'Synchro en cours' : 'Synchro planifiee');
+      }
     }
 
     function updateFolderButtons() {
@@ -1237,19 +2057,111 @@
       return `${yyyy}${mm}${dd}_${hh}${mi}`;
     }
 
-    async function exportUserDataJson() {
+    async function buildUserDataSnapshot(version = 1) {
       const snapshot = {
         meta: {
-          app: 'TaskMDA Team',
+          app: 'NEXUS MDA',
           exportedAt: new Date().toISOString(),
           exportedByUserId: currentUser?.userId || null,
-          version: 1
+          version
         },
         stores: {}
       };
       for (const [storeName, idField] of Object.entries(DATA_EXPORT_STORES)) {
         snapshot.stores[storeName] = await getAllDecrypted(storeName, idField);
       }
+      return snapshot;
+    }
+
+    async function restoreUserDataSnapshot(snapshot) {
+      if (!snapshot || typeof snapshot !== 'object' || !snapshot.stores) return;
+      const db = getDatabase();
+      for (const storeName of Object.keys(DATA_EXPORT_STORES)) {
+        await db.clear(storeName);
+      }
+      for (const [storeName, idField] of Object.entries(DATA_EXPORT_STORES)) {
+        const rows = Array.isArray(snapshot.stores[storeName]) ? snapshot.stores[storeName] : [];
+        for (const row of rows) {
+          await putEncrypted(storeName, row, idField);
+        }
+      }
+    }
+
+    function showRecoveryKeyInstructions(recoveryCode, contextLabel = 'Clé de récupération') {
+      const code = String(recoveryCode || '').trim();
+      if (!code) return;
+      window.alert(
+        `${contextLabel}:\n\n${code}\n\nConservez cette clé hors ligne (papier / coffre mot de passe). ` +
+        `Elle permet de restaurer l'accès en cas d'oubli du mot de passe.`
+      );
+    }
+
+    function getSharedBackupThrottleKey() {
+      const userId = String(currentUser?.userId || 'anonymous');
+      return `taskmda_shared_backup_last_ts_${userId}`;
+    }
+
+    function getLastSharedBackupTimestamp() {
+      const raw = localStorage.getItem(getSharedBackupThrottleKey());
+      if (!raw) return 0;
+      const parsed = Number(raw);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+
+    function setLastSharedBackupTimestamp(ts = Date.now()) {
+      localStorage.setItem(getSharedBackupThrottleKey(), String(ts));
+    }
+
+    async function writeEncryptedUserBackupToSharedFolder(snapshot) {
+      if (!sharedFolderHandle) return false;
+      if (!window.TaskMDACrypto || !window.TaskMDACrypto.isUnlocked()) return false;
+      const userId = String(currentUser?.userId || '').trim();
+      if (!userId) return false;
+
+      const backupsRoot = await sharedFolderHandle.getDirectoryHandle('backups', { create: true });
+      const usersDir = await backupsRoot.getDirectoryHandle('users', { create: true });
+      const userDir = await usersDir.getDirectoryHandle(userId, { create: true });
+      const fileHandle = await userDir.getFileHandle('user-data.latest.enc.json', { create: true });
+
+      const payload = {
+        type: 'taskmda_user_backup_encrypted',
+        version: 1,
+        userId,
+        updatedAt: Date.now(),
+        encrypted: await window.TaskMDACrypto.encrypt(snapshot)
+      };
+
+      const writable = await fileHandle.createWritable();
+      await writable.write(JSON.stringify(payload, null, 2));
+      await writable.close();
+      return true;
+    }
+
+    async function ensureAutoEncryptedUserBackupToSharedFolder(options = {}) {
+      const force = options.force === true;
+      const silent = options.silent !== false;
+      if (!sharedFolderHandle) return;
+      if (!window.TaskMDACrypto || !window.TaskMDACrypto.isUnlocked()) return;
+      if (!currentUser?.userId) return;
+
+      const nowTs = Date.now();
+      const throttleMs = 6 * 60 * 60 * 1000; // 6h
+      if (!force && (nowTs - getLastSharedBackupTimestamp()) < throttleMs) return;
+
+      try {
+        const snapshot = await buildUserDataSnapshot(1);
+        const written = await writeEncryptedUserBackupToSharedFolder(snapshot);
+        if (written) {
+          setLastSharedBackupTimestamp(nowTs);
+          if (!silent) showToast('Sauvegarde chiffrée utilisateur mise à jour dans le dossier lié');
+        }
+      } catch (error) {
+        console.warn('Auto encrypted backup to shared folder failed:', error);
+      }
+    }
+
+    async function exportUserDataJson() {
+      const snapshot = await buildUserDataSnapshot(1);
       const tag = formatExportDateTag();
       downloadBlobFile(
         JSON.stringify(snapshot, null, 2),
@@ -1359,12 +2271,32 @@
     async function refreshGlobalTaxonomyCache() {
       const themes = await getAllDecrypted('globalThemes', 'themeKey');
       const groups = await getAllDecrypted('globalGroups', 'groupKey');
+      const softwareVersions = await getAllDecrypted('softwareVersions', 'softwareId');
       globalThemeCatalog = (themes || [])
         .filter(item => item && item.themeKey && item.name)
         .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'fr'));
       globalGroupCatalog = (groups || [])
         .filter(item => item && item.groupKey && item.name)
+        .map((item) => {
+          const fromMemberUserIds = Array.isArray(item.memberUserIds) ? item.memberUserIds : [];
+          const fromMemberIds = Array.isArray(item.memberIds) ? item.memberIds : [];
+          const fromMembersArray = Array.isArray(item.members)
+            ? item.members.map((m) => typeof m === 'string' ? m : (m?.userId || '')).filter(Boolean)
+            : [];
+          const memberUserIds = Array.from(new Set([
+            ...fromMemberUserIds,
+            ...fromMemberIds,
+            ...fromMembersArray
+          ].map(id => String(id || '').trim()).filter(Boolean)));
+          return {
+            ...item,
+            memberUserIds
+          };
+        })
         .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'fr'));
+      globalSoftwareVersionCatalog = (softwareVersions || [])
+        .filter(item => item && item.softwareId && item.softwareName && item.version)
+        .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
     }
 
     async function upsertGlobalTheme(theme) {
@@ -1383,15 +2315,44 @@
     async function upsertGlobalGroup(group) {
       const name = String(group?.name || '').trim();
       const description = String(group?.description || '').trim();
-      const memberUserIds = Array.from(new Set((group?.memberUserIds || []).map(id => String(id || '').trim()).filter(Boolean)));
+      const hasExplicitMembers = Boolean(
+        group && typeof group === 'object' && (
+          Object.prototype.hasOwnProperty.call(group, 'memberUserIds')
+          || Object.prototype.hasOwnProperty.call(group, 'memberIds')
+          || Object.prototype.hasOwnProperty.call(group, 'members')
+        )
+      );
+      const sourceMemberUserIds = Array.isArray(group?.memberUserIds) ? group.memberUserIds : [];
+      const sourceMemberIds = Array.isArray(group?.memberIds) ? group.memberIds : [];
+      const sourceMembers = Array.isArray(group?.members)
+        ? group.members.map((m) => typeof m === 'string' ? m : (m?.userId || '')).filter(Boolean)
+        : [];
+      let memberUserIds = Array.from(new Set([
+        ...sourceMemberUserIds,
+        ...sourceMemberIds,
+        ...sourceMembers
+      ].map(id => String(id || '').trim()).filter(Boolean)));
       const groupKey = normalizeCatalogKey(name);
       if (!groupKey) return;
       const existing = await getDecrypted('globalGroups', groupKey, 'groupKey');
+      if (!hasExplicitMembers && existing) {
+        const existingMemberUserIds = Array.isArray(existing.memberUserIds) ? existing.memberUserIds : [];
+        const existingMemberIds = Array.isArray(existing.memberIds) ? existing.memberIds : [];
+        const existingMembers = Array.isArray(existing.members)
+          ? existing.members.map((m) => typeof m === 'string' ? m : (m?.userId || '')).filter(Boolean)
+          : [];
+        memberUserIds = Array.from(new Set([
+          ...existingMemberUserIds,
+          ...existingMemberIds,
+          ...existingMembers
+        ].map(id => String(id || '').trim()).filter(Boolean)));
+      }
       await putEncrypted('globalGroups', {
         groupKey,
         name,
         description: description || existing?.description || '',
         memberUserIds,
+        members: memberUserIds,
         createdAt: existing?.createdAt || Date.now(),
         updatedAt: Date.now()
       }, 'groupKey');
@@ -1434,6 +2395,60 @@
       select.innerHTML = users
         .map(user => `<option value="${escapeHtml(user.userId)}" ${selected.has(user.userId) ? 'selected' : ''}>${escapeHtml(user.name)}</option>`)
         .join('');
+      bindMultiSelectToggle('global-group-members-input');
+    }
+
+    function filterUserSelectOptions(selectId, query) {
+      const select = document.getElementById(selectId);
+      if (!select) return;
+      const needle = normalizeSearch(query || '');
+      Array.from(select.options || []).forEach((option) => {
+        if (!needle) {
+          option.hidden = false;
+          return;
+        }
+        const label = normalizeSearch(option.textContent || option.label || '');
+        // Keep selected options always visible to avoid losing context.
+        option.hidden = !(option.selected || label.includes(needle));
+      });
+    }
+
+    function bindGlobalGroupMemberSearchInputs() {
+      const createSearch = document.getElementById('global-group-members-search');
+      if (createSearch) {
+        createSearch.oninput = (e) => {
+          filterUserSelectOptions('global-group-members-input', e?.target?.value || '');
+        };
+      }
+
+      document.querySelectorAll('.global-group-members-search').forEach((input) => {
+        input.oninput = (e) => {
+          const selectId = input.getAttribute('data-target-select');
+          if (!selectId) return;
+          filterUserSelectOptions(selectId, e?.target?.value || '');
+        };
+      });
+    }
+
+    function bindMultiSelectToggle(selectId) {
+      const select = document.getElementById(selectId);
+      if (!select || select.dataset.toggleBound === '1') return;
+      select.dataset.toggleBound = '1';
+      select.addEventListener('mousedown', (event) => {
+        const option = event.target?.closest?.('option');
+        if (!option) return;
+        event.preventDefault();
+        option.selected = !option.selected;
+        select.focus();
+      });
+    }
+
+    function bindGlobalGroupMemberSelectsToggle() {
+      bindMultiSelectToggle('global-group-members-input');
+      document.querySelectorAll('.global-group-members-select').forEach((select) => {
+        if (!select?.id) return;
+        bindMultiSelectToggle(select.id);
+      });
     }
 
     async function refreshGroupSelectorsAfterCatalogChange() {
@@ -1447,13 +2462,201 @@
     async function deleteGlobalThemeByKey(themeKey) {
       if (!isValidIdbKey(themeKey)) return;
       const db = getDatabase();
-      await db.delete('globalThemes', themeKey);
+      await deleteFromStore('globalThemes', themeKey);
     }
 
     async function deleteGlobalGroupByKey(groupKey) {
       if (!isValidIdbKey(groupKey)) return;
       const db = getDatabase();
-      await db.delete('globalGroups', groupKey);
+      await deleteFromStore('globalGroups', groupKey);
+    }
+
+    async function repairGlobalGroupsMembersFromProjects() {
+      if (globalGroupMemberRepairAttempted) return 0;
+      globalGroupMemberRepairAttempted = true;
+
+      const groups = await getAllDecrypted('globalGroups', 'groupKey');
+      const emptyGroups = (groups || []).filter((group) => {
+        const ids = Array.isArray(group?.memberUserIds) ? group.memberUserIds : [];
+        return ids.length === 0 && String(group?.groupKey || '').trim();
+      });
+      if (emptyGroups.length === 0) return 0;
+
+      const projects = await getAllProjects();
+      if (!projects || projects.length === 0) return 0;
+
+      const membersByGroupKey = new Map();
+      for (const project of projects) {
+        const projectId = String(project?.projectId || '').trim();
+        if (!projectId) continue;
+        let state = null;
+        try {
+          state = await getProjectState(projectId, { ignoreAccessCheck: true });
+        } catch {
+          state = null;
+        }
+        if (!state) continue;
+        const userGroups = Array.isArray(state.userGroups) ? state.userGroups : [];
+        userGroups.forEach((group) => {
+          const key = normalizeCatalogKey(group?.name || '');
+          if (!key) return;
+          const memberIds = Array.from(new Set((group?.memberUserIds || []).map((id) => String(id || '').trim()).filter(Boolean)));
+          if (memberIds.length === 0) return;
+          if (!membersByGroupKey.has(key)) membersByGroupKey.set(key, new Set());
+          const bucket = membersByGroupKey.get(key);
+          memberIds.forEach((id) => bucket.add(id));
+        });
+      }
+
+      let updates = 0;
+      for (const group of emptyGroups) {
+        const key = String(group.groupKey || '').trim();
+        if (!key) continue;
+        const membersSet = membersByGroupKey.get(key);
+        const memberUserIds = membersSet ? Array.from(membersSet) : [];
+        if (memberUserIds.length === 0) continue;
+        await putEncrypted('globalGroups', {
+          ...group,
+          memberUserIds,
+          members: memberUserIds,
+          updatedAt: Date.now()
+        }, 'groupKey');
+        updates += 1;
+      }
+
+      return updates;
+    }
+
+    async function saveAppBrandingFromSettings(useDefaults = false) {
+      if (!isAppAdmin()) {
+        showToast('Action reservee a l Admin application');
+        return;
+      }
+      const nameInput = document.getElementById('app-display-name-input');
+      const subtitleInput = document.getElementById('app-display-subtitle-input');
+      const appName = useDefaults ? DEFAULT_APP_BRANDING.appName : String(nameInput?.value || '').trim();
+      const appSubtitle = useDefaults ? DEFAULT_APP_BRANDING.appSubtitle : String(subtitleInput?.value || '').trim();
+      const next = normalizeAppBrandingConfig({
+        ...(appBranding || {}),
+        appName,
+        appSubtitle,
+        adminUserId: appBranding?.adminUserId || currentUser?.userId || '',
+        updatedAt: Date.now()
+      });
+      await saveAppBrandingConfig(next, { sync: true });
+      await renderGlobalSettings();
+      showToast(useDefaults ? 'Identite application reinitialisee' : 'Identite application enregistree');
+    }
+
+    async function assignAppAdminFromSettings() {
+      if (!isAppAdmin()) {
+        showToast('Action reservee a l Admin application');
+        return;
+      }
+      const select = document.getElementById('app-admin-user-select');
+      const targetUserId = String(select?.value || '').trim();
+      if (!targetUserId) {
+        showToast('Selectionnez un utilisateur');
+        return;
+      }
+      const targetName = (knownUsersCache.get(targetUserId)?.name || fallbackDirectoryName(targetUserId));
+      const confirmed = window.confirm(`Confirmer le transfert du role Admin application vers "${targetName}" ?`);
+      if (!confirmed) return;
+      const next = normalizeAppBrandingConfig({
+        ...(appBranding || {}),
+        adminUserId: targetUserId,
+        updatedAt: Date.now()
+      });
+      await saveAppBrandingConfig(next, { sync: true });
+      await renderGlobalSettings();
+      showToast(`Admin application: ${targetName}`);
+    }
+
+    async function saveProjectRoleCatalogFromSettings(nextCatalog, successMessage = 'Habilitations mises a jour') {
+      if (!isAppAdmin()) {
+        showToast('Action reservee a l Admin application');
+        return false;
+      }
+      const next = normalizeAppBrandingConfig({
+        ...(appBranding || {}),
+        roleCatalog: normalizeProjectRoleCatalog(nextCatalog),
+        updatedAt: Date.now()
+      });
+      await saveAppBrandingConfig(next, { sync: true });
+      showToast(successMessage);
+      await renderGlobalSettings();
+      if (currentProjectState) {
+        renderProjectRoleSelectors(currentProjectState);
+        await renderProjectMembers(currentProjectState);
+        renderProjectInvitations(currentProjectState);
+        renderProjectPermissionMatrix(currentProjectState);
+      }
+      return true;
+    }
+
+    async function createProjectRoleFromSettings() {
+      const nameInput = document.getElementById('global-role-name-input');
+      const baseRoleInput = document.getElementById('global-role-base-input');
+      const label = String(nameInput?.value || '').trim();
+      const baseRole = normalizeProjectRoleBase(baseRoleInput?.value || 'member');
+      if (!label) {
+        showToast('Nom d habilitation requis');
+        return;
+      }
+      const currentCatalog = getProjectRoleCatalog();
+      const exists = currentCatalog.some(item => normalizeCatalogKey(item.label) === normalizeCatalogKey(label));
+      if (exists) {
+        showToast('Cette habilitation existe deja');
+        return;
+      }
+      const customRoleKey = `custom:${uuidv4()}`;
+      const nextCatalog = [...currentCatalog, {
+        roleKey: customRoleKey,
+        label,
+        baseRole,
+        isSystem: false
+      }];
+      const saved = await saveProjectRoleCatalogFromSettings(nextCatalog, 'Habilitation ajoutee');
+      if (!saved) return;
+      if (nameInput) nameInput.value = '';
+      if (baseRoleInput) baseRoleInput.value = 'member';
+    }
+
+    async function editProjectRole(roleKey) {
+      const key = String(roleKey || '').trim();
+      if (!key) return;
+      const currentCatalog = getProjectRoleCatalog();
+      const current = currentCatalog.find(item => item.roleKey === key);
+      if (!current) return;
+      const nextLabel = (window.prompt('Nom du role/habilitation', current.label || '') || '').trim();
+      if (!nextLabel) return;
+      const nextBaseRole = normalizeProjectRoleBase(
+        (window.prompt('Role technique sous-jacent (owner/manager/member)', current.baseRole || 'member') || '').trim()
+      );
+      const nextCatalog = currentCatalog.map((item) => {
+        if (item.roleKey !== key) return item;
+        return {
+          ...item,
+          label: nextLabel,
+          baseRole: nextBaseRole
+        };
+      });
+      await saveProjectRoleCatalogFromSettings(nextCatalog, 'Habilitation modifiee');
+    }
+
+    async function deleteProjectRole(roleKey) {
+      const key = String(roleKey || '').trim();
+      if (!key) return;
+      const currentCatalog = getProjectRoleCatalog();
+      const current = currentCatalog.find(item => item.roleKey === key);
+      if (!current) return;
+      if (current.isSystem) {
+        showToast('Les roles systeme ne peuvent pas etre supprimes');
+        return;
+      }
+      if (!window.confirm(`Supprimer l habilitation "${current.label}" ?`)) return;
+      const nextCatalog = currentCatalog.filter(item => item.roleKey !== key);
+      await saveProjectRoleCatalogFromSettings(nextCatalog, 'Habilitation supprimee');
     }
 
     async function createGlobalThemeFromSettings() {
@@ -1463,12 +2666,14 @@
         showToast('Thématique requise');
         return;
       }
-      await upsertGlobalTheme(name);
+      await runWithLoading(async () => {
+        await upsertGlobalTheme(name);
       await refreshGlobalTaxonomyCache();
       if (input) input.value = '';
       showToast('Thématique globale ajoutée');
       await renderGlobalSettings();
-      await refreshGroupSelectorsAfterCatalogChange();
+        await refreshGroupSelectorsAfterCatalogChange();
+      });
     }
 
     async function createGlobalGroupFromSettings() {
@@ -1481,17 +2686,25 @@
         showToast('Nom de groupe requis');
         return;
       }
-      await upsertGlobalGroup({ name, description, memberUserIds });
+      if (memberUserIds.length === 0) {
+        showToast('Sélectionnez au moins un membre pour ce groupe');
+        return;
+      }
+      await runWithLoading(async () => {
+        await upsertGlobalGroup({ name, description, memberUserIds });
       await refreshGlobalTaxonomyCache();
       if (nameInput) nameInput.value = '';
       if (descInput) descInput.value = '';
+      const membersSearchInput = document.getElementById('global-group-members-search');
+      if (membersSearchInput) membersSearchInput.value = '';
       const membersInput = document.getElementById('global-group-members-input');
       if (membersInput) {
         Array.from(membersInput.options || []).forEach(opt => { opt.selected = false; });
       }
       showToast('Groupe global ajouté');
       await renderGlobalSettings();
-      await refreshGroupSelectorsAfterCatalogChange();
+        await refreshGroupSelectorsAfterCatalogChange();
+      });
     }
 
     async function editGlobalTheme(themeKey) {
@@ -1532,14 +2745,16 @@
       if (nextKey !== key) {
         await deleteGlobalGroupByKey(key);
       }
-      await upsertGlobalGroup({
+      await runWithLoading(async () => {
+        await upsertGlobalGroup({
         name: nextName,
         description: nextDescription,
         memberUserIds: current.memberUserIds || []
       });
       await refreshGlobalTaxonomyCache();
       showToast('Groupe global modifié');
-      await renderGlobalSettings();
+        await renderGlobalSettings();
+      });
       await refreshGroupSelectorsAfterCatalogChange();
     }
 
@@ -1573,18 +2788,153 @@
       await renderGlobalSettings();
     }
 
+    async function createSoftwareVersionEntry() {
+      const softwareNameInput = document.getElementById('software-name-input');
+      const versionInput = document.getElementById('software-version-input');
+      const notesInput = document.getElementById('software-notes-input');
+      const softwareName = String(softwareNameInput?.value || '').trim();
+      const version = String(versionInput?.value || '').trim();
+      const notes = String(notesInput?.value || '').trim();
+      if (!softwareName || !version) {
+        showToast('Logiciel et version sont requis');
+        return;
+      }
+      await runWithLoading(async () => {
+        await putEncrypted('softwareVersions', {
+        softwareId: uuidv4(),
+        softwareName,
+        version,
+        notes,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        updatedBy: currentUser?.userId || ''
+      }, 'softwareId');
+      if (softwareNameInput) softwareNameInput.value = '';
+      if (versionInput) versionInput.value = '';
+      if (notesInput) notesInput.value = '';
+      showToast('Version logicielle ajoutée');
+        await renderGlobalSettings();
+      });
+    }
+
+    async function editSoftwareVersionEntry(softwareId) {
+      const id = String(softwareId || '').trim();
+      if (!id) return;
+      const current = await getDecrypted('softwareVersions', id, 'softwareId');
+      if (!current) return;
+      const nextSoftwareName = (window.prompt('Logiciel', current.softwareName || '') || '').trim();
+      if (!nextSoftwareName) return;
+      const nextVersion = (window.prompt('Version', current.version || '') || '').trim();
+      if (!nextVersion) return;
+      const nextNotes = (window.prompt('Notes', current.notes || '') || '').trim();
+      await putEncrypted('softwareVersions', {
+        ...current,
+        softwareName: nextSoftwareName,
+        version: nextVersion,
+        notes: nextNotes,
+        updatedAt: Date.now(),
+        updatedBy: currentUser?.userId || current.updatedBy || ''
+      }, 'softwareId');
+      showToast('Version logicielle modifiée');
+      await renderGlobalSettings();
+    }
+
+    async function deleteSoftwareVersionEntry(softwareId) {
+      const id = String(softwareId || '').trim();
+      if (!id) return;
+      const current = await getDecrypted('softwareVersions', id, 'softwareId');
+      if (!current) return;
+      if (!confirm(`Supprimer l'entree ${current.softwareName} ${current.version} ?`)) return;
+      const db = getDatabase();
+      await deleteFromStore('softwareVersions', id);
+      showToast('Version logicielle supprimée');
+      await renderGlobalSettings();
+    }
+
     async function renderGlobalSettings() {
       await refreshGlobalTaxonomyCache();
+      const repairedGroupsCount = await repairGlobalGroupsMembersFromProjects();
+      if (repairedGroupsCount > 0) {
+        await refreshGlobalTaxonomyCache();
+        showToast(`${repairedGroupsCount} groupe(s) global(aux) restauré(s) depuis les projets`);
+      }
       const themesList = document.getElementById('global-themes-admin-list');
       const groupsList = document.getElementById('global-groups-admin-list');
-      if (!themesList || !groupsList) return;
+      const rolesList = document.getElementById('global-roles-admin-list');
+      const softwareList = document.getElementById('software-versions-list');
+      const roleNameInput = document.getElementById('global-role-name-input');
+      const roleBaseInput = document.getElementById('global-role-base-input');
+      const roleAddBtn = document.getElementById('btn-global-role-add');
+      const appNameInput = document.getElementById('app-display-name-input');
+      const appSubtitleInput = document.getElementById('app-display-subtitle-input');
+      const appAdminSelect = document.getElementById('app-admin-user-select');
+      const appAdminBadge = document.getElementById('app-admin-badge');
+      const saveBrandingBtn = document.getElementById('btn-save-app-branding');
+      const assignAdminBtn = document.getElementById('btn-assign-app-admin');
+      const resetBrandingBtn = document.getElementById('btn-reset-app-branding');
+      if (!themesList || !groupsList || !softwareList || !rolesList) return;
+      if (!appBranding) {
+        await loadAppBrandingConfig({ ensureRemote: false });
+      }
       const knownUsers = await getKnownUsersForGlobalGroups();
       await renderGlobalGroupMembersInputOptions();
+
+      const branding = normalizeAppBrandingConfig(appBranding || {});
+      const canManageBranding = isAppAdmin();
+      const adminName = String(branding.adminUserId || '').trim()
+        ? (knownUsersCache.get(branding.adminUserId)?.name || fallbackDirectoryName(branding.adminUserId))
+        : 'Non defini';
+
+      if (appNameInput) {
+        appNameInput.value = branding.appName;
+        appNameInput.disabled = !canManageBranding;
+      }
+      if (appSubtitleInput) {
+        appSubtitleInput.value = branding.appSubtitle;
+        appSubtitleInput.disabled = !canManageBranding;
+      }
+      if (appAdminSelect) {
+        const knownByName = [...knownUsers];
+        if (currentUser?.userId && !knownByName.some(u => u.userId === currentUser.userId)) {
+          knownByName.unshift({
+            userId: currentUser.userId,
+            name: currentUser.name || fallbackDirectoryName(currentUser.userId)
+          });
+        }
+        appAdminSelect.innerHTML = knownByName.length === 0
+          ? '<option value="" disabled>Aucun utilisateur connu</option>'
+          : knownByName.map((u) => `<option value="${escapeHtml(u.userId)}" ${u.userId === branding.adminUserId ? 'selected' : ''}>${escapeHtml(u.name)}</option>`).join('');
+        appAdminSelect.disabled = !canManageBranding;
+      }
+      if (saveBrandingBtn) saveBrandingBtn.disabled = !canManageBranding;
+      if (assignAdminBtn) assignAdminBtn.disabled = !canManageBranding;
+      if (resetBrandingBtn) resetBrandingBtn.disabled = !canManageBranding;
+      if (roleNameInput) roleNameInput.disabled = !canManageBranding;
+      if (roleBaseInput) roleBaseInput.disabled = !canManageBranding;
+      if (roleAddBtn) roleAddBtn.disabled = !canManageBranding;
+      if (appAdminBadge) {
+        appAdminBadge.textContent = canManageBranding
+          ? `Role: Admin application (${adminName})`
+          : `Admin application: ${adminName}`;
+        appAdminBadge.className = canManageBranding
+          ? 'text-[11px] font-semibold px-2 py-1 rounded-full bg-emerald-100 text-emerald-700'
+          : 'text-[11px] font-semibold px-2 py-1 rounded-full bg-slate-200 text-slate-700';
+      }
 
       const filteredThemes = (globalThemeCatalog || [])
         .filter(item => matchesQuery([item?.name], globalSearchQuery));
       const filteredGroups = (globalGroupCatalog || [])
         .filter(item => matchesQuery([item?.name, item?.description], globalSearchQuery));
+      const filteredSoftwareVersions = (globalSoftwareVersionCatalog || [])
+        .filter(item => matchesQuery([item?.softwareName, item?.version, item?.notes], globalSearchQuery));
+      const filteredRoles = getProjectRoleCatalog()
+        .filter(item => matchesQuery([item?.label, item?.baseRole, item?.roleKey], globalSearchQuery));
+
+      if (roleBaseInput) {
+        roleBaseInput.innerHTML = ['owner', 'manager', 'member'].map((baseRole) => `
+          <option value="${baseRole}">${getBaseProjectRoleLabel(baseRole)}</option>
+        `).join('');
+      }
 
       themesList.innerHTML = filteredThemes.length === 0
         ? '<p class="text-xs text-slate-500">Aucune thématique globale.</p>'
@@ -1601,8 +2951,8 @@
       groupsList.innerHTML = filteredGroups.length === 0
         ? '<p class="text-xs text-slate-500">Aucun groupe global.</p>'
         : filteredGroups.map(item => `
-            <div class="rounded-lg border border-slate-200 bg-white p-2">
-              <div class="flex items-start justify-between gap-2">
+            <div class="software-version-row rounded-lg border border-slate-200 bg-white p-3">
+              <div class="software-version-main min-w-0">
                 <div class="min-w-0">
                   <p class="text-sm font-semibold text-slate-700 truncate">${escapeHtml(item.name)}</p>
                   <p class="text-xs text-slate-500 truncate">${escapeHtml(item.description || 'Sans description')}</p>
@@ -1614,6 +2964,12 @@
                 </div>
               </div>
               <div class="mt-2 grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2">
+                <input
+                  type="text"
+                  class="global-group-members-search px-3 py-2 border border-slate-300 rounded-lg text-xs"
+                  data-target-select="${escapeHtml(getGlobalGroupMembersSelectId(item.groupKey))}"
+                  placeholder="Rechercher un membre..."
+                >
                 <select id="${escapeHtml(getGlobalGroupMembersSelectId(item.groupKey))}" multiple class="global-group-members-select px-3 py-2 border border-slate-300 rounded-lg text-xs min-h-[84px]">
                   ${knownUsers.map(user => `
                     <option value="${escapeHtml(user.userId)}" ${(item.memberUserIds || []).includes(user.userId) ? 'selected' : ''}>
@@ -1625,6 +2981,50 @@
               </div>
             </div>
           `).join('');
+
+      rolesList.innerHTML = filteredRoles.length === 0
+        ? '<p class="text-xs text-slate-500">Aucune habilitation definie.</p>'
+        : filteredRoles.map(item => `
+            <div class="rounded-lg border border-slate-200 bg-white p-2 flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <p class="text-sm font-semibold text-slate-700 truncate">${escapeHtml(item.label)}</p>
+                <p class="text-xs text-slate-500">Niveau technique: ${escapeHtml(getBaseProjectRoleLabel(item.baseRole))}</p>
+                ${item.isSystem ? '<p class="text-[11px] text-slate-400 mt-1">Role systeme</p>' : ''}
+              </div>
+              <div class="flex items-center gap-1 shrink-0">
+                ${canManageBranding
+                  ? `<button onclick="editProjectRole('${escapeHtml(item.roleKey)}')" class="text-xs px-2 py-1 rounded bg-slate-100 text-slate-700">Modifier</button>`
+                  : '<button class="text-xs px-2 py-1 rounded bg-slate-100 text-slate-400 cursor-not-allowed" disabled>Modifier</button>'
+                }
+                ${item.isSystem
+                  ? '<button class="text-xs px-2 py-1 rounded bg-slate-100 text-slate-400 cursor-not-allowed" disabled>Supprimer</button>'
+                  : (canManageBranding
+                    ? `<button onclick="deleteProjectRole('${escapeHtml(item.roleKey)}')" class="text-xs px-2 py-1 rounded bg-rose-100 text-rose-700">Supprimer</button>`
+                    : '<button class="text-xs px-2 py-1 rounded bg-slate-100 text-slate-400 cursor-not-allowed" disabled>Supprimer</button>')
+                }
+              </div>
+            </div>
+          `).join('');
+
+      softwareList.innerHTML = filteredSoftwareVersions.length === 0
+        ? '<p class="text-xs text-slate-500">Aucune version logicielle enregistrée.</p>'
+        : filteredSoftwareVersions.map(item => `
+            <div class="software-version-row rounded-lg border border-slate-200 bg-white p-3">
+              <div class="software-version-main min-w-0">
+                <p class="text-sm font-semibold text-slate-700 break-words">${escapeHtml(item.softwareName)}</p>
+                <p class="text-xs text-slate-500 mt-0.5">Version: <span class="font-medium text-slate-700">${escapeHtml(item.version)}</span></p>
+                <p class="text-xs text-slate-500 mt-0.5 break-words">${escapeHtml(item.notes || 'Sans note')}</p>
+                <p class="text-[11px] text-slate-400 mt-1">Mise à jour: ${new Date(item.updatedAt || item.createdAt || Date.now()).toLocaleString('fr-FR')}</p>
+              </div>
+              <div class="software-version-actions flex items-center gap-1 shrink-0">
+                <button onclick="editSoftwareVersionEntry('${escapeHtml(item.softwareId)}')" class="text-xs px-2 py-1 rounded bg-slate-100 text-slate-700">Modifier</button>
+                <button onclick="deleteSoftwareVersionEntry('${escapeHtml(item.softwareId)}')" class="text-xs px-2 py-1 rounded bg-rose-100 text-rose-700">Supprimer</button>
+              </div>
+            </div>
+          `).join('');
+      bindGlobalGroupMemberSearchInputs();
+      bindGlobalGroupMemberSelectsToggle();
+      applyGlobalSettingsTabView();
     }
 
     function readSelectedGlobalGroups(selectId) {
@@ -1686,6 +3086,8 @@
         tasks: document.getElementById('nav-tasks'),
         calendar: document.getElementById('nav-calendar'),
         docs: document.getElementById('nav-docs'),
+        messages: document.getElementById('nav-messages'),
+        feed: document.getElementById('nav-feed'),
         settings: document.getElementById('nav-settings')
       };
       Object.entries(links).forEach(([key, link]) => {
@@ -1699,7 +3101,7 @@
         renderTasks(currentProjectState.tasks || []);
         renderKanban(currentProjectState.tasks || []);
         renderTimeline(currentProjectState.tasks || []);
-        renderDocuments(currentProjectState.tasks || []);
+        renderDocuments(currentProjectState);
         renderMessages(currentProjectState.messages || []);
         renderActivity(currentProjectEvents || []);
         applyLiveSearchFilter();
@@ -1756,6 +3158,348 @@
           existingHint.remove();
         }
       });
+    }
+
+    function hideHeaderSearchResults() {
+      const panel = document.getElementById('header-search-results');
+      if (!panel) return;
+      panel.classList.add('hidden');
+      headerSearchActiveIndex = -1;
+    }
+
+    function renderHeaderSearchResults() {
+      const panel = document.getElementById('header-search-results');
+      if (!panel) return;
+      if (!headerSearchResults.length) {
+        panel.innerHTML = '<p class="header-search-empty">Aucun resultat global.</p>';
+        panel.classList.remove('hidden');
+        return;
+      }
+      panel.innerHTML = headerSearchResults.map((item, idx) => `
+        <button type="button" class="header-search-item ${idx === headerSearchActiveIndex ? 'is-active' : ''}" data-search-result-index="${idx}" role="option" aria-selected="${idx === headerSearchActiveIndex ? 'true' : 'false'}">
+          <span class="material-symbols-outlined header-search-item-icon">${escapeHtml(item.icon || 'search')}</span>
+          <span class="min-w-0">
+            <span class="header-search-item-title block truncate">${escapeHtml(item.title || '')}</span>
+            <span class="header-search-item-meta block truncate">${escapeHtml(item.meta || '')}</span>
+          </span>
+          ${item.badge ? `<span class="header-search-item-badge">${escapeHtml(item.badge)}</span>` : ''}
+        </button>
+      `).join('');
+      panel.classList.remove('hidden');
+    }
+
+    async function executeHeaderSearchResult(item) {
+      if (!item) return;
+      hideHeaderSearchResults();
+      const searchInput = document.getElementById('search-input');
+      if (searchInput) searchInput.value = '';
+      globalSearchQuery = '';
+      closeMobileSidebar();
+      if (item.action === 'workspace') {
+        if (item.view === 'dashboard') {
+          showDashboard();
+          return;
+        }
+        if (item.view === 'projects') {
+          await showProjectsWorkspace();
+          return;
+        }
+        await showGlobalWorkspace(item.view);
+        if (item.view === 'settings' && item.settingsTab) {
+          setGlobalSettingsTab(item.settingsTab);
+          await renderGlobalSettings();
+        }
+        return;
+      }
+      if (item.action === 'open-project') {
+        await showProjectDetail(item.projectId, { resetScroll: true });
+        if (item.projectTab) setProjectView(item.projectTab);
+        return;
+      }
+      if (item.action === 'open-project-task') {
+        await showProjectDetail(item.projectId, { resetScroll: true });
+        setProjectView('list');
+        await openProjectTaskDetails(item.taskId);
+        return;
+      }
+      if (item.action === 'open-project-message') {
+        await showProjectDetail(item.projectId, { resetScroll: true });
+        setProjectView('chat');
+        const chatSearch = document.getElementById('chat-search-input');
+        if (chatSearch) {
+          chatSearch.value = item.hint || '';
+          messageFilters.query = item.hint || '';
+          renderMessages(currentProjectState?.messages || []);
+        }
+        return;
+      }
+      if (item.action === 'open-project-document') {
+        await showProjectDetail(item.projectId, { resetScroll: true });
+        setProjectView('docs');
+        docsFilters.query = item.hint || '';
+        const docsSearch = document.getElementById('docs-search-input');
+        if (docsSearch) docsSearch.value = item.hint || '';
+        renderDocuments(currentProjectState);
+        return;
+      }
+      if (item.action === 'open-global-task') {
+        await showGlobalWorkspace('tasks');
+        await openGlobalTaskDetails(item.taskRef);
+        return;
+      }
+      if (item.action === 'open-global-calendar-item') {
+        await showGlobalWorkspace('calendar');
+        await openStandaloneCalendarDetails(item.itemId);
+        return;
+      }
+      if (item.action === 'open-global-document') {
+        await showGlobalWorkspace('docs');
+        const input = document.getElementById('global-doc-search');
+        if (input) input.value = item.hint || '';
+        await renderGlobalDocs();
+        return;
+      }
+      if (item.action === 'open-global-message') {
+        await showGlobalWorkspace('messages');
+        const channelId = String(item.hint || '').trim();
+        if (channelId) {
+          await selectGlobalMessageChannel(channelId);
+        }
+        return;
+      }
+      if (item.action === 'open-global-post') {
+        await openGlobalFeedPost(item.postId);
+      }
+    }
+
+    async function buildHeaderSearchResults(query) {
+      const q = String(query || '').trim();
+      if (q.length < 2) return [];
+      const results = [];
+      const seen = new Set();
+      const push = (item) => {
+        if (!item) return;
+        const key = String(item.key || `${item.action}|${item.title}|${item.meta}`);
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        results.push(item);
+      };
+      const quickLinks = [
+        { view: 'dashboard', label: 'Tableau de bord', badge: 'Rubrique', icon: 'dashboard' },
+        { view: 'projects', label: 'Projets', badge: 'Rubrique', icon: 'folder_shared' },
+        { view: 'tasks', label: 'Taches', badge: 'Rubrique', icon: 'assignment' },
+        { view: 'calendar', label: 'Calendrier', badge: 'Rubrique', icon: 'calendar_today' },
+        { view: 'docs', label: 'Documents', badge: 'Rubrique', icon: 'description' },
+        { view: 'messages', label: 'Messagerie', badge: 'Rubrique', icon: 'chat' },
+        { view: 'feed', label: "Fil d'info", badge: 'Rubrique', icon: 'campaign' },
+        { view: 'settings', label: 'Referentiels', badge: 'Rubrique', icon: 'tune' }
+      ];
+      quickLinks.forEach((link) => {
+        if (matchesQuery([link.label, link.view], q)) {
+          push({
+            key: `quick:${link.view}`,
+            action: 'workspace',
+            view: link.view,
+            icon: link.icon,
+            title: link.label,
+            meta: 'Navigation rapide',
+            badge: link.badge
+          });
+        }
+      });
+
+      const projectStates = await getAllProjectStates();
+      projectStates.forEach((state) => {
+        const project = state?.project;
+        if (!project) return;
+        if (matchesQuery([project.name, project.description, project.status], q)) {
+          push({
+            key: `project:${project.projectId}`,
+            action: 'open-project',
+            projectId: project.projectId,
+            icon: 'folder_open',
+            title: project.name || 'Projet',
+            meta: 'Projet',
+            badge: 'Projet'
+          });
+        }
+
+        (state.tasks || []).forEach((task) => {
+          if (task.archivedAt) return;
+          if (!matchesQuery([task.title, task.description, task.theme, getTaskAssigneeName(task, state), task.status], q)) return;
+          push({
+            key: `project-task:${project.projectId}:${task.taskId}`,
+            action: 'open-project-task',
+            projectId: project.projectId,
+            taskId: task.taskId,
+            icon: 'task_alt',
+            title: task.title || 'Tache',
+            meta: `${project.name || 'Projet'} > Travail`,
+            badge: 'Tache'
+          });
+        });
+
+        (state.documents || []).forEach((doc) => {
+          if (!matchesQuery([doc.name, doc.theme, doc.notes], q)) return;
+          push({
+            key: `project-doc:${project.projectId}:${doc.docId}`,
+            action: 'open-project-document',
+            projectId: project.projectId,
+            hint: doc.name || '',
+            icon: 'description',
+            title: doc.name || 'Document',
+            meta: `${project.name || 'Projet'} > Documents`,
+            badge: 'Doc'
+          });
+        });
+
+        (state.messages || []).forEach((msg) => {
+          if (!matchesQuery([msg.content, msg.author], q)) return;
+          const hint = String(msg.content || '').slice(0, 80);
+          push({
+            key: `project-msg:${project.projectId}:${msg.messageId}`,
+            action: 'open-project-message',
+            projectId: project.projectId,
+            hint,
+            icon: 'chat',
+            title: project.name || 'Discussion',
+            meta: `${project.name || 'Projet'} > Discussion`,
+            badge: 'Msg'
+          });
+        });
+      });
+
+      const globalTasks = await getAllDecrypted('globalTasks', 'id');
+      (globalTasks || []).forEach((task) => {
+        if (task.archivedAt) return;
+        if (!matchesQuery([task.title, task.description, task.theme, task.status], q)) return;
+        push({
+          key: `global-task:${task.id}`,
+          action: 'open-global-task',
+          taskRef: `standalone:${task.id}`,
+          icon: 'task',
+          title: task.title || 'Tache hors projet',
+          meta: 'Taches > Vue transverse',
+          badge: 'Hors projet'
+        });
+      });
+
+      const globalDocs = await getAllDecrypted('globalDocs', 'id');
+      (globalDocs || []).forEach((doc) => {
+        if (!matchesQuery([doc.name, doc.theme, doc.notes], q)) return;
+        push({
+          key: `global-doc:${doc.id}`,
+          action: 'open-global-document',
+          hint: doc.name || '',
+          icon: 'description',
+          title: doc.name || 'Document hors projet',
+          meta: 'Documents > Tous projets',
+          badge: 'Hors projet'
+        });
+      });
+
+      const me = String(currentUser?.userId || '');
+      const globalMessages = await getAllDecrypted('globalMessages', 'messageId');
+      (globalMessages || []).forEach((msg) => {
+        const fromId = String(msg.fromUserId || '');
+        const toId = String(msg.toUserId || '');
+        if (!me || !isGlobalMessageVisibleForUser(msg, me)) return;
+        const conversationId = String(msg.conversationId || '').trim();
+        const isGroup = isGlobalGroupConversationId(conversationId) || isGlobalGroupTarget(toId);
+        const peerId = isGroup ? `${GLOBAL_MESSAGE_GROUP_SELECTION_PREFIX}${conversationId}` : (fromId === me ? toId : fromId);
+        const recipients = getGlobalMessageRecipientIds(msg).filter((id) => id !== me);
+        const peerName = isGroup
+          ? (String(msg.toName || '').trim() || formatGlobalMessageGroupChannelLabel(recipients))
+          : (fromId === me
+            ? (msg.toName || fallbackDirectoryName(peerId))
+            : (msg.fromName || fallbackDirectoryName(peerId)));
+        if (!matchesQuery([msg.content, msg.fromName, msg.toName, peerName, recipients.join(' ')], q)) return;
+        push({
+          key: `global-message:${msg.messageId}`,
+          action: 'open-global-message',
+          hint: peerId,
+          icon: 'chat',
+          title: peerName || 'Messagerie hors projet',
+          meta: String(msg.content || '').slice(0, 80) || 'Message privé',
+          badge: isGroup ? 'Groupe' : 'Msg'
+        });
+      });
+
+      const globalCalendarItems = await getAllDecrypted('globalCalendarItems', 'id');
+      (globalCalendarItems || []).forEach((item) => {
+        if (item.archivedAt) return;
+        if (!matchesQuery([item.title, item.description, item.theme], q)) return;
+        push({
+          key: `calendar-item:${item.id}`,
+          action: 'open-global-calendar-item',
+          itemId: item.id,
+          icon: 'event',
+          title: item.title || 'Info calendrier',
+          meta: 'Calendrier > Infos hors projet',
+          badge: 'Calendrier'
+        });
+      });
+
+      const globalPosts = await getAllDecrypted('globalPosts', 'postId');
+      (globalPosts || []).forEach((post) => {
+        if (post.deletedAt) return;
+        if (!matchesQuery([post.content, post.authorName, ...(post.refs || []).map((r) => r?.label || '')], q)) return;
+        push({
+          key: `global-post:${post.postId}`,
+          action: 'open-global-post',
+          postId: post.postId,
+          icon: 'campaign',
+          title: String(post.authorName || 'Post information'),
+          meta: String(post.content || '').slice(0, 80) || "Fil d'info",
+          badge: 'Post'
+        });
+      });
+
+      const settingsHits = [
+        ...(globalThemeCatalog || []).filter((item) => matchesQuery([item?.name], q)).map((item) => ({
+          key: `settings-theme:${item.themeKey}`,
+          action: 'workspace',
+          view: 'settings',
+          settingsTab: 'themes',
+          icon: 'label',
+          title: item.name || 'Thematique',
+          meta: 'Referentiels > Thematiques globales',
+          badge: 'Parametre'
+        })),
+        ...(globalGroupCatalog || []).filter((item) => matchesQuery([item?.name, item?.description], q)).map((item) => ({
+          key: `settings-group:${item.groupKey}`,
+          action: 'workspace',
+          view: 'settings',
+          settingsTab: 'groups',
+          icon: 'groups',
+          title: item.name || 'Groupe',
+          meta: 'Referentiels > Groupes globaux',
+          badge: 'Parametre'
+        })),
+        ...(globalSoftwareVersionCatalog || []).filter((item) => matchesQuery([item?.softwareName, item?.version, item?.notes], q)).map((item) => ({
+          key: `settings-soft:${item.softwareId}`,
+          action: 'workspace',
+          view: 'settings',
+          settingsTab: 'software',
+          icon: 'deployed_code',
+          title: `${item.softwareName || 'Logiciel'} ${item.version || ''}`.trim(),
+          meta: 'Referentiels > Suivi versions logicielles',
+          badge: 'Parametre'
+        })),
+        ...getProjectRoleCatalog().filter((item) => matchesQuery([item?.label, item?.baseRole], q)).map((item) => ({
+          key: `settings-role:${item.roleKey}`,
+          action: 'workspace',
+          view: 'settings',
+          settingsTab: 'roles',
+          icon: 'admin_panel_settings',
+          title: item.label || 'Habilitation',
+          meta: 'Referentiels > Habilitations',
+          badge: 'Parametre'
+        }))
+      ];
+      settingsHits.forEach(push);
+
+      return results.slice(0, 40);
     }
 
     async function refreshStats() {
@@ -1861,11 +3605,18 @@
 
     function addNotification(title, body, projectId = null, meta = {}) {
       const payload = meta && typeof meta === 'object' ? meta : {};
+      const actorUserId = String(payload.actorUserId || (currentUser?.userId || '')).trim();
+      const inferredSelfAction = !payload.actorUserId && !payload.actorName;
+      const suppressSelf = payload.allowSelf === true ? false : (
+        (actorUserId && actorUserId === String(currentUser?.userId || '')) || inferredSelfAction
+      );
+      if (suppressSelf) return;
       const nextNotification = {
         id: uuidv4(),
         title: String(title || 'Notification'),
         body: String(body || ''),
         projectId: projectId || null,
+        actorUserId: actorUserId || null,
         actorName: String(payload.actorName || currentUser?.name || 'Système'),
         targetType: payload.targetType || null,
         targetId: payload.targetId || null,
@@ -1879,6 +3630,73 @@
         : [nextNotification, ...notifications].slice(0, 120);
       saveNotifications();
       renderNotifications();
+    }
+
+    function isCurrentUserAssignedToTask(task, state) {
+      const me = String(currentUser?.userId || '').trim();
+      if (!me || !task) return false;
+      const entries = getTaskAssigneeEntries(task, state);
+      return entries.some(entry => String(entry?.userId || '').trim() === me);
+    }
+
+    function buildCollaboratorNotificationFromEvent(event, state) {
+      if (!event || !state?.project) return null;
+      const me = String(currentUser?.userId || '').trim();
+      if (!me) return null;
+      if (String(event.author || '') === me) return null;
+      if (!hasProjectAccess(state, me)) return null;
+      const actor = resolveKnownUserIdentity(event.author, event.payload?.authorName || 'Collaborateur');
+      const actorName = actor.name || 'Collaborateur';
+      const projectName = state.project.name || 'Projet';
+
+      if (event.type === EventTypes.ADD_MEMBER && String(event.payload?.userId || '') === me) {
+        return {
+          title: 'Ajout au projet',
+          body: `${actorName} vous a ajoute au projet "${projectName}".`,
+          projectId: event.projectId,
+          meta: { actorUserId: event.author, actorName, targetView: 'list', linkLabel: 'Ouvrir le projet' },
+          browserTag: `member:${event.projectId}:${event.eventId}`
+        };
+      }
+
+      if (event.type === EventTypes.SEND_MESSAGE) {
+        return {
+          title: 'Nouveau message',
+          body: `${actorName} a envoye un message dans "${projectName}".`,
+          projectId: event.projectId,
+          meta: { actorUserId: event.author, actorName, targetType: 'message', targetId: event.eventId, targetView: 'chat', linkLabel: 'Ouvrir la discussion' },
+          browserTag: `msg:${event.projectId}:${event.eventId}`
+        };
+      }
+
+      if (event.type === EventTypes.CREATE_TASK || event.type === EventTypes.UPDATE_TASK) {
+        const taskId = String(event.payload?.taskId || '').trim();
+        const task = (state.tasks || []).find(t => String(t.taskId || '') === taskId);
+        if (!task || !isCurrentUserAssignedToTask(task, state)) return null;
+        const statusLabel = getTaskStatusMeta(task.status).label;
+        const isCreated = event.type === EventTypes.CREATE_TASK;
+        return {
+          title: isCreated ? 'Tache assignee' : 'Tache mise a jour',
+          body: isCreated
+            ? `${actorName} vous a assigne la tache "${task.title || 'Tache'}".`
+            : `${actorName} a mis a jour "${task.title || 'Tache'}" (${statusLabel}).`,
+          projectId: event.projectId,
+          meta: { actorUserId: event.author, actorName, targetType: 'task', targetId: task.taskId, targetView: 'list', linkLabel: 'Ouvrir la tache' },
+          browserTag: `task:${event.projectId}:${task.taskId}:${event.eventId}`
+        };
+      }
+      return null;
+    }
+
+    async function maybeNotifyCollaboratorEvent(event) {
+      if (!event?.projectId) return false;
+      const state = await getProjectState(event.projectId, { ignoreAccessCheck: true });
+      if (!state?.project) return false;
+      const info = buildCollaboratorNotificationFromEvent(event, state);
+      if (!info) return false;
+      addNotification(info.title, info.body, info.projectId, info.meta);
+      emitBrowserNotification(info.title, info.body, info.browserTag);
+      return true;
     }
 
     function toggleNotificationsPanel(forceOpen = null) {
@@ -1898,6 +3716,7 @@
     async function openNotification(notificationId) {
       const notif = notifications.find(n => n.id === notificationId);
       if (!notif) return;
+      let openedGlobalMessages = false;
       notifications = window.TaskMDANotifications?.markRead
         ? window.TaskMDANotifications.markRead(notifications, notificationId)
         : notifications.map(n => n.id === notificationId ? { ...n, read: true } : n);
@@ -1916,6 +3735,16 @@
         await showGlobalWorkspace('calendar');
       } else if (notif.targetView === 'global-docs') {
         await showGlobalWorkspace('docs');
+      } else if (notif.targetView === 'feed') {
+        await showGlobalWorkspace('feed');
+      } else if (notif.targetView === 'messages') {
+        await showGlobalWorkspace('messages');
+        openedGlobalMessages = true;
+        const hinted = String(notif.hint || '').trim();
+        const channelId = hinted || String(notif.actorUserId || '').trim();
+        if (channelId) {
+          await selectGlobalMessageChannel(channelId);
+        }
       }
       if (notif.targetType === 'task' && notif.targetId) {
         const target = document.getElementById(`task-card-${notif.targetId}`);
@@ -1924,6 +3753,19 @@
       if (notif.targetType === 'message' && notif.targetId) {
         const target = document.getElementById(`message-item-${notif.targetId}`);
         target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      if (notif.targetType === 'global-message') {
+        if (!openedGlobalMessages) {
+          await showGlobalWorkspace('messages');
+        }
+        const hinted = String(notif.hint || '').trim();
+        const channelId = hinted || String(notif.actorUserId || '').trim();
+        if (channelId) {
+          await selectGlobalMessageChannel(channelId);
+        }
+      }
+      if (notif.targetType === 'global-post' && notif.targetId) {
+        await openGlobalFeedPost(notif.targetId);
       }
       toggleNotificationsPanel(false);
     }
@@ -1941,6 +3783,130 @@
       saveNotifications();
       renderNotifications();
     }
+
+    const NOTIFIED_EVENT_IDS_STORAGE_KEY = 'taskmda_notified_event_ids_v1';
+    const NOTIFIED_EVENT_IDS_MAX = 3000;
+
+    function loadNotifiedEventIds() {
+      try {
+        const raw = localStorage.getItem(NOTIFIED_EVENT_IDS_STORAGE_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+        if (!Array.isArray(parsed)) return new Set();
+        return new Set(parsed.filter(Boolean).map((id) => String(id)));
+      } catch {
+        return new Set();
+      }
+    }
+
+    function saveNotifiedEventIds(idsSet) {
+      try {
+        const arr = Array.from(idsSet || []).slice(-NOTIFIED_EVENT_IDS_MAX);
+        localStorage.setItem(NOTIFIED_EVENT_IDS_STORAGE_KEY, JSON.stringify(arr));
+      } catch {
+        // ignore quota/storage errors
+      }
+    }
+
+    renderNotifications = function renderNotificationsEnhanced() {
+      const list = document.getElementById('notifications-list');
+      const badge = document.getElementById('notif-badge');
+      if (!list || !badge) return;
+
+      const unread = window.TaskMDANotifications?.unreadCount
+        ? window.TaskMDANotifications.unreadCount(notifications)
+        : notifications.filter(n => !n.read).length;
+      badge.textContent = unread > 99 ? '99+' : String(unread);
+      badge.classList.toggle('hidden', unread === 0);
+
+      if (notifications.length === 0) {
+        list.innerHTML = '<p class="text-sm text-slate-500 text-center py-6">Aucune notification</p>';
+        return;
+      }
+
+      list.innerHTML = notifications.map(item => `
+        <button onclick="openNotification('${item.id}')" class="w-full text-left rounded-xl border px-3 py-2 ${
+          item.read ? 'border-slate-100 bg-white' : 'border-blue-200 bg-blue-50 shadow-sm'
+        } hover:bg-slate-50">
+          <div class="flex items-start justify-between gap-2">
+            <p class="text-sm ${item.read ? 'font-medium text-slate-700' : 'font-bold text-slate-900'}">${escapeHtml(item.title || 'Information')}</p>
+            <span class="text-[10px] text-slate-500">${new Date(item.timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
+          </div>
+          <p class="text-xs ${item.read ? 'text-slate-600' : 'text-slate-700'} mt-1">${escapeHtml(item.body || '')}</p>
+          <div class="mt-1 flex flex-wrap items-center gap-2 text-[11px]">
+            ${item.read ? '' : '<span class="inline-block w-2 h-2 rounded-full bg-blue-500" aria-hidden="true"></span>'}
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+              <span class="material-symbols-outlined text-[13px]">person</span>
+              <span>${escapeHtml(item.actorName || 'Systeme')}</span>
+            </span>
+            ${item.linkLabel ? `
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">
+                <span class="material-symbols-outlined text-[13px]">link</span>
+                <span>${escapeHtml(item.linkLabel)}</span>
+              </span>
+            ` : ''}
+          </div>
+        </button>
+      `).join('');
+    };
+
+    const addNotificationBase = addNotification;
+    addNotification = function addNotificationEnhanced(title, body, projectId = null, meta = {}) {
+      const payload = meta && typeof meta === 'object' ? meta : {};
+      const dedupeKey = String(payload.dedupeKey || '').trim();
+      if (dedupeKey) {
+        const duplicate = notifications.find(n => String(n?.dedupeKey || '') === dedupeKey);
+        if (duplicate) {
+          notifications = notifications.map(n => (
+            String(n?.dedupeKey || '') === dedupeKey
+              ? { ...n, read: false, timestamp: Date.now() }
+              : n
+          ));
+          saveNotifications();
+          renderNotifications();
+          return;
+        }
+      }
+      addNotificationBase(title, body, projectId, { ...payload, dedupeKey });
+    };
+
+    const buildCollaboratorNotificationFromEventBase = buildCollaboratorNotificationFromEvent;
+    buildCollaboratorNotificationFromEvent = function buildCollaboratorNotificationFromEventWithDedupe(event, state) {
+      const info = buildCollaboratorNotificationFromEventBase(event, state);
+      if (!info || !event?.eventId) return info;
+      const meta = info.meta && typeof info.meta === 'object' ? info.meta : {};
+      return {
+        ...info,
+        meta: {
+          ...meta,
+          dedupeKey: String(meta.dedupeKey || `event:${event.eventId}`)
+        }
+      };
+    };
+
+    const maybeNotifyCollaboratorEventBase = maybeNotifyCollaboratorEvent;
+    maybeNotifyCollaboratorEvent = async function maybeNotifyCollaboratorEventOnce(event) {
+      const eventId = String(event?.eventId || '').trim();
+      if (eventId && notifiedCollaboratorEventIds.has(eventId)) {
+        return false;
+      }
+      const notified = await maybeNotifyCollaboratorEventBase(event);
+      if (notified && eventId) {
+        notifiedCollaboratorEventIds.add(eventId);
+        if (notifiedCollaboratorEventIds.size > NOTIFIED_EVENT_IDS_MAX) {
+          const trimmed = Array.from(notifiedCollaboratorEventIds).slice(-NOTIFIED_EVENT_IDS_MAX);
+          notifiedCollaboratorEventIds = new Set(trimmed);
+        }
+        saveNotifiedEventIds(notifiedCollaboratorEventIds);
+      }
+      return notified;
+    };
+
+    toggleNotificationsPanel = function toggleNotificationsPanelEnhanced(forceOpen = null) {
+      const panel = document.getElementById('notifications-panel');
+      if (!panel) return;
+      notificationsOpen = typeof forceOpen === 'boolean' ? forceOpen : !notificationsOpen;
+      panel.classList.toggle('hidden', !notificationsOpen);
+    };
 
     function loadReminderMemory() {
       try {
@@ -2037,7 +4003,7 @@
         });
 
         scopedTasks.forEach(({ task, scope, scopeId }) => {
-          if (!task || task.status === 'termine') return;
+          if (!task || task.status === 'termine' || task.status === 'suspendu') return;
           const dueKey = taskDueDateKey(task);
           if (!dueKey) return;
           const dueDate = new Date(`${dueKey}T00:00:00`);
@@ -2169,9 +4135,7 @@
       }, duration);
     }
 
-    async function notifyNewEvent(projectId) {
-      showToast('🔄 Nouvelle mise à jour reçue');
-      addNotification('Synchronisation', 'Une mise a jour distante a ete recue', projectId);
+    async function notifyNewEvent(projectId, event = null) {
       await refreshStats();
 
       // Si on est dans la vue détaillée de ce projet, la rafraîchir
@@ -2186,29 +4150,51 @@
     async function renderProjects() {
       await refreshKnownUsersCache();
       const projects = await getAllProjects();
+      const projectsWithDescriptionMeta = projects.map((project) => {
+        const descriptionPlain = getProjectDescriptionPlainText(project.description || '');
+        return {
+          ...project,
+          _descriptionPlain: descriptionPlain,
+          _descriptionCard: getProjectCardDescription(project.description || '')
+        };
+      });
       const container = document.getElementById('projects-container');
       const projectsList = document.getElementById('projects-list');
       const paginationContainer = document.getElementById('projects-pagination');
+      const shouldShowProjectsList = workspaceMode === 'dashboard';
       const isListView = projectsViewMode === 'list';
       container.className = isListView
         ? 'space-y-3'
         : 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4';
       updateProjectsViewButtons();
-      const filteredProjects = projects.filter(project => matchesQuery([
+      const filteredProjects = projectsWithDescriptionMeta.filter(project => matchesQuery([
         project.name,
-        project.description,
+        project._descriptionPlain,
         project.status,
         project.sharingMode
       ], globalSearchQuery));
       if (paginationContainer) paginationContainer.innerHTML = '';
 
-      if (projects.length === 0) {
-        projectsList.classList.add('hidden');
+      if (projectsWithDescriptionMeta.length === 0) {
+        projectsList.classList.toggle('hidden', !shouldShowProjectsList);
+        container.className = 'grid grid-cols-1';
+        container.innerHTML = `
+          <button
+            type="button"
+            class="projects-empty-state"
+            onclick="document.getElementById('btn-create-project')?.click()"
+            aria-label="Créer un nouveau projet"
+          >
+            <span class="projects-empty-icon material-symbols-outlined">add</span>
+            <span class="projects-empty-title">Démarrer un autre projet</span>
+            <span class="projects-empty-subtitle">Créez un projet solo ou collaboratif pour organiser les tâches, documents et échanges de votre équipe.</span>
+          </button>
+        `;
         if (paginationContainer) paginationContainer.innerHTML = '';
         return;
       }
 
-      projectsList.classList.remove('hidden');
+      projectsList.classList.toggle('hidden', !shouldShowProjectsList);
       if (filteredProjects.length === 0) {
         container.innerHTML = '<p class="text-slate-500 text-center py-8">Aucun projet ne correspond à la recherche</p>';
         return;
@@ -2255,6 +4241,9 @@
           participantRows.push({ userId: project.createdBy, name: '' });
         }
         const participantsHtml = renderParticipantsStack(participantRows, 3);
+        const projectCreatorIdentity = resolveKnownUserIdentity(project?.createdBy || '', project?.createdBy ? fallbackDirectoryName(project.createdBy) : 'Utilisateur');
+        const projectCreatorName = projectCreatorIdentity?.name || 'Utilisateur';
+        const creatorTooltip = `Projet cree par ${projectCreatorName}`;
 
         return `
           <div class="project-card rounded-xl p-6 cursor-pointer ${isListView ? 'project-card-list' : ''}" onclick="showProjectDetail('${project.projectId}')">
@@ -2265,26 +4254,26 @@
               </h4>
               <div class="flex items-center gap-1">${badge}${statusBadge}</div>
             </div>
-            <p class="text-gray-600 text-sm mb-4 line-clamp-2">${project.description || 'Aucune description'}</p>
+            <p class="text-gray-600 text-sm mb-4 line-clamp-2">${escapeHtml(project._descriptionCard || 'Aucune description')}</p>
             <div class="flex items-center justify-between gap-2">
               <div class="flex items-center gap-2 text-sm text-gray-500">
                 <span class="material-symbols-outlined text-lg">calendar_today</span>
                 <span>${new Date(project.createdAt).toLocaleDateString('fr-FR')}</span>
               </div>
               <div class="flex items-center gap-2">
-                ${participantsHtml}
+                <span title="${escapeHtml(creatorTooltip)}" aria-label="${escapeHtml(creatorTooltip)}">${participantsHtml}</span>
                 <span class="text-[11px] font-semibold text-slate-500">${isPrivate ? 'Mode solo' : 'Mode collaboratif'}</span>
               </div>
             </div>
             <div class="mt-3 flex items-center gap-2">
               <button
                 class="px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-slate-300 ${canEdit ? 'bg-white text-slate-700 hover:bg-slate-50' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}"
-                ${canEdit ? '' : 'disabled title="Reserve aux owners/managers"'}
+                ${canEdit ? '' : 'disabled title="Reserve aux Proprietaires/Managers"'}
                 onclick="event.stopPropagation(); openEditProjectModalFromDashboard('${project.projectId}')"
               >Modifier</button>
               <button
                 class="px-2.5 py-1.5 rounded-lg text-xs font-semibold border ${canDelete ? 'border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100' : 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'}"
-                ${canDelete ? '' : 'disabled title="Reserve au owner"'}
+                ${canDelete ? '' : 'disabled title="Reserve au Proprietaire"'}
                 onclick="event.stopPropagation(); deleteProjectFromDashboard('${project.projectId}')"
               >Supprimer</button>
             </div>
@@ -2302,10 +4291,14 @@
     let currentProjectState = null;
     let currentProjectEvents = [];
     let workspaceMode = 'dashboard'; // dashboard | project | global
-    let globalWorkspaceView = 'tasks'; // tasks | calendar | docs | settings
+    let globalWorkspaceView = 'tasks'; // tasks | calendar | docs | messages | feed | settings
+    let globalSettingsTab = localStorage.getItem('taskmda_global_settings_tab') || 'branding'; // branding | themes | groups | roles | software
+    let globalSettingsHelpOpen = false;
     let projectDetailMode = 'work'; // work | settings
+    let projectSettingsTab = 'members'; // members | collab | permissions
     let projectPermissionDetailsOpen = false;
     let activeProjectView = 'list';
+    let projectTaskPresentationMode = localStorage.getItem('taskmda_project_task_presentation') === 'list' ? 'list' : 'cards';
     let editingTaskId = null;
     let draggedTaskId = null;
     let timelineFilter = 'all';
@@ -2314,14 +4307,21 @@
     let calendarDayFilterEnabled = false;
     let editingMessageId = null;
     let editingMessageDraft = '';
-    let messagePreviewEnabled = false;
+    let messageMarkdownDebounceTimer = null;
+    let messageRenderedDraftHtml = '';
+    let projectDescriptionExpanded = false;
     let emojiPickerOpen = false;
     let messageFilters = { query: '', onlyMine: false };
     let globalSearchQuery = '';
+    let headerSearchResults = [];
+    let headerSearchActiveIndex = -1;
+    let headerSearchDebounceTimer = null;
+    let headerSearchRequestToken = 0;
     let docsFilters = { query: '', type: 'all', sort: 'recent' };
     let activityFilters = { type: 'all', author: '', period: 'all' };
     let notifications = [];
     let notificationsOpen = false;
+    let notifiedCollaboratorEventIds = new Set();
     let dueReminderInterval = null;
     let backupReminderInterval = null;
     let dueReminderBusy = false;
@@ -2330,14 +4330,27 @@
     let browserNotifPermissionChecked = false;
     let standaloneTaskMode = false;
     let globalTasksViewMode = localStorage.getItem('taskmda_global_tasks_view') || 'cards'; // cards | list | kanban | timeline
+    let globalTimelineDisplayMode = localStorage.getItem('taskmda_global_timeline_mode') === 'list' ? 'list' : 'columns'; // columns | list
+    let globalTimelineExpandedGroups = {
+      overdue: false,
+      today: false,
+      upcoming: false,
+      nodue: false
+    };
     let globalCalendarViewMode = 'list'; // list | grid
     let globalCalendarSelectedDay = null;
     let editingGlobalCalendarItemId = null;
+    let currentCalendarInfoDetailId = null;
+    let currentDocBindingContext = null;
+    let currentDocEditorContext = null;
     let selectedUserGroupId = null;
+    let selectedProjectGroupId = null;
+    let taskPendingGroupMemberUserIds = [];
     let editingStandaloneTaskId = null;
-    let archivedTasksExpanded = false;
     let globalThemeCatalog = [];
     let globalGroupCatalog = [];
+    let globalSoftwareVersionCatalog = [];
+    let globalGroupMemberRepairAttempted = false;
     let knownUsersCache = new Map();
     let projectsViewMode = localStorage.getItem('taskmda_projects_view') === 'list' ? 'list' : 'grid';
     const paginationConfig = {
@@ -2348,11 +4361,58 @@
     let projectsPage = 1;
     let tasksPage = 1;
     let globalTasksPage = 1;
+    const GLOBAL_MESSAGE_BROADCAST_TARGET = '__all__';
+    const GLOBAL_MESSAGE_BROADCAST_USER_ID = '*';
+    const GLOBAL_MESSAGE_GROUP_TARGET_PREFIX = '__group__:';
+    const GLOBAL_MESSAGE_GROUP_CONVERSATION_PREFIX = 'group__';
+    const GLOBAL_MESSAGE_GROUP_SELECTION_PREFIX = 'group:';
+    const GLOBAL_MESSAGE_CONTACTS_INITIAL_BATCH = 24;
+    const GLOBAL_MESSAGE_CONTACTS_BATCH_SIZE = 20;
+    const GLOBAL_MESSAGE_THREAD_INITIAL_BATCH = 40;
+    const GLOBAL_MESSAGE_THREAD_BATCH_SIZE = 32;
+    const GLOBAL_MESSAGE_BROADCAST_LABEL = 'Canal général (tous les agents connus)';
+    let globalMessagePeerUserId = GLOBAL_MESSAGE_BROADCAST_TARGET;
+    let globalMessageActiveGroupConversationId = '';
+    let globalMessageRecipientUserIds = new Set();
+    let globalMessageContactsRenderLimit = GLOBAL_MESSAGE_CONTACTS_INITIAL_BATCH;
+    let globalMessageThreadRenderLimit = GLOBAL_MESSAGE_THREAD_INITIAL_BATCH;
+    let knownGlobalMessageIds = new Set();
+    let knownGlobalPostIds = new Set();
+    let globalFeedFocusPostId = '';
+    let globalFeedFilterMode = 'all'; // all | auto | manual | mentions | project-refs | task-refs
+    let globalFeedSortMode = 'desc'; // desc | asc
+    let globalFeedMentionCatalogCache = null;
+    const GLOBAL_MESSAGE_READ_STORAGE_KEY = 'taskmda_global_message_reads_v1';
+    let globalMessageReadMap = loadGlobalMessageReadMap();
+    let projectTaskCardsColumns = Math.min(4, Math.max(1, Number.parseInt(localStorage.getItem('taskmda_project_task_cards_cols') || '1', 10) || 1));
+    let globalTaskCardsColumns = Math.min(4, Math.max(1, Number.parseInt(localStorage.getItem('taskmda_global_task_cards_cols') || '1', 10) || 1));
+    const GLOBAL_KANBAN_INITIAL_BATCH = 18;
+    const GLOBAL_KANBAN_BATCH_SIZE = 18;
+    const GLOBAL_KANBAN_SCROLL_THRESHOLD_PX = 84;
+    const GLOBAL_TIMELINE_INITIAL_BATCH = 16;
+    const GLOBAL_TIMELINE_BATCH_SIZE = 16;
+    const GLOBAL_TIMELINE_SCROLL_THRESHOLD_PX = 84;
     let draggedGlobalTaskRef = null;
+    let currentGlobalTaskDetailRef = '';
+    let globalKanbanInfiniteScrollState = null;
     const chatEmojiPalette = [
-      '😀', '😄', '🙂', '😉', '😊', '😍', '😎', '🤝',
+      'ðŸ˜€', 'ðŸ˜„', 'ðŸ™‚', 'ðŸ˜‰', '😊', 'ðŸ˜', 'ðŸ˜Ž', 'ðŸ¤',
       '👍', '👏', '🙌', '🙏', '💡', '✅', '⚠️', '🚀',
-      '📌', '📅', '📎', '📝', '📣', '🎯', '🔥', '💬'
+      'ðŸ“Œ', 'ðŸ“…', 'ðŸ“Ž', 'ðŸ“', 'ðŸ“£', 'ðŸŽ¯', 'ðŸ”¥', 'ðŸ’¬'
+    ];
+    let projectEditorEmojiPickerOpen = false;
+    let projectEditorEmojiTarget = '';
+    let projectEditorEmojiAnchorId = '';
+    const projectDescriptionQuillEditors = new Map();
+    let activeProjectEditorImage = null;
+    let activeProjectEditorId = '';
+    let projectImageResizeDragState = null;
+    const extendedEmojiPalette = [
+      ...chatEmojiPalette,
+      '\u{1F972}', '\u{1F976}', '\u{1F92F}', '\u{1F913}', '\u{1F60C}', '\u{1F644}', '\u{1F914}', '\u{1F631}', '\u{1F92D}', '\u{1F92B}',
+      '\u{1F47B}', '\u{1F916}', '\u{1F47E}', '\u{1F4A4}', '\u{1F9D1}\u{200D}\u{1F4BB}', '\u{1F9D1}\u{200D}\u{1F4BC}', '\u{1F468}\u{200D}\u{1F4BB}', '\u{1F469}\u{200D}\u{1F4BB}', '\u{1F52E}', '\u{1F3A8}',
+      '\u{1F4B0}', '\u{1F4B3}', '\u{1F4B8}', '\u{1F3E2}', '\u{1F3DB}\u{FE0F}', '\u{1F3E5}', '\u{1F3EB}', '\u{1F3E6}', '\u{1F4E6}', '\u{1F69A}',
+      '\u{1F9FE}', '\u{1F5C3}\u{FE0F}', '\u{1F5C4}\u{FE0F}', '\u{1F4DC}', '\u{1F4C3}', '\u{1F9FE}', '\u{1F4F0}', '\u{1F3F7}\u{FE0F}', '\u{1F4A2}', '\u{1F53D}'
     ];
 
     function escapeHtml(value) {
@@ -2365,6 +4425,200 @@
         .replace(/'/g, '&#39;');
     }
 
+    const LOCK_SCOPE_TASK = 'task';
+    const LOCK_SCOPE_PROJECT = 'project';
+    const LOCK_SCOPE_CALENDAR = 'calendar-item';
+    const CALENDAR_LOCKS_SETTINGS_KEY = 'calendar_resource_locks';
+    let activeTaskEditLock = null;
+    let activeProjectEditLock = null;
+    let activeCalendarEditLock = null;
+
+    function buildResourceLockKey(resourceType, resourceId) {
+      return `${String(resourceType || '').trim()}:${String(resourceId || '').trim()}`;
+    }
+
+    function getCurrentUserLockDisplayName() {
+      return String(currentUser?.name || fallbackDirectoryName(currentUser?.userId || '') || 'Utilisateur').trim();
+    }
+
+    function normalizeResourceLockRow(lock, now = Date.now()) {
+      if (!lock || typeof lock !== 'object') return null;
+      const resourceType = String(lock.resourceType || '').trim();
+      const resourceId = String(lock.resourceId || '').trim();
+      const ownerUserId = String(lock.ownerUserId || '').trim();
+      const expiresAt = Number(lock.expiresAt || 0);
+      if (!resourceType || !resourceId || !ownerUserId) return null;
+      if (!Number.isFinite(expiresAt) || expiresAt <= now) return null;
+      return {
+        resourceType,
+        resourceId,
+        lockId: String(lock.lockId || '').trim(),
+        ownerUserId,
+        ownerName: String(lock.ownerName || '').trim(),
+        scope: String(lock.scope || '').trim(),
+        updatedAt: Number(lock.updatedAt || now) || now,
+        expiresAt
+      };
+    }
+
+    function getProjectResourceLock(state, resourceType, resourceId, options = {}) {
+      const lockKey = buildResourceLockKey(resourceType, resourceId);
+      const source = (state?.resourceLocks && typeof state.resourceLocks === 'object') ? state.resourceLocks : {};
+      const normalized = normalizeResourceLockRow(source[lockKey], Number(options.now || Date.now()));
+      return normalized;
+    }
+
+    function isProjectResourceLockedByOther(state, resourceType, resourceId, userId = currentUser?.userId) {
+      const lock = getProjectResourceLock(state, resourceType, resourceId);
+      if (!lock) return false;
+      return String(lock.ownerUserId || '') !== String(userId || '');
+    }
+
+    function formatLockOwner(lock) {
+      if (!lock) return 'Un autre utilisateur';
+      const name = String(lock.ownerName || '').trim();
+      if (name) return name;
+      return fallbackDirectoryName(lock.ownerUserId || '') || 'Un autre utilisateur';
+    }
+
+    function buildProjectLockHintHtml(state, resourceType, resourceId, compact = false) {
+      const lock = getProjectResourceLock(state, resourceType, resourceId);
+      if (!lock || String(lock.ownerUserId || '') === String(currentUser?.userId || '')) return '';
+      const owner = escapeHtml(formatLockOwner(lock));
+      const minutesLeft = Math.max(1, Math.ceil((Number(lock.expiresAt || 0) - Date.now()) / 60000));
+      if (compact) {
+        return `<span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold" title="${owner} modifie en ce moment">${owner} modifie…</span>`;
+      }
+      return `<div class="text-xs mt-2 px-2 py-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-200">${owner} modifie en ce moment (${minutesLeft} min max).</div>`;
+    }
+
+    async function publishProjectLockEvent(projectId, type, payload) {
+      if (!projectId) return;
+      const event = createEvent(type, projectId, currentUser.userId, payload);
+      await publishEvent(event);
+      if (sharedFolderHandle) {
+        await writeEventToSharedFolder(projectId, event);
+      }
+    }
+
+    async function acquireProjectResourceLock(projectId, resourceType, resourceId, options = {}) {
+      const pid = String(projectId || '').trim();
+      const rid = String(resourceId || '').trim();
+      const rtype = String(resourceType || '').trim();
+      if (!pid || !rid || !rtype) return { ok: false, reason: 'invalid' };
+      const state = await getProjectState(pid, { ignoreAccessCheck: true });
+      const existing = getProjectResourceLock(state, rtype, rid);
+      if (existing && String(existing.ownerUserId || '') !== String(currentUser?.userId || '')) {
+        return { ok: false, reason: 'locked-by-other', lock: existing };
+      }
+      const lockId = String(options.lockId || '').trim() || uuidv4();
+      const ttlMs = Math.max(60 * 1000, Math.min(30 * 60 * 1000, Number(options.ttlMs || DEFAULT_LOCK_TTL_MS) || DEFAULT_LOCK_TTL_MS));
+      await publishProjectLockEvent(pid, EventTypes.LOCK_RESOURCE, {
+        resourceType: rtype,
+        resourceId: rid,
+        lockId,
+        scope: String(options.scope || '').trim(),
+        ownerUserId: currentUser.userId,
+        ownerName: getCurrentUserLockDisplayName(),
+        ttlMs
+      });
+      return { ok: true, lockId };
+    }
+
+    async function releaseProjectResourceLock(projectId, resourceType, resourceId, lockId = '') {
+      const pid = String(projectId || '').trim();
+      const rid = String(resourceId || '').trim();
+      const rtype = String(resourceType || '').trim();
+      if (!pid || !rid || !rtype) return false;
+      await publishProjectLockEvent(pid, EventTypes.UNLOCK_RESOURCE, {
+        resourceType: rtype,
+        resourceId: rid,
+        lockId: String(lockId || '').trim(),
+        ownerUserId: currentUser.userId
+      });
+      return true;
+    }
+
+    function buildLockBlockedMessage(lock, fallback = "Ressource en cours d'édition") {
+      const owner = formatLockOwner(lock);
+      return `${owner} modifie en ce moment. Réessayez dans un instant.`;
+    }
+
+    function ensureProjectResourceUnlockedForAction(state, resourceType, resourceId, actionLabel = 'action') {
+      const lock = getProjectResourceLock(state, resourceType, resourceId);
+      if (!lock) return { ok: true, lock: null };
+      if (String(lock.ownerUserId || '') === String(currentUser?.userId || '')) {
+        return { ok: true, lock };
+      }
+      showToast(`${formatLockOwner(lock)} modifie en ce moment. ${actionLabel} temporairement bloquée.`);
+      return { ok: false, lock };
+    }
+
+    async function getCalendarLocksMap() {
+      const row = await getDecrypted('appSettings', CALENDAR_LOCKS_SETTINGS_KEY, 'key');
+      const map = (row && typeof row.value === 'object' && row.value) ? row.value : {};
+      return pruneResourceLocksMap(map);
+    }
+
+    async function saveCalendarLocksMap(lockMap) {
+      const cleaned = pruneResourceLocksMap(lockMap);
+      await putEncrypted('appSettings', {
+        key: CALENDAR_LOCKS_SETTINGS_KEY,
+        value: cleaned,
+        updatedAt: Date.now()
+      }, 'key');
+    }
+
+    async function acquireCalendarItemLock(itemId) {
+      const id = String(itemId || '').trim();
+      if (!id) return { ok: false, reason: 'invalid' };
+      const lockKey = buildResourceLockKey(LOCK_SCOPE_CALENDAR, id);
+      const locks = await getCalendarLocksMap();
+      const existing = normalizeResourceLockRow(locks[lockKey]);
+      if (existing && String(existing.ownerUserId || '') !== String(currentUser?.userId || '')) {
+        return { ok: false, reason: 'locked-by-other', lock: existing };
+      }
+      const lockId = uuidv4();
+      locks[lockKey] = {
+        resourceType: LOCK_SCOPE_CALENDAR,
+        resourceId: id,
+        lockId,
+        ownerUserId: currentUser.userId,
+        ownerName: getCurrentUserLockDisplayName(),
+        scope: 'calendar',
+        updatedAt: Date.now(),
+        expiresAt: Date.now() + DEFAULT_LOCK_TTL_MS
+      };
+      await saveCalendarLocksMap(locks);
+      return { ok: true, lockId };
+    }
+
+    async function releaseCalendarItemLock(itemId, lockId = '') {
+      const id = String(itemId || '').trim();
+      if (!id) return false;
+      const lockKey = buildResourceLockKey(LOCK_SCOPE_CALENDAR, id);
+      const locks = await getCalendarLocksMap();
+      const existing = normalizeResourceLockRow(locks[lockKey]);
+      if (!existing) return false;
+      if (String(existing.ownerUserId || '') !== String(currentUser?.userId || '')) return false;
+      if (lockId && String(existing.lockId || '') !== String(lockId || '')) return false;
+      delete locks[lockKey];
+      await saveCalendarLocksMap(locks);
+      return true;
+    }
+
+    async function ensureCalendarItemUnlockedForAction(itemId, actionLabel = 'Action') {
+      const id = String(itemId || '').trim();
+      if (!id) return { ok: true };
+      const locks = await getCalendarLocksMap();
+      const lock = normalizeResourceLockRow(locks[buildResourceLockKey(LOCK_SCOPE_CALENDAR, id)]);
+      if (!lock || String(lock.ownerUserId || '') === String(currentUser?.userId || '')) {
+        return { ok: true, lock };
+      }
+      showToast(`${formatLockOwner(lock)} modifie cette information. ${actionLabel} temporairement bloquée.`);
+      return { ok: false, lock };
+    }
+
     function formatDate(dateValue) {
       if (!dateValue) return 'Non définie';
       const date = new Date(dateValue);
@@ -2372,8 +4626,48 @@
       return date.toLocaleDateString('fr-FR');
     }
 
+    function resetWorkspaceScrollTop() {
+      if (typeof window.scrollTo === 'function') {
+        window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      }
+      const candidates = [
+        document.scrollingElement,
+        document.documentElement,
+        document.body,
+        document.querySelector('.content'),
+        document.querySelector('.workspace')
+      ];
+      candidates.forEach((node) => {
+        if (node && typeof node.scrollTop === 'number') {
+          node.scrollTop = 0;
+        }
+      });
+    }
+
+    function detachGlobalKanbanInfiniteScroll() {
+      const handler = globalKanbanInfiniteScrollState?.handler;
+      if (handler) {
+        window.removeEventListener('scroll', handler);
+      }
+      globalKanbanInfiniteScrollState = null;
+    }
+
+    function scrollProjectTitleIntoView(behavior = 'smooth') {
+      const projectTitle = document.getElementById('project-title');
+      if (!projectTitle) return;
+      const topbar = document.querySelector('.topbar');
+      const topbarHeight = topbar?.getBoundingClientRect?.().height || 0;
+      const offset = Math.max(56, Math.round(topbarHeight + 14));
+      const targetTop = Math.max(0, Math.round(window.scrollY + projectTitle.getBoundingClientRect().top - offset));
+      window.scrollTo({ top: targetTop, left: 0, behavior });
+    }
+
     function normalizeSharingMode(mode, fallback = 'private') {
       return mode === 'shared' || mode === 'private' ? mode : fallback;
+    }
+
+    function normalizeProjectReadAccess(value, fallback = 'private') {
+      return value === 'public' || value === 'members' || value === 'private' ? value : fallback;
     }
 
     function sharingModeLabel(mode) {
@@ -2492,23 +4786,152 @@
         cards: document.getElementById('global-tasks-view-cards'),
         list: document.getElementById('global-tasks-view-list'),
         kanban: document.getElementById('global-tasks-view-kanban'),
-        timeline: document.getElementById('global-tasks-view-timeline')
+        timeline: document.getElementById('global-tasks-view-timeline'),
+        calendar: document.getElementById('global-tasks-view-calendar'),
+        archives: document.getElementById('global-tasks-view-archives')
       };
       Object.entries(buttons).forEach(([mode, btn]) => {
         if (!btn) return;
-        btn.classList.toggle('view-tab-active', mode === globalTasksViewMode);
+        const isActive = mode === globalTasksViewMode;
+        btn.classList.toggle('view-tab-active', isActive);
+        btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
       });
+      updateGlobalTaskLayoutButtons();
+    }
+
+    function toggleGlobalTasksInlineCalendar(showCalendar) {
+      const tasksSection = document.getElementById('global-tasks-section');
+      const calendarSection = document.getElementById('global-calendar-section');
+      if (!tasksSection || !calendarSection) return;
+      const layoutToolbar = document.getElementById('global-task-layout-toolbar');
+      const filterRow = document.getElementById('global-task-filter-row');
+      const tasksContainer = document.getElementById('global-tasks-container');
+      const tasksPagination = document.getElementById('global-tasks-pagination');
+      if (showCalendar) {
+        tasksSection.classList.remove('hidden');
+        layoutToolbar?.classList.add('hidden');
+        filterRow?.classList.add('hidden');
+        tasksContainer?.classList.add('hidden');
+        tasksPagination?.classList.add('hidden');
+        calendarSection.classList.remove('hidden');
+        setActiveSidebarNav('tasks');
+      } else if (globalWorkspaceView === 'tasks') {
+        tasksSection.classList.remove('hidden');
+        filterRow?.classList.remove('hidden');
+        tasksContainer?.classList.remove('hidden');
+        calendarSection.classList.add('hidden');
+      }
+    }
+
+    function getGlobalSettingsHelpContent(tabKey) {
+      const helpByTab = {
+        branding: {
+          title: 'Aide: Identite',
+          text: "Definissez le nom et le sous-titre de la plateforme. Le role Admin application peut etre attribue a un utilisateur connu."
+        },
+        themes: {
+          title: 'Aide: Thematiques',
+          text: "Ajoutez des thematiques courtes et stables pour faciliter les filtres transverses et la recherche dans les projets."
+        },
+        groups: {
+          title: 'Aide: Groupes',
+          text: "Creez des groupes reutilisables entre projets. Ajoutez les membres depuis l'annuaire local pour accelerer les assignations."
+        },
+        roles: {
+          title: 'Aide: Habilitations',
+          text: "Les habilitations globales se basent sur les niveaux techniques Proprietaire, Manager et Membre, avec des libelles metier personnalisables."
+        },
+        software: {
+          title: 'Aide: Versions logicielles',
+          text: "Maintenez ici un registre des versions de vos logiciels metier. Mettez a jour apres chaque changement pour garder un suivi fiable."
+        }
+      };
+      return helpByTab[tabKey] || helpByTab.branding;
+    }
+
+    function renderGlobalSettingsHelpBox() {
+      const box = document.getElementById('global-settings-help-box');
+      const title = document.getElementById('global-settings-help-title');
+      const text = document.getElementById('global-settings-help-text');
+      const btn = document.getElementById('btn-global-settings-help');
+      if (!box || !title || !text || !btn) return;
+      const help = getGlobalSettingsHelpContent(globalSettingsTab);
+      title.textContent = help.title;
+      text.textContent = help.text;
+      const tooltipLabel = String(help.title || 'Aide').replace(/^Aide:\s*/i, '').trim();
+      const tooltipText = tooltipLabel ? `Aide: ${tooltipLabel}` : 'Aide';
+      btn.setAttribute('data-tooltip', tooltipText);
+      btn.setAttribute('aria-label', tooltipText);
+      box.classList.toggle('hidden', !globalSettingsHelpOpen);
+      btn.setAttribute('aria-expanded', globalSettingsHelpOpen ? 'true' : 'false');
+    }
+
+    function applyGlobalSettingsTabView() {
+      const allowed = new Set(['branding', 'themes', 'groups', 'roles', 'software']);
+      if (!allowed.has(String(globalSettingsTab || ''))) {
+        globalSettingsTab = 'branding';
+      }
+      const tabButtons = {
+        branding: document.getElementById('global-settings-tab-branding'),
+        themes: document.getElementById('global-settings-tab-themes'),
+        groups: document.getElementById('global-settings-tab-groups'),
+        roles: document.getElementById('global-settings-tab-roles'),
+        software: document.getElementById('global-settings-tab-software')
+      };
+      Object.entries(tabButtons).forEach(([key, btn]) => {
+        if (!btn) return;
+        const active = key === globalSettingsTab;
+        btn.classList.toggle('view-tab-active', active);
+        btn.setAttribute('aria-selected', active ? 'true' : 'false');
+      });
+
+      const brandingCard = document.querySelector('#global-settings-section .global-settings-card-branding');
+      const themesCard = document.querySelector('#global-settings-section .global-settings-card-themes');
+      const groupsCard = document.querySelector('#global-settings-section .global-settings-card-groups');
+      const rolesCard = document.querySelector('#global-settings-section .global-settings-card-roles');
+      const softwareCard = document.querySelector('#global-settings-section .global-settings-card-software');
+      const softwareTipsCard = document.querySelector('#global-settings-section .global-settings-card-software-tips');
+      const globalSettingsSection = document.getElementById('global-settings-section');
+
+      if (brandingCard) brandingCard.classList.toggle('hidden', globalSettingsTab !== 'branding');
+      if (themesCard) themesCard.classList.toggle('hidden', globalSettingsTab !== 'themes');
+      if (groupsCard) groupsCard.classList.toggle('hidden', globalSettingsTab !== 'groups');
+      if (rolesCard) rolesCard.classList.toggle('hidden', globalSettingsTab !== 'roles');
+      if (softwareCard) softwareCard.classList.toggle('hidden', globalSettingsTab !== 'software');
+      if (softwareTipsCard) softwareTipsCard.classList.toggle('hidden', globalSettingsTab !== 'software');
+      globalSettingsSection?.classList.toggle('software-tab-active', globalSettingsTab === 'software');
+      renderGlobalSettingsHelpBox();
+    }
+
+    function setGlobalSettingsTab(tabKey) {
+      const allowed = new Set(['branding', 'themes', 'groups', 'roles', 'software']);
+      const next = allowed.has(String(tabKey || '')) ? String(tabKey) : 'branding';
+      globalSettingsTab = next;
+      localStorage.setItem('taskmda_global_settings_tab', next);
+      applyGlobalSettingsTabView();
     }
 
     function getViewButtons() {
       return {
+        cards: document.getElementById('view-cards'),
         list: document.getElementById('view-list'),
         kanban: document.getElementById('view-kanban'),
         timeline: document.getElementById('view-timeline'),
         docs: document.getElementById('view-docs'),
         chat: document.getElementById('view-chat'),
-        activity: document.getElementById('view-activity')
+        activity: document.getElementById('view-activity'),
+        archives: document.getElementById('view-archives')
       };
+    }
+
+    function setProjectTaskPresentationMode(mode) {
+      const nextMode = mode === 'list' ? 'list' : 'cards';
+      projectTaskPresentationMode = nextMode;
+      localStorage.setItem('taskmda_project_task_presentation', nextMode);
+      if (workspaceMode === 'project' && activeProjectView === 'list' && currentProjectState) {
+        renderTasks(currentProjectState.tasks || []);
+      }
+      setProjectView('list');
     }
 
     function renderSafeMarkdown(text) {
@@ -2521,6 +4944,184 @@
       html = html.replace(/`(.+?)`/g, '<code>$1</code>');
       html = html.replace(/\n/g, '<br>');
       return html;
+    }
+
+    function looksLikeHtml(value) {
+      return /<\/?[a-z][\s\S]*>/i.test(String(value || ''));
+    }
+
+    function plainTextToRichHtml(text) {
+      const normalized = String(text || '').replace(/\r\n/g, '\n').trim();
+      if (!normalized) return '';
+      return normalized
+        .split(/\n{2,}/)
+        .map(chunk => `<p>${escapeHtml(chunk).replace(/\n/g, '<br>')}</p>`)
+        .join('');
+    }
+
+    function sanitizeProjectDescriptionHtml(htmlInput) {
+      const parser = new DOMParser();
+      const html = String(htmlInput || '').trim();
+      const normalized = html
+        ? (looksLikeHtml(html) ? html : plainTextToRichHtml(html))
+        : '';
+      const doc = parser.parseFromString(`<div>${normalized}</div>`, 'text/html');
+      const root = doc.body.firstElementChild;
+      if (!root) return '';
+
+      root.querySelectorAll('.project-editor-image-overlay').forEach((el) => el.remove());
+      root.querySelectorAll('.project-editor-image-overlay-panel').forEach((el) => el.remove());
+      root.querySelectorAll('.project-editor-image-overlay-btn').forEach((el) => el.remove());
+      root.querySelectorAll('.project-editor-image-resize-handle').forEach((el) => el.remove());
+      root.querySelectorAll('.material-symbols-outlined').forEach((el) => {
+        const text = String(el.textContent || '').trim().toLowerCase();
+        if (text === 'photo_size_select_large' || text === 'open_with') {
+          el.remove();
+        }
+      });
+      root.querySelectorAll('p,div,span').forEach((el) => {
+        const text = String(el.textContent || '').trim().toLowerCase();
+        if (text !== 'photo_size_select_large') return;
+        const parent = el.parentElement;
+        const next = el.nextElementSibling;
+        el.remove();
+        if (next && /^\s*\d{1,3}%\s*$/.test(String(next.textContent || '').trim())) {
+          next.remove();
+        }
+        if (parent && ['p', 'div', 'span'].includes(parent.tagName.toLowerCase()) && !String(parent.textContent || '').trim()) {
+          parent.remove();
+        }
+      });
+
+      const allowedTags = new Set(['p', 'br', 'strong', 'em', 'u', 's', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'blockquote', 'code', 'pre', 'a', 'img', 'figure', 'figcaption', 'span', 'div']);
+      const allowedImageClasses = new Set(['desc-img-align-left', 'desc-img-align-center', 'desc-img-align-right']);
+
+      function safeHref(value) {
+        const raw = String(value || '').trim();
+        if (!raw) return '';
+        const lower = raw.toLowerCase();
+        if (lower.startsWith('http://') || lower.startsWith('https://') || lower.startsWith('mailto:')) return raw;
+        return '';
+      }
+
+      function safeImageSrc(value) {
+        const raw = String(value || '').trim();
+        if (!raw) return '';
+        const lower = raw.toLowerCase();
+        if (lower.startsWith('data:image/')) return raw;
+        if (lower.startsWith('http://') || lower.startsWith('https://')) return raw;
+        return '';
+      }
+
+      function safeImageWidthPercent(node) {
+        if (!(node instanceof Element)) return 100;
+        const dataWidth = node.getAttribute('data-desc-image-width');
+        if (dataWidth) return normalizeProjectImageWidthPercent(dataWidth, 100);
+        const styleWidth = parseImageWidthPercentFromStyle(node.getAttribute('style'));
+        if (styleWidth) return styleWidth;
+        const widthAttr = node.getAttribute('width');
+        if (widthAttr) return normalizeProjectImageWidthPercent(widthAttr, 100);
+        return 100;
+      }
+
+      function sanitizeNode(node) {
+        if (node.nodeType === Node.TEXT_NODE) {
+          return doc.createTextNode(node.textContent || '');
+        }
+        if (node.nodeType !== Node.ELEMENT_NODE) {
+          return null;
+        }
+        const tag = node.tagName.toLowerCase();
+        if (!allowedTags.has(tag)) {
+          const fragment = doc.createDocumentFragment();
+          Array.from(node.childNodes || []).forEach((child) => {
+            const sanitizedChild = sanitizeNode(child);
+            if (sanitizedChild) fragment.appendChild(sanitizedChild);
+          });
+          return fragment;
+        }
+
+        const out = doc.createElement(tag);
+        if (tag === 'a') {
+          const href = safeHref(node.getAttribute('href'));
+          if (href) {
+            out.setAttribute('href', href);
+            out.setAttribute('target', '_blank');
+            out.setAttribute('rel', 'noopener noreferrer');
+          }
+        } else if (tag === 'img') {
+          const src = safeImageSrc(node.getAttribute('src'));
+          if (!src) return null;
+          out.setAttribute('src', src);
+          out.setAttribute('alt', String(node.getAttribute('alt') || '').slice(0, 180));
+          const currentId = String(node.getAttribute('data-desc-image-id') || '').trim();
+          out.setAttribute('data-desc-image-id', currentId || uuidv4());
+          const widthPercent = safeImageWidthPercent(node);
+          out.setAttribute('data-desc-image-width', String(widthPercent));
+          out.setAttribute('style', `width:${widthPercent}%;max-width:100%;height:auto`);
+          const cls = String(node.getAttribute('class') || '').split(/\s+/).find(c => allowedImageClasses.has(c));
+          out.setAttribute('class', cls || 'desc-img-align-center');
+          return out;
+        }
+
+        Array.from(node.childNodes || []).forEach((child) => {
+          const sanitizedChild = sanitizeNode(child);
+          if (sanitizedChild) out.appendChild(sanitizedChild);
+        });
+        return out;
+      }
+
+      const sanitized = doc.createElement('div');
+      Array.from(root.childNodes || []).forEach((child) => {
+        const clean = sanitizeNode(child);
+        if (clean) sanitized.appendChild(clean);
+      });
+      return sanitized.innerHTML.trim();
+    }
+
+    function getProjectDescriptionHtmlForStorage(editorId, fallbackInputId) {
+      const editor = document.getElementById(editorId);
+      const fallbackInput = document.getElementById(fallbackInputId);
+      const quill = projectDescriptionQuillEditors.get(editorId);
+      const raw = quill
+        ? quill.root.innerHTML
+        : (editor ? editor.innerHTML : (fallbackInput?.value || ''));
+      const sanitized = sanitizeProjectDescriptionHtml(raw);
+      if (fallbackInput) fallbackInput.value = sanitized;
+      return sanitized;
+    }
+
+    function getProjectDescriptionPlainText(descriptionHtml = '') {
+      const safeHtml = sanitizeProjectDescriptionHtml(descriptionHtml || '');
+      if (!safeHtml) return '';
+      const doc = new DOMParser().parseFromString(`<div>${safeHtml}</div>`, 'text/html');
+      return String(doc.body.textContent || '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
+    function getProjectCardDescription(descriptionHtml = '', maxLength = 220) {
+      const plain = getProjectDescriptionPlainText(descriptionHtml);
+      if (!plain) return 'Aucune description';
+      if (plain.length <= maxLength) return plain;
+      return `${plain.slice(0, Math.max(40, maxLength - 1)).trimEnd()}…`;
+    }
+
+    function setProjectDescriptionEditorContent(editorId, inputId, value) {
+      const editor = document.getElementById(editorId);
+      const hiddenInput = document.getElementById(inputId);
+      const safeHtml = sanitizeProjectDescriptionHtml(value || '');
+      const quill = projectDescriptionQuillEditors.get(editorId);
+      if (quill) {
+        quill.clipboard.dangerouslyPasteHTML(safeHtml || '<p><br></p>');
+      }
+      if (editor) {
+        if (!quill) editor.innerHTML = safeHtml;
+        if (activeProjectEditorId === editor.id) {
+          clearProjectEditorImageSelection();
+        }
+      }
+      if (hiddenInput) hiddenInput.value = safeHtml;
     }
 
     function focusElementById(id) {
@@ -2546,6 +5147,44 @@
       if (addTaskBtn) addTaskBtn.classList.toggle('hidden', nextMode !== 'work');
       if (workBtn) workBtn.classList.toggle('view-tab-active', nextMode === 'work');
       if (settingsBtn) settingsBtn.classList.toggle('view-tab-active', nextMode === 'settings');
+      if (nextMode === 'settings') {
+        applyProjectSettingsTabView();
+      }
+    }
+
+    function applyProjectSettingsTabView() {
+      const allowed = new Set(['members', 'collab', 'themes', 'permissions']);
+      if (!allowed.has(String(projectSettingsTab || ''))) {
+        projectSettingsTab = 'members';
+      }
+      const tabButtons = {
+        members: document.getElementById('project-settings-tab-members'),
+        collab: document.getElementById('project-settings-tab-collab'),
+        themes: document.getElementById('project-settings-tab-themes'),
+        permissions: document.getElementById('project-settings-tab-permissions')
+      };
+      Object.entries(tabButtons).forEach(([key, btn]) => {
+        if (!btn) return;
+        const active = key === projectSettingsTab;
+        btn.classList.toggle('view-tab-active', active);
+        btn.setAttribute('aria-selected', active ? 'true' : 'false');
+      });
+
+      const membersCard = document.querySelector('#project-settings-panel .project-settings-card-members');
+      const collabCard = document.querySelector('#project-settings-panel .project-settings-card-collab');
+      const themesCard = document.querySelector('#project-settings-panel .project-settings-card-themes');
+      const permissionsCard = document.querySelector('#project-settings-panel .project-settings-card-permissions');
+      if (membersCard) membersCard.classList.toggle('hidden', projectSettingsTab !== 'members');
+      if (collabCard) collabCard.classList.toggle('hidden', projectSettingsTab !== 'collab');
+      if (themesCard) themesCard.classList.toggle('hidden', projectSettingsTab !== 'themes');
+      if (permissionsCard) permissionsCard.classList.toggle('hidden', projectSettingsTab !== 'permissions');
+    }
+
+    function setProjectSettingsTab(tabKey) {
+      const allowed = new Set(['members', 'collab', 'themes', 'permissions']);
+      const next = allowed.has(String(tabKey || '')) ? String(tabKey) : 'members';
+      projectSettingsTab = next;
+      applyProjectSettingsTabView();
     }
 
     function setProjectView(view) {
@@ -2555,15 +5194,19 @@
       }
       activeProjectView = view;
 
+      const taskListSection = document.getElementById('task-list-section');
       const sections = {
-        list: document.getElementById('task-list-section'),
         kanban: document.getElementById('kanban-section'),
         timeline: document.getElementById('timeline-section'),
         docs: document.getElementById('documents-section'),
         chat: document.getElementById('discussion-section'),
-        activity: document.getElementById('activity-section')
+        activity: document.getElementById('activity-section'),
+        archives: document.getElementById('archives-section')
       };
 
+      if (taskListSection) {
+        taskListSection.classList.toggle('hidden', view !== 'list');
+      }
       Object.entries(sections).forEach(([key, el]) => {
         if (!el) return;
         el.classList.toggle('hidden', key !== view);
@@ -2575,13 +5218,17 @@
         if (key === 'activity' && !canReadProjectActivity(currentProjectState)) {
           btn.classList.add('opacity-50');
           btn.setAttribute('aria-disabled', 'true');
-          btn.setAttribute('title', 'Reserve aux owners/managers');
+          btn.setAttribute('title', 'Reserve aux Proprietaires/Managers');
         } else if (key === 'activity') {
           btn.classList.remove('opacity-50');
           btn.removeAttribute('aria-disabled');
           btn.removeAttribute('title');
         }
-        if (key === view) {
+        const isTaskPresentationButton = key === 'cards' || key === 'list';
+        const isActive = isTaskPresentationButton
+          ? view === 'list' && key === projectTaskPresentationMode
+          : key === view;
+        if (isActive) {
           btn.classList.add('view-tab-active');
           btn.setAttribute('aria-selected', 'true');
           btn.setAttribute('tabindex', '0');
@@ -2727,14 +5374,99 @@
         .filter(Boolean);
     }
 
-    async function refreshTaskAssigneeOptionsMulti(state, selectedUserIds = []) {
+    function isValidEmailAddress(value) {
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
+    }
+
+    function parseAssigneeToken(rawToken) {
+      const token = String(rawToken || '').trim();
+      if (!token) return null;
+      const bracketMatch = token.match(/^(.*?)<([^<>]+)>$/);
+      if (bracketMatch) {
+        const name = String(bracketMatch[1] || '').trim();
+        const email = String(bracketMatch[2] || '').trim().toLowerCase();
+        if (isValidEmailAddress(email)) {
+          return {
+            name: name || email,
+            email
+          };
+        }
+      }
+      if (isValidEmailAddress(token)) {
+        return { name: token, email: token.toLowerCase() };
+      }
+      return { name: token, email: '' };
+    }
+
+    function parseManualAssigneeEntries(value) {
+      const tokens = String(value || '')
+        .split(/\n|,/g)
+        .map(v => v.trim())
+        .filter(Boolean);
+      const entries = [];
+      const seen = new Set();
+      tokens.forEach((token) => {
+        const parsed = parseAssigneeToken(token);
+        if (!parsed) return;
+        const key = `${normalizeSearch(parsed.name || '')}|${String(parsed.email || '').toLowerCase()}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        entries.push(parsed);
+      });
+      return entries;
+    }
+
+    async function refreshTaskQuickAssigneeSuggestions(state) {
+      const datalist = document.getElementById('task-assignee-quick-options');
+      if (!datalist) return;
+      await refreshKnownUsersCache();
+
+      const names = new Set();
+      (state?.members || []).forEach((member) => {
+        const name = String(member?.displayName || '').trim();
+        if (name) names.add(name);
+      });
+      Array.from(knownUsersCache.values() || []).forEach((user) => {
+        const name = String(user?.name || '').trim();
+        if (name) names.add(name);
+      });
+      const sorted = Array.from(names).sort((a, b) => a.localeCompare(b, 'fr'));
+      datalist.innerHTML = sorted.map((name) => `<option value="${escapeHtml(name)}"></option>`).join('');
+    }
+
+    function addQuickTaskAssignee(rawName) {
+      const name = String(rawName || '').trim();
+      if (!name) return;
+      const select = document.getElementById('task-assignee');
+      const manual = document.getElementById('task-assignee-manual');
+      const quickInput = document.getElementById('task-assignee-quick-input');
+      if (!manual) return;
+
+      const options = Array.from(select?.options || []);
+      const matched = options.find((opt) => normalizeSearch(opt.dataset.assigneeName || opt.textContent || '') === normalizeSearch(name));
+      if (matched) {
+        matched.selected = true;
+        if (quickInput) quickInput.value = '';
+        return;
+      }
+
+      const existingManual = parseManualAssigneeNames(manual.value || '');
+      const dedup = new Set(existingManual.map(v => normalizeSearch(v)));
+      if (!dedup.has(normalizeSearch(name))) {
+        existingManual.push(name);
+        manual.value = existingManual.join('\n');
+      }
+      if (quickInput) quickInput.value = '';
+    }
+
+    async function refreshTaskAssigneeOptionsMulti(state, selectedUserIds = [], pendingMembers = []) {
       const assigneeSelect = document.getElementById('task-assignee');
       if (!assigneeSelect) return;
       const selectedSet = new Set((selectedUserIds || []).filter(Boolean));
 
       if (!state?.project) {
         const currentName = currentUser?.name || 'Moi';
-        assigneeSelect.innerHTML = `<option value="${escapeHtml(currentUser?.userId || '')}">${escapeHtml(currentName)}</option>`;
+        assigneeSelect.innerHTML = `<option value="${escapeHtml(currentUser?.userId || '')}" data-assignee-name="${escapeHtml(currentName)}">${escapeHtml(currentName)}</option>`;
         Array.from(assigneeSelect.options || []).forEach(opt => {
           opt.selected = selectedSet.has(opt.value);
         });
@@ -2742,19 +5474,240 @@
       }
 
       const members = await getProjectMembersResolved(state);
-      assigneeSelect.innerHTML = members.map(m => `<option value="${escapeHtml(m.userId)}">${escapeHtml(m.displayNameResolved)}</option>`).join('');
+      const options = members.map(m => ({
+        userId: String(m.userId || ''),
+        label: String(m.displayNameResolved || '').trim() || fallbackDirectoryName(m.userId),
+        pending: false
+      }));
+      const optionIds = new Set(options.map(o => o.userId));
+      (pendingMembers || []).forEach((member) => {
+        const userId = String(member?.userId || '').trim();
+        if (!userId || optionIds.has(userId)) return;
+        optionIds.add(userId);
+        const label = String(member?.displayName || '').trim() || fallbackDirectoryName(userId);
+        options.push({
+          userId,
+          label,
+          pending: true
+        });
+      });
+      assigneeSelect.innerHTML = options.map((entry) => {
+        const suffix = entry.pending ? ' (groupe - en attente)' : '';
+        return `<option value="${escapeHtml(entry.userId)}" data-assignee-name="${escapeHtml(entry.label)}" ${entry.pending ? 'data-pending-group-member="1"' : ''}>${escapeHtml(entry.label + suffix)}</option>`;
+      }).join('');
       Array.from(assigneeSelect.options || []).forEach(opt => {
         opt.selected = selectedSet.has(opt.value);
       });
     }
 
-    async function renderUserGroupMemberSelect(state) {
-      const select = document.getElementById('user-group-members-input');
+    async function resolveUserRowsByIds(userIds = []) {
+      const ids = Array.from(new Set((userIds || []).map(id => String(id || '').trim()).filter(Boolean)));
+      if (ids.length === 0) return [];
+      const users = await getAllDecrypted('users', 'userId');
+      const usersById = new Map((users || []).map(user => [String(user.userId || ''), user]));
+      const directory = await getAllDecrypted('directoryUsers', 'userId');
+      const directoryById = new Map((directory || []).map(user => [String(user.userId || ''), user]));
+      return ids.map((userId) => {
+        const user = usersById.get(userId) || directoryById.get(userId);
+        return {
+          userId,
+          displayName: String(user?.name || '').trim() || fallbackDirectoryName(userId)
+        };
+      });
+    }
+
+    async function resolveTaskSelectedGroupContext(state, rawGroupValue = '') {
+      const rawValue = String(rawGroupValue || '').trim();
+      if (!state?.project || !rawValue) return null;
+      if (rawValue.startsWith('global:')) {
+        const groupKey = rawValue.slice('global:'.length);
+        const globalGroup = (globalGroupCatalog || []).find(group => String(group.groupKey || '') === groupKey);
+        if (!globalGroup) return null;
+        return {
+          scope: 'global',
+          groupKey,
+          groupId: null,
+          groupName: String(globalGroup.name || '').trim(),
+          groupDescription: String(globalGroup.description || '').trim(),
+          memberUserIds: Array.from(new Set((globalGroup.memberUserIds || []).map(id => String(id || '').trim()).filter(Boolean)))
+        };
+      }
+      const projectGroup = (state.groups || []).find(group => group.groupId === rawValue);
+      const groupName = String(projectGroup?.name || '').trim();
+      const linkedUserGroup = (state.userGroups || []).find(group =>
+        group.groupId === rawValue || (groupName && normalizeSearch(group.name) === normalizeSearch(groupName))
+      );
+      return {
+        scope: 'project',
+        groupKey: normalizeCatalogKey(groupName),
+        groupId: rawValue,
+        groupName,
+        groupDescription: String(projectGroup?.description || '').trim(),
+        memberUserIds: Array.from(new Set((linkedUserGroup?.memberUserIds || []).map(id => String(id || '').trim()).filter(Boolean)))
+      };
+    }
+
+    async function refreshTaskGroupSelectionPreview(state, selectedUserIds = null) {
+      const groupSelect = document.getElementById('task-group');
+      const pendingBox = document.getElementById('task-group-pending-members');
+      const assigneeSelect = document.getElementById('task-assignee');
+      if (!groupSelect || !assigneeSelect) return;
+      if (!state?.project || standaloneTaskMode) {
+        taskPendingGroupMemberUserIds = [];
+        if (pendingBox) {
+          pendingBox.classList.add('hidden');
+          pendingBox.innerHTML = '';
+        }
+        await refreshTaskAssigneeOptionsMulti(state, selectedUserIds || []);
+        return;
+      }
+
+      const currentlySelected = Array.isArray(selectedUserIds)
+        ? selectedUserIds
+        : Array.from(assigneeSelect.selectedOptions || []).map(opt => String(opt.value || '').trim()).filter(Boolean);
+      const groupContext = await resolveTaskSelectedGroupContext(state, groupSelect.value);
+      if (!groupContext || !groupContext.groupName) {
+        taskPendingGroupMemberUserIds = [];
+        if (pendingBox) {
+          pendingBox.classList.add('hidden');
+          pendingBox.innerHTML = '';
+        }
+        await refreshTaskAssigneeOptionsMulti(state, currentlySelected);
+        return;
+      }
+
+      const groupMemberIds = Array.from(new Set((groupContext.memberUserIds || []).filter(Boolean)));
+      const memberIdsSet = new Set((state.members || []).map(member => String(member.userId || '').trim()).filter(Boolean));
+      const pendingMemberIds = groupMemberIds.filter(userId => !memberIdsSet.has(userId));
+      taskPendingGroupMemberUserIds = pendingMemberIds;
+      const pendingMembers = await resolveUserRowsByIds(pendingMemberIds);
+      const mergedSelected = Array.from(new Set([...currentlySelected, ...groupMemberIds]));
+      await refreshTaskAssigneeOptionsMulti(state, mergedSelected, pendingMembers);
+
+      if (!pendingBox) return;
+      if (pendingMembers.length === 0) {
+        pendingBox.classList.add('hidden');
+        pendingBox.innerHTML = '';
+        return;
+      }
+      pendingBox.classList.remove('hidden');
+      const names = pendingMembers.map(member => escapeHtml(member.displayName)).join(', ');
+      pendingBox.innerHTML = `<strong>En attente de validation</strong>: ${escapeHtml(groupContext.groupName)} ajoutera ${pendingMembers.length} membre(s) au projet lors de l'enregistrement de la tache. <span class="font-medium">${names}</span>`;
+    }
+
+    async function ensureTaskGroupAssociationInProject(state, groupContext) {
+      if (!state?.project || !groupContext?.groupName) {
+        return { state, groupId: null, groupName: null, addedMembersCount: 0 };
+      }
+
+      let latestState = state;
+      let groupId = groupContext.groupId || null;
+      const uniqueMemberIds = Array.from(new Set((groupContext.memberUserIds || []).map(id => String(id || '').trim()).filter(Boolean)));
+
+      if (groupContext.scope === 'global') {
+        let existingProjectGroup = (latestState.groups || []).find(group =>
+          normalizeCatalogKey(group.name) === normalizeCatalogKey(groupContext.groupName)
+        );
+        if (!existingProjectGroup) {
+          if (!canManageProjectCollaboration(latestState)) {
+            throw new Error('Seuls Proprietaire/Manager peuvent associer un groupe global au projet.');
+          }
+          const createdGroupId = uuidv4();
+          const createGroupEvent = createEvent(
+            EventTypes.CREATE_GROUP,
+            currentProjectId,
+            currentUser.userId,
+            { groupId: createdGroupId, name: groupContext.groupName, description: groupContext.groupDescription || '' }
+          );
+          await publishEvent(createGroupEvent);
+          if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, createGroupEvent);
+          latestState = await getProjectState(currentProjectId, { ignoreAccessCheck: true });
+          existingProjectGroup = (latestState?.groups || []).find(group => group.groupId === createdGroupId)
+            || (latestState?.groups || []).find(group => normalizeCatalogKey(group.name) === normalizeCatalogKey(groupContext.groupName));
+        }
+        groupId = existingProjectGroup?.groupId || groupId;
+      }
+
+      if (!groupId) {
+        return { state: latestState, groupId: null, groupName: groupContext.groupName, addedMembersCount: 0 };
+      }
+
+      if (uniqueMemberIds.length > 0) {
+        const linkedUserGroup = (latestState.userGroups || []).find(group =>
+          group.groupId === groupId || normalizeCatalogKey(group.name) === normalizeCatalogKey(groupContext.groupName)
+        );
+        const linkedMemberIds = Array.from(new Set((linkedUserGroup?.memberUserIds || []).map(id => String(id || '').trim()).filter(Boolean)));
+        const mergedLinkedMemberIds = Array.from(new Set([...linkedMemberIds, ...uniqueMemberIds]));
+        if (!linkedUserGroup) {
+          const createUserGroupEvent = createEvent(
+            EventTypes.CREATE_USER_GROUP,
+            currentProjectId,
+            currentUser.userId,
+            { groupId, name: groupContext.groupName, memberUserIds: mergedLinkedMemberIds }
+          );
+          await publishEvent(createUserGroupEvent);
+          if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, createUserGroupEvent);
+        } else if (mergedLinkedMemberIds.length !== linkedMemberIds.length) {
+          const updateUserGroupEvent = createEvent(
+            EventTypes.UPDATE_USER_GROUP,
+            currentProjectId,
+            currentUser.userId,
+            { groupId: linkedUserGroup.groupId, changes: { memberUserIds: mergedLinkedMemberIds, name: groupContext.groupName } }
+          );
+          await publishEvent(updateUserGroupEvent);
+          if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, updateUserGroupEvent);
+        }
+        latestState = await getProjectState(currentProjectId, { ignoreAccessCheck: true });
+      }
+
+      const existingMemberIds = new Set((latestState.members || []).map(member => String(member.userId || '').trim()).filter(Boolean));
+      const membersToAdd = uniqueMemberIds.filter(userId => !existingMemberIds.has(userId));
+      if (membersToAdd.length > 0) {
+        if (!canManageProjectCollaboration(latestState)) {
+          throw new Error('Le groupe contient des membres hors projet. Droits Proprietaire/Manager requis pour les ajouter.');
+        }
+        const memberRows = await resolveUserRowsByIds(membersToAdd);
+        const displayById = new Map(memberRows.map(row => [row.userId, row.displayName]));
+        for (const userId of membersToAdd) {
+          const addMemberEvent = createEvent(
+            EventTypes.ADD_MEMBER,
+            currentProjectId,
+            currentUser.userId,
+            {
+              userId,
+              role: 'member',
+              displayName: displayById.get(userId) || fallbackDirectoryName(userId)
+            }
+          );
+          await publishEvent(addMemberEvent);
+          if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, addMemberEvent);
+        }
+        latestState = await getProjectState(currentProjectId, { ignoreAccessCheck: true });
+      }
+
+      return {
+        state: latestState,
+        groupId,
+        groupName: groupContext.groupName,
+        addedMembersCount: membersToAdd.length
+      };
+    }
+
+    async function renderMemberSelectOptions(state, selectId) {
+      const select = document.getElementById(selectId);
       if (!select) return;
       const members = await getProjectMembersResolved(state);
       select.innerHTML = members.map(member => `
         <option value="${escapeHtml(member.userId)}">${escapeHtml(member.displayNameResolved)}</option>
       `).join('');
+    }
+
+    async function renderUserGroupMemberSelect(state) {
+      await renderMemberSelectOptions(state, 'user-group-members-input');
+    }
+
+    async function renderProjectGroupMemberSelect(state) {
+      await renderMemberSelectOptions(state, 'group-members-input');
     }
 
     async function renderProjectUserGroups(state) {
@@ -2828,6 +5781,7 @@
       const members = await getProjectMembersResolved(state);
       const canManage = canManageProjectCollaboration(state);
       const myRole = normalizeProjectRole(getMyProjectRole(state));
+      renderProjectRoleSelectors(state);
 
       addBtn.disabled = !canManage;
       addBtn.classList.toggle('opacity-50', !canManage);
@@ -2843,7 +5797,7 @@
       container.innerHTML = members.map(member => {
         const displayName = escapeHtml(member.displayNameResolved || fallbackDirectoryName(member.userId));
         const normalizedRole = normalizeProjectRole(member.role);
-        const role = escapeHtml(normalizedRole);
+        const role = escapeHtml(getProjectRoleLabel(member.role));
         const canRemoveMember = canManage
           && member.userId !== currentUser?.userId
           && (myRole === 'owner' || normalizedRole === 'member');
@@ -2870,8 +5824,9 @@
       const toggle = document.getElementById('btn-toggle-permissions-details');
       if (!tbody) return;
 
-      const role = normalizeProjectRole(getMyProjectRole(state));
-      const roleLabel = role === 'owner' ? 'Owner' : role === 'manager' ? 'Manager' : role === 'member' ? 'Member' : 'Aucun';
+      const roleRaw = getMyProjectRole(state);
+      const role = normalizeProjectRole(roleRaw);
+      const roleLabel = roleRaw ? getProjectRoleLabel(roleRaw) : 'Aucun';
       if (roleBadge) {
         roleBadge.textContent = `Role: ${roleLabel}`;
         roleBadge.className = `text-xs font-semibold px-2 py-1 rounded-full ${
@@ -2896,14 +5851,14 @@
         { action: 'Envoyer un message', owner: true, manager: true, member: true },
         { action: 'Editer/supprimer tous les messages', owner: true, manager: true, member: false },
         { action: 'Consulter le journal activite', owner: true, manager: true, member: false },
-        { action: 'Invitations / Groupes utilisateurs / Groupes thematiques / Thematiques', owner: true, manager: true, member: false },
+        { action: 'Invitations / Groupes sur-mesure (avec membres) / Thematiques', owner: true, manager: true, member: false },
         { action: 'Gerer les membres du projet*', owner: true, manager: true, member: false }
       ];
 
       const roleRules = {
-        owner: { label: 'Owner', description: 'Pilotage complet du projet', allowed: rows.filter(r => r.owner).length, total: rows.length, chip: 'bg-amber-100 text-amber-800' },
+        owner: { label: getProjectRoleLabel('owner'), description: 'Pilotage complet du projet', allowed: rows.filter(r => r.owner).length, total: rows.length, chip: 'bg-amber-100 text-amber-800' },
         manager: { label: 'Manager', description: 'Gestion opérationnelle avancée', allowed: rows.filter(r => r.manager).length, total: rows.length, chip: 'bg-blue-100 text-blue-800' },
-        member: { label: 'Member', description: 'Exécution et contribution', allowed: rows.filter(r => r.member).length, total: rows.length, chip: 'bg-emerald-100 text-emerald-800' }
+        member: { label: 'Membre', description: 'Exécution et contribution', allowed: rows.filter(r => r.member).length, total: rows.length, chip: 'bg-emerald-100 text-emerald-800' }
       };
       if (summary) {
         summary.innerHTML = ['owner', 'manager', 'member'].map((key) => {
@@ -2956,8 +5911,7 @@
     }
 
     function normalizeProjectRole(role) {
-      if (role === 'owner' || role === 'manager' || role === 'member') return role;
-      return 'member';
+      return getProjectRoleMeta(role).baseRole;
     }
 
     function hasProjectRole(state = currentProjectState) {
@@ -2979,6 +5933,40 @@
 
     function canDeleteProjectMeta(state = currentProjectState) {
       return isProjectOwner(state);
+    }
+
+    function getAssignableProjectRolesForUser(state = currentProjectState) {
+      const myRole = normalizeProjectRole(getMyProjectRole(state));
+      const catalog = getProjectRoleCatalog();
+      if (myRole === 'owner') return catalog;
+      if (myRole === 'manager') return catalog.filter(item => normalizeProjectRoleBase(item.baseRole) === 'member');
+      return [];
+    }
+
+    function renderProjectRoleSelectors(state = currentProjectState) {
+      const roleInputs = [
+        document.getElementById('member-role-input'),
+        document.getElementById('invite-role-input')
+      ].filter(Boolean);
+      if (roleInputs.length === 0) return;
+      const options = getAssignableProjectRolesForUser(state);
+      roleInputs.forEach((input) => {
+        const previous = String(input.value || '').trim();
+        input.innerHTML = options.length === 0
+          ? ''
+          : options.map((item) => {
+            const baseLabel = getBaseProjectRoleLabel(item.baseRole);
+            const label = item.isSystem ? item.label : `${item.label} (${baseLabel})`;
+            return `<option value="${escapeHtml(item.roleKey)}">${escapeHtml(label)}</option>`;
+          }).join('');
+        if (options.length === 0) {
+          input.disabled = true;
+          return;
+        }
+        input.disabled = false;
+        const hasPrev = options.some(item => item.roleKey === previous);
+        input.value = hasPrev ? previous : options[0].roleKey;
+      });
     }
 
     function canCreateTaskInProject(state = currentProjectState) {
@@ -3050,18 +6038,24 @@
           const userId = String(entry?.userId || '').trim();
           const fallbackName = userId ? (memberMap.get(userId) || '') : '';
           const name = String(entry?.name || fallbackName || '').trim();
-          const key = `${userId}|${normalizeSearch(name)}`;
+          const email = String(entry?.email || '').trim().toLowerCase();
+          const key = `${userId}|${normalizeSearch(name)}|${email}`;
           if (!userId && !name) return;
           if (seen.has(key)) return;
           seen.add(key);
-          dedup.push({ userId: userId || null, name });
+          dedup.push({ userId: userId || null, name, email });
         });
         return dedup;
       }
       const member = (state?.members || []).find(m => m.userId === task.assigneeUserId);
       const legacyName = task.assignee || member?.displayName || '';
       if (!task.assigneeUserId && !legacyName) return [];
-      return [{ userId: task.assigneeUserId || null, name: String(legacyName || '').trim() }];
+      const parsedLegacy = parseAssigneeToken(legacyName);
+      return [{
+        userId: task.assigneeUserId || null,
+        name: String(parsedLegacy?.name || legacyName || '').trim(),
+        email: String(parsedLegacy?.email || '').trim().toLowerCase()
+      }];
     }
 
     function getTaskAssigneeNames(task, state = currentProjectState) {
@@ -3111,13 +6105,367 @@
       return null;
     }
 
-    function collectProjectRecipientEmails(state = currentProjectState) {
-      return Array.from(new Set(
-        (state?.invites || [])
-          .filter(inv => inv.email && inv.status !== 'declined')
-          .map(inv => String(inv.email).trim())
-          .filter(Boolean)
-      ));
+    function normalizeTaskSubtasks(task) {
+      const subtasks = Array.isArray(task?.subtasks) ? task.subtasks : [];
+      return subtasks
+        .map((item, index) => {
+          if (typeof item === 'string') {
+            return { id: `subtask-${index}`, text: item, done: false };
+          }
+          return {
+            id: String(item?.id || `subtask-${index}`),
+            text: String(item?.text || item?.label || item?.title || '').trim(),
+            done: Boolean(item?.done)
+          };
+        })
+        .filter(item => item.text);
+    }
+
+    function closeGlobalTaskDetails() {
+      const modal = document.getElementById('modal-global-task-details');
+      if (!modal) return;
+      modal.classList.add('hidden');
+      currentGlobalTaskDetailRef = '';
+    }
+
+    async function releaseActiveProjectEditLock() {
+      if (!activeProjectEditLock) return;
+      await releaseProjectResourceLock(
+        activeProjectEditLock.projectId,
+        activeProjectEditLock.resourceType,
+        activeProjectEditLock.resourceId,
+        activeProjectEditLock.lockId
+      );
+      activeProjectEditLock = null;
+      updateEditLockBadges();
+    }
+
+    async function releaseActiveTaskEditLock() {
+      if (!activeTaskEditLock) return;
+      await releaseProjectResourceLock(
+        activeTaskEditLock.projectId,
+        activeTaskEditLock.resourceType,
+        activeTaskEditLock.resourceId,
+        activeTaskEditLock.lockId
+      );
+      activeTaskEditLock = null;
+      updateEditLockBadges();
+    }
+
+    function updateEditLockBadges() {
+      const taskBadge = document.getElementById('task-edit-lock-badge');
+      const projectBadge = document.getElementById('project-edit-lock-badge');
+
+      if (taskBadge) {
+        if (activeTaskEditLock?.lockId) {
+          taskBadge.textContent = 'Verrou actif: cette tache est reservee a votre edition temporaire.';
+          taskBadge.classList.remove('hidden');
+        } else {
+          taskBadge.classList.add('hidden');
+          taskBadge.textContent = '';
+        }
+      }
+
+      if (projectBadge) {
+        if (activeProjectEditLock?.lockId) {
+          projectBadge.textContent = 'Verrou actif: ce projet est reserve a votre edition temporaire.';
+          projectBadge.classList.remove('hidden');
+        } else {
+          projectBadge.classList.add('hidden');
+          projectBadge.textContent = '';
+        }
+      }
+    }
+
+    async function openGlobalTaskDetails(taskRef) {
+      const modal = document.getElementById('modal-global-task-details');
+      if (!modal) return;
+      const resolved = await resolveGlobalTaskFromRef(taskRef);
+      if (!resolved?.task) {
+        showToast('Tache introuvable');
+        return;
+      }
+      const task = resolved.task;
+      const state = resolved.sourceType === 'project' ? resolved.state : null;
+      const isStandalone = resolved.sourceType === 'standalone';
+      const canEdit = isStandalone ? true : canEditTaskInProject(task, state);
+      const canArchive = isStandalone ? true : canEditTaskInProject(task, state);
+      const canDelete = isStandalone ? true : canDeleteTaskInProject(task, state);
+      const titleEl = document.getElementById('global-task-detail-title');
+      const subtitleEl = document.getElementById('global-task-detail-subtitle');
+      const badgesEl = document.getElementById('global-task-detail-badges');
+      const descriptionEl = document.getElementById('global-task-detail-description');
+      const requestDateEl = document.getElementById('global-task-detail-request-date');
+      const dueDateEl = document.getElementById('global-task-detail-due-date');
+      const assigneesEl = document.getElementById('global-task-detail-assignees');
+      const groupEl = document.getElementById('global-task-detail-group');
+      const subtasksEl = document.getElementById('global-task-detail-subtasks');
+      const attachmentsEl = document.getElementById('global-task-detail-attachments');
+      const btnEdit = document.getElementById('btn-global-task-detail-edit');
+      const btnArchive = document.getElementById('btn-global-task-detail-archive');
+      const btnDelete = document.getElementById('btn-global-task-detail-delete');
+      const statusMeta = getTaskStatusMeta(task.status || 'todo');
+      const urgencyMeta = getTaskUrgencyMeta(task.urgency || 'medium');
+      const sourceProjectName = isStandalone
+        ? 'Hors projet'
+        : (state?.project?.name || 'Projet');
+      const sourceTheme = String(task.theme || 'General');
+      const assigneeNames = getTaskAssigneeName(task, state) || 'Non assigne';
+      const groupName = getTaskGroupName(task, state) || task.groupName || 'Aucun groupe';
+      const description = String(task.description || '').trim() || 'Aucune description.';
+      const subtasks = normalizeTaskSubtasks(task);
+      const doneSubtasks = subtasks.filter(item => item.done).length;
+      const attachments = Array.isArray(task.attachments) ? task.attachments : [];
+
+      if (titleEl) titleEl.textContent = task.title || 'Tache';
+      if (subtitleEl) subtitleEl.textContent = `${sourceProjectName} • ${sourceTheme}`;
+      if (badgesEl) {
+        badgesEl.innerHTML = `
+          <span class="${urgencyMeta.chipClass}">${urgencyMeta.label}</span>
+          <span class="${statusMeta.chipClass}">${statusMeta.label}</span>
+          ${sharingModeBadge(task.sharingMode)}
+        `;
+      }
+      if (descriptionEl) descriptionEl.textContent = description;
+      if (requestDateEl) requestDateEl.textContent = formatDate(task.requestDate);
+      if (dueDateEl) dueDateEl.textContent = formatDate(task.dueDate);
+      if (assigneesEl) assigneesEl.textContent = assigneeNames;
+      if (groupEl) groupEl.textContent = groupName;
+      if (subtasksEl) {
+        if (subtasks.length === 0) {
+          subtasksEl.innerHTML = '<p class="text-slate-500">Aucune sous-tache.</p>';
+        } else {
+          subtasksEl.innerHTML = `
+            <p class="text-xs text-slate-500 mb-2">${doneSubtasks}/${subtasks.length} terminees</p>
+            ${subtasks.map(item => `
+              <div class="flex items-center gap-2">
+                <span class="text-sm ${item.done ? 'text-emerald-600' : 'text-slate-400'}">${item.done ? '☑' : '☐'}</span>
+                <span class="${item.done ? 'line-through text-slate-400' : 'text-slate-700'}">${escapeHtml(item.text)}</span>
+              </div>
+            `).join('')}
+          `;
+        }
+      }
+      if (attachmentsEl) {
+        if (attachments.length === 0) {
+          attachmentsEl.innerHTML = '<p class="text-slate-500">Aucun document lié.</p>';
+        } else {
+          attachmentsEl.innerHTML = attachments.map((file, index) => `
+            <a class="inline-flex items-center gap-1 text-primary hover:underline mr-3" href="${file?.data || '#'}" download="${escapeHtml(file?.name || `piece-jointe-${index + 1}`)}">
+              <span class="material-symbols-outlined text-sm">attach_file</span>
+              <span>${escapeHtml(file?.name || `piece-jointe-${index + 1}`)}</span>
+            </a>
+          `).join('');
+        }
+      }
+
+      if (btnEdit) {
+        btnEdit.classList.toggle('hidden', !canEdit);
+        btnEdit.onclick = async () => {
+          closeGlobalTaskDetails();
+          await editGlobalTask(taskRef);
+        };
+      }
+      if (btnArchive) {
+        btnArchive.classList.toggle('hidden', !canArchive);
+        btnArchive.onclick = async () => {
+          closeGlobalTaskDetails();
+          await archiveGlobalTask(taskRef);
+        };
+      }
+      if (btnDelete) {
+        btnDelete.classList.toggle('hidden', !canDelete);
+        btnDelete.onclick = async () => {
+          closeGlobalTaskDetails();
+          await deleteGlobalTask(taskRef);
+        };
+      }
+
+      currentGlobalTaskDetailRef = taskRef;
+      modal.classList.remove('hidden');
+    }
+
+    async function openProjectTaskDetails(taskId) {
+      if (!currentProjectId || !taskId) return;
+      const modal = document.getElementById('modal-global-task-details');
+      if (!modal) return;
+      const state = await getProjectState(currentProjectId);
+      if (!state?.project) return;
+      const task = (state.tasks || []).find(t => t.taskId === taskId);
+      if (!task) {
+        showToast('Tache introuvable');
+        return;
+      }
+
+      const canEdit = canEditTaskInProject(task, state);
+      const canArchive = canEditTaskInProject(task, state);
+      const canDelete = canDeleteTaskInProject(task, state);
+      const titleEl = document.getElementById('global-task-detail-title');
+      const subtitleEl = document.getElementById('global-task-detail-subtitle');
+      const badgesEl = document.getElementById('global-task-detail-badges');
+      const descriptionEl = document.getElementById('global-task-detail-description');
+      const requestDateEl = document.getElementById('global-task-detail-request-date');
+      const dueDateEl = document.getElementById('global-task-detail-due-date');
+      const assigneesEl = document.getElementById('global-task-detail-assignees');
+      const groupEl = document.getElementById('global-task-detail-group');
+      const subtasksEl = document.getElementById('global-task-detail-subtasks');
+      const attachmentsEl = document.getElementById('global-task-detail-attachments');
+      const btnEdit = document.getElementById('btn-global-task-detail-edit');
+      const btnArchive = document.getElementById('btn-global-task-detail-archive');
+      const btnDelete = document.getElementById('btn-global-task-detail-delete');
+      const statusMeta = getTaskStatusMeta(task.status || 'todo');
+      const urgencyMeta = getTaskUrgencyMeta(task.urgency || 'medium');
+      const sourceProjectName = state?.project?.name || 'Projet';
+      const sourceTheme = String(task.theme || 'General');
+      const assigneeNames = getTaskAssigneeName(task, state) || 'Non assigne';
+      const groupName = getTaskGroupName(task, state) || task.groupName || 'Aucun groupe';
+      const description = String(task.description || '').trim() || 'Aucune description.';
+      const subtasks = normalizeTaskSubtasks(task);
+      const doneSubtasks = subtasks.filter(item => item.done).length;
+      const attachments = Array.isArray(task.attachments) ? task.attachments : [];
+      const linkedDocs = (state.documents || []).filter(doc => (doc.linkedTaskIds || []).includes(taskId));
+      const sharingMode = task.sharingMode || state?.project?.sharingMode || 'shared';
+
+      if (titleEl) titleEl.textContent = task.title || 'Tache';
+      if (subtitleEl) subtitleEl.textContent = `${sourceProjectName} • ${sourceTheme}`;
+      if (badgesEl) {
+        badgesEl.innerHTML = `
+          <span class="${urgencyMeta.chipClass}">${urgencyMeta.label}</span>
+          <span class="${statusMeta.chipClass}">${statusMeta.label}</span>
+          ${sharingModeBadge(sharingMode)}
+        `;
+      }
+      if (descriptionEl) descriptionEl.textContent = description;
+      if (requestDateEl) requestDateEl.textContent = formatDate(task.requestDate);
+      if (dueDateEl) dueDateEl.textContent = formatDate(task.dueDate);
+      if (assigneesEl) assigneesEl.textContent = assigneeNames;
+      if (groupEl) groupEl.textContent = groupName;
+      if (subtasksEl) {
+        if (subtasks.length === 0) {
+          subtasksEl.innerHTML = '<p class="text-slate-500">Aucune sous-tache.</p>';
+        } else {
+          subtasksEl.innerHTML = `
+            <p class="text-xs text-slate-500 mb-2">${doneSubtasks}/${subtasks.length} terminees</p>
+            ${subtasks.map(item => `
+              <div class="flex items-center gap-2">
+                <span class="text-sm ${item.done ? 'text-emerald-600' : 'text-slate-400'}">${item.done ? '☑' : '☐'}</span>
+                <span class="${item.done ? 'line-through text-slate-400' : 'text-slate-700'}">${escapeHtml(item.text)}</span>
+              </div>
+            `).join('')}
+          `;
+        }
+      }
+      if (attachmentsEl) {
+        const allItems = [
+          ...attachments.map((file, index) => ({ type: 'attachment', file, index })),
+          ...linkedDocs.map((doc) => ({ type: 'project-doc', doc }))
+        ];
+        if (allItems.length === 0) {
+          attachmentsEl.innerHTML = '<p class="text-slate-500">Aucun document lie.</p>';
+        } else {
+          attachmentsEl.innerHTML = allItems.map((item) => {
+            if (item.type === 'attachment') {
+              const file = item.file || {};
+              return `
+                <a class="inline-flex items-center gap-1 text-primary hover:underline mr-3" href="${file?.data || '#'}" download="${escapeHtml(file?.name || `piece-jointe-${item.index + 1}`)}">
+                  <span class="material-symbols-outlined text-sm">attach_file</span>
+                  <span>${escapeHtml(file?.name || `piece-jointe-${item.index + 1}`)}</span>
+                </a>
+              `;
+            }
+            const doc = item.doc || {};
+            return `
+              <a class="inline-flex items-center gap-1 text-primary hover:underline mr-3" href="${doc?.data || '#'}" download="${escapeHtml(doc?.name || 'document')}">
+                <span class="material-symbols-outlined text-sm">description</span>
+                <span>${escapeHtml(doc?.name || 'document')}</span>
+              </a>
+            `;
+          }).join('');
+        }
+      }
+
+      if (btnEdit) {
+        btnEdit.classList.toggle('hidden', !canEdit);
+        btnEdit.onclick = async () => {
+          closeGlobalTaskDetails();
+          await editTask(taskId);
+        };
+      }
+      if (btnArchive) {
+        btnArchive.classList.toggle('hidden', !canArchive);
+        btnArchive.onclick = async () => {
+          closeGlobalTaskDetails();
+          await archiveTask(taskId);
+        };
+      }
+      if (btnDelete) {
+        btnDelete.classList.toggle('hidden', !canDelete);
+        btnDelete.onclick = async () => {
+          closeGlobalTaskDetails();
+          await deleteTask(taskId);
+        };
+      }
+
+      currentGlobalTaskDetailRef = `project:${currentProjectId}:${taskId}`;
+      modal.classList.remove('hidden');
+    }
+
+    async function collectProjectRecipientEmails(state = currentProjectState, options = {}) {
+      const recipients = new Set();
+      const includeInvites = options.includeInvites !== false;
+      const includeProjectAssignees = options.includeProjectAssignees === true;
+      const task = options.task || null;
+
+      if (includeInvites) {
+        (state?.invites || []).forEach((inv) => {
+          const email = String(inv?.email || '').trim().toLowerCase();
+          if (inv?.status === 'declined') return;
+          if (isValidEmailAddress(email)) recipients.add(email);
+        });
+      }
+
+      const users = await getAllDecrypted('users', 'userId');
+      const directoryUsers = await getAllDecrypted('directoryUsers', 'userId');
+      const emailByUserId = new Map();
+      (directoryUsers || []).forEach((user) => {
+        const id = String(user?.userId || '').trim();
+        const email = String(user?.email || '').trim().toLowerCase();
+        if (id && isValidEmailAddress(email)) emailByUserId.set(id, email);
+      });
+      (users || []).forEach((user) => {
+        const id = String(user?.userId || '').trim();
+        const email = String(user?.email || '').trim().toLowerCase();
+        if (id && isValidEmailAddress(email)) emailByUserId.set(id, email);
+      });
+
+      (state?.members || []).forEach((member) => {
+        const memberEmail = String(member?.email || '').trim().toLowerCase();
+        if (isValidEmailAddress(memberEmail)) recipients.add(memberEmail);
+        const mapped = emailByUserId.get(String(member?.userId || '').trim());
+        if (mapped) recipients.add(mapped);
+      });
+
+      const addAssigneeEmail = (entry) => {
+        if (!entry) return;
+        const directEmail = String(entry?.email || '').trim().toLowerCase();
+        if (isValidEmailAddress(directEmail)) recipients.add(directEmail);
+        const mappedById = emailByUserId.get(String(entry?.userId || '').trim());
+        if (mappedById) recipients.add(mappedById);
+        const parsedFromName = parseAssigneeToken(entry?.name || '');
+        if (isValidEmailAddress(parsedFromName?.email || '')) {
+          recipients.add(String(parsedFromName.email).toLowerCase());
+        }
+      };
+
+      if (task) {
+        getTaskAssigneeEntries(task, state).forEach(addAssigneeEmail);
+      } else if (includeProjectAssignees) {
+        (state?.tasks || []).forEach((projectTask) => {
+          getTaskAssigneeEntries(projectTask, state).forEach(addAssigneeEmail);
+        });
+      }
+
+      return Array.from(recipients);
     }
 
     function normalizeMailText(value) {
@@ -3142,7 +6490,7 @@
     async function sendInvitationEmail(inviteId) {
       if (!currentProjectId) return;
       if (!canManageProjectCollaboration(currentProjectState)) {
-        showToast('Seuls owner/manager peuvent envoyer des invitations');
+        showToast('Seuls Proprietaire/Manager peuvent envoyer des invitations');
         return;
       }
       const state = await getProjectState(currentProjectId);
@@ -3150,9 +6498,9 @@
       if (!invite) return;
 
       const projectName = state?.project?.name || 'Projet';
-      const roleLabel = invite.role === 'owner' ? 'owner' : invite.role === 'manager' ? 'manager' : 'membre';
+      const roleLabel = getProjectRoleLabel(invite.role);
       const typeLabel = invite.inviteType === 'agent' ? 'agent' : 'utilisateur';
-      const subject = `[TaskMDA Team] Invitation projet: ${projectName}`;
+      const subject = `[NEXUS MDA] Invitation projet: ${projectName}`;
       const body = [
         `Bonjour ${invite.displayName || ''},`,
         '',
@@ -3180,7 +6528,7 @@
     async function updateInviteStatus(inviteId, status) {
       if (!currentProjectId || !inviteId) return;
       if (!canManageProjectCollaboration(currentProjectState)) {
-        showToast('Seuls owner/manager peuvent mettre à jour les invitations');
+        showToast('Seuls Proprietaire/Manager peuvent mettre a jour les invitations');
         return;
       }
       const normalized = ['pending', 'sent', 'accepted', 'declined'].includes(status) ? status : 'pending';
@@ -3231,7 +6579,7 @@
     async function addProjectInvite() {
       if (!currentProjectId || !currentProjectState) return;
       if (!canManageProjectCollaboration(currentProjectState)) {
-        showToast('Seuls owner/manager peuvent inviter');
+        showToast('Seuls Proprietaire/Manager peuvent inviter');
         return;
       }
 
@@ -3242,9 +6590,11 @@
       const displayName = (nameInput?.value || '').trim();
       const email = (emailInput?.value || '').trim().toLowerCase();
       const inviteType = (typeInput?.value || 'user').trim();
-      const role = normalizeProjectRole((roleInput?.value || 'member').trim());
+      const selectedRoleKey = String(roleInput?.value || 'member').trim() || 'member';
+      const role = getProjectRoleMeta(selectedRoleKey).roleKey;
+      const targetRoleBase = normalizeProjectRole(selectedRoleKey);
       const myRole = normalizeProjectRole(getMyProjectRole(currentProjectState));
-      if (myRole === 'manager' && role !== 'member') {
+      if (myRole === 'manager' && targetRoleBase !== 'member') {
         showToast('Action non autorisee');
         return;
       }
@@ -3323,7 +6673,7 @@
             <div class="flex items-start justify-between gap-2">
               <div>
                 <p class="text-sm font-semibold text-slate-800">${escapeHtml(inv.displayName || 'Invité')}</p>
-                <p class="text-xs text-slate-500">${escapeHtml(inv.email || '')} • ${(inv.inviteType === 'agent' ? 'Agent' : 'Utilisateur')} • ${escapeHtml(inv.role || 'member')}</p>
+                <p class="text-xs text-slate-500">${escapeHtml(inv.email || '')} • ${(inv.inviteType === 'agent' ? 'Agent' : 'Utilisateur')} • ${escapeHtml(getProjectRoleLabel(inv.role || 'member'))}</p>
               </div>
               <span class="text-[10px] px-2 py-1 rounded-full font-semibold ${statusClass[inv.status] || statusClass.pending}">${escapeHtml(inv.status || 'pending')}</span>
             </div>
@@ -3339,44 +6689,103 @@
     async function createProjectGroup() {
       if (!currentProjectId || !currentProjectState) return;
       if (!canManageProjectCollaboration(currentProjectState)) {
-        showToast('Seuls owner/manager peuvent créer des groupes');
+        showToast('Seuls Proprietaire/Manager peuvent creer des groupes');
         return;
       }
       const nameInput = document.getElementById('group-name-input');
       const descInput = document.getElementById('group-description-input');
+      const membersSelect = document.getElementById('group-members-input');
       const name = (nameInput?.value || '').trim();
       const description = (descInput?.value || '').trim();
+      const selectedIds = Array.from(membersSelect?.selectedOptions || []).map(o => o.value).filter(Boolean);
       if (!name) {
         showToast('Nom de groupe requis');
         return;
       }
-      const exists = (currentProjectState.groups || []).some(g => normalizeSearch(g.name) === normalizeSearch(name));
+      const editGroup = selectedProjectGroupId
+        ? (currentProjectState.groups || []).find(g => g.groupId === selectedProjectGroupId)
+        : null;
+      const exists = (currentProjectState.groups || []).some(g =>
+        normalizeSearch(g.name) === normalizeSearch(name)
+        && (!editGroup || g.groupId !== editGroup.groupId)
+      );
       if (exists) {
         showToast('Ce groupe existe déjà');
         return;
       }
 
-      const event = createEvent(
-        EventTypes.CREATE_GROUP,
-        currentProjectId,
-        currentUser.userId,
-        { groupId: uuidv4(), name, description }
+      const groupId = editGroup?.groupId || uuidv4();
+      if (editGroup) {
+        const event = createEvent(
+          EventTypes.UPDATE_GROUP,
+          currentProjectId,
+          currentUser.userId,
+          { groupId, changes: { name, description } }
+        );
+        await publishEvent(event);
+        if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+      } else {
+        const event = createEvent(
+          EventTypes.CREATE_GROUP,
+          currentProjectId,
+          currentUser.userId,
+          { groupId, name, description }
+        );
+        await publishEvent(event);
+        if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+      }
+      const existingUserGroup = (currentProjectState.userGroups || []).find(g =>
+        g.groupId === groupId || normalizeSearch(g.name) === normalizeSearch(editGroup?.name || name)
       );
-      await publishEvent(event);
-      if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
-      await upsertGlobalGroup({ name, description });
+      if (existingUserGroup) {
+        const eventUserGroupUpdate = createEvent(
+          EventTypes.UPDATE_USER_GROUP,
+          currentProjectId,
+          currentUser.userId,
+          { groupId: existingUserGroup.groupId, changes: { memberUserIds: [...new Set(selectedIds)], name, description } }
+        );
+        await publishEvent(eventUserGroupUpdate);
+        if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, eventUserGroupUpdate);
+      } else {
+        const eventUserGroupCreate = createEvent(
+          EventTypes.CREATE_USER_GROUP,
+          currentProjectId,
+          currentUser.userId,
+          { groupId, name, memberUserIds: [...new Set(selectedIds)] }
+        );
+        await publishEvent(eventUserGroupCreate);
+        if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, eventUserGroupCreate);
+      }
+      const refreshedAfterGroupSave = await getProjectState(currentProjectId, { ignoreAccessCheck: true });
+      const savedGroup = (refreshedAfterGroupSave?.groups || []).find(g => g.groupId === groupId)
+        || { name, description };
+      const savedLinkedUserGroup = (refreshedAfterGroupSave?.userGroups || []).find(ug =>
+        ug.groupId === groupId || normalizeSearch(ug.name) === normalizeSearch(savedGroup.name || name)
+      );
+      const savedMemberUserIds = Array.from(new Set(
+        (savedLinkedUserGroup?.memberUserIds || selectedIds).map(id => String(id || '').trim()).filter(Boolean)
+      ));
+      await upsertGlobalGroup({
+        name: savedGroup.name || name,
+        description: savedGroup.description || description,
+        memberUserIds: savedMemberUserIds
+      });
       await refreshGlobalTaxonomyCache();
       if (nameInput) nameInput.value = '';
       if (descInput) descInput.value = '';
-      showToast('Groupe créé');
-      addNotification('Groupe', `Groupe ${name} créé`, currentProjectId);
+      if (membersSelect) {
+        Array.from(membersSelect.options || []).forEach(opt => { opt.selected = false; });
+      }
+      selectedProjectGroupId = null;
+      showToast(editGroup ? 'Groupe modifié' : 'Groupe créé');
+      addNotification('Groupe', editGroup ? `Groupe ${name} modifié` : `Groupe ${name} créé`, currentProjectId);
       await showProjectDetail(currentProjectId);
     }
 
     async function deleteProjectGroup(groupId) {
       if (!currentProjectId || !currentProjectState || !groupId) return;
       if (!canManageProjectCollaboration(currentProjectState)) {
-        showToast('Seuls owner/manager peuvent supprimer des groupes');
+        showToast('Seuls Proprietaire/Manager peuvent supprimer des groupes');
         return;
       }
       const groupName = getGroupNameById(currentProjectState, groupId) || 'ce groupe';
@@ -3390,6 +6799,19 @@
       );
       await publishEvent(event);
       if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+      const linkedUserGroups = (currentProjectState.userGroups || []).filter(g =>
+        g.groupId === groupId || normalizeSearch(g.name) === normalizeSearch(groupName)
+      );
+      for (const userGroup of linkedUserGroups) {
+        const userGroupDeleteEvent = createEvent(
+          EventTypes.DELETE_USER_GROUP,
+          currentProjectId,
+          currentUser.userId,
+          { groupId: userGroup.groupId }
+        );
+        await publishEvent(userGroupDeleteEvent);
+        if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, userGroupDeleteEvent);
+      }
       showToast('Groupe supprimé');
       await showProjectDetail(currentProjectId);
     }
@@ -3429,10 +6851,137 @@
       }).join('');
     }
 
+    async function renderProjectGroups(state) {
+      const container = document.getElementById('project-groups-list');
+      const createBtn = document.getElementById('btn-create-group');
+      const membersSelect = document.getElementById('group-members-input');
+      if (!container || !createBtn || !membersSelect) return;
+      const canManage = canManageProjectCollaboration(state);
+      createBtn.disabled = !canManage;
+      createBtn.classList.toggle('opacity-50', !canManage);
+      membersSelect.disabled = !canManage;
+
+      await renderProjectGroupMemberSelect(state);
+      const members = await getProjectMembersResolved(state);
+      const byId = new Map(members.map(m => [m.userId, m.displayNameResolved]));
+
+      const groups = state?.groups || [];
+      if (groups.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state-card">
+            <p class="empty-state-title">Aucun groupe configuré</p>
+            <p class="empty-state-text">Créez des groupes et assignez des membres pour faciliter la répartition.</p>
+            ${canManage ? '<button class="empty-state-cta" onclick="focusElementById(\'group-name-input\')">Créer un groupe</button>' : ''}
+          </div>
+        `;
+        selectedProjectGroupId = null;
+        createBtn.textContent = 'Créer groupe';
+        const groupNameInput = document.getElementById('group-name-input');
+        const groupDescriptionInput = document.getElementById('group-description-input');
+        if (groupNameInput) groupNameInput.value = '';
+        if (groupDescriptionInput) groupDescriptionInput.value = '';
+        Array.from(membersSelect.options || []).forEach(opt => { opt.selected = false; });
+        return;
+      }
+
+      if (selectedProjectGroupId && !groups.find(g => g.groupId === selectedProjectGroupId)) {
+        selectedProjectGroupId = null;
+      }
+
+      container.innerHTML = groups.map(group => {
+        const active = group.groupId === selectedProjectGroupId;
+        const assignedCount = (state?.tasks || []).filter(t => t.groupId === group.groupId).length;
+        const linkedUserGroup = (state?.userGroups || []).find(ug =>
+          ug.groupId === group.groupId || normalizeSearch(ug.name) === normalizeSearch(group.name)
+        );
+        const memberNames = (linkedUserGroup?.memberUserIds || []).map(id => byId.get(id) || fallbackDirectoryName(id));
+        return `
+          <div class="rounded-lg border ${active ? 'border-primary bg-blue-50' : 'border-slate-200 bg-white'} p-3">
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <p class="text-sm font-semibold text-slate-800 truncate">${escapeHtml(group.name)}</p>
+                <p class="text-xs text-slate-500 truncate">${escapeHtml(group.description || 'Sans description')}</p>
+                <p class="text-[11px] text-slate-500 mt-1">${assignedCount} tâche(s) • ${(linkedUserGroup?.memberUserIds || []).length} membre(s)</p>
+                <p class="text-[11px] text-slate-500 truncate">${escapeHtml(memberNames.join(', ') || 'Aucun membre')}</p>
+              </div>
+              <div class="flex items-center gap-2 text-xs">
+                <button onclick="selectProjectGroup('${group.groupId}')" class="px-2 py-1 rounded bg-slate-100 text-slate-700">Modifier</button>
+                ${canManage ? `<button onclick="deleteProjectGroup('${group.groupId}')" class="px-2 py-1 rounded bg-rose-100 text-rose-700">Supprimer</button>` : ''}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      const selectedGroup = selectedProjectGroupId
+        ? (groups.find(g => g.groupId === selectedProjectGroupId) || null)
+        : null;
+      const linkedSelectedUserGroup = selectedGroup
+        ? (state?.userGroups || []).find(ug =>
+            ug.groupId === selectedGroup.groupId || normalizeSearch(ug.name) === normalizeSearch(selectedGroup.name)
+          )
+        : null;
+      const selectedIds = new Set(linkedSelectedUserGroup?.memberUserIds || []);
+      Array.from(membersSelect.options || []).forEach(opt => {
+        opt.selected = selectedIds.has(opt.value);
+      });
+      const groupNameInput = document.getElementById('group-name-input');
+      const groupDescriptionInput = document.getElementById('group-description-input');
+      if (selectedGroup) {
+        if (groupNameInput) groupNameInput.value = selectedGroup.name || '';
+        if (groupDescriptionInput) groupDescriptionInput.value = selectedGroup.description || '';
+      }
+      createBtn.textContent = selectedGroup ? 'Enregistrer modifications' : 'Créer groupe';
+    }
+
+    function selectProjectGroup(groupId) {
+      selectedProjectGroupId = groupId || null;
+      renderProjectGroups(currentProjectState);
+      const membersSelect = document.getElementById('group-members-input');
+      if (membersSelect) membersSelect.focus();
+    }
+
+    async function updateProjectGroupMembers() {
+      if (!currentProjectId || !currentProjectState || !selectedProjectGroupId) return;
+      if (!canManageProjectCollaboration(currentProjectState)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const group = (currentProjectState.groups || []).find(g => g.groupId === selectedProjectGroupId);
+      if (!group) {
+        showToast('Sélectionnez un groupe');
+        return;
+      }
+      const membersSelect = document.getElementById('group-members-input');
+      const selectedIds = Array.from(membersSelect?.selectedOptions || []).map(o => o.value).filter(Boolean);
+      const linked = (currentProjectState.userGroups || []).find(ug =>
+        ug.groupId === group.groupId || normalizeSearch(ug.name) === normalizeSearch(group.name)
+      );
+      const event = linked
+        ? createEvent(
+            EventTypes.UPDATE_USER_GROUP,
+            currentProjectId,
+            currentUser.userId,
+            { groupId: linked.groupId, changes: { memberUserIds: [...new Set(selectedIds)], name: group.name } }
+          )
+        : createEvent(
+            EventTypes.CREATE_USER_GROUP,
+            currentProjectId,
+            currentUser.userId,
+            { groupId: group.groupId, name: group.name, memberUserIds: [...new Set(selectedIds)] }
+          );
+      await publishEvent(event);
+      if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+      showToast('Membres du groupe mis à jour');
+      await showProjectDetail(currentProjectId);
+    }
+
+    window.selectProjectGroup = selectProjectGroup;
+
     async function addProjectTheme() {
       if (!currentProjectId || !currentProjectState) return;
       if (!canManageProjectCollaboration(currentProjectState)) {
-        showToast('Seuls owner/manager peuvent gérer les thèmes');
+        showToast('Seuls Proprietaire/Manager peuvent gerer les themes');
         return;
       }
       const input = document.getElementById('theme-name-input');
@@ -3465,7 +7014,7 @@
     async function removeProjectTheme(theme) {
       if (!currentProjectId || !currentProjectState || !theme) return;
       if (!canManageProjectCollaboration(currentProjectState)) {
-        showToast('Seuls owner/manager peuvent gérer les thèmes');
+        showToast('Seuls Proprietaire/Manager peuvent gerer les themes');
         return;
       }
       const event = createEvent(
@@ -3561,6 +7110,222 @@
       }
     }
 
+    function uniqueThemeNames(rawThemes) {
+      const seen = new Set();
+      const out = [];
+      (rawThemes || []).forEach((item) => {
+        const name = String(item || '').trim();
+        if (!name) return;
+        const key = normalizeCatalogKey(name);
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        out.push(name);
+      });
+      return out.sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+    }
+
+    function fillThemePicker(selectId, inputId, themes, emptyLabel = 'Thématiques existantes...') {
+      const select = document.getElementById(selectId);
+      const input = document.getElementById(inputId);
+      if (!select || !input) return;
+      const unique = uniqueThemeNames(themes);
+      const currentInput = String(input.value || '').trim();
+      const currentInputKey = normalizeCatalogKey(currentInput);
+
+      select.innerHTML = [
+        `<option value="">${escapeHtml(emptyLabel)}</option>`,
+        ...unique.map((theme) => `<option value="${escapeHtml(theme)}" data-theme-key="${escapeHtml(normalizeCatalogKey(theme))}">${escapeHtml(theme)}</option>`)
+      ].join('');
+
+      const matchOption = Array.from(select.options).find((opt) => {
+        if (!opt.value) return false;
+        return normalizeCatalogKey(opt.value) === currentInputKey;
+      });
+      select.value = matchOption ? matchOption.value : '';
+
+      let datalist = document.getElementById(`${inputId}-options`);
+      if (!datalist) {
+        datalist = document.createElement('datalist');
+        datalist.id = `${inputId}-options`;
+        document.body.appendChild(datalist);
+      }
+      datalist.innerHTML = unique.map((theme) => `<option value="${escapeHtml(theme)}"></option>`).join('');
+      input.setAttribute('list', datalist.id);
+    }
+
+    function syncThemePickerSelectionFromInput(selectId, inputId) {
+      const select = document.getElementById(selectId);
+      const input = document.getElementById(inputId);
+      if (!select || !input) return;
+      const inputKey = normalizeCatalogKey(String(input.value || '').trim());
+      if (!inputKey) {
+        select.value = '';
+        return;
+      }
+      const matchOption = Array.from(select.options).find((opt) => {
+        if (!opt.value) return false;
+        return normalizeCatalogKey(opt.value) === inputKey;
+      });
+      select.value = matchOption ? matchOption.value : '';
+    }
+
+    function syncProjectThemeFilterAssist(state) {
+      const themes = [
+        ...(state?.themes || []),
+        ...((state?.tasks || []).map((task) => String(task?.theme || '').trim())),
+        ...((globalThemeCatalog || []).map((t) => String(t?.name || '').trim()))
+      ];
+      fillThemePicker('project-task-theme-known', 'project-task-theme-filter', themes, 'Thématiques du projet...');
+    }
+
+    function syncGlobalThemeFilterAssist(tasks = []) {
+      const themes = [
+        ...((tasks || []).map((task) => String(task?.theme || '').trim())),
+        ...((globalThemeCatalog || []).map((t) => String(t?.name || '').trim()))
+      ];
+      fillThemePicker('global-task-theme-known', 'global-task-theme', themes, 'Thématiques existantes...');
+    }
+
+    function refreshProjectDocumentTaskOptions(state) {
+      const select = document.getElementById('project-doc-task-links');
+      if (!select) return;
+      const tasks = (state?.tasks || []).filter(t => !t.archivedAt);
+      if (tasks.length === 0) {
+        select.innerHTML = '<option value="">Aucune tâche active</option>';
+        select.disabled = true;
+        bindProjectDocTaskSelector();
+        return;
+      }
+      select.disabled = false;
+      select.innerHTML = tasks.map(task => `
+        <option value="${escapeHtml(task.taskId)}">${escapeHtml(task.title || 'Tâche')}</option>
+      `).join('');
+    }
+
+    function bindProjectDocTaskSelector() {
+      const select = document.getElementById('project-doc-task-links');
+      if (!select) return;
+
+      if (!select.dataset.toggleClickBound) {
+        select.addEventListener('mousedown', (e) => {
+          const option = e.target?.closest?.('option');
+          if (!option || select.disabled) return;
+          e.preventDefault();
+          option.selected = !option.selected;
+          select.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        select.dataset.toggleClickBound = '1';
+      }
+
+      const btnSelectAll = document.getElementById('btn-project-doc-select-all');
+      const btnClear = document.getElementById('btn-project-doc-clear-selection');
+      if (btnSelectAll && !btnSelectAll.dataset.bound) {
+        btnSelectAll.addEventListener('click', () => {
+          if (select.disabled) return;
+          Array.from(select.options || []).forEach(opt => {
+            opt.selected = !!opt.value;
+          });
+          select.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        btnSelectAll.dataset.bound = '1';
+      }
+      if (btnClear && !btnClear.dataset.bound) {
+        btnClear.addEventListener('click', () => {
+          Array.from(select.options || []).forEach(opt => { opt.selected = false; });
+          select.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        btnClear.dataset.bound = '1';
+      }
+    }
+
+    const refreshProjectDocumentTaskOptionsBase = refreshProjectDocumentTaskOptions;
+    refreshProjectDocumentTaskOptions = function refreshProjectDocumentTaskOptionsWithEnhancements(state) {
+      const select = document.getElementById('project-doc-task-links');
+      const selectedBefore = new Set(Array.from(select?.selectedOptions || []).map(opt => String(opt.value || '')));
+      refreshProjectDocumentTaskOptionsBase(state);
+      const currentSelect = document.getElementById('project-doc-task-links');
+      if (currentSelect && !currentSelect.disabled) {
+        Array.from(currentSelect.options || []).forEach(opt => {
+          opt.selected = selectedBefore.has(String(opt.value || ''));
+        });
+      }
+      bindProjectDocTaskSelector();
+    };
+
+    function renderProjectDocTaskSelector() {
+      const select = document.getElementById('project-doc-task-links');
+      const container = document.getElementById('project-doc-task-options');
+      const filterInput = document.getElementById('project-doc-task-filter');
+      const countEl = document.getElementById('project-doc-task-selection-count');
+      if (!select || !container) return;
+      const filter = String(filterInput?.value || '').trim().toLowerCase();
+      const options = Array.from(select.options || []).filter(opt => String(opt.value || '').trim());
+      const selectedCount = options.filter(opt => !!opt.selected).length;
+      if (countEl) {
+        countEl.textContent = `${selectedCount} tache${selectedCount > 1 ? 's' : ''} selectionnee${selectedCount > 1 ? 's' : ''}`;
+      }
+
+      if (select.disabled || options.length === 0) {
+        container.innerHTML = '<div class="project-doc-task-empty">Aucune tache active a associer.</div>';
+        return;
+      }
+
+      const filtered = options.filter(opt => String(opt.textContent || '').toLowerCase().includes(filter));
+      if (filtered.length === 0) {
+        detachGlobalKanbanInfiniteScroll();
+        container.innerHTML = '<div class="project-doc-task-empty">Aucune tache ne correspond au filtre.</div>';
+        return;
+      }
+
+      container.innerHTML = filtered.map(opt => `
+        <button type="button" class="project-doc-task-option ${opt.selected ? 'is-selected' : ''}" data-task-id="${escapeHtml(opt.value)}">
+          <span class="project-doc-task-option-label">${escapeHtml(opt.textContent || 'Tache')}</span>
+          <span class="project-doc-task-option-check">${opt.selected ? '&#10003;' : ''}</span>
+        </button>
+      `).join('');
+    }
+
+    function toggleProjectDocTaskSelection(taskId) {
+      const select = document.getElementById('project-doc-task-links');
+      if (!select || !taskId) return;
+      const option = Array.from(select.options || []).find(opt => String(opt.value || '') === String(taskId || ''));
+      if (!option) return;
+      option.selected = !option.selected;
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    const bindProjectDocTaskSelectorBase = bindProjectDocTaskSelector;
+    bindProjectDocTaskSelector = function bindProjectDocTaskSelectorEnhanced() {
+      bindProjectDocTaskSelectorBase();
+      const select = document.getElementById('project-doc-task-links');
+      if (!select) return;
+      const taskOptionsContainer = document.getElementById('project-doc-task-options');
+      const taskFilterInput = document.getElementById('project-doc-task-filter');
+      if (taskOptionsContainer && !taskOptionsContainer.dataset.bound) {
+        taskOptionsContainer.addEventListener('click', (e) => {
+          const btn = e.target?.closest?.('.project-doc-task-option');
+          if (!btn || select.disabled) return;
+          toggleProjectDocTaskSelection(btn.dataset.taskId || '');
+        });
+        taskOptionsContainer.dataset.bound = '1';
+      }
+      if (taskFilterInput && !taskFilterInput.dataset.bound) {
+        taskFilterInput.addEventListener('input', () => renderProjectDocTaskSelector());
+        taskFilterInput.dataset.bound = '1';
+      }
+      if (!select.dataset.changeBound) {
+        select.addEventListener('change', () => renderProjectDocTaskSelector());
+        select.dataset.changeBound = '1';
+      }
+      renderProjectDocTaskSelector();
+    };
+
+    const refreshProjectDocumentTaskOptionsEnhancedBase = refreshProjectDocumentTaskOptions;
+    refreshProjectDocumentTaskOptions = function refreshProjectDocumentTaskOptionsWithTaskList(state) {
+      refreshProjectDocumentTaskOptionsEnhancedBase(state);
+      renderProjectDocTaskSelector();
+    };
+
     async function addProjectMember() {
       if (!currentProjectId || !currentProjectState) return;
 
@@ -3572,9 +7337,11 @@
       const input = document.getElementById('member-name-input');
       const roleInput = document.getElementById('member-role-input');
       const name = (input?.value || '').trim();
-      const role = normalizeProjectRole((roleInput?.value || 'member').trim());
+      const selectedRoleKey = String(roleInput?.value || 'member').trim() || 'member';
+      const role = getProjectRoleMeta(selectedRoleKey).roleKey;
+      const targetRoleBase = normalizeProjectRole(selectedRoleKey);
       const myRole = normalizeProjectRole(getMyProjectRole(currentProjectState));
-      if (myRole === 'manager' && role !== 'member') {
+      if (myRole === 'manager' && targetRoleBase !== 'member') {
         showToast('Action non autorisee');
         return;
       }
@@ -3624,7 +7391,7 @@
       );
       await publishEvent(event);
       if (sharedFolderHandle) {
-        await writeEventToSharedFolder(projectId, event);
+        await writeEventToSharedFolder(currentProjectId, event);
       }
 
       input.value = '';
@@ -3663,7 +7430,11 @@
       );
       await publishEvent(event);
       if (sharedFolderHandle) {
-        await writeEventToSharedFolder(currentProjectId, event);
+        const synced = await writeEventToSharedFolder(currentProjectId, event);
+        if (!synced) {
+          showToast('Projet supprime localement, mais synchro dossier en echec');
+          addNotification('Synchronisation', 'Suppression projet non synchronisee dans le dossier partage', projectId);
+        }
       }
       showToast('Membre retiré');
       addNotification('Membre', 'Un membre a ete retire du projet', currentProjectId);
@@ -3677,6 +7448,10 @@
     window.editGlobalGroup = editGlobalGroup;
     window.deleteGlobalGroup = deleteGlobalGroup;
     window.saveGlobalGroupMembers = saveGlobalGroupMembers;
+    window.editProjectRole = editProjectRole;
+    window.deleteProjectRole = deleteProjectRole;
+    window.editSoftwareVersionEntry = editSoftwareVersionEntry;
+    window.deleteSoftwareVersionEntry = deleteSoftwareVersionEntry;
 
     async function createUserGroup() {
       if (!currentProjectId || !currentProjectState) return;
@@ -3780,10 +7555,13 @@
     function openTaskModal(task = null) {
       const modal = document.getElementById('modal-new-task');
       modal.classList.remove('hidden');
+      updateEditLockBadges();
       const titleEl = modal.querySelector('h3');
       const standaloneModeWrap = document.getElementById('task-standalone-mode-wrap');
       const standaloneModeInput = document.getElementById('task-standalone-mode');
       const metadataWrap = document.getElementById('task-project-metadata-wrap');
+      const groupAssignWrap = document.getElementById('task-group-assignment-wrap');
+      const groupPendingBox = document.getElementById('task-group-pending-members');
       const taskThemeInput = document.getElementById('task-theme');
       const taskGroupInput = document.getElementById('task-group');
       if (standaloneModeWrap) {
@@ -3792,6 +7570,14 @@
       if (metadataWrap) {
         metadataWrap.classList.toggle('hidden', standaloneTaskMode);
       }
+      if (groupAssignWrap) {
+        groupAssignWrap.classList.toggle('hidden', standaloneTaskMode);
+      }
+      if (groupPendingBox) {
+        groupPendingBox.classList.add('hidden');
+        groupPendingBox.innerHTML = '';
+      }
+      taskPendingGroupMemberUserIds = [];
       if (!standaloneTaskMode) {
         refreshTaskMetadataOptions(currentProjectState);
       }
@@ -3800,6 +7586,7 @@
         standaloneTaskMode ? null : currentProjectState,
         currentAssignees.map(a => a.userId).filter(Boolean)
       );
+      refreshTaskQuickAssigneeSuggestions(standaloneTaskMode ? null : currentProjectState);
       if (titleEl) {
         titleEl.textContent = standaloneTaskMode ? 'Nouvelle tâche hors projet' : 'Nouvelle tâche';
       }
@@ -3811,7 +7598,7 @@
         document.getElementById('task-description').value = task.description || '';
         const manualAssignees = currentAssignees
           .filter(a => !a.userId && a.name)
-          .map(a => a.name);
+          .map(a => (a.email && normalizeSearch(a.email) !== normalizeSearch(a.name || '')) ? `${a.name} <${a.email}>` : a.name);
         document.getElementById('task-assignee-manual').value = manualAssignees.join('\n');
         document.getElementById('task-request-date').value = task.requestDate || (task.createdAt ? toYmd(new Date(task.createdAt)) : '');
         document.getElementById('task-due-date').value = task.dueDate || '';
@@ -3839,6 +7626,12 @@
             taskGroupInput.value = '';
           }
         }
+        if (!standaloneTaskMode) {
+          refreshTaskGroupSelectionPreview(
+            currentProjectState,
+            currentAssignees.map(a => a.userId).filter(Boolean)
+          );
+        }
       } else {
         editingTaskId = null;
         editingStandaloneTaskId = null;
@@ -3856,6 +7649,9 @@
         if (standaloneModeInput) standaloneModeInput.value = 'private';
         if (taskThemeInput) taskThemeInput.value = (currentProjectState?.themes || [])[0] || '';
         if (taskGroupInput) taskGroupInput.value = '';
+        if (!standaloneTaskMode) {
+          refreshTaskGroupSelectionPreview(currentProjectState, []);
+        }
       }
     }
 
@@ -3887,12 +7683,39 @@
       navWrap.classList.remove('hidden');
     }
 
-    async function showProjectDetail(projectId) {
+    function renderProjectDescription(descriptionText = '') {
+      const descEl = document.getElementById('project-description-display');
+      const toggleBtn = document.getElementById('btn-toggle-project-description');
+      if (!descEl || !toggleBtn) return;
+
+      const html = sanitizeProjectDescriptionHtml(descriptionText || '');
+      const fallback = 'Aucune description';
+      descEl.innerHTML = html || `<p>${fallback}</p>`;
+
+      const plain = (descEl.textContent || '').trim();
+      const imagesCount = descEl.querySelectorAll('img').length;
+      const shouldCollapse = plain.length > 360 || imagesCount > 1 || plain.split('\n').length >= 5;
+      descEl.classList.toggle('is-collapsed', shouldCollapse && !projectDescriptionExpanded);
+      toggleBtn.classList.toggle('hidden', !shouldCollapse);
+      if (shouldCollapse) {
+        toggleBtn.textContent = projectDescriptionExpanded ? 'Voir moins' : 'Afficher tout';
+      }
+    }
+
+    async function showProjectDetail(projectId, options = {}) {
+      const isSameProjectContext = workspaceMode === 'project' && currentProjectId === projectId;
+      const shouldResetScroll = options.resetScroll === true
+        || (!isSameProjectContext && options.resetScroll !== false);
+      if (shouldResetScroll) {
+        resetWorkspaceScrollTop();
+      }
       workspaceMode = 'project';
       const previousProjectId = currentProjectId;
       currentProjectId = projectId;
       if (previousProjectId !== projectId) {
         projectDetailMode = 'work';
+        projectDescriptionExpanded = false;
+        projectSettingsTab = 'members';
       }
       tasksPage = 1;
       const state = await getProjectState(projectId);
@@ -3921,7 +7744,7 @@
 
       // Update project info
       document.getElementById('project-title').textContent = state.project.name;
-      document.getElementById('project-description-display').textContent = state.project.description || 'Aucune description';
+      renderProjectDescription(state.project.description || '');
       document.getElementById('project-date').textContent = new Date(state.project.createdAt).toLocaleDateString('fr-FR');
       document.getElementById('project-members-count').textContent = `${state.members.length} membre${state.members.length > 1 ? 's' : ''}`;
       const visibleTasks = (state.tasks || []).filter(t => !t.archivedAt);
@@ -3934,10 +7757,12 @@
       await renderProjectUserGroups(state);
       renderProjectPermissionMatrix(state);
       renderProjectInvitations(state);
-      renderProjectGroups(state);
+      await renderProjectGroups(state);
       renderProjectThemes(state);
       await syncProjectTaxonomyToGlobal(state);
       refreshTaskMetadataOptions(state);
+      syncProjectThemeFilterAssist(state);
+      refreshProjectDocumentTaskOptions(state);
       await refreshTaskAssigneeOptionsMulti(state);
       const btnEditProject = document.getElementById('btn-edit-project');
       const btnDeleteProject = document.getElementById('btn-delete-project');
@@ -3945,13 +7770,24 @@
         const allowed = canEditProjectMeta(state);
         btnEditProject.disabled = !allowed;
         btnEditProject.classList.toggle('opacity-50', !allowed);
-        btnEditProject.title = allowed ? '' : 'Reserve aux owners/managers';
+        btnEditProject.title = allowed ? '' : 'Reserve aux Proprietaires/Managers';
       }
       if (btnDeleteProject) {
         const allowed = canDeleteProjectMeta(state);
         btnDeleteProject.disabled = !allowed;
         btnDeleteProject.classList.toggle('opacity-50', !allowed);
-        btnDeleteProject.title = allowed ? '' : 'Reserve au owner';
+        btnDeleteProject.title = allowed ? '' : 'Reserve au Proprietaire';
+      }
+      const projectLockWarning = document.getElementById('project-lock-warning');
+      if (projectLockWarning) {
+        const lock = getProjectResourceLock(state, LOCK_SCOPE_PROJECT, projectId);
+        if (lock && String(lock.ownerUserId || '') !== String(currentUser?.userId || '')) {
+          projectLockWarning.textContent = `${formatLockOwner(lock)} modifie les informations du projet en ce moment. Les actions destructives sont temporairement bloquees.`;
+          projectLockWarning.classList.remove('hidden');
+        } else {
+          projectLockWarning.textContent = '';
+          projectLockWarning.classList.add('hidden');
+        }
       }
 
       currentProjectState = state;
@@ -3959,6 +7795,9 @@
       const btnSendMessage = document.getElementById('btn-send-message');
       const messageInput = document.getElementById('message-input');
       const messageFiles = document.getElementById('message-files');
+      const btnAddProjectDocs = document.getElementById('btn-add-project-documents');
+      const projectDocFilesInput = document.getElementById('project-doc-files');
+      const projectDocTaskLinks = document.getElementById('project-doc-task-links');
       if (btnSendMessage) {
         btnSendMessage.disabled = !canSendChat;
         btnSendMessage.classList.toggle('opacity-50', !canSendChat);
@@ -3971,12 +7810,19 @@
       if (messageFiles) {
         messageFiles.disabled = !canSendChat;
       }
+      if (btnAddProjectDocs) {
+        btnAddProjectDocs.disabled = !canSendChat;
+        btnAddProjectDocs.classList.toggle('opacity-50', !canSendChat);
+        btnAddProjectDocs.title = canSendChat ? '' : 'Reserve aux membres du projet';
+      }
+      if (projectDocFilesInput) projectDocFilesInput.disabled = !canSendChat;
+      if (projectDocTaskLinks) projectDocTaskLinks.disabled = !canSendChat || (projectDocTaskLinks.options?.length || 0) === 0;
       renderTasks(visibleTasks);
       renderArchivedTasks(state.tasks || []);
       renderKanban(visibleTasks);
       renderTimeline(visibleTasks);
       renderCalendar(visibleTasks);
-      renderDocuments(visibleTasks);
+      renderDocuments(state);
       renderMessages(state.messages);
       const events = await getProjectEvents(projectId);
       currentProjectEvents = events;
@@ -4003,12 +7849,30 @@
         showToast('Action non autorisee');
         return;
       }
+      const lockResult = await acquireProjectResourceLock(projectId, LOCK_SCOPE_PROJECT, projectId, { scope: 'project-meta' });
+      if (!lockResult.ok) {
+        showToast(buildLockBlockedMessage(lockResult.lock, "Projet en cours d'edition"));
+        return;
+      }
+      activeProjectEditLock = {
+        projectId,
+        resourceType: LOCK_SCOPE_PROJECT,
+        resourceId: projectId,
+        lockId: lockResult.lockId
+      };
+      updateEditLockBadges();
       currentProjectId = projectId;
       currentProjectState = state;
       editProjectFromDashboard = fromDashboard === true;
       document.getElementById('edit-project-name').value = state.project.name || '';
-      document.getElementById('edit-project-description').value = state.project.description || '';
+      setProjectDescriptionEditorContent('edit-project-description-editor', 'edit-project-description', state.project.description || '');
+      const editImageInput = document.getElementById('edit-project-description-image-input');
+      if (editImageInput) editImageInput.value = '';
       document.getElementById('edit-project-status').value = state.project.status || 'en-cours';
+      document.getElementById('edit-project-read-access').value = normalizeProjectReadAccess(
+        state.project.readAccess,
+        normalizeSharingMode(state.project.sharingMode, 'private') === 'private' ? 'private' : 'members'
+      ) === 'public' ? 'public' : 'private';
       await populateProjectGroupPresetOptions('edit-project-group-presets', (state.groups || []).map(g => g.name));
       document.getElementById('modal-edit-project').classList.remove('hidden');
       document.getElementById('edit-project-name').focus();
@@ -4020,6 +7884,7 @@
 
     async function saveProjectEdits() {
       if (!currentProjectId) return;
+      try {
       const state = await getProjectState(currentProjectId);
       if (!state?.project || !canEditProjectMeta(state)) {
         showToast('Action non autorisee');
@@ -4032,8 +7897,9 @@
       }
       const changes = {
         name,
-        description: (document.getElementById('edit-project-description').value || '').trim(),
-        status: document.getElementById('edit-project-status').value || 'en-cours'
+        description: getProjectDescriptionHtmlForStorage('edit-project-description-editor', 'edit-project-description'),
+        status: document.getElementById('edit-project-status').value || 'en-cours',
+        readAccess: (document.getElementById('edit-project-read-access')?.value || 'private') === 'public' ? 'public' : 'private'
       };
       const selectedGlobalGroups = readSelectedGlobalGroups('edit-project-group-presets');
       const existingGroupKeys = new Set((state.groups || []).map(g => normalizeCatalogKey(g.name)));
@@ -4048,6 +7914,8 @@
       if (sharedFolderHandle) {
         await writeEventToSharedFolder(currentProjectId, event);
       }
+      const refreshedState = await getProjectState(currentProjectId, { ignoreAccessCheck: true });
+      await syncDescriptionImagesAsProjectDocs(currentProjectId, refreshedState, changes.description);
       let addedGroupsCount = 0;
       for (const group of selectedGlobalGroups) {
         const groupKey = normalizeCatalogKey(group.name);
@@ -4065,22 +7933,28 @@
         }
         addedGroupsCount += 1;
       }
+      await releaseActiveProjectEditLock();
       document.getElementById('modal-edit-project').classList.add('hidden');
       showToast('Projet mis à jour');
       if (addedGroupsCount > 0) {
         addNotification('Groupe', `${addedGroupsCount} groupe(s) global(aux) associe(s) au projet`, currentProjectId);
       }
       addNotification('Projet', 'Informations projet mises à jour', currentProjectId);
-      if (editProjectFromDashboard || workspaceMode === 'dashboard') {
+      if (editProjectFromDashboard) {
         editProjectFromDashboard = false;
         await refreshStats();
         await renderProjects();
         applyLiveSearchFilter();
         return;
       }
+      editProjectFromDashboard = false;
       await showProjectDetail(currentProjectId);
       await refreshStats();
       await renderProjects();
+      } catch (error) {
+        console.error('Error saving project edits:', error);
+        showToast('Erreur lors de la mise a jour du projet');
+      }
     }
 
     async function deleteCurrentProject(projectId = currentProjectId, fromDashboard = false) {
@@ -4089,6 +7963,9 @@
       const state = await getProjectState(projectId);
       if (!state?.project || !canDeleteProjectMeta(state)) {
         showToast('Action non autorisee');
+        return;
+      }
+      if (!ensureProjectResourceUnlockedForAction(state, LOCK_SCOPE_PROJECT, projectId, 'Suppression du projet').ok) {
         return;
       }
       currentProjectId = projectId;
@@ -4133,10 +8010,10 @@
       const done = tasks.filter(t => t.status === 'termine').length;
       const inProgress = tasks.filter(t => t.status === 'en-cours').length;
       const todo = tasks.filter(t => (t.status || 'todo') === 'todo').length;
-      const recipients = collectProjectRecipientEmails(state);
+      const recipients = await collectProjectRecipientEmails(state, { includeProjectAssignees: true });
       const subject = doneOnly
-        ? `[TaskMDA Team] Projet achevé: ${state.project.name}`
-        : `[TaskMDA Team] Point statut projet: ${state.project.name}`;
+        ? `[NEXUS MDA] Projet achevé: ${state.project.name}`
+        : `[NEXUS MDA] Point statut projet: ${state.project.name}`;
       const body = doneOnly
         ? [
             `Bonjour,`,
@@ -4174,11 +8051,11 @@
       if (!state?.project) return;
       const task = (state.tasks || []).find(t => t.taskId === taskId);
       if (!task) return;
-      const recipients = collectProjectRecipientEmails(state);
+      const recipients = await collectProjectRecipientEmails(state, { task });
       const groupName = getTaskGroupName(task, state) || 'Aucun groupe';
       const subject = doneOnly
-        ? `[TaskMDA Team] Tâche achevée: ${task.title}`
-        : `[TaskMDA Team] Statut tâche: ${task.title}`;
+        ? `[NEXUS MDA] Tâche achevée: ${task.title}`
+        : `[NEXUS MDA] Statut tâche: ${task.title}`;
       const body = doneOnly
         ? [
             `Bonjour,`,
@@ -4212,6 +8089,7 @@
     }
 
     function showDashboard() {
+      resetWorkspaceScrollTop();
       closeMobileSidebar();
       workspaceMode = 'dashboard';
       projectsPage = 1;
@@ -4236,6 +8114,7 @@
     }
 
     async function showProjectsWorkspace() {
+      resetWorkspaceScrollTop();
       closeMobileSidebar();
       workspaceMode = 'dashboard';
       projectsPage = 1;
@@ -4245,7 +8124,7 @@
       document.getElementById('dashboard-head')?.classList.remove('hidden');
       document.getElementById('dashboard-title')?.classList.remove('hidden');
       if (document.getElementById('dashboard-title')) {
-        document.getElementById('dashboard-title').textContent = 'Mes projets';
+        document.getElementById('dashboard-title').textContent = 'Projets';
       }
       document.getElementById('dashboard-stats')?.classList.add('hidden');
       document.getElementById('dashboard-quick-actions')?.classList.add('hidden');
@@ -4298,6 +8177,12 @@
       const states = await getAllProjectStates();
       const docs = [];
       states.forEach(state => {
+        const isPublicProject = normalizeProjectReadAccess(
+          state?.project?.readAccess,
+          normalizeSharingMode(state?.project?.sharingMode, 'private') === 'private' ? 'private' : 'members'
+        ) === 'public';
+        if (!isPublicProject) return;
+
         (state.tasks || []).forEach(task => {
           (task.attachments || []).forEach((file, attachmentIndex) => {
             if (file.shareToDocs !== false) {
@@ -4309,11 +8194,34 @@
                 data: file.data,
                 theme: task.theme || state.project.name || 'Projet',
                 sourceProjectName: state.project.name,
+                sourceProjectId: state.project.projectId,
+                taskId: task.taskId,
+                attachmentIndex,
                 sourceType: 'project',
                 sharingMode: state.project.sharingMode || 'shared',
                 createdAt: task.updatedAt || task.createdAt || state.project.createdAt || 0
               });
             }
+          });
+        });
+
+        (state.documents || []).forEach((doc) => {
+          docs.push({
+            id: `${state.project.projectId}:project-doc:${doc.docId}`,
+            name: doc.name,
+            type: doc.type,
+            size: doc.size,
+            data: doc.data,
+            theme: doc.theme || state.project.name || 'Projet',
+            sourceProjectName: state.project.name,
+            sourceProjectId: state.project.projectId,
+            docId: doc.docId,
+            linkedTaskIds: Array.isArray(doc.linkedTaskIds) ? [...doc.linkedTaskIds] : [],
+            sourceType: 'project-doc',
+            sharingMode: normalizeSharingMode(doc.sharingMode, normalizeSharingMode(state.project.sharingMode, 'shared')),
+            notes: doc.notes || '',
+            createdAt: doc.uploadedAt || doc.createdAt || state.project.createdAt || 0,
+            origin: doc.origin || ''
           });
         });
       });
@@ -4338,6 +8246,7 @@
       if (paginationContainer) paginationContainer.innerHTML = '';
       updateGlobalTasksViewButtons();
       const all = await getGlobalTasksList();
+      syncGlobalThemeFilterAssist(all);
       const allProjectStates = await getAllProjectStates();
       const stateByProjectId = new Map(allProjectStates.map(s => [s.project?.projectId, s]));
 
@@ -4355,15 +8264,32 @@
       ], query));
       if (status !== 'all') filtered = filtered.filter(task => (task.status || 'todo') === status);
       if (theme.trim()) filtered = filtered.filter(task => matchesQuery([task.theme], theme));
+      const mode = ['cards', 'list', 'kanban', 'timeline', 'calendar', 'archives'].includes(globalTasksViewMode) ? globalTasksViewMode : 'cards';
+      if (mode !== 'kanban') detachGlobalKanbanInfiniteScroll();
+      if (mode === 'calendar') {
+        toggleGlobalTasksInlineCalendar(true);
+        await renderGlobalCalendar();
+        updateGlobalTasksViewButtons();
+        if (paginationContainer) paginationContainer.classList.add('hidden');
+        return;
+      }
+      if (mode === 'archives') {
+        toggleGlobalTasksInlineCalendar(false);
+        if (paginationContainer) paginationContainer.classList.add('hidden');
+        renderGlobalArchivedTasks(all, stateByProjectId, container);
+        return;
+      }
+
       filtered = filtered.filter(task => !task.archivedAt);
+      toggleGlobalTasksInlineCalendar(false);
+      if (paginationContainer) paginationContainer.classList.toggle('hidden', mode === 'kanban' || mode === 'timeline');
 
       if (filtered.length === 0) {
+        detachGlobalKanbanInfiniteScroll();
         container.innerHTML = '<p class="text-slate-500 text-center py-8">Aucune tâche trouvée</p>';
         return;
       }
 
-      const mode = ['cards', 'list', 'kanban', 'timeline'].includes(globalTasksViewMode) ? globalTasksViewMode : 'cards';
-      if (paginationContainer) paginationContainer.classList.toggle('hidden', mode === 'kanban' || mode === 'timeline');
       if (mode !== 'cards') {
         const prepared = filtered.map(task => {
           const taskRef = buildGlobalTaskRef(task);
@@ -4389,22 +8315,23 @@
           };
         });
         const taskActions = (task) => `
-          ${task._canEdit ? `<button onclick="editGlobalTask('${task._taskRef}')" class="px-2 py-1 rounded bg-slate-100 text-slate-700">Modifier</button>` : ''}
-          ${task._canArchive ? `<button onclick="archiveGlobalTask('${task._taskRef}')" class="px-2 py-1 rounded bg-amber-100 text-amber-700">Archiver</button>` : ''}
-          ${task._canDelete ? `<button onclick="deleteGlobalTask('${task._taskRef}')" class="px-2 py-1 rounded bg-rose-100 text-rose-700">Supprimer</button>` : ''}
+          ${task._canEdit ? `<button onclick="event.stopPropagation(); editGlobalTask('${task._taskRef}')" class="task-action-btn task-action-btn-subtle">Modifier</button>` : ''}
+          ${task._canArchive ? `<button onclick="event.stopPropagation(); archiveGlobalTask('${task._taskRef}')" class="task-action-btn task-action-btn-subtle task-action-btn-warn">Archiver</button>` : ''}
+          ${task._canDelete ? `<button onclick="event.stopPropagation(); deleteGlobalTask('${task._taskRef}')" class="task-action-btn task-action-btn-subtle task-action-btn-danger">Supprimer</button>` : ''}
         `;
         const taskCard = (task) => `
-          <div class="global-task-card rounded-xl border border-slate-200 bg-white p-4 cursor-grab active:cursor-grabbing" draggable="true" ondragstart="startGlobalKanbanDrag(event, '${task._taskRef}')">
+          <div class="global-task-card global-task-card-modern ${getTaskUrgencyMeta(task.urgency).accentClass} rounded-xl border border-slate-200 bg-white p-4 cursor-grab active:cursor-grabbing" draggable="true" ondragstart="startGlobalKanbanDrag(event, '${task._taskRef}')" onclick="openGlobalTaskDetails('${task._taskRef}')" role="button" tabindex="0">
             <div class="flex items-start justify-between gap-3">
               <div>
+                <div class="flex flex-wrap items-center gap-2 mb-1">
+                  <span class="${getTaskUrgencyMeta(task.urgency).chipClass}">${getTaskUrgencyMeta(task.urgency).label}</span>
+                </div>
                 <h4 class="font-bold text-slate-800">${escapeHtml(task.title || 'Tache')}</h4>
                 <p class="text-xs text-slate-500 mt-1">${escapeHtml(task.sourceProjectName || 'Hors projet')} - ${escapeHtml(task.theme || 'General')}</p>
               </div>
               <div class="flex flex-wrap items-center justify-end gap-1">
                 ${sharingModeBadge(task.sharingMode)}
-                <span class="text-[10px] px-2 py-1 rounded-full font-semibold ${
-                  task._statusKey === 'termine' ? 'bg-emerald-100 text-emerald-700' : task._statusKey === 'en-cours' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'
-                }">${escapeHtml(task._statusKey)}</span>
+                <span class="${getTaskStatusMeta(task._statusKey).chipClass}">${getTaskStatusMeta(task._statusKey).label}</span>
               </div>
             </div>
             <p class="text-sm text-slate-600 mt-2">${escapeHtml(task.description || '')}</p>
@@ -4436,17 +8363,17 @@
                 </thead>
                 <tbody>
                   ${pagination.pageItems.map(task => `
-                    <tr class="border-b border-slate-100 align-top">
+                    <tr class="border-b border-slate-100 align-top cursor-pointer hover:bg-slate-50" onclick="openGlobalTaskDetails('${task._taskRef}')">
                       <td class="px-3 py-2">
                         <p class="font-semibold text-slate-800">${escapeHtml(task.title || 'Tache')}</p>
                         <p class="text-xs text-slate-500">${escapeHtml(task.theme || 'General')}</p>
                         ${buildSubtaskProgressHtml(task, true)}
                       </td>
                       <td class="px-3 py-2 text-slate-600">${escapeHtml(task.sourceProjectName || 'Hors projet')}</td>
-                      <td class="px-3 py-2 text-slate-600">${escapeHtml(task._statusKey)}</td>
+                      <td class="px-3 py-2 text-slate-600"><span class="${getTaskStatusMeta(task._statusKey).chipClass}">${getTaskStatusMeta(task._statusKey).label}</span></td>
                       <td class="px-3 py-2 text-slate-600">${formatDate(task.dueDate)}</td>
                       <td class="px-3 py-2 text-slate-600">${escapeHtml(task._assigneeName)}</td>
-                      <td class="px-3 py-2"><div class="flex flex-wrap gap-1 text-xs">${taskActions(task)}</div></td>
+                      <td class="px-3 py-2" onclick="event.stopPropagation()"><div class="flex flex-wrap gap-1 text-xs">${taskActions(task)}</div></td>
                     </tr>
                   `).join('')}
                 </tbody>
@@ -4457,22 +8384,118 @@
           return;
         }
         if (mode === 'kanban') {
-          container.className = 'grid grid-cols-1 lg:grid-cols-3 gap-4';
-          const cols = [{ key: 'todo', label: 'A faire' }, { key: 'en-cours', label: 'En cours' }, { key: 'termine', label: 'Termine' }];
+          container.className = 'global-kanban-board grid grid-cols-1 lg:grid-cols-4 gap-4';
+          const cols = [
+            { key: 'todo', label: 'A faire' },
+            { key: 'en-cours', label: 'En cours' },
+            { key: 'suspendu', label: 'Suspendu' },
+            { key: 'termine', label: 'Termine' }
+          ];
+          const itemsByCol = {};
+          const taskCardKanban = (task) => `
+            <div class="global-task-card global-task-card-modern global-kanban-card kanban-card ${getTaskUrgencyMeta(task.urgency).accentClass} rounded-xl border border-slate-200 bg-white p-3 cursor-grab active:cursor-grabbing" draggable="true" ondragstart="startGlobalKanbanDrag(event, '${task._taskRef}')" onclick="openGlobalTaskDetails('${task._taskRef}')" role="button" tabindex="0">
+              <div class="mb-2 flex items-center justify-between gap-2">
+                <span class="${getTaskUrgencyMeta(task.urgency).chipClass}">${getTaskUrgencyMeta(task.urgency).label}</span>
+                <span class="${getTaskStatusMeta(task._statusKey).chipClass}">${getTaskStatusMeta(task._statusKey).label}</span>
+              </div>
+              <h4 class="font-semibold text-slate-900 text-[1.04rem] leading-tight mb-1">${escapeHtml(task.title || 'Tache')}</h4>
+              <p class="text-xs text-slate-500 mb-2">${escapeHtml(task.sourceProjectName || 'Hors projet')} • ${escapeHtml(task.theme || 'General')}</p>
+              <p class="text-sm text-slate-700 global-kanban-desc mb-2">${escapeHtml(task.description || '')}</p>
+              ${buildSubtaskProgressHtml(task, true)}
+              <div class="mt-2 text-xs text-slate-600 flex items-center justify-between gap-2">
+                <span class="truncate">${escapeHtml(task._assigneeName)}</span>
+                <span class="whitespace-nowrap">${formatDate(task.dueDate)}</span>
+              </div>
+              <div class="mt-2 flex flex-wrap gap-1 text-xs">${taskActions(task)}</div>
+            </div>
+          `;
           container.innerHTML = cols.map(col => {
             const items = prepared.filter(task => task._statusKey === col.key);
+            itemsByCol[col.key] = items;
+            const initialCount = Math.min(items.length, GLOBAL_KANBAN_INITIAL_BATCH);
             return `
-              <div class="rounded-xl border border-slate-200 bg-slate-50 p-3" ondragover="allowKanbanDrop(event)" ondrop="dropGlobalKanbanTask(event, '${col.key}')">
-                <div class="flex items-center justify-between mb-2">
-                  <h4 class="text-sm font-bold text-slate-700">${col.label}</h4>
-                  <span class="text-xs text-slate-500">${items.length}</span>
+              <div class="global-kanban-col rounded-xl border border-slate-200 bg-slate-50 p-3" data-col="${col.key}" ondragover="allowKanbanDrop(event)" ondrop="dropGlobalKanbanTask(event, '${col.key}')">
+                <div class="global-kanban-col-head flex items-center justify-between mb-2">
+                  <h4 class="text-sm font-bold text-slate-800">${col.label}</h4>
+                  <span class="global-kanban-col-count text-xs">${items.length}</span>
                 </div>
-                <div class="space-y-2">
-                  ${items.length > 0 ? items.map(taskCard).join('') : '<p class="text-xs text-slate-400 py-2">Aucune tache</p>'}
+                <div id="global-kanban-items-${col.key}" class="global-kanban-items space-y-2 pr-1" data-col-key="${col.key}" data-rendered="${initialCount}">
+                  ${initialCount > 0 ? items.slice(0, initialCount).map(taskCardKanban).join('') : '<p class="text-xs text-slate-400 py-2">Aucune tache</p>'}
+                </div>
+                <div class="mt-2 flex items-center justify-between gap-2">
+                  <p class="text-[11px] text-slate-500">
+                    <span id="global-kanban-count-${col.key}">${initialCount}</span> / ${items.length}
+                  </p>
+                  <span class="text-[11px] text-slate-400 ${initialCount >= items.length ? 'hidden' : ''}" id="global-kanban-hint-${col.key}">Défilez la page pour charger plus</span>
                 </div>
               </div>
             `;
           }).join('');
+
+          detachGlobalKanbanInfiniteScroll();
+          const columnLoaders = cols.map((col) => {
+            const listEl = document.getElementById(`global-kanban-items-${col.key}`);
+            const countEl = document.getElementById(`global-kanban-count-${col.key}`);
+            const hintEl = document.getElementById(`global-kanban-hint-${col.key}`);
+            const items = itemsByCol[col.key] || [];
+            if (!listEl) {
+              return { hasMore: () => false, loadNext: () => false };
+            }
+            const updateCounters = (rendered) => {
+              if (countEl) countEl.textContent = String(rendered);
+              if (hintEl) hintEl.classList.toggle('hidden', rendered >= items.length);
+            };
+            const loadNext = () => {
+              const rendered = Number.parseInt(listEl.dataset.rendered || '0', 10) || 0;
+              if (rendered >= items.length) {
+                updateCounters(items.length);
+                return false;
+              }
+              const next = Math.min(items.length, rendered + GLOBAL_KANBAN_BATCH_SIZE);
+              const chunk = items.slice(rendered, next);
+              listEl.insertAdjacentHTML('beforeend', chunk.map(taskCardKanban).join(''));
+              listEl.dataset.rendered = String(next);
+              updateCounters(next);
+              return next > rendered;
+            };
+            const hasMore = () => {
+              const rendered = Number.parseInt(listEl.dataset.rendered || '0', 10) || 0;
+              return rendered < items.length;
+            };
+            return { hasMore, loadNext };
+          });
+
+          const loadNextKanbanBatchAllColumns = () => {
+            let changed = false;
+            columnLoaders.forEach((loader) => {
+              if (loader.hasMore()) {
+                changed = loader.loadNext() || changed;
+              }
+            });
+            return changed;
+          };
+
+          const hasMoreKanbanRows = () => columnLoaders.some((loader) => loader.hasMore());
+          const scrollHandler = () => {
+            if (!hasMoreKanbanRows()) return;
+            const scroller = document.scrollingElement || document.documentElement;
+            const remaining = (scroller.scrollHeight - (window.scrollY + window.innerHeight));
+            if (remaining <= GLOBAL_KANBAN_SCROLL_THRESHOLD_PX) {
+              loadNextKanbanBatchAllColumns();
+            }
+          };
+          globalKanbanInfiniteScrollState = { handler: scrollHandler };
+          window.addEventListener('scroll', scrollHandler, { passive: true });
+
+          let safety = 0;
+          while (hasMoreKanbanRows() && safety < 6) {
+            const scroller = document.scrollingElement || document.documentElement;
+            const needsFill = scroller.scrollHeight <= (window.innerHeight + GLOBAL_KANBAN_SCROLL_THRESHOLD_PX);
+            if (!needsFill) break;
+            const changed = loadNextKanbanBatchAllColumns();
+            if (!changed) break;
+            safety += 1;
+          }
           return;
         }
         container.className = 'space-y-4';
@@ -4481,27 +8504,176 @@
         const now = new Date();
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
         const todayEnd = todayStart + (24 * 60 * 60 * 1000) - 1;
-        const overdue = withDate.filter(task => task._dueTs < todayStart);
-        const today = withDate.filter(task => task._dueTs >= todayStart && task._dueTs <= todayEnd);
-        const upcoming = withDate.filter(task => task._dueTs > todayEnd);
-        const group = (title, items) => `
-          <div class="rounded-xl border border-slate-200 bg-white p-4">
-            <div class="flex items-center justify-between mb-3">
-              <h4 class="font-bold text-slate-800">${title}</h4>
-              <span class="text-xs text-slate-500">${items.length}</span>
+        const groups = [
+          { key: 'overdue', label: 'En retard', items: withDate.filter(task => task._dueTs < todayStart) },
+          { key: 'today', label: 'Aujourd hui', items: withDate.filter(task => task._dueTs >= todayStart && task._dueTs <= todayEnd) },
+          { key: 'upcoming', label: 'A venir', items: withDate.filter(task => task._dueTs > todayEnd) },
+          { key: 'nodue', label: 'Sans echeance', items: withoutDate }
+        ];
+        const displayMode = globalTimelineDisplayMode === 'list' ? 'list' : 'columns';
+        const modeBtnClass = (target) => `px-3 py-1.5 rounded-lg text-xs font-semibold ${displayMode === target ? 'bg-primary text-white' : 'bg-slate-100 text-slate-700'}`;
+
+        if (displayMode === 'columns') {
+          container.innerHTML = `
+            <div class="flex items-center justify-between gap-2">
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Timeline</p>
+              <div class="inline-flex items-center gap-2">
+                <button id="global-timeline-mode-columns" type="button" class="${modeBtnClass('columns')}">Vue 4 colonnes</button>
+                <button id="global-timeline-mode-list" type="button" class="${modeBtnClass('list')}">Vue liste</button>
+              </div>
             </div>
-            <div class="space-y-2">
-              ${items.length > 0 ? items.map(taskCard).join('') : '<p class="text-xs text-slate-400">Aucune tache</p>'}
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+              ${groups.map((group) => {
+                const initial = Math.min(group.items.length, GLOBAL_TIMELINE_INITIAL_BATCH);
+                return `
+                  <div class="rounded-xl border border-slate-200 bg-white p-3">
+                    <div class="flex items-center justify-between mb-2">
+                      <h4 class="font-bold text-slate-800 text-sm">${group.label}</h4>
+                      <span class="text-xs text-slate-500">${group.items.length}</span>
+                    </div>
+                    <div id="global-timeline-col-items-${group.key}" class="space-y-2 pr-1" data-rendered="${initial}">
+                      ${initial > 0 ? group.items.slice(0, initial).map(taskCard).join('') : '<p class="text-xs text-slate-400 py-2">Aucune tache</p>'}
+                    </div>
+                    <div class="mt-2 flex items-center justify-between gap-2">
+                      <p class="text-[11px] text-slate-500"><span id="global-timeline-col-count-${group.key}">${initial}</span> / ${group.items.length}</p>
+                      <button id="global-timeline-col-more-${group.key}" type="button" class="px-2 py-1 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-semibold ${initial >= group.items.length ? 'hidden' : ''}">Charger plus</button>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
             </div>
-          </div>
-        `;
-        container.innerHTML = [group('En retard', overdue), group('Aujourd hui', today), group('A venir', upcoming), group('Sans echeance', withoutDate)].join('');
+          `;
+
+          const bindLazyColumn = (group) => {
+            const listEl = document.getElementById(`global-timeline-col-items-${group.key}`);
+            const btnMore = document.getElementById(`global-timeline-col-more-${group.key}`);
+            const countEl = document.getElementById(`global-timeline-col-count-${group.key}`);
+            if (!listEl) return;
+            const items = group.items || [];
+            const update = (rendered) => {
+              if (countEl) countEl.textContent = String(rendered);
+              if (btnMore) btnMore.classList.toggle('hidden', rendered >= items.length);
+            };
+            const loadNext = () => {
+              const rendered = Number.parseInt(listEl.dataset.rendered || '0', 10) || 0;
+              if (rendered >= items.length) {
+                update(items.length);
+                return;
+              }
+              const next = Math.min(items.length, rendered + GLOBAL_TIMELINE_BATCH_SIZE);
+              const chunk = items.slice(rendered, next);
+              listEl.insertAdjacentHTML('beforeend', chunk.map(taskCard).join(''));
+              listEl.dataset.rendered = String(next);
+              update(next);
+            };
+            btnMore?.addEventListener('click', loadNext);
+          };
+          groups.forEach(bindLazyColumn);
+        } else {
+          container.innerHTML = `
+            <div class="flex items-center justify-between gap-2">
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Timeline</p>
+              <div class="inline-flex items-center gap-2">
+                <button id="global-timeline-mode-columns" type="button" class="${modeBtnClass('columns')}">Vue 4 colonnes</button>
+                <button id="global-timeline-mode-list" type="button" class="${modeBtnClass('list')}">Vue liste</button>
+              </div>
+            </div>
+            <div class="space-y-3">
+              ${groups.map((group) => {
+                const expanded = Boolean(globalTimelineExpandedGroups[group.key]);
+                const initial = expanded ? Math.min(group.items.length, GLOBAL_TIMELINE_INITIAL_BATCH) : 0;
+                return `
+                  <div class="rounded-xl border border-slate-200 bg-white p-3">
+                    <button id="global-timeline-list-toggle-${group.key}" type="button" class="w-full flex items-center justify-between text-left">
+                      <span class="font-bold text-slate-800">${group.label}</span>
+                      <span class="inline-flex items-center gap-2 text-xs text-slate-500"><span>${group.items.length}</span><span id="global-timeline-toggle-symbol-${group.key}" class="text-base leading-none">${expanded ? '-' : '+'}</span></span>
+                    </button>
+                    <div id="global-timeline-list-body-${group.key}" class="${expanded ? 'mt-2' : 'hidden mt-2'}">
+                      <div id="global-timeline-list-items-${group.key}" class="space-y-2 pr-1" data-rendered="${initial}">
+                        ${expanded ? (initial > 0 ? group.items.slice(0, initial).map(taskCard).join('') : '<p class="text-xs text-slate-400 py-2">Aucune tache</p>') : ''}
+                      </div>
+                      <div class="mt-2 flex items-center justify-between gap-2">
+                        <p class="text-[11px] text-slate-500"><span id="global-timeline-list-count-${group.key}">${initial}</span> / ${group.items.length}</p>
+                        <button id="global-timeline-list-more-${group.key}" type="button" class="px-2 py-1 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-semibold ${(expanded && initial < group.items.length) ? '' : 'hidden'}">Charger plus</button>
+                      </div>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          `;
+
+          const bindLazyList = (group) => {
+            const bodyEl = document.getElementById(`global-timeline-list-body-${group.key}`);
+            const listEl = document.getElementById(`global-timeline-list-items-${group.key}`);
+            const countEl = document.getElementById(`global-timeline-list-count-${group.key}`);
+            const btnMore = document.getElementById(`global-timeline-list-more-${group.key}`);
+            const btnToggle = document.getElementById(`global-timeline-list-toggle-${group.key}`);
+            const symbolEl = document.getElementById(`global-timeline-toggle-symbol-${group.key}`);
+            if (!bodyEl || !listEl || !btnToggle) return;
+            const items = group.items || [];
+            const update = (rendered) => {
+              if (countEl) countEl.textContent = String(rendered);
+              if (btnMore) btnMore.classList.toggle('hidden', rendered >= items.length || bodyEl.classList.contains('hidden'));
+            };
+            const renderIfNeeded = () => {
+              const rendered = Number.parseInt(listEl.dataset.rendered || '0', 10) || 0;
+              if (rendered > 0 || items.length === 0) return;
+              const initial = Math.min(items.length, GLOBAL_TIMELINE_INITIAL_BATCH);
+              listEl.innerHTML = items.slice(0, initial).map(taskCard).join('');
+              listEl.dataset.rendered = String(initial);
+              update(initial);
+            };
+            const loadNext = () => {
+              const rendered = Number.parseInt(listEl.dataset.rendered || '0', 10) || 0;
+              if (rendered >= items.length) {
+                update(items.length);
+                return;
+              }
+              const next = Math.min(items.length, rendered + GLOBAL_TIMELINE_BATCH_SIZE);
+              listEl.insertAdjacentHTML('beforeend', items.slice(rendered, next).map(taskCard).join(''));
+              listEl.dataset.rendered = String(next);
+              update(next);
+            };
+            btnToggle.addEventListener('click', () => {
+              const willExpand = bodyEl.classList.contains('hidden');
+              bodyEl.classList.toggle('hidden', !willExpand);
+              globalTimelineExpandedGroups[group.key] = willExpand;
+              if (symbolEl) symbolEl.textContent = willExpand ? '-' : '+';
+              if (willExpand) {
+                renderIfNeeded();
+                update(Number.parseInt(listEl.dataset.rendered || '0', 10) || 0);
+              } else {
+                update(Number.parseInt(listEl.dataset.rendered || '0', 10) || 0);
+              }
+            });
+            btnMore?.addEventListener('click', loadNext);
+            if (!bodyEl.classList.contains('hidden')) {
+              renderIfNeeded();
+              update(Number.parseInt(listEl.dataset.rendered || '0', 10) || 0);
+            }
+          };
+          groups.forEach(bindLazyList);
+        }
+
+        document.getElementById('global-timeline-mode-columns')?.addEventListener('click', () => {
+          if (globalTimelineDisplayMode === 'columns') return;
+          globalTimelineDisplayMode = 'columns';
+          localStorage.setItem('taskmda_global_timeline_mode', globalTimelineDisplayMode);
+          renderGlobalTasks();
+        });
+        document.getElementById('global-timeline-mode-list')?.addEventListener('click', () => {
+          if (globalTimelineDisplayMode === 'list') return;
+          globalTimelineDisplayMode = 'list';
+          localStorage.setItem('taskmda_global_timeline_mode', globalTimelineDisplayMode);
+          renderGlobalTasks();
+        });
         return;
       }
 
       const pagination = paginateItems(filtered, globalTasksPage, paginationConfig.globalTasksPerPage);
       globalTasksPage = pagination.currentPage;
-      container.className = 'space-y-3';
+      container.className = `global-task-grid cols-${globalTaskCardsColumns}`;
       container.innerHTML = pagination.pageItems.map(task => {
         const taskRef = buildGlobalTaskRef(task);
         let canEdit = task.sourceType === 'standalone';
@@ -4514,17 +8686,18 @@
           canArchive = canEditTaskInProject(task, projectState);
         }
         return `
-        <div class="global-task-card rounded-xl border border-slate-200 bg-white p-4">
+        <div class="global-task-card global-task-card-modern ${getTaskUrgencyMeta(task.urgency).accentClass} rounded-xl border border-slate-200 bg-white p-4 cursor-pointer" onclick="openGlobalTaskDetails('${taskRef}')" role="button" tabindex="0">
           <div class="flex items-start justify-between gap-3">
             <div>
+              <div class="flex flex-wrap items-center gap-2 mb-1">
+                <span class="${getTaskUrgencyMeta(task.urgency).chipClass}">${getTaskUrgencyMeta(task.urgency).label}</span>
+              </div>
               <h4 class="font-bold text-slate-800">${escapeHtml(task.title || 'Tâche')}</h4>
               <p class="text-xs text-slate-500 mt-1">${escapeHtml(task.sourceProjectName || 'Hors projet')} • ${escapeHtml(task.theme || 'Général')}</p>
             </div>
             <div class="flex flex-wrap items-center justify-end gap-1">
               ${sharingModeBadge(task.sharingMode)}
-              <span class="text-[10px] px-2 py-1 rounded-full font-semibold ${
-                (task.status || 'todo') === 'termine' ? 'bg-emerald-100 text-emerald-700' : (task.status || 'todo') === 'en-cours' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'
-              }">${escapeHtml(task.status || 'todo')}</span>
+              <span class="${getTaskStatusMeta(task.status).chipClass}">${getTaskStatusMeta(task.status).label}</span>
             </div>
           </div>
           <p class="text-sm text-slate-600 mt-2">${escapeHtml(task.description || '')}</p>
@@ -4535,9 +8708,9 @@
             <span>Assigné: ${escapeHtml(getTaskAssigneeName(task, stateByProjectId.get(task.sourceProjectId)) || 'Non assigné')}</span>
           </div>
           <div class="mt-3 flex flex-wrap gap-2 text-xs">
-            ${canEdit ? `<button onclick="editGlobalTask('${taskRef}')" class="px-2 py-1 rounded bg-slate-100 text-slate-700">Modifier</button>` : ''}
-            ${canArchive ? `<button onclick="archiveGlobalTask('${taskRef}')" class="px-2 py-1 rounded bg-amber-100 text-amber-700">Archiver</button>` : ''}
-            ${canDelete ? `<button onclick="deleteGlobalTask('${taskRef}')" class="px-2 py-1 rounded bg-rose-100 text-rose-700">Supprimer</button>` : ''}
+            ${canEdit ? `<button onclick="event.stopPropagation(); editGlobalTask('${taskRef}')" class="task-action-btn task-action-btn-subtle">Modifier</button>` : ''}
+            ${canArchive ? `<button onclick="event.stopPropagation(); archiveGlobalTask('${taskRef}')" class="task-action-btn task-action-btn-subtle task-action-btn-warn">Archiver</button>` : ''}
+            ${canDelete ? `<button onclick="event.stopPropagation(); deleteGlobalTask('${taskRef}')" class="task-action-btn task-action-btn-subtle task-action-btn-danger">Supprimer</button>` : ''}
           </div>
         </div>
       `;
@@ -4545,9 +8718,106 @@
       renderPagination('global-tasks-pagination', pagination, 'setGlobalTasksPage', 'taches');
     }
 
+    function renderGlobalArchivedTasks(allTasks, stateByProjectId, targetContainer) {
+      const container = targetContainer || document.getElementById('global-tasks-container');
+      if (!container) return;
+
+      const query = `${globalSearchQuery} ${document.getElementById('global-task-search')?.value || ''}`.trim();
+      const status = String(document.getElementById('global-task-status')?.value || 'all').trim();
+      const theme = String(document.getElementById('global-task-theme')?.value || '').trim();
+      let archived = (allTasks || []).filter(task => task?.archivedAt);
+      archived = archived.filter(task => matchesQuery([
+        task.title,
+        task.description,
+        task.sourceProjectName,
+        task.theme,
+        getTaskAssigneeName(task, stateByProjectId?.get(task.sourceProjectId)),
+        sharingModeLabel(task.sharingMode)
+      ], query));
+      if (status !== 'all') archived = archived.filter(task => (task.status || 'todo') === status);
+      if (theme) archived = archived.filter(task => matchesQuery([task.theme], theme));
+      archived.sort((a, b) => (b.archivedAt || 0) - (a.archivedAt || 0));
+
+      if (archived.length === 0) {
+        container.className = 'space-y-3';
+        container.innerHTML = '<p class="text-slate-500 text-center py-8">Aucune tache archivee</p>';
+        return;
+      }
+
+      container.className = 'space-y-2';
+      container.innerHTML = archived.map((task) => {
+        const taskRef = buildGlobalTaskRef(task);
+        let canEdit = task.sourceType === 'standalone';
+        let canDelete = task.sourceType === 'standalone';
+        if (task.sourceType === 'project') {
+          const projectState = stateByProjectId?.get(task.sourceProjectId);
+          canEdit = canEditTaskInProject(task, projectState);
+          canDelete = canDeleteTaskInProject(task, projectState);
+        }
+        return `
+          <div class="rounded-lg border border-slate-200 bg-white p-3">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <p class="text-sm font-semibold text-slate-800">${escapeHtml(task.title || 'Tache')}</p>
+                <p class="text-xs text-slate-500 mt-1">${escapeHtml(task.sourceProjectName || 'Hors projet')} - ${escapeHtml(task.theme || 'General')}</p>
+                <p class="text-xs text-slate-500 mt-1">Archivee le ${task.archivedAt ? new Date(task.archivedAt).toLocaleString('fr-FR') : '-'}</p>
+              </div>
+              <div class="flex items-center gap-2 text-xs">
+                ${canEdit ? `<button onclick="restoreGlobalTask('${taskRef}')" class="px-2 py-1 rounded bg-emerald-100 text-emerald-700">Restaurer</button>` : ''}
+                ${canDelete ? `<button onclick="deleteGlobalTask('${taskRef}')" class="px-2 py-1 rounded bg-rose-100 text-rose-700">Supprimer</button>` : ''}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    const renderGlobalTasksBase = renderGlobalTasks;
+    renderGlobalTasks = async function renderGlobalTasksWithEmptyState() {
+      await renderGlobalTasksBase();
+      const container = document.getElementById('global-tasks-container');
+      if (!container) return;
+      if (globalTasksViewMode === 'calendar' || globalTasksViewMode === 'archives') return;
+      const paginationContainer = document.getElementById('global-tasks-pagination');
+
+      const all = await getGlobalTasksList();
+      const query = `${globalSearchQuery} ${document.getElementById('global-task-search')?.value || ''}`.trim();
+      const status = document.getElementById('global-task-status')?.value || 'all';
+      const theme = document.getElementById('global-task-theme')?.value || '';
+
+      let filtered = all.filter(task => matchesQuery([
+        task.title,
+        task.description,
+        task.sourceProjectName,
+        task.theme,
+        sharingModeLabel(task.sharingMode)
+      ], query));
+      if (status !== 'all') filtered = filtered.filter(task => (task.status || 'todo') === status);
+      if (theme.trim()) filtered = filtered.filter(task => matchesQuery([task.theme], theme));
+      filtered = filtered.filter(task => !task.archivedAt);
+
+      if (all.length === 0 && filtered.length === 0) {
+        container.className = 'space-y-3';
+        container.innerHTML = `
+          <button
+            type="button"
+            class="tasks-empty-state"
+            onclick="document.getElementById('btn-global-add-task')?.click()"
+            aria-label="Créer une nouvelle tâche hors projet"
+          >
+            <span class="tasks-empty-icon material-symbols-outlined">add</span>
+            <span class="tasks-empty-title">Créer une première tâche</span>
+            <span class="tasks-empty-subtitle">Ajoutez une tâche solo ou collaborative pour démarrer votre pilotage transverse.</span>
+          </button>
+        `;
+        if (paginationContainer) paginationContainer.innerHTML = '';
+      }
+    };
+
     async function renderGlobalCalendar() {
       const container = document.getElementById('global-calendar-container');
       const monthInput = document.getElementById('global-calendar-month');
+      const monthLabel = document.getElementById('global-calendar-month-label');
       const listWrap = document.getElementById('global-calendar-list-wrap');
       const gridWrap = document.getElementById('global-calendar-grid-wrap');
       const grid = document.getElementById('global-calendar-grid');
@@ -4577,12 +8847,18 @@
         month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
         monthInput.value = month;
       }
+      if (monthLabel) {
+        const [yy, mm] = String(month).split('-');
+        const d = new Date(Number(yy), Number(mm) - 1, 1);
+        monthLabel.textContent = d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+      }
 
       const standaloneItems = await getAllDecrypted('globalCalendarItems', 'id');
       const taskEntries = all
         .filter(task => task.dueDate && !task.archivedAt)
         .map(task => ({
           entryType: 'task',
+          taskRef: buildGlobalTaskRef(task),
           date: taskDueDateKey(task),
           title: task.title || 'Tache',
           description: task.description || '',
@@ -4609,6 +8885,15 @@
         .filter(entry => matchesQuery([entry.title, entry.description, entry.theme, entry.source, sharingModeLabel(entry.sharingMode)], q))
         .sort((a, b) => a.sortDate - b.sortDate);
       const isSharedEntry = (entry) => normalizeSharingMode(entry?.sharingMode, 'private') === 'shared';
+      const getEntryOpenAction = (entry) => {
+        if (entry?.entryType === 'task' && entry?.taskRef) {
+          return `openGlobalTaskDetails('${entry.taskRef}')`;
+        }
+        if (entry?.entryType === 'info' && entry?.id) {
+          return `openStandaloneCalendarDetails('${entry.id}')`;
+        }
+        return '';
+      };
 
       const isGrid = globalCalendarViewMode === 'grid';
       listWrap.classList.toggle('hidden', isGrid);
@@ -4659,7 +8944,7 @@
         }
 
         const dayHeaders = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
-          .map(label => `<div class="text-center text-[11px] font-semibold text-slate-500 py-1">${label}</div>`)
+          .map(label => `<div class="calendar-day-header">${label}</div>`)
           .join('');
         const blanks = Array.from({ length: startOffset }).map(() => '<div></div>').join('');
         const dayCells = Array.from({ length: daysInMonth }).map((_, idx) => {
@@ -4668,19 +8953,24 @@
           const dayEntries = entriesByDay.get(dayKey) || [];
           const sharedCount = dayEntries.filter(isSharedEntry).length;
           const privateCount = Math.max(0, dayEntries.length - sharedCount);
+          const modeClass = sharedCount > 0 && privateCount === 0
+            ? 'global-cal-day-mode-shared'
+            : privateCount > 0 && sharedCount === 0
+              ? 'global-cal-day-mode-private'
+              : (sharedCount > 0 && privateCount > 0 ? 'global-cal-day-mode-mixed' : '');
           const isToday = dayKey === todayKey;
           const isSelected = dayKey === globalCalendarSelectedDay;
           return `
-            <button class="global-cal-day min-h-[72px] rounded-lg border p-1 text-left ${isSelected ? 'border-primary bg-blue-50' : 'border-slate-200 bg-white'} ${isToday ? 'ring-1 ring-amber-300' : ''}" data-day="${dayKey}">
-              <div class="text-[11px] font-semibold ${isToday ? 'text-amber-700' : 'text-slate-700'}">${day}</div>
+            <button class="global-cal-day min-h-[72px] rounded-lg border p-1 text-left ${modeClass} ${isSelected ? 'global-cal-day-selected' : ''} ${isToday ? 'global-cal-day-today' : ''}" data-day="${dayKey}">
+              <div class="global-cal-day-number ${isToday ? 'global-cal-day-number-today' : ''}">${day}</div>
               <div class="mt-1 space-y-1">
-                ${(dayEntries || []).slice(0, 2).map(item => `<div class="text-[10px] truncate ${isSharedEntry(item) ? 'text-emerald-700' : 'text-slate-700'}">${escapeHtml(item.title || '')}</div>`).join('')}
-                ${dayEntries.length > 2 ? `<div class="text-[10px] text-slate-500">+${dayEntries.length - 2}</div>` : ''}
+                ${(dayEntries || []).slice(0, 2).map(item => `<div class="calendar-day-item ${isSharedEntry(item) ? 'calendar-day-item-shared' : 'calendar-day-item-private'}">${escapeHtml(item.title || '')}</div>`).join('')}
+                ${dayEntries.length > 2 ? `<div class="calendar-day-more">+${dayEntries.length - 2}</div>` : ''}
               </div>
               ${(sharedCount + privateCount) > 0 ? `
                 <div class="mt-1 flex items-center gap-1 text-[9px]">
-                  ${sharedCount > 0 ? `<span class="px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">Collab ${sharedCount}</span>` : ''}
-                  ${privateCount > 0 ? `<span class="px-1.5 py-0.5 rounded-full bg-slate-200 text-slate-700 font-semibold">Solo ${privateCount}</span>` : ''}
+                  ${sharedCount > 0 ? `<span class="calendar-mini-chip calendar-mini-chip-shared">Collab ${sharedCount}</span>` : ''}
+                  ${privateCount > 0 ? `<span class="calendar-mini-chip calendar-mini-chip-private">Solo ${privateCount}</span>` : ''}
                 </div>
               ` : ''}
             </button>
@@ -4697,25 +8987,25 @@
         const selectedEntries = entriesByDay.get(globalCalendarSelectedDay) || [];
         if (selectedEntries.length === 0) {
           dayDetails.innerHTML = `
-            <div class="rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-500">
+            <div class="calendar-detail-card text-sm text-slate-500">
               Aucun element le ${formatDate(globalCalendarSelectedDay)}.
             </div>
           `;
           return;
         }
         dayDetails.innerHTML = selectedEntries.map(entry => `
-          <div class="rounded-lg border ${isSharedEntry(entry) ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/70'} p-3">
+          <div class="calendar-detail-card ${isSharedEntry(entry) ? 'calendar-detail-card-shared' : 'calendar-detail-card-private'} ${getEntryOpenAction(entry) ? 'cursor-pointer' : ''}" ${getEntryOpenAction(entry) ? `onclick="${getEntryOpenAction(entry)}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();${getEntryOpenAction(entry)};}"` : ''}>
             <div class="flex items-center justify-between gap-2">
               <p class="font-semibold text-slate-800">${escapeHtml(entry.title || 'Element')}</p>
-              <span class="inline-flex text-[10px] px-2 py-1 rounded-full font-semibold ${isSharedEntry(entry) ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-700'}">${isSharedEntry(entry) ? 'Collaboratif' : 'Solo'}</span>
+              <span class="inline-flex text-[10px] px-2 py-1 rounded-full font-semibold ${isSharedEntry(entry) ? 'calendar-chip-shared' : 'calendar-chip-private'}">${isSharedEntry(entry) ? 'Collaboratif' : 'Solo'}</span>
             </div>
             <p class="text-xs text-slate-500 mt-1">${escapeHtml(entry.source || 'Hors projet')} - ${escapeHtml(entry.theme || 'General')}</p>
             <p class="text-sm text-slate-600 mt-1">${escapeHtml(entry.description || '')}</p>
             ${entry.entryType === 'info' && entry.id ? `
               <div class="mt-2 flex flex-wrap gap-2 text-xs">
-                <button onclick="editStandaloneCalendarItem('${entry.id}')" class="px-2 py-1 rounded bg-slate-100 text-slate-700">Modifier</button>
-                <button onclick="archiveStandaloneCalendarItem('${entry.id}')" class="px-2 py-1 rounded bg-amber-100 text-amber-700">Archiver</button>
-                <button onclick="deleteStandaloneCalendarItem('${entry.id}')" class="px-2 py-1 rounded bg-rose-100 text-rose-700">Supprimer</button>
+                <button onclick="event.stopPropagation(); editStandaloneCalendarItem('${entry.id}')" class="px-2 py-1 rounded bg-slate-100 text-slate-700">Modifier</button>
+                <button onclick="event.stopPropagation(); archiveStandaloneCalendarItem('${entry.id}')" class="px-2 py-1 rounded bg-amber-100 text-amber-700">Archiver</button>
+                <button onclick="event.stopPropagation(); deleteStandaloneCalendarItem('${entry.id}')" class="px-2 py-1 rounded bg-rose-100 text-rose-700">Supprimer</button>
               </div>
             ` : ''}
           </div>
@@ -4724,7 +9014,7 @@
       }
 
       container.innerHTML = mixed.map(entry => `
-        <div class="rounded-xl border ${isSharedEntry(entry) ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-white'} p-4">
+        <div class="calendar-entry-card ${isSharedEntry(entry) ? 'calendar-entry-card-shared' : 'calendar-entry-card-private'} ${getEntryOpenAction(entry) ? 'cursor-pointer' : ''}" ${getEntryOpenAction(entry) ? `onclick="${getEntryOpenAction(entry)}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();${getEntryOpenAction(entry)};}"` : ''}>
           <div class="flex items-center justify-between gap-2">
             <h4 class="font-semibold text-slate-800">${escapeHtml(entry.title || 'Element')}</h4>
             <span class="text-xs text-slate-500">${formatDate(entry.date)}</span>
@@ -4732,22 +9022,46 @@
           <p class="text-xs text-slate-500 mt-1">${escapeHtml(entry.source || 'Hors projet')} • ${escapeHtml(entry.theme || 'General')}</p>
           <p class="text-sm text-slate-600 mt-1">${escapeHtml(entry.description || '')}</p>
           <div class="mt-2 flex flex-wrap gap-1">
-            <span class="inline-flex text-[10px] px-2 py-1 rounded-full ${entry.entryType === 'task' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'} font-semibold">
+            <span class="inline-flex text-[10px] px-2 py-1 rounded-full ${entry.entryType === 'task' ? 'calendar-chip-task' : 'calendar-chip-info'} font-semibold">
               ${entry.entryType === 'task' ? 'Echeance tache' : 'Info hors projet'}
             </span>
-            <span class="inline-flex text-[10px] px-2 py-1 rounded-full font-semibold ${isSharedEntry(entry) ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-700'}">${isSharedEntry(entry) ? 'Collaboratif' : 'Solo'}</span>
+            <span class="inline-flex text-[10px] px-2 py-1 rounded-full font-semibold ${isSharedEntry(entry) ? 'calendar-chip-shared' : 'calendar-chip-private'}">${isSharedEntry(entry) ? 'Collaboratif' : 'Solo'}</span>
           </div>
           ${entry.entryType === 'info' && entry.id ? `
             <div class="mt-2 flex flex-wrap gap-2 text-xs">
-              <button onclick="editStandaloneCalendarItem('${entry.id}')" class="px-2 py-1 rounded bg-slate-100 text-slate-700">Modifier</button>
-              <button onclick="archiveStandaloneCalendarItem('${entry.id}')" class="px-2 py-1 rounded bg-amber-100 text-amber-700">Archiver</button>
-              <button onclick="deleteStandaloneCalendarItem('${entry.id}')" class="px-2 py-1 rounded bg-rose-100 text-rose-700">Supprimer</button>
+              <button onclick="event.stopPropagation(); editStandaloneCalendarItem('${entry.id}')" class="px-2 py-1 rounded bg-slate-100 text-slate-700">Modifier</button>
+              <button onclick="event.stopPropagation(); archiveStandaloneCalendarItem('${entry.id}')" class="px-2 py-1 rounded bg-amber-100 text-amber-700">Archiver</button>
+              <button onclick="event.stopPropagation(); deleteStandaloneCalendarItem('${entry.id}')" class="px-2 py-1 rounded bg-rose-100 text-rose-700">Supprimer</button>
             </div>
           ` : ''}
         </div>
       `).join('');
       return;
 
+    }
+
+    function ensureGlobalCalendarMonthOption(monthInput, year, monthIndex) {
+      const value = `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
+      if (!monthInput.querySelector(`option[value="${value}"]`)) {
+        const opt = document.createElement('option');
+        opt.value = value;
+        opt.textContent = new Date(year, monthIndex, 1).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+        monthInput.appendChild(opt);
+      }
+      monthInput.value = value;
+    }
+
+    function shiftGlobalCalendarMonth(offset) {
+      const monthInput = document.getElementById('global-calendar-month');
+      if (!monthInput) return;
+      const current = monthInput.value && /^\d{4}-\d{2}$/.test(monthInput.value)
+        ? monthInput.value
+        : toYmd(new Date()).slice(0, 7);
+      const [y, m] = current.split('-');
+      const d = new Date(Number(y), Number(m) - 1 + Number(offset || 0), 1);
+      ensureGlobalCalendarMonthOption(monthInput, d.getFullYear(), d.getMonth());
+      globalCalendarSelectedDay = null;
+      renderGlobalCalendar();
     }
 
     async function editGlobalTask(taskRef) {
@@ -4786,6 +9100,9 @@
         showToast('Action non autorisee');
         return;
       }
+      if (!ensureProjectResourceUnlockedForAction(resolved.state, LOCK_SCOPE_TASK, resolved.task.taskId, 'Archivage').ok) {
+        return;
+      }
       const event = createEvent(
         EventTypes.UPDATE_TASK,
         resolved.projectId,
@@ -4803,13 +9120,48 @@
       }
     }
 
+    async function restoreGlobalTask(taskRef) {
+      const resolved = await resolveGlobalTaskFromRef(taskRef);
+      if (!resolved?.task) return;
+      if (resolved.sourceType === 'standalone') {
+        await putEncrypted('globalTasks', {
+          ...resolved.task,
+          archivedAt: null,
+          updatedAt: Date.now()
+        }, 'id');
+        showToast('Tache restauree');
+        await renderGlobalTasks();
+        await refreshStats();
+        return;
+      }
+      if (!canEditTaskInProject(resolved.task, resolved.state)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const event = createEvent(
+        EventTypes.UPDATE_TASK,
+        resolved.projectId,
+        currentUser.userId,
+        { taskId: resolved.task.taskId, changes: { archivedAt: null } }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) await writeEventToSharedFolder(resolved.projectId, event);
+      showToast('Tache restauree');
+      if (workspaceMode === 'global') {
+        await renderGlobalTasks();
+        await refreshStats();
+      } else {
+        await showProjectDetail(resolved.projectId);
+      }
+    }
+
     async function deleteGlobalTask(taskRef) {
       const resolved = await resolveGlobalTaskFromRef(taskRef);
       if (!resolved?.task) return;
       if (resolved.sourceType === 'standalone') {
         if (!confirm('Supprimer cette tache hors projet ?')) return;
         const db = getDatabase();
-        await db.delete('globalTasks', resolved.task.id);
+        await deleteFromStore('globalTasks', resolved.task.id);
         showToast('Tache supprimee');
         await renderGlobalTasks();
         await refreshStats();
@@ -4817,6 +9169,9 @@
       }
       if (!canDeleteTaskInProject(resolved.task, resolved.state)) {
         showToast('Action non autorisee');
+        return;
+      }
+      if (!ensureProjectResourceUnlockedForAction(resolved.state, LOCK_SCOPE_TASK, resolved.task.taskId, 'Suppression').ok) {
         return;
       }
       if (!confirm('Supprimer cette tache ?')) return;
@@ -4839,7 +9194,52 @@
 
     window.editGlobalTask = editGlobalTask;
     window.archiveGlobalTask = archiveGlobalTask;
+    window.restoreGlobalTask = restoreGlobalTask;
     window.deleteGlobalTask = deleteGlobalTask;
+    window.openGlobalTaskDetails = openGlobalTaskDetails;
+    window.openProjectTaskDetails = openProjectTaskDetails;
+    window.closeGlobalTaskDetails = closeGlobalTaskDetails;
+    window.deleteGlobalDocument = deleteGlobalDocument;
+    window.openDocumentBindingModal = openDocumentBindingModal;
+
+    async function openStandaloneCalendarDetails(itemId) {
+      const id = String(itemId || '').trim();
+      if (!id) return;
+      const item = await getDecrypted('globalCalendarItems', id, 'id');
+      if (!item || item.archivedAt) {
+        showToast('Information introuvable');
+        return;
+      }
+
+      currentCalendarInfoDetailId = id;
+      const modal = document.getElementById('modal-calendar-info-details');
+      const titleEl = document.getElementById('calendar-info-detail-title');
+      const subtitleEl = document.getElementById('calendar-info-detail-subtitle');
+      const badgesEl = document.getElementById('calendar-info-detail-badges');
+      const descriptionEl = document.getElementById('calendar-info-detail-description');
+      const dateEl = document.getElementById('calendar-info-detail-date');
+      const themeEl = document.getElementById('calendar-info-detail-theme');
+      if (!modal || !titleEl || !subtitleEl || !badgesEl || !descriptionEl || !dateEl || !themeEl) return;
+
+      titleEl.textContent = item.title || 'Information';
+      subtitleEl.textContent = `Hors projet • ${item.theme || 'General'}`;
+      descriptionEl.textContent = item.notes || 'Aucune description.';
+      dateEl.textContent = formatDate(item.date);
+      themeEl.textContent = item.theme || 'General';
+      badgesEl.innerHTML = `
+        <span class="inline-flex text-[10px] px-2 py-1 rounded-full calendar-chip-info font-semibold">Info hors projet</span>
+        <span class="inline-flex text-[10px] px-2 py-1 rounded-full font-semibold ${normalizeSharingMode(item.sharingMode, 'private') === 'shared' ? 'calendar-chip-shared' : 'calendar-chip-private'}">${normalizeSharingMode(item.sharingMode, 'private') === 'shared' ? 'Collaboratif' : 'Solo'}</span>
+      `;
+
+      modal.classList.remove('hidden');
+    }
+
+    function closeStandaloneCalendarDetails() {
+      currentCalendarInfoDetailId = null;
+      document.getElementById('modal-calendar-info-details')?.classList.add('hidden');
+    }
+
+    window.openStandaloneCalendarDetails = openStandaloneCalendarDetails;
     window.editStandaloneCalendarItem = editStandaloneCalendarItem;
     window.archiveStandaloneCalendarItem = archiveStandaloneCalendarItem;
     window.deleteStandaloneCalendarItem = deleteStandaloneCalendarItem;
@@ -4851,6 +9251,10 @@
     }
 
     function resetStandaloneCalendarForm() {
+      if (activeCalendarEditLock?.itemId) {
+        releaseCalendarItemLock(activeCalendarEditLock.itemId, activeCalendarEditLock.lockId || '');
+        activeCalendarEditLock = null;
+      }
       const titleInput = document.getElementById('global-calendar-item-title');
       const dateInput = document.getElementById('global-calendar-item-date');
       const themeInput = document.getElementById('global-calendar-item-theme');
@@ -4870,11 +9274,22 @@
     async function editStandaloneCalendarItem(itemId) {
       const id = String(itemId || '').trim();
       if (!id) return;
+      if (activeCalendarEditLock?.itemId && activeCalendarEditLock.itemId !== id) {
+        await releaseCalendarItemLock(activeCalendarEditLock.itemId, activeCalendarEditLock.lockId || '');
+        activeCalendarEditLock = null;
+      }
+      const lockResult = await acquireCalendarItemLock(id);
+      if (!lockResult.ok) {
+        showToast(buildLockBlockedMessage(lockResult.lock, 'Information calendrier en cours de modification'));
+        return;
+      }
       const item = await getDecrypted('globalCalendarItems', id, 'id');
       if (!item) {
+        await releaseCalendarItemLock(id, lockResult.lockId || '');
         showToast('Information introuvable');
         return;
       }
+      activeCalendarEditLock = { itemId: id, lockId: lockResult.lockId || '' };
       document.getElementById('global-calendar-item-title').value = item.title || '';
       document.getElementById('global-calendar-item-date').value = item.date || '';
       document.getElementById('global-calendar-item-theme').value = item.theme || '';
@@ -4890,6 +9305,7 @@
     async function archiveStandaloneCalendarItem(itemId) {
       const id = String(itemId || '').trim();
       if (!id) return;
+      if (!(await ensureCalendarItemUnlockedForAction(id, 'Archivage')).ok) return;
       const item = await getDecrypted('globalCalendarItems', id, 'id');
       if (!item) return;
       await putEncrypted('globalCalendarItems', {
@@ -4908,9 +9324,10 @@
     async function deleteStandaloneCalendarItem(itemId) {
       const id = String(itemId || '').trim();
       if (!id) return;
+      if (!(await ensureCalendarItemUnlockedForAction(id, 'Suppression')).ok) return;
       if (!confirm('Supprimer cette information hors projet ?')) return;
       const db = getDatabase();
-      await db.delete('globalCalendarItems', id);
+      await deleteFromStore('globalCalendarItems', id);
       if (editingGlobalCalendarItemId === id) {
         resetStandaloneCalendarForm();
       }
@@ -4944,6 +9361,10 @@
       }, 'id');
 
       resetStandaloneCalendarForm();
+      if (existing?.id) {
+        await releaseCalendarItemLock(existing.id, activeCalendarEditLock?.lockId || '');
+      }
+      activeCalendarEditLock = null;
       showToast(existing ? 'Information calendrier mise a jour' : 'Information calendrier ajoutee');
       addNotification('Calendrier', existing ? 'Information hors projet mise a jour' : 'Information hors projet ajoutee', null);
       await renderGlobalCalendar();
@@ -4953,6 +9374,8 @@
       const container = document.getElementById('global-docs-container');
       if (!container) return;
       const all = await getGlobalDocumentsList();
+      const states = await getAllProjectStates();
+      const stateByProjectId = new Map(states.map(s => [s?.project?.projectId, s]));
 
       const q = `${globalSearchQuery} ${document.getElementById('global-doc-search')?.value || ''}`.trim();
       const themeFilter = document.getElementById('global-doc-theme')?.value || '';
@@ -4977,10 +9400,354 @@
           <p class="text-xs text-slate-500 mt-1">${escapeHtml(doc.sourceProjectName || 'Hors projet')} • ${escapeHtml(doc.theme || 'Général')}</p>
           <div class="mt-3 flex items-center justify-between text-xs">
             <span class="text-slate-500">${formatFileSize(doc.size || 0)}</span>
-            <a class="text-primary font-semibold hover:underline" href="${doc.data || '#'}" download="${escapeHtml(doc.name || 'document')}">Télécharger</a>
+            <div class="flex items-center gap-3">
+              <a class="text-primary font-semibold hover:underline" href="${doc.data || '#'}" download="${escapeHtml(doc.name || 'document')}">Télécharger</a>
+              ${(() => {
+                const canManageDocBinding = doc.sourceType === 'standalone'
+                  || (doc.sourceType === 'project-doc' && (() => {
+                    const state = stateByProjectId.get(doc.sourceProjectId);
+                    return !!(state && canEditProjectMeta(state));
+                  })());
+                if (doc.sourceType === 'standalone') {
+                  return `
+                    ${isDocumentEditable(doc) ? `<button onclick="openGlobalDocumentEditor('${escapeHtml(doc.id)}')" class="text-slate-700 font-semibold hover:underline">Modifier</button>` : ''}
+                    ${canManageDocBinding ? `<button onclick="openDocumentBindingModal('${escapeHtml(doc.id)}')" class="text-slate-700 font-semibold hover:underline">Gérer</button>` : ''}
+                    <button onclick="deleteGlobalDocument('${escapeHtml(doc.id)}')" class="text-rose-700 font-semibold hover:underline">Supprimer</button>
+                  `;
+                }
+                if (doc.sourceType === 'project-doc') {
+                  const state = stateByProjectId.get(doc.sourceProjectId);
+                  if (state && canEditProjectMeta(state)) {
+                    return `
+                      ${isDocumentEditable(doc) ? `<button onclick="openGlobalDocumentEditor('${escapeHtml(doc.id)}')" class="text-slate-700 font-semibold hover:underline">Modifier</button>` : ''}
+                      ${canManageDocBinding ? `<button onclick="openDocumentBindingModal('${escapeHtml(doc.id)}')" class="text-slate-700 font-semibold hover:underline">Gérer</button>` : ''}
+                      <button onclick="deleteGlobalDocument('${escapeHtml(doc.id)}')" class="text-rose-700 font-semibold hover:underline">Supprimer</button>
+                    `;
+                  }
+                  return '';
+                }
+                const state = stateByProjectId.get(doc.sourceProjectId);
+                const task = (state?.tasks || []).find(t => t.taskId === doc.taskId);
+                if (state && task && canEditTaskInProject(task, state)) {
+                  return `
+                    ${isDocumentEditable(doc) ? `<button onclick="openGlobalDocumentEditor('${escapeHtml(doc.id)}')" class="text-slate-700 font-semibold hover:underline">Modifier</button>` : ''}
+                    <button onclick="deleteGlobalDocument('${escapeHtml(doc.id)}')" class="text-rose-700 font-semibold hover:underline">Supprimer</button>
+                  `;
+                }
+                return '';
+              })()}
+            </div>
           </div>
         </div>
       `).join('');
+    }
+
+    async function populateDocBindingTaskOptions(projectId, selectedTaskId = '') {
+      const taskSelect = document.getElementById('doc-binding-task');
+      if (!taskSelect) return;
+      const pid = String(projectId || '').trim();
+      if (!pid) {
+        taskSelect.innerHTML = '<option value="">Aucune (hors projet)</option>';
+        taskSelect.disabled = true;
+        return;
+      }
+      const state = await getProjectState(pid);
+      const tasks = (state?.tasks || []).filter(task => !task.archivedAt);
+      taskSelect.disabled = false;
+      if (tasks.length === 0) {
+        taskSelect.innerHTML = '<option value="">Aucune tâche active</option>';
+        return;
+      }
+      const selected = String(selectedTaskId || '').trim();
+      taskSelect.innerHTML = [
+        '<option value="">Aucune (document projet)</option>',
+        ...tasks.map(task => `<option value="${escapeHtml(task.taskId)}" ${selected === String(task.taskId) ? 'selected' : ''}>${escapeHtml(task.title || 'Tâche')}</option>`)
+      ].join('');
+    }
+
+    async function resolveDocumentForBinding(docId) {
+      const id = String(docId || '').trim();
+      if (!id) return null;
+      const all = await getGlobalDocumentsList();
+      const fromGlobal = all.find(item => String(item.id || '') === id);
+      if (fromGlobal) return fromGlobal;
+
+      const marker = ':project-doc:';
+      const markerIndex = id.indexOf(marker);
+      if (markerIndex <= 0) return null;
+      const sourceProjectId = id.slice(0, markerIndex);
+      const sourceDocId = id.slice(markerIndex + marker.length);
+      if (!sourceProjectId || !sourceDocId) return null;
+
+      const sourceState = await getProjectState(sourceProjectId);
+      if (!sourceState?.project) return null;
+      const sourceDoc = (sourceState.documents || []).find(item => String(item.docId || '') === sourceDocId);
+      if (!sourceDoc) return null;
+
+      return {
+        id,
+        name: sourceDoc.name,
+        type: sourceDoc.type,
+        size: sourceDoc.size,
+        data: sourceDoc.data,
+        theme: sourceDoc.theme || sourceState.project.name || 'Projet',
+        sourceProjectName: sourceState.project.name,
+        sourceProjectId,
+        docId: sourceDoc.docId,
+        linkedTaskIds: Array.isArray(sourceDoc.linkedTaskIds) ? [...sourceDoc.linkedTaskIds] : [],
+        sourceType: 'project-doc',
+        sharingMode: normalizeSharingMode(sourceDoc.sharingMode, normalizeSharingMode(sourceState.project.sharingMode, 'shared')),
+        notes: sourceDoc.notes || '',
+        createdAt: sourceDoc.uploadedAt || sourceDoc.createdAt || sourceState.project.createdAt || 0
+      };
+    }
+
+    async function openDocumentBindingModal(docId) {
+      const id = String(docId || '').trim();
+      if (!id) return;
+      const doc = await resolveDocumentForBinding(id);
+      if (!doc) {
+        showToast('Document introuvable');
+        return;
+      }
+      if (doc.sourceType === 'project') {
+        showToast('Ce document est une pièce jointe de tâche: modifiez la tâche pour le déplacer.');
+        return;
+      }
+      if (!['standalone', 'project-doc'].includes(doc.sourceType)) {
+        showToast('Gestion indisponible pour ce type de document.');
+        return;
+      }
+      if (doc.sourceType === 'project-doc') {
+        const sourceState = await getProjectState(doc.sourceProjectId);
+        if (!sourceState?.project || !canEditProjectMeta(sourceState)) {
+          showToast('Action non autorisée');
+          return;
+        }
+      }
+
+      const projectSelect = document.getElementById('doc-binding-project');
+      const modeSelect = document.getElementById('doc-binding-mode');
+      const nameEl = document.getElementById('doc-binding-name');
+      const sourceEl = document.getElementById('doc-binding-current-source');
+      const modal = document.getElementById('modal-doc-binding');
+      if (!projectSelect || !modeSelect || !nameEl || !sourceEl || !modal) return;
+
+      const states = await getAllProjectStates();
+      const editableProjects = (states || []).filter(state => state?.project && canEditProjectMeta(state));
+      const sourceProjectId = String(doc.sourceProjectId || '').trim();
+      projectSelect.innerHTML = [
+        '<option value="">Hors projet</option>',
+        ...editableProjects.map(state => `<option value="${escapeHtml(state.project.projectId)}" ${String(state.project.projectId) === sourceProjectId ? 'selected' : ''}>${escapeHtml(state.project.name || 'Projet')}</option>`)
+      ].join('');
+      modeSelect.value = normalizeSharingMode(doc.sharingMode, 'private');
+      nameEl.textContent = doc.name || 'Document';
+      sourceEl.textContent = `Source: ${doc.sourceProjectName || 'Hors projet'}`;
+
+      currentDocBindingContext = {
+        doc
+      };
+      await populateDocBindingTaskOptions(sourceProjectId, Array.isArray(doc.linkedTaskIds) ? (doc.linkedTaskIds[0] || '') : '');
+      modal.classList.remove('hidden');
+    }
+
+    function closeDocumentBindingModal() {
+      currentDocBindingContext = null;
+      document.getElementById('modal-doc-binding')?.classList.add('hidden');
+    }
+
+    async function saveDocumentBindingChanges() {
+      const ctx = currentDocBindingContext;
+      if (!ctx?.doc) return;
+      const doc = ctx.doc;
+      const projectSelect = document.getElementById('doc-binding-project');
+      const taskSelect = document.getElementById('doc-binding-task');
+      const modeSelect = document.getElementById('doc-binding-mode');
+      if (!projectSelect || !taskSelect || !modeSelect) return;
+
+      const targetProjectId = String(projectSelect.value || '').trim();
+      const selectedTaskId = String(taskSelect.value || '').trim();
+      const nextSharingMode = normalizeSharingMode(modeSelect.value, 'private');
+      let changed = false;
+
+      await runWithLoading(async () => {
+        if (doc.sourceType === 'standalone') {
+          if (!targetProjectId) {
+            const current = await getDecrypted('globalDocs', doc.id, 'id');
+            if (!current) {
+              showToast('Document introuvable');
+              return;
+            }
+            await putEncrypted('globalDocs', {
+              ...current,
+              sharingMode: nextSharingMode,
+              updatedAt: Date.now()
+            }, 'id');
+            showToast('Document mis à jour');
+            changed = true;
+            return;
+          }
+          const targetState = await getProjectState(targetProjectId);
+          if (!targetState?.project || !canEditProjectMeta(targetState)) {
+            showToast('Action non autorisée sur le projet cible');
+            return;
+          }
+          const createEventDoc = createEvent(
+            EventTypes.CREATE_DOCUMENT,
+            targetProjectId,
+            currentUser.userId,
+            {
+              docId: uuidv4(),
+              name: doc.name,
+              type: doc.type,
+              size: doc.size,
+              data: doc.data,
+              theme: doc.theme || 'General',
+              notes: doc.notes || '',
+              sharingMode: nextSharingMode,
+              linkedTaskIds: selectedTaskId ? [selectedTaskId] : []
+            }
+          );
+          await publishEvent(createEventDoc);
+          if (sharedFolderHandle) await writeEventToSharedFolder(targetProjectId, createEventDoc);
+          await deleteFromStore('globalDocs', doc.id);
+          showToast('Document rattaché au projet');
+          changed = true;
+          return;
+        }
+
+        if (doc.sourceType === 'project-doc') {
+          const sourceState = await getProjectState(doc.sourceProjectId);
+          if (!sourceState?.project || !canEditProjectMeta(sourceState)) {
+            showToast('Action non autorisée');
+            return;
+          }
+          if (!targetProjectId) {
+            await putEncrypted('globalDocs', {
+              id: uuidv4(),
+              name: doc.name,
+              type: doc.type,
+              size: doc.size,
+              data: doc.data,
+              theme: doc.theme || 'General',
+              notes: doc.notes || '',
+              sharingMode: nextSharingMode,
+              createdAt: Date.now(),
+              updatedAt: Date.now()
+            }, 'id');
+          } else {
+            const targetState = await getProjectState(targetProjectId);
+            if (!targetState?.project || !canEditProjectMeta(targetState)) {
+              showToast('Action non autorisée sur le projet cible');
+              return;
+            }
+            const createEventDoc = createEvent(
+              EventTypes.CREATE_DOCUMENT,
+              targetProjectId,
+              currentUser.userId,
+              {
+                docId: uuidv4(),
+                name: doc.name,
+                type: doc.type,
+                size: doc.size,
+                data: doc.data,
+                theme: doc.theme || 'General',
+                notes: doc.notes || '',
+                sharingMode: nextSharingMode,
+                linkedTaskIds: selectedTaskId ? [selectedTaskId] : []
+              }
+            );
+            await publishEvent(createEventDoc);
+            if (sharedFolderHandle) await writeEventToSharedFolder(targetProjectId, createEventDoc);
+          }
+
+          const deleteEventDoc = createEvent(
+            EventTypes.DELETE_DOCUMENT,
+            doc.sourceProjectId,
+            currentUser.userId,
+            { docId: doc.docId }
+          );
+          await publishEvent(deleteEventDoc);
+          if (sharedFolderHandle) await writeEventToSharedFolder(doc.sourceProjectId, deleteEventDoc);
+          showToast(targetProjectId ? 'Document déplacé / mis à jour' : 'Document détaché hors projet');
+          changed = true;
+        }
+      });
+
+      if (!changed) return;
+      closeDocumentBindingModal();
+      await renderGlobalDocs();
+    }
+
+    async function deleteGlobalDocument(docId) {
+      const id = String(docId || '').trim();
+      if (!id) return;
+      const docs = await getGlobalDocumentsList();
+      const doc = docs.find(d => String(d.id || '') === id);
+      if (!doc) {
+        showToast('Document introuvable');
+        return;
+      }
+
+      if (doc.sourceType === 'standalone') {
+        if (!confirm('Supprimer ce document hors projet ?')) return;
+        const db = getDatabase();
+        await deleteFromStore('globalDocs', doc.id);
+        showToast('Document supprimé');
+        addNotification('Documents', 'Document hors projet supprimé', null);
+        await renderGlobalDocs();
+        return;
+      }
+
+      if (doc.sourceType === 'project-doc') {
+        const state = await getProjectState(doc.sourceProjectId);
+        if (!state?.project) {
+          showToast('Projet source introuvable');
+          return;
+        }
+        if (!canEditProjectMeta(state)) {
+          showToast('Action non autorisee');
+          return;
+        }
+        if (!confirm('Supprimer ce document du projet ?')) return;
+        const event = createEvent(
+          EventTypes.DELETE_DOCUMENT,
+          doc.sourceProjectId,
+          currentUser.userId,
+          { docId: doc.docId }
+        );
+        await publishEvent(event);
+        if (sharedFolderHandle) await writeEventToSharedFolder(doc.sourceProjectId, event);
+        showToast('Document projet supprimé');
+        addNotification('Documents', 'Document de projet supprimé', doc.sourceProjectId);
+        await renderGlobalDocs();
+        return;
+      }
+
+      const state = await getProjectState(doc.sourceProjectId);
+      const task = (state?.tasks || []).find(t => t.taskId === doc.taskId);
+      if (!state || !task) {
+        showToast('Tâche source introuvable');
+        return;
+      }
+      if (!canEditTaskInProject(task, state)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      if (!confirm('Supprimer cette pièce jointe du projet ?')) return;
+
+      const attachments = (task.attachments || []).filter((_, idx) => idx !== Number(doc.attachmentIndex));
+      const event = createEvent(
+        EventTypes.UPDATE_TASK,
+        doc.sourceProjectId,
+        currentUser.userId,
+        { taskId: doc.taskId, changes: { attachments } }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) await writeEventToSharedFolder(doc.sourceProjectId, event);
+      showToast('Pièce jointe supprimée');
+      addNotification('Documents', 'Pièce jointe de projet supprimée', doc.sourceProjectId);
+      await renderGlobalDocs();
     }
 
     async function addStandaloneDocuments() {
@@ -4996,6 +9763,7 @@
       }
 
       const maxFileSize = 8 * 1024 * 1024;
+      await runWithLoading(async () => {
       for (const file of files) {
         if (file.size > maxFileSize) {
           showToast(`Le fichier ${file.name} dépasse 8 Mo`);
@@ -5019,10 +9787,1173 @@
 
       if (filesInput) filesInput.value = '';
       if (modeInput) modeInput.value = 'private';
+      });
       showToast('Documents hors projet ajoutés');
       addNotification('Documents', `${files.length} document(s) hors projet ajouté(s)`, null);
       await renderGlobalDocs();
     }
+
+    function loadGlobalMessageReadMap() {
+      try {
+        const raw = localStorage.getItem(GLOBAL_MESSAGE_READ_STORAGE_KEY);
+        const parsed = raw ? JSON.parse(raw) : {};
+        if (!parsed || typeof parsed !== 'object') return {};
+        const cleaned = {};
+        Object.entries(parsed).forEach(([key, value]) => {
+          const ts = Number(value || 0);
+          if (key && Number.isFinite(ts) && ts > 0) cleaned[String(key)] = ts;
+        });
+        return cleaned;
+      } catch {
+        return {};
+      }
+    }
+
+    function saveGlobalMessageReadMap() {
+      try {
+        localStorage.setItem(GLOBAL_MESSAGE_READ_STORAGE_KEY, JSON.stringify(globalMessageReadMap || {}));
+      } catch {
+        // ignore quota/storage errors
+      }
+    }
+
+    function getGlobalConversationLastRead(conversationId) {
+      const key = String(conversationId || '').trim();
+      if (!key) return 0;
+      const value = Number(globalMessageReadMap?.[key] || 0);
+      return Number.isFinite(value) && value > 0 ? value : 0;
+    }
+
+    function markGlobalConversationRead(conversationId, items = []) {
+      const key = String(conversationId || '').trim();
+      if (!key) return false;
+      const maxTs = (items || []).reduce((acc, msg) => {
+        const ts = Number(msg?.createdAt || 0);
+        return ts > acc ? ts : acc;
+      }, 0);
+      if (!maxTs) return false;
+      if (getGlobalConversationLastRead(key) >= maxTs) return false;
+      globalMessageReadMap[key] = maxTs;
+      saveGlobalMessageReadMap();
+      return true;
+    }
+
+    function getDirectConversationId(userA, userB) {
+      const a = String(userA || '').trim();
+      const b = String(userB || '').trim();
+      if (!a || !b) return '';
+      return [a, b].sort().join('__');
+    }
+
+    function getGlobalBroadcastConversationId() {
+      return 'global__all';
+    }
+
+    function isGlobalBroadcastTarget(userId) {
+      const target = String(userId || '').trim();
+      return target === GLOBAL_MESSAGE_BROADCAST_TARGET || target === GLOBAL_MESSAGE_BROADCAST_USER_ID;
+    }
+
+    function isGlobalGroupTarget(userId) {
+      return String(userId || '').trim().startsWith(GLOBAL_MESSAGE_GROUP_TARGET_PREFIX);
+    }
+
+    function isGlobalGroupConversationId(conversationId) {
+      return String(conversationId || '').trim().startsWith(GLOBAL_MESSAGE_GROUP_CONVERSATION_PREFIX);
+    }
+
+    function normalizeGlobalMessageUserIds(userIds = []) {
+      return Array.from(new Set((userIds || [])
+        .map((id) => String(id || '').trim())
+        .filter(Boolean)))
+        .sort((a, b) => a.localeCompare(b, 'fr'));
+    }
+
+    function getGroupConversationId(userIds = []) {
+      const normalized = normalizeGlobalMessageUserIds(userIds);
+      if (normalized.length < 2) return '';
+      return `${GLOBAL_MESSAGE_GROUP_CONVERSATION_PREFIX}${normalized.join('__')}`;
+    }
+
+    function parseGroupConversationMemberIds(conversationId) {
+      const raw = String(conversationId || '').trim();
+      if (!isGlobalGroupConversationId(raw)) return [];
+      const payload = raw.slice(GLOBAL_MESSAGE_GROUP_CONVERSATION_PREFIX.length);
+      return normalizeGlobalMessageUserIds(payload.split('__'));
+    }
+
+    function buildGlobalGroupTargetUserId(conversationId) {
+      const cid = String(conversationId || '').trim();
+      if (!cid) return '';
+      return `${GLOBAL_MESSAGE_GROUP_TARGET_PREFIX}${cid}`;
+    }
+
+    function getGlobalMessageRecipientIds(msg) {
+      const fromField = Array.isArray(msg?.toUserIds) ? msg.toUserIds : [];
+      const normalizedField = normalizeGlobalMessageUserIds(fromField);
+      if (normalizedField.length > 0) return normalizedField;
+      const toUserId = String(msg?.toUserId || '').trim();
+      if (isGlobalGroupTarget(toUserId)) {
+        const fromConversation = parseGroupConversationMemberIds(String(msg?.conversationId || ''));
+        if (fromConversation.length > 0) return fromConversation;
+      }
+      if (toUserId && !isGlobalBroadcastTarget(toUserId)) {
+        const sender = String(msg?.fromUserId || '').trim();
+        return normalizeGlobalMessageUserIds([sender, toUserId]);
+      }
+      return [];
+    }
+
+    function isGlobalMessageVisibleForUser(msg, userId) {
+      const me = String(userId || '').trim();
+      if (!me || !msg) return false;
+      const fromId = String(msg.fromUserId || '').trim();
+      const toId = String(msg.toUserId || '').trim();
+      if (fromId === me) return true;
+      if (toId === me) return true;
+      if (isGlobalBroadcastTarget(toId)) return true;
+      if (!isGlobalGroupTarget(toId)) return false;
+      return getGlobalMessageRecipientIds(msg).includes(me);
+    }
+
+    function formatGlobalMessageGroupChannelLabel(memberIds = [], includeSelf = false) {
+      const me = String(currentUser?.userId || '').trim();
+      const filtered = (memberIds || []).filter((id) => includeSelf ? true : String(id || '') !== me);
+      const recipientsLabel = formatGlobalMessageRecipientLabel(filtered);
+      return recipientsLabel ? `Groupe: ${recipientsLabel}` : 'Canal de groupe';
+    }
+
+    async function ensureKnownGlobalMessageIdsLoaded() {
+      if (knownGlobalMessageIds.size > 0) return;
+      const rows = await getAllDecrypted('globalMessages', 'messageId');
+      (rows || []).forEach((row) => {
+        if (row?.messageId) knownGlobalMessageIds.add(String(row.messageId));
+      });
+    }
+
+    async function writeGlobalMessageToSharedFolder(message) {
+      if (!sharedFolderHandle || !message?.messageId) return false;
+      try {
+        const globalDir = await sharedFolderHandle.getDirectoryHandle('global', { create: true });
+        const messagesDir = await globalDir.getDirectoryHandle('messages', { create: true });
+        const eventsDir = await messagesDir.getDirectoryHandle('events', { create: true });
+        const fileName = `${Number(message.createdAt || Date.now())}_${message.messageId}.json`;
+        const fileHandle = await eventsDir.getFileHandle(fileName, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(JSON.stringify({
+          type: 'taskmda_global_message',
+          version: 1,
+          payload: message
+        }));
+        await writable.close();
+        return true;
+      } catch (error) {
+        console.warn('Global message shared write failed:', error);
+        return false;
+      }
+    }
+
+    async function syncGlobalMessagesFromSharedFolder(options = {}) {
+      if (!sharedFolderHandle) return { loaded: 0 };
+      await ensureKnownGlobalMessageIdsLoaded();
+      let loaded = 0;
+      try {
+        const globalDir = await sharedFolderHandle.getDirectoryHandle('global', { create: true });
+        const messagesDir = await globalDir.getDirectoryHandle('messages', { create: true });
+        const eventsDir = await messagesDir.getDirectoryHandle('events', { create: true });
+        for await (const entry of eventsDir.values()) {
+          if (entry.kind !== 'file' || !entry.name.endsWith('.json')) continue;
+          const file = await entry.getFile();
+          const content = await file.text();
+          let parsed = null;
+          try {
+            parsed = JSON.parse(content);
+          } catch {
+            continue;
+          }
+          if (!parsed || parsed.type !== 'taskmda_global_message' || !parsed.payload) continue;
+          const msg = parsed.payload;
+          const messageId = String(msg.messageId || '').trim();
+          if (!messageId || knownGlobalMessageIds.has(messageId)) continue;
+          if (!msg.fromUserId || !msg.toUserId || !msg.conversationId) continue;
+          const normalizedRecipientIds = getGlobalMessageRecipientIds(msg);
+          await putEncrypted('globalMessages', {
+            messageId,
+            conversationId: String(msg.conversationId || ''),
+            fromUserId: String(msg.fromUserId || ''),
+            fromName: String(msg.fromName || ''),
+            toUserId: String(msg.toUserId || ''),
+            toUserIds: normalizedRecipientIds,
+            toName: String(msg.toName || ''),
+            content: String(msg.content || ''),
+            createdAt: Number(msg.createdAt || Date.now()),
+            source: 'shared'
+          }, 'messageId');
+          knownGlobalMessageIds.add(messageId);
+          loaded += 1;
+          const me = String(currentUser?.userId || '');
+          const toUserId = String(msg.toUserId || '');
+          const isBroadcast = isGlobalBroadcastTarget(toUserId);
+          const isGroup = isGlobalGroupTarget(toUserId) || isGlobalGroupConversationId(String(msg.conversationId || ''));
+          const isForMe = toUserId === me || isBroadcast || (isGroup && normalizedRecipientIds.includes(me));
+          if (isForMe && String(msg.fromUserId || '') !== me) {
+            const hintValue = isBroadcast
+              ? GLOBAL_MESSAGE_BROADCAST_TARGET
+              : (isGroup
+                ? `${GLOBAL_MESSAGE_GROUP_SELECTION_PREFIX}${String(msg.conversationId || '').trim()}`
+                : '');
+            addNotification(
+              isBroadcast ? 'Canal general' : (isGroup ? 'Canal groupe' : 'Message hors projet'),
+              isBroadcast
+                ? `${msg.fromName || fallbackDirectoryName(msg.fromUserId)} a publie dans le canal general`
+                : (isGroup
+                  ? `${msg.fromName || fallbackDirectoryName(msg.fromUserId)} a ecrit dans ${String(msg.toName || 'un canal de groupe')}`
+                  : `${msg.fromName || fallbackDirectoryName(msg.fromUserId)} vous a ecrit`),
+              null,
+              {
+                targetView: 'messages',
+                actorUserId: msg.fromUserId,
+                actorName: msg.fromName || '',
+                targetType: 'global-message',
+                targetId: messageId,
+                hint: hintValue,
+                dedupeKey: `global-message:${messageId}`,
+                linkLabel: isBroadcast || isGroup ? 'Ouvrir le canal' : 'Ouvrir la messagerie'
+              }
+            );
+          }
+        }
+      } catch (error) {
+        if (error?.name !== 'NotFoundError') {
+          console.warn('Global message shared sync failed:', error);
+        }
+      }
+      if (loaded > 0 && workspaceMode === 'global' && globalWorkspaceView === 'messages') {
+        await renderGlobalMessages();
+      }
+      return { loaded };
+    }
+
+    async function getGlobalMessageContacts(query = '') {
+      const users = await getKnownUsersForGlobalGroups();
+      const me = String(currentUser?.userId || '');
+      const allMessages = await getAllDecrypted('globalMessages', 'messageId');
+      const scoped = (allMessages || []).filter((msg) => isGlobalMessageVisibleForUser(msg, me));
+      const lastByUser = new Map();
+      scoped.forEach((msg) => {
+        const other = String(msg.fromUserId || '') === me ? String(msg.toUserId || '') : String(msg.fromUserId || '');
+        if (!other) return;
+        const current = lastByUser.get(other);
+        if (!current || Number(msg.createdAt || 0) > Number(current.createdAt || 0)) {
+          lastByUser.set(other, msg);
+        }
+      });
+      const allContacts = users
+        .filter(u => String(u.userId || '') && String(u.userId) !== me)
+        .sort((a, b) => {
+          const aTs = Number(lastByUser.get(a.userId)?.createdAt || 0);
+          const bTs = Number(lastByUser.get(b.userId)?.createdAt || 0);
+          if (aTs !== bTs) return bTs - aTs;
+          return String(a.name || '').localeCompare(String(b.name || ''), 'fr');
+        });
+      const filteredUsers = allContacts.filter(u => matchesQuery([u.name, u.email], query));
+      return { contacts: filteredUsers, allContacts, messages: scoped };
+    }
+
+    // Rend la messagerie hors projet.
+    // La couche de templates HTML est deleguee a taskmda-social.js
+    // pour limiter la complexite visuelle de ce fichier central.
+    function formatGlobalMessageRecipientLabel(recipientIds = [], contacts = []) {
+      const labels = recipientIds
+        .map((id) => {
+          const row = contacts.find(c => String(c.userId || '') === String(id || ''))
+            || knownUsersCache.get(String(id || '').trim())
+            || null;
+          const identity = resolveKnownUserIdentity(id, row?.name || '');
+          return identity.name || fallbackDirectoryName(id);
+        })
+        .filter(Boolean);
+      if (labels.length === 0) return '';
+      if (labels.length === 1) return labels[0];
+      if (labels.length === 2) return `${labels[0]} et ${labels[1]}`;
+      return `${labels[0]}, ${labels[1]} +${labels.length - 2}`;
+    }
+
+    function resetGlobalMessageRenderLimits() {
+      globalMessageContactsRenderLimit = GLOBAL_MESSAGE_CONTACTS_INITIAL_BATCH;
+      globalMessageThreadRenderLimit = GLOBAL_MESSAGE_THREAD_INITIAL_BATCH;
+    }
+
+    async function renderGlobalMessages(options = {}) {
+      const keepThreadAnchor = Boolean(options?.keepThreadAnchor);
+      const forceScrollBottom = Boolean(options?.forceScrollBottom);
+      const contactsList = document.getElementById('global-message-contacts-list');
+      const contactSearch = document.getElementById('global-message-contact-search');
+      const thread = document.getElementById('global-message-thread');
+      const empty = document.getElementById('global-message-thread-empty');
+      const input = document.getElementById('global-message-input');
+      const targetLabel = document.getElementById('global-message-target-label');
+      const groupChannelSelect = document.getElementById('global-message-group-channel-select');
+      if (!contactsList || !thread || !empty || !input) return;
+      const query = String(contactSearch?.value || '').trim();
+      const { contacts, allContacts, messages } = await getGlobalMessageContacts(query);
+      const me = String(currentUser?.userId || '');
+      if (!globalMessagePeerUserId) {
+        globalMessagePeerUserId = GLOBAL_MESSAGE_BROADCAST_TARGET;
+      }
+      const hasSelectedContact = allContacts.some(c => c.userId === globalMessagePeerUserId);
+      if (globalMessagePeerUserId !== GLOBAL_MESSAGE_BROADCAST_TARGET && !hasSelectedContact) {
+        globalMessagePeerUserId = GLOBAL_MESSAGE_BROADCAST_TARGET;
+      }
+      const validRecipientIds = new Set(allContacts.map(c => String(c.userId || '')));
+      globalMessageRecipientUserIds = new Set(
+        Array.from(globalMessageRecipientUserIds || []).filter((id) => validRecipientIds.has(String(id || '')))
+      );
+
+      const visibleMessages = (messages || []).filter((msg) => isGlobalMessageVisibleForUser(msg, me));
+      const groupChannelMap = new Map();
+      visibleMessages.forEach((msg) => {
+        const conversationId = String(msg.conversationId || '').trim();
+        if (!isGlobalGroupConversationId(conversationId)) return;
+        const memberIds = getGlobalMessageRecipientIds(msg);
+        if (!memberIds.includes(me)) return;
+        const previous = groupChannelMap.get(conversationId);
+        const createdAt = Number(msg.createdAt || 0);
+        const label = String(msg.toName || '').trim() || formatGlobalMessageGroupChannelLabel(memberIds);
+        if (!previous || createdAt > Number(previous.lastCreatedAt || 0)) {
+          groupChannelMap.set(conversationId, {
+            conversationId,
+            memberIds,
+            label,
+            lastCreatedAt: createdAt
+          });
+        }
+      });
+      if (globalMessageActiveGroupConversationId && !groupChannelMap.has(globalMessageActiveGroupConversationId)) {
+        globalMessageActiveGroupConversationId = '';
+      }
+
+      const isGroupView = Boolean(globalMessageActiveGroupConversationId);
+      const isBroadcastView = !isGroupView && globalMessagePeerUserId === GLOBAL_MESSAGE_BROADCAST_TARGET;
+      const activeConversationId = isGroupView
+        ? globalMessageActiveGroupConversationId
+        : (isBroadcastView
+          ? getGlobalBroadcastConversationId()
+          : getDirectConversationId(currentUser?.userId, globalMessagePeerUserId));
+
+      const activeItems = visibleMessages
+        .filter((msg) => String(msg.conversationId || '') === activeConversationId)
+        .sort((a, b) => Number(a.createdAt || 0) - Number(b.createdAt || 0));
+      if (activeConversationId && activeItems.length > 0) {
+        markGlobalConversationRead(activeConversationId, activeItems);
+      }
+
+      const unreadByUser = new Map();
+      const unreadByGroup = new Map();
+      let unreadBroadcast = 0;
+      (visibleMessages || []).forEach((msg) => {
+        const fromId = String(msg.fromUserId || '');
+        const toId = String(msg.toUserId || '');
+        const conversationId = String(msg.conversationId || '').trim();
+        if (fromId === me || !conversationId) return;
+        if (!isGlobalMessageVisibleForUser(msg, me)) return;
+        if (!conversationId) return;
+        const lastRead = getGlobalConversationLastRead(conversationId);
+        const createdAt = Number(msg.createdAt || 0);
+        if (!createdAt || createdAt <= lastRead) return;
+        if (isGlobalBroadcastTarget(toId)) {
+          unreadBroadcast += 1;
+          return;
+        }
+        if (isGlobalGroupConversationId(conversationId) || isGlobalGroupTarget(toId)) {
+          unreadByGroup.set(conversationId, Number(unreadByGroup.get(conversationId) || 0) + 1);
+          return;
+        }
+        unreadByUser.set(fromId, Number(unreadByUser.get(fromId) || 0) + 1);
+      });
+
+      const contactItems = [
+        {
+          id: GLOBAL_MESSAGE_BROADCAST_TARGET,
+          isBroadcast: true,
+          clickHandler: 'selectGlobalMessageChannel',
+          isActive: isBroadcastView && !isGroupView,
+          name: 'Canal general',
+          status: 'Tous les agents connus',
+          unreadCount: unreadBroadcast,
+          avatarDataUrl: '',
+          initials: 'ALL',
+          avatarColor: 'linear-gradient(135deg,#1f4b92,#3b82f6)'
+        },
+        ...Array.from(groupChannelMap.values())
+          .sort((a, b) => Number(b.lastCreatedAt || 0) - Number(a.lastCreatedAt || 0))
+          .map((channel) => {
+            const membersWithoutMe = (channel.memberIds || []).filter((id) => id !== me);
+            return {
+              id: `${GLOBAL_MESSAGE_GROUP_SELECTION_PREFIX}${channel.conversationId}`,
+              isBroadcast: false,
+              isGroup: true,
+              clickHandler: 'selectGlobalMessageChannel',
+              isActive: channel.conversationId === globalMessageActiveGroupConversationId,
+              name: channel.label || formatGlobalMessageGroupChannelLabel(channel.memberIds),
+              status: `${membersWithoutMe.length} agent(s)`,
+              subtitle: formatGlobalMessageRecipientLabel(membersWithoutMe, allContacts),
+              unreadCount: Number(unreadByGroup.get(channel.conversationId) || 0),
+              avatarDataUrl: '',
+              initials: 'GRP',
+              avatarColor: 'linear-gradient(135deg,#0f766e,#22c55e)'
+            };
+          }),
+        ...contacts.map((user) => {
+          const identity = resolveKnownUserIdentity(user.userId, user.name || '');
+          return {
+            id: String(user.userId || ''),
+            isBroadcast: false,
+            clickHandler: 'selectGlobalMessageChannel',
+            isActive: !isGroupView && user.userId === globalMessagePeerUserId,
+            name: identity.name || fallbackDirectoryName(user.userId),
+            status: user.email || 'Agent connu',
+            unreadCount: Number(unreadByUser.get(user.userId) || 0),
+            avatarDataUrl: identity.avatarDataUrl || '',
+            initials: getInitials(identity.name || 'U'),
+            avatarColor: stringToColor(identity.userId || identity.name || '')
+          };
+        })
+      ];
+      const limitedContactItems = contactItems.slice(0, Math.max(1, globalMessageContactsRenderLimit));
+      const hasMoreContacts = contactItems.length > limitedContactItems.length;
+      contactsList.dataset.hasMore = hasMoreContacts ? '1' : '0';
+      contactsList.innerHTML = window.TaskMDASocial?.renderContactsList
+        ? window.TaskMDASocial.renderContactsList({
+            items: limitedContactItems,
+            broadcastTarget: GLOBAL_MESSAGE_BROADCAST_TARGET,
+            multiSelectedIds: globalMessageRecipientUserIds,
+            escapeHtml
+          })
+        : '<p class="text-sm text-slate-500">Aucun agent connu.</p>';
+      if (hasMoreContacts) {
+        contactsList.insertAdjacentHTML('beforeend', '<p class="text-[11px] text-slate-500 text-center py-1">Faites défiler pour charger plus de canaux…</p>');
+      }
+
+      if (groupChannelSelect) {
+        await refreshGlobalTaxonomyCache();
+        const ownGroupRows = (globalGroupCatalog || [])
+          .filter((group) => {
+            const ids = Array.from(new Set((group?.memberUserIds || []).map((id) => String(id || '').trim()).filter(Boolean)));
+            return ids.length > 0 && ids.includes(me);
+          })
+          .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'fr'));
+        groupChannelSelect.innerHTML = [
+          '<option value="">Canal de groupe (groupes existants)</option>',
+          ...ownGroupRows.map((group) => `<option value="${escapeHtml(group.groupKey)}">${escapeHtml(group.name)}</option>`)
+        ].join('');
+      }
+
+      input.disabled = false;
+      empty.classList.add('hidden');
+      thread.classList.remove('hidden');
+      const maxThreadItems = Math.max(1, globalMessageThreadRenderLimit);
+      const hasMoreThreadItems = activeItems.length > maxThreadItems;
+      const items = hasMoreThreadItems ? activeItems.slice(activeItems.length - maxThreadItems) : activeItems;
+      thread.dataset.hasMore = hasMoreThreadItems ? '1' : '0';
+      if (targetLabel) {
+        if (globalMessageRecipientUserIds.size > 0) {
+          const selectedIds = Array.from(globalMessageRecipientUserIds);
+          const label = formatGlobalMessageRecipientLabel(selectedIds, allContacts);
+          if (selectedIds.length > 1) {
+            targetLabel.textContent = `Canal groupe (${selectedIds.length}): ${label}`;
+            input.placeholder = `Ecrire dans le canal groupe (${selectedIds.length} agents)...`;
+          } else {
+            targetLabel.textContent = `Destinataire: ${label}`;
+            input.placeholder = `Ecrire un message prive a ${label}...`;
+          }
+        } else if (isGroupView) {
+          const members = parseGroupConversationMemberIds(globalMessageActiveGroupConversationId).filter((id) => id !== me);
+          targetLabel.textContent = formatGlobalMessageGroupChannelLabel(members);
+          input.placeholder = `Ecrire dans ${formatGlobalMessageGroupChannelLabel(members)}...`;
+        } else if (isBroadcastView) {
+          targetLabel.textContent = 'Destinataire: Canal general (tous les agents connus)';
+          input.placeholder = 'Ecrire un message pour tous les agents connus...';
+        } else {
+          const targetIdentity = resolveKnownUserIdentity(globalMessagePeerUserId, allContacts.find(c => c.userId === globalMessagePeerUserId)?.name || '');
+          targetLabel.textContent = `Destinataire: ${targetIdentity.name}`;
+          input.placeholder = `Ecrire un message prive a ${targetIdentity.name}...`;
+        }
+      }
+
+      if (items.length === 0) {
+        thread.innerHTML = isBroadcastView
+          ? '<p class="text-slate-500 text-center py-8">Aucun message dans le canal general.</p>'
+          : (isGroupView
+            ? '<p class="text-slate-500 text-center py-8">Aucun message dans ce canal de groupe.</p>'
+            : '<p class="text-slate-500 text-center py-8">Aucun message pour cette discussion.</p>');
+        return;
+      }
+
+      const threadItems = items.map((msg) => {
+        const mine = String(msg.fromUserId || '') === String(currentUser?.userId || '');
+        const identity = resolveKnownUserIdentity(msg.fromUserId, msg.fromName || '');
+        const identityName = mine ? (currentUser?.name || identity.name || 'Vous') : (identity.name || fallbackDirectoryName(msg.fromUserId));
+        const timeLabel = new Date(Number(msg.createdAt || Date.now())).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        return {
+          mine,
+          author: identityName,
+          timeLabel,
+          content: msg.content || '',
+          avatarDataUrl: (mine ? currentUser?.avatarDataUrl : identity.avatarDataUrl) || '',
+          avatarInitials: getInitials(identityName),
+          avatarColor: stringToColor(msg.fromUserId || identityName || '')
+        };
+      });
+      const prevScrollHeight = thread.scrollHeight;
+      const prevScrollTop = thread.scrollTop;
+      thread.innerHTML = window.TaskMDASocial?.renderThread
+        ? window.TaskMDASocial.renderThread({
+            items: threadItems,
+            escapeHtml,
+            renderMarkdown: (text) => renderSafeMarkdown(text)
+          })
+        : '';
+      if (hasMoreThreadItems) {
+        thread.insertAdjacentHTML('afterbegin', '<p class="text-[11px] text-slate-500 text-center pb-2">Faites défiler vers le haut pour charger les messages précédents…</p>');
+      }
+      if (keepThreadAnchor) {
+        const nextHeight = thread.scrollHeight;
+        thread.scrollTop = Math.max(0, nextHeight - prevScrollHeight + prevScrollTop);
+      } else if (forceScrollBottom || !hasMoreThreadItems) {
+        thread.scrollTop = thread.scrollHeight;
+      }
+    }
+
+    async function selectGlobalMessageChannel(channelId) {
+      const next = String(channelId || '').trim();
+      resetGlobalMessageRenderLimits();
+      if (!next || next === GLOBAL_MESSAGE_BROADCAST_TARGET) {
+        globalMessageActiveGroupConversationId = '';
+        globalMessagePeerUserId = GLOBAL_MESSAGE_BROADCAST_TARGET;
+      } else if (next.startsWith(GLOBAL_MESSAGE_GROUP_SELECTION_PREFIX)) {
+        const conversationId = next.slice(GLOBAL_MESSAGE_GROUP_SELECTION_PREFIX.length);
+        globalMessageActiveGroupConversationId = conversationId;
+        globalMessagePeerUserId = GLOBAL_MESSAGE_BROADCAST_TARGET;
+      } else {
+        globalMessageActiveGroupConversationId = '';
+        globalMessagePeerUserId = next;
+      }
+      globalMessageRecipientUserIds = new Set();
+      await renderGlobalMessages();
+    }
+
+    function selectGlobalMessagePeer(userId) {
+      selectGlobalMessageChannel(userId);
+    }
+
+    async function toggleGlobalMessageRecipient(userId) {
+      const id = String(userId || '').trim();
+      if (!id || id === GLOBAL_MESSAGE_BROADCAST_TARGET) return;
+      if (globalMessageRecipientUserIds.has(id)) {
+        globalMessageRecipientUserIds.delete(id);
+      } else {
+        globalMessageRecipientUserIds.add(id);
+      }
+      await renderGlobalMessages();
+    }
+
+    async function selectAllGlobalMessageRecipients() {
+      const users = await getKnownUsersForGlobalGroups();
+      const me = String(currentUser?.userId || '');
+      globalMessageRecipientUserIds = new Set(
+        (users || [])
+          .map(u => String(u?.userId || '').trim())
+          .filter(id => id && id !== me)
+      );
+      await renderGlobalMessages();
+    }
+
+    async function clearGlobalMessageRecipients() {
+      globalMessageRecipientUserIds = new Set();
+      await renderGlobalMessages();
+    }
+
+    async function handleGlobalMessageContactsScroll(event) {
+      const el = event?.currentTarget;
+      if (!(el instanceof HTMLElement)) return;
+      if (el.dataset.hasMore !== '1') return;
+      const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 56;
+      if (!nearBottom) return;
+      globalMessageContactsRenderLimit += GLOBAL_MESSAGE_CONTACTS_BATCH_SIZE;
+      await renderGlobalMessages();
+    }
+
+    async function handleGlobalMessageThreadScroll(event) {
+      const el = event?.currentTarget;
+      if (!(el instanceof HTMLElement)) return;
+      if (el.dataset.hasMore !== '1') return;
+      if (el.scrollTop > 28) return;
+      globalMessageThreadRenderLimit += GLOBAL_MESSAGE_THREAD_BATCH_SIZE;
+      await renderGlobalMessages({ keepThreadAnchor: true });
+    }
+
+    async function openGlobalMessageGroupChannelFromCatalog(groupKey) {
+      const key = String(groupKey || '').trim();
+      if (!key) return;
+      resetGlobalMessageRenderLimits();
+      await refreshGlobalTaxonomyCache();
+      const me = String(currentUser?.userId || '').trim();
+      const group = (globalGroupCatalog || []).find((item) => String(item.groupKey || '').trim() === key);
+      if (!group) return;
+      const memberIds = normalizeGlobalMessageUserIds([
+        me,
+        ...((group.memberUserIds || []).map((id) => String(id || '').trim()))
+      ]);
+      if (memberIds.length < 2) {
+        showToast('Ce groupe ne contient aucun autre agent.');
+        return;
+      }
+      const conversationId = getGroupConversationId(memberIds);
+      if (!conversationId) return;
+      globalMessageActiveGroupConversationId = conversationId;
+      globalMessagePeerUserId = GLOBAL_MESSAGE_BROADCAST_TARGET;
+      globalMessageRecipientUserIds = new Set(memberIds.filter((id) => id !== me));
+      await renderGlobalMessages();
+    }
+
+    function normalizeMentionHandle(value) {
+      const raw = String(value || '').toLowerCase();
+      const noAccent = raw.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      return noAccent.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24) || 'agent';
+    }
+
+    async function buildGlobalMentionCatalog() {
+      const users = await getKnownUsersForGlobalGroups();
+      const byHandle = new Map();
+      const byDisplayName = new Map();
+      const byUserId = new Map();
+      const used = new Set();
+      users.forEach((user) => {
+        const userId = String(user?.userId || '').trim();
+        if (!userId) return;
+        const displayName = String(user?.name || fallbackDirectoryName(userId)).trim();
+        if (!displayName) return;
+        let handle = normalizeMentionHandle(displayName);
+        if (!handle) handle = `agent-${userId.slice(0, 6)}`;
+        let suffix = 2;
+        let unique = handle;
+        while (used.has(unique)) {
+          unique = `${handle}-${suffix++}`;
+        }
+        used.add(unique);
+        const row = { userId, name: displayName, email: String(user?.email || ''), handle: unique };
+        byHandle.set(unique, row);
+        byDisplayName.set(normalizeSearch(displayName), row);
+        byUserId.set(userId, row);
+      });
+      return { byHandle, byDisplayName, byUserId, users: Array.from(byUserId.values()) };
+    }
+
+    function extractMentionedUserIdsFromText(content, catalog) {
+      const text = String(content || '');
+      const ids = new Set();
+      if (!catalog) return ids;
+
+      const handleRegex = /@([a-z0-9][a-z0-9._-]{1,30})/gi;
+      let match = null;
+      while ((match = handleRegex.exec(text)) !== null) {
+        const handle = normalizeMentionHandle(match[1]);
+        const user = catalog.byHandle.get(handle);
+        if (user?.userId) ids.add(user.userId);
+      }
+
+      const bracketRegex = /@\[([^\]]{2,80})\]/g;
+      while ((match = bracketRegex.exec(text)) !== null) {
+        const key = normalizeSearch(match[1]);
+        const user = catalog.byDisplayName.get(key);
+        if (user?.userId) ids.add(user.userId);
+      }
+      return ids;
+    }
+
+    async function updateGlobalFeedMentionCounter() {
+      const counter = document.getElementById('global-feed-mention-counter');
+      const input = document.getElementById('global-feed-input');
+      if (!counter || !input) return;
+      let catalog = globalFeedMentionCatalogCache;
+      if (!catalog) {
+        catalog = await buildGlobalMentionCatalog();
+        globalFeedMentionCatalogCache = catalog;
+      }
+      const mentionsCount = extractMentionedUserIdsFromText(String(input.value || ''), catalog).size;
+      const label = mentionsCount > 1 ? `${mentionsCount} mentions detectees` : `${mentionsCount} mention detectee`;
+      counter.textContent = label;
+      counter.classList.toggle('is-active', mentionsCount > 0);
+      counter.setAttribute('title', mentionsCount > 0
+        ? `${mentionsCount} agent(s) sera/seront notifie(s) a la publication`
+        : 'Ajoutez des @mentions pour notifier des agents');
+    }
+
+    function renderGlobalFeedContentHtml(content, catalog) {
+      let html = escapeHtml(String(content || ''));
+      html = html.replace(/@\[(.+?)\]/g, (_full, name) => {
+        const user = catalog?.byDisplayName?.get(normalizeSearch(name));
+        const label = user ? `${user.name} (@${user.handle})` : String(name || '');
+        return `<span class="feed-mention">@${escapeHtml(label)}</span>`;
+      });
+      html = html.replace(/@([a-z0-9][a-z0-9._-]{1,30})/gi, (_full, handle) => {
+        const user = catalog?.byHandle?.get(normalizeMentionHandle(handle));
+        const label = user ? `${user.name} (@${user.handle})` : `@${handle}`;
+        return `<span class="feed-mention">${escapeHtml(label)}</span>`;
+      });
+      return html.replace(/\n/g, '<br>');
+    }
+
+    async function ensureKnownGlobalPostIdsLoaded() {
+      if (knownGlobalPostIds.size > 0) return;
+      const rows = await getAllDecrypted('globalPosts', 'postId');
+      (rows || []).forEach((row) => {
+        if (row?.postId) knownGlobalPostIds.add(String(row.postId));
+      });
+    }
+
+    async function writeGlobalFeedPostToSharedFolder(post) {
+      if (!sharedFolderHandle || !post?.postId) return false;
+      try {
+        const globalDir = await sharedFolderHandle.getDirectoryHandle('global', { create: true });
+        const feedDir = await globalDir.getDirectoryHandle('feed', { create: true });
+        const eventsDir = await feedDir.getDirectoryHandle('events', { create: true });
+        const fileName = `${Number(post.createdAt || Date.now())}_${post.postId}.json`;
+        const fileHandle = await eventsDir.getFileHandle(fileName, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(JSON.stringify({
+          type: 'taskmda_global_post',
+          version: 1,
+          payload: post
+        }));
+        await writable.close();
+        return true;
+      } catch (error) {
+        console.warn('Global feed post shared write failed:', error);
+        return false;
+      }
+    }
+
+    async function syncGlobalFeedFromSharedFolder() {
+      if (!sharedFolderHandle) return { loaded: 0 };
+      await ensureKnownGlobalPostIdsLoaded();
+      let loaded = 0;
+      try {
+        const globalDir = await sharedFolderHandle.getDirectoryHandle('global', { create: true });
+        const feedDir = await globalDir.getDirectoryHandle('feed', { create: true });
+        const eventsDir = await feedDir.getDirectoryHandle('events', { create: true });
+        for await (const entry of eventsDir.values()) {
+          if (entry.kind !== 'file' || !entry.name.endsWith('.json')) continue;
+          const file = await entry.getFile();
+          const content = await file.text();
+          let parsed = null;
+          try {
+            parsed = JSON.parse(content);
+          } catch {
+            continue;
+          }
+          if (!parsed || parsed.type !== 'taskmda_global_post' || !parsed.payload) continue;
+          const post = parsed.payload;
+          const postId = String(post.postId || '').trim();
+          if (!postId || knownGlobalPostIds.has(postId)) continue;
+          await putEncrypted('globalPosts', {
+            postId,
+            authorUserId: String(post.authorUserId || ''),
+            authorName: String(post.authorName || ''),
+            content: String(post.content || ''),
+            mentions: Array.isArray(post.mentions) ? post.mentions.map((id) => String(id || '').trim()).filter(Boolean) : [],
+            refs: Array.isArray(post.refs) ? post.refs : [],
+            createdAt: Number(post.createdAt || Date.now()),
+            source: 'shared',
+            isAuto: Boolean(post.isAuto),
+            autoKind: String(post.autoKind || '').trim(),
+            sourceEventId: String(post.sourceEventId || '').trim()
+          }, 'postId');
+          knownGlobalPostIds.add(postId);
+          loaded += 1;
+
+          const me = String(currentUser?.userId || '');
+          const isMentioned = Array.isArray(post.mentions) && post.mentions.map((id) => String(id || '')).includes(me);
+          if (me && isMentioned && String(post.authorUserId || '') !== me) {
+            addNotification('Mention', `${post.authorName || fallbackDirectoryName(post.authorUserId)} vous a mentionne`, null, {
+              targetView: 'feed',
+              targetType: 'global-post',
+              targetId: postId,
+              actorUserId: post.authorUserId || '',
+              actorName: post.authorName || '',
+              dedupeKey: `global-post-mention:${postId}:${me}`,
+              linkLabel: "Ouvrir le post"
+            });
+          }
+        }
+      } catch (error) {
+        if (error?.name !== 'NotFoundError') {
+          console.warn('Global feed shared sync failed:', error);
+        }
+      }
+      if (loaded > 0 && workspaceMode === 'global' && globalWorkspaceView === 'feed') {
+        await renderGlobalFeed();
+      }
+      return { loaded };
+    }
+
+    async function populateGlobalFeedComposerContext() {
+      const mentionSelect = document.getElementById('global-feed-mention-select');
+      const projectSelect = document.getElementById('global-feed-project-ref');
+      const taskSelect = document.getElementById('global-feed-task-ref');
+      const calendarSelect = document.getElementById('global-feed-calendar-ref');
+      if (!mentionSelect || !projectSelect || !taskSelect || !calendarSelect) return null;
+
+      const mentionCatalog = await buildGlobalMentionCatalog();
+      globalFeedMentionCatalogCache = mentionCatalog;
+      const mentionOptions = mentionCatalog.users
+        .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'fr'))
+        .map((u) => `<option value="${escapeHtml(u.userId)}">${escapeHtml(`${u.name} (@${u.handle})`)}</option>`)
+        .join('');
+      mentionSelect.innerHTML = `<option value="">Choisir un agent à mentionner...</option>${mentionOptions}`;
+
+      const projects = await getAllProjects();
+      projectSelect.innerHTML = `<option value="">Reference projet (optionnel)</option>${(projects || [])
+        .filter((p) => p && p.projectId)
+        .map((p) => `<option value="${escapeHtml(p.projectId)}">${escapeHtml(p.name || 'Projet')}</option>`).join('')}`;
+
+      const allTasks = await getGlobalTasksList();
+      taskSelect.innerHTML = `<option value="">Reference tache (optionnel)</option>${(allTasks || [])
+        .filter((t) => !t.archivedAt)
+        .map((t) => `<option value="${escapeHtml(buildGlobalTaskRef(t))}">${escapeHtml(`${t.title || 'Tache'} • ${t.sourceProjectName || 'Hors projet'}`)}</option>`).join('')}`;
+
+      const infos = await getAllDecrypted('globalCalendarItems', 'id');
+      calendarSelect.innerHTML = `<option value="">Reference info calendrier (optionnel)</option>${(infos || [])
+        .filter((i) => !i.archivedAt)
+        .map((i) => `<option value="${escapeHtml(i.id)}">${escapeHtml(`${i.title || 'Info'} • ${formatDate(i.date)}`)}</option>`).join('')}`;
+
+      await updateGlobalFeedMentionCounter();
+      return mentionCatalog;
+    }
+
+    async function publishGlobalFeedPost() {
+      const input = document.getElementById('global-feed-input');
+      const projectSelect = document.getElementById('global-feed-project-ref');
+      const taskSelect = document.getElementById('global-feed-task-ref');
+      const calendarSelect = document.getElementById('global-feed-calendar-ref');
+      if (!input || !projectSelect || !taskSelect || !calendarSelect) return;
+      const content = String(input.value || '').trim();
+      if (!content) {
+        showToast('Le post est vide');
+        return;
+      }
+
+      const mentionCatalog = await buildGlobalMentionCatalog();
+      const mentions = Array.from(extractMentionedUserIdsFromText(content, mentionCatalog));
+      const refs = [];
+      if (projectSelect.value) {
+        const opt = projectSelect.options[projectSelect.selectedIndex];
+        refs.push({ type: 'project', id: projectSelect.value, label: opt?.textContent || 'Projet' });
+      }
+      if (taskSelect.value) {
+        const opt = taskSelect.options[taskSelect.selectedIndex];
+        refs.push({ type: 'task', id: taskSelect.value, label: opt?.textContent || 'Tache' });
+      }
+      if (calendarSelect.value) {
+        const opt = calendarSelect.options[calendarSelect.selectedIndex];
+        refs.push({ type: 'calendar-info', id: calendarSelect.value, label: opt?.textContent || 'Info calendrier' });
+      }
+
+      const post = {
+        postId: uuidv4(),
+        authorUserId: String(currentUser?.userId || ''),
+        authorName: String(currentUser?.name || fallbackDirectoryName(currentUser?.userId || '')),
+        content,
+        mentions,
+        refs,
+        createdAt: Date.now(),
+        source: sharedFolderHandle ? 'shared' : 'local'
+      };
+      await putEncrypted('globalPosts', post, 'postId');
+      knownGlobalPostIds.add(post.postId);
+      input.value = '';
+      projectSelect.value = '';
+      taskSelect.value = '';
+      calendarSelect.value = '';
+      await updateGlobalFeedMentionCounter();
+      await renderGlobalFeed();
+      if (sharedFolderHandle) {
+        writeGlobalFeedPostToSharedFolder(post);
+      }
+      showToast('Post publie');
+    }
+
+    async function openGlobalFeedReference(type, refId) {
+      const t = String(type || '').trim();
+      const id = decodeURIComponent(String(refId || '').trim());
+      if (!t || !id) return;
+      if (t === 'project') {
+        await showProjectDetail(id, { resetScroll: true });
+        return;
+      }
+      if (t === 'task') {
+        await showGlobalWorkspace('tasks');
+        await openGlobalTaskDetails(id);
+        return;
+      }
+      if (t === 'calendar-info') {
+        await showGlobalWorkspace('calendar');
+        await openStandaloneCalendarDetails(id);
+      }
+    }
+
+    async function openGlobalFeedPost(postId) {
+      globalFeedFocusPostId = String(postId || '').trim();
+      await showGlobalWorkspace('feed');
+      await renderGlobalFeed();
+    }
+
+    function refreshGlobalFeedFilterButtons() {
+      const map = {
+        all: document.getElementById('global-feed-filter-all'),
+        auto: document.getElementById('global-feed-filter-auto'),
+        manual: document.getElementById('global-feed-filter-manual'),
+        mentions: document.getElementById('global-feed-filter-mentions'),
+        'project-refs': document.getElementById('global-feed-filter-project-refs'),
+        'task-refs': document.getElementById('global-feed-filter-task-refs')
+      };
+      Object.entries(map).forEach(([key, btn]) => {
+        if (!btn) return;
+        const active = key === globalFeedFilterMode;
+        btn.classList.toggle('view-tab-active', active);
+        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+      });
+      const sortSelect = document.getElementById('global-feed-sort');
+      if (sortSelect) sortSelect.value = globalFeedSortMode;
+    }
+
+    function renderGlobalFeedSummary(posts, mentionCatalog) {
+      const summary = document.getElementById('global-feed-summary');
+      if (!summary) return;
+      const me = String(currentUser?.userId || '');
+      const total = posts.length;
+      const autoCount = posts.filter((p) => Boolean(p.isAuto || p.sourceEventId)).length;
+      const manualCount = total - autoCount;
+      const mentionCount = posts.filter((p) => Array.isArray(p.mentions) && p.mentions.map((id) => String(id || '')).includes(me)).length;
+      const projectRefsCount = posts.filter((p) => Array.isArray(p.refs) && p.refs.some((r) => String(r?.type || '') === 'project')).length;
+      const taskRefsCount = posts.filter((p) => Array.isArray(p.refs) && p.refs.some((r) => String(r?.type || '') === 'task')).length;
+      const knownMentions = (mentionCatalog?.users || []).length;
+      summary.innerHTML = `
+        <span class="feed-summary-chip"><span class="material-symbols-outlined text-[14px]">feed</span>${total} éléments</span>
+        <span class="feed-summary-chip"><span class="material-symbols-outlined text-[14px]">bolt</span>${autoCount} activités auto</span>
+        <span class="feed-summary-chip"><span class="material-symbols-outlined text-[14px]">edit_square</span>${manualCount} posts manuels</span>
+        <span class="feed-summary-chip"><span class="material-symbols-outlined text-[14px]">alternate_email</span>${mentionCount} mentions</span>
+        <span class="feed-summary-chip"><span class="material-symbols-outlined text-[14px]">folder</span>${projectRefsCount} refs projet</span>
+        <span class="feed-summary-chip"><span class="material-symbols-outlined text-[14px]">assignment</span>${taskRefsCount} refs tache</span>
+        <span class="feed-summary-chip"><span class="material-symbols-outlined text-[14px]">group</span>${knownMentions} agents connus</span>
+      `;
+    }
+
+    async function renderGlobalFeed() {
+      const list = document.getElementById('global-feed-list');
+      const searchInput = document.getElementById('global-feed-search');
+      if (!list) return;
+      const mentionCatalog = await populateGlobalFeedComposerContext();
+      if (mentionCatalog) globalFeedMentionCatalogCache = mentionCatalog;
+      const query = String(searchInput?.value || '').trim();
+      const postsAll = (await getAllDecrypted('globalPosts', 'postId') || [])
+        .filter((p) => !p.deletedAt)
+        .filter((p) => matchesQuery([
+          p.content,
+          p.authorName,
+          ...(Array.isArray(p.refs) ? p.refs.map((r) => r?.label) : []),
+          ...(Array.isArray(p.mentions) ? p.mentions.map((id) => mentionCatalog?.byUserId?.get(id)?.name || '') : [])
+        ], query));
+      const me = String(currentUser?.userId || '');
+      renderGlobalFeedSummary(postsAll, mentionCatalog);
+      refreshGlobalFeedFilterButtons();
+
+      const postsFilteredByType = postsAll.filter((post) => {
+        const isAuto = Boolean(post.isAuto || post.sourceEventId);
+        const isMention = Array.isArray(post.mentions) && post.mentions.map((id) => String(id || '')).includes(me);
+        const refs = Array.isArray(post.refs) ? post.refs : [];
+        const hasProjectRef = refs.some((ref) => String(ref?.type || '') === 'project');
+        const hasTaskRef = refs.some((ref) => String(ref?.type || '') === 'task');
+        if (globalFeedFilterMode === 'auto') return isAuto;
+        if (globalFeedFilterMode === 'manual') return !isAuto;
+        if (globalFeedFilterMode === 'mentions') return isMention;
+        if (globalFeedFilterMode === 'project-refs') return hasProjectRef;
+        if (globalFeedFilterMode === 'task-refs') return hasTaskRef;
+        return true;
+      });
+      const posts = postsFilteredByType.sort((a, b) => (
+        globalFeedSortMode === 'asc'
+          ? Number(a.createdAt || 0) - Number(b.createdAt || 0)
+          : Number(b.createdAt || 0) - Number(a.createdAt || 0)
+      ));
+
+      if (posts.length === 0) {
+        list.innerHTML = '<p class="text-slate-500 text-center py-8">Aucun élément pour ces critères.</p>';
+        return;
+      }
+
+      list.innerHTML = posts.map((post) => {
+        const postId = String(post.postId || '');
+        const mentions = (post.mentions || [])
+          .map((id) => mentionCatalog?.byUserId?.get(String(id || '')))
+          .filter(Boolean);
+        const refs = Array.isArray(post.refs) ? post.refs : [];
+        const isFocused = globalFeedFocusPostId && globalFeedFocusPostId === postId;
+        const isAuto = Boolean(post.isAuto || post.sourceEventId);
+        const typeLabel = isAuto ? 'Activité auto' : 'Post manuel';
+        const typeClass = isAuto ? 'feed-item-type-auto' : 'feed-item-type-manual';
+        const identity = resolveKnownUserIdentity(post.authorUserId || '', post.authorName || fallbackDirectoryName(post.authorUserId || ''));
+        return `
+          <article id="global-feed-post-${postId}" class="feed-item ${isFocused ? 'border-blue-400 shadow-[0_0_0_2px_rgba(59,130,246,0.15)]' : ''}">
+            <div class="feed-item-head">
+              <div class="feed-item-meta">
+                ${identity.avatarDataUrl
+                  ? `<span class="discussion-avatar" style="background-image:url('${identity.avatarDataUrl}');background-size:cover;background-position:center;"></span>`
+                  : `<span class="discussion-avatar" style="background:${stringToColor(post.authorUserId || post.authorName || '')}">${escapeHtml(getInitials(post.authorName || 'U'))}</span>`}
+                <div>
+                  <p class="text-sm font-semibold text-slate-800">${escapeHtml(post.authorName || fallbackDirectoryName(post.authorUserId || ''))}</p>
+                  <p class="text-xs text-slate-500">${new Date(Number(post.createdAt || Date.now())).toLocaleString('fr-FR')}</p>
+                </div>
+              </div>
+              <span class="feed-item-type ${typeClass}">${typeLabel}</span>
+            </div>
+            <div class="feed-item-body">${renderGlobalFeedContentHtml(post.content || '', mentionCatalog)}</div>
+            ${mentions.length > 0 ? `
+              <div class="feed-item-mentions">
+                ${mentions.map((u) => `<span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-blue-100 text-blue-700 font-semibold">@${escapeHtml(u.name)}</span>`).join('')}
+              </div>
+            ` : ''}
+            ${refs.length > 0 ? `
+              <div class="feed-item-refs">
+                ${refs.map((ref) => `<button onclick="openGlobalFeedReference('${escapeHtml(ref.type || '')}','${encodeURIComponent(String(ref.id || ''))}')" class="feed-ref-btn">${escapeHtml(ref.label || 'Référence')}</button>`).join('')}
+              </div>
+            ` : ''}
+          </article>
+        `;
+      }).join('');
+
+      if (globalFeedFocusPostId) {
+        const target = document.getElementById(`global-feed-post-${globalFeedFocusPostId}`);
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }
+    }
+
+    function insertMentionTokenInGlobalFeed() {
+      const input = document.getElementById('global-feed-input');
+      const select = document.getElementById('global-feed-mention-select');
+      if (!input || !select) return;
+      const selectedUserId = String(select.value || '').trim();
+      if (!selectedUserId) return;
+      const name = knownUsersCache.get(selectedUserId)?.name || fallbackDirectoryName(selectedUserId);
+      const token = `@[${name}] `;
+      insertTextAtCursor(input, token);
+      input.focus();
+      updateGlobalFeedMentionCounter();
+    }
+
+    window.openGlobalFeedReference = openGlobalFeedReference;
+    window.openGlobalFeedPost = openGlobalFeedPost;
+
+    async function sendGlobalMessage() {
+      const input = document.getElementById('global-message-input');
+      const selectedTarget = String(globalMessagePeerUserId || '').trim();
+      const isBroadcast = !selectedTarget || selectedTarget === GLOBAL_MESSAGE_BROADCAST_TARGET;
+      if (!input) return;
+      const content = String(input.value || '').trim();
+      if (!content) return;
+      const senderUserId = String(currentUser?.userId || '');
+      const senderName = String(currentUser?.name || fallbackDirectoryName(currentUser?.userId || ''));
+      const selectedRecipients = Array.from(globalMessageRecipientUserIds || [])
+        .map(id => String(id || '').trim())
+        .filter(id => id && id !== senderUserId && id !== GLOBAL_MESSAGE_BROADCAST_TARGET);
+      const sendTargets = [];
+      if (selectedRecipients.length > 1) {
+        const groupMemberIds = normalizeGlobalMessageUserIds([senderUserId, ...selectedRecipients]);
+        const conversationId = getGroupConversationId(groupMemberIds);
+        if (!conversationId) return;
+        globalMessageActiveGroupConversationId = conversationId;
+        globalMessagePeerUserId = GLOBAL_MESSAGE_BROADCAST_TARGET;
+        sendTargets.push({
+          mode: 'group',
+          toUserId: buildGlobalGroupTargetUserId(conversationId),
+          toUserIds: groupMemberIds,
+          toName: formatGlobalMessageGroupChannelLabel(groupMemberIds),
+          conversationId
+        });
+      } else if (selectedRecipients.length === 1) {
+        const id = selectedRecipients[0];
+        globalMessageActiveGroupConversationId = '';
+        globalMessagePeerUserId = id;
+        sendTargets.push({
+          mode: 'direct',
+          toUserId: id,
+          toUserIds: normalizeGlobalMessageUserIds([senderUserId, id]),
+          toName: knownUsersCache.get(id)?.name || fallbackDirectoryName(id),
+          conversationId: getDirectConversationId(currentUser?.userId, id)
+        });
+      } else if (globalMessageActiveGroupConversationId) {
+        const fromConversation = parseGroupConversationMemberIds(globalMessageActiveGroupConversationId);
+        const groupMemberIds = normalizeGlobalMessageUserIds([
+          senderUserId,
+          ...fromConversation
+        ]);
+        sendTargets.push({
+          mode: 'group',
+          toUserId: buildGlobalGroupTargetUserId(globalMessageActiveGroupConversationId),
+          toUserIds: groupMemberIds,
+          toName: formatGlobalMessageGroupChannelLabel(groupMemberIds),
+          conversationId: globalMessageActiveGroupConversationId
+        });
+      } else {
+        sendTargets.push({
+          mode: isBroadcast ? 'broadcast' : 'direct',
+          toUserId: isBroadcast ? GLOBAL_MESSAGE_BROADCAST_USER_ID : selectedTarget,
+          toUserIds: isBroadcast
+            ? []
+            : normalizeGlobalMessageUserIds([senderUserId, selectedTarget]),
+          toName: isBroadcast
+            ? GLOBAL_MESSAGE_BROADCAST_LABEL
+            : (knownUsersCache.get(selectedTarget)?.name || fallbackDirectoryName(selectedTarget)),
+          conversationId: isBroadcast
+            ? getGlobalBroadcastConversationId()
+            : getDirectConversationId(currentUser?.userId, selectedTarget)
+        });
+      }
+
+      for (const target of sendTargets) {
+        const message = {
+          messageId: uuidv4(),
+          conversationId: target.conversationId,
+          fromUserId: senderUserId,
+          fromName: senderName,
+          toUserId: target.toUserId,
+          toUserIds: target.toUserIds,
+          toName: target.toName,
+          content,
+          createdAt: Date.now(),
+          source: sharedFolderHandle ? 'shared' : 'local'
+        };
+        await putEncrypted('globalMessages', message, 'messageId');
+        knownGlobalMessageIds.add(message.messageId);
+        if (sharedFolderHandle) {
+          writeGlobalMessageToSharedFolder(message);
+        }
+      }
+      input.value = '';
+      if (selectedRecipients.length > 0) {
+        globalMessageRecipientUserIds = new Set();
+      }
+      await renderGlobalMessages({ forceScrollBottom: true });
+    }
+
+    window.selectGlobalMessagePeer = selectGlobalMessagePeer;
+    window.selectGlobalMessageChannel = selectGlobalMessageChannel;
+    window.toggleGlobalMessageRecipient = toggleGlobalMessageRecipient;
+    window.selectAllGlobalMessageRecipients = selectAllGlobalMessageRecipients;
+    window.clearGlobalMessageRecipients = clearGlobalMessageRecipients;
 
     function setGlobalHubView(view) {
       globalWorkspaceView = view;
@@ -5030,6 +10961,8 @@
         tasks: ['Vue Tâches (Tous projets)', 'Pilotage transversal des tâches, y compris hors projet.'],
         calendar: ['Vue Calendrier (Tous projets)', 'Échéances consolidées avec recherche thématique/sujet.'],
         docs: ['Vue Documents (Tous projets)', 'Référentiel documentaire projet + thématique hors projet.'],
+        messages: ['Messagerie hors projet', 'Canal general (tous) ou discussion privee entre agents connus du dossier collaboratif.'],
+        feed: ["Fil d'information transverse", 'Activités automatiques (créations projet/tâche) + posts manuels, mentions et références croisées.'],
         settings: ['Référentiels globaux', 'Gestion transverse des groupes et thématiques réutilisables.']
       };
       const [title, subtitle] = mapping[view] || mapping.tasks;
@@ -5038,10 +10971,17 @@
       document.getElementById('global-tasks-section')?.classList.toggle('hidden', view !== 'tasks');
       document.getElementById('global-calendar-section')?.classList.toggle('hidden', view !== 'calendar');
       document.getElementById('global-docs-section')?.classList.toggle('hidden', view !== 'docs');
+      document.getElementById('global-messages-section')?.classList.toggle('hidden', view !== 'messages');
+      document.getElementById('global-feed-section')?.classList.toggle('hidden', view !== 'feed');
       document.getElementById('global-settings-section')?.classList.toggle('hidden', view !== 'settings');
+      updateGlobalTasksViewButtons();
     }
 
     async function showGlobalWorkspace(view) {
+      resetWorkspaceScrollTop();
+      if (view !== 'tasks') {
+        detachGlobalKanbanInfiniteScroll();
+      }
       workspaceMode = 'global';
       globalTasksPage = 1;
       currentProjectId = null;
@@ -5063,11 +11003,20 @@
           ? 'calendar'
           : view === 'docs'
             ? 'docs'
+            : view === 'messages'
+              ? 'messages'
+              : view === 'feed'
+                ? 'feed'
             : 'settings');
 
       if (view === 'tasks') await renderGlobalTasks();
       if (view === 'calendar') await renderGlobalCalendar();
       if (view === 'docs') await renderGlobalDocs();
+      if (view === 'messages') {
+        resetGlobalMessageRenderLimits();
+        await renderGlobalMessages();
+      }
+      if (view === 'feed') await renderGlobalFeed();
       if (view === 'settings') await renderGlobalSettings();
       closeMobileSidebar();
     }
@@ -5129,40 +11078,124 @@
       });
     }
 
-    function renderTasks(tasks) {
+    function getTaskStatusMeta(status) {
+      const normalized = status || 'todo';
+      if (normalized === 'termine') {
+        return { key: normalized, label: 'Terminé', chipClass: 'task-status-chip task-status-termine' };
+      }
+      if (normalized === 'suspendu') {
+        return { key: normalized, label: 'Suspendu', chipClass: 'task-status-chip task-status-suspendu' };
+      }
+      if (normalized === 'en-cours') {
+        return { key: normalized, label: 'En cours', chipClass: 'task-status-chip task-status-en-cours' };
+      }
+      return { key: 'todo', label: 'À faire', chipClass: 'task-status-chip task-status-todo' };
+    }
+
+    function getTaskUrgencyMeta(urgency) {
+      const normalized = urgency || 'medium';
+      if (normalized === 'high') {
+        return { key: normalized, label: 'Urgente', chipClass: 'task-urgency-chip task-urgency-high', accentClass: 'task-accent-high' };
+      }
+      if (normalized === 'low') {
+        return { key: normalized, label: 'Basse', chipClass: 'task-urgency-chip task-urgency-low', accentClass: 'task-accent-low' };
+      }
+      return { key: 'medium', label: 'Normale', chipClass: 'task-urgency-chip task-urgency-medium', accentClass: 'task-accent-medium' };
+    }
+
+    function updateProjectTaskLayoutButtons() {
+      [1, 2, 3, 4].forEach((value) => {
+        const btn = document.getElementById(`project-task-view-${value}`);
+        if (!btn) return;
+        btn.classList.toggle('view-tab-active', projectTaskCardsColumns === value);
+        btn.setAttribute('aria-pressed', projectTaskCardsColumns === value ? 'true' : 'false');
+      });
+    }
+
+    function updateGlobalTaskLayoutButtons() {
+      [1, 2, 3, 4].forEach((value) => {
+        const btn = document.getElementById(`global-task-view-${value}`);
+        if (!btn) return;
+        btn.classList.toggle('view-tab-active', globalTaskCardsColumns === value);
+        btn.setAttribute('aria-pressed', globalTaskCardsColumns === value ? 'true' : 'false');
+      });
+      const toolbar = document.getElementById('global-task-layout-toolbar');
+      if (toolbar) {
+        toolbar.classList.toggle('hidden', globalTasksViewMode !== 'cards');
+      }
+    }
+
+    function applyProjectTaskCardsLayoutClass() {
       const container = document.getElementById('tasks-container');
-      const paginationContainer = document.getElementById('tasks-pagination');
-      if (paginationContainer) paginationContainer.innerHTML = '';
-      const filteredTasks = (tasks || []).filter(task => matchesQuery([
+      if (!container) return;
+      const cols = projectTaskPresentationMode === 'list' ? 1 : projectTaskCardsColumns;
+      container.className = `project-task-grid cols-${cols}`;
+      container.classList.toggle('project-task-list-mode', projectTaskPresentationMode === 'list');
+    }
+
+    function setProjectTaskCardsColumns(value) {
+      const next = Math.min(4, Math.max(1, Number(value) || 1));
+      projectTaskCardsColumns = next;
+      localStorage.setItem('taskmda_project_task_cards_cols', String(next));
+      updateProjectTaskLayoutButtons();
+      applyProjectTaskCardsLayoutClass();
+      if (workspaceMode === 'project' && activeProjectView === 'list' && currentProjectState) {
+        renderTasks(currentProjectState.tasks || []);
+      }
+    }
+
+    function setGlobalTaskCardsColumns(value) {
+      const next = Math.min(4, Math.max(1, Number(value) || 1));
+      globalTaskCardsColumns = next;
+      localStorage.setItem('taskmda_global_task_cards_cols', String(next));
+      updateGlobalTaskLayoutButtons();
+      if (workspaceMode === 'global' && globalWorkspaceView === 'tasks' && globalTasksViewMode === 'cards') {
+        renderGlobalTasks();
+      }
+    }
+
+    function getProjectTaskFilters() {
+      return {
+        query: String(document.getElementById('project-task-search')?.value || '').trim(),
+        status: String(document.getElementById('project-task-status')?.value || 'all').trim(),
+        theme: String(document.getElementById('project-task-theme-filter')?.value || '').trim()
+      };
+    }
+
+    function filterProjectTasksByControls(tasks) {
+      const filters = getProjectTaskFilters();
+      let filtered = (tasks || []).filter(task => matchesQuery([
         task.title,
         task.description,
         getTaskAssigneeName(task, currentProjectState),
         task.theme,
         getTaskGroupName(task, currentProjectState)
-      ], globalSearchQuery));
+      ], `${globalSearchQuery} ${filters.query}`.trim()));
+      if (filters.status && filters.status !== 'all') {
+        filtered = filtered.filter(task => (task.status || 'todo') === filters.status);
+      }
+      if (filters.theme) {
+        filtered = filtered.filter(task => matchesQuery([task.theme], filters.theme));
+      }
+      return filtered;
+    }
+
+    function renderTasks(tasks) {
+      const container = document.getElementById('tasks-container');
+      const paginationContainer = document.getElementById('tasks-pagination');
+      const layoutToolbar = document.querySelector('#task-list-section .project-task-layout-toolbar');
+      if (layoutToolbar) {
+        layoutToolbar.classList.toggle('hidden', projectTaskPresentationMode !== 'cards');
+      }
+      if (paginationContainer) paginationContainer.innerHTML = '';
+      applyProjectTaskCardsLayoutClass();
+      updateProjectTaskLayoutButtons();
+      const filteredTasks = filterProjectTasksByControls(tasks);
 
       if (filteredTasks.length === 0) {
         container.innerHTML = '<p class="text-gray-500 text-center py-8">Aucune tâche pour le moment</p>';
         return;
       }
-
-      const statusColors = {
-        'todo': 'bg-gray-100 text-gray-700',
-        'en-cours': 'bg-blue-100 text-blue-700',
-        'termine': 'bg-green-100 text-green-700'
-      };
-
-      const statusLabels = {
-        'todo': 'À faire',
-        'en-cours': 'En cours',
-        'termine': 'Terminé'
-      };
-
-      const urgencyColors = {
-        'low': 'text-green-600',
-        'medium': 'text-yellow-600',
-        'high': 'text-red-600'
-      };
 
       const canCreate = canCreateTaskInProject(currentProjectState);
       const addTaskBtn = document.getElementById('btn-add-task');
@@ -5173,7 +11206,12 @@
 
       const pagination = paginateItems(filteredTasks, tasksPage, paginationConfig.tasksPerPage);
       tasksPage = pagination.currentPage;
+      const compactLevel = projectTaskCardsColumns >= 4 ? 3 : projectTaskCardsColumns >= 3 ? 2 : projectTaskCardsColumns >= 2 ? 1 : 0;
+      const renderAsList = projectTaskPresentationMode === 'list';
       container.innerHTML = pagination.pageItems.map(task => {
+        const statusMeta = getTaskStatusMeta(task.status);
+        const urgencyMeta = getTaskUrgencyMeta(task.urgency);
+        const lockHint = buildProjectLockHintHtml(currentProjectState, LOCK_SCOPE_TASK, task.taskId, compactLevel > 1);
         const participants = getTaskAssigneeEntries(task, currentProjectState).map((a) => ({
           userId: a.userId || '',
           name: a.name || fallbackDirectoryName(a.userId)
@@ -5182,28 +11220,64 @@
           participants.push({ userId: task.createdBy, name: '' });
         }
         const participantsHtml = renderParticipantsStack(participants, 2);
-        return `
-        <div id="task-card-${task.taskId}" class="task-list-card rounded-lg p-4 bg-white">
-          <div class="flex justify-between items-start mb-2">
-            <h4 class="text-lg font-bold">${escapeHtml(task.title)}</h4>
+        if (renderAsList) {
+          return `
+        <div id="task-card-${task.taskId}" class="task-list-row rounded-lg bg-white border border-slate-200 p-3 cursor-pointer" onclick="openProjectTaskDetails('${task.taskId}')" role="button" tabindex="0">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0 flex-1">
+              <div class="flex flex-wrap items-center gap-2 mb-1">
+                <span class="${urgencyMeta.chipClass}">${urgencyMeta.label}</span>
+                ${task.theme ? `<span class="task-theme-chip">${escapeHtml(task.theme)}</span>` : ''}
+                <span class="${statusMeta.chipClass}">${statusMeta.label}</span>
+              </div>
+              <h4 class="text-base font-bold truncate">${escapeHtml(task.title)}</h4>
+              <p class="text-sm text-slate-500 truncate">${escapeHtml(task.description || '')}</p>
+            </div>
+            <div class="task-list-row-right text-xs text-slate-600">
+              <div>${escapeHtml(getTaskAssigneeName(task, currentProjectState) || 'Non assigné')}</div>
+              <div>${formatDate(task.dueDate)}</div>
+            </div>
+          </div>
+          <div class="mt-2 flex items-center justify-between gap-2 flex-wrap">
+            <div class="task-card-participants">${participantsHtml}</div>
             <div class="flex items-center gap-2">
-              <span class="px-3 py-1 rounded-full text-xs font-semibold ${statusColors[task.status] || statusColors['todo']}">
-                ${statusLabels[task.status] || 'À faire'}
+              ${canEditTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); editTask('${task.taskId}')" class="task-action-btn-subtle text-xs">Modifier</button>` : ''}
+              ${canDeleteTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); deleteTask('${task.taskId}')" class="task-action-btn-subtle text-xs text-red-600">Supprimer</button>` : ''}
+            </div>
+          </div>
+          ${lockHint}
+        </div>
+      `;
+        }
+        return `
+        <div id="task-card-${task.taskId}" class="task-list-card task-list-card-modern task-density-${compactLevel} ${urgencyMeta.accentClass} rounded-lg p-4 bg-white cursor-pointer" onclick="openProjectTaskDetails('${task.taskId}')" role="button" tabindex="0">
+          <div class="flex justify-between items-start mb-2">
+            <div>
+              <div class="flex flex-wrap items-center gap-2 mb-1">
+                <span class="${urgencyMeta.chipClass}">${urgencyMeta.label}</span>
+                ${task.theme ? `<span class="task-theme-chip">${escapeHtml(task.theme)}</span>` : ''}
+                ${getTaskGroupName(task, currentProjectState) ? `<span class="task-group-chip">${escapeHtml(getTaskGroupName(task, currentProjectState) || 'Groupe')}</span>` : ''}
+              </div>
+              <h4 class="text-lg font-bold">${escapeHtml(task.title)}</h4>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="${statusMeta.chipClass}">
+                ${statusMeta.label}
               </span>
-              ${canEditTaskInProject(task, currentProjectState) ? `<button onclick="editTask('${task.taskId}')" class="text-slate-500 hover:text-primary" title="Éditer">
+              ${canEditTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); editTask('${task.taskId}')" class="text-slate-500 hover:text-primary" title="Éditer">
                 <span class="material-symbols-outlined text-base">edit</span>
               </button>` : ''}
-              ${canDeleteTaskInProject(task, currentProjectState) ? `<button onclick="deleteTask('${task.taskId}')" class="text-slate-500 hover:text-red-600" title="Supprimer">
+              ${canDeleteTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); deleteTask('${task.taskId}')" class="text-slate-500 hover:text-red-600" title="Supprimer">
                 <span class="material-symbols-outlined text-base">delete</span>
               </button>` : ''}
             </div>
           </div>
-          <p class="text-gray-600 text-sm mb-3">${escapeHtml(task.description || '')}</p>
-          <div class="text-xs text-slate-500 flex flex-wrap gap-2 mb-3">
+          <p class="task-card-description text-gray-600 text-sm mb-3">${escapeHtml(task.description || '')}</p>
+          <div class="hidden text-xs text-slate-500 flex flex-wrap gap-2 mb-3">
             ${task.theme ? `<span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700">Thème: ${escapeHtml(task.theme)}</span>` : ''}
             ${getTaskGroupName(task, currentProjectState) ? `<span class="px-2 py-1 rounded-full bg-blue-100 text-blue-700">Groupe: ${escapeHtml(getTaskGroupName(task, currentProjectState) || 'N/A')}</span>` : ''}
           </div>
-          <div class="text-xs text-gray-500 flex flex-wrap items-center gap-3 mb-3">
+          <div class="task-card-meta text-xs text-gray-500 flex flex-wrap items-center gap-3 mb-3">
             <span class="flex items-center gap-1">
               <span class="material-symbols-outlined text-base">event_note</span>
               Demande: ${formatDate(task.requestDate)}
@@ -5221,25 +11295,22 @@
               ${(task.attachments || []).length} fichier(s)
             </span>
           </div>
-          <div class="flex items-center justify-between text-sm gap-3 flex-wrap">
-            <span class="flex items-center gap-1 ${urgencyColors[task.urgency] || urgencyColors['medium']}">
-              <span class="material-symbols-outlined text-lg">priority_high</span>
-              <span>${task.urgency === 'high' ? 'Haute' : task.urgency === 'low' ? 'Basse' : 'Moyenne'}</span>
-            </span>
-            ${participantsHtml}
-            <div class="flex items-center gap-3">
-              <button onclick="sendTaskStatusEmail('${task.taskId}', false)" class="text-slate-600 hover:underline">Email statut</button>
-              ${task.status === 'termine' ? `<button onclick="sendTaskStatusEmail('${task.taskId}', true)" class="text-emerald-700 hover:underline">Email achevée</button>` : ''}
-              ${canChangeTaskStatus(task, currentProjectState) ? `<button onclick="toggleTaskStatus('${task.taskId}')" class="text-primary hover:underline">Changer statut</button>` : ''}
+          <div class="task-card-bottom flex items-center justify-between text-sm gap-3 flex-wrap">
+            <div class="task-card-participants">${participantsHtml}</div>
+            <div class="task-card-actions flex items-center gap-3">
+              <button onclick="event.stopPropagation(); sendTaskStatusEmail('${task.taskId}', false)" class="text-slate-600 hover:underline">Email statut</button>
+              ${task.status === 'termine' ? `<button onclick="event.stopPropagation(); sendTaskStatusEmail('${task.taskId}', true)" class="text-emerald-700 hover:underline">Email achevée</button>` : ''}
+              ${canChangeTaskStatus(task, currentProjectState) ? `<button onclick="event.stopPropagation(); toggleTaskStatus('${task.taskId}')" class="text-primary hover:underline">Changer statut</button>` : ''}
             </div>
           </div>
+          ${lockHint}
           ${(task.subtasks && task.subtasks.length > 0) ? `
-            <div class="mt-3 border-t border-gray-100 pt-3">
+            <div class="task-card-subtasks mt-3 border-t border-gray-100 pt-3">
               ${buildSubtaskProgressHtml(task, false)}
               <div class="mt-2 space-y-1.5">
               ${task.subtasks.map(st => `
                 <label class="subtask-item">
-                  <input class="subtask-checkbox" type="checkbox" ${st.done ? 'checked' : ''} ${canEditTaskInProject(task, currentProjectState) ? '' : 'disabled'} onchange="toggleSubtask('${task.taskId}','${st.id}', this.checked)">
+                  <input class="subtask-checkbox" type="checkbox" ${st.done ? 'checked' : ''} ${canEditTaskInProject(task, currentProjectState) ? '' : 'disabled'} onclick="event.stopPropagation()" onchange="toggleSubtask('${task.taskId}','${st.id}', this.checked)">
                   <span class="subtask-label ${st.done ? 'subtask-label-done' : ''}">${escapeHtml(st.label)}</span>
                 </label>
               `).join('')}
@@ -5255,17 +11326,12 @@
     function renderArchivedTasks(tasks) {
       const countEl = document.getElementById('archived-tasks-count');
       const container = document.getElementById('archived-tasks-container');
-      const toggleBtn = document.getElementById('btn-toggle-archived-tasks');
       const archived = (tasks || []).filter(task => task?.archivedAt);
       if (countEl) {
         countEl.textContent = `(${archived.length})`;
       }
-      if (toggleBtn) {
-        toggleBtn.textContent = archivedTasksExpanded ? 'Masquer' : 'Afficher';
-      }
       if (!container) return;
-      container.classList.toggle('hidden', !archivedTasksExpanded);
-      if (!archivedTasksExpanded) return;
+      container.classList.remove('hidden');
 
       if (archived.length === 0) {
         container.innerHTML = '<p class="text-sm text-slate-500">Aucune tache archivee.</p>';
@@ -5325,34 +11391,41 @@
     function renderKanban(tasks) {
       const board = document.getElementById('kanban-board');
       if (!board) return;
+      const scopedTasks = filterProjectTasksByControls(tasks);
 
       const columns = [
         { key: 'todo', label: 'À faire' },
         { key: 'en-cours', label: 'En cours' },
+        { key: 'suspendu', label: 'Suspendu' },
         { key: 'termine', label: 'Terminé' }
       ];
 
       board.innerHTML = columns.map(col => {
-        const items = tasks.filter(t => (t.status || 'todo') === col.key);
+        const items = scopedTasks.filter(t => (t.status || 'todo') === col.key);
         const cards = items.length === 0
           ? '<p class="text-sm text-gray-500 text-center py-4">Aucune tâche</p>'
           : items.map(task => `
-            <div class="kanban-card bg-white rounded-lg p-3 cursor-grab active:cursor-grabbing" draggable="true" ondragstart="startKanbanDrag(event, '${task.taskId}')">
+            <div class="kanban-card kanban-card-modern ${getTaskUrgencyMeta(task.urgency).accentClass} bg-white rounded-lg p-3 cursor-grab active:cursor-grabbing" draggable="true" ondragstart="startKanbanDrag(event, '${task.taskId}')" onclick="openProjectTaskDetails('${task.taskId}')" role="button" tabindex="0">
+              <div class="mb-2 flex items-center justify-between gap-2">
+                <span class="${getTaskUrgencyMeta(task.urgency).chipClass}">${getTaskUrgencyMeta(task.urgency).label}</span>
+                <span class="${getTaskStatusMeta(task.status).chipClass}">${getTaskStatusMeta(task.status).label}</span>
+              </div>
               <h4 class="font-semibold text-sm mb-1">${escapeHtml(task.title)}</h4>
               <p class="text-xs text-gray-500 mb-2">${escapeHtml(task.description || '')}</p>
               ${buildSubtaskProgressHtml(task, true)}
               <div class="mb-2 flex flex-wrap gap-1">
-                ${task.theme ? `<span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">${escapeHtml(task.theme)}</span>` : ''}
-                ${getTaskGroupName(task, currentProjectState) ? `<span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">${escapeHtml(getTaskGroupName(task, currentProjectState) || 'Groupe')}</span>` : ''}
+                ${task.theme ? `<span class="task-theme-chip">${escapeHtml(task.theme)}</span>` : ''}
+                ${getTaskGroupName(task, currentProjectState) ? `<span class="task-group-chip">${escapeHtml(getTaskGroupName(task, currentProjectState) || 'Groupe')}</span>` : ''}
               </div>
               <div class="text-xs text-gray-500 flex items-center justify-between">
                 <span>${escapeHtml(getTaskAssigneeName(task, currentProjectState) || 'Non assigné')}</span>
                 <span>${formatDate(task.dueDate)}</span>
               </div>
+              ${buildProjectLockHintHtml(currentProjectState, LOCK_SCOPE_TASK, task.taskId, true)}
               <div class="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                ${canEditTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); editTask('${task.taskId}')" class="px-2 py-1 rounded bg-slate-100 text-slate-700">Modifier</button>` : ''}
-                ${canEditTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); archiveTask('${task.taskId}')" class="px-2 py-1 rounded bg-amber-100 text-amber-700">Archiver</button>` : ''}
-                ${canDeleteTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); deleteTask('${task.taskId}')" class="px-2 py-1 rounded bg-rose-100 text-rose-700">Supprimer</button>` : ''}
+                ${canEditTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); editTask('${task.taskId}')" class="task-action-btn">Modifier</button>` : ''}
+                ${canEditTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); archiveTask('${task.taskId}')" class="task-action-btn task-action-btn-warn">Archiver</button>` : ''}
+                ${canDeleteTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); deleteTask('${task.taskId}')" class="task-action-btn task-action-btn-danger">Supprimer</button>` : ''}
               </div>
             </div>
           `).join('');
@@ -5374,7 +11447,7 @@
       if (!container) return;
 
       const now = Date.now();
-      let items = [...tasks].sort((a, b) => {
+      let items = [...filterProjectTasksByControls(tasks)].sort((a, b) => {
         const ad = a.dueDate ? new Date(a.dueDate).getTime() : Number.MAX_SAFE_INTEGER;
         const bd = b.dueDate ? new Date(b.dueDate).getTime() : Number.MAX_SAFE_INTEGER;
         return ad - bd;
@@ -5385,7 +11458,7 @@
       } else if (timelineFilter === 'urgent') {
         items = items.filter(task => task.urgency === 'high');
       } else if (timelineFilter === 'overdue') {
-        items = items.filter(task => task.dueDate && new Date(task.dueDate).getTime() < now && task.status !== 'termine');
+        items = items.filter(task => task.dueDate && new Date(task.dueDate).getTime() < now && task.status !== 'termine' && task.status !== 'suspendu');
       }
 
       if (calendarDayFilterEnabled && selectedCalendarDayKey) {
@@ -5410,7 +11483,7 @@
       }
 
       container.innerHTML = items.map(task => {
-        const progress = task.status === 'termine' ? 100 : task.status === 'en-cours' ? 55 : 10;
+        const progress = task.status === 'termine' ? 100 : task.status === 'en-cours' ? 55 : task.status === 'suspendu' ? 30 : 10;
         const isMilestone = task.status === 'termine' || task.urgency === 'high';
         return `
           <div class="bg-surface-container-low rounded-lg p-4">
@@ -5558,6 +11631,9 @@
         showToast('Action non autorisee');
         return false;
       }
+      if (!ensureProjectResourceUnlockedForAction(resolved.state, LOCK_SCOPE_TASK, resolved.task.taskId, 'Changement de statut').ok) {
+        return false;
+      }
       const eventUpdate = createEvent(
         EventTypes.UPDATE_TASK,
         resolved.projectId,
@@ -5620,6 +11696,9 @@
         showToast('Action non autorisee');
         return;
       }
+      if (!ensureProjectResourceUnlockedForAction(state, LOCK_SCOPE_TASK, task.taskId, 'Changement de statut').ok) {
+        return;
+      }
 
       const eventUpdate = createEvent(
         EventTypes.UPDATE_TASK,
@@ -5653,6 +11732,79 @@
     function isDocumentPreviewable(doc) {
       const category = getDocumentCategory(doc);
       return category === 'image' || category === 'pdf' || (doc.type || '').startsWith('text/');
+    }
+
+    function getDocumentFileExtension(doc) {
+      const name = String(doc?.name || '').trim().toLowerCase();
+      const idx = name.lastIndexOf('.');
+      return idx >= 0 ? name.slice(idx + 1) : '';
+    }
+
+    function isDirectTextDocumentEditable(doc) {
+      const type = String(doc?.type || '').toLowerCase();
+      const ext = getDocumentFileExtension(doc);
+      if (['md', 'markdown', 'txt'].includes(ext)) return true;
+      if (type.startsWith('text/')) return true;
+      return false;
+    }
+
+    function isMarkdownDocument(doc) {
+      const type = String(doc?.type || '').toLowerCase();
+      const ext = getDocumentFileExtension(doc);
+      return ext === 'md'
+        || ext === 'markdown'
+        || type.includes('markdown')
+        || type === 'text/x-markdown';
+    }
+
+    function isWordDocumentEditable(doc) {
+      const type = String(doc?.type || '').toLowerCase();
+      const ext = getDocumentFileExtension(doc);
+      if (['doc', 'docx', 'odt', 'rtf'].includes(ext)) return true;
+      return type.includes('msword')
+        || type.includes('wordprocessingml')
+        || type.includes('opendocument.text')
+        || type.includes('rtf')
+        || type.includes('word');
+    }
+
+    function isDocumentEditable(doc) {
+      return isDirectTextDocumentEditable(doc) || isWordDocumentEditable(doc);
+    }
+
+    function decodeDataUrlToText(dataUrl) {
+      const value = String(dataUrl || '');
+      const commaIdx = value.indexOf(',');
+      if (commaIdx < 0) return '';
+      const meta = value.slice(0, commaIdx).toLowerCase();
+      const payload = value.slice(commaIdx + 1);
+      try {
+        if (meta.includes(';base64')) {
+          const binary = atob(payload);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+          return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+        }
+        return decodeURIComponent(payload);
+      } catch {
+        return '';
+      }
+    }
+
+    function encodeTextToDataUrl(text, mimeType = 'text/plain;charset=utf-8') {
+      const raw = String(text || '');
+      const bytes = new TextEncoder().encode(raw);
+      let binary = '';
+      bytes.forEach((b) => {
+        binary += String.fromCharCode(b);
+      });
+      return `data:${mimeType};base64,${btoa(binary)}`;
+    }
+
+    function resolveDocumentEditMode(doc) {
+      if (isDirectTextDocumentEditable(doc)) return 'text';
+      if (isWordDocumentEditable(doc)) return 'word-replace';
+      return 'none';
     }
 
     function openDocumentPreview(dataEncoded, nameEncoded, typeEncoded) {
@@ -5690,29 +11842,476 @@
 
     window.openDocumentPreview = openDocumentPreview;
 
-    function renderDocuments(tasks) {
+    function closeDocumentEditorModal() {
+      currentDocEditorContext = null;
+      const modal = document.getElementById('modal-doc-editor');
+      const textarea = document.getElementById('doc-editor-textarea');
+      const input = document.getElementById('doc-editor-file-input');
+      const summary = document.getElementById('doc-editor-file-summary');
+      const tools = document.getElementById('doc-editor-markdown-tools');
+      const formatHint = document.getElementById('doc-editor-format-hint');
+      if (textarea) textarea.value = '';
+      if (input) input.value = '';
+      if (summary) summary.textContent = 'Aucun fichier sélectionné.';
+      tools?.classList.add('hidden');
+      if (formatHint) formatHint.textContent = 'Edition directe du contenu (markdown/texte).';
+      modal?.classList.add('hidden');
+    }
+
+    function replaceTextareaSelection(input, replacement, selectionStart = null, selectionEnd = null) {
+      if (!input) return;
+      const start = typeof input.selectionStart === 'number' ? input.selectionStart : 0;
+      const end = typeof input.selectionEnd === 'number' ? input.selectionEnd : start;
+      const before = input.value.slice(0, start);
+      const after = input.value.slice(end);
+      input.value = `${before}${replacement}${after}`;
+      const nextStart = selectionStart == null ? start + replacement.length : start + Math.max(0, selectionStart);
+      const nextEnd = selectionEnd == null ? nextStart : start + Math.max(0, selectionEnd);
+      input.selectionStart = nextStart;
+      input.selectionEnd = nextEnd;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.focus();
+    }
+
+    function wrapTextareaSelection(input, prefix, suffix, fallback = '') {
+      if (!input) return;
+      const start = typeof input.selectionStart === 'number' ? input.selectionStart : 0;
+      const end = typeof input.selectionEnd === 'number' ? input.selectionEnd : start;
+      const selected = input.value.slice(start, end);
+      const core = selected || fallback;
+      const replacement = `${prefix}${core}${suffix}`;
+      const cursorStart = prefix.length;
+      const cursorEnd = prefix.length + core.length;
+      replaceTextareaSelection(input, replacement, cursorStart, cursorEnd);
+    }
+
+    function prefixTextareaLines(input, prefix) {
+      if (!input) return;
+      const start = typeof input.selectionStart === 'number' ? input.selectionStart : 0;
+      const end = typeof input.selectionEnd === 'number' ? input.selectionEnd : start;
+      const text = input.value;
+      const lineStart = text.lastIndexOf('\n', Math.max(0, start - 1)) + 1;
+      const lineEndIndex = text.indexOf('\n', end);
+      const lineEnd = lineEndIndex === -1 ? text.length : lineEndIndex;
+      const block = text.slice(lineStart, lineEnd);
+      const lines = block.split('\n');
+      const prefixed = lines.map((line) => {
+        if (!line.trim()) return line;
+        return line.startsWith(prefix) ? line : `${prefix}${line}`;
+      });
+      const replacement = prefixed.join('\n');
+      const nonEmptyCount = Math.max(1, lines.filter((line) => line.trim()).length);
+      replaceTextareaSelection(
+        input,
+        replacement,
+        (start - lineStart) + prefix.length,
+        (end - lineStart) + (prefix.length * nonEmptyCount)
+      );
+    }
+
+    function applyMarkdownEditorAction(action) {
+      if (!currentDocEditorContext?.isMarkdown) return;
+      const input = document.getElementById('doc-editor-textarea');
+      if (!input) return;
+      const safeAction = String(action || '').trim().toLowerCase();
+      switch (safeAction) {
+        case 'h1':
+          prefixTextareaLines(input, '# ');
+          break;
+        case 'h2':
+          prefixTextareaLines(input, '## ');
+          break;
+        case 'h3':
+          prefixTextareaLines(input, '### ');
+          break;
+        case 'bold':
+          wrapTextareaSelection(input, '**', '**', 'texte');
+          break;
+        case 'italic':
+          wrapTextareaSelection(input, '*', '*', 'texte');
+          break;
+        case 'link':
+          wrapTextareaSelection(input, '[', '](https://)', 'texte du lien');
+          break;
+        case 'ul':
+          prefixTextareaLines(input, '- ');
+          break;
+        case 'quote':
+          prefixTextareaLines(input, '> ');
+          break;
+        case 'code':
+          wrapTextareaSelection(input, '`', '`', 'code');
+          break;
+        case 'codeblock': {
+          const start = typeof input.selectionStart === 'number' ? input.selectionStart : 0;
+          const end = typeof input.selectionEnd === 'number' ? input.selectionEnd : start;
+          const selected = input.value.slice(start, end) || 'code';
+          const replacement = `\`\`\`\n${selected}\n\`\`\``;
+          replaceTextareaSelection(input, replacement, 4, 4 + selected.length);
+          break;
+        }
+        case 'image':
+          {
+            const start = typeof input.selectionStart === 'number' ? input.selectionStart : 0;
+            const end = typeof input.selectionEnd === 'number' ? input.selectionEnd : start;
+            const selected = input.value.slice(start, end).trim() || 'description image';
+            const replacement = `![${selected}](https://)`;
+            replaceTextareaSelection(input, replacement, selected.length + 4, selected.length + 12);
+          }
+          break;
+        default:
+          break;
+      }
+    }
+
+    function updateDocumentEditorFileSummary() {
+      const input = document.getElementById('doc-editor-file-input');
+      const summary = document.getElementById('doc-editor-file-summary');
+      if (!summary) return;
+      const file = input?.files?.[0];
+      summary.textContent = file
+        ? `${file.name} (${formatFileSize(file.size || 0)})`
+        : 'Aucun fichier sélectionné.';
+    }
+
+    async function readSingleDocumentFileFromInput(inputId) {
+      const input = document.getElementById(inputId);
+      const file = input?.files?.[0];
+      if (!file) return null;
+      return await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve({
+          name: file.name,
+          type: file.type || 'application/octet-stream',
+          size: file.size || 0,
+          data: reader.result
+        });
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function openDocumentEditorModal(context) {
+      const modal = document.getElementById('modal-doc-editor');
+      const title = document.getElementById('doc-editor-title');
+      const subtitle = document.getElementById('doc-editor-subtitle');
+      const textWrap = document.getElementById('doc-editor-text-mode');
+      const wordWrap = document.getElementById('doc-editor-word-mode');
+      const textarea = document.getElementById('doc-editor-textarea');
+      const fileInput = document.getElementById('doc-editor-file-input');
+      const markdownTools = document.getElementById('doc-editor-markdown-tools');
+      const formatHint = document.getElementById('doc-editor-format-hint');
+      if (!modal || !title || !subtitle || !textWrap || !wordWrap || !textarea || !fileInput || !markdownTools || !formatHint) return;
+
+      const mode = resolveDocumentEditMode(context?.doc);
+      if (mode === 'none') {
+        showToast('Edition non disponible pour ce format');
+        return;
+      }
+      currentDocEditorContext = { ...context, mode, isMarkdown: isMarkdownDocument(context?.doc) };
+      title.textContent = `Modifier: ${context.doc?.name || 'document'}`;
+      subtitle.textContent = mode === 'text'
+        ? 'Edition directe du contenu'
+        : 'Format Word: remplacement du fichier';
+      textWrap.classList.toggle('hidden', mode !== 'text');
+      wordWrap.classList.toggle('hidden', mode !== 'word-replace');
+      markdownTools.classList.toggle('hidden', !(mode === 'text' && currentDocEditorContext.isMarkdown));
+      formatHint.textContent = currentDocEditorContext.isMarkdown
+        ? 'Editeur Markdown assisté: utilisez la barre ci-dessous pour insérer le balisage.'
+        : 'Edition directe du contenu (texte brut).';
+      fileInput.accept = mode === 'word-replace' ? '.doc,.docx,.odt,.rtf' : '';
+      fileInput.value = '';
+      updateDocumentEditorFileSummary();
+
+      if (mode === 'text') {
+        textarea.value = decodeDataUrlToText(context.doc?.data || '');
+        textarea.focus();
+      } else {
+        textarea.value = '';
+      }
+
+      modal.classList.remove('hidden');
+    }
+
+    async function saveDocumentEditorChanges() {
+      const ctx = currentDocEditorContext;
+      if (!ctx?.doc || !ctx.mode) return;
+      const textarea = document.getElementById('doc-editor-textarea');
+      const replacement = ctx.mode === 'word-replace'
+        ? await readSingleDocumentFileFromInput('doc-editor-file-input')
+        : null;
+      if (ctx.mode === 'word-replace' && !replacement) {
+        showToast('Sélectionnez un fichier Word');
+        return;
+      }
+
+      await runWithLoading(async () => {
+        if (ctx.sourceType === 'standalone') {
+          const row = await getDecrypted('globalDocs', ctx.id, 'id');
+          if (!row) {
+            showToast('Document introuvable');
+            return;
+          }
+          const next = ctx.mode === 'text'
+            ? {
+                ...row,
+                data: encodeTextToDataUrl(textarea?.value || '', row.type || 'text/plain;charset=utf-8'),
+                size: new TextEncoder().encode(String(textarea?.value || '')).length,
+                updatedAt: Date.now()
+              }
+            : {
+                ...row,
+                name: replacement.name || row.name,
+                type: replacement.type || row.type,
+                size: replacement.size || row.size,
+                data: replacement.data || row.data,
+                updatedAt: Date.now()
+              };
+          await putEncrypted('globalDocs', next, 'id');
+          showToast('Document mis à jour');
+          closeDocumentEditorModal();
+          await renderGlobalDocs();
+          return;
+        }
+
+        if (ctx.sourceType === 'project-doc') {
+          const state = await getProjectState(ctx.projectId, { ignoreAccessCheck: true });
+          if (!state?.project || !canEditProjectMeta(state)) {
+            showToast('Action non autorisée');
+            return;
+          }
+          const existing = (state.documents || []).find((d) => d.docId === ctx.docId);
+          if (!existing) {
+            showToast('Document introuvable');
+            return;
+          }
+          const updated = ctx.mode === 'text'
+            ? {
+                ...existing,
+                data: encodeTextToDataUrl(textarea?.value || '', existing.type || 'text/plain;charset=utf-8'),
+                size: new TextEncoder().encode(String(textarea?.value || '')).length,
+                uploadedAt: Date.now()
+              }
+            : {
+                ...existing,
+                name: replacement.name || existing.name,
+                type: replacement.type || existing.type,
+                size: replacement.size || existing.size,
+                data: replacement.data || existing.data,
+                uploadedAt: Date.now()
+              };
+
+          const delEvent = createEvent(EventTypes.DELETE_DOCUMENT, ctx.projectId, currentUser.userId, { docId: existing.docId });
+          await publishEvent(delEvent);
+          if (sharedFolderHandle) await writeEventToSharedFolder(ctx.projectId, delEvent);
+          const createEventDoc = createEvent(EventTypes.CREATE_DOCUMENT, ctx.projectId, currentUser.userId, {
+            docId: updated.docId,
+            name: updated.name,
+            type: updated.type,
+            size: updated.size,
+            data: updated.data,
+            notes: updated.notes || '',
+            theme: updated.theme || 'General',
+            sharingMode: normalizeSharingMode(updated.sharingMode, normalizeSharingMode(state.project.sharingMode, 'shared')),
+            linkedTaskIds: Array.isArray(updated.linkedTaskIds) ? [...updated.linkedTaskIds] : []
+          });
+          await publishEvent(createEventDoc);
+          if (sharedFolderHandle) await writeEventToSharedFolder(ctx.projectId, createEventDoc);
+
+          showToast('Document projet mis à jour');
+          closeDocumentEditorModal();
+          if (workspaceMode === 'project' && currentProjectId === ctx.projectId) {
+            await showProjectDetail(ctx.projectId, { resetScroll: false });
+          } else {
+            await renderGlobalDocs();
+          }
+          return;
+        }
+
+        if (ctx.sourceType === 'task-attachment') {
+          const state = await getProjectState(ctx.projectId, { ignoreAccessCheck: true });
+          const task = (state?.tasks || []).find((t) => t.taskId === ctx.taskId);
+          if (!state?.project || !task || !canEditTaskInProject(task, state)) {
+            showToast('Action non autorisée');
+            return;
+          }
+          const idx = Number(ctx.attachmentIndex);
+          const attachments = [...(task.attachments || [])];
+          if (!attachments[idx]) {
+            showToast('Pièce jointe introuvable');
+            return;
+          }
+          attachments[idx] = ctx.mode === 'text'
+            ? {
+                ...attachments[idx],
+                data: encodeTextToDataUrl(textarea?.value || '', attachments[idx].type || 'text/plain;charset=utf-8'),
+                size: new TextEncoder().encode(String(textarea?.value || '')).length
+              }
+            : {
+                ...attachments[idx],
+                name: replacement.name || attachments[idx].name,
+                type: replacement.type || attachments[idx].type,
+                size: replacement.size || attachments[idx].size,
+                data: replacement.data || attachments[idx].data
+              };
+
+          const event = createEvent(EventTypes.UPDATE_TASK, ctx.projectId, currentUser.userId, {
+            taskId: task.taskId,
+            changes: { attachments }
+          });
+          await publishEvent(event);
+          if (sharedFolderHandle) await writeEventToSharedFolder(ctx.projectId, event);
+
+          showToast('Pièce jointe mise à jour');
+          closeDocumentEditorModal();
+          if (workspaceMode === 'project' && currentProjectId === ctx.projectId) {
+            await showProjectDetail(ctx.projectId, { resetScroll: false });
+          } else {
+            await renderGlobalDocs();
+          }
+        }
+      });
+    }
+
+    async function openProjectDocumentEditor(sourceType, sourceId, attachmentIndex = -1) {
+      const state = currentProjectState || (currentProjectId ? await getProjectState(currentProjectId, { ignoreAccessCheck: true }) : null);
+      if (!state?.project) return;
+      const kind = String(sourceType || '').trim();
+      if (kind === 'project-doc') {
+        const doc = (state.documents || []).find((d) => d.docId === sourceId);
+        if (!doc || !canEditProjectMeta(state)) return;
+        await openDocumentEditorModal({
+          sourceType: 'project-doc',
+          projectId: state.project.projectId,
+          docId: doc.docId,
+          id: `${state.project.projectId}:project-doc:${doc.docId}`,
+          doc
+        });
+        return;
+      }
+      if (kind === 'task-attachment') {
+        const task = (state.tasks || []).find((t) => t.taskId === sourceId);
+        const idx = Number(attachmentIndex);
+        const doc = task?.attachments?.[idx];
+        if (!task || !doc || !canEditTaskInProject(task, state)) return;
+        await openDocumentEditorModal({
+          sourceType: 'task-attachment',
+          projectId: state.project.projectId,
+          taskId: task.taskId,
+          attachmentIndex: idx,
+          id: `${state.project.projectId}:${task.taskId}:${idx}`,
+          doc
+        });
+      }
+    }
+
+    async function openGlobalDocumentEditor(docId) {
+      const id = String(docId || '').trim();
+      if (!id) return;
+      const doc = await resolveDocumentForBinding(id);
+      if (!doc) {
+        showToast('Document introuvable');
+        return;
+      }
+      if (doc.sourceType === 'standalone') {
+        await openDocumentEditorModal({ sourceType: 'standalone', id: doc.id, doc });
+        return;
+      }
+      if (doc.sourceType === 'project-doc') {
+        const state = await getProjectState(doc.sourceProjectId, { ignoreAccessCheck: true });
+        if (!state?.project || !canEditProjectMeta(state)) {
+          showToast('Action non autorisée');
+          return;
+        }
+        await openDocumentEditorModal({
+          sourceType: 'project-doc',
+          projectId: doc.sourceProjectId,
+          docId: doc.docId,
+          id: doc.id,
+          doc
+        });
+        return;
+      }
+
+      const parts = id.split(':');
+      if (parts.length >= 3) {
+        const projectId = parts[0];
+        const taskId = parts[1];
+        const idx = Number(parts[2]);
+        const state = await getProjectState(projectId, { ignoreAccessCheck: true });
+        const task = (state?.tasks || []).find((t) => t.taskId === taskId);
+        const attachment = task?.attachments?.[idx];
+        if (!state?.project || !task || !attachment || !canEditTaskInProject(task, state)) {
+          showToast('Action non autorisée');
+          return;
+        }
+        await openDocumentEditorModal({
+          sourceType: 'task-attachment',
+          projectId,
+          taskId,
+          attachmentIndex: idx,
+          id,
+          doc: attachment
+        });
+      }
+    }
+
+    window.openProjectDocumentEditor = openProjectDocumentEditor;
+    window.openGlobalDocumentEditor = openGlobalDocumentEditor;
+
+    function renderDocuments(stateOrTasks) {
       const container = document.getElementById('documents-container');
       if (!container) return;
+
+      const state = Array.isArray(stateOrTasks)
+        ? { tasks: stateOrTasks, documents: (currentProjectState?.documents || []) }
+        : (stateOrTasks || currentProjectState || { tasks: [], documents: [] });
+      const tasks = Array.isArray(state.tasks) ? state.tasks : [];
+      const projectDocs = Array.isArray(state.documents) ? state.documents : [];
+      const taskTitleById = new Map(tasks.map(t => [t.taskId, t.title || 'Tâche']));
 
       const docs = [];
       tasks.forEach(task => {
         (task.attachments || []).forEach((file, attachmentIndex) => {
           if (file.shareToDocs !== false) {
             docs.push({
+              sourceType: 'task-attachment',
               taskTitle: task.title,
               taskId: task.taskId,
+              linkedTaskIds: [task.taskId],
               attachmentIndex,
               uploadedAt: task.updatedAt || task.createdAt || 0,
+              createdBy: task.createdBy || null,
               ...file
             });
           }
         });
       });
 
+      projectDocs.forEach(doc => {
+        docs.push({
+          sourceType: 'project-doc',
+          docId: doc.docId,
+          taskTitle: (doc.linkedTaskIds || []).length > 0 ? 'Document projet lié' : 'Document indépendant',
+          linkedTaskIds: Array.isArray(doc.linkedTaskIds) ? [...doc.linkedTaskIds] : [],
+          uploadedAt: doc.uploadedAt || doc.createdAt || 0,
+          createdBy: doc.createdBy || null,
+          name: doc.name,
+          type: doc.type,
+          size: doc.size,
+          data: doc.data,
+          notes: doc.notes || ''
+        });
+      });
+
       let filtered = [...docs];
       if (docsFilters.query.trim()) {
         const q = docsFilters.query.trim().toLowerCase();
-        filtered = filtered.filter(doc => [doc.name, doc.taskTitle, doc.type].some(v => String(v || '').toLowerCase().includes(q)));
+        filtered = filtered.filter(doc => {
+          const linkedTitles = (doc.linkedTaskIds || []).map(id => taskTitleById.get(id) || '').join(' ');
+          return [doc.name, doc.taskTitle, doc.type, doc.notes, linkedTitles]
+            .some(v => String(v || '').toLowerCase().includes(q));
+        });
       }
       if (docsFilters.type !== 'all') {
         filtered = filtered.filter(doc => getDocumentCategory(doc) === docsFilters.type);
@@ -5732,7 +12331,23 @@
         return;
       }
 
-      container.innerHTML = filtered.map((doc, idx) => `
+      container.innerHTML = filtered.map((doc, idx) => {
+        const linkedTitles = (doc.linkedTaskIds || [])
+          .map(id => taskTitleById.get(id))
+          .filter(Boolean);
+        const linkedLabel = linkedTitles.length > 0
+          ? `Lié à: ${linkedTitles.join(', ')}`
+          : 'Aucune tâche associée';
+        const canDeleteTaskDoc = doc.sourceType === 'task-attachment'
+          && canEditTaskInProject((currentProjectState?.tasks || []).find(t => t.taskId === doc.taskId), currentProjectState);
+        const canDeleteProjectDoc = doc.sourceType === 'project-doc'
+          && (canEditProjectMeta(currentProjectState) || (doc.createdBy && doc.createdBy === currentUser?.userId));
+        const canEditTaskDoc = doc.sourceType === 'task-attachment'
+          && canEditTaskInProject((currentProjectState?.tasks || []).find(t => t.taskId === doc.taskId), currentProjectState);
+        const canEditProjectDoc = doc.sourceType === 'project-doc'
+          && (canEditProjectMeta(currentProjectState) || (doc.createdBy && doc.createdBy === currentUser?.userId));
+        const canManageProjectDocBinding = doc.sourceType === 'project-doc' && canEditProjectMeta(currentProjectState);
+        return `
         <div class="doc-card bg-surface-container-low rounded-xl p-4">
           <div class="flex items-center justify-between mb-3">
             <span class="material-symbols-outlined text-primary">description</span>
@@ -5740,24 +12355,29 @@
           </div>
           <h4 class="font-semibold text-sm truncate mb-1">${escapeHtml(doc.name || `document-${idx + 1}`)}</h4>
           <p class="text-xs text-gray-500 mb-2">Source: ${escapeHtml(doc.taskTitle || 'Tâche')}</p>
+          <p class="text-[11px] text-slate-500 mb-2 truncate" title="${escapeHtml(linkedLabel)}">${escapeHtml(linkedLabel)}</p>
           <div class="text-[11px] text-slate-500 mb-3">${doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString('fr-FR') : ''}</div>
           <div class="flex items-center justify-between text-xs">
             <span class="text-gray-500">${formatFileSize(doc.size || 0)}</span>
             <div class="flex items-center gap-2">
               ${isDocumentPreviewable(doc) ? `<button onclick="openDocumentPreview('${encodeURIComponent(doc.data || '')}','${encodeURIComponent(doc.name || '')}','${encodeURIComponent(doc.type || '')}')" class="text-slate-700 hover:underline">Aperçu</button>` : ''}
+              ${isDocumentEditable(doc) && (canEditTaskDoc || canEditProjectDoc) ? `<button onclick="openProjectDocumentEditor('${doc.sourceType}','${escapeHtml(doc.sourceType === 'project-doc' ? doc.docId : doc.taskId)}',${Number(doc.attachmentIndex ?? -1)})" class="text-slate-700 hover:underline">Modifier</button>` : ''}
               <a class="text-primary font-semibold hover:underline" href="${doc.data || '#'}" download="${escapeHtml(doc.name || 'document')}">Télécharger</a>
-              ${canEditTaskInProject((currentProjectState?.tasks || []).find(t => t.taskId === doc.taskId), currentProjectState) ? `<button onclick="removeAttachment('${doc.taskId}', ${doc.attachmentIndex})" class="text-red-600 hover:underline">Suppr.</button>` : ''}
+              ${canManageProjectDocBinding ? `<button onclick="openDocumentBindingModal('${escapeHtml(`${currentProjectId}:project-doc:${doc.docId}`)}')" class="text-slate-700 font-semibold hover:underline">Gerer</button>` : ''}
+              ${canDeleteTaskDoc ? `<button onclick="removeAttachment('${doc.taskId}', ${doc.attachmentIndex})" class="text-red-600 hover:underline">Suppr.</button>` : ''}
+              ${canDeleteProjectDoc ? `<button onclick="deleteProjectDocument('${doc.docId}')" class="text-red-600 hover:underline">Suppr.</button>` : ''}
             </div>
           </div>
         </div>
-      `).join('');
+      `;
+      }).join('');
     }
 
     async function renderActivity(events) {
       const container = document.getElementById('activity-container');
       if (!container) return;
       if (!canReadProjectActivity(currentProjectState)) {
-        container.innerHTML = '<p class="text-gray-500 text-center py-8">Acces reserve aux managers/owners.</p>';
+        container.innerHTML = '<p class="text-gray-500 text-center py-8">Acces reserve aux Managers/Proprietaires.</p>';
         return;
       }
 
@@ -5789,7 +12409,9 @@
         UPDATE_USER_GROUP: 'Maj groupe utilisateurs',
         DELETE_USER_GROUP: 'Suppression groupe utilisateurs',
         ADD_THEME: 'Ajout thematique',
-        REMOVE_THEME: 'Retrait thematique'
+        REMOVE_THEME: 'Retrait thematique',
+        CREATE_DOCUMENT: 'Ajout document',
+        DELETE_DOCUMENT: 'Suppression document'
       };
 
       const now = Date.now();
@@ -5849,11 +12471,74 @@
       `;
     }
 
-    function renderMessages(messages) {
+    function renderDiscussionMembersPanel(messages) {
+      const listEl = document.getElementById('discussion-members-list');
+      const countEl = document.getElementById('discussion-members-count');
+      if (!listEl || !countEl) return;
+
+      const members = Array.isArray(currentProjectState?.members) ? currentProjectState.members : [];
+      const latestByUser = new Map();
+      (messages || []).forEach(msg => {
+        const key = String(msg?.author || '').trim();
+        if (!key) return;
+        const ts = Number(msg.timestamp || 0);
+        if (!latestByUser.has(key) || latestByUser.get(key) < ts) latestByUser.set(key, ts);
+      });
+
+      const now = Date.now();
+      const rows = members.map(member => {
+        const identity = resolveKnownUserIdentity(member.userId, member.displayName || '');
+        const lastTs = latestByUser.get(member.userId) || 0;
+        const isOnline = (now - lastTs) < (2 * 60 * 60 * 1000);
+        return {
+          userId: member.userId,
+          name: identity.name || fallbackDirectoryName(member.userId),
+          avatarDataUrl: identity.avatarDataUrl || '',
+          isOnline
+        };
+      });
+
+      if (currentUser?.userId && !rows.some(r => r.userId === currentUser.userId)) {
+        rows.push({
+          userId: currentUser.userId,
+          name: currentUser.name || fallbackDirectoryName(currentUser.userId),
+          avatarDataUrl: currentUser.avatarDataUrl || '',
+          isOnline: true
+        });
+      }
+
+      countEl.textContent = String(rows.length);
+      if (rows.length === 0) {
+        listEl.innerHTML = '<p class="text-xs text-slate-500">Aucun membre</p>';
+        return;
+      }
+
+      listEl.innerHTML = rows.map((row, idx) => {
+        const avatarUrl = String(row.avatarDataUrl || '').replace(/'/g, '%27');
+        const avatar = row.avatarDataUrl
+          ? `<span class="discussion-member-avatar" style="background-image:url('${avatarUrl}')"></span>`
+          : `<span class="discussion-member-avatar" style="background:${stringToColor(row.userId || row.name || String(idx))}">${escapeHtml(getInitials(row.name))}</span>`;
+        return `
+          <div class="discussion-member-item">
+            <div class="discussion-member-avatar-wrap">
+              ${avatar}
+              <span class="discussion-member-dot ${row.isOnline ? 'is-online' : 'is-away'}"></span>
+            </div>
+            <div class="discussion-member-meta">
+              <p class="discussion-member-name">${escapeHtml(row.name)}</p>
+              <p class="discussion-member-status ${row.isOnline ? 'is-online' : 'is-away'}">${row.isOnline ? 'En ligne' : 'Absent'}</p>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderMessagesLegacy(messages) {
       const container = document.getElementById('messages-container');
       if (!container) return;
 
-      let filtered = [...(messages || [])];
+      const allMessages = [...(messages || [])];
+      let filtered = [...allMessages];
       if (messageFilters.query.trim()) {
         const q = messageFilters.query.trim().toLowerCase();
         filtered = filtered.filter(msg => {
@@ -5864,8 +12549,10 @@
         filtered = filtered.filter(msg => msg.author === currentUser.userId);
       }
 
+      renderDiscussionMembersPanel(allMessages);
+
       if (filtered.length === 0) {
-        const emptyLabel = (messages || []).length === 0
+        const emptyLabel = allMessages.length === 0
           ? 'Aucun message'
           : 'Aucun message ne correspond aux filtres';
         container.innerHTML = `<p class="text-gray-500 text-center py-8">${emptyLabel}</p>`;
@@ -5902,6 +12589,72 @@
       container.scrollTop = container.scrollHeight;
     }
 
+    function renderMessages(messages) {
+      const container = document.getElementById('messages-container');
+      if (!container) return;
+
+      const allMessages = [...(messages || [])];
+      let filtered = [...allMessages];
+      if (messageFilters.query.trim()) {
+        const q = messageFilters.query.trim().toLowerCase();
+        filtered = filtered.filter(msg => [msg.content, msg.authorName].some(v => String(v || '').toLowerCase().includes(q)));
+      }
+      if (messageFilters.onlyMine && currentUser?.userId) {
+        filtered = filtered.filter(msg => msg.author === currentUser.userId);
+      }
+
+      renderDiscussionMembersPanel(allMessages);
+
+      if (filtered.length === 0) {
+        const emptyLabel = allMessages.length === 0 ? 'Aucun message' : 'Aucun message ne correspond aux filtres';
+        container.innerHTML = `<p class="text-gray-500 text-center py-8">${emptyLabel}</p>`;
+        return;
+      }
+
+      container.innerHTML = filtered.map((msg, idx) => {
+        const mine = msg.author === currentUser?.userId;
+        const identity = resolveKnownUserIdentity(msg.author, msg.authorName || 'Utilisateur');
+        const avatarUrl = String(identity.avatarDataUrl || '').replace(/'/g, '%27');
+        const avatarHtml = identity.avatarDataUrl
+          ? `<span class="discussion-avatar" style="background-image:url('${avatarUrl}')"></span>`
+          : `<span class="discussion-avatar" style="background:${stringToColor(identity.userId || identity.name || String(idx))}">${escapeHtml(getInitials(identity.name))}</span>`;
+        const timeLabel = new Date(msg.timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+
+        return `
+          <div id="message-item-${msg.messageId}" class="discussion-message-row ${mine ? 'is-mine' : 'is-other'}">
+            ${avatarHtml}
+            <div class="discussion-message-wrap">
+              <div class="discussion-message-meta">
+                <span class="discussion-author">${escapeHtml(identity.name || 'Utilisateur')}</span>
+                <span class="discussion-time">${timeLabel}</span>
+                ${msg.editedAt ? '<span class="discussion-edited">(modifie)</span>' : ''}
+              </div>
+              <div class="discussion-bubble ${mine ? 'is-mine' : 'is-other'}">
+                ${editingMessageId === msg.messageId ? `
+                  <div class="space-y-2">
+                    <textarea id="message-edit-input-${msg.messageId}" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">${escapeHtml(editingMessageDraft)}</textarea>
+                    <div class="flex items-center gap-3 text-xs">
+                      <button onclick="saveEditedMessage('${msg.messageId}')" class="text-primary hover:underline">Enregistrer</button>
+                      <button onclick="cancelEditMessage()" class="text-slate-600 hover:underline">Annuler</button>
+                    </div>
+                  </div>
+                ` : `
+                  <div class="markdown-content">${renderSafeMarkdown(msg.content)}</div>
+                  ${renderMessageAttachments(msg.attachments)}
+                  <div class="mt-2 flex items-center gap-3 text-xs">
+                    ${canEditProjectMessage(msg, currentProjectState) ? `<button onclick="startEditMessage('${msg.messageId}')" class="text-primary hover:underline">Editer</button>` : ''}
+                    ${canDeleteProjectMessage(msg, currentProjectState) ? `<button onclick="deleteMessage('${msg.messageId}')" class="text-rose-600 hover:underline">Supprimer</button>` : ''}
+                  </div>
+                `}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      container.scrollTop = container.scrollHeight;
+    }
+
     async function toggleTaskStatus(taskId) {
       if (!currentProjectId) return;
 
@@ -5913,9 +12666,12 @@
         showToast('Action non autorisee');
         return;
       }
+      if (!ensureProjectResourceUnlockedForAction(state, LOCK_SCOPE_TASK, task.taskId, 'Changement de statut').ok) {
+        return;
+      }
 
       // Cycle through statuses
-      const statuses = ['todo', 'en-cours', 'termine'];
+      const statuses = ['todo', 'en-cours', 'suspendu', 'termine'];
       const currentIndex = statuses.indexOf(task.status);
       const newStatus = statuses[(currentIndex + 1) % statuses.length];
 
@@ -5929,11 +12685,12 @@
         }
       );
 
-      await publishEvent(event);
-
-      if (sharedFolderHandle) {
-        await writeEventToSharedFolder(currentProjectId, event);
-      }
+      await runWithLoading(async () => {
+        await publishEvent(event);
+        if (sharedFolderHandle) {
+          await writeEventToSharedFolder(currentProjectId, event);
+        }
+      });
 
       showToast('✅ Statut mis à jour');
       await showProjectDetail(currentProjectId);
@@ -5948,6 +12705,17 @@
         showToast('Action non autorisee');
         return;
       }
+      const lockResult = await acquireProjectResourceLock(currentProjectId, LOCK_SCOPE_TASK, task.taskId, { scope: 'task-edit' });
+      if (!lockResult.ok) {
+        showToast(buildLockBlockedMessage(lockResult.lock, 'Tache en cours de modification'));
+        return;
+      }
+      activeTaskEditLock = {
+        projectId: currentProjectId,
+        resourceType: LOCK_SCOPE_TASK,
+        resourceId: task.taskId,
+        lockId: lockResult.lockId
+      };
       openTaskModal(task);
     }
 
@@ -5958,6 +12726,9 @@
       if (!task) return;
       if (!canDeleteTaskInProject(task, state)) {
         showToast('Action non autorisee');
+        return;
+      }
+      if (!ensureProjectResourceUnlockedForAction(state, LOCK_SCOPE_TASK, task.taskId, 'Suppression').ok) {
         return;
       }
       if (!confirm('Supprimer cette tâche ?')) return;
@@ -5988,6 +12759,9 @@
       if (!task) return;
       if (!canEditTaskInProject(task, state)) {
         showToast('Action non autorisee');
+        return;
+      }
+      if (!ensureProjectResourceUnlockedForAction(state, LOCK_SCOPE_TASK, task.taskId, 'Archivage').ok) {
         return;
       }
       if (!confirm('Archiver cette tâche ?')) return;
@@ -6057,6 +12831,199 @@
       await publishEvent(event);
       if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
       showToast('✅ Document supprimé');
+      await showProjectDetail(currentProjectId);
+    }
+
+    async function readDocumentFilesFromInput(inputId) {
+      const input = document.getElementById(inputId);
+      const files = Array.from(input?.files || []);
+      if (!files.length) return [];
+      const docs = await Promise.all(
+        files.map(file => new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            resolve({
+              docId: uuidv4(),
+              name: file.name,
+              type: file.type || 'application/octet-stream',
+              size: file.size,
+              data: reader.result,
+              uploadedAt: Date.now()
+            });
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        }))
+      );
+      return docs;
+    }
+
+    async function readProjectDocumentFiles() {
+      return readDocumentFilesFromInput('project-doc-files');
+    }
+
+    async function readCreateProjectDocumentFiles() {
+      return readDocumentFilesFromInput('project-create-doc-files');
+    }
+
+    function estimateDataUrlBytes(dataUrl) {
+      const base64 = String(dataUrl || '').split(',')[1] || '';
+      const len = base64.length;
+      if (!len) return 0;
+      const padding = (base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0);
+      return Math.max(0, Math.floor((len * 3) / 4) - padding);
+    }
+
+    function extractDescriptionImageDocs(descriptionHtml = '') {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(`<div>${sanitizeProjectDescriptionHtml(descriptionHtml)}</div>`, 'text/html');
+      const root = doc.body.firstElementChild;
+      if (!root) return [];
+      const images = Array.from(root.querySelectorAll('img[src^="data:image/"]'));
+      return images.map((img, index) => {
+        const src = String(img.getAttribute('src') || '');
+        const mime = (src.match(/^data:([^;]+);base64,/i)?.[1] || 'image/png').toLowerCase();
+        const ext = mime.split('/')[1] || 'png';
+        const imageId = String(img.getAttribute('data-desc-image-id') || '').trim() || uuidv4();
+        const alt = String(img.getAttribute('alt') || '').trim();
+        const baseName = alt || `description-image-${index + 1}`;
+        const safeBaseName = baseName.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-').trim() || `description-image-${index + 1}`;
+        const fileName = /\.[a-z0-9]{2,5}$/i.test(safeBaseName) ? safeBaseName : `${safeBaseName}.${ext}`;
+        return {
+          imageId,
+          name: fileName,
+          type: mime,
+          size: estimateDataUrlBytes(src),
+          data: src
+        };
+      });
+    }
+
+    async function syncDescriptionImagesAsProjectDocs(projectId, state, descriptionHtml) {
+      if (!projectId || !state?.project) return;
+      if (sharedFolderHandle && !projectFolders.get(projectId)) {
+        await registerProject(projectId);
+      }
+      const extracted = extractDescriptionImageDocs(descriptionHtml);
+      const extractedById = new Map(extracted.map(item => [item.imageId, item]));
+      const existing = (state.documents || []).filter(d => d.origin === 'project-description-image');
+      const existingByImageId = new Map(existing.map(d => [String(d.descriptionImageId || ''), d]));
+
+      for (const item of extracted) {
+        const matched = existingByImageId.get(item.imageId);
+        if (matched && matched.data === item.data) continue;
+
+        if (matched && matched.data !== item.data) {
+          const deleteEvent = createEvent(
+            EventTypes.DELETE_DOCUMENT,
+            projectId,
+            currentUser.userId,
+            { docId: matched.docId }
+          );
+          await publishEvent(deleteEvent);
+          if (sharedFolderHandle) await writeEventToSharedFolder(projectId, deleteEvent);
+        }
+
+        const createEventDoc = createEvent(
+          EventTypes.CREATE_DOCUMENT,
+          projectId,
+          currentUser.userId,
+          {
+            docId: uuidv4(),
+            name: item.name,
+            type: item.type,
+            size: item.size,
+            data: item.data,
+            uploadedAt: Date.now(),
+            linkedTaskIds: [],
+            notes: 'Image intégrée dans la description du projet',
+            origin: 'project-description-image',
+            descriptionImageId: item.imageId
+          }
+        );
+        await publishEvent(createEventDoc);
+        if (sharedFolderHandle) await writeEventToSharedFolder(projectId, createEventDoc);
+      }
+
+      for (const previous of existing) {
+        const imageId = String(previous.descriptionImageId || '');
+        if (!imageId || extractedById.has(imageId)) continue;
+        const deleteEvent = createEvent(
+          EventTypes.DELETE_DOCUMENT,
+          projectId,
+          currentUser.userId,
+          { docId: previous.docId }
+        );
+        await publishEvent(deleteEvent);
+        if (sharedFolderHandle) await writeEventToSharedFolder(projectId, deleteEvent);
+      }
+    }
+
+    async function addProjectDocuments() {
+      if (!currentProjectId) return;
+      const state = await getProjectState(currentProjectId);
+      if (!state?.project) return;
+      if (!canSendProjectMessage(state)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const files = await readProjectDocumentFiles();
+      if (!files.length) {
+        showToast('Selectionnez au moins un document');
+        return;
+      }
+      const taskLinksSelect = document.getElementById('project-doc-task-links');
+      const linkedTaskIds = Array.from(taskLinksSelect?.selectedOptions || [])
+        .map(opt => opt.value)
+        .filter(Boolean);
+      const validTaskIds = new Set((state.tasks || []).map(t => t.taskId));
+      const safeLinkedTaskIds = [...new Set(linkedTaskIds.filter(id => validTaskIds.has(id)))];
+
+      await runWithLoading(async () => {
+      for (const file of files) {
+        const event = createEvent(
+          EventTypes.CREATE_DOCUMENT,
+          currentProjectId,
+          currentUser.userId,
+          {
+            ...file,
+            linkedTaskIds: safeLinkedTaskIds
+          }
+        );
+        await publishEvent(event);
+        if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+      }
+      const input = document.getElementById('project-doc-files');
+      if (input) input.value = '';
+      updateProjectDocFilesSummary();
+      if (taskLinksSelect) taskLinksSelect.selectedIndex = -1;
+      });
+      addNotification('Document', `${files.length} document(s) ajoute(s)`, currentProjectId);
+      showToast('Document(s) ajoute(s)');
+      await showProjectDetail(currentProjectId);
+    }
+
+    async function deleteProjectDocument(docId) {
+      if (!currentProjectId || !docId) return;
+      const state = await getProjectState(currentProjectId);
+      if (!state?.project) return;
+      const doc = (state.documents || []).find(d => d.docId === docId);
+      if (!doc) return;
+      const canDelete = canEditProjectMeta(state) || (doc.createdBy && doc.createdBy === currentUser?.userId);
+      if (!canDelete) {
+        showToast('Action non autorisee');
+        return;
+      }
+      if (!confirm('Supprimer ce document du projet ?')) return;
+      const event = createEvent(
+        EventTypes.DELETE_DOCUMENT,
+        currentProjectId,
+        currentUser.userId,
+        { docId }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+      showToast('Document supprime');
       await showProjectDetail(currentProjectId);
     }
 
@@ -6177,7 +13144,7 @@
     // ============================================================================
 
     async function initApp() {
-      debugLog('Initializing TaskMDA Team...');
+      debugLog('Initializing NEXUS MDA...');
 
       try {
         showLoading(true);
@@ -6215,8 +13182,10 @@
             currentUser.name = encryptedData.config.userName;
           }
         }
+        await loadAppBrandingConfig({ ensureRemote: false });
         updateUserInfo();
         loadNotifications();
+        notifiedCollaboratorEventIds = loadNotifiedEventIds();
         dueReminderMemory = loadReminderMemory();
         renderNotifications();
 
@@ -6262,7 +13231,8 @@
         showLoading(true);
 
         const handle = await selectSharedFolder();
-        await connectSharedFolderHandle(handle, true);
+        const shouldReload = askCollaborativeReload('liaison manuelle');
+        await connectSharedFolderHandle(handle, true, { rebuildLocal: shouldReload });
         showLoading(false);
         return;
         sharedFolderHandle = handle;
@@ -6362,15 +13332,39 @@
     document.getElementById('btn-select-folder').addEventListener('click', handleSelectFolder);
     document.getElementById('btn-continue-local')?.addEventListener('click', handleContinueWithoutFolder);
     document.getElementById('btn-theme-toggle')?.addEventListener('click', toggleTheme);
+    document.getElementById('btn-open-app-help')?.addEventListener('click', () => {
+      document.getElementById('modal-app-help')?.classList.remove('hidden');
+    });
+    document.getElementById('btn-close-app-help')?.addEventListener('click', () => {
+      document.getElementById('modal-app-help')?.classList.add('hidden');
+    });
+    document.getElementById('btn-sidebar-collapse')?.addEventListener('click', toggleSidebarCollapsed);
     document.getElementById('btn-link-folder')?.addEventListener('click', handleSelectFolder);
     document.getElementById('btn-unlink-folder')?.addEventListener('click', handleContinueWithoutFolder);
     document.getElementById('sidebar-link-folder')?.addEventListener('click', handleSelectFolder);
     document.getElementById('sidebar-logout')?.addEventListener('click', handleLogout);
-    document.getElementById('btn-back-to-dashboard').addEventListener('click', showDashboard);
+    document.getElementById('btn-back-to-dashboard').addEventListener('click', async () => {
+      await showProjectsWorkspace();
+    });
     document.getElementById('btn-edit-project')?.addEventListener('click', () => openEditProjectModal());
     document.getElementById('btn-delete-project')?.addEventListener('click', () => deleteCurrentProject());
+    document.getElementById('btn-toggle-project-description')?.addEventListener('click', () => {
+      const wasExpanded = projectDescriptionExpanded;
+      projectDescriptionExpanded = !projectDescriptionExpanded;
+      renderProjectDescription(currentProjectState?.project?.description || '');
+      if (wasExpanded && !projectDescriptionExpanded) {
+        requestAnimationFrame(() => {
+          scrollProjectTitleIntoView('smooth');
+          requestAnimationFrame(() => scrollProjectTitleIntoView('auto'));
+        });
+      }
+    });
     document.getElementById('mobile-menu-btn')?.addEventListener('click', openMobileSidebar);
     document.getElementById('mobile-overlay')?.addEventListener('click', closeMobileSidebar);
+    window.addEventListener('resize', () => {
+      const collapsed = localStorage.getItem(SIDEBAR_COMPACT_STORAGE_KEY) === '1';
+      applySidebarCollapsedState(collapsed, false);
+    });
     document.getElementById('btn-notifications')?.addEventListener('click', (e) => {
       e.stopPropagation();
       toggleNotificationsPanel();
@@ -6396,7 +13390,6 @@
     document.getElementById('nav-projects')?.addEventListener('click', async (e) => {
       e.preventDefault();
       await showProjectsWorkspace();
-      document.getElementById('projects-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       closeMobileSidebar();
     });
     document.getElementById('projects-view-grid')?.addEventListener('click', async () => {
@@ -6420,10 +13413,66 @@
       await showGlobalWorkspace('docs');
       closeMobileSidebar();
     });
+    document.getElementById('nav-messages')?.addEventListener('click', async (e) => {
+      e.preventDefault();
+      await showGlobalWorkspace('messages');
+      closeMobileSidebar();
+    });
+    document.getElementById('nav-feed')?.addEventListener('click', async (e) => {
+      e.preventDefault();
+      await showGlobalWorkspace('feed');
+      closeMobileSidebar();
+    });
     document.getElementById('nav-settings')?.addEventListener('click', async (e) => {
       e.preventDefault();
       await showGlobalWorkspace('settings');
       closeMobileSidebar();
+    });
+    document.getElementById('btn-global-feed-post')?.addEventListener('click', async () => {
+      await publishGlobalFeedPost();
+    });
+    document.getElementById('btn-global-feed-insert-mention')?.addEventListener('click', () => {
+      insertMentionTokenInGlobalFeed();
+    });
+    document.getElementById('global-feed-search')?.addEventListener('input', () => {
+      renderGlobalFeed();
+    });
+    document.getElementById('global-feed-sort')?.addEventListener('change', (e) => {
+      globalFeedSortMode = String(e?.target?.value || 'desc') === 'asc' ? 'asc' : 'desc';
+      renderGlobalFeed();
+    });
+    document.getElementById('global-feed-filter-all')?.addEventListener('click', () => {
+      globalFeedFilterMode = 'all';
+      renderGlobalFeed();
+    });
+    document.getElementById('global-feed-filter-auto')?.addEventListener('click', () => {
+      globalFeedFilterMode = 'auto';
+      renderGlobalFeed();
+    });
+    document.getElementById('global-feed-filter-manual')?.addEventListener('click', () => {
+      globalFeedFilterMode = 'manual';
+      renderGlobalFeed();
+    });
+    document.getElementById('global-feed-filter-mentions')?.addEventListener('click', () => {
+      globalFeedFilterMode = 'mentions';
+      renderGlobalFeed();
+    });
+    document.getElementById('global-feed-filter-project-refs')?.addEventListener('click', () => {
+      globalFeedFilterMode = 'project-refs';
+      renderGlobalFeed();
+    });
+    document.getElementById('global-feed-filter-task-refs')?.addEventListener('click', () => {
+      globalFeedFilterMode = 'task-refs';
+      renderGlobalFeed();
+    });
+    document.getElementById('global-feed-input')?.addEventListener('input', () => {
+      updateGlobalFeedMentionCounter();
+    });
+    document.getElementById('global-feed-input')?.addEventListener('keydown', async (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        await publishGlobalFeedPost();
+      }
     });
 
     document.getElementById('search-input')?.addEventListener('input', async (e) => {
@@ -6435,12 +13484,73 @@
         }
         if (globalWorkspaceView === 'calendar') await renderGlobalCalendar();
         if (globalWorkspaceView === 'docs') await renderGlobalDocs();
+        if (globalWorkspaceView === 'messages') await renderGlobalMessages();
         if (globalWorkspaceView === 'settings') await renderGlobalSettings();
       } else {
         if (workspaceMode === 'dashboard') projectsPage = 1;
         if (workspaceMode === 'project') tasksPage = 1;
         await rerenderCurrentContext();
       }
+
+      if (headerSearchDebounceTimer) clearTimeout(headerSearchDebounceTimer);
+      const query = globalSearchQuery;
+      const token = ++headerSearchRequestToken;
+      if (!query || query.length < 2) {
+        headerSearchResults = [];
+        hideHeaderSearchResults();
+        return;
+      }
+      headerSearchDebounceTimer = setTimeout(async () => {
+        const results = await buildHeaderSearchResults(query);
+        if (token !== headerSearchRequestToken) return;
+        headerSearchResults = results;
+        headerSearchActiveIndex = results.length > 0 ? 0 : -1;
+        renderHeaderSearchResults();
+      }, 170);
+    });
+    document.getElementById('search-input')?.addEventListener('focus', () => {
+      const query = (document.getElementById('search-input')?.value || '').trim();
+      if (query.length >= 2) {
+        if (headerSearchResults.length > 0) renderHeaderSearchResults();
+      }
+    });
+    document.getElementById('search-input')?.addEventListener('keydown', async (e) => {
+      if (e.key === 'Escape') {
+        hideHeaderSearchResults();
+        return;
+      }
+      if (!headerSearchResults.length) return;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        headerSearchActiveIndex = Math.min(headerSearchResults.length - 1, headerSearchActiveIndex + 1);
+        renderHeaderSearchResults();
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        headerSearchActiveIndex = Math.max(0, headerSearchActiveIndex - 1);
+        renderHeaderSearchResults();
+        return;
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const idx = headerSearchActiveIndex >= 0 ? headerSearchActiveIndex : 0;
+        const item = headerSearchResults[idx];
+        await executeHeaderSearchResult(item);
+      }
+    });
+    document.getElementById('header-search-results')?.addEventListener('click', async (e) => {
+      const row = e.target?.closest?.('[data-search-result-index]');
+      if (!row) return;
+      const idx = Number(row.dataset.searchResultIndex);
+      if (!Number.isFinite(idx) || idx < 0 || idx >= headerSearchResults.length) return;
+      await executeHeaderSearchResult(headerSearchResults[idx]);
+    });
+    document.addEventListener('click', (e) => {
+      const wrap = document.getElementById('header-search-wrap');
+      if (!wrap) return;
+      if (wrap.contains(e.target)) return;
+      hideHeaderSearchResults();
     });
     document.getElementById('global-task-search')?.addEventListener('input', () => {
       globalTasksPage = 1;
@@ -6451,30 +13561,76 @@
       renderGlobalTasks();
     });
     document.getElementById('global-task-theme')?.addEventListener('input', () => {
+      syncThemePickerSelectionFromInput('global-task-theme-known', 'global-task-theme');
       globalTasksPage = 1;
       renderGlobalTasks();
+    });
+    document.getElementById('global-task-theme-known')?.addEventListener('change', () => {
+      const value = String(document.getElementById('global-task-theme-known')?.value || '');
+      const input = document.getElementById('global-task-theme');
+      if (input) input.value = value;
+      globalTasksPage = 1;
+      renderGlobalTasks();
+    });
+    const rerenderProjectTasksFromFilters = () => {
+      if (workspaceMode !== 'project' || !currentProjectState) return;
+      tasksPage = 1;
+      const visibleTasks = (currentProjectState.tasks || []).filter(t => !t.archivedAt);
+      renderTasks(visibleTasks);
+      renderKanban(visibleTasks);
+      renderTimeline(visibleTasks);
+    };
+    document.getElementById('project-task-search')?.addEventListener('input', rerenderProjectTasksFromFilters);
+    document.getElementById('project-task-status')?.addEventListener('change', rerenderProjectTasksFromFilters);
+    document.getElementById('project-task-theme-filter')?.addEventListener('input', () => {
+      syncThemePickerSelectionFromInput('project-task-theme-known', 'project-task-theme-filter');
+      rerenderProjectTasksFromFilters();
+    });
+    document.getElementById('project-task-theme-known')?.addEventListener('change', () => {
+      const value = String(document.getElementById('project-task-theme-known')?.value || '');
+      const input = document.getElementById('project-task-theme-filter');
+      if (input) input.value = value;
+      rerenderProjectTasksFromFilters();
     });
     document.getElementById('global-tasks-view-cards')?.addEventListener('click', () => {
       globalTasksViewMode = 'cards';
       localStorage.setItem('taskmda_global_tasks_view', globalTasksViewMode);
+      toggleGlobalTasksInlineCalendar(false);
       globalTasksPage = 1;
       renderGlobalTasks();
     });
     document.getElementById('global-tasks-view-list')?.addEventListener('click', () => {
       globalTasksViewMode = 'list';
       localStorage.setItem('taskmda_global_tasks_view', globalTasksViewMode);
+      toggleGlobalTasksInlineCalendar(false);
       globalTasksPage = 1;
       renderGlobalTasks();
     });
     document.getElementById('global-tasks-view-kanban')?.addEventListener('click', () => {
       globalTasksViewMode = 'kanban';
       localStorage.setItem('taskmda_global_tasks_view', globalTasksViewMode);
+      toggleGlobalTasksInlineCalendar(false);
       renderGlobalTasks();
     });
     document.getElementById('global-tasks-view-timeline')?.addEventListener('click', () => {
       globalTasksViewMode = 'timeline';
       localStorage.setItem('taskmda_global_tasks_view', globalTasksViewMode);
+      toggleGlobalTasksInlineCalendar(false);
       renderGlobalTasks();
+    });
+    document.getElementById('global-tasks-view-calendar')?.addEventListener('click', async () => {
+      globalTasksViewMode = 'calendar';
+      localStorage.setItem('taskmda_global_tasks_view', globalTasksViewMode);
+      toggleGlobalTasksInlineCalendar(true);
+      await renderGlobalTasks();
+      updateGlobalTasksViewButtons();
+    });
+    document.getElementById('global-tasks-view-archives')?.addEventListener('click', async () => {
+      globalTasksViewMode = 'archives';
+      localStorage.setItem('taskmda_global_tasks_view', globalTasksViewMode);
+      toggleGlobalTasksInlineCalendar(false);
+      await renderGlobalTasks();
+      updateGlobalTasksViewButtons();
     });
     document.getElementById('global-calendar-search')?.addEventListener('input', () => renderGlobalCalendar());
     document.getElementById('global-calendar-month')?.addEventListener('change', () => {
@@ -6487,6 +13643,20 @@
     });
     document.getElementById('global-calendar-view-grid')?.addEventListener('click', () => {
       globalCalendarViewMode = 'grid';
+      renderGlobalCalendar();
+    });
+    document.getElementById('global-calendar-prev-month')?.addEventListener('click', () => {
+      shiftGlobalCalendarMonth(-1);
+    });
+    document.getElementById('global-calendar-next-month')?.addEventListener('click', () => {
+      shiftGlobalCalendarMonth(1);
+    });
+    document.getElementById('global-calendar-today')?.addEventListener('click', () => {
+      const monthInput = document.getElementById('global-calendar-month');
+      if (!monthInput) return;
+      const now = new Date();
+      ensureGlobalCalendarMonthOption(monthInput, now.getFullYear(), now.getMonth());
+      globalCalendarSelectedDay = toYmd(now);
       renderGlobalCalendar();
     });
     document.getElementById('btn-global-calendar-add')?.addEventListener('click', addStandaloneCalendarItem);
@@ -6509,8 +13679,95 @@
       renderGlobalDocs();
     });
     document.getElementById('btn-global-doc-add')?.addEventListener('click', addStandaloneDocuments);
+    document.getElementById('global-message-contact-search')?.addEventListener('input', async () => {
+      globalMessageContactsRenderLimit = GLOBAL_MESSAGE_CONTACTS_INITIAL_BATCH;
+      await renderGlobalMessages();
+    });
+    document.getElementById('global-message-contacts-list')?.addEventListener('scroll', async (event) => {
+      await handleGlobalMessageContactsScroll(event);
+    });
+    document.getElementById('global-message-thread')?.addEventListener('scroll', async (event) => {
+      await handleGlobalMessageThreadScroll(event);
+    });
+    document.getElementById('btn-global-message-select-all')?.addEventListener('click', async () => {
+      await selectAllGlobalMessageRecipients();
+    });
+    document.getElementById('btn-global-message-clear-selection')?.addEventListener('click', async () => {
+      await clearGlobalMessageRecipients();
+    });
+    document.getElementById('btn-global-message-open-group-channel')?.addEventListener('click', async () => {
+      const select = document.getElementById('global-message-group-channel-select');
+      const groupKey = String(select?.value || '').trim();
+      if (!groupKey) return;
+      await openGlobalMessageGroupChannelFromCatalog(groupKey);
+    });
+    document.getElementById('btn-global-send-message')?.addEventListener('click', async () => {
+      await sendGlobalMessage();
+    });
+    document.getElementById('global-message-input')?.addEventListener('keydown', async (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        await sendGlobalMessage();
+      }
+    });
+    document.getElementById('btn-close-doc-binding')?.addEventListener('click', () => {
+      closeDocumentBindingModal();
+    });
+    document.getElementById('doc-binding-project')?.addEventListener('change', async (e) => {
+      await populateDocBindingTaskOptions(e.target?.value || '', '');
+    });
+    document.getElementById('btn-save-doc-binding')?.addEventListener('click', saveDocumentBindingChanges);
+    document.getElementById('btn-close-doc-editor')?.addEventListener('click', () => {
+      closeDocumentEditorModal();
+    });
+    document.getElementById('btn-save-doc-editor')?.addEventListener('click', async () => {
+      await saveDocumentEditorChanges();
+    });
+    document.getElementById('doc-editor-file-input')?.addEventListener('change', () => {
+      updateDocumentEditorFileSummary();
+    });
+    document.getElementById('doc-editor-markdown-tools')?.addEventListener('click', (e) => {
+      const button = e.target instanceof Element ? e.target.closest('[data-md-action]') : null;
+      if (!button) return;
+      const action = button.getAttribute('data-md-action') || '';
+      applyMarkdownEditorAction(action);
+    });
+    document.getElementById('doc-editor-textarea')?.addEventListener('keydown', (e) => {
+      if (!currentDocEditorContext?.isMarkdown) return;
+      if (e.ctrlKey || e.metaKey) {
+        const key = String(e.key || '').toLowerCase();
+        if (key === 'b') {
+          e.preventDefault();
+          applyMarkdownEditorAction('bold');
+        } else if (key === 'i') {
+          e.preventDefault();
+          applyMarkdownEditorAction('italic');
+        } else if (key === 'k') {
+          e.preventDefault();
+          applyMarkdownEditorAction('link');
+        }
+      }
+    });
+    document.getElementById('btn-save-app-branding')?.addEventListener('click', async () => {
+      await saveAppBrandingFromSettings(false);
+    });
+    document.getElementById('btn-reset-app-branding')?.addEventListener('click', async () => {
+      await saveAppBrandingFromSettings(true);
+    });
+    document.getElementById('btn-assign-app-admin')?.addEventListener('click', assignAppAdminFromSettings);
+    document.getElementById('global-settings-tab-branding')?.addEventListener('click', () => setGlobalSettingsTab('branding'));
+    document.getElementById('global-settings-tab-themes')?.addEventListener('click', () => setGlobalSettingsTab('themes'));
+    document.getElementById('global-settings-tab-groups')?.addEventListener('click', () => setGlobalSettingsTab('groups'));
+    document.getElementById('global-settings-tab-roles')?.addEventListener('click', () => setGlobalSettingsTab('roles'));
+    document.getElementById('global-settings-tab-software')?.addEventListener('click', () => setGlobalSettingsTab('software'));
+    document.getElementById('btn-global-settings-help')?.addEventListener('click', () => {
+      globalSettingsHelpOpen = !globalSettingsHelpOpen;
+      renderGlobalSettingsHelpBox();
+    });
     document.getElementById('btn-global-theme-add')?.addEventListener('click', createGlobalThemeFromSettings);
     document.getElementById('btn-global-group-add')?.addEventListener('click', createGlobalGroupFromSettings);
+    document.getElementById('btn-global-role-add')?.addEventListener('click', createProjectRoleFromSettings);
+    document.getElementById('btn-software-add')?.addEventListener('click', createSoftwareVersionEntry);
     document.getElementById('global-theme-name-input')?.addEventListener('keydown', async (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
@@ -6521,6 +13778,24 @@
       if (e.key === 'Enter') {
         e.preventDefault();
         await createGlobalGroupFromSettings();
+      }
+    });
+    document.getElementById('global-role-name-input')?.addEventListener('keydown', async (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        await createProjectRoleFromSettings();
+      }
+    });
+    document.getElementById('software-name-input')?.addEventListener('keydown', async (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        await createSoftwareVersionEntry();
+      }
+    });
+    document.getElementById('software-version-input')?.addEventListener('keydown', async (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        await createSoftwareVersionEntry();
       }
     });
     document.getElementById('btn-add-member')?.addEventListener('click', addProjectMember);
@@ -6563,6 +13838,10 @@
     document.getElementById('btn-email-project-complete')?.addEventListener('click', () => sendProjectStatusEmail(true));
     document.getElementById('project-mode-work')?.addEventListener('click', () => setProjectDetailMode('work'));
     document.getElementById('project-mode-settings')?.addEventListener('click', () => setProjectDetailMode('settings'));
+    document.getElementById('project-settings-tab-members')?.addEventListener('click', () => setProjectSettingsTab('members'));
+    document.getElementById('project-settings-tab-collab')?.addEventListener('click', () => setProjectSettingsTab('collab'));
+    document.getElementById('project-settings-tab-themes')?.addEventListener('click', () => setProjectSettingsTab('themes'));
+    document.getElementById('project-settings-tab-permissions')?.addEventListener('click', () => setProjectSettingsTab('permissions'));
     document.getElementById('btn-toggle-permissions-details')?.addEventListener('click', () => {
       projectPermissionDetailsOpen = !projectPermissionDetailsOpen;
       renderProjectPermissionMatrix(currentProjectState);
@@ -6572,14 +13851,23 @@
     document.getElementById('btn-create-project').addEventListener('click', async () => {
       document.getElementById('modal-new-project').classList.remove('hidden');
       document.getElementById('project-name').value = '';
-      document.getElementById('project-description-input').value = '';
+      setProjectDescriptionEditorContent('project-description-editor', 'project-description-input', '');
+      const createImageInput = document.getElementById('project-description-image-input');
+      if (createImageInput) createImageInput.value = '';
+      const createProjectDocInput = document.getElementById('project-create-doc-files');
+      if (createProjectDocInput) createProjectDocInput.value = '';
+      updateCreateProjectDocFilesSummary();
       document.getElementById('project-status').value = 'en-cours';
+      document.getElementById('project-read-access').value = 'private';
       await populateProjectGroupPresetOptions('project-group-presets');
       document.getElementById('project-name').focus();
     });
 
     document.getElementById('btn-cancel-project').addEventListener('click', () => {
       document.getElementById('modal-new-project').classList.add('hidden');
+      const createProjectDocInput = document.getElementById('project-create-doc-files');
+      if (createProjectDocInput) createProjectDocInput.value = '';
+      updateCreateProjectDocFilesSummary();
     });
 
     // Toggle passphrase section based on sharing mode
@@ -6598,15 +13886,23 @@
     document.getElementById('btn-edit-user-name').addEventListener('click', () => {
       const modal = document.getElementById('modal-edit-user-name');
       const nameInput = document.getElementById('edit-user-name-input');
+      const emailInput = document.getElementById('edit-user-email-input');
       const photoInput = document.getElementById('profile-photo-input');
       const importInput = document.getElementById('import-user-json-input');
       modal.classList.remove('hidden');
       nameInput.value = currentUser.name;
+      if (emailInput) emailInput.value = String(currentUser.email || '').trim();
       nameInput.focus();
       pendingProfilePhotoDataUrl = currentUser.avatarDataUrl || '';
       pendingProfilePhotoDirty = false;
       if (photoInput) photoInput.value = '';
       if (importInput) importInput.value = '';
+      const currentPwdInput = document.getElementById('profile-current-password');
+      const newPwdInput = document.getElementById('profile-new-password');
+      const confirmPwdInput = document.getElementById('profile-confirm-password');
+      if (currentPwdInput) currentPwdInput.value = '';
+      if (newPwdInput) newPwdInput.value = '';
+      if (confirmPwdInput) confirmPwdInput.value = '';
     });
 
     document.getElementById('edit-user-name-input').addEventListener('keypress', (e) => {
@@ -6685,21 +13981,109 @@
       }
     });
 
+    document.getElementById('btn-show-recovery-key')?.addEventListener('click', async () => {
+      if (!window.TaskMDACrypto?.isUnlocked?.()) {
+        showToast('Session verrouillée');
+        return;
+      }
+      try {
+        const hasRecovery = window.TaskMDACrypto?.hasRecoveryKey?.();
+        if (!hasRecovery) {
+          const generated = await window.TaskMDACrypto.setupRecoveryForCurrentKey();
+          showRecoveryKeyInstructions(generated, 'Nouvelle clé de récupération');
+          showToast('Clé de récupération générée');
+          return;
+        }
+        if (!window.confirm('Afficher la clé actuelle nécessite d en générer une nouvelle. Continuer ?')) return;
+        const rotated = await window.TaskMDACrypto.setupRecoveryForCurrentKey();
+        showRecoveryKeyInstructions(rotated, 'Nouvelle clé de récupération');
+        showToast('Clé de récupération régénérée');
+      } catch (error) {
+        console.error('Recovery key error:', error);
+        showToast('Impossible de gérer la clé de récupération');
+      }
+    });
+
+    document.getElementById('btn-regenerate-recovery-key')?.addEventListener('click', async () => {
+      if (!window.TaskMDACrypto?.isUnlocked?.()) {
+        showToast('Session verrouillée');
+        return;
+      }
+      if (!window.confirm('Regénérer la clé invalidera l ancienne. Continuer ?')) return;
+      try {
+        const generated = await window.TaskMDACrypto.setupRecoveryForCurrentKey();
+        showRecoveryKeyInstructions(generated, 'Nouvelle clé de récupération');
+        showToast('Clé de récupération régénérée');
+      } catch (error) {
+        console.error('Recovery key regenerate error:', error);
+        showToast('Impossible de régénérer la clé');
+      }
+    });
+
+    document.getElementById('btn-change-password')?.addEventListener('click', async () => {
+      if (!window.TaskMDACrypto?.isUnlocked?.()) {
+        showToast('Session verrouillée');
+        return;
+      }
+      const currentPwd = String(document.getElementById('profile-current-password')?.value || '');
+      const newPwd = String(document.getElementById('profile-new-password')?.value || '');
+      const confirmPwd = String(document.getElementById('profile-confirm-password')?.value || '');
+      if (newPwd.length < 4) {
+        showToast('Nouveau mot de passe trop court (min 4)');
+        return;
+      }
+      if (newPwd !== confirmPwd) {
+        showToast('La confirmation ne correspond pas');
+        return;
+      }
+      try {
+        showLoading(true);
+        const ok = await window.TaskMDACrypto.verifyPassword(currentPwd);
+        if (!ok) {
+          showToast('Mot de passe actuel incorrect');
+          showLoading(false);
+          return;
+        }
+        const snapshot = await buildUserDataSnapshot(1);
+        const rotateResult = await window.TaskMDACrypto.rotatePassword(newPwd);
+        await restoreUserDataSnapshot(snapshot);
+        await saveEncryptedConfig();
+        showRecoveryKeyInstructions(rotateResult?.recoveryCode || '', 'Mot de passe modifié - nouvelle clé de récupération');
+        document.getElementById('profile-current-password').value = '';
+        document.getElementById('profile-new-password').value = '';
+        document.getElementById('profile-confirm-password').value = '';
+        showToast('Mot de passe mis à jour');
+      } catch (error) {
+        console.error('Change password failed:', error);
+        showToast('Échec du changement de mot de passe');
+      } finally {
+        showLoading(false);
+      }
+    });
+
     document.getElementById('btn-cancel-user-name').addEventListener('click', () => {
       pendingProfilePhotoDirty = false;
       document.getElementById('modal-edit-user-name').classList.add('hidden');
     });
-    document.getElementById('btn-cancel-edit-project')?.addEventListener('click', () => {
+    document.getElementById('btn-cancel-edit-project')?.addEventListener('click', async () => {
       editProjectFromDashboard = false;
+      await releaseActiveProjectEditLock();
       document.getElementById('modal-edit-project').classList.add('hidden');
     });
     document.getElementById('btn-save-edit-project')?.addEventListener('click', saveProjectEdits);
 
     document.getElementById('btn-save-user-name').addEventListener('click', async () => {
       const newName = document.getElementById('edit-user-name-input').value.trim();
+      const emailInput = document.getElementById('edit-user-email-input');
+      const newEmail = String(emailInput?.value || '').trim().toLowerCase();
       if (!newName) {
         showToast('❌ Le nom est requis');
         document.getElementById('edit-user-name-input').focus();
+        return;
+      }
+      if (newEmail && !isValidEmailAddress(newEmail)) {
+        showToast('Email professionnel invalide');
+        emailInput?.focus();
         return;
       }
 
@@ -6708,6 +14092,7 @@
 
         // Mettre à jour le nom dans currentUser
         currentUser.name = newName;
+        currentUser.email = newEmail;
         if (pendingProfilePhotoDirty) {
           currentUser.avatarDataUrl = pendingProfilePhotoDataUrl || '';
         }
@@ -6717,6 +14102,7 @@
         await upsertDirectoryUser({
           userId: currentUser.userId,
           name: currentUser.name,
+          email: currentUser.email || '',
           source: 'user_rename',
           lastSeenAt: Date.now()
         });
@@ -6787,8 +14173,9 @@
           currentUser.userId,
           {
             name: name,
-            description: document.getElementById('project-description-input').value.trim(),
+            description: getProjectDescriptionHtmlForStorage('project-description-editor', 'project-description-input'),
             status: document.getElementById('project-status').value,
+            readAccess: (document.getElementById('project-read-access')?.value || 'private') === 'public' ? 'public' : 'private',
             sharingMode: sharingMode,
             joinPassphrase: passphrase || null
           }
@@ -6814,15 +14201,38 @@
         for (const event of createGroupEvents) {
           await publishEvent(event);
         }
+        const stateAfterCreate = await getProjectState(projectId, { ignoreAccessCheck: true });
+        await syncDescriptionImagesAsProjectDocs(projectId, stateAfterCreate, createProjectEvent.payload.description || '');
+        const createProjectDocuments = await readCreateProjectDocumentFiles();
+        const createProjectDocumentEvents = createProjectDocuments.map(file => createEvent(
+          EventTypes.CREATE_DOCUMENT,
+          projectId,
+          currentUser.userId,
+          {
+            ...file,
+            linkedTaskIds: [],
+            notes: 'Document ajoute lors de la creation du projet',
+            origin: 'project-create-upload'
+          }
+        ));
+        for (const event of createProjectDocumentEvents) {
+          await publishEvent(event);
+        }
 
         // Register for sync ET write to shared folder uniquement si partagé
         if (sharingMode === 'shared') {
           await registerProject(projectId);
+          if (sharedKeyHex) {
+            await writeProjectSharedKeyToFolder(projectId, sharedKeyHex);
+          }
 
           if (sharedFolderHandle) {
             await writeEventToSharedFolder(projectId, createProjectEvent);
             await writeEventToSharedFolder(projectId, addMemberEvent);
             for (const event of createGroupEvents) {
+              await writeEventToSharedFolder(projectId, event);
+            }
+            for (const event of createProjectDocumentEvents) {
               await writeEventToSharedFolder(projectId, event);
             }
 
@@ -6837,6 +14247,9 @@
         await renderProjects();
 
         document.getElementById('modal-new-project').classList.add('hidden');
+        const createProjectDocInput = document.getElementById('project-create-doc-files');
+        if (createProjectDocInput) createProjectDocInput.value = '';
+        updateCreateProjectDocFilesSummary();
         const modeText = sharingMode === 'private' ? 'privé' : 'partagé et chiffré E2E';
         showToast(`✅ Projet ${modeText} créé !`);
         addNotification('Projet', `Projet ${name} cree (${sharingMode})`, projectId);
@@ -6856,16 +14269,13 @@
       standaloneTaskMode = false;
       openTaskModal();
     });
-    document.getElementById('btn-toggle-archived-tasks')?.addEventListener('click', () => {
-      archivedTasksExpanded = !archivedTasksExpanded;
-      renderArchivedTasks(currentProjectState?.tasks || []);
-    });
     document.getElementById('btn-global-add-task')?.addEventListener('click', () => {
       standaloneTaskMode = true;
       openTaskModal();
     });
 
-    document.getElementById('btn-cancel-task').addEventListener('click', () => {
+    document.getElementById('btn-cancel-task').addEventListener('click', async () => {
+      await releaseActiveTaskEditLock();
       document.getElementById('modal-new-task').classList.add('hidden');
       editingTaskId = null;
       editingStandaloneTaskId = null;
@@ -6874,10 +14284,32 @@
       if (standaloneModeInput) standaloneModeInput.value = 'private';
       const taskThemeInput = document.getElementById('task-theme');
       const taskGroupInput = document.getElementById('task-group');
+      const taskGroupPendingBox = document.getElementById('task-group-pending-members');
       const taskAssigneeManualInput = document.getElementById('task-assignee-manual');
+      const taskAssigneeQuickInput = document.getElementById('task-assignee-quick-input');
       if (taskThemeInput) taskThemeInput.value = '';
       if (taskGroupInput) taskGroupInput.value = '';
+      if (taskGroupPendingBox) {
+        taskGroupPendingBox.classList.add('hidden');
+        taskGroupPendingBox.innerHTML = '';
+      }
+      taskPendingGroupMemberUserIds = [];
       if (taskAssigneeManualInput) taskAssigneeManualInput.value = '';
+      if (taskAssigneeQuickInput) taskAssigneeQuickInput.value = '';
+    });
+    document.getElementById('btn-task-assignee-quick-add')?.addEventListener('click', () => {
+      const value = document.getElementById('task-assignee-quick-input')?.value || '';
+      addQuickTaskAssignee(value);
+    });
+    document.getElementById('task-assignee-quick-input')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        addQuickTaskAssignee(e.target?.value || '');
+      }
+    });
+    document.getElementById('task-group')?.addEventListener('change', async () => {
+      if (standaloneTaskMode || !currentProjectState?.project) return;
+      await refreshTaskGroupSelectionPreview(currentProjectState);
     });
 
     document.getElementById('btn-save-task').addEventListener('click', async () => {
@@ -6891,7 +14323,7 @@
 
       let attachments = [];
       try {
-        attachments = await readTaskFiles();
+        attachments = await runWithLoading(async () => readTaskFiles());
       } catch (error) {
         showToast(`❌ ${error.message}`);
         return;
@@ -6924,8 +14356,27 @@
       const selectedGroupScope = String(selectedGroupOption?.dataset?.groupScope || '');
       const selectedGroupName = String(selectedGroupOption?.dataset?.groupName || '').trim();
       const rawGroupValue = String(groupSelectEl?.value || '');
-      const resolvedGroupId = selectedGroupScope === 'project' ? rawGroupValue || null : null;
-      const resolvedGroupName = rawGroupValue ? (selectedGroupName || null) : null;
+      let effectiveState = state;
+      let resolvedGroupId = selectedGroupScope === 'project' ? rawGroupValue || null : null;
+      let resolvedGroupName = rawGroupValue ? (selectedGroupName || null) : null;
+      let autoAddedMembersCount = 0;
+      if (!standaloneTaskMode && rawGroupValue) {
+        const groupContext = await resolveTaskSelectedGroupContext(state, rawGroupValue);
+        if (!groupContext) {
+          showToast('Groupe selectionne introuvable. Rechargez et reessayez.');
+          return;
+        }
+        try {
+          const ensured = await runWithLoading(async () => ensureTaskGroupAssociationInProject(state, groupContext));
+          effectiveState = ensured.state || state;
+          resolvedGroupId = ensured.groupId || null;
+          resolvedGroupName = ensured.groupName || groupContext.groupName || resolvedGroupName;
+          autoAddedMembersCount = Number(ensured.addedMembersCount || 0);
+        } catch (error) {
+          showToast(error?.message || 'Association du groupe impossible');
+          return;
+        }
+      }
       const assigneeSelectEl = document.getElementById('task-assignee');
       const manualAssigneeInput = document.getElementById('task-assignee-manual');
       const selectedAssigneeUserIds = Array.from(assigneeSelectEl?.selectedOptions || [])
@@ -6934,23 +14385,27 @@
       const selectedAssigneesFromMembers = selectedAssigneeUserIds.map((userId) => {
         let name = '';
         if (!standaloneTaskMode) {
-          const member = (state?.members || []).find(m => m.userId === userId);
+          const member = (effectiveState?.members || []).find(m => m.userId === userId);
           name = member?.displayName || '';
         } else if (userId === currentUser?.userId) {
           name = currentUser?.name || '';
         }
         if (!name) {
           const option = Array.from(assigneeSelectEl?.options || []).find(opt => opt.value === userId);
-          name = String(option?.textContent || '').trim();
+          name = String(option?.dataset?.assigneeName || option?.textContent || '').trim();
         }
         return { userId, name };
       });
-      const manualAssigneeNames = parseManualAssigneeNames(manualAssigneeInput?.value || '');
+      const manualAssigneeEntries = parseManualAssigneeEntries(manualAssigneeInput?.value || '');
       const seenAssignees = new Set();
-      const assignees = [...selectedAssigneesFromMembers, ...manualAssigneeNames.map(name => ({ userId: null, name }))]
+      const assignees = [...selectedAssigneesFromMembers, ...manualAssigneeEntries.map(entry => ({
+        userId: null,
+        name: entry.name,
+        email: entry.email || ''
+      }))]
         .filter((entry) => entry.userId || entry.name)
         .filter((entry) => {
-          const key = `${entry.userId || ''}|${normalizeSearch(entry.name || '')}`;
+          const key = `${entry.userId || ''}|${normalizeSearch(entry.name || '')}|${String(entry.email || '').toLowerCase()}`;
           if (seenAssignees.has(key)) return false;
           seenAssignees.add(key);
           return true;
@@ -6968,8 +14423,8 @@
         status: document.getElementById('task-status').value,
         urgency: document.getElementById('task-urgency').value,
         theme: (document.getElementById('task-theme')?.value || '').trim(),
-        groupId: resolvedGroupId,
-        groupName: resolvedGroupName,
+        groupId: resolvedGroupId || null,
+        groupName: resolvedGroupName || null,
         subtasks: existingTask
           ? mergeSubtasksWithExisting(existingTask.subtasks || [], subtasksParsed)
           : subtasksParsed
@@ -7019,7 +14474,42 @@
           updatedAt: Date.now(),
           archivedAt: existingStandalone?.archivedAt || null
         };
-        await putEncrypted('globalTasks', standaloneTask, 'id');
+        await runWithLoading(async () => {
+          await putEncrypted('globalTasks', standaloneTask, 'id');
+        });
+        if (!isEditStandalone) {
+          const standaloneFeedPostId = `auto-standalone-task-${standaloneTask.id}`;
+          const existingStandalonePost = await getDecrypted('globalPosts', standaloneFeedPostId, 'postId');
+          if (!existingStandalonePost) {
+            const standaloneTaskRef = buildGlobalTaskRef({
+              sourceType: 'standalone',
+              sourceProjectId: null,
+              taskId: null,
+              id: standaloneTask.id
+            });
+            const standaloneAutoPost = {
+              postId: standaloneFeedPostId,
+              authorUserId: String(currentUser?.userId || ''),
+              authorName: String(currentUser?.name || fallbackDirectoryName(currentUser?.userId || '')),
+              content: `Nouvelle tâche créée: ${standaloneTask.title || 'Tâche'}\nProjet: Hors projet`,
+              mentions: [],
+              refs: [{ type: 'task', id: standaloneTaskRef, label: `${standaloneTask.title || 'Tâche'} • Hors projet` }],
+              createdAt: Number(standaloneTask.createdAt || Date.now()),
+              source: sharedFolderHandle ? 'shared' : 'local',
+              isAuto: true,
+              autoKind: 'task-created',
+              sourceEventId: `standalone:${standaloneTask.id}`
+            };
+            await putEncrypted('globalPosts', standaloneAutoPost, 'postId');
+            knownGlobalPostIds.add(standaloneAutoPost.postId);
+            if (sharedFolderHandle) {
+              await writeGlobalFeedPostToSharedFolder(standaloneAutoPost);
+            }
+            if (workspaceMode === 'global' && globalWorkspaceView === 'feed') {
+              await renderGlobalFeed();
+            }
+          }
+        }
         document.getElementById('modal-new-task').classList.add('hidden');
         if (standaloneSharingMode === 'shared' && !sharedFolderHandle) {
           showToast('Mode collaboratif actif: connectez un dossier partagé pour synchroniser.');
@@ -7052,14 +14542,19 @@
             { taskId: uuidv4(), createdBy: currentUser.userId, ...payload }
           );
 
-      await publishEvent(event);
+      await runWithLoading(async () => {
+        await publishEvent(event);
+        if (sharedFolderHandle) {
+          await writeEventToSharedFolder(currentProjectId, event);
+        }
+      });
 
-      if (sharedFolderHandle) {
-        await writeEventToSharedFolder(currentProjectId, event);
-      }
-
+      await releaseActiveTaskEditLock();
       document.getElementById('modal-new-task').classList.add('hidden');
       showToast(editingTaskId ? '✅ Tâche mise à jour' : '✅ Tâche créée');
+      if (autoAddedMembersCount > 0) {
+        showToast(`✅ ${autoAddedMembersCount} membre(s) du groupe ajouté(s) au projet`);
+      }
       editingTaskId = null;
       addNotification('Tache', event.type === EventTypes.UPDATE_TASK ? 'Tache mise a jour' : 'Nouvelle tache creee', currentProjectId, {
         targetType: 'task',
@@ -7074,6 +14569,30 @@
     document.getElementById('btn-send-message').addEventListener('click', async () => {
       await sendMessage();
     });
+    document.getElementById('btn-close-global-task-details')?.addEventListener('click', () => {
+      closeGlobalTaskDetails();
+    });
+    document.getElementById('btn-close-calendar-info-details')?.addEventListener('click', () => {
+      closeStandaloneCalendarDetails();
+    });
+    document.getElementById('btn-calendar-info-detail-edit')?.addEventListener('click', async () => {
+      if (!currentCalendarInfoDetailId) return;
+      const targetId = currentCalendarInfoDetailId;
+      closeStandaloneCalendarDetails();
+      await editStandaloneCalendarItem(targetId);
+    });
+    document.getElementById('btn-calendar-info-detail-archive')?.addEventListener('click', async () => {
+      if (!currentCalendarInfoDetailId) return;
+      const targetId = currentCalendarInfoDetailId;
+      closeStandaloneCalendarDetails();
+      await archiveStandaloneCalendarItem(targetId);
+    });
+    document.getElementById('btn-calendar-info-detail-delete')?.addEventListener('click', async () => {
+      if (!currentCalendarInfoDetailId) return;
+      const targetId = currentCalendarInfoDetailId;
+      closeStandaloneCalendarDetails();
+      await deleteStandaloneCalendarItem(targetId);
+    });
 
     document.getElementById('message-input').addEventListener('keypress', async (e) => {
       if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
@@ -7081,10 +14600,17 @@
         await sendMessage();
       }
     });
+    document.getElementById('message-input')?.setAttribute('placeholder', "Ecrire un message a l'equipe...");
 
     // Close modals on escape key
-    document.addEventListener('keydown', (e) => {
+    document.addEventListener('keydown', async (e) => {
       if (e.key === 'Escape') {
+        await releaseActiveTaskEditLock();
+        await releaseActiveProjectEditLock();
+        if (activeCalendarEditLock?.itemId) {
+          await releaseCalendarItemLock(activeCalendarEditLock.itemId, activeCalendarEditLock.lockId || '');
+          activeCalendarEditLock = null;
+        }
         document.getElementById('modal-new-project').classList.add('hidden');
         document.getElementById('modal-new-task').classList.add('hidden');
         document.getElementById('modal-edit-user-name').classList.add('hidden');
@@ -7092,6 +14618,10 @@
         document.getElementById('modal-edit-project').classList.add('hidden');
         editProjectFromDashboard = false;
         document.getElementById('modal-doc-preview').classList.add('hidden');
+        closeDocumentBindingModal();
+        closeDocumentEditorModal();
+        document.getElementById('modal-app-help')?.classList.add('hidden');
+        closeGlobalTaskDetails();
         toggleNotificationsPanel(false);
         toggleEmojiPicker(false);
         editingTaskId = null;
@@ -7107,11 +14637,37 @@
       }
     });
 
-    document.getElementById('modal-new-task').addEventListener('click', (e) => {
+    document.getElementById('modal-new-task').addEventListener('click', async (e) => {
       if (e.target.id === 'modal-new-task') {
+        await releaseActiveTaskEditLock();
         document.getElementById('modal-new-task').classList.add('hidden');
         editingTaskId = null;
         editingStandaloneTaskId = null;
+      }
+    });
+    document.getElementById('modal-global-task-details')?.addEventListener('click', (e) => {
+      if (e.target.id === 'modal-global-task-details') {
+        closeGlobalTaskDetails();
+      }
+    });
+    document.getElementById('modal-calendar-info-details')?.addEventListener('click', (e) => {
+      if (e.target.id === 'modal-calendar-info-details') {
+        closeStandaloneCalendarDetails();
+      }
+    });
+    document.getElementById('modal-doc-binding')?.addEventListener('click', (e) => {
+      if (e.target.id === 'modal-doc-binding') {
+        closeDocumentBindingModal();
+      }
+    });
+    document.getElementById('modal-doc-editor')?.addEventListener('click', (e) => {
+      if (e.target.id === 'modal-doc-editor') {
+        closeDocumentEditorModal();
+      }
+    });
+    document.getElementById('modal-app-help')?.addEventListener('click', (e) => {
+      if (e.target.id === 'modal-app-help') {
+        document.getElementById('modal-app-help')?.classList.add('hidden');
       }
     });
 
@@ -7121,19 +14677,30 @@
         pendingProfilePhotoDirty = false;
       }
     });
-    document.getElementById('modal-edit-project')?.addEventListener('click', (e) => {
+    document.getElementById('modal-edit-project')?.addEventListener('click', async (e) => {
       if (e.target.id === 'modal-edit-project') {
         editProjectFromDashboard = false;
+        await releaseActiveProjectEditLock();
         document.getElementById('modal-edit-project').classList.add('hidden');
       }
     });
 
     // Project views
-    document.getElementById('view-list').addEventListener('click', () => setProjectView('list'));
+    document.getElementById('view-cards')?.addEventListener('click', () => setProjectTaskPresentationMode('cards'));
+    document.getElementById('view-list').addEventListener('click', () => setProjectTaskPresentationMode('list'));
     document.getElementById('view-kanban').addEventListener('click', () => setProjectView('kanban'));
     document.getElementById('view-timeline').addEventListener('click', () => setProjectView('timeline'));
     document.getElementById('view-docs').addEventListener('click', () => setProjectView('docs'));
     document.getElementById('view-chat').addEventListener('click', () => setProjectView('chat'));
+    document.getElementById('view-archives')?.addEventListener('click', () => setProjectView('archives'));
+    document.getElementById('project-task-view-1')?.addEventListener('click', () => setProjectTaskCardsColumns(1));
+    document.getElementById('project-task-view-2')?.addEventListener('click', () => setProjectTaskCardsColumns(2));
+    document.getElementById('project-task-view-3')?.addEventListener('click', () => setProjectTaskCardsColumns(3));
+    document.getElementById('project-task-view-4')?.addEventListener('click', () => setProjectTaskCardsColumns(4));
+    document.getElementById('global-task-view-1')?.addEventListener('click', () => setGlobalTaskCardsColumns(1));
+    document.getElementById('global-task-view-2')?.addEventListener('click', () => setGlobalTaskCardsColumns(2));
+    document.getElementById('global-task-view-3')?.addEventListener('click', () => setGlobalTaskCardsColumns(3));
+    document.getElementById('global-task-view-4')?.addEventListener('click', () => setGlobalTaskCardsColumns(4));
     document.getElementById('view-activity').addEventListener('click', async () => {
       if (!canReadProjectActivity(currentProjectState)) {
         showToast('Action non autorisee');
@@ -7146,7 +14713,7 @@
       await renderActivity(currentProjectEvents);
     });
 
-    const orderedViews = ['list', 'kanban', 'timeline', 'docs', 'chat', 'activity'];
+    const orderedViews = ['cards', 'list', 'kanban', 'timeline', 'docs', 'chat', 'activity', 'archives'];
     orderedViews.forEach((viewKey, idx) => {
       const btn = document.getElementById(`view-${viewKey === 'docs' ? 'docs' : viewKey}`);
       if (!btn) return;
@@ -7158,12 +14725,16 @@
           : (idx - 1 + orderedViews.length) % orderedViews.length;
         let nextKey = orderedViews[nextIdx];
         if (nextKey === 'activity' && !canReadProjectActivity(currentProjectState)) {
-          nextKey = 'list';
+          nextKey = 'cards';
         }
         const nextBtn = document.getElementById(`view-${nextKey === 'docs' ? 'docs' : nextKey}`);
         if (nextBtn) {
           nextBtn.focus();
-          setProjectView(nextKey);
+          if (nextKey === 'cards' || nextKey === 'list') {
+            setProjectTaskPresentationMode(nextKey);
+          } else {
+            setProjectView(nextKey);
+          }
         }
       });
     });
@@ -7204,26 +14775,15 @@
       renderTimeline(currentProjectState?.tasks || []);
     });
 
-    document.getElementById('btn-toggle-message-preview')?.addEventListener('click', () => {
-      messagePreviewEnabled = !messagePreviewEnabled;
-      const preview = document.getElementById('message-preview');
-      const toggle = document.getElementById('btn-toggle-message-preview');
-      if (!preview) return;
-      preview.classList.toggle('hidden', !messagePreviewEnabled);
-      if (toggle) {
-        toggle.textContent = messagePreviewEnabled ? 'Masquer aperçu' : 'Aperçu';
-      }
-      if (messagePreviewEnabled) {
-        preview.innerHTML = renderSafeMarkdown(document.getElementById('message-input').value);
-      }
-    });
-
     document.getElementById('message-input')?.addEventListener('input', () => {
-      if (!messagePreviewEnabled) return;
-      const preview = document.getElementById('message-preview');
-      if (preview) {
-        preview.innerHTML = renderSafeMarkdown(document.getElementById('message-input').value);
+      if (messageMarkdownDebounceTimer) {
+        clearTimeout(messageMarkdownDebounceTimer);
       }
+      messageMarkdownDebounceTimer = setTimeout(() => {
+        const current = document.getElementById('message-input')?.value || '';
+        // Conversion markdown "a chaud" (sans zone de preview visible)
+        messageRenderedDraftHtml = renderSafeMarkdown(current);
+      }, 280);
     });
     document.getElementById('btn-toggle-emoji-picker')?.addEventListener('click', (e) => {
       e.preventDefault();
@@ -7237,12 +14797,49 @@
       insertTextAtCursor(input, button.dataset.emoji || '');
     });
     document.addEventListener('click', (e) => {
+      const target = e.target;
+      if (projectEditorEmojiPickerOpen) {
+        const projectPanel = document.getElementById('project-editor-emoji-panel');
+        const anchor = projectEditorEmojiAnchorId ? document.getElementById(projectEditorEmojiAnchorId) : null;
+        if (!projectPanel?.contains(target) && !anchor?.contains(target)) {
+          toggleProjectEditorEmojiPicker(null, null, false);
+        }
+      }
       if (!emojiPickerOpen) return;
       const panel = document.getElementById('emoji-picker-panel');
       const trigger = document.getElementById('btn-toggle-emoji-picker');
-      const target = e.target;
       if (panel?.contains(target) || trigger?.contains(target)) return;
       toggleEmojiPicker(false);
+    });
+    document.addEventListener('click', (e) => {
+      const button = e.target.closest('#project-editor-emoji-panel [data-emoji]');
+      if (!button || !projectEditorEmojiTarget) return;
+      const editor = document.getElementById(projectEditorEmojiTarget);
+      if (!editor) return;
+      editor.focus();
+      document.execCommand('insertText', false, button.dataset.emoji || '');
+      toggleProjectEditorEmojiPicker(null, null, false);
+    });
+    document.addEventListener('click', (e) => {
+      const target = e.target;
+      if (!activeProjectEditorImage || !activeProjectEditorId) return;
+      const editor = document.getElementById(activeProjectEditorId);
+      if (!editor) {
+        clearProjectEditorImageSelection();
+        return;
+      }
+      const overlay = editor.querySelector('.project-editor-image-overlay');
+      if (editor.contains(target) || overlay?.contains(target)) return;
+      clearProjectEditorImageSelection();
+    });
+    window.addEventListener('resize', () => {
+      if (!activeProjectEditorImage || !activeProjectEditorId) return;
+      const editor = document.getElementById(activeProjectEditorId);
+      if (!editor || !editor.contains(activeProjectEditorImage)) {
+        clearProjectEditorImageSelection();
+        return;
+      }
+      updateProjectEditorImageOverlayPosition(editor);
     });
     document.getElementById('chat-search-input')?.addEventListener('input', () => {
       messageFilters.query = document.getElementById('chat-search-input').value || '';
@@ -7258,6 +14855,63 @@
       document.getElementById('chat-filter-mine').checked = false;
       renderMessages(currentProjectState?.messages || []);
     });
+    function assignFilesToInput(input, files) {
+      if (!input || !files) return;
+      const dt = new DataTransfer();
+      Array.from(files || []).forEach(file => {
+        if (file) dt.items.add(file);
+      });
+      input.files = dt.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    function initFileDropInputs() {
+      const inputs = Array.from(document.querySelectorAll('.js-file-drop-input'));
+      inputs.forEach((input) => {
+        if (input.dataset.dropBound) return;
+        const decorateDropHost = input.dataset.dropDecor !== 'false';
+        const customHostSelector = String(input.dataset.dropHost || '').trim();
+        const host = (customHostSelector && input.closest(customHostSelector))
+          || input.closest('.space-y-1')
+          || input.parentElement;
+        if (!host) return;
+        if (decorateDropHost) {
+          host.classList.add('file-drop-host');
+          const title = document.createElement('div');
+          title.className = 'file-drop-title';
+          title.innerHTML = '<span class="material-symbols-outlined">upload_file</span><span>Zone de depot</span>';
+          host.insertBefore(title, input);
+          const hint = document.createElement('p');
+          hint.className = 'file-drop-hint';
+          hint.textContent = input.dataset.dropLabel || 'Glissez-deposez des fichiers ici ou cliquez pour selectionner.';
+          host.appendChild(hint);
+        }
+
+        const toggleHover = (on) => host.classList.toggle('is-drag-over', !!on);
+        ['dragenter', 'dragover'].forEach(evtName => {
+          host.addEventListener(evtName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleHover(true);
+          });
+        });
+        ['dragleave', 'dragend', 'drop'].forEach(evtName => {
+          host.addEventListener(evtName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleHover(false);
+          });
+        });
+        host.addEventListener('drop', (e) => {
+          const files = Array.from(e.dataTransfer?.files || []);
+          if (!files.length) return;
+          assignFilesToInput(input, files);
+          showToast(`${files.length} fichier(s) ajoute(s)`);
+        });
+        input.dataset.dropBound = '1';
+      });
+    }
+
     document.getElementById('message-files')?.addEventListener('change', () => {
       const input = document.getElementById('message-files');
       const list = document.getElementById('message-files-list');
@@ -7269,6 +14923,36 @@
       }
       list.textContent = files.map(f => `${f.name} (${formatFileSize(f.size)})`).join(' • ');
     });
+
+    function updateProjectDocFilesSummary() {
+      const input = document.getElementById('project-doc-files');
+      const summary = document.getElementById('project-doc-selected-files');
+      if (!summary) return;
+      const files = Array.from(input?.files || []);
+      if (files.length === 0) {
+        summary.textContent = 'Aucun fichier selectionne';
+        return;
+      }
+      summary.textContent = files.map(f => `${f.name} (${formatFileSize(f.size)})`).join(' • ');
+    }
+
+    function updateCreateProjectDocFilesSummary() {
+      const input = document.getElementById('project-create-doc-files');
+      const summary = document.getElementById('project-create-doc-files-summary');
+      if (!summary) return;
+      const files = Array.from(input?.files || []);
+      if (files.length === 0) {
+        summary.textContent = 'Aucun fichier sélectionné';
+        return;
+      }
+      summary.textContent = files.map(f => `${f.name} (${formatFileSize(f.size)})`).join(' • ');
+    }
+
+    document.getElementById('project-doc-files')?.addEventListener('change', updateProjectDocFilesSummary);
+    document.getElementById('project-create-doc-files')?.addEventListener('change', updateCreateProjectDocFilesSummary);
+
+    initFileDropInputs();
+    initProjectDescriptionEditors();
 
     document.getElementById('activity-filter-type')?.addEventListener('change', async (e) => {
       activityFilters.type = e.target.value;
@@ -7292,23 +14976,24 @@
 
     document.getElementById('docs-search-input')?.addEventListener('input', () => {
       docsFilters.query = document.getElementById('docs-search-input').value || '';
-      renderDocuments(currentProjectState?.tasks || []);
+      renderDocuments(currentProjectState);
     });
     document.getElementById('docs-type-filter')?.addEventListener('change', () => {
       docsFilters.type = document.getElementById('docs-type-filter').value || 'all';
-      renderDocuments(currentProjectState?.tasks || []);
+      renderDocuments(currentProjectState);
     });
     document.getElementById('docs-sort')?.addEventListener('change', () => {
       docsFilters.sort = document.getElementById('docs-sort').value || 'recent';
-      renderDocuments(currentProjectState?.tasks || []);
+      renderDocuments(currentProjectState);
     });
     document.getElementById('docs-filter-reset')?.addEventListener('click', () => {
       docsFilters = { query: '', type: 'all', sort: 'recent' };
       document.getElementById('docs-search-input').value = '';
       document.getElementById('docs-type-filter').value = 'all';
       document.getElementById('docs-sort').value = 'recent';
-      renderDocuments(currentProjectState?.tasks || []);
+      renderDocuments(currentProjectState);
     });
+    document.getElementById('btn-add-project-documents')?.addEventListener('click', addProjectDocuments);
     document.getElementById('btn-close-doc-preview')?.addEventListener('click', closeDocumentPreview);
     document.getElementById('modal-doc-preview')?.addEventListener('click', (e) => {
       if (e.target.id === 'modal-doc-preview') {
@@ -7383,10 +15068,11 @@
       input.focus();
     }
 
+    // Project editor / Quill module moved to taskmda-editor.js
     function renderEmojiPicker() {
       const panel = document.getElementById('emoji-picker-panel');
       if (!panel || panel.dataset.ready === '1') return;
-      panel.innerHTML = chatEmojiPalette
+      panel.innerHTML = extendedEmojiPalette
         .map((emoji) => `<button type="button" class="emoji-picker-btn" data-emoji="${emoji}" aria-label="Insérer ${emoji}">${emoji}</button>`)
         .join('');
       panel.dataset.ready = '1';
@@ -7422,10 +15108,11 @@
       const filesInput = document.getElementById('message-files');
       const filesList = document.getElementById('message-files-list');
       const content = input.value.trim();
+      messageRenderedDraftHtml = renderSafeMarkdown(content);
       let attachments = [];
 
       try {
-        attachments = await readMessageFiles();
+        attachments = await runWithLoading(async () => readMessageFiles());
       } catch (error) {
         showToast(`❌ ${error.message}`);
         return;
@@ -7444,11 +15131,12 @@
         }
       );
 
-      await publishEvent(event);
-
-      if (sharedFolderHandle) {
-        await writeEventToSharedFolder(currentProjectId, event);
-      }
+      await runWithLoading(async () => {
+        await publishEvent(event);
+        if (sharedFolderHandle) {
+          await writeEventToSharedFolder(currentProjectId, event);
+        }
+      });
       addNotification('Message', attachments.length > 0 ? 'Message envoye avec pieces jointes' : 'Nouveau message envoye', currentProjectId, {
         targetType: 'message',
         targetId: event.eventId,
@@ -7460,9 +15148,10 @@
       toggleEmojiPicker(false);
       if (filesInput) filesInput.value = '';
       if (filesList) filesList.textContent = 'Aucun fichier sélectionné';
-      const preview = document.getElementById('message-preview');
-      if (preview) {
-        preview.innerHTML = '';
+      messageRenderedDraftHtml = '';
+      if (messageMarkdownDebounceTimer) {
+        clearTimeout(messageMarkdownDebounceTimer);
+        messageMarkdownDebounceTimer = null;
       }
       await showProjectDetail(currentProjectId);
     }
@@ -7480,6 +15169,9 @@
       // Initialize crypto UI
       if (window.TaskMDACrypto) {
         window.TaskMDACrypto.initCryptoUI();
+        window.addEventListener('taskmda-crypto-recovered', async () => {
+          await initApp();
+        });
 
         // Check if encrypted data exists
         const hasSalt = window.TaskMDACrypto.hasSalt();
@@ -7508,6 +15200,7 @@
             lockBtn.onclick = () => {
               window.TaskMDACrypto.submitPassword(async (result) => {
                 if (result.isNewUser) {
+                  showRecoveryKeyInstructions(result.recoveryCode || '', 'Clé de récupération initiale');
                   // New password created, initialize app
                   await initApp();
                 }
@@ -7529,4 +15222,5 @@
       startApp();
     }
 
-    debugLog('TaskMDA Team loaded');
+    debugLog('NEXUS MDA loaded');
+
