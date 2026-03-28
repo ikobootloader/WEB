@@ -1986,10 +1986,52 @@ function bindEvents() {
     });
   }
 
-  // Notifications button (future feature)
+  // Notifications button
   if (el.notificationsBtn) {
-    el.notificationsBtn.addEventListener("click", () => {
-      showInfo("Fonctionnalité de notifications à venir dans une prochaine version.");
+    el.notificationsBtn.addEventListener("click", async () => {
+      if (!('Notification' in window)) {
+        showError("Les notifications navigateur ne sont pas supportées par votre navigateur.");
+        return;
+      }
+
+      const permission = Notification.permission;
+
+      if (permission === 'granted') {
+        showInfo("✅ Les notifications sont déjà activées.");
+        // Test notification
+        try {
+          new Notification('Contingence Local', {
+            body: 'Les notifications sont actives ! Vous recevrez des alertes pour les événements importants.',
+            icon: '/favicon.ico',
+            tag: 'test-notification'
+          });
+        } catch (err) {
+          showError("Erreur lors de l'envoi de la notification test.");
+        }
+      } else if (permission === 'denied') {
+        showWarning("❌ Les notifications ont été bloquées. Veuillez les autoriser dans les paramètres de votre navigateur.");
+      } else {
+        // Demander la permission
+        try {
+          const result = await Notification.requestPermission();
+
+          if (result === 'granted') {
+            showInfo("✅ Notifications activées avec succès !");
+            updateNotificationIcon();
+            // Test notification
+            new Notification('Contingence Local', {
+              body: 'Les notifications sont maintenant activées ! Vous recevrez des alertes pour les événements importants.',
+              icon: '/favicon.ico',
+              tag: 'welcome-notification'
+            });
+          } else {
+            showWarning("Les notifications ont été refusées.");
+            updateNotificationIcon();
+          }
+        } catch (err) {
+          showError(`Erreur lors de la demande de permission: ${err.message}`);
+        }
+      }
     });
   }
 }
@@ -2040,6 +2082,38 @@ function setupStaticOptions() {
 }
 
 // ============================================
+// NOTIFICATIONS
+// ============================================
+
+/**
+ * Met à jour l'icône de notification selon le statut des permissions
+ */
+function updateNotificationIcon() {
+  if (!('Notification' in window) || !el.notificationsBtn) {
+    return;
+  }
+
+  const icon = el.notificationsBtn.querySelector('.material-symbols-outlined');
+  if (!icon) return;
+
+  const permission = Notification.permission;
+
+  if (permission === 'granted') {
+    icon.textContent = 'notifications_active';
+    icon.classList.add('filled');
+    el.notificationsBtn.setAttribute('aria-label', 'Notifications activées');
+  } else if (permission === 'denied') {
+    icon.textContent = 'notifications_off';
+    icon.classList.remove('filled');
+    el.notificationsBtn.setAttribute('aria-label', 'Notifications bloquées');
+  } else {
+    icon.textContent = 'notifications';
+    icon.classList.remove('filled');
+    el.notificationsBtn.setAttribute('aria-label', 'Activer les notifications');
+  }
+}
+
+// ============================================
 // SERVICE WORKER
 // ============================================
 
@@ -2078,10 +2152,41 @@ async function initFSA() {
 
   if (status.connected) {
     if (status.permissionRestored) {
-      showInfo("Connexion au dossier de sauvegarde restaurée");
+      // Message d'information visible
+      showInfo(`✅ Connexion automatique au dossier de sauvegarde "${status.folderName}" restaurée`);
+
+      // Notification navigateur (si permissions accordées)
+      if ('Notification' in window && Notification.permission === 'granted') {
+        try {
+          new Notification('Contingence Local - Sauvegarde Active', {
+            body: `Connexion restaurée au dossier: ${status.folderName}`,
+            icon: '/favicon.ico',
+            badge: '/favicon.ico',
+            tag: 'fsa-reconnection',
+            requireInteraction: false
+          });
+        } catch (err) {
+          console.log('Browser notification not supported or blocked:', err);
+        }
+      }
     }
   } else if (status.requiresPermission) {
-    showWarning(`Le dossier "${status.folderName}" nécessite une reconnexion. Allez dans Paramètres pour relier le dossier.`);
+    showWarning(`⚠️ Le dossier de sauvegarde "${status.folderName}" nécessite une reconnexion. Allez dans Paramètres → Sauvegarde Automatique pour relier le dossier.`);
+
+    // Notification navigateur pour alerter l'utilisateur
+    if ('Notification' in window && Notification.permission === 'granted') {
+      try {
+        new Notification('Contingence Local - Action Requise', {
+          body: `Le dossier "${status.folderName}" nécessite une reconnexion`,
+          icon: '/favicon.ico',
+          badge: '/favicon.ico',
+          tag: 'fsa-permission-needed',
+          requireInteraction: true
+        });
+      } catch (err) {
+        console.log('Browser notification not supported or blocked:', err);
+      }
+    }
   }
 }
 
@@ -2258,6 +2363,9 @@ async function init() {
 
   // Initialize branding
   await initBranding();
+
+  // Initialize notification icon
+  updateNotificationIcon();
 
   // Initialize FSA
   await initFSA();
