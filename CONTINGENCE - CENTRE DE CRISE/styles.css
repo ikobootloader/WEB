@@ -1,0 +1,375 @@
+:root {
+  --bg: #f4f6ef;
+  --paper: #fffdfa;
+  --ink: #1f2421;
+  --muted: #5c655f;
+  --line: #d7ddd4;
+  --brand: #1d6f5d;
+  --brand-2: #2a8e77;
+  --danger: #9e2f2f;
+  --warning: #b06e18;
+  --focus: #005fcc;
+  --radius: 14px;
+  --shadow: 0 8px 24px rgba(19, 37, 30, 0.1);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: "Segoe UI", "Noto Sans", "Liberation Sans", sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(80rem 30rem at 0% -20%, #d7e7de 0%, transparent 55%),
+    radial-gradient(80rem 30rem at 110% -10%, #e8e1cf 0%, transparent 60%),
+    var(--bg);
+  min-height: 100vh;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  line-height: 1.2;
+}
+
+p {
+  margin: 0;
+}
+
+label {
+  display: block;
+  margin-bottom: 0.3rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+input,
+select,
+textarea,
+button {
+  font: inherit;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  padding: 0.58rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible {
+  outline: 3px solid color-mix(in oklab, var(--focus) 35%, transparent);
+  outline-offset: 1px;
+}
+
+textarea {
+  resize: vertical;
+}
+
+button {
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  padding: 0.5rem 0.8rem;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+button.primary {
+  background: linear-gradient(140deg, var(--brand), var(--brand-2));
+  color: #fff;
+  border-color: transparent;
+}
+
+button.danger {
+  border-color: color-mix(in oklab, var(--danger) 40%, var(--line));
+  color: var(--danger);
+}
+
+button:hover {
+  filter: brightness(0.98);
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  padding: 1rem;
+  background: color-mix(in oklab, var(--paper) 92%, white);
+  border-bottom: 1px solid var(--line);
+  backdrop-filter: blur(8px);
+}
+
+.subtitle {
+  color: var(--muted);
+  margin-top: 0.2rem;
+  font-size: 0.95rem;
+}
+
+.top-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.import-label {
+  display: inline-block;
+  margin: 0;
+  padding: 0.52rem 0.7rem;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: #fff;
+  cursor: pointer;
+}
+
+#importFile {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+}
+
+.banner {
+  margin: 0.7rem 1rem 0;
+  padding: 0.7rem 0.9rem;
+  background: #fff8e9;
+  border: 1px solid color-mix(in oklab, var(--warning) 30%, var(--line));
+  border-radius: 10px;
+  font-size: 0.95rem;
+}
+
+.banner.error {
+  background: #fdeeee;
+  border-color: color-mix(in oklab, var(--danger) 35%, var(--line));
+}
+
+.hidden {
+  display: none !important;
+}
+
+.import-actions {
+  margin-left: 0.6rem;
+  display: inline-flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(290px, 360px) 1fr;
+  gap: 1rem;
+  padding: 1rem;
+  align-items: start;
+}
+
+.panel {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.8rem 0.9rem;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(180deg, #fff, #f8faf5);
+  border-top-left-radius: var(--radius);
+  border-top-right-radius: var(--radius);
+}
+
+.row-actions {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.list-panel {
+  padding-bottom: 0.6rem;
+}
+
+.list-panel label,
+.list-panel input,
+.list-panel .filter-grid {
+  margin: 0.55rem 0.75rem 0;
+}
+
+.filter-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+}
+
+.plan-list {
+  margin: 0.7rem 0.4rem 0;
+  padding: 0;
+  list-style: none;
+  max-height: 68vh;
+  overflow: auto;
+}
+
+.plan-item {
+  width: 100%;
+  text-align: left;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.65rem;
+  margin: 0.25rem 0;
+}
+
+.plan-item.active {
+  border-color: color-mix(in oklab, var(--brand) 50%, var(--line));
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--brand) 18%, transparent);
+}
+
+.plan-item strong {
+  display: block;
+}
+
+.plan-item span,
+.plan-item small {
+  display: block;
+  color: var(--muted);
+  margin-top: 0.18rem;
+}
+
+.empty {
+  padding: 1rem;
+  color: var(--muted);
+}
+
+.detail-panel {
+  overflow: hidden;
+}
+
+form {
+  padding: 0.85rem;
+}
+
+fieldset {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.7rem;
+  margin: 0 0 0.8rem;
+}
+
+legend {
+  padding: 0 0.2rem;
+  color: var(--muted);
+}
+
+.form-grid {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.form-grid.two {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.sticky-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  padding: 0.6rem;
+  border-top: 1px solid var(--line);
+  background: color-mix(in oklab, var(--paper) 95%, white);
+}
+
+.urgency-panel {
+  grid-column: 1 / -1;
+}
+
+#urgencyContent {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0.75rem;
+  padding: 0.8rem;
+}
+
+.urgency-card {
+  border: 1px solid color-mix(in oklab, var(--warning) 30%, var(--line));
+  border-radius: 12px;
+  padding: 0.75rem;
+  background: #fffef8;
+}
+
+.urgency-card .meta {
+  color: var(--muted);
+  margin-top: 0.2rem;
+  margin-bottom: 0.5rem;
+}
+
+.urgency-card h4 {
+  margin-top: 0.45rem;
+  font-size: 0.95rem;
+}
+
+.urgency-card ul {
+  margin: 0.3rem 0 0.45rem 1.2rem;
+}
+
+@media (max-width: 1100px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .form-grid.two {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media print {
+  .topbar,
+  .list-panel,
+  .sticky-actions,
+  .row-actions,
+  #saveReminder,
+  #importPreview,
+  #errorBox,
+  #urgencyPanel {
+    display: none !important;
+  }
+
+  .layout {
+    display: block;
+    padding: 0;
+  }
+
+  .detail-panel {
+    border: none;
+    box-shadow: none;
+  }
+
+  body {
+    background: #fff;
+  }
+}

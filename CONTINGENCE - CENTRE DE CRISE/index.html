@@ -1,0 +1,899 @@
+<!doctype html>
+<!--
+  Contingence Local - Application de Gestion de Plans de Contingence
+
+  @author Frédérick MURAT
+  @license MIT
+  @year 2026
+  @description Application web locale de gestion de plans de contingence
+               avec sauvegarde automatique via File System Access API
+-->
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="author" content="Frédérick MURAT">
+  <title>Vanguard Command Center - Contingence Local</title>
+  <meta name="description" content="Gestion locale hors ligne des plans de contingence">
+
+  <!-- Material Symbols Icons -->
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+
+  <!-- Inter Font -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <!-- Vanguard Styles -->
+  <link rel="stylesheet" href="styles/design-tokens.css">
+  <link rel="stylesheet" href="styles/vanguard-core.css">
+  <link rel="stylesheet" href="styles/vanguard-layouts.css">
+  <link rel="stylesheet" href="styles/vanguard-print.css">
+</head>
+<body>
+  <!-- ============================================
+       SIDE NAVIGATION
+       ============================================ -->
+  <nav class="sidenav" id="sideNav">
+    <div class="sidenav-brand">
+      <div class="sidenav-logo">
+        <span class="material-symbols-outlined filled" style="color: var(--primary); font-size: 32px;">shield</span>
+      </div>
+      <div>
+        <div class="sidenav-title">Vanguard</div>
+        <div class="sidenav-subtitle">Command Center</div>
+      </div>
+    </div>
+
+    <div class="sidenav-nav">
+      <a href="#dashboard" class="sidenav-item" data-view="dashboard">
+        <span class="material-symbols-outlined">dashboard</span>
+        <span>Dashboard</span>
+      </a>
+      <a href="#plans" class="sidenav-item active" data-view="plans">
+        <span class="material-symbols-outlined">description</span>
+        <span>Plans</span>
+      </a>
+      <a href="#editor" class="sidenav-item" data-view="editor">
+        <span class="material-symbols-outlined">edit_document</span>
+        <span>Éditeur</span>
+      </a>
+      <a href="#crisis" class="sidenav-item" data-view="crisis">
+        <span class="material-symbols-outlined">warning</span>
+        <span>Mode Urgence</span>
+      </a>
+      <a href="#settings" class="sidenav-item" data-view="settings">
+        <span class="material-symbols-outlined">settings</span>
+        <span>Paramètres</span>
+      </a>
+    </div>
+
+    <div class="sidenav-footer">
+      <button class="sidenav-cta" id="newIncidentBtn">
+        <span class="material-symbols-outlined">add_circle</span>
+        <span>Nouveau Plan</span>
+      </button>
+      <a href="#support" class="sidenav-item">
+        <span class="material-symbols-outlined">contact_support</span>
+        <span>Support</span>
+      </a>
+    </div>
+  </nav>
+
+  <!-- ============================================
+       TOP APP BAR
+       ============================================ -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <div class="topbar-search">
+        <span class="material-symbols-outlined topbar-search-icon">search</span>
+        <input
+          type="search"
+          id="globalSearch"
+          class="topbar-search-input"
+          placeholder="Rechercher un plan ou identifiant..."
+          aria-label="Recherche globale"
+        >
+      </div>
+    </div>
+
+    <div class="topbar-right">
+      <div class="topbar-status" id="crisisModeIndicator" style="display: none; background: rgba(186, 26, 26, 0.1); border: 1px solid var(--error);">
+        <span class="material-symbols-outlined filled topbar-status-icon" style="color: var(--error); animation: pulse 2s ease-in-out infinite;">emergency_home</span>
+        <span class="topbar-status-text" style="color: var(--error); font-weight: 900;">CRISIS MODE ACTIVE</span>
+      </div>
+
+      <div class="topbar-status" id="fsaStatusIndicator" style="display: none;">
+        <span class="material-symbols-outlined filled topbar-status-icon" id="fsaStatusIcon">cloud_off</span>
+        <span class="topbar-status-text" id="fsaStatusLabel">Non lié</span>
+      </div>
+
+      <div class="topbar-status">
+        <span class="material-symbols-outlined filled topbar-status-icon">security</span>
+        <span class="topbar-status-text">System Secure</span>
+      </div>
+
+      <div class="topbar-actions">
+        <button class="topbar-icon-btn" id="notificationsBtn" aria-label="Notifications">
+          <span class="material-symbols-outlined">notifications</span>
+        </button>
+        <button class="topbar-icon-btn" id="helpBtn" aria-label="Aide">
+          <span class="material-symbols-outlined">help</span>
+        </button>
+        <button class="btn btn-danger btn-sm" id="emergencyBtn">
+          <span class="material-symbols-outlined">emergency</span>
+          <span>URGENCE</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============================================
+       BANNERS (Alerts, Reminders, Errors)
+       ============================================ -->
+  <div class="main-content">
+    <section id="saveReminder" class="banner banner-warning hidden" role="alert" aria-live="polite"></section>
+    <section id="importPreview" class="banner banner-info hidden" role="alert" aria-live="polite"></section>
+    <section id="errorBox" class="banner banner-error hidden" role="alert" aria-live="assertive"></section>
+
+    <!-- ============================================
+         VIEW: DASHBOARD
+         ============================================ -->
+    <div id="viewDashboard" class="view-container hidden">
+      <div class="page-header">
+        <nav class="page-breadcrumb">
+          <span>Vanguard</span>
+          <span class="material-symbols-outlined page-breadcrumb-sep">chevron_right</span>
+          <span class="text-primary">Dashboard</span>
+        </nav>
+        <h2 class="page-title">Tableau de Bord</h2>
+        <p class="page-subtitle">Vue d'ensemble des plans de contingence et statistiques opérationnelles</p>
+      </div>
+
+      <!-- Hero Stats -->
+      <div class="hero-stats">
+        <div class="stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-label">Total Plans</span>
+            <span class="material-symbols-outlined text-primary">description</span>
+          </div>
+          <div>
+            <div class="stat-card-value" id="statTotalPlans">0</div>
+            <p class="stat-card-meta">Plans enregistrés dans le système</p>
+          </div>
+        </div>
+
+        <div class="stat-card" style="border-left-color: var(--tertiary-fixed-dim);">
+          <div class="stat-card-header">
+            <span class="stat-card-label">Plans Critiques</span>
+            <span class="material-symbols-outlined filled" style="color: var(--tertiary-fixed-dim);">warning</span>
+          </div>
+          <div>
+            <div class="stat-card-value text-tertiary" id="statCriticalPlans">0</div>
+            <p class="stat-card-meta">Nécessitent une attention immédiate</p>
+          </div>
+        </div>
+
+        <div class="stat-card" style="border-left-color: var(--secondary);">
+          <div class="stat-card-header">
+            <span class="stat-card-label">Dernière Sauvegarde</span>
+            <span class="material-symbols-outlined text-secondary">cloud_done</span>
+          </div>
+          <div>
+            <div class="stat-card-value text-secondary" id="statLastBackup">--:--</div>
+            <p class="stat-card-meta" id="statBackupMeta">Aucune sauvegarde détectée</p>
+          </div>
+        </div>
+
+        <div class="stat-card card-elevated" style="border-left-color: var(--primary); background: linear-gradient(135deg, var(--primary), var(--primary-container));">
+          <div style="position: relative; z-index: 1;">
+            <span class="material-symbols-outlined filled" style="color: var(--tertiary-fixed-dim); font-size: 48px; margin-bottom: var(--spacing-2); display: block;">emergency_home</span>
+            <h3 style="color: white; font-size: var(--font-size-body-lg); font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: var(--spacing-2);">Mode Urgence</h3>
+            <p style="color: rgba(255,255,255,0.8); font-size: var(--font-size-body-sm); margin-bottom: var(--spacing-4);">Activer le protocole de déploiement immédiat</p>
+            <button class="btn btn-tertiary" id="dashboardEmergencyBtn">
+              <span>Activer Maintenant</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Actions -->
+      <div class="layout-asymmetric">
+        <div class="col-span-12">
+          <div class="card card-elevated" style="padding: var(--spacing-6);">
+            <h3 class="headline-md" style="margin-bottom: var(--spacing-4);">Actions Rapides</h3>
+            <div style="display: flex; gap: var(--spacing-3); flex-wrap: wrap;">
+              <button class="btn btn-primary" id="dashboardNewPlanBtn">
+                <span class="material-symbols-outlined">add</span>
+                <span>Nouveau Plan</span>
+              </button>
+              <button class="btn btn-secondary" id="dashboardExportBtn">
+                <span class="material-symbols-outlined">download</span>
+                <span>Export Global</span>
+              </button>
+              <button class="btn btn-secondary" id="dashboardImportBtn">
+                <span class="material-symbols-outlined">upload</span>
+                <span>Importer Données</span>
+              </button>
+              <input type="file" id="importFile" accept="application/json" class="hidden">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================
+         VIEW: PLANS LIST
+         ============================================ -->
+    <div id="viewPlans" class="view-container">
+      <div class="page-header">
+        <nav class="page-breadcrumb">
+          <span>Vanguard</span>
+          <span class="material-symbols-outlined page-breadcrumb-sep">chevron_right</span>
+          <span class="text-primary">Explorateur de Plans</span>
+        </nav>
+        <div style="display: flex; justify-content: space-between; align-items: flex-end; gap: var(--spacing-6);">
+          <div>
+            <h2 class="page-title">Explorateur <span class="page-title-accent">de Plans</span></h2>
+            <p class="page-subtitle">Consultez et gérez les protocoles opérationnels</p>
+          </div>
+          <button class="btn btn-tertiary btn-lg" id="plansNewBtn">
+            <span class="material-symbols-outlined">add_circle</span>
+            <span>CRÉER UN PLAN</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Filters -->
+      <div class="card" style="padding: var(--spacing-6); margin-bottom: var(--spacing-6);">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--spacing-4); align-items: end;">
+          <div>
+            <label for="filterCategory" class="label">Catégorie</label>
+            <select id="filterCategory" class="select"></select>
+          </div>
+          <div>
+            <label for="filterCriticality" class="label">Criticité</label>
+            <select id="filterCriticality" class="select"></select>
+          </div>
+          <div>
+            <label for="filterStatus" class="label">Statut</label>
+            <select id="filterStatus" class="select"></select>
+          </div>
+          <div>
+            <label for="searchInput" class="label">Recherche</label>
+            <input type="search" id="searchInput" class="input" placeholder="Titre, scénario, actions...">
+          </div>
+        </div>
+      </div>
+
+      <!-- Plans List -->
+      <div class="card-elevated">
+        <div id="plansListContainer">
+          <ul id="plansList" class="plan-list" role="list"></ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================
+         VIEW: PLAN EDITOR
+         ============================================ -->
+    <div id="viewEditor" class="view-container hidden">
+      <div class="page-header">
+        <nav class="page-breadcrumb">
+          <span>Vanguard</span>
+          <span class="material-symbols-outlined page-breadcrumb-sep">chevron_right</span>
+          <span>Plans</span>
+          <span class="material-symbols-outlined page-breadcrumb-sep">chevron_right</span>
+          <span class="text-primary">Éditeur</span>
+        </nav>
+        <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+          <div>
+            <div style="display: flex; align-items: center; gap: var(--spacing-3); margin-bottom: var(--spacing-3);">
+              <span class="badge badge-primary" id="editorPlanType">Plan de Contingence</span>
+            </div>
+            <h2 class="page-title" id="editorTitle">Éditeur de Plan Stratégique</h2>
+          </div>
+          <div style="display: flex; gap: var(--spacing-3);">
+            <button class="btn btn-danger" id="deleteBtn">
+              <span class="material-symbols-outlined">delete</span>
+              <span>Supprimer</span>
+            </button>
+            <button class="btn btn-secondary" id="duplicateBtn">
+              <span class="material-symbols-outlined">content_copy</span>
+              <span>Dupliquer</span>
+            </button>
+            <button class="btn btn-primary" id="saveBtn">
+              <span class="material-symbols-outlined">save</span>
+              <span>Enregistrer</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Editor Form -->
+      <form id="planForm">
+        <div class="layout-asymmetric">
+          <!-- Left Column: Identity -->
+          <div class="col-span-4">
+            <div class="card card-bordered-left" style="padding: var(--spacing-6);">
+              <h3 class="label-md" style="margin-bottom: var(--spacing-6); display: flex; align-items: center; gap: var(--spacing-2);">
+                <span class="material-symbols-outlined">fingerprint</span>
+                <span>Identité du Plan</span>
+              </h3>
+
+              <div style="display: flex; flex-direction: column; gap: var(--spacing-4);">
+                <div>
+                  <label for="planId" class="label">ID du Document</label>
+                  <input id="planId" name="id" class="input" required style="font-family: monospace;">
+                </div>
+                <div>
+                  <label for="planTitle" class="label">Titre du Plan</label>
+                  <input id="planTitle" name="title" class="input" required maxlength="180" style="font-weight: 600; font-size: var(--font-size-title-md);">
+                </div>
+                <div>
+                  <label for="planCategory" class="label">Catégorie</label>
+                  <select id="planCategory" name="category" class="select" required></select>
+                </div>
+                <div>
+                  <label for="planCriticality" class="label">Criticité</label>
+                  <select id="planCriticality" name="criticality" class="select" required></select>
+                </div>
+                <div>
+                  <label for="planStatus" class="label">Statut</label>
+                  <select id="planStatus" name="status" class="select" required></select>
+                </div>
+                <div>
+                  <label for="planUpdatedAt" class="label">Dernière mise à jour</label>
+                  <input id="planUpdatedAt" class="input" readonly>
+                </div>
+              </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="card" style="padding: var(--spacing-4); margin-top: var(--spacing-6);">
+              <h4 class="label-md" style="margin-bottom: var(--spacing-3);">Actions du Plan</h4>
+              <div style="display: flex; flex-direction: column; gap: var(--spacing-2);">
+                <button type="button" class="btn btn-secondary btn-sm" id="archiveBtn">
+                  <span class="material-symbols-outlined">archive</span>
+                  <span>Archiver</span>
+                </button>
+                <button type="button" class="btn btn-secondary btn-sm" id="exportOneBtn">
+                  <span class="material-symbols-outlined">download</span>
+                  <span>Export JSON</span>
+                </button>
+                <button type="button" class="btn btn-secondary btn-sm" id="exportOneExcelBtn">
+                  <span class="material-symbols-outlined">table_chart</span>
+                  <span>Export Excel</span>
+                </button>
+                <button type="button" class="btn btn-secondary btn-sm" id="exportOnePdfBtn">
+                  <span class="material-symbols-outlined">picture_as_pdf</span>
+                  <span>Export PDF</span>
+                </button>
+                <button type="button" class="btn btn-secondary btn-sm" id="printBtn">
+                  <span class="material-symbols-outlined">print</span>
+                  <span>Imprimer</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Column: Content -->
+          <div class="col-span-8">
+            <!-- Scenario Section -->
+            <div class="card" style="padding: var(--spacing-6); margin-bottom: var(--spacing-6);">
+              <h3 class="label-md" style="margin-bottom: var(--spacing-6); display: flex; align-items: center; gap: var(--spacing-2);">
+                <span class="material-symbols-outlined">visibility</span>
+                <span>Analyse du Scénario</span>
+              </h3>
+
+              <div style="display: flex; flex-direction: column; gap: var(--spacing-4);">
+                <div>
+                  <label for="planSummary" class="label">Résumé de la Situation</label>
+                  <textarea id="planSummary" name="summary" class="textarea" rows="3" placeholder="Décrivez brièvement le contexte critique..."></textarea>
+                </div>
+                <div>
+                  <label for="planScenario" class="label">Description du Scénario</label>
+                  <textarea id="planScenario" name="scenario" class="textarea" rows="3"></textarea>
+                </div>
+                <div>
+                  <label for="planTriggers" class="label">Déclencheurs (une ligne = un item)</label>
+                  <textarea id="planTriggers" name="triggers" class="textarea" rows="3"></textarea>
+                </div>
+                <div>
+                  <label for="planImpacts" class="label">Impacts Potentiels (une ligne = un item)</label>
+                  <textarea id="planImpacts" name="impacts" class="textarea" rows="3"></textarea>
+                </div>
+              </div>
+            </div>
+
+            <!-- Operations Section -->
+            <div class="card" style="padding: var(--spacing-6); margin-bottom: var(--spacing-6);">
+              <h3 class="label-md" style="margin-bottom: var(--spacing-6); display: flex; align-items: center; gap: var(--spacing-2);">
+                <span class="material-symbols-outlined">deployed_code</span>
+                <span>Procédures Opérationnelles</span>
+              </h3>
+
+              <div style="display: flex; flex-direction: column; gap: var(--spacing-4);">
+                <div>
+                  <label for="planServices" class="label">Services Concernés (une ligne = un item)</label>
+                  <textarea id="planServices" name="services" class="textarea" rows="3"></textarea>
+                </div>
+                <div>
+                  <label for="planRoles" class="label">Rôles et Responsabilités (format: rôle | responsabilité)</label>
+                  <textarea id="planRoles" name="roles" class="textarea" rows="4"></textarea>
+                </div>
+                <div>
+                  <label for="planImmediate" class="label">Actions Immédiates (T0-T2h)</label>
+                  <textarea id="planImmediate" name="immediateActions" class="textarea" rows="4"></textarea>
+                </div>
+                <div>
+                  <label for="planContinuity" class="label">Procédure de Continuité (T2h-T48h)</label>
+                  <textarea id="planContinuity" name="continuityActions" class="textarea" rows="4"></textarea>
+                </div>
+                <div>
+                  <label for="planRecovery" class="label">Procédure de Reprise</label>
+                  <textarea id="planRecovery" name="recoveryActions" class="textarea" rows="4"></textarea>
+                </div>
+              </div>
+            </div>
+
+            <!-- Support Section -->
+            <div class="card" style="padding: var(--spacing-6);">
+              <h3 class="label-md" style="margin-bottom: var(--spacing-6); display: flex; align-items: center; gap: var(--spacing-2);">
+                <span class="material-symbols-outlined">support_agent</span>
+                <span>Support et Ressources</span>
+              </h3>
+
+              <div style="display: flex; flex-direction: column; gap: var(--spacing-4);">
+                <div>
+                  <label for="planContacts" class="label">Contacts (format: nom | téléphone | email)</label>
+                  <textarea id="planContacts" name="contacts" class="textarea" rows="4"></textarea>
+                </div>
+                <div>
+                  <label for="planResources" class="label">Ressources Nécessaires (une ligne = un item)</label>
+                  <textarea id="planResources" name="resources" class="textarea" rows="3"></textarea>
+                </div>
+                <div>
+                  <label for="planChecklist" class="label">Checklist (format: phase: item1; item2)</label>
+                  <textarea id="planChecklist" name="checklists" class="textarea" rows="4"></textarea>
+                </div>
+                <div>
+                  <label for="planAttachments" class="label">Pièces Jointes / Liens (une ligne = un item)</label>
+                  <textarea id="planAttachments" name="attachments" class="textarea" rows="3"></textarea>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Form Actions Footer -->
+        <div style="background: var(--surface-container-low); padding: var(--spacing-4); margin-top: var(--spacing-6); display: flex; justify-content: flex-end; gap: var(--spacing-3); border-top: 1px solid var(--outline-variant);">
+          <button type="button" class="btn btn-secondary" id="resetBtn">Réinitialiser</button>
+          <button type="submit" class="btn btn-primary btn-lg">
+            <span class="material-symbols-outlined">save</span>
+            <span>Enregistrer le Plan</span>
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- ============================================
+         VIEW: CRISIS CENTER
+         ============================================ -->
+    <div id="viewCrisis" class="view-container hidden">
+      <div id="urgencyContent"></div>
+    </div>
+
+    <!-- ============================================
+         VIEW: SETTINGS
+         ============================================ -->
+    <div id="viewSettings" class="view-container hidden">
+      <div class="page-header">
+        <h2 class="page-title">Paramètres</h2>
+        <p class="page-subtitle">Configuration du système et exports</p>
+      </div>
+
+      <div class="layout-asymmetric">
+        <div class="col-span-8">
+          <!-- Personnalisation du Nom -->
+          <div class="card" style="padding: var(--spacing-6); margin-bottom: var(--spacing-6);">
+            <h3 class="headline-md" style="margin-bottom: var(--spacing-6);">Personnalisation de l'Application</h3>
+
+            <div style="display: flex; flex-direction: column; gap: var(--spacing-4);">
+              <div>
+                <label class="label" for="settingAppName">Nom de l'Application</label>
+                <input
+                  type="text"
+                  id="settingAppName"
+                  class="input"
+                  placeholder="Vanguard"
+                  maxlength="50"
+                >
+                <p class="body-sm text-muted" style="margin-top: var(--spacing-1);">
+                  Affiché dans la navigation latérale et le titre de la page
+                </p>
+              </div>
+
+              <div>
+                <label class="label" for="settingAppSubtitle">Sous-titre de l'Application</label>
+                <input
+                  type="text"
+                  id="settingAppSubtitle"
+                  class="input"
+                  placeholder="Command Center"
+                  maxlength="50"
+                >
+                <p class="body-sm text-muted" style="margin-top: var(--spacing-1);">
+                  Complète le nom dans la barre supérieure
+                </p>
+              </div>
+
+              <div style="display: flex; gap: var(--spacing-3);">
+                <button class="btn btn-primary" id="saveBrandingBtn">
+                  <span class="material-symbols-outlined">save</span>
+                  <span>Enregistrer</span>
+                </button>
+                <button class="btn btn-secondary" id="resetBrandingBtn">
+                  <span class="material-symbols-outlined">refresh</span>
+                  <span>Réinitialiser</span>
+                </button>
+              </div>
+
+              <div class="banner banner-info" style="font-size: var(--font-size-body-sm);">
+                <strong>Aperçu :</strong> <span id="brandingPreview">Vanguard Command Center</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sauvegarde Automatique -->
+          <div class="card" style="padding: var(--spacing-6);">
+            <h3 class="headline-md" style="margin-bottom: var(--spacing-6);">Sauvegarde Automatique</h3>
+
+            <div style="display: flex; flex-direction: column; gap: var(--spacing-4); margin-bottom: var(--spacing-8);">
+              <div class="card" style="padding: var(--spacing-4); background: var(--surface-container-highest);">
+                <div style="display: flex; align-items: center; gap: var(--spacing-3); margin-bottom: var(--spacing-3);">
+                  <span class="material-symbols-outlined filled" style="color: var(--primary); font-size: 32px;">cloud_sync</span>
+                  <div style="flex: 1;">
+                    <h4 class="title-lg" style="margin-bottom: var(--spacing-1);">Dossier de Sauvegarde Lié</h4>
+                    <p class="body-md text-muted" id="fsaStatusText">Aucun dossier lié</p>
+                  </div>
+                </div>
+
+                <div id="fsaNotSupported" class="banner banner-warning" style="display: none; margin-bottom: var(--spacing-3);">
+                  <strong>Non supporté</strong> - Votre navigateur ne supporte pas l'API File System Access. Utilisez Chrome ou Edge.
+                </div>
+
+                <div id="fsaConnected" style="display: none;">
+                  <div class="banner banner-info" style="margin-bottom: var(--spacing-3);">
+                    <span class="material-symbols-outlined filled" style="vertical-align: middle; color: var(--primary);">check_circle</span>
+                    <strong>Connecté au dossier : <span id="fsaFolderName"></span></strong>
+                    <br>
+                    <small>Les plans sont sauvegardés automatiquement dans ce dossier.</small>
+                  </div>
+                  <div style="display: flex; gap: var(--spacing-3);">
+                    <button class="btn btn-secondary" id="fsaBackupNowBtn">
+                      <span class="material-symbols-outlined">save</span>
+                      <span>Sauvegarder Maintenant</span>
+                    </button>
+                    <button class="btn btn-danger" id="fsaUnlinkBtn">
+                      <span class="material-symbols-outlined">link_off</span>
+                      <span>Délier le Dossier</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div id="fsaDisconnected" style="display: none;">
+                  <p class="body-lg text-muted" style="margin-bottom: var(--spacing-3);">
+                    Liez un dossier sur votre ordinateur pour activer la sauvegarde automatique.
+                    Vos plans seront sauvegardés en temps réel dans des fichiers JSON.
+                  </p>
+                  <button class="btn btn-tertiary" id="fsaLinkBtn">
+                    <span class="material-symbols-outlined">folder_open</span>
+                    <span>Lier un Dossier de Sauvegarde</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <h3 class="headline-md" style="margin-bottom: var(--spacing-6);">Exports Manuels</h3>
+
+            <div style="display: flex; flex-direction: column; gap: var(--spacing-4);">
+              <div class="card" style="padding: var(--spacing-4); background: var(--surface-container-highest);">
+                <h4 class="title-lg" style="margin-bottom: var(--spacing-2);">Export Global JSON</h4>
+                <p class="body-lg text-muted" style="margin-bottom: var(--spacing-3);">Exporte tous les plans et paramètres au format JSON pour sauvegarde complète.</p>
+                <button class="btn btn-primary" id="exportAllBtn">
+                  <span class="material-symbols-outlined">download</span>
+                  <span>Exporter Tout (JSON)</span>
+                </button>
+              </div>
+
+              <div class="card" style="padding: var(--spacing-4); background: var(--surface-container-highest);">
+                <h4 class="title-lg" style="margin-bottom: var(--spacing-2);">Export Excel (CSV)</h4>
+                <p class="body-lg text-muted" style="margin-bottom: var(--spacing-3);">Exporte tous les plans au format CSV compatible Excel.</p>
+                <button class="btn btn-secondary" id="exportAllExcelBtn">
+                  <span class="material-symbols-outlined">table_chart</span>
+                  <span>Exporter Excel (Tous)</span>
+                </button>
+              </div>
+
+              <div class="card" style="padding: var(--spacing-4); background: var(--surface-container-highest);">
+                <h4 class="title-lg" style="margin-bottom: var(--spacing-2);">Export PDF Imprimable</h4>
+                <p class="body-lg text-muted" style="margin-bottom: var(--spacing-3);">Génère un document PDF imprimable de tous les plans.</p>
+                <button class="btn btn-secondary" id="exportAllPdfBtn">
+                  <span class="material-symbols-outlined">picture_as_pdf</span>
+                  <span>Exporter PDF (Tous)</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-span-4">
+          <div class="card card-bordered-error" style="padding: var(--spacing-6);">
+            <h3 class="label-md" style="margin-bottom: var(--spacing-4); color: var(--error);">
+              <span class="material-symbols-outlined filled">warning</span>
+              ATTENTION
+            </h3>
+            <p class="body-lg" style="margin-bottom: var(--spacing-4);">Les données sont stockées localement dans votre navigateur. Pensez à effectuer des sauvegardes régulières sur support externe.</p>
+            <div class="banner banner-warning" style="font-size: var(--font-size-body-sm);">
+              <strong>Recommandation :</strong> Sauvegarde hebdomadaire sur clé USB sécurisée
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================
+       HELP MODAL
+       ============================================ -->
+  <div id="helpModal" class="modal hidden" role="dialog" aria-labelledby="helpModalTitle" aria-modal="true">
+    <div class="modal-overlay" id="helpModalOverlay"></div>
+    <div class="modal-content" style="max-width: 700px;">
+      <div class="modal-header">
+        <h2 id="helpModalTitle" class="headline-lg">À propos</h2>
+        <button class="modal-close" id="closeHelpModal" aria-label="Fermer">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+        <div style="margin-bottom: var(--spacing-6);">
+          <h3 class="title-lg" style="margin-bottom: var(--spacing-3); color: var(--primary);">Application de Gestion de Plans de Contingence</h3>
+          <p class="body-lg" style="margin-bottom: var(--spacing-2);">
+            Cette application vous permet de créer, gérer et maintenir vos plans de contingence localement dans votre navigateur.
+          </p>
+          <p class="body-lg text-muted">
+            Version <strong id="appVersionDisplay">1.0.0</strong>
+          </p>
+        </div>
+
+        <div style="margin-bottom: var(--spacing-6);">
+          <h3 class="title-lg" style="margin-bottom: var(--spacing-3);">Fonctionnalités Principales</h3>
+          <ul style="list-style: disc; margin-left: var(--spacing-6);">
+            <li class="body-lg" style="margin-bottom: var(--spacing-2);">Création et édition de plans de contingence structurés</li>
+            <li class="body-lg" style="margin-bottom: var(--spacing-2);">Catégorisation par type de risque et niveau de criticité</li>
+            <li class="body-lg" style="margin-bottom: var(--spacing-2);">Mode crise pour accès rapide aux plans critiques</li>
+            <li class="body-lg" style="margin-bottom: var(--spacing-2);">Sauvegarde automatique via File System Access API</li>
+            <li class="body-lg" style="margin-bottom: var(--spacing-2);">Exports multiples : JSON, CSV, PDF</li>
+            <li class="body-lg" style="margin-bottom: var(--spacing-2);">Stockage local sécurisé (IndexedDB)</li>
+            <li class="body-lg" style="margin-bottom: var(--spacing-2);">Interface personnalisable</li>
+          </ul>
+        </div>
+
+        <div style="margin-bottom: var(--spacing-6);">
+          <h3 class="title-lg" style="margin-bottom: var(--spacing-3);">Raccourcis Clavier</h3>
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+              <td class="body-lg" style="padding: var(--spacing-2); border-bottom: 1px solid var(--outline-variant);"><kbd>Ctrl+S</kbd></td>
+              <td class="body-lg text-muted" style="padding: var(--spacing-2); border-bottom: 1px solid var(--outline-variant);">Enregistrer le plan en cours</td>
+            </tr>
+            <tr>
+              <td class="body-lg" style="padding: var(--spacing-2); border-bottom: 1px solid var(--outline-variant);"><kbd>Ctrl+F</kbd></td>
+              <td class="body-lg text-muted" style="padding: var(--spacing-2); border-bottom: 1px solid var(--outline-variant);">Focuser la recherche</td>
+            </tr>
+          </table>
+        </div>
+
+        <div style="margin-bottom: var(--spacing-6);">
+          <h3 class="title-lg" style="margin-bottom: var(--spacing-3);">Documentation</h3>
+          <p class="body-lg" style="margin-bottom: var(--spacing-2);">
+            Consultez les fichiers suivants pour plus d'informations :
+          </p>
+          <ul style="list-style: none; margin-left: 0;">
+            <li class="body-lg" style="margin-bottom: var(--spacing-2);">
+              <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 18px;">description</span>
+              <strong>README.md</strong> - Documentation générale
+            </li>
+            <li class="body-lg" style="margin-bottom: var(--spacing-2);">
+              <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 18px;">description</span>
+              <strong>REFONTE-UX.md</strong> - Architecture et design
+            </li>
+            <li class="body-lg" style="margin-bottom: var(--spacing-2);">
+              <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 18px;">description</span>
+              <strong>SAUVEGARDE_FSA.md</strong> - Guide de sauvegarde automatique
+            </li>
+          </ul>
+        </div>
+
+        <div class="banner banner-info" style="margin-bottom: var(--spacing-6);">
+          <h4 class="label-md" style="margin-bottom: var(--spacing-2);">Développement</h4>
+          <p class="body-md">
+            <strong>Développé par :</strong> Frédérick MURAT<br>
+            <strong>Licence :</strong> MIT License<br>
+            <strong>Année :</strong> 2026<br>
+          </p>
+        </div>
+
+        <div class="banner banner-warning">
+          <strong>Note importante :</strong> Cette application fonctionne entièrement en local dans votre navigateur. Aucune donnée n'est envoyée vers un serveur externe. Pensez à effectuer des sauvegardes régulières de vos plans.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================
+       TEMPLATES
+       ============================================ -->
+  <template id="urgencyTemplate">
+    <article class="urgency-card card card-bordered-error" style="padding: var(--spacing-6); margin-bottom: var(--spacing-6); background: #fffef8;">
+      <h3 class="headline-md" style="margin-bottom: var(--spacing-2);"></h3>
+      <p class="meta body-lg text-muted" style="margin-bottom: var(--spacing-4);"></p>
+
+      <h4 class="title-lg" style="margin-top: var(--spacing-4); margin-bottom: var(--spacing-3); color: var(--error);">Actions 0-30 min</h4>
+      <ul class="u-immediate" style="margin-left: var(--spacing-6); list-style: disc;"></ul>
+
+      <h4 class="title-lg" style="margin-top: var(--spacing-4); margin-bottom: var(--spacing-3); color: var(--primary);">Contacts Clés</h4>
+      <ul class="u-contacts" style="margin-left: var(--spacing-6); list-style: circle;"></ul>
+    </article>
+  </template>
+
+  <template id="planItemTemplate">
+    <li>
+      <button type="button" class="plan-item" data-id="">
+        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: var(--spacing-2);">
+          <strong class="title-lg"></strong>
+          <span class="badge"></span>
+        </div>
+        <span class="body-md text-muted" style="display: block; margin-bottom: var(--spacing-1);"></span>
+        <small class="label-sm text-muted"></small>
+      </button>
+    </li>
+  </template>
+
+  <!-- ============================================
+       SCRIPTS
+       ============================================ -->
+  <script src="db.js"></script>
+  <script src="fsa.js"></script>
+  <script src="app.js"></script>
+
+  <style>
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    /* Modal styles */
+    .modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: var(--spacing-4);
+    }
+
+    .modal.hidden {
+      display: none;
+    }
+
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(4px);
+    }
+
+    .modal-content {
+      position: relative;
+      background: var(--surface-container-lowest);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow-elevated);
+      width: 100%;
+      max-width: 600px;
+      z-index: 1001;
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--spacing-6);
+      border-bottom: 1px solid var(--outline-variant);
+    }
+
+    .modal-body {
+      padding: var(--spacing-6);
+    }
+
+    .modal-close {
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: none;
+      border-radius: var(--radius-lg);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+
+    .modal-close:hover {
+      background: var(--surface-container);
+    }
+
+    kbd {
+      display: inline-block;
+      padding: 2px 8px;
+      background: var(--surface-container-high);
+      border: 1px solid var(--outline-variant);
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 0.9em;
+      font-weight: 700;
+    }
+
+    .plan-item {
+      width: 100%;
+      text-align: left;
+      background: var(--surface-container-lowest);
+      border: 1px solid var(--outline-variant);
+      border-radius: var(--radius-lg);
+      padding: var(--spacing-4);
+      margin-bottom: var(--spacing-2);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+
+    .plan-item:hover {
+      background: var(--surface-container-high);
+      border-color: var(--primary);
+    }
+
+    .plan-item.active {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(0, 32, 79, 0.1);
+      background: var(--primary-fixed);
+    }
+
+    .plan-list {
+      list-style: none;
+      padding: var(--spacing-4);
+      margin: 0;
+    }
+
+    .view-container {
+      animation: fadeIn 0.3s ease-in-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Import file hidden */
+    #importFile {
+      position: absolute;
+      left: -9999px;
+      width: 1px;
+      height: 1px;
+    }
+  </style>
+</body>
+</html>
