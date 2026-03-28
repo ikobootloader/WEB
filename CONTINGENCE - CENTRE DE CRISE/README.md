@@ -10,6 +10,7 @@
 
 ## 📋 Table des matières
 
+- [Nouveautés v1.0.0](#-nouveautés-v100)
 - [Aperçu](#-aperçu)
 - [Fonctionnalités](#-fonctionnalités)
 - [Démarrage rapide](#-démarrage-rapide)
@@ -19,9 +20,34 @@
 - [Structure des plans](#-structure-des-plans)
 - [Exports & Imports](#-exports--imports)
 - [Mode Urgence](#-mode-urgence-centre-de-crise)
+- [Plans Pré-Configurés](#-plans-pré-configurés-disponibles)
 - [Compatibilité navigateurs](#-compatibilité-navigateurs)
 - [Documentation](#-documentation)
 - [Licence](#-licence)
+
+---
+
+## 🆕 Nouveautés v1.0.0
+
+### Persistance du Mode Crise
+Le mode urgence a été considérablement amélioré avec une **persistance complète** :
+- 🕐 **Chronomètre continu** - Continue de compter même après fermeture du navigateur
+- 💾 **Restauration automatique** - Le centre de crise se recharge automatiquement au redémarrage
+- ✅ **État checklist sauvegardé** - Les cases cochées sont préservées par plan
+- 🔴 **Indicateur TopBar** - Badge rouge permanent tant que le mode crise est actif
+
+### Nouveaux Plans Pré-Configurés
+**5 nouveaux plans** pour administrations publiques dans [nouveaux-plans.json](nouveaux-plans.json) :
+- ⚡ Coupure électrique prolongée sur site stratégique (Critique)
+- 📢 Crise médiatique et communication de crise (Importante)
+- 📁 Défaillance système GED (Importante)
+- 🚨 Menace sécuritaire ou intrusion malveillante (Critique)
+- 🌊 Pollution environnementale accidentelle (Importante)
+
+### Améliorations UX
+- 🔝 **Auto-scroll** - La page remonte automatiquement lors des changements de vue
+- 🏷️ **Branding dynamique** - Le nom personnalisé apparaît dans le fil d'Ariane du mode crise
+- 🔘 **Navigation checklist** - Le bouton "Voir Protocole Complet" ouvre directement le plan dans l'éditeur
 
 ---
 
@@ -31,7 +57,9 @@
 
 - ✅ **100% Local** - Aucun serveur, aucune connexion réseau requise
 - ✅ **Sauvegarde automatique** - File System Access API pour backup en temps réel
-- ✅ **Mode Crise** - Interface tactique optimisée pour situations d'urgence
+- ✅ **Mode Crise Persistant** - Interface tactique qui survit aux redémarrages navigateur
+- ✅ **Chronomètre continu** - Le timer continue automatiquement entre les sessions
+- ✅ **15 plans pré-configurés** - Templates MDA et administration publique prêts à l'emploi
 - ✅ **Personnalisable** - Nom d'application et branding configurables
 - ✅ **Multi-formats** - Exports JSON, CSV/Excel, PDF et impression
 - ✅ **Accessible** - Raccourcis clavier, ARIA, Material Design 3
@@ -98,7 +126,12 @@
 #### 4. 🚨 Centre de Crise (Mode Urgence)
 - **Sélection de plan critique** - Grille visuelle avec icônes catégorielles
 - **Chronomètre en temps réel** - Temps écoulé depuis activation
-- **Checklist interactive** - Actions 0-30 min avec cases à cocher
+- **⭐ Persistance totale** - Le mode crise survit aux redémarrages navigateur
+  - Chronomètre continue automatiquement depuis l'activation initiale
+  - Plan actif restauré au redémarrage
+  - État checklist préservé par plan
+  - Indicateur permanent en TopBar tant que mode actif
+- **Checklist interactive** - Actions 0-30 min avec cases à cocher et sauvegarde automatique
 - **Contacts stratégiques** - Avatars et boutons d'appel direct
 - **Carte tactique** - Visualisation des zones d'impact
 - **Services critiques** - Indicateurs de statut avec barres de progression
@@ -142,9 +175,13 @@
 
 ### Premiers pas
 
-1. **Importer des plans MDA** (optionnel) :
-   - Paramètres → Import → Sélectionner `plans-mda-import.json`
-   - Prévisualiser les 10 plans pour Maison Départementale de l'Autonomie
+1. **Importer des plans pré-configurés** (optionnel) :
+   - **Plans MDA** - Paramètres → Import → Sélectionner `plans-mda-import.json`
+     - 10 plans pour Maison Départementale de l'Autonomie
+   - **Plans Administration Publique** - Paramètres → Import → Sélectionner `nouveaux-plans.json`
+     - 5 plans critiques et importants pour collectivités
+     - Coupure électrique, crise médiatique, défaillance GED, menace sécuritaire, pollution
+   - Prévisualiser les plans avant import
    - Cliquer "Importer en fusion"
 
 2. **Créer un nouveau plan** :
@@ -156,6 +193,8 @@
    - Cliquer sur "URGENCE" dans la navigation latérale
    - Sélectionner un plan critique dans la grille
    - Le centre de commandement tactique s'active
+   - Le chronomètre démarre automatiquement
+   - **Le mode crise persiste** - même si vous fermez le navigateur, il reprendra où vous en étiez
 
 ---
 
@@ -190,6 +229,7 @@ CONTINGENCE/
 ├── model/                  # Design inspirations
 │   └── vanguard_*/
 ├── plans-mda-import.json   # 10 plans MDA prêts à importer
+├── nouveaux-plans.json     # 5 plans administration publique
 └── Documentation/
     ├── projet.md           # Spécification complète
     ├── REFONTE-UX.md       # Alignement design system
@@ -209,6 +249,17 @@ CONTINGENCE/
 | `settings` | `key` | - | Configuration application |
 | `exportsHistory` | auto-increment | createdAt | Historique exports |
 | `auditLog` | auto-increment | timestamp | Journal d'audit |
+
+**Clés Settings importantes :**
+
+| Clé | Type | Description |
+|-----|------|-------------|
+| `appName` | string | Nom personnalisé de l'application |
+| `appSubtitle` | string | Sous-titre personnalisé |
+| `activeCrisisPlanId` | string | ID du plan actuellement actif en mode crise |
+| `crisisActivatedAt` | timestamp | Date/heure d'activation du mode crise (pour chronomètre) |
+| `checklist_state_${planId}` | object | État des cases cochées par plan (format: `{0: true, 1: false, ...}`) |
+| `fsaDirectoryHandle` | FileSystemDirectoryHandle | Handle du dossier de sauvegarde automatique |
 
 ---
 
@@ -406,12 +457,28 @@ Document imprimable multi-pages avec :
 3. **Activation** → Cliquer sur la carte du plan concerné
 4. **Centre de Crise** → Interface tactique se charge
 
+### Persistance et Récupération Automatique
+
+**Le mode crise survit aux redémarrages de navigateur :**
+- ✅ **Chronomètre persistant** - Continue à compter même après fermeture du navigateur
+- ✅ **Plan actif sauvegardé** - Le plan en cours reste actif entre les sessions
+- ✅ **Restauration automatique** - Au redémarrage, le centre de crise se recharge automatiquement
+- ✅ **État checklist préservé** - Les cases cochées sont sauvegardées par plan
+- ✅ **Indicateur TopBar** - Badge rouge permanent tant que le mode crise est actif
+
+**Fonctionnement technique :**
+- `activeCrisisPlanId` et `crisisActivatedAt` stockés dans IndexedDB
+- État de checklist sauvegardé par plan (`checklist_state_${planId}`)
+- Fonction `restoreCrisisMode()` appelée au démarrage de l'application
+- Le chronomètre reprend automatiquement à partir du timestamp d'activation initial
+
 ### Interface Tactique
 
 **Breadcrumb personnalisé :**
 ```
 [NOM_APP] › CENTRE DE CRISE
 ```
+*Note : Utilise le nom d'application personnalisé défini dans les paramètres*
 
 **Header éditorial :**
 - Badge "CODE ROUGE"
@@ -419,16 +486,20 @@ Document imprimable multi-pages avec :
 - Titre du plan (3rem, gras)
 - Résumé / scénario
 - **Chronomètre temps réel** (HH:MM:SS depuis activation)
+  - Mise à jour chaque seconde
+  - Persiste entre les sessions navigateur
+  - Nettoyage automatique si hash change
 
 **Layout Bento (asymétrique 4-8 colonnes) :**
 
 #### Colonne Gauche (4/12)
 
 **Checklist Immédiate (0-30 min)**
-- Cases à cocher interactives
+- Cases à cocher interactives avec persistance
+- État sauvegardé automatiquement dans IndexedDB
 - 4-6 actions prioritaires
 - Compteur d'actions
-- Bouton "Voir Protocole Complet"
+- Bouton "Voir Protocole Complet" (navigation vers l'éditeur)
 
 **Contacts Stratégiques**
 - 3 contacts maximum
@@ -461,7 +532,8 @@ Document imprimable multi-pages avec :
 - Bouton **"Quitter Mode Urgence"** (top-right)
 - Confirmation requise
 - Retour à la grille de sélection
-- Chronomètre arrêté
+- Chronomètre arrêté et état nettoyé
+- Suppression des données de persistance (IndexedDB)
 
 ---
 
@@ -555,6 +627,56 @@ Document imprimable multi-pages avec :
 
 ---
 
+## 📦 Plans Pré-Configurés Disponibles
+
+L'application fournit des templates de plans prêts à l'emploi pour démarrage rapide.
+
+### Plans MDA (plans-mda-import.json)
+
+**10 plans** spécifiques aux Maisons Départementales de l'Autonomie :
+
+| ID | Titre | Criticité | Catégorie |
+|----|-------|-----------|-----------|
+| PLAN-CYBER-MDA-001 | Cyberattaque ransomware SI-MDPH | Critique | Cyberattaque |
+| PLAN-IT-MDA-001 | Panne majeure système iodas | Critique | Informatique |
+| PLAN-TELCOM-MDA-001 | Coupure téléphonie/internet | Importante | Infrastructure |
+| PLAN-SINISTRE-MDA-001 | Sinistre bâtiment | Critique | Infrastructure |
+| PLAN-SANTE-MDA-001 | Épidémie personnel | Importante | Santé |
+| PLAN-RGPD-MDA-001 | Violation RGPD données usagers | Critique | Juridique |
+| PLAN-CANICULE-MDA-001 | Canicule protection usagers vulnérables | Importante | Environnement |
+| PLAN-PRESTA-MDA-001 | Défaillance prestataire transport/repas | Moyenne | Logistique |
+| PLAN-COVID-MDA-001 | Pandémie type COVID-19 | Critique | Santé |
+| PLAN-INNOND-MDA-001 | Inondation majeure évacuation | Critique | Environnement |
+
+### Plans Administration Publique (nouveaux-plans.json)
+
+**5 plans** pour collectivités territoriales et administrations :
+
+| ID | Titre | Criticité | Catégorie |
+|----|-------|-----------|-----------|
+| PLAN-ELECT-001 | Coupure électrique prolongée sur site stratégique | Critique | Infrastructure |
+| PLAN-SOCIAL-001 | Crise médiatique et communication de crise | Importante | Communication |
+| PLAN-TECH-002 | Défaillance système GED (Gestion Électronique Documents) | Importante | Informatique |
+| PLAN-SECU-001 | Menace sécuritaire ou intrusion malveillante | Critique | Sécurité |
+| PLAN-ENV-001 | Pollution environnementale accidentelle | Importante | Environnement |
+
+**Caractéristiques communes :**
+- ✅ Scénarios détaillés et réalistes
+- ✅ Procédures complètes (immédiate, continuité, récupération)
+- ✅ Contacts et rôles pré-remplis (à adapter)
+- ✅ Checklists opérationnelles 0-30 min
+- ✅ Services critiques identifiés
+- ✅ Ressources et équipements listés
+
+**Import :**
+1. Paramètres → Import
+2. Sélectionner le fichier JSON
+3. Prévisualiser les plans
+4. Choisir "Fusion" ou "Remplacement"
+5. Confirmer l'import
+
+---
+
 ## 📊 Statistiques Projet
 
 - **Lignes de code JavaScript :** ~2500+ (app.js)
@@ -564,6 +686,8 @@ Document imprimable multi-pages avec :
 - **Niveaux de criticité :** 4
 - **Formats d'export :** 4 (JSON, CSV, PDF, Print)
 - **Object Stores IndexedDB :** 4
+- **Plans pré-configurés :** 15 (10 MDA + 5 Administration Publique)
+- **Fonctionnalités persistantes :** 3 (Mode crise, Chronomètre, État checklist)
 
 ---
 
