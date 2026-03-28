@@ -15,7 +15,8 @@
 
 <!-- External Libraries -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
 
 <!-- Tailwind CSS -->
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
@@ -272,6 +273,13 @@
       </div>
     </div>
     <div class="flex items-center gap-2 lg:gap-4">
+      <!-- FSA Status (discret) -->
+      <div class="hidden lg:flex items-center gap-1.5 px-2 py-1 rounded-lg bg-surface-container/50 text-xs text-on-surface-variant">
+        <span class="material-symbols-outlined" style="font-size: 16px;">sync</span>
+        <span id="fsaStatus" class="w-2 h-2 rounded-full bg-gray-400"></span>
+        <span id="fsaStatusText">Non connecté</span>
+      </div>
+
       <button id="btnNotifications" class="w-10 h-10 hidden sm:flex items-center justify-center text-on-surface-variant hover:text-primary transition-all relative">
         <span class="material-symbols-outlined">notifications</span>
         <span id="notificationBadge" class="hidden absolute top-0 right-0 w-5 h-5 bg-tertiary text-white text-xs font-bold rounded-full flex items-center justify-center"></span>
@@ -416,7 +424,7 @@
               <p class="text-3xl font-extrabold font-headline text-tertiary" id="statProjectsUrgent">0</p>
             </div>
             <div class="w-12 h-12 rounded-full bg-tertiary-container flex items-center justify-center text-on-tertiary-container">
-              <span class="material-symbols-outlined">warning</span>
+              <span class="material-symbols-outlined">priority_high</span>
             </div>
           </div>
 
@@ -426,7 +434,7 @@
               <p class="text-3xl font-extrabold font-headline" id="statProjectsCompleted">0</p>
             </div>
             <div class="w-12 h-12 rounded-full bg-primary-fixed flex items-center justify-center text-on-primary-fixed-variant">
-              <span class="material-symbols-outlined">done_all</span>
+              <span class="material-symbols-outlined">check_circle</span>
             </div>
           </div>
         </div>
@@ -468,14 +476,14 @@
           <button class="filter-btn active px-4 py-2 rounded-full text-sm font-semibold transition-all" data-filter="all">
             Toutes
           </button>
-          <button class="filter-btn px-4 py-2 rounded-full text-sm font-semibold transition-all" data-filter="low">
-            🌿 Faible
+          <button class="filter-btn px-4 py-2 rounded-full text-sm font-semibold transition-all flex items-center gap-1" data-filter="low">
+            <span class="material-symbols-outlined" style="font-size: 18px; color: #16a34a;">eco</span> Faible
           </button>
-          <button class="filter-btn px-4 py-2 rounded-full text-sm font-semibold transition-all" data-filter="medium">
-            ⚠️ Moyenne
+          <button class="filter-btn px-4 py-2 rounded-full text-sm font-semibold transition-all flex items-center gap-1" data-filter="medium">
+            <span class="material-symbols-outlined" style="font-size: 18px; color: #f59e0b;">warning</span> Moyenne
           </button>
-          <button class="filter-btn px-4 py-2 rounded-full text-sm font-semibold transition-all" data-filter="high">
-            🔥 Haute
+          <button class="filter-btn px-4 py-2 rounded-full text-sm font-semibold transition-all flex items-center gap-1" data-filter="high">
+            <span class="material-symbols-outlined" style="font-size: 18px; color: #ef4444;">local_fire_department</span> Haute
           </button>
         </div>
 
@@ -859,20 +867,6 @@
         </h3>
         <p class="text-sm text-on-surface-variant mb-4">Liez un dossier local pour sauvegarder automatiquement vos données</p>
 
-        <!-- Connection Status -->
-        <div class="flex items-center justify-between p-4 bg-surface-container rounded-xl mb-4">
-          <div class="flex items-center gap-3">
-            <span class="material-symbols-outlined text-primary">sync</span>
-            <div>
-              <h4 class="font-semibold text-on-surface">Statut de connexion</h4>
-              <p class="text-xs text-on-surface-variant flex items-center gap-2">
-                <span id="fsaStatus" class="w-3 h-3 rounded-full bg-gray-400"></span>
-                <span id="fsaStatusText">Non connecté</span>
-              </p>
-            </div>
-          </div>
-        </div>
-
         <!-- FSA Actions -->
         <div class="space-y-3">
           <button onclick="linkBackupFolder()" class="w-full px-4 py-3 bg-primary-gradient text-white rounded-xl font-semibold flex items-center justify-center gap-2">
@@ -953,14 +947,14 @@
         <div>
           <label class="block text-sm font-semibold mb-2">Urgence</label>
           <div class="flex gap-2" id="urgencyPills">
-            <button type="button" class="urgency-pill flex-1 px-3 py-2 rounded-xl text-sm font-semibold transition-all" data-urgency="low">
-              🌿 Faible
+            <button type="button" class="urgency-pill flex-1 px-3 py-2 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-1" data-urgency="low">
+              <span class="material-symbols-outlined" style="font-size: 18px; color: #16a34a;">eco</span> Faible
             </button>
-            <button type="button" class="urgency-pill flex-1 px-3 py-2 rounded-xl text-sm font-semibold" data-urgency="medium">
-              ⚠️ Moyenne
+            <button type="button" class="urgency-pill flex-1 px-3 py-2 rounded-xl text-sm font-semibold flex items-center justify-center gap-1" data-urgency="medium">
+              <span class="material-symbols-outlined" style="font-size: 18px; color: #f59e0b;">warning</span> Moyenne
             </button>
-            <button type="button" class="urgency-pill flex-1 px-3 py-2 rounded-xl text-sm font-semibold" data-urgency="high">
-              🔥 Haute
+            <button type="button" class="urgency-pill flex-1 px-3 py-2 rounded-xl text-sm font-semibold flex items-center justify-center gap-1" data-urgency="high">
+              <span class="material-symbols-outlined" style="font-size: 18px; color: #ef4444;">local_fire_department</span> Haute
             </button>
           </div>
         </div>
@@ -1942,6 +1936,39 @@
       </div>
     </div>
 
+    <!-- Security Question (hidden by default, only for create mode) -->
+    <div id="lockSecurityWrap" class="mb-4 hidden">
+      <div class="mb-3">
+        <label class="block text-sm font-semibold text-on-surface mb-2">Question de sécurité</label>
+        <select id="lockSecurityQuestion" class="w-full px-4 py-3 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none">
+          <option value="">-- Choisissez une question --</option>
+          <option value="city">Dans quelle ville êtes-vous né(e) ?</option>
+          <option value="pet">Quel était le nom de votre premier animal de compagnie ?</option>
+          <option value="school">Quelle était le nom de votre école primaire ?</option>
+          <option value="teacher">Quel était le nom de famille de votre professeur préféré ?</option>
+          <option value="street">Dans quelle rue avez-vous grandi ?</option>
+          <option value="custom">Question personnalisée</option>
+        </select>
+      </div>
+      <div id="customQuestionWrap" class="mb-3 hidden">
+        <input
+          type="text"
+          id="lockCustomQuestion"
+          placeholder="Votre question personnalisée"
+          class="w-full px-4 py-3 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none"
+        >
+      </div>
+      <div>
+        <label class="block text-sm font-semibold text-on-surface mb-2">Réponse</label>
+        <input
+          type="text"
+          id="lockSecurityAnswer"
+          placeholder="Votre réponse"
+          class="w-full px-4 py-3 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none"
+        >
+      </div>
+    </div>
+
     <!-- Error Message -->
     <div id="lockError" class="text-error text-sm text-center mb-4 min-h-[20px]"></div>
 
@@ -1954,6 +1981,129 @@
       <span class="material-symbols-outlined">lock_open</span>
       <span>Déverrouiller</span>
     </button>
+
+    <!-- Forgot Password Link -->
+    <div id="forgotPasswordLink" class="text-center mt-4 hidden">
+      <button onclick="showPasswordRecovery()" class="text-sm text-primary hover:underline">
+        Mot de passe oublié ?
+      </button>
+    </div>
+
+    <!-- Change Password Link (for settings) -->
+    <div id="changePasswordLink" class="text-center mt-4 hidden">
+      <button onclick="openChangePasswordModal()" class="text-sm text-on-surface-variant hover:text-primary hover:underline">
+        Changer le mot de passe
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Password Recovery Modal -->
+<div id="recoveryModal" class="fixed inset-0 bg-black/40 backdrop-blur-md z-[110] hidden items-center justify-center p-4" onclick="if(event.target===this) closeRecoveryModal()">
+  <div class="bg-surface-container-lowest rounded-2xl shadow-2xl p-8 w-full max-w-md" onclick="event.stopPropagation()">
+    <div class="flex items-center justify-between mb-6">
+      <h3 class="text-xl font-bold text-on-surface">Récupération du mot de passe</h3>
+      <button onclick="closeRecoveryModal()" class="text-on-surface-variant hover:text-on-surface">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+
+    <div id="recoveryStep1" class="space-y-4">
+      <p class="text-sm text-on-surface-variant mb-4">
+        Répondez à votre question de sécurité pour réinitialiser votre mot de passe.
+      </p>
+      <div class="bg-surface-container-low rounded-xl p-4 mb-4">
+        <p class="text-xs text-on-surface-variant mb-1">Votre question :</p>
+        <p id="recoveryQuestionDisplay" class="text-sm font-semibold text-on-surface"></p>
+      </div>
+      <div>
+        <label class="block text-sm font-semibold text-on-surface mb-2">Réponse</label>
+        <input
+          type="text"
+          id="securityAnswer"
+          placeholder="Votre réponse"
+          class="w-full px-4 py-3 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none"
+        >
+      </div>
+      <div id="recoveryError" class="text-error text-sm min-h-[20px]"></div>
+      <button onclick="verifySecurityAnswer()" class="w-full py-3 px-4 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition-colors">
+        Vérifier
+      </button>
+    </div>
+
+    <div id="recoveryStep2" class="space-y-4 hidden">
+      <p class="text-sm text-success mb-4">
+        ✓ Réponse correcte ! Définissez votre nouveau mot de passe.
+      </p>
+      <div>
+        <label class="block text-sm font-semibold text-on-surface mb-2">Nouveau mot de passe</label>
+        <input
+          type="password"
+          id="newPassword"
+          placeholder="Minimum 4 caractères"
+          class="w-full px-4 py-3 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none"
+        >
+      </div>
+      <div>
+        <label class="block text-sm font-semibold text-on-surface mb-2">Confirmer le mot de passe</label>
+        <input
+          type="password"
+          id="newPasswordConfirm"
+          placeholder="Retapez le mot de passe"
+          class="w-full px-4 py-3 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none"
+        >
+      </div>
+      <div id="newPasswordError" class="text-error text-sm min-h-[20px]"></div>
+      <button onclick="resetPassword()" class="w-full py-3 px-4 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition-colors">
+        Réinitialiser le mot de passe
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Change Password Modal -->
+<div id="changePasswordModal" class="fixed inset-0 bg-black/40 backdrop-blur-md z-[110] hidden items-center justify-center p-4" onclick="if(event.target===this) closeChangePasswordModal()">
+  <div class="bg-surface-container-lowest rounded-2xl shadow-2xl p-8 w-full max-w-md" onclick="event.stopPropagation()">
+    <div class="flex items-center justify-between mb-6">
+      <h3 class="text-xl font-bold text-on-surface">Changer le mot de passe</h3>
+      <button onclick="closeChangePasswordModal()" class="text-on-surface-variant hover:text-on-surface">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+
+    <div class="space-y-4">
+      <div>
+        <label class="block text-sm font-semibold text-on-surface mb-2">Mot de passe actuel</label>
+        <input
+          type="password"
+          id="currentPassword"
+          placeholder="Votre mot de passe actuel"
+          class="w-full px-4 py-3 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none"
+        >
+      </div>
+      <div>
+        <label class="block text-sm font-semibold text-on-surface mb-2">Nouveau mot de passe</label>
+        <input
+          type="password"
+          id="newPasswordChange"
+          placeholder="Minimum 4 caractères"
+          class="w-full px-4 py-3 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none"
+        >
+      </div>
+      <div>
+        <label class="block text-sm font-semibold text-on-surface mb-2">Confirmer le nouveau mot de passe</label>
+        <input
+          type="password"
+          id="newPasswordChangeConfirm"
+          placeholder="Retapez le nouveau mot de passe"
+          class="w-full px-4 py-3 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none"
+        >
+      </div>
+      <div id="changePasswordError" class="text-error text-sm min-h-[20px]"></div>
+      <button onclick="submitChangePassword()" class="w-full py-3 px-4 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition-colors">
+        Changer le mot de passe
+      </button>
+    </div>
   </div>
 </div>
 

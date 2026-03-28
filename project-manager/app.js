@@ -165,9 +165,21 @@ function initEventListeners() {
 
   // Settings events
   document.getElementById('btnSetPassword')?.addEventListener('click', () => showLockScreen('create'));
-  document.getElementById('btnChangePassword')?.addEventListener('click', changePassword);
+  document.getElementById('btnChangePassword')?.addEventListener('click', openChangePasswordModal);
   document.getElementById('btnLockApp')?.addEventListener('click', lockApp);
   document.getElementById('btnClearAll')?.addEventListener('click', clearAllTasks);
+
+  // Security question dropdown - show/hide custom question field
+  document.getElementById('lockSecurityQuestion')?.addEventListener('change', (e) => {
+    const customWrap = document.getElementById('customQuestionWrap');
+    if (customWrap) {
+      if (e.target.value === 'custom') {
+        customWrap.classList.remove('hidden');
+      } else {
+        customWrap.classList.add('hidden');
+      }
+    }
+  });
 
   // Appearance events
   document.getElementById('darkModeToggle')?.addEventListener('change', toggleDarkMode);
@@ -463,9 +475,10 @@ function renderDashboard() {
 
     if (activeProjects.length === 0) {
       projectsContainer.innerHTML = `
-        <div class="col-span-full text-center py-8">
-          <span class="material-symbols-outlined text-5xl text-on-surface-variant mb-2 block opacity-40">folder_open</span>
-          <p class="text-on-surface-variant text-sm">Aucun projet actif</p>
+        <div class="col-span-full text-center py-12">
+          <span class="material-symbols-outlined text-6xl text-on-surface-variant mb-4 block opacity-40">folder_open</span>
+          <p class="text-on-surface-variant text-base">Aucun projet actif</p>
+          <p class="text-on-surface-variant text-sm mt-2">Créez votre premier projet pour commencer</p>
         </div>
       `;
     } else {
@@ -552,8 +565,8 @@ function renderDashboard() {
   if (recentTasks.length === 0) {
     container.innerHTML = `
       <div class="col-span-full text-center py-12">
-        <span class="material-symbols-outlined text-6xl text-on-surface-variant mb-4 block">inbox</span>
-        <p class="text-on-surface-variant text-lg">Aucune tâche à afficher</p>
+        <span class="material-symbols-outlined text-6xl text-on-surface-variant mb-4 block opacity-40">inbox</span>
+        <p class="text-on-surface-variant text-base">Aucune tâche à afficher</p>
         <p class="text-on-surface-variant text-sm mt-2">Cliquez sur "Nouvelle tâche" pour commencer</p>
       </div>
     `;
@@ -662,16 +675,24 @@ function showLockScreen(mode) {
   const lockIcon = lockBtn.querySelector('.material-symbols-outlined');
   const lockText = lockBtn.querySelector('span:last-child');
 
+  // Show/hide security question fields based on mode
+  const securityWrap = document.getElementById('lockSecurityWrap');
+  const forgotPasswordLink = document.getElementById('forgotPasswordLink');
+
   if (mode === 'create') {
     document.getElementById('lockTitle').textContent = 'Créer un mot de passe';
     document.getElementById('lockSub').textContent   = 'Vos données seront chiffrées (AES-256-GCM). Sans ce mot de passe, elles sont illisibles.';
     document.getElementById('lockConfirmWrap').classList.remove('hidden');
+    if (securityWrap) securityWrap.classList.remove('hidden');
+    if (forgotPasswordLink) forgotPasswordLink.classList.add('hidden');
     if (lockIcon) lockIcon.textContent = 'lock_open';
     if (lockText) lockText.textContent = 'Créer & déverrouiller';
   } else {
     document.getElementById('lockTitle').textContent = 'Déverrouiller';
     document.getElementById('lockSub').textContent   = 'Entrez votre mot de passe pour déchiffrer vos données localement.';
     document.getElementById('lockConfirmWrap').classList.add('hidden');
+    if (securityWrap) securityWrap.classList.add('hidden');
+    if (forgotPasswordLink) forgotPasswordLink.classList.remove('hidden');
     if (lockIcon) lockIcon.textContent = 'lock_open';
     if (lockText) lockText.textContent = 'Déverrouiller';
   }
@@ -721,6 +742,31 @@ async function submitPassword() {
   if (!pwd || pwd.length < 4) { err.textContent = 'Mot de passe trop court (4 min).'; shake(document.getElementById('lockPassword')); return; }
   if (mode === 'create' && pwd !== conf) { err.textContent = 'Les mots de passe ne correspondent pas.'; shake(document.getElementById('lockConfirm')); return; }
 
+  // Validate security question in create mode
+  if (mode === 'create') {
+    const securityQuestion = document.getElementById('lockSecurityQuestion').value;
+    const customQuestion = document.getElementById('lockCustomQuestion').value;
+    const securityAnswer = document.getElementById('lockSecurityAnswer').value;
+
+    if (!securityQuestion) {
+      err.textContent = 'Veuillez choisir une question de sécurité.';
+      shake(document.getElementById('lockSecurityQuestion'));
+      return;
+    }
+
+    if (securityQuestion === 'custom' && !customQuestion.trim()) {
+      err.textContent = 'Veuillez saisir votre question personnalisée.';
+      shake(document.getElementById('lockCustomQuestion'));
+      return;
+    }
+
+    if (!securityAnswer.trim()) {
+      err.textContent = 'Veuillez fournir une réponse à la question de sécurité.';
+      shake(document.getElementById('lockSecurityAnswer'));
+      return;
+    }
+  }
+
   btn.disabled = true;
   const btnText = btn.querySelector('span:last-child');
   if (btnText) btnText.textContent = 'Chargement...';
@@ -730,6 +776,18 @@ async function submitPassword() {
       const salt = crypto.getRandomValues(new Uint8Array(16));
       await idbSet('salt', bufToHex(salt));
       cryptoKey = await deriveKey(pwd, salt);
+
+      // Store security question and hashed answer
+      const securityQuestion = document.getElementById('lockSecurityQuestion').value;
+      const customQuestion = document.getElementById('lockCustomQuestion').value;
+      const securityAnswer = document.getElementById('lockSecurityAnswer').value;
+
+      const questionToStore = securityQuestion === 'custom' ? customQuestion : securityQuestion;
+      const answerHash = await hashSecurityAnswer(securityAnswer);
+
+      await idbSet('securityQuestion', questionToStore);
+      await idbSet('securityAnswerHash', answerHash);
+
       tasks = window.initialTasks || [];
       await saveToStorage();
     } else {
@@ -797,6 +855,294 @@ async function changePassword() {
   cryptoKey = await deriveKey(newPwd, salt);
   await saveToStorage();
   showToast('Le mot de passe a été changé avec succès');
+}
+
+// ............................................................
+//  PASSWORD RECOVERY SYSTEM
+// ............................................................
+
+// Hash security answer for secure storage
+async function hashSecurityAnswer(answer) {
+  const normalized = answer.trim().toLowerCase(); // Normalize for case-insensitive comparison
+  const encoder = new TextEncoder();
+  const data = encoder.encode(normalized);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  return bufToHex(new Uint8Array(hashBuffer));
+}
+
+// Show password recovery modal
+async function showPasswordRecovery() {
+  const securityQuestion = await idbGet('securityQuestion');
+
+  if (!securityQuestion) {
+    showToast('Aucune question de sécurité configurée.');
+    return;
+  }
+
+  const modal = document.getElementById('recoveryModal');
+  const questionDisplay = document.getElementById('recoveryQuestionDisplay');
+
+  // Map predefined questions to their display text
+  const questionMap = {
+    'city': 'Dans quelle ville êtes-vous né(e) ?',
+    'pet': 'Quel était le nom de votre premier animal de compagnie ?',
+    'school': 'Quel était le nom de votre école primaire ?',
+    'teacher': 'Quel était le nom de votre premier enseignant ?',
+    'street': 'Dans quelle rue avez-vous grandi ?'
+  };
+
+  questionDisplay.textContent = questionMap[securityQuestion] || securityQuestion;
+
+  // Reset modal state
+  document.getElementById('recoveryStep1').classList.remove('hidden');
+  document.getElementById('recoveryStep2').classList.add('hidden');
+  document.getElementById('securityAnswer').value = '';
+  document.getElementById('recoveryError').textContent = '';
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  setTimeout(() => {
+    document.getElementById('securityAnswer').focus();
+
+    // Add Enter key listener to security answer field
+    const answerField = document.getElementById('securityAnswer');
+    answerField.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        verifySecurityAnswer();
+      }
+    });
+  }, 150);
+}
+
+function closeRecoveryModal() {
+  const modal = document.getElementById('recoveryModal');
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+}
+
+// Verify security answer
+async function verifySecurityAnswer() {
+  const answer = document.getElementById('securityAnswer').value;
+  const errorEl = document.getElementById('recoveryError');
+
+  if (!answer.trim()) {
+    errorEl.textContent = 'Veuillez saisir votre réponse.';
+    shake(document.getElementById('securityAnswer'));
+    return;
+  }
+
+  try {
+    const storedHash = await idbGet('securityAnswerHash');
+    const providedHash = await hashSecurityAnswer(answer);
+
+    if (providedHash === storedHash) {
+      // Answer is correct, show step 2
+      document.getElementById('recoveryStep1').classList.add('hidden');
+      document.getElementById('recoveryStep2').classList.remove('hidden');
+      document.getElementById('newPassword').value = '';
+      document.getElementById('newPasswordConfirm').value = '';
+      document.getElementById('newPasswordError').textContent = '';
+      setTimeout(() => {
+        document.getElementById('newPassword').focus();
+
+        // Add Enter key listeners for new password fields
+        const newPwdField = document.getElementById('newPassword');
+        const confirmPwdField = document.getElementById('newPasswordConfirm');
+
+        newPwdField.addEventListener('keypress', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            confirmPwdField.focus();
+          }
+        });
+
+        confirmPwdField.addEventListener('keypress', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            resetPassword();
+          }
+        });
+      }, 150);
+    } else {
+      errorEl.textContent = 'Réponse incorrecte. Veuillez réessayer.';
+      shake(document.getElementById('securityAnswer'));
+    }
+  } catch (error) {
+    console.error('Erreur lors de la vérification de la réponse:', error);
+    errorEl.textContent = 'Une erreur est survenue. Veuillez réessayer.';
+  }
+}
+
+// Reset password after successful verification
+async function resetPassword() {
+  const newPassword = document.getElementById('newPassword').value;
+  const confirmPassword = document.getElementById('newPasswordConfirm').value;
+  const errorEl = document.getElementById('newPasswordError');
+
+  errorEl.textContent = '';
+
+  if (!newPassword || newPassword.length < 4) {
+    errorEl.textContent = 'Le mot de passe doit contenir au moins 4 caractères.';
+    shake(document.getElementById('newPassword'));
+    return;
+  }
+
+  if (newPassword !== confirmPassword) {
+    errorEl.textContent = 'Les mots de passe ne correspondent pas.';
+    shake(document.getElementById('newPasswordConfirm'));
+    return;
+  }
+
+  try {
+    // Generate new salt and derive new key
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    await idbSet('salt', bufToHex(salt));
+    const newKey = await deriveKey(newPassword, salt);
+
+    // Re-encrypt all data with new key
+    const oldKey = cryptoKey;
+    cryptoKey = newKey;
+    await saveToStorage();
+
+    closeRecoveryModal();
+    showToast('Mot de passe réinitialisé avec succès !');
+
+    // Reload to re-lock the app
+    setTimeout(() => {
+      location.reload();
+    }, 1500);
+
+  } catch (error) {
+    console.error('Erreur lors de la réinitialisation du mot de passe:', error);
+    errorEl.textContent = 'Une erreur est survenue. Veuillez réessayer.';
+  }
+}
+
+// ............................................................
+//  PASSWORD CHANGE SYSTEM
+// ............................................................
+
+function openChangePasswordModal() {
+  const modal = document.getElementById('changePasswordModal');
+
+  // Reset form
+  document.getElementById('currentPassword').value = '';
+  document.getElementById('newPasswordChange').value = '';
+  document.getElementById('newPasswordChangeConfirm').value = '';
+  document.getElementById('changePasswordError').textContent = '';
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  setTimeout(() => {
+    document.getElementById('currentPassword').focus();
+
+    // Add Enter key listeners to password change fields
+    const currentPwd = document.getElementById('currentPassword');
+    const newPwd = document.getElementById('newPasswordChange');
+    const confirmPwd = document.getElementById('newPasswordChangeConfirm');
+
+    currentPwd.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        newPwd.focus();
+      }
+    });
+
+    newPwd.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        confirmPwd.focus();
+      }
+    });
+
+    confirmPwd.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        submitChangePassword();
+      }
+    });
+  }, 150);
+}
+
+function closeChangePasswordModal() {
+  const modal = document.getElementById('changePasswordModal');
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+}
+
+async function submitChangePassword() {
+  const currentPassword = document.getElementById('currentPassword').value;
+  const newPassword = document.getElementById('newPasswordChange').value;
+  const confirmNewPassword = document.getElementById('newPasswordChangeConfirm').value;
+  const errorEl = document.getElementById('changePasswordError');
+
+  errorEl.textContent = '';
+
+  if (!currentPassword) {
+    errorEl.textContent = 'Veuillez saisir votre mot de passe actuel.';
+    shake(document.getElementById('currentPassword'));
+    return;
+  }
+
+  if (!newPassword || newPassword.length < 4) {
+    errorEl.textContent = 'Le nouveau mot de passe doit contenir au moins 4 caractères.';
+    shake(document.getElementById('newPasswordChange'));
+    return;
+  }
+
+  if (newPassword !== confirmNewPassword) {
+    errorEl.textContent = 'Les nouveaux mots de passe ne correspondent pas.';
+    shake(document.getElementById('newPasswordChangeConfirm'));
+    return;
+  }
+
+  if (currentPassword === newPassword) {
+    errorEl.textContent = 'Le nouveau mot de passe doit être différent de l\'ancien.';
+    shake(document.getElementById('newPasswordChange'));
+    return;
+  }
+
+  try {
+    // Verify current password
+    const saltHex = await idbGet('salt');
+    if (!saltHex) {
+      errorEl.textContent = 'Données corrompues.';
+      return;
+    }
+
+    const currentKey = await deriveKey(currentPassword, hexToBuf(saltHex));
+
+    // Try to decrypt data with current password to verify it's correct
+    try {
+      const storedData = await idbGet('tasks');
+      if (storedData) {
+        const tempKey = cryptoKey;
+        cryptoKey = currentKey;
+        await decrypt(storedData);
+        cryptoKey = tempKey; // Restore original key
+      }
+    } catch (decryptError) {
+      errorEl.textContent = 'Mot de passe actuel incorrect.';
+      shake(document.getElementById('currentPassword'));
+      return;
+    }
+
+    // Generate new salt and derive new key
+    const newSalt = crypto.getRandomValues(new Uint8Array(16));
+    await idbSet('salt', bufToHex(newSalt));
+    cryptoKey = await deriveKey(newPassword, newSalt);
+
+    // Re-encrypt all data with new key
+    await saveToStorage();
+
+    closeChangePasswordModal();
+    showToast('Mot de passe modifié avec succès !');
+
+  } catch (error) {
+    console.error('Erreur lors du changement de mot de passe:', error);
+    errorEl.textContent = 'Une erreur est survenue. Veuillez réessayer.';
+  }
 }
 
 // ............................................................
@@ -980,6 +1326,86 @@ async function removeStoredDirectoryHandle() {
   });
 }
 
+// Stocker les informations du dossier (nom)
+async function storeDirectoryInfo(dirName) {
+  if (!fsaDB) await initFSADB();
+
+  return new Promise((resolve, reject) => {
+    const transaction = fsaDB.transaction([FSA_STORE_NAME], 'readwrite');
+    const store = transaction.objectStore(FSA_STORE_NAME);
+    const info = { name: dirName, linkedAt: new Date().toISOString() };
+    const request = store.put(info, 'backup-folder-info');
+
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+}
+
+// Récupérer les informations du dossier
+async function getDirectoryInfo() {
+  if (!fsaDB) await initFSADB();
+
+  return new Promise((resolve, reject) => {
+    const transaction = fsaDB.transaction([FSA_STORE_NAME], 'readonly');
+    const store = transaction.objectStore(FSA_STORE_NAME);
+    const request = store.get('backup-folder-info');
+
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+// Supprimer les informations du dossier
+async function removeDirectoryInfo() {
+  if (!fsaDB) await initFSADB();
+
+  return new Promise((resolve, reject) => {
+    const transaction = fsaDB.transaction([FSA_STORE_NAME], 'readwrite');
+    const store = transaction.objectStore(FSA_STORE_NAME);
+    const request = store.delete('backup-folder-info');
+
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+}
+
+// Reconnecter au dossier sauvegardé (demande de nouveau les permissions)
+async function relinkBackupFolder() {
+  try {
+    // Demander à nouveau le dossier
+    const dirHandle = await window.showDirectoryPicker({
+      mode: 'readwrite',
+      startIn: 'documents'
+    });
+
+    // Vérifier les permissions
+    const hasPermission = await verifyDirectoryPermission(dirHandle, true);
+    if (!hasPermission) {
+      alert('Permission refusée pour accéder au dossier.');
+      return false;
+    }
+
+    // Stocker le nouveau handle (même dossier mais nouveau handle)
+    await storeDirectoryHandle(dirHandle);
+    await storeDirectoryInfo(dirHandle.name);
+    linkedDirectoryHandle = dirHandle;
+    fsaConnected = true;
+
+    // Mettre à jour l'UI
+    updateFSAStatus();
+
+    showToast('✅ Reconnexion au dossier de sauvegarde réussie !');
+    return true;
+
+  } catch (err) {
+    if (err.name !== 'AbortError') {
+      console.error('Erreur lors de la reconnexion:', err);
+      alert('Erreur lors de la reconnexion au dossier: ' + err.message);
+    }
+    return false;
+  }
+}
+
 // Vérifier les permissions du dossier
 async function verifyDirectoryPermission(dirHandle, requestIfNeeded = false) {
   const opts = { mode: 'readwrite' };
@@ -1019,8 +1445,9 @@ async function linkBackupFolder() {
       return false;
     }
 
-    // Stocker le handle
+    // Stocker le handle et le nom du dossier
     await storeDirectoryHandle(dirHandle);
+    await storeDirectoryInfo(dirHandle.name);
     linkedDirectoryHandle = dirHandle;
     fsaConnected = true;
 
@@ -1046,6 +1473,7 @@ async function linkBackupFolder() {
 async function unlinkBackupFolder() {
   try {
     await removeStoredDirectoryHandle();
+    await removeDirectoryInfo();
     linkedDirectoryHandle = null;
     fsaConnected = false;
     updateFSAStatus();
@@ -1060,6 +1488,8 @@ async function unlinkBackupFolder() {
 async function checkFolderConnection() {
   try {
     const dirHandle = await getStoredDirectoryHandle();
+    const dirInfo = await getDirectoryInfo();
+
     if (!dirHandle) {
       fsaConnected = false;
       updateFSAStatus();
@@ -1075,9 +1505,26 @@ async function checkFolderConnection() {
       console.log('✅ Connexion au dossier de sauvegarde restaurée');
       return true;
     } else {
+      // Permission perdue - proposer de reconnecter
       fsaConnected = false;
       updateFSAStatus();
       console.log('⚠️ Permission dossier perdue - reconnexion manuelle nécessaire');
+
+      // Proposer de se reconnecter au même dossier
+      if (dirInfo && dirInfo.name) {
+        setTimeout(() => {
+          const reconnect = confirm(
+            `Vous aviez précédemment lié le dossier "${dirInfo.name}" pour les sauvegardes automatiques.\n\n` +
+            `Souhaitez-vous vous reconnecter à ce dossier maintenant ?\n\n` +
+            `(Les permissions d'accès au dossier ont expiré et doivent être renouvelées)`
+          );
+
+          if (reconnect) {
+            relinkBackupFolder();
+          }
+        }, 2000); // Attendre 2s pour que l'UI soit chargée
+      }
+
       return false;
     }
   } catch (err) {
@@ -1620,11 +2067,11 @@ function handleOverlayClick(e) { if (e.target === document.getElementById('modal
 let currentDetailTaskId = null;
 
 function openTaskDetailModal(taskId, isArchive = false) {
-  console.log('Y" [openTaskDetailModal] taskId:', taskId, 'isArchive:', isArchive);
+  console.log('🔍 [openTaskDetailModal] taskId:', taskId, 'isArchive:', isArchive);
   currentDetailTaskId = taskId;
   const task = tasks.find(t => t.id === taskId);
   if (!task) return;
-  console.log('Y" [openTaskDetailModal] task.status:', task.status, 'task.archivedAt:', task.archivedAt);
+  console.log('🔍 [openTaskDetailModal] task.status:', task.status, 'task.archivedAt:', task.archivedAt);
 
   const overlay = document.getElementById('taskDetailOverlay');
 
@@ -1640,7 +2087,9 @@ function openTaskDetailModal(taskId, isArchive = false) {
   const urgencyBadge = document.getElementById('detailBadgeUrgency');
   const urgencyColors = { low: 'badge-urgency-low', medium: 'badge-urgency-medium', high: 'badge-urgency-high' };
   urgencyBadge.className = `px-3 py-1 rounded-full text-xs font-bold uppercase ${urgencyColors[task.urgency || 'low']}`;
-  urgencyBadge.textContent = `${task.urgency === 'low' ? '🌿' : task.urgency === 'medium' ? '⚠️' : '🔥'} ${urgencyLabels[task.urgency] || task.urgency}`;
+  const urgencyIcon = task.urgency === 'low' ? 'eco' : task.urgency === 'medium' ? 'warning' : 'local_fire_department';
+  const urgencyIconColor = task.urgency === 'low' ? '#16a34a' : task.urgency === 'medium' ? '#f59e0b' : '#ef4444';
+  urgencyBadge.innerHTML = `<span class="material-symbols-outlined" style="font-size: 14px; vertical-align: middle; color: ${urgencyIconColor};">${urgencyIcon}</span> ${urgencyLabels[task.urgency] || task.urgency}`;
 
   const statusBadge = document.getElementById('detailBadgeStatus');
   const statusColors = { 'en-cours': 'badge-status-encours', 'en-attente': 'badge-status-enattente', 'realise': 'badge-status-realise' };
@@ -1962,7 +2411,7 @@ async function deleteProjectFromDetail() {
   if (!currentDetailProjectId) return;
   const projectId = currentDetailProjectId;
   closeProjectDetailModal();
-  await confirmDeleteProject(projectId);
+  await deleteProject(projectId);
 }
 
 // ............................................................
@@ -2063,9 +2512,9 @@ function isTaskScheduledInFuture(task, referenceDate = new Date()) {
 function getActiveTasks() {
   // Taches actives = non realisees et prevues au plus tard aujourd'hui
   const activeTasks = tasks.filter(t => t.status !== 'realise' && !isTaskScheduledInFuture(t));
-  console.log('Y"Z [getActiveTasks] Total tasks:', tasks.length);
-  console.log('Y"Z [getActiveTasks] Active tasks:', activeTasks.length, activeTasks.map(t => ({ id: t.id, title: t.title, status: t.status })));
-  console.log('Y"Z [getActiveTasks] All statuses:', tasks.map(t => ({ id: t.id, status: t.status, title: t.title })));
+  console.log('📊 [getActiveTasks] Total tasks:', tasks.length);
+  console.log('📊 [getActiveTasks] Active tasks:', activeTasks.length, activeTasks.map(t => ({ id: t.id, title: t.title, status: t.status })));
+  console.log('📊 [getActiveTasks] All statuses:', tasks.map(t => ({ id: t.id, status: t.status, title: t.title })));
   return activeTasks;
 }
 
@@ -2247,8 +2696,8 @@ async function markAsCompleted(id) {
   try {
     const now = new Date().toISOString();
 
-    console.log('Y" [DEBUG] ID reçu:', id, 'Type:', typeof id);
-    console.log('Y" [DEBUG] Liste des IDs dans tasks:', tasks.map(t => ({ id: t.id, type: typeof t.id, title: t.title })));
+    console.log('🔍 [DEBUG] ID reçu:', id, 'Type:', typeof id);
+    console.log('🔍 [DEBUG] Liste des IDs dans tasks:', tasks.map(t => ({ id: t.id, type: typeof t.id, title: t.title })));
 
     // Convertir l'ID en nombre pour une comparaison fiable
     const numId = Number(id);
@@ -2277,21 +2726,21 @@ async function markAsCompleted(id) {
       return;
     }
 
-    console.log('Y" [DEBUG] Nombre de tâches AVANT:', tasks.length);
+    console.log('🔍 [DEBUG] Nombre de tâches AVANT:', tasks.length);
 
     // Si tâche récurrente, créer la prochaine occurrence AVANT de modifier la tâche actuelle
     if (task.recurring) {
       console.log('🔄 [DEBUG] Création prochaine occurrence');
       createNextRecurrence(task, task.recurring);
-      console.log('Y" [DEBUG] Nombre de tâches APR^S createNextRecurrence:', tasks.length);
+      console.log('🔍 [DEBUG] Nombre de tâches APRÈS createNextRecurrence:', tasks.length);
     }
 
     // Modifier la tâche pour la marquer comme réalisée
     console.log('🔄 [DEBUG] Modification du statut...');
     tasks = tasks.map(t => (Number(t.id) === numId || t.id === id) ? { ...t, status: 'realise', updatedAt: now, archivedAt: now } : t);
 
-    console.log('Y" [DEBUG] Nombre de tâches APR^S map:', tasks.length);
-    console.log('Y"S [DEBUG] Actives:', tasks.filter(t => t.status !== 'realise').length, 'Archivées:', tasks.filter(t => t.status === 'realise').length);
+    console.log('🔍 [DEBUG] Nombre de tâches APRÈS map:', tasks.length);
+    console.log('📊 [DEBUG] Actives:', tasks.filter(t => t.status !== 'realise').length, 'Archivées:', tasks.filter(t => t.status === 'realise').length);
 
     await saveToStorage();
     updateSidebarCounts();
@@ -2339,7 +2788,7 @@ function showEmailConfirmation(task, email) {
     </div>
   `;
 
-  showModal('Y" Notification au demandeur', content);
+  showModal('📧 Notification au demandeur', content);
 }
 
 function canSendEmailForTask(task) {
@@ -2766,7 +3215,7 @@ function showNotificationsSummary(notifications) {
   showToast(`🔄 ${notifications.length} notification(s) - Voir les détails`, 5000);
 
   // Log to console for debugging
-  console.log('Y" Notifications TaskMDA:', notifications);
+  console.log('🔔 Notifications TaskMDA:', notifications);
 }
 
 // Check notifications on load and every hour
@@ -2793,17 +3242,17 @@ function initNotificationSystem() {
 // ............................................................
 
 function renderTasks() {
-  console.log('Y"< [renderTasks] DÉBUT du rendu des tâches');
+  console.log('🎨 [renderTasks] DÉBUT du rendu des tâches');
   const container = document.getElementById('tasks');
   container.innerHTML = '';
-  console.log('Y"< [renderTasks] Conteneur vidé');
+  console.log('🎨 [renderTasks] Conteneur vidé');
 
   const urgFilter = activeFilter;
   const sort = document.getElementById('sortSelect')?.value || 'date-asc';
   const searchQuery = document.getElementById('searchInput')?.value.toLowerCase().trim() || '';
 
   let list = applyFilters(getActiveTasks(), urgFilter, 'all', 'all');
-  console.log('Y"< [renderTasks] Après filtres, liste:', list.length, 'tâches', list.map(t => t.title));
+  console.log('🎨 [renderTasks] Après filtres, liste:', list.length, 'tâches', list.map(t => t.title));
 
   // Appliquer la recherche
   if (searchQuery) {
@@ -2818,11 +3267,30 @@ function renderTasks() {
   list = applySort(list, sort);
 
   if (!list.length) {
+    const hasFilters = urgFilter !== 'all' || searchQuery;
     container.innerHTML = `
-      <div class="empty-state">
-        <div class="big-icon">📋</div>
-        <strong>Aucune tâche ici</strong>
-        <p>${urgFilter !== 'all' || searchQuery ? 'Aucune tâche pour ces critères.' : 'Commencez par créer votre première tâche.'}</p>
+      <div class="col-span-full flex flex-col items-center justify-center py-16 px-4">
+        ${hasFilters ? `
+          <div class="empty-state">
+            <div class="big-icon">📋</div>
+            <strong>Aucune tâche ici</strong>
+            <p>Aucune tâche pour ces critères.</p>
+          </div>
+        ` : `
+          <div class="max-w-2xl w-full bg-surface-container-low border-2 border-dashed border-outline-variant rounded-3xl p-12 text-center">
+            <div class="w-20 h-20 mx-auto mb-6 rounded-full bg-primary-container flex items-center justify-center">
+              <span class="material-symbols-outlined text-5xl text-primary">add</span>
+            </div>
+            <h3 class="text-2xl font-bold text-on-surface mb-3">Créer votre première tâche</h3>
+            <p class="text-on-surface-variant mb-6 max-w-md mx-auto">
+              Organisez votre travail en créant des tâches avec des niveaux d'urgence, des échéances et des suivis personnalisés.
+            </p>
+            <button onclick="openModal()" class="px-6 py-3 bg-primary text-white rounded-xl font-semibold hover:bg-primary/90 transition-colors inline-flex items-center gap-2">
+              <span class="material-symbols-outlined">add</span>
+              Nouvelle tâche
+            </button>
+          </div>
+        `}
       </div>`;
     document.getElementById('pagination').innerHTML = '';
     return;
@@ -3077,7 +3545,7 @@ function renderArchives() {
   if (!list.length) {
     container.innerHTML = `
       <div class="empty-state">
-        <div class="big-icon">Y-"</div>
+        <div class="big-icon">✓</div>
         <strong>Aucune tâche archivée</strong>
         <p>Les tâches marquées "Réalisé" apparaîtront ici.</p>
       </div>`;
@@ -3138,6 +3606,9 @@ function renderArchivedProjects() {
           <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <button onclick="event.stopPropagation(); restoreProject(${project.id})" title="Restaurer le projet" class="p-2 hover:bg-surface-container-high rounded-lg text-on-surface-variant hover:text-primary transition-colors">
               <span class="material-symbols-outlined text-sm">restore</span>
+            </button>
+            <button onclick="event.stopPropagation(); deleteProject(${project.id})" title="Supprimer définitivement" class="p-2 hover:bg-error-container rounded-lg text-on-surface-variant hover:text-error transition-colors">
+              <span class="material-symbols-outlined text-sm">delete</span>
             </button>
           </div>
         </div>
@@ -3313,8 +3784,10 @@ function buildCard(task, idx, isArchive) {
   card.innerHTML = `
     <div class="flex justify-between items-start ${taskViewMode === 4 ? 'mb-1' : 'mb-4'}">
       <div class="flex flex-wrap ${gapSize}">
-        <span class="${badgeSize} ${urgencyChipBg[task.urgency || 'low']} font-bold rounded-full uppercase tracking-tight">
-          ${taskViewMode === 4 ? (urgencyLabels[task.urgency]||task.urgency) : (task.urgency === 'low' ? '🌿' : task.urgency === 'medium' ? '⚠️' : '🔥') + ' ' + (urgencyLabels[task.urgency]||task.urgency)}
+        <span class="${badgeSize} ${urgencyChipBg[task.urgency || 'low']} font-bold rounded-full uppercase tracking-tight flex items-center gap-1">
+          ${taskViewMode === 4
+            ? (urgencyLabels[task.urgency]||task.urgency)
+            : `<span class="material-symbols-outlined" style="font-size: 14px; color: ${task.urgency === 'low' ? '#16a34a' : task.urgency === 'medium' ? '#f59e0b' : '#ef4444'};">${task.urgency === 'low' ? 'eco' : task.urgency === 'medium' ? 'warning' : 'local_fire_department'}</span> ${urgencyLabels[task.urgency]||task.urgency}`}
         </span>
         ${!isArchive && taskViewMode !== 4 ? `<span class="${badgeSize} ${statusChipBg[task.status] || 'bg-secondary-container text-on-secondary-container'} font-bold rounded-full uppercase tracking-tight">
           ${statusLabels[task.status]||task.status}
@@ -3726,12 +4199,34 @@ function downloadFile(filename, base64Data) {
 const escHtml = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
 function renderMarkdown(text) {
-  if (!text || typeof marked === 'undefined') return escHtml(text);
+  if (!text) return '';
+
+  // Si marked n'est pas disponible, échapper le HTML
+  if (typeof marked === 'undefined') return escHtml(text);
+
   try {
     // Configure marked pour plus de sécurité
     marked.setOptions({ breaks: true, gfm: true });
-    return marked.parse(text);
-  } catch {
+
+    // Parse le Markdown
+    const dirty = marked.parse(text);
+
+    // Sanitize avec DOMPurify pour prévenir les attaques XSS
+    if (typeof DOMPurify !== 'undefined') {
+      return DOMPurify.sanitize(dirty, {
+        ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 's', 'del', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+                       'ul', 'ol', 'li', 'code', 'pre', 'blockquote', 'a', 'hr', 'table', 'thead',
+                       'tbody', 'tr', 'th', 'td', 'img'],
+        ALLOWED_ATTR: ['href', 'title', 'alt', 'src'],
+        ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|data):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
+        ALLOW_DATA_ATTR: false
+      });
+    }
+
+    // Fallback si DOMPurify n'est pas disponible (ne devrait pas arriver)
+    return dirty;
+  } catch (error) {
+    console.error('Erreur lors du rendu Markdown:', error);
     return escHtml(text);
   }
 }
@@ -3780,17 +4275,17 @@ function showHelpModal() {
   const content = `
     <div class="space-y-4">
       <div>
-        <h3 class="font-bold text-lg mb-2">Y" Sécurité et stockage</h3>
+        <h3 class="font-bold text-lg mb-2">🔒 Sécurité et stockage</h3>
         <p class="text-sm text-on-surface-variant mb-2">Vos données sont chiffrées localement avec <strong>AES-256-GCM</strong> et stockées dans <strong>IndexedDB</strong>.</p>
         <ul class="text-xs text-on-surface-variant space-y-1 ml-4">
-          <li>? Chiffrement : PBKDF2 avec 310 000 itérations</li>
-          <li>? Stockage : 100% local dans votre navigateur</li>
-          <li>? Aucune connexion serveur requise</li>
+          <li>🔑 Chiffrement : PBKDF2 avec 310 000 itérations</li>
+          <li>💾 Stockage : 100% local dans votre navigateur</li>
+          <li>🔌 Aucune connexion serveur requise</li>
           <li>• Sans votre mot de passe, les données sont illisibles</li>
         </ul>
       </div>
       <div>
-        <h3 class="font-bold text-lg mb-2">Y' Sauvegarde des données</h3>
+        <h3 class="font-bold text-lg mb-2">💾 Sauvegarde des données</h3>
         <p class="text-sm text-on-surface-variant">Vos données sont automatiquement sauvegardées dans IndexedDB. Pour une sauvegarde externe, utilisez <strong>Export JSON</strong> dans Import/Export.</p>
       </div>
       <div>
@@ -3798,11 +4293,11 @@ function showHelpModal() {
         <p class="text-sm text-on-surface-variant">Créez des tâches qui se répètent automatiquement (quotidien, hebdomadaire, mensuel, annuel) avec intervalles personnalisés.</p>
       </div>
       <div>
-        <h3 class="font-bold text-lg mb-2">Y"Z Pièces jointes</h3>
+        <h3 class="font-bold text-lg mb-2">📎 Pièces jointes</h3>
         <p class="text-sm text-on-surface-variant">Attachez jusqu'à 5 fichiers par tâche (max 5 Mo chacun). Ils sont chiffrés et stockés avec vos données.</p>
       </div>
       <div>
-        <h3 class="font-bold text-lg mb-2">Y"S Gestion de projets</h3>
+        <h3 class="font-bold text-lg mb-2">📊 Gestion de projets</h3>
         <p class="text-sm text-on-surface-variant">Visualisez vos projets avec un diagramme de Gantt interactif. Basculez entre vue mensuelle et hebdomadaire pour une meilleure visibilité.</p>
       </div>
       <div>
@@ -3810,7 +4305,7 @@ function showHelpModal() {
         <p class="text-sm text-on-surface-variant">Archivez vos tâches et projets terminés. Vous pouvez les restaurer à tout moment en passant la souris sur la carte et en cliquant sur l'icône de restauration.</p>
       </div>
       <div>
-        <h3 class="font-bold text-lg mb-2">Y"Y" Import/Export</h3>
+        <h3 class="font-bold text-lg mb-2">📥📤 Import/Export</h3>
         <p class="text-sm text-on-surface-variant">Exportez vos données en JSON ou Excel depuis Import/Export. Le format JSON inclut toutes vos données chiffrées (tâches, projets, versions, configuration).</p>
       </div>
       <div class="pt-4 border-t border-outline-variant">
@@ -4107,7 +4602,7 @@ function renderVersionsList() {
   if (entries.length === 0) {
     container.innerHTML = `
       <div style="text-align:center;padding:2rem;color:var(--muted);">
-        <div style="font-size:2rem;margin-bottom:0.5rem;opacity:0.4;">Y"</div>
+        <div style="font-size:2rem;margin-bottom:0.5rem;opacity:0.4;">📋</div>
         <p style="font-size:0.85rem;">Aucune version enregistrée</p>
       </div>`;
     return;
@@ -4219,7 +4714,7 @@ function renderRequestersList() {
   if (config.requesters.length === 0) {
     container.innerHTML = `
       <div class="text-center py-8 text-on-surface-variant">
-        <div class="text-4xl mb-2 opacity-40">Y'</div>
+        <div class="text-4xl mb-2 opacity-40">👥</div>
         <p class="text-sm">Aucun demandeur enregistré</p>
       </div>`;
     return;
@@ -4342,7 +4837,7 @@ function renderTypesList() {
   if (config.types.length === 0) {
     container.innerHTML = `
       <div class="text-center py-8 text-on-surface-variant">
-        <div class="text-4xl mb-2 opacity-40">Y"<</div>
+        <div class="text-4xl mb-2 opacity-40">🏷️</div>
         <p class="text-sm">Aucun type enregistré</p>
       </div>`;
     return;
@@ -4807,10 +5302,13 @@ function closeProjectModal() {
   editingProjectId = null;
 }
 
-async function archiveProject() {
-  if (!editingProjectId) return;
+async function archiveProject(id) {
+  // Si appelé depuis le modal d'édition, utiliser editingProjectId
+  // Si appelé depuis le modal de détail, utiliser le paramètre id
+  const projectId = id || editingProjectId;
+  if (!projectId) return;
 
-  const project = projects.find(p => p.id === editingProjectId);
+  const project = projects.find(p => p.id === projectId);
   if (!project || project.archivedAt) return;
 
   // Archive the project
@@ -4822,7 +5320,8 @@ async function archiveProject() {
   updateProjectCount();
   renderGanttChart();
   renderProjectCards();
-  showToast(`Y" Le projet "${projectName}" a été archivé avec succès`);
+  renderArchivedProjects();
+  showToast(`📦 Le projet "${projectName}" a été archivé avec succès`);
 }
 
 async function restoreProject(id) {
@@ -4866,7 +5365,7 @@ async function quickArchiveProject(id) {
     renderProjectCards();
   }
 
-  showToast(`Y" Le projet "${projectName}" a été archivé avec succès`);
+  showToast(`📦 Le projet "${projectName}" a été archivé avec succès`);
 }
 
 async function deleteProject(id) {
@@ -5153,11 +5652,30 @@ function renderGanttChart() {
   }
 
   if (activeProjects.length === 0) {
+    const hasSearch = searchQuery.length > 0;
     container.innerHTML = `
-      <div class="text-center py-16 px-4">
-        <span class="material-symbols-outlined text-6xl text-on-surface-variant mb-4 block opacity-40">folder_open</span>
-        <p class="text-lg font-semibold text-on-surface mb-2">Aucun projet</p>
-        <p class="text-on-surface-variant">Créez votre premier projet pour commencer</p>
+      <div class="flex flex-col items-center justify-center py-16 px-4">
+        ${hasSearch ? `
+          <div class="text-center">
+            <span class="material-symbols-outlined text-6xl text-on-surface-variant mb-4 block opacity-40">folder_open</span>
+            <p class="text-lg font-semibold text-on-surface mb-2">Aucun projet</p>
+            <p class="text-on-surface-variant">Aucun projet ne correspond à votre recherche</p>
+          </div>
+        ` : `
+          <div class="max-w-2xl w-full bg-surface-container-low border-2 border-dashed border-outline-variant rounded-3xl p-12 text-center">
+            <div class="w-20 h-20 mx-auto mb-6 rounded-full bg-primary-container flex items-center justify-center">
+              <span class="material-symbols-outlined text-5xl text-primary">add</span>
+            </div>
+            <h3 class="text-2xl font-bold text-on-surface mb-3">Créer votre premier projet</h3>
+            <p class="text-on-surface-variant mb-6 max-w-md mx-auto">
+              Visualisez l'avancement et les échéances de vos initiatives stratégiques.
+            </p>
+            <button onclick="openProjectModal()" class="px-6 py-3 bg-primary text-white rounded-xl font-semibold hover:bg-primary/90 transition-colors inline-flex items-center gap-2">
+              <span class="material-symbols-outlined">add</span>
+              Nouveau projet
+            </button>
+          </div>
+        `}
       </div>
     `;
     return;
@@ -5333,11 +5851,30 @@ function renderProjectCards() {
   }
 
   if (activeProjects.length === 0) {
+    const hasSearch = searchQuery.length > 0;
     container.innerHTML = `
-      <div class="text-center py-16 px-4">
-        <span class="material-symbols-outlined text-6xl text-on-surface-variant mb-4 block opacity-40">folder_open</span>
-        <p class="text-lg font-semibold text-on-surface mb-2">Aucun projet</p>
-        <p class="text-on-surface-variant">Créez votre premier projet pour commencer</p>
+      <div class="flex flex-col items-center justify-center py-16 px-4">
+        ${hasSearch ? `
+          <div class="text-center">
+            <span class="material-symbols-outlined text-6xl text-on-surface-variant mb-4 block opacity-40">folder_open</span>
+            <p class="text-lg font-semibold text-on-surface mb-2">Aucun projet</p>
+            <p class="text-on-surface-variant">Aucun projet ne correspond à votre recherche</p>
+          </div>
+        ` : `
+          <div class="max-w-2xl w-full bg-surface-container-low border-2 border-dashed border-outline-variant rounded-3xl p-12 text-center">
+            <div class="w-20 h-20 mx-auto mb-6 rounded-full bg-primary-container flex items-center justify-center">
+              <span class="material-symbols-outlined text-5xl text-primary">add</span>
+            </div>
+            <h3 class="text-2xl font-bold text-on-surface mb-3">Démarrer un nouveau projet</h3>
+            <p class="text-on-surface-variant mb-6 max-w-md mx-auto">
+              Créez un projet solo ou collaboratif pour organiser les tâches, documents et échanges de votre équipe.
+            </p>
+            <button onclick="openProjectModal()" class="px-6 py-3 bg-primary text-white rounded-xl font-semibold hover:bg-primary/90 transition-colors inline-flex items-center gap-2">
+              <span class="material-symbols-outlined">add</span>
+              Nouveau projet
+            </button>
+          </div>
+        `}
       </div>
     `;
     return;
