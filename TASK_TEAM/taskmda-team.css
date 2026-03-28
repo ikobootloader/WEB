@@ -903,7 +903,8 @@ html.dark .project-view-tab:hover {
   color: #e8f0ff;
 }
 
-html.dark #project-work-panel .project-view-tab.view-tab-active {
+html.dark #project-work-panel .project-view-tab.view-tab-active,
+html.dark #project-settings-panel .project-view-tab.view-tab-active {
   background: linear-gradient(135deg, #2b4f9f, #3d63b5) !important;
   border-color: rgba(122, 162, 255, 0.5) !important;
   box-shadow: 0 7px 16px rgba(0, 0, 0, 0.28), inset 0 -2px 0 rgba(255, 159, 74, 0.92);
@@ -1538,7 +1539,7 @@ html.dark .header-search-item-badge {
 
 #project-work-layout.is-vertical {
   display: grid;
-  grid-template-columns: minmax(150px, 184px) minmax(0, 1fr);
+  grid-template-columns: minmax(130px, 150px) minmax(0, 1fr);
   align-items: start;
   gap: 10px;
 }
@@ -1577,30 +1578,34 @@ html.dark .header-search-item-badge {
 }
 
 #project-work-layout.is-vertical .project-work-nav-controls {
-  width: auto;
-  align-self: flex-start;
+  width: 100%;
+  align-self: stretch;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: stretch;
+  gap: 8px;
 }
 
 #project-work-layout.is-vertical #btn-add-task {
   width: 100%;
-  min-height: 42px;
-  padding-block: 9px;
-  font-size: 1.04rem;
+  min-height: 40px;
+  padding-block: 8px;
+  font-size: 0.95rem;
 }
 
 #project-work-layout.is-vertical .project-subnav-layout-group {
-  align-self: flex-start;
-  justify-content: flex-start;
+  align-self: stretch;
+  width: 100%;
+  justify-content: stretch;
   padding: 3px;
   gap: 4px;
   border-radius: 10px;
+  display: flex;
 }
 
 #project-work-layout.is-vertical .project-subnav-layout-btn {
-  width: 30px;
-  height: 30px;
+  width: auto;
+  flex: 1;
+  height: 32px;
   border-radius: 8px;
 }
 
@@ -1609,9 +1614,10 @@ html.dark .header-search-item-badge {
 }
 
 #project-work-layout.is-vertical .project-subnav-focus-btn {
-  width: 30px;
-  min-height: 30px;
-  height: 30px;
+  width: auto;
+  flex: 1;
+  min-height: 32px;
+  height: 32px;
   font-size: 0.78rem;
   padding: 0;
   border-radius: 8px;
@@ -1659,7 +1665,7 @@ html.dark .header-search-item-badge {
     grid-column: auto;
     grid-row: auto;
   }
-  #project-settings-panel.is-vertical {
+  #project-settings-panel.is-vertical:not(.hidden) {
     display: block;
   }
   #project-settings-panel.is-vertical #project-settings-tabs-list {
@@ -1683,7 +1689,8 @@ html.dark .header-search-item-badge {
   }
 }
 
-#project-work-panel .project-view-tab.view-tab-active {
+#project-work-panel .project-view-tab.view-tab-active,
+#project-settings-panel .project-view-tab.view-tab-active {
   background: linear-gradient(135deg, var(--primary), var(--primary-container)) !important;
   color: #ffffff !important;
   border-color: rgba(0, 43, 107, 0.46) !important;
@@ -2271,12 +2278,12 @@ html.dark #project-work-panel.project-work-focus-fallback {
 }
 
 #project-settings-panel.is-vertical #project-settings-tabs-wrap {
-  max-width: 184px;
+  max-width: 150px;
 }
 
-#project-settings-panel.is-vertical {
+#project-settings-panel.is-vertical:not(.hidden) {
   display: grid;
-  grid-template-columns: minmax(150px, 184px) minmax(0, 1fr);
+  grid-template-columns: minmax(130px, 150px) minmax(0, 1fr);
   gap: 10px 14px;
   align-items: start;
 }
@@ -2293,10 +2300,9 @@ html.dark #project-work-panel.project-work-focus-fallback {
 #project-settings-panel.is-vertical #project-settings-tabs-list {
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  gap: 4px;
   overflow: visible;
-  padding: 4px;
+  gap: 4px;
+  padding: 2px;
   background: #f4f7ff;
   border-radius: 12px;
   border: 1px solid rgba(101, 115, 141, 0.18);
@@ -2305,6 +2311,9 @@ html.dark #project-work-panel.project-work-focus-fallback {
 #project-settings-panel.is-vertical #project-settings-tabs-list .project-view-tab {
   width: 100%;
   text-align: left;
+  padding: 8px 9px;
+  font-size: 0.84rem;
+  border-radius: 10px;
 }
 
 #project-settings-panel.is-vertical .project-settings-card-members,
@@ -2981,23 +2990,67 @@ textarea:focus {
 
 .dashboard-news-list {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 8px;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 1.5rem;
+}
+
+@media (max-width: 1024px) {
+  .dashboard-news-list {
+    grid-template-columns: 1fr;
+  }
 }
 
 .dashboard-news-item {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  flex-direction: column;
   gap: 10px;
-  border: 1px solid rgba(148, 163, 184, 0.26);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.94);
-  padding: 10px 12px;
+  border: none;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.26);
+  background: transparent;
+  padding: 0 0 1rem 0;
+  border-radius: 0;
+}
+
+.dashboard-news-item:last-child {
+  border-bottom: none;
+}
+
+.dashboard-news-item-hero {
+  grid-row: span 3;
+  border-bottom: none;
+  border-right: 1px solid rgba(148, 163, 184, 0.26);
+  padding-right: 1.5rem;
+  padding-bottom: 0;
+}
+
+@media (max-width: 1024px) {
+  .dashboard-news-item-hero {
+    grid-row: auto;
+    border-right: none;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.26);
+    padding-right: 0;
+  }
+}
+
+.dashboard-news-image {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin-top: 0.25rem;
+}
+
+.dashboard-news-item-hero .dashboard-news-image {
+  height: auto;
+  min-height: 250px;
+  max-height: 400px;
 }
 
 .dashboard-news-item-main {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .dashboard-news-item-top {
@@ -3026,28 +3079,39 @@ textarea:focus {
 }
 
 .dashboard-news-text {
-  font-size: 0.88rem;
-  font-weight: 600;
+  font-size: 1.15rem;
+  font-weight: 800;
   color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.dashboard-news-item-hero .dashboard-news-text {
+  font-size: 1.8rem;
 }
 
 .dashboard-news-sub {
-  margin-top: 2px;
-  font-size: 0.76rem;
+  font-size: 0.88rem;
   color: var(--text-secondary);
-  white-space: nowrap;
+  line-height: 1.5;
   overflow: hidden;
-  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3; /* Standard syntax */
+  -webkit-box-orient: vertical;
+}
+
+.dashboard-news-item-hero .dashboard-news-sub {
+  -webkit-line-clamp: 6;
+  line-clamp: 6;
+  font-size: 1rem;
 }
 
 .dashboard-news-time {
   flex-shrink: 0;
   font-size: 0.72rem;
   color: var(--text-secondary);
-  padding-top: 2px;
+  padding-top: 4px;
+  margin-top: auto;
 }
 
 .dashboard-news-empty {
@@ -6056,4 +6120,200 @@ html.dark .global-settings-help-box {
   .project-view-tabs::-webkit-scrollbar {
     display: none;
   }
+}
+
+/* Scrollbars discretes pour les editeurs */
+.feed-composer-panel::-webkit-scrollbar,
+.project-editor-wrap::-webkit-scrollbar,
+.ql-editor::-webkit-scrollbar,
+.global-feed-editor::-webkit-scrollbar {
+  width: 6px;
+}
+
+.feed-composer-panel::-webkit-scrollbar-track,
+.project-editor-wrap::-webkit-scrollbar-track,
+.ql-editor::-webkit-scrollbar-track,
+.global-feed-editor::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.feed-composer-panel::-webkit-scrollbar-thumb,
+.project-editor-wrap::-webkit-scrollbar-thumb,
+.ql-editor::-webkit-scrollbar-thumb,
+.global-feed-editor::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.3);
+  border-radius: 999px;
+}
+
+.feed-composer-panel:hover::-webkit-scrollbar-thumb,
+.project-editor-wrap:hover::-webkit-scrollbar-thumb,
+.ql-editor:hover::-webkit-scrollbar-thumb,
+.global-feed-editor:hover::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.5);
+}
+
+html.dark .feed-composer-panel::-webkit-scrollbar-thumb,
+html.dark .project-editor-wrap::-webkit-scrollbar-thumb,
+html.dark .ql-editor::-webkit-scrollbar-thumb,
+html.dark .global-feed-editor::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+}
+
+html.dark .feed-composer-panel:hover::-webkit-scrollbar-thumb,
+html.dark .project-editor-wrap:hover::-webkit-scrollbar-thumb,
+html.dark .ql-editor:hover::-webkit-scrollbar-thumb,
+html.dark .global-feed-editor:hover::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.5);
+}
+
+/* Fullscreen Composer */
+.composer-fullscreen {
+  position: fixed !important;
+  inset: 5% !important;
+  z-index: 9999 !important;
+  max-height: none !important;
+  display: flex !important;
+  flex-direction: column !important;
+  box-shadow: 0 0 0 100vmax rgba(15, 23, 42, 0.6), 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
+  overflow: hidden !important;
+  transition: all 0.2s ease-out;
+}
+
+@media (max-width: 768px) {
+  .composer-fullscreen {
+    inset: 0 !important;
+    border-radius: 0 !important;
+  }
+}
+
+.composer-fullscreen .project-editor-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.composer-fullscreen .global-feed-editor {
+  flex: 1;
+  overflow-y: auto;
+}
+
+#project-settings-panel.is-vertical #project-overview-panel:not(.hidden) {
+  grid-column: 2;
+  margin-top: 0 !important;
+}
+
+#project-settings-tabs-wrap {
+  display: flex;
+  justify-content: space-between;
+}
+
+.project-settings-nav-controls {
+  display: flex;
+  align-items: center;
+}
+
+#project-settings-panel.is-vertical .project-settings-nav-controls {
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+}
+
+#project-settings-panel.is-vertical .project-subnav-layout-group {
+  align-self: stretch;
+  width: 100%;
+  padding: 3px;
+  gap: 4px;
+  border-radius: 10px;
+  display: flex;
+}
+
+#project-settings-panel.is-vertical .project-subnav-layout-btn {
+  width: auto;
+  flex: 1;
+  height: 32px;
+  border-radius: 8px;
+}
+
+
+
+#project-settings-panel.is-vertical #project-settings-tabs-wrap {
+  display: flex !important;
+  flex-direction: column !important;
+  height: auto !important;
+  min-height: auto !important;
+  margin-bottom: 0 !important;
+}
+
+/* Fullscreen settings for project-settings-panel */
+#project-settings-panel.project-settings-focus-fallback {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 99999 !important;
+  background: #f4f7fa !important; /* using the app background */
+  padding: 24px !important;
+  overflow-y: auto !important;
+  margin: 0 !important;
+  box-sizing: border-box !important;
+}
+
+#project-settings-panel:fullscreen {
+  background: #f4f7fa;
+  padding: 24px;
+  overflow-y: auto;
+}
+
+#project-settings-panel:-webkit-full-screen {
+  background: #f4f7fa;
+  padding: 24px;
+  overflow-y: auto;
+}
+
+#project-settings-panel.is-vertical .project-settings-nav-controls {
+  width: 100% !important;
+  align-self: stretch !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 8px !important;
+  margin-top: 12px !important;
+}
+
+#project-settings-panel.is-vertical .project-subnav-layout-group {
+  align-self: stretch !important;
+  width: 100% !important;
+  justify-content: stretch !important;
+  padding: 3px !important;
+  gap: 4px !important;
+  border-radius: 10px !important;
+  display: flex !important;
+  background: #f1f5f9 !important;
+}
+
+#project-settings-panel.is-vertical .project-subnav-layout-btn {
+  width: auto !important;
+  flex: 1 !important;
+  height: 32px !important;
+  border-radius: 8px !important;
+}
+
+#project-settings-panel.is-vertical .project-subnav-layout-btn .material-symbols-outlined {
+  font-size: 16px !important;
+}
+
+#project-settings-panel.is-vertical .project-subnav-focus-btn {
+  width: auto !important;
+  flex: 1 !important;
+  min-height: 32px !important;
+  height: 32px !important;
+  font-size: 0.78rem !important;
+  padding: 0 !important;
+  border-radius: 8px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px !important;
 }

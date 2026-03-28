@@ -1,4 +1,4 @@
-﻿    // ============================================================================
+    // ============================================================================
     // TASKMDA TEAM - STANDALONE VERSION
     // Toutes les fonctionnalités event-sourcing dans un seul fichier HTML
     // ============================================================================
@@ -4187,6 +4187,18 @@
         .trim();
     }
 
+    function extractFirstImageSrcFromHtml(html) {
+      if (!html) return null;
+      try {
+        const div = document.createElement('div');
+        div.innerHTML = String(html);
+        const img = div.querySelector('img');
+        return img ? img.src : null;
+      } catch (e) {
+        return null;
+      }
+    }
+
     async function renderDashboardNews() {
       const panel = document.getElementById('dashboard-news');
       const list = document.getElementById('dashboard-news-list');
@@ -4206,30 +4218,44 @@
         return;
       }
 
-      list.innerHTML = items.map((post) => {
-        const content = stripMentionMarkupForDashboard(post.content || '');
-        const [headlineRaw, subtitleRaw] = content.split('\n');
+      list.innerHTML = items.map((post, index) => {
+        const isHero = index === 0;
+        const plainText = getProjectDescriptionPlainText(post.content || '');
+        const content = stripMentionMarkupForDashboard(plainText);
+        let [headlineRaw, ...subtitleRaws] = content.split('\\n');
         const headline = stripMentionMarkupForDashboard(headlineRaw || '') || 'Mise à jour';
-        const subtitle = stripMentionMarkupForDashboard(
-          subtitleRaw || ((post.refs || []).map((ref) => ref?.label).filter(Boolean).slice(0, 2).join(' • '))
-        );
+        
+        let subtitleSrc = subtitleRaws.join(' ').trim();
+        if (!subtitleSrc) {
+          subtitleSrc = (post.refs || []).map((ref) => ref?.label).filter(Boolean).slice(0, 2).join(' • ');
+        }
+        const subtitle = stripMentionMarkupForDashboard(subtitleSrc);
+        
+        const imgSrc = extractFirstImageSrcFromHtml(post.content);
+        let imgHtml = '';
+        if (imgSrc) {
+          // Si limage est un base64 très long, il fonctionnera comme nimporte quelle URL
+          imgHtml = `<img src="${escapeHtml(imgSrc)}" class="dashboard-news-image" alt="" loading="lazy">`;
+        }
+
         const typeMeta = getDashboardNewsTypeMeta(post);
         const ts = Number(post.createdAt || Date.now());
         const timeText = new Date(ts).toLocaleString('fr-FR', {
-          day: '2-digit',
-          month: '2-digit',
-          hour: '2-digit',
-          minute: '2-digit'
+          day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
         });
+        
+        const heroClass = isHero ? 'dashboard-news-item-hero' : '';
+
         return `
-          <article class="dashboard-news-item">
+          <article class="dashboard-news-item ${heroClass}">
+            <div class="dashboard-news-item-top">
+              <span class="dashboard-news-type">
+                <span class="material-symbols-outlined">${escapeHtml(typeMeta.icon)}</span>
+                ${escapeHtml(typeMeta.label)}
+              </span>
+            </div>
+            ${imgHtml}
             <div class="dashboard-news-item-main">
-              <div class="dashboard-news-item-top">
-                <span class="dashboard-news-type">
-                  <span class="material-symbols-outlined">${typeMeta.icon}</span>
-                  ${escapeHtml(typeMeta.label)}
-                </span>
-              </div>
               <div class="dashboard-news-text">${escapeHtml(headline)}</div>
               ${subtitle ? `<div class="dashboard-news-sub">${escapeHtml(subtitle)}</div>` : ''}
             </div>
@@ -5142,6 +5168,18 @@
         }
         return;
       }
+      const shouldInlineInSettingsArea = (
+        projectDetailMode === 'settings'
+        && projectSubnavLayout === 'vertical'
+        && projectSettingsTab === 'overview'
+      );
+      if (shouldInlineInSettingsArea) {
+        const settingsPanel = document.getElementById('project-settings-panel');
+        if (overviewPanel.parentElement !== settingsPanel) {
+          settingsPanel.appendChild(overviewPanel);
+        }
+        return;
+      }
       if (overviewPanel.parentElement !== overviewAnchor.parentElement) {
         overviewAnchor.insertAdjacentElement('afterend', overviewPanel);
       }
@@ -5151,9 +5189,14 @@
       const overviewPanel = document.getElementById('project-overview-panel');
       if (!overviewPanel) return;
       relocateProjectOverviewPanel();
-      const inSettings = projectDetailMode === 'settings';
-      const inVerticalWorkMode = projectDetailMode === 'work' && projectSubnavLayout === 'vertical';
-      const shouldShowOverview = inSettings || !inVerticalWorkMode || activeProjectView === 'overview';
+      let shouldShowOverview = true;
+      if (projectSubnavLayout === 'vertical') {
+        if (projectDetailMode === 'work') {
+          shouldShowOverview = activeProjectView === 'overview';
+        } else if (projectDetailMode === 'settings') {
+          shouldShowOverview = projectSettingsTab === 'overview';
+        }
+      }
       overviewPanel.classList.toggle('hidden', !shouldShowOverview);
       overviewPanel.setAttribute('aria-hidden', shouldShowOverview ? 'false' : 'true');
     }
@@ -5449,11 +5492,12 @@
     }
 
     function applyProjectSettingsTabView() {
-      const allowed = new Set(['members', 'collab', 'themes', 'permissions']);
+      const allowed = new Set(['overview', 'members', 'collab', 'themes', 'permissions']);
       if (!allowed.has(String(projectSettingsTab || ''))) {
-        projectSettingsTab = 'members';
+        projectSettingsTab = projectSubnavLayout === 'vertical' ? 'overview' : 'members';
       }
       const tabButtons = {
+        overview: document.getElementById('project-settings-tab-overview'),
         members: document.getElementById('project-settings-tab-members'),
         collab: document.getElementById('project-settings-tab-collab'),
         themes: document.getElementById('project-settings-tab-themes'),
@@ -5474,10 +5518,12 @@
       if (collabCard) collabCard.classList.toggle('hidden', projectSettingsTab !== 'collab');
       if (themesCard) themesCard.classList.toggle('hidden', projectSettingsTab !== 'themes');
       if (permissionsCard) permissionsCard.classList.toggle('hidden', projectSettingsTab !== 'permissions');
+      
+      updateProjectOverviewVisibility();
     }
 
     function setProjectSettingsTab(tabKey) {
-      const allowed = new Set(['members', 'collab', 'themes', 'permissions']);
+      const allowed = new Set(['overview', 'members', 'collab', 'themes', 'permissions']);
       const next = allowed.has(String(tabKey || '')) ? String(tabKey) : 'members';
       projectSettingsTab = next;
       applyProjectSettingsTabView();
@@ -5526,6 +5572,8 @@
       const tabsWrap = document.getElementById('project-view-tabs-wrap');
       const horizontalBtn = document.getElementById('btn-project-subnav-horizontal');
       const verticalBtn = document.getElementById('btn-project-subnav-vertical');
+      const settingsVerticalBtn = document.getElementById('btn-project-settings-subnav-vertical');
+      const settingsHorizontalBtn = document.getElementById('btn-project-settings-subnav-horizontal');
       const overviewBtn = document.getElementById('view-overview');
       if (!layout || !panel) return;
       layout.classList.toggle('is-vertical', projectSubnavLayout === 'vertical');
@@ -5536,6 +5584,19 @@
       if (horizontalBtn) {
         horizontalBtn.classList.toggle('is-active', projectSubnavLayout === 'horizontal');
         horizontalBtn.setAttribute('aria-pressed', projectSubnavLayout === 'horizontal' ? 'true' : 'false');
+      }
+      if (settingsVerticalBtn) {
+        settingsVerticalBtn.classList.toggle('is-active', projectSubnavLayout === 'vertical');
+        settingsVerticalBtn.setAttribute('aria-pressed', projectSubnavLayout === 'vertical' ? 'true' : 'false');
+      }
+      if (settingsHorizontalBtn) {
+        settingsHorizontalBtn.classList.toggle('is-active', projectSubnavLayout === 'horizontal');
+        settingsHorizontalBtn.setAttribute('aria-pressed', projectSubnavLayout === 'horizontal' ? 'true' : 'false');
+      }
+      
+      const settingsOverviewBtn = document.getElementById('project-settings-tab-overview');
+      if (settingsOverviewBtn) {
+        settingsOverviewBtn.classList.toggle('hidden', projectSubnavLayout !== 'vertical');
       }
       if (verticalBtn) {
         verticalBtn.classList.toggle('is-active', projectSubnavLayout === 'vertical');
@@ -5553,18 +5614,17 @@
 
     function setProjectSubnavLayout(mode) {
       const next = mode === 'vertical' ? 'vertical' : 'horizontal';
-      const wasOverview = activeProjectView === 'overview';
+      const wasOverviewWork = projectDetailMode === 'work' && activeProjectView === 'overview';
+      const wasOverviewSettings = projectDetailMode === 'settings' && projectSettingsTab === 'overview';
       projectSubnavLayout = next;
       localStorage.setItem('taskmda_project_subnav_layout', next);
+      
+      if (next === 'horizontal') {
+        if (wasOverviewWork) setProjectView('list');
+        if (wasOverviewSettings) setProjectSettingsTab('members');
+      }
+      
       applyProjectSubnavLayout();
-      if (next === 'horizontal' && wasOverview) {
-        // Force le même comportement UX que "Voir moins" en quittant l'aperçu.
-        setProjectView('list');
-        return;
-      }
-      if (next === 'horizontal' && activeProjectView === 'list') {
-        setProjectView('list');
-      }
     }
 
     async function toggleProjectWorkFocus() {
@@ -5585,6 +5645,39 @@
         panel.classList.toggle('project-work-focus-fallback');
       }
       syncProjectWorkFocusButton();
+    }
+
+
+    async function toggleProjectSettingsFocus() {
+      const panel = document.getElementById('project-settings-panel');
+      if (!panel) return;
+      const supportsFullscreen = typeof panel.requestFullscreen === 'function';
+      if (supportsFullscreen) {
+        try {
+          if (document.fullscreenElement === panel) {
+            await document.exitFullscreen();
+          } else {
+            await panel.requestFullscreen();
+          }
+        } catch (_) {
+          panel.classList.toggle('project-settings-focus-fallback');
+        }
+      } else {
+        panel.classList.toggle('project-settings-focus-fallback');
+      }
+      syncProjectSettingsFocusButton();
+    }
+
+    function syncProjectSettingsFocusButton() {
+      const panel = document.getElementById('project-settings-panel');
+      const btn = document.getElementById('btn-project-settings-work-focus');
+      if (!panel || !btn) return;
+      const isFullscreen = document.fullscreenElement === panel || panel.classList.contains('project-settings-focus-fallback');
+      const icon = btn.querySelector('.material-symbols-outlined');
+      const text = btn.querySelector('.project-subnav-focus-text');
+      if (icon) icon.textContent = isFullscreen ? 'fullscreen_exit' : 'fullscreen';
+      if (text) text.textContent = isFullscreen ? 'Quitter' : 'Plein écran';
+      btn.classList.toggle('is-active', isFullscreen);
     }
 
     function setProjectView(view) {
@@ -11358,13 +11451,15 @@
     async function updateGlobalFeedMentionCounter() {
       const counter = document.getElementById('global-feed-mention-counter');
       const input = document.getElementById('global-feed-input');
-      if (!counter || !input) return;
+      if (!counter) return;
+      const quill = projectDescriptionQuillEditors.get('global-feed-editor');
       let catalog = globalFeedMentionCatalogCache;
       if (!catalog) {
         catalog = await buildGlobalMentionCatalog();
         globalFeedMentionCatalogCache = catalog;
       }
-      const mentionsCount = extractMentionedUserIdsFromText(String(input.value || ''), catalog).size;
+      const textToScan = quill ? (quill.getText() || '') : String(input?.value || '');
+      const mentionsCount = extractMentionedUserIdsFromText(textToScan, catalog).size;
       const label = mentionsCount > 1 ? `${mentionsCount} mentions detectees` : `${mentionsCount} mention detectee`;
       counter.textContent = label;
       counter.classList.toggle('is-active', mentionsCount > 0);
@@ -11393,11 +11488,11 @@
         tokens.push({ key, html });
         return key;
       });
-      let html = escapeHtml(tokenized);
+      let html = sanitizeProjectDescriptionHtml(tokenized);
       tokens.forEach((token) => {
         html = html.replace(token.key, token.html);
       });
-      return html.replace(/\n/g, '<br>');
+      return html;
     }
 
     async function ensureKnownGlobalPostIdsLoaded() {
@@ -11527,20 +11622,139 @@
       return mentionCatalog;
     }
 
+    let editingGlobalFeedPostId = null;
+
+    function toggleGlobalFeedComposerFullscreen() {
+      const panel = document.querySelector('.feed-composer-panel');
+      const icon = document.getElementById('global-feed-fullscreen-icon');
+      if (!panel || !icon) return;
+      
+      const isFullscreen = panel.classList.toggle('composer-fullscreen');
+      document.body.classList.toggle('overflow-hidden', isFullscreen);
+      
+      if (isFullscreen) {
+        icon.textContent = 'close_fullscreen';
+        icon.parentElement.title = "Réduire";
+      } else {
+        icon.textContent = 'open_in_full';
+        icon.parentElement.title = "Plein écran";
+      }
+    }
+
+    function cancelEditGlobalFeedPost() {
+      editingGlobalFeedPostId = null;
+      document.getElementById('global-feed-composer-title').textContent = "Nouveau post d'information";
+      document.getElementById('global-feed-post-btn-label').textContent = "Publier";
+      document.getElementById('global-feed-post-btn-icon').textContent = "send";
+      const cancelBtn = document.getElementById('btn-global-feed-cancel');
+      if (cancelBtn) cancelBtn.classList.add('hidden');
+      
+      const panel = document.querySelector('.feed-composer-panel');
+      if (panel && panel.classList.contains('composer-fullscreen')) {
+        toggleGlobalFeedComposerFullscreen();
+      }
+
+      const quill = projectDescriptionQuillEditors.get('global-feed-editor');
+      if (quill) quill.root.innerHTML = '';
+      
+      const input = document.getElementById('global-feed-input');
+      const projectSelect = document.getElementById('global-feed-project-ref');
+      const taskSelect = document.getElementById('global-feed-task-ref');
+      const calendarSelect = document.getElementById('global-feed-calendar-ref');
+      const mentionSelect = document.getElementById('global-feed-mention-select');
+      
+      if (input) input.value = '';
+      if (projectSelect) projectSelect.value = '';
+      if (taskSelect) taskSelect.value = '';
+      if (calendarSelect) calendarSelect.value = '';
+      if (mentionSelect) mentionSelect.value = '';
+      
+      updateGlobalFeedMentionCounter();
+    }
+
+    async function startEditGlobalFeedPost(postId) {
+      const existing = await getDecrypted('globalPosts', postId, 'postId');
+      if (!existing || existing.deletedAt || existing.isAuto) return;
+      if (String(existing.authorUserId || '') !== String(currentUser?.userId || '')) {
+        showToast('Action non autorisée');
+        return;
+      }
+      editingGlobalFeedPostId = postId;
+      document.getElementById('global-feed-composer-title').textContent = "Édition du post";
+      document.getElementById('global-feed-post-btn-label').textContent = "Mettre à jour";
+      document.getElementById('global-feed-post-btn-icon').textContent = "save";
+      const cancelBtn = document.getElementById('btn-global-feed-cancel');
+      if (cancelBtn) cancelBtn.classList.remove('hidden');
+
+      const quill = projectDescriptionQuillEditors.get('global-feed-editor');
+      const input = document.getElementById('global-feed-input');
+      if (quill) {
+        quill.clipboard.dangerouslyPasteHTML(existing.content || '');
+      } else if (input) {
+        input.value = existing.content || '';
+      }
+      
+      const projectSelect = document.getElementById('global-feed-project-ref');
+      const taskSelect = document.getElementById('global-feed-task-ref');
+      const calendarSelect = document.getElementById('global-feed-calendar-ref');
+      
+      if (projectSelect) projectSelect.value = '';
+      if (taskSelect) taskSelect.value = '';
+      if (calendarSelect) calendarSelect.value = '';
+      
+      if (Array.isArray(existing.refs)) {
+        existing.refs.forEach(ref => {
+          if (ref.type === 'project' && projectSelect) projectSelect.value = ref.id;
+          if (ref.type === 'task' && taskSelect) taskSelect.value = ref.id;
+          if (ref.type === 'calendar-info' && calendarSelect) calendarSelect.value = ref.id;
+        });
+      }
+      updateGlobalFeedMentionCounter();
+      document.querySelector('.feed-composer-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    async function deleteGlobalFeedPost(postId) {
+      if (!confirm('Supprimer ce post ?')) return;
+      const existing = await getDecrypted('globalPosts', postId, 'postId');
+      if (!existing || existing.deletedAt) return;
+      if (String(existing.authorUserId || '') !== String(currentUser?.userId || '')) {
+        showToast('Action non autorisée');
+        return;
+      }
+      existing.deletedAt = Date.now();
+      await putEncrypted('globalPosts', existing, 'postId');
+      if (sharedFolderHandle) {
+        writeGlobalFeedPostToSharedFolder(existing);
+      }
+      if (editingGlobalFeedPostId === postId) {
+        cancelEditGlobalFeedPost();
+      }
+      showToast('Post supprimé');
+      await renderGlobalFeed();
+    }
+
     async function publishGlobalFeedPost() {
       const input = document.getElementById('global-feed-input');
       const projectSelect = document.getElementById('global-feed-project-ref');
       const taskSelect = document.getElementById('global-feed-task-ref');
       const calendarSelect = document.getElementById('global-feed-calendar-ref');
       if (!input || !projectSelect || !taskSelect || !calendarSelect) return;
-      const content = String(input.value || '').trim();
+      const quill = projectDescriptionQuillEditors.get('global-feed-editor');
+      let content = '';
+      if (quill) {
+        content = String(quill.root.innerHTML || '').trim();
+        if (content === '<p><br></p>') content = '';
+      } else {
+        content = String(input.value || '').trim();
+      }
       if (!content) {
         showToast('Le post est vide');
         return;
       }
 
       const mentionCatalog = await buildGlobalMentionCatalog();
-      const mentions = Array.from(extractMentionedUserIdsFromText(content, mentionCatalog));
+      const textToScan = quill ? (quill.getText() || '') : content;
+      const mentions = Array.from(extractMentionedUserIdsFromText(textToScan, mentionCatalog));
       const refs = [];
       if (projectSelect.value) {
         const opt = projectSelect.options[projectSelect.selectedIndex];
@@ -11553,6 +11767,32 @@
       if (calendarSelect.value) {
         const opt = calendarSelect.options[calendarSelect.selectedIndex];
         refs.push({ type: 'calendar-info', id: calendarSelect.value, label: opt?.textContent || 'Info calendrier' });
+      }
+
+      if (typeof editingGlobalFeedPostId !== 'undefined' && editingGlobalFeedPostId) {
+        const existing = await getDecrypted('globalPosts', editingGlobalFeedPostId, 'postId');
+        if (existing) {
+          existing.content = content;
+          existing.mentions = mentions;
+          existing.refs = refs;
+          existing.updatedAt = Date.now();
+          await putEncrypted('globalPosts', existing, 'postId');
+          knownGlobalPostIds.add(existing.postId);
+          
+          if (typeof quill !== 'undefined' && quill) quill.root.innerHTML = '';
+          input.value = '';
+          projectSelect.value = '';
+          taskSelect.value = '';
+          calendarSelect.value = '';
+          await updateGlobalFeedMentionCounter();
+          await renderGlobalFeed();
+          if (sharedFolderHandle) {
+            writeGlobalFeedPostToSharedFolder(existing);
+          }
+          showToast('Post mis à jour');
+          cancelEditGlobalFeedPost();
+          return;
+        }
       }
 
       const post = {
@@ -11568,6 +11808,7 @@
       await putEncrypted('globalPosts', post, 'postId');
       knownGlobalPostIds.add(post.postId);
       input.value = '';
+      if (typeof quill !== 'undefined' && quill) quill.root.innerHTML = '';
       projectSelect.value = '';
       taskSelect.value = '';
       calendarSelect.value = '';
@@ -11710,7 +11951,14 @@
                   <p class="text-xs text-slate-500">${new Date(Number(post.createdAt || Date.now())).toLocaleString('fr-FR')}</p>
                 </div>
               </div>
-              <span class="feed-item-type ${typeClass}">${typeLabel}</span>
+              <div class="flex items-center gap-2">
+                ${!isAuto && String(post.authorUserId || '') === String(currentUser?.userId || '') ? `
+                  <button onclick="startEditGlobalFeedPost('${postId}')" class="text-xs text-slate-500 hover:text-blue-600 font-semibold transition-colors" title="Éditer">Éditer</button>
+                  <button onclick="deleteGlobalFeedPost('${postId}')" class="text-xs text-slate-500 hover:text-rose-600 font-semibold transition-colors" title="Supprimer">Supprimer</button>
+                  <span class="text-slate-300">|</span>
+                ` : ''}
+                <span class="feed-item-type ${typeClass}">${typeLabel}</span>
+              </div>
             </div>
             <div class="feed-item-body">${renderGlobalFeedContentHtml(post.content || '', mentionCatalog)}</div>
             ${mentions.length > 0 ? `
@@ -11738,18 +11986,29 @@
     function insertMentionTokenInGlobalFeed() {
       const input = document.getElementById('global-feed-input');
       const select = document.getElementById('global-feed-mention-select');
-      if (!input || !select) return;
+      const quill = projectDescriptionQuillEditors.get('global-feed-editor');
+      if (!select) return;
       const selectedUserId = String(select.value || '').trim();
       if (!selectedUserId) return;
       const name = knownUsersCache.get(selectedUserId)?.name || fallbackDirectoryName(selectedUserId);
       const token = `@[${name}] `;
-      insertTextAtCursor(input, token);
-      input.focus();
+      if (quill) {
+        const sel = quill.getSelection(true) || { index: quill.getLength(), length: 0 };
+        quill.insertText(sel.index, token, 'user');
+        quill.setSelection(sel.index + token.length, 0, 'user');
+      } else if (input) {
+        insertTextAtCursor(input, token);
+        input.focus();
+      }
       updateGlobalFeedMentionCounter();
     }
 
     window.openGlobalFeedReference = openGlobalFeedReference;
     window.openGlobalFeedPost = openGlobalFeedPost;
+    window.toggleGlobalFeedComposerFullscreen = toggleGlobalFeedComposerFullscreen;
+    window.startEditGlobalFeedPost = startEditGlobalFeedPost;
+    window.cancelEditGlobalFeedPost = cancelEditGlobalFeedPost;
+    window.deleteGlobalFeedPost = deleteGlobalFeedPost;
 
     async function sendGlobalMessage() {
       const input = document.getElementById('global-message-input');
@@ -15585,6 +15844,7 @@
     document.getElementById('btn-email-project-complete')?.addEventListener('click', () => sendProjectStatusEmail(true));
     document.getElementById('project-mode-work')?.addEventListener('click', () => setProjectDetailMode('work'));
     document.getElementById('project-mode-settings')?.addEventListener('click', () => setProjectDetailMode('settings'));
+    document.getElementById('project-settings-tab-overview')?.addEventListener('click', () => setProjectSettingsTab('overview'));
     document.getElementById('project-settings-tab-members')?.addEventListener('click', () => setProjectSettingsTab('members'));
     document.getElementById('project-settings-tab-collab')?.addEventListener('click', () => setProjectSettingsTab('collab'));
     document.getElementById('project-settings-tab-themes')?.addEventListener('click', () => setProjectSettingsTab('themes'));
@@ -16531,7 +16791,10 @@
     document.getElementById('project-task-view-4')?.addEventListener('click', () => setProjectTaskCardsColumns(4));
     document.getElementById('btn-project-subnav-horizontal')?.addEventListener('click', () => setProjectSubnavLayout('horizontal'));
     document.getElementById('btn-project-subnav-vertical')?.addEventListener('click', () => setProjectSubnavLayout('vertical'));
+    document.getElementById('btn-project-settings-subnav-horizontal')?.addEventListener('click', () => setProjectSubnavLayout('horizontal'));
+    document.getElementById('btn-project-settings-subnav-vertical')?.addEventListener('click', () => setProjectSubnavLayout('vertical'));
     document.getElementById('btn-project-work-focus')?.addEventListener('click', toggleProjectWorkFocus);
+    document.getElementById('btn-project-settings-work-focus')?.addEventListener('click', toggleProjectSettingsFocus);
     document.getElementById('global-task-view-1')?.addEventListener('click', () => setGlobalTaskCardsColumns(1));
     document.getElementById('global-task-view-2')?.addEventListener('click', () => setGlobalTaskCardsColumns(2));
     document.getElementById('global-task-view-3')?.addEventListener('click', () => setGlobalTaskCardsColumns(3));

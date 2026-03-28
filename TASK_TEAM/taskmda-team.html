@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="fr" class="light">
 <head>
   <meta charset="UTF-8">
@@ -28,8 +28,8 @@
   </script>
   <script src="https://cdn.jsdelivr.net/npm/idb@8.0.0/build/umd.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
-  <link href="https://unpkg.com/tabulator-tables@5.6.2/dist/css/tabulator.min.css" rel="stylesheet">
-  <script src="https://unpkg.com/tabulator-tables@5.6.2/dist/js/tabulator.min.js"></script>
+  <link href="https://unpkg.com/tabulator-tables@5.6.1/dist/css/tabulator.min.css" rel="stylesheet">
+  <script src="https://unpkg.com/tabulator-tables@5.6.1/dist/js/tabulator.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <link href="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.snow.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.min.js"></script>
@@ -457,12 +457,33 @@
               </section>
               <aside class="feed-composer-panel rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <div class="feed-composer-head">
-                  <h4 class="font-bold text-slate-800 mb-2">Nouveau post d'information</h4>
-                  <span id="global-feed-mention-counter" class="feed-mention-counter" aria-live="polite">0 mention détectée</span>
+                  <h4 id="global-feed-composer-title" class="font-bold text-slate-800 mb-2">Nouveau post d'information</h4>
+                  <div class="flex items-center gap-2 mb-2">
+                    <span id="global-feed-mention-counter" class="feed-mention-counter" aria-live="polite">0 mention détectée</span>
+                    <button type="button" onclick="toggleGlobalFeedComposerFullscreen()" class="p-1 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-700 transition" title="Plein écran">
+                      <span id="global-feed-fullscreen-icon" class="material-symbols-outlined text-[18px]">open_in_full</span>
+                    </button>
+                  </div>
                 </div>
-                <div class="feed-editor-wrap border border-slate-300 rounded-xl bg-white overflow-hidden">
-                  <div id="global-feed-editor" class="global-feed-editor"></div>
-                  <textarea id="global-feed-input" rows="5" placeholder="Publier une information (ex: @prenom.nom merci de relire)." class="hidden"></textarea>
+                <div class="project-editor-wrap border border-slate-300 rounded-xl bg-white overflow-hidden">
+                  <div class="project-editor-toolbar project-editor-toolbar-fallback">
+                    <button type="button" class="project-editor-btn" data-editor-target="global-feed-editor" data-editor-action="bold" title="Gras"><span class="material-symbols-outlined">format_bold</span></button>
+                    <button type="button" class="project-editor-btn" data-editor-target="global-feed-editor" data-editor-action="italic" title="Italique"><span class="material-symbols-outlined">format_italic</span></button>
+                    <button type="button" class="project-editor-btn project-editor-btn-text" data-editor-target="global-feed-editor" data-editor-action="h1" title="Titre 1">H1</button>
+                    <button type="button" class="project-editor-btn project-editor-btn-text" data-editor-target="global-feed-editor" data-editor-action="h2" title="Titre 2">H2</button>
+                    <button type="button" class="project-editor-btn project-editor-btn-text" data-editor-target="global-feed-editor" data-editor-action="h3" title="Titre 3">H3</button>
+                    <button type="button" class="project-editor-btn" data-editor-target="global-feed-editor" data-editor-action="ul" title="Liste"><span class="material-symbols-outlined">format_list_bulleted</span></button>
+                    <button type="button" class="project-editor-btn" data-editor-target="global-feed-editor" data-editor-action="ol" title="Liste numérotée"><span class="material-symbols-outlined">format_list_numbered</span></button>
+                    <button type="button" class="project-editor-btn" data-editor-target="global-feed-editor" data-editor-action="emoji" title="Emoji"><span class="material-symbols-outlined">sentiment_satisfied</span></button>
+                    <button type="button" class="project-editor-btn" data-editor-target="global-feed-editor" data-editor-file-input="global-feed-image-input" data-editor-action="image" title="Insérer image"><span class="material-symbols-outlined">image</span></button>
+                    <button type="button" class="project-editor-btn" data-editor-target="global-feed-editor" data-editor-action="video" title="Insérer vidéo"><span class="material-symbols-outlined">smart_display</span></button>
+                    <button type="button" class="project-editor-btn" data-editor-target="global-feed-editor" data-editor-action="align-left" title="Aligner à gauche"><span class="material-symbols-outlined">format_align_left</span></button>
+                    <button type="button" class="project-editor-btn" data-editor-target="global-feed-editor" data-editor-action="align-center" title="Centrer"><span class="material-symbols-outlined">format_align_center</span></button>
+                    <button type="button" class="project-editor-btn" data-editor-target="global-feed-editor" data-editor-action="align-right" title="Aligner à droite"><span class="material-symbols-outlined">format_align_right</span></button>
+                  </div>
+                  <div id="global-feed-editor" class="global-feed-editor project-description-editor" contenteditable="true" aria-label="Editeur feed" style="min-height: 120px;"></div>
+                  <textarea id="global-feed-input" rows="5" class="hidden"></textarea>
+                  <input id="global-feed-image-input" type="file" accept="image/*" multiple class="hidden">
                 </div>
                 <div class="grid grid-cols-1 gap-2 mt-3">
                   <div class="feed-mention-row flex items-center gap-2">
@@ -480,10 +501,11 @@
                     <option value="">Référence info calendrier (optionnel)</option>
                   </select>
                 </div>
-                <div class="flex justify-end mt-3">
+                <div class="flex justify-end gap-2 mt-3">
+                  <button id="btn-global-feed-cancel" class="px-4 py-2 rounded-lg bg-slate-200 text-slate-700 text-sm font-semibold hidden" onclick="cancelEditGlobalFeedPost()">Annuler</button>
                   <button id="btn-global-feed-post" class="btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold flex items-center gap-2">
-                    <span class="material-symbols-outlined text-[18px]">send</span>
-                    <span>Publier</span>
+                    <span id="global-feed-post-btn-icon" class="material-symbols-outlined text-[18px]">send</span>
+                    <span id="global-feed-post-btn-label">Publier</span>
                   </button>
                 </div>
               </aside>
@@ -645,13 +667,29 @@
               <button id="project-mode-work" class="project-mode-tab view-tab-active">Espace de travail</button>
               <button id="project-mode-settings" class="project-mode-tab">Configuration</button>
             </div>
-            <div id="project-settings-panel" class="hidden">
+          </div> <!-- end project-overview-panel -->
+          <div id="project-settings-panel" class="hidden panel p-6 mb-6">
             <div id="project-settings-tabs-wrap" class="global-settings-tabs-wrap mt-4 mb-4">
               <div id="project-settings-tabs-list" class="project-view-tabs flex items-center gap-2 overflow-x-auto" role="tablist" aria-label="Sous-onglets paramètres projet">
+                <button id="project-settings-tab-overview" role="tab" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap hidden">Aperçu projet</button>
                 <button id="project-settings-tab-members" role="tab" aria-selected="true" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap view-tab-active">Membres</button>
                 <button id="project-settings-tab-collab" role="tab" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Collaboration</button>
                 <button id="project-settings-tab-themes" role="tab" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Thématiques</button>
                 <button id="project-settings-tab-permissions" role="tab" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Permissions</button>
+              </div>
+              <div class="project-settings-nav-controls">
+                <div class="project-subnav-layout-group flex bg-slate-100/80 p-1 rounded-lg" role="group" aria-label="Disposition des sous-onglets">
+                  <button id="btn-project-settings-subnav-horizontal" type="button" class="project-subnav-layout-btn" title="Disposition horizontale" aria-label="Disposition horizontale">
+                    <span class="material-symbols-outlined">top_panel_open</span>
+                  </button>
+                  <button id="btn-project-settings-subnav-vertical" type="button" class="project-subnav-layout-btn is-active" title="Disposition verticale" aria-label="Disposition verticale" aria-pressed="true">
+                    <span class="material-symbols-outlined">left_panel_open</span>
+                  </button>
+                  <button id="btn-project-settings-work-focus" type="button" class="project-subnav-focus-btn" title="Plein écran" aria-label="Plein écran">
+                    <span class="material-symbols-outlined">fullscreen</span>
+                    <span class="project-subnav-focus-text">Plein écran</span>
+                  </button>
+                </div>
               </div>
             </div>
             <div class="project-settings-card-members mt-1 border-t border-slate-100 pt-4 project-collab-block">
@@ -758,9 +796,8 @@
                 <p class="text-[11px] text-slate-500 mt-3">Note: certaines actions manager sont limitees aux membres (pas d escalation Proprietaire/Manager).</p>
               </div>
             </div>
-            </div>
           </div>
-
+          
           <div id="project-work-panel" class="panel p-6 mb-6">
             <div id="project-work-layout" class="project-work-layout">
               <aside id="project-work-nav" class="project-work-nav">
