@@ -1075,10 +1075,10 @@
       return `
         <div class="participants-stack" title="${escapeHtml(normalized.map(p => p.name).join(', '))}">
           ${visible.map((p, idx) => {
-            const avatarUrl = String(p.avatarDataUrl || '').replace(/'/g, '%27');
-            const style = p.avatarDataUrl
-              ? `background-image:url('${avatarUrl}'); background-size:cover; background-position:center; color:transparent;`
-              : `background:${stringToColor(p.userId || p.name || String(idx))};`;
+            const style = safeAvatarInlineStyle(
+              p.avatarDataUrl,
+              stringToColor(p.userId || p.name || String(idx))
+            );
             return `<span class="participant-chip" style="${style}" aria-label="${escapeHtml(p.name)}">${escapeHtml(getInitials(p.name))}</span>`;
           }).join('')}
           ${extra > 0 ? `<span class="participant-chip participant-chip-more">+${extra}</span>` : ''}
@@ -2204,6 +2204,7 @@
       await refreshGlobalTaxonomyCache();
       await refreshDirectoryFromKnownSources();
       currentUser = await initializeCurrentUser();
+      refreshGlobalMessageHiddenGroupsForCurrentUser();
       updateUserInfo();
       await refreshStats();
       await renderProjects();
@@ -3100,6 +3101,7 @@
       if (currentProjectId && currentProjectState) {
         renderTasks(currentProjectState.tasks || []);
         renderKanban(currentProjectState.tasks || []);
+        renderGantt(currentProjectState.tasks || []);
         renderTimeline(currentProjectState.tasks || []);
         renderDocuments(currentProjectState);
         renderMessages(currentProjectState.messages || []);
@@ -4147,6 +4149,97 @@
       }
     }
 
+    function isDashboardNewsVisibleContext() {
+      if (workspaceMode !== 'dashboard') return false;
+      const stats = document.getElementById('dashboard-stats');
+      return !stats || !stats.classList.contains('hidden');
+    }
+
+    function getDashboardNewsTypeMeta(post) {
+      if (post?.isAuto && post?.autoKind === 'project-created') return { label: 'Projet', icon: 'folder' };
+      if (post?.isAuto && post?.autoKind === 'task-created') return { label: 'Tâche', icon: 'assignment_add' };
+      if ((post?.mentions || []).length > 0) return { label: 'Mention', icon: 'alternate_email' };
+      if ((post?.refs || []).length > 0) return { label: 'Référence', icon: 'link' };
+      return { label: 'Post', icon: 'campaign' };
+    }
+
+    function getDashboardMajorNewsItems(posts, limit = 4) {
+      const source = Array.isArray(posts) ? posts : [];
+      return source
+        .filter((post) => post && !post.deletedAt)
+        .filter((post) => {
+          const content = String(post.content || '').trim();
+          return Boolean(post.isAuto)
+            || (Array.isArray(post.mentions) && post.mentions.length > 0)
+            || (Array.isArray(post.refs) && post.refs.length > 0)
+            || content.length >= 45;
+        })
+        .sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0))
+        .slice(0, Math.max(1, limit));
+    }
+
+    function stripMentionMarkupForDashboard(value) {
+      const text = String(value || '');
+      return text
+        .replace(/@\[(.*?)\]/g, (_, name) => String(name || '').trim())
+        .replace(/@([a-z0-9][a-z0-9._-]{1,63})/gi, '$1')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+    }
+
+    async function renderDashboardNews() {
+      const panel = document.getElementById('dashboard-news');
+      const list = document.getElementById('dashboard-news-list');
+      if (!panel || !list) return;
+
+      if (!isDashboardNewsVisibleContext()) {
+        panel.classList.add('hidden');
+        list.innerHTML = '';
+        return;
+      }
+
+      const posts = await getAllDecrypted('globalPosts', 'postId') || [];
+      const items = getDashboardMajorNewsItems(posts, 4);
+      if (!items.length) {
+        panel.classList.remove('hidden');
+        list.innerHTML = '<div class="dashboard-news-empty">Aucune actualité majeure pour le moment.</div>';
+        return;
+      }
+
+      list.innerHTML = items.map((post) => {
+        const content = stripMentionMarkupForDashboard(post.content || '');
+        const [headlineRaw, subtitleRaw] = content.split('\n');
+        const headline = stripMentionMarkupForDashboard(headlineRaw || '') || 'Mise à jour';
+        const subtitle = stripMentionMarkupForDashboard(
+          subtitleRaw || ((post.refs || []).map((ref) => ref?.label).filter(Boolean).slice(0, 2).join(' • '))
+        );
+        const typeMeta = getDashboardNewsTypeMeta(post);
+        const ts = Number(post.createdAt || Date.now());
+        const timeText = new Date(ts).toLocaleString('fr-FR', {
+          day: '2-digit',
+          month: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+        return `
+          <article class="dashboard-news-item">
+            <div class="dashboard-news-item-main">
+              <div class="dashboard-news-item-top">
+                <span class="dashboard-news-type">
+                  <span class="material-symbols-outlined">${typeMeta.icon}</span>
+                  ${escapeHtml(typeMeta.label)}
+                </span>
+              </div>
+              <div class="dashboard-news-text">${escapeHtml(headline)}</div>
+              ${subtitle ? `<div class="dashboard-news-sub">${escapeHtml(subtitle)}</div>` : ''}
+            </div>
+            <time class="dashboard-news-time">${escapeHtml(timeText)}</time>
+          </article>
+        `;
+      }).join('');
+      panel.classList.remove('hidden');
+    }
+
     async function renderProjects() {
       await refreshKnownUsersCache();
       const projects = await getAllProjects();
@@ -4191,12 +4284,14 @@
           </button>
         `;
         if (paginationContainer) paginationContainer.innerHTML = '';
+        await renderDashboardNews();
         return;
       }
 
       projectsList.classList.toggle('hidden', !shouldShowProjectsList);
       if (filteredProjects.length === 0) {
         container.innerHTML = '<p class="text-slate-500 text-center py-8">Aucun projet ne correspond à la recherche</p>';
+        await renderDashboardNews();
         return;
       }
 
@@ -4285,6 +4380,7 @@
         `;
       }).join('');
       renderPagination('projects-pagination', pagination, 'setProjectsPage', 'projets');
+      await renderDashboardNews();
     }
 
     let currentProjectId = null;
@@ -4296,6 +4392,7 @@
     let globalSettingsHelpOpen = false;
     let projectDetailMode = 'work'; // work | settings
     let projectSettingsTab = 'members'; // members | collab | permissions
+    let projectSubnavLayout = localStorage.getItem('taskmda_project_subnav_layout') === 'vertical' ? 'vertical' : 'horizontal';
     let projectPermissionDetailsOpen = false;
     let activeProjectView = 'list';
     let projectTaskPresentationMode = localStorage.getItem('taskmda_project_task_presentation') === 'list' ? 'list' : 'cards';
@@ -4311,6 +4408,7 @@
     let messageRenderedDraftHtml = '';
     let projectDescriptionExpanded = false;
     let emojiPickerOpen = false;
+    let globalEmojiPickerOpen = false;
     let messageFilters = { query: '', onlyMine: false };
     let globalSearchQuery = '';
     let headerSearchResults = [];
@@ -4337,16 +4435,25 @@
       upcoming: false,
       nodue: false
     };
-    let globalCalendarViewMode = 'list'; // list | grid
+    let globalCalendarViewMode = 'grid'; // list | grid
     let globalCalendarSelectedDay = null;
     let editingGlobalCalendarItemId = null;
     let currentCalendarInfoDetailId = null;
     let currentDocBindingContext = null;
     let currentDocEditorContext = null;
+    let docSpreadsheetEditorState = {
+      table: null,
+      activeTab: 'css',
+      workbook: null,
+      sheetName: '',
+      xlsxColumns: 8,
+      cssRows: []
+    };
     let selectedUserGroupId = null;
     let selectedProjectGroupId = null;
     let taskPendingGroupMemberUserIds = [];
     let editingStandaloneTaskId = null;
+    let pendingTaskConvertRef = null;
     let globalThemeCatalog = [];
     let globalGroupCatalog = [];
     let globalSoftwareVersionCatalog = [];
@@ -4371,11 +4478,14 @@
     const GLOBAL_MESSAGE_THREAD_INITIAL_BATCH = 40;
     const GLOBAL_MESSAGE_THREAD_BATCH_SIZE = 32;
     const GLOBAL_MESSAGE_BROADCAST_LABEL = 'Canal général (tous les agents connus)';
+    const GLOBAL_MESSAGE_HIDDEN_GROUPS_STORAGE_KEY = 'taskmda_global_hidden_group_channels_v1';
     let globalMessagePeerUserId = GLOBAL_MESSAGE_BROADCAST_TARGET;
     let globalMessageActiveGroupConversationId = '';
     let globalMessageRecipientUserIds = new Set();
     let globalMessageContactsRenderLimit = GLOBAL_MESSAGE_CONTACTS_INITIAL_BATCH;
     let globalMessageThreadRenderLimit = GLOBAL_MESSAGE_THREAD_INITIAL_BATCH;
+    let editingGlobalMessageId = null;
+    let editingGlobalMessageDraft = '';
     let knownGlobalMessageIds = new Set();
     let knownGlobalPostIds = new Set();
     let globalFeedFocusPostId = '';
@@ -4384,6 +4494,7 @@
     let globalFeedMentionCatalogCache = null;
     const GLOBAL_MESSAGE_READ_STORAGE_KEY = 'taskmda_global_message_reads_v1';
     let globalMessageReadMap = loadGlobalMessageReadMap();
+    let globalMessageHiddenGroupChannels = loadGlobalMessageHiddenGroupChannels();
     let projectTaskCardsColumns = Math.min(4, Math.max(1, Number.parseInt(localStorage.getItem('taskmda_project_task_cards_cols') || '1', 10) || 1));
     let globalTaskCardsColumns = Math.min(4, Math.max(1, Number.parseInt(localStorage.getItem('taskmda_global_task_cards_cols') || '1', 10) || 1));
     const GLOBAL_KANBAN_INITIAL_BATCH = 18;
@@ -4396,9 +4507,9 @@
     let currentGlobalTaskDetailRef = '';
     let globalKanbanInfiniteScrollState = null;
     const chatEmojiPalette = [
-      'ðŸ˜€', 'ðŸ˜„', 'ðŸ™‚', 'ðŸ˜‰', '😊', 'ðŸ˜', 'ðŸ˜Ž', 'ðŸ¤',
-      '👍', '👏', '🙌', '🙏', '💡', '✅', '⚠️', '🚀',
-      'ðŸ“Œ', 'ðŸ“…', 'ðŸ“Ž', 'ðŸ“', 'ðŸ“£', 'ðŸŽ¯', 'ðŸ”¥', 'ðŸ’¬'
+      '\u{1F600}', '\u{1F604}', '\u{1F642}', '\u{1F609}', '\u{1F60A}', '\u{1F60D}', '\u{1F60E}', '\u{1F91D}',
+      '\u{1F44D}', '\u{1F44F}', '\u{1F64C}', '\u{1F64F}', '\u{1F4A1}', '\u{2705}', '\u{26A0}\u{FE0F}', '\u{1F680}',
+      '\u{1F4CC}', '\u{1F4C5}', '\u{1F4CE}', '\u{1F4DD}', '\u{1F4E3}', '\u{1F3AF}', '\u{1F525}', '\u{1F4AC}'
     ];
     let projectEditorEmojiPickerOpen = false;
     let projectEditorEmojiTarget = '';
@@ -4423,6 +4534,87 @@
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+    }
+
+    function extractDataUrlMimeType(url) {
+      const raw = String(url || '').trim();
+      if (!raw.toLowerCase().startsWith('data:')) return '';
+      const withoutPrefix = raw.slice(5);
+      const sepIdx = withoutPrefix.search(/[;,]/);
+      const mime = (sepIdx >= 0 ? withoutPrefix.slice(0, sepIdx) : withoutPrefix).trim().toLowerCase();
+      return mime;
+    }
+
+    function isDangerousUrlScheme(url) {
+      const lower = String(url || '').trim().toLowerCase();
+      return lower.startsWith('javascript:') || lower.startsWith('vbscript:');
+    }
+
+    function sanitizeUrlForDom(url, options = {}) {
+      const raw = String(url || '').trim();
+      if (!raw) return '';
+      if (isDangerousUrlScheme(raw)) return '';
+      const lower = raw.toLowerCase();
+      const allowHttp = options.allowHttp !== false;
+      const allowBlob = options.allowBlob !== false;
+      const allowData = options.allowData !== false;
+      const allowDataMimePrefixes = Array.isArray(options.allowDataMimePrefixes)
+        ? options.allowDataMimePrefixes.map((v) => String(v || '').toLowerCase()).filter(Boolean)
+        : [];
+
+      if (lower.startsWith('https://') || lower.startsWith('http://')) {
+        return allowHttp ? raw : '';
+      }
+      if (lower.startsWith('blob:')) {
+        return allowBlob ? raw : '';
+      }
+      if (lower.startsWith('data:')) {
+        if (!allowData) return '';
+        const mime = extractDataUrlMimeType(raw);
+        if (!mime) return '';
+        if (allowDataMimePrefixes.length === 0) return raw;
+        const ok = allowDataMimePrefixes.some((prefix) => mime.startsWith(prefix));
+        return ok ? raw : '';
+      }
+      return '';
+    }
+
+    function sanitizeAvatarDataUrl(url) {
+      return sanitizeUrlForDom(url, {
+        allowHttp: true,
+        allowBlob: true,
+        allowData: true,
+        allowDataMimePrefixes: ['image/']
+      });
+    }
+
+    function safeAvatarInlineStyle(url, fallbackColor) {
+      const safeUrl = sanitizeAvatarDataUrl(url);
+      if (safeUrl) {
+        const escapedUrl = safeUrl.replace(/'/g, '%27').replace(/"/g, '%22');
+        return `background-image:url('${escapedUrl}'); background-size:cover; background-position:center; color:transparent;`;
+      }
+      return `background:${fallbackColor};`;
+    }
+
+    function sanitizeDownloadHref(url, mimeHint = '') {
+      const hints = [String(mimeHint || '').toLowerCase()];
+      return sanitizeUrlForDom(url, {
+        allowHttp: true,
+        allowBlob: true,
+        allowData: true,
+        allowDataMimePrefixes: [
+          ...hints.filter(Boolean),
+          'application/octet-stream',
+          'application/pdf',
+          'image/',
+          'text/',
+          'application/msword',
+          'application/vnd',
+          'application/rtf',
+          'application/zip'
+        ]
+      });
     }
 
     const LOCK_SCOPE_TASK = 'task';
@@ -4642,6 +4834,14 @@
           node.scrollTop = 0;
         }
       });
+    }
+
+    function updateTopbarHeightVar() {
+      const topbar = document.querySelector('.topbar');
+      const root = document.documentElement;
+      if (!topbar || !root) return;
+      const measured = Math.max(56, Math.round(topbar.getBoundingClientRect().height || 0));
+      root.style.setProperty('--topbar-height', `${measured}px`);
     }
 
     function detachGlobalKanbanInfiniteScroll() {
@@ -4913,15 +5113,58 @@
 
     function getViewButtons() {
       return {
+        overview: document.getElementById('view-overview'),
         cards: document.getElementById('view-cards'),
         list: document.getElementById('view-list'),
         kanban: document.getElementById('view-kanban'),
+        gantt: document.getElementById('view-gantt'),
         timeline: document.getElementById('view-timeline'),
         docs: document.getElementById('view-docs'),
         chat: document.getElementById('view-chat'),
         activity: document.getElementById('view-activity'),
         archives: document.getElementById('view-archives')
       };
+    }
+
+    function relocateProjectOverviewPanel() {
+      const overviewPanel = document.getElementById('project-overview-panel');
+      const overviewAnchor = document.getElementById('project-overview-anchor');
+      const workMain = document.querySelector('#project-work-layout .project-work-main');
+      if (!overviewPanel || !overviewAnchor || !workMain) return;
+      const shouldInlineInWorkArea = (
+        projectDetailMode === 'work'
+        && projectSubnavLayout === 'vertical'
+        && activeProjectView === 'overview'
+      );
+      if (shouldInlineInWorkArea) {
+        if (overviewPanel.parentElement !== workMain) {
+          workMain.prepend(overviewPanel);
+        }
+        return;
+      }
+      if (overviewPanel.parentElement !== overviewAnchor.parentElement) {
+        overviewAnchor.insertAdjacentElement('afterend', overviewPanel);
+      }
+    }
+
+    function updateProjectOverviewVisibility() {
+      const overviewPanel = document.getElementById('project-overview-panel');
+      if (!overviewPanel) return;
+      relocateProjectOverviewPanel();
+      const inSettings = projectDetailMode === 'settings';
+      const inVerticalWorkMode = projectDetailMode === 'work' && projectSubnavLayout === 'vertical';
+      const shouldShowOverview = inSettings || !inVerticalWorkMode || activeProjectView === 'overview';
+      overviewPanel.classList.toggle('hidden', !shouldShowOverview);
+      overviewPanel.setAttribute('aria-hidden', shouldShowOverview ? 'false' : 'true');
+    }
+
+    function applyProjectSettingsLayout() {
+      const settingsPanel = document.getElementById('project-settings-panel');
+      const settingsTabsList = document.getElementById('project-settings-tabs-list');
+      if (!settingsPanel || !settingsTabsList) return;
+      const isVertical = projectSubnavLayout === 'vertical';
+      settingsPanel.classList.toggle('is-vertical', isVertical);
+      settingsTabsList.setAttribute('aria-orientation', isVertical ? 'vertical' : 'horizontal');
     }
 
     function setProjectTaskPresentationMode(mode) {
@@ -4993,7 +5236,7 @@
         }
       });
 
-      const allowedTags = new Set(['p', 'br', 'strong', 'em', 'u', 's', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'blockquote', 'code', 'pre', 'a', 'img', 'figure', 'figcaption', 'span', 'div']);
+      const allowedTags = new Set(['p', 'br', 'strong', 'em', 'u', 's', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'blockquote', 'code', 'pre', 'a', 'img', 'figure', 'figcaption', 'span', 'div', 'iframe']);
       const allowedImageClasses = new Set(['desc-img-align-left', 'desc-img-align-center', 'desc-img-align-right']);
 
       function safeHref(value) {
@@ -5010,6 +5253,30 @@
         const lower = raw.toLowerCase();
         if (lower.startsWith('data:image/')) return raw;
         if (lower.startsWith('http://') || lower.startsWith('https://')) return raw;
+        return '';
+      }
+
+      function safeVideoEmbedSrc(value) {
+        const raw = String(value || '').trim();
+        if (!raw) return '';
+        let url;
+        try {
+          url = new URL(raw);
+        } catch {
+          return '';
+        }
+        const protocol = String(url.protocol || '').toLowerCase();
+        if (protocol !== 'https:' && protocol !== 'http:') return '';
+        const hostname = String(url.hostname || '').toLowerCase().replace(/^www\./, '');
+        const pathname = String(url.pathname || '');
+        if (hostname === 'youtube.com' || hostname === 'm.youtube.com') {
+          if (pathname.startsWith('/embed/')) return raw;
+          return '';
+        }
+        if (hostname === 'youtube-nocookie.com' && pathname.startsWith('/embed/')) return raw;
+        if (hostname === 'player.vimeo.com' && pathname.startsWith('/video/')) return raw;
+        if (hostname === 'dailymotion.com' && pathname.startsWith('/embed/video/')) return raw;
+        if (hostname === 'loom.com' && pathname.startsWith('/embed/')) return raw;
         return '';
       }
 
@@ -5061,6 +5328,17 @@
           out.setAttribute('style', `width:${widthPercent}%;max-width:100%;height:auto`);
           const cls = String(node.getAttribute('class') || '').split(/\s+/).find(c => allowedImageClasses.has(c));
           out.setAttribute('class', cls || 'desc-img-align-center');
+          return out;
+        } else if (tag === 'iframe') {
+          const src = safeVideoEmbedSrc(node.getAttribute('src'));
+          if (!src) return null;
+          out.setAttribute('src', src);
+          out.setAttribute('class', 'desc-video-embed');
+          out.setAttribute('frameborder', '0');
+          out.setAttribute('allowfullscreen', 'true');
+          out.setAttribute('loading', 'lazy');
+          out.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+          out.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share');
           return out;
         }
 
@@ -5133,8 +5411,17 @@
       }
     }
 
+    function collapseProjectDescriptionIfExpanded() {
+      if (!projectDescriptionExpanded) return;
+      projectDescriptionExpanded = false;
+      renderProjectDescription(currentProjectState?.project?.description || '');
+    }
+
     function setProjectDetailMode(mode) {
       const nextMode = mode === 'settings' ? 'settings' : 'work';
+      if (nextMode !== 'work') {
+        collapseProjectDescriptionIfExpanded();
+      }
       projectDetailMode = nextMode;
       const workPanel = document.getElementById('project-work-panel');
       const settingsPanel = document.getElementById('project-settings-panel');
@@ -5147,9 +5434,18 @@
       if (addTaskBtn) addTaskBtn.classList.toggle('hidden', nextMode !== 'work');
       if (workBtn) workBtn.classList.toggle('view-tab-active', nextMode === 'work');
       if (settingsBtn) settingsBtn.classList.toggle('view-tab-active', nextMode === 'settings');
+      if (nextMode !== 'work') {
+        clearProjectWorkFocusState();
+      }
+      if (nextMode === 'work') {
+        applyProjectSubnavLayout();
+        syncProjectWorkFocusButton();
+      }
       if (nextMode === 'settings') {
+        applyProjectSettingsLayout();
         applyProjectSettingsTabView();
       }
+      updateProjectOverviewVisibility();
     }
 
     function applyProjectSettingsTabView() {
@@ -5187,7 +5483,115 @@
       applyProjectSettingsTabView();
     }
 
+    function syncProjectWorkFocusButton() {
+      const btn = document.getElementById('btn-project-work-focus');
+      const panel = document.getElementById('project-work-panel');
+      const addTaskBtn = document.getElementById('btn-add-task');
+      if (!btn || !panel) return;
+      const icon = btn.querySelector('.material-symbols-outlined');
+      const text = btn.querySelector('.project-subnav-focus-text');
+      const nativeFullscreenActive = document.fullscreenElement === panel;
+      const fallbackActive = panel.classList.contains('project-work-focus-fallback');
+      const browserFullscreenLike = (
+        workspaceMode === 'project'
+        && projectDetailMode === 'work'
+        && (
+          Math.abs(window.innerHeight - window.screen.height) <= 2
+          || Math.abs(window.innerHeight - window.screen.availHeight) <= 2
+        )
+      );
+      const active = nativeFullscreenActive || fallbackActive;
+      const hideAddTask = active || browserFullscreenLike;
+      btn.classList.toggle('is-active', active);
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+      btn.setAttribute('title', active ? 'Quitter le plein écran' : 'Plein écran');
+      if (icon) icon.textContent = active ? 'fullscreen_exit' : 'fullscreen';
+      if (text) text.textContent = active ? 'Quitter plein écran' : 'Plein écran';
+      if (addTaskBtn) addTaskBtn.classList.toggle('hidden', hideAddTask);
+    }
+
+    function clearProjectWorkFocusState() {
+      const panel = document.getElementById('project-work-panel');
+      if (!panel) return;
+      panel.classList.remove('project-work-focus-fallback');
+      if (document.fullscreenElement === panel && typeof document.exitFullscreen === 'function') {
+        document.exitFullscreen().catch(() => {});
+      }
+      syncProjectWorkFocusButton();
+    }
+
+    function applyProjectSubnavLayout() {
+      const layout = document.getElementById('project-work-layout');
+      const panel = document.getElementById('project-work-panel');
+      const tabsWrap = document.getElementById('project-view-tabs-wrap');
+      const horizontalBtn = document.getElementById('btn-project-subnav-horizontal');
+      const verticalBtn = document.getElementById('btn-project-subnav-vertical');
+      const overviewBtn = document.getElementById('view-overview');
+      if (!layout || !panel) return;
+      layout.classList.toggle('is-vertical', projectSubnavLayout === 'vertical');
+      panel.classList.toggle('project-subnav-vertical-active', projectSubnavLayout === 'vertical');
+      if (tabsWrap) {
+        tabsWrap.setAttribute('aria-orientation', projectSubnavLayout === 'vertical' ? 'vertical' : 'horizontal');
+      }
+      if (horizontalBtn) {
+        horizontalBtn.classList.toggle('is-active', projectSubnavLayout === 'horizontal');
+        horizontalBtn.setAttribute('aria-pressed', projectSubnavLayout === 'horizontal' ? 'true' : 'false');
+      }
+      if (verticalBtn) {
+        verticalBtn.classList.toggle('is-active', projectSubnavLayout === 'vertical');
+        verticalBtn.setAttribute('aria-pressed', projectSubnavLayout === 'vertical' ? 'true' : 'false');
+      }
+      if (overviewBtn) {
+        const showOverviewTab = projectSubnavLayout === 'vertical';
+        overviewBtn.classList.toggle('hidden', !showOverviewTab);
+        overviewBtn.setAttribute('aria-hidden', showOverviewTab ? 'false' : 'true');
+        overviewBtn.setAttribute('tabindex', showOverviewTab ? '0' : '-1');
+      }
+      applyProjectSettingsLayout();
+      updateProjectOverviewVisibility();
+    }
+
+    function setProjectSubnavLayout(mode) {
+      const next = mode === 'vertical' ? 'vertical' : 'horizontal';
+      const wasOverview = activeProjectView === 'overview';
+      projectSubnavLayout = next;
+      localStorage.setItem('taskmda_project_subnav_layout', next);
+      applyProjectSubnavLayout();
+      if (next === 'horizontal' && wasOverview) {
+        // Force le même comportement UX que "Voir moins" en quittant l'aperçu.
+        setProjectView('list');
+        return;
+      }
+      if (next === 'horizontal' && activeProjectView === 'list') {
+        setProjectView('list');
+      }
+    }
+
+    async function toggleProjectWorkFocus() {
+      const panel = document.getElementById('project-work-panel');
+      if (!panel) return;
+      const supportsFullscreen = typeof panel.requestFullscreen === 'function';
+      if (supportsFullscreen) {
+        try {
+          if (document.fullscreenElement === panel) {
+            await document.exitFullscreen();
+          } else {
+            await panel.requestFullscreen();
+          }
+        } catch (_) {
+          panel.classList.toggle('project-work-focus-fallback');
+        }
+      } else {
+        panel.classList.toggle('project-work-focus-fallback');
+      }
+      syncProjectWorkFocusButton();
+    }
+
     function setProjectView(view) {
+      const previousView = activeProjectView;
+      if (previousView === 'overview' && view !== 'overview') {
+        collapseProjectDescriptionIfExpanded();
+      }
       if (view === 'activity' && !canReadProjectActivity(currentProjectState)) {
         showToast('Action non autorisee');
         view = 'list';
@@ -5197,6 +5601,7 @@
       const taskListSection = document.getElementById('task-list-section');
       const sections = {
         kanban: document.getElementById('kanban-section'),
+        gantt: document.getElementById('gantt-section'),
         timeline: document.getElementById('timeline-section'),
         docs: document.getElementById('documents-section'),
         chat: document.getElementById('discussion-section'),
@@ -5244,10 +5649,14 @@
       } else {
         const navKey = view === 'docs'
           ? 'docs'
-          : view === 'timeline'
+          : view === 'timeline' || view === 'gantt'
             ? 'calendar'
             : 'tasks';
         setActiveSidebarNav(navKey);
+      }
+      updateProjectOverviewVisibility();
+      if (view === 'list' && workspaceMode === 'project' && currentProjectState) {
+        renderTasks(currentProjectState.tasks || []);
       }
       applyLiveSearchFilter();
     }
@@ -6177,6 +6586,272 @@
       }
     }
 
+    function renderTaskDescriptionToElement(task = {}, targetEl = null) {
+      if (!targetEl) return;
+      const html = sanitizeProjectDescriptionHtml(task.descriptionHtml || '');
+      if (html) {
+        targetEl.innerHTML = html;
+        return;
+      }
+      targetEl.textContent = String(task.description || '').trim() || 'Aucune description.';
+    }
+
+    function mapTaskStatusToProjectStatus(taskStatus = '') {
+      const status = String(taskStatus || '').trim();
+      if (status === 'termine') return 'termine';
+      if (status === 'todo') return 'planifie';
+      return 'en-cours';
+    }
+
+    function closeTaskConvertModal() {
+      const modal = document.getElementById('modal-task-convert');
+      if (!modal) return;
+      modal.classList.add('hidden');
+      pendingTaskConvertRef = null;
+      const errorEl = document.getElementById('task-convert-error');
+      if (errorEl) errorEl.classList.add('hidden');
+    }
+
+    async function openTaskConvertModal(taskRef, prefill = {}) {
+      const modal = document.getElementById('modal-task-convert');
+      if (!modal) {
+        await convertTaskToProject(taskRef, { ...prefill, __fromModal: true });
+        return;
+      }
+      const resolved = await resolveGlobalTaskFromRef(taskRef);
+      if (!resolved?.task) {
+        showToast('Tache introuvable');
+        return;
+      }
+      const task = resolved.task;
+      const sourceType = resolved.sourceType;
+      const sourceState = sourceType === 'project' ? resolved.state : null;
+      if (sourceType === 'project' && !canEditTaskInProject(task, sourceState)) {
+        showToast('Action non autorisee');
+        return;
+      }
+
+      const suggestedName = String(task.title || '').trim() || 'Nouveau projet';
+      const sharingMode = normalizeSharingMode(
+        prefill?.sharingMode || task.sharingMode || sourceState?.project?.sharingMode || 'private',
+        'private'
+      );
+      const sourceProjectName = sourceType === 'project'
+        ? String(sourceState?.project?.name || '').trim()
+        : 'Hors projet';
+
+      const sourceLabelEl = document.getElementById('task-convert-source-label');
+      const projectNameInput = document.getElementById('task-convert-project-name');
+      const modeSelect = document.getElementById('task-convert-mode');
+      const archiveCheckbox = document.getElementById('task-convert-archive-source');
+      const openCheckbox = document.getElementById('task-convert-open-project');
+      const errorEl = document.getElementById('task-convert-error');
+
+      if (sourceLabelEl) sourceLabelEl.textContent = `${String(task.title || 'Tâche').trim()} • ${sourceProjectName}`;
+      if (projectNameInput) projectNameInput.value = String(prefill?.projectName || suggestedName);
+      if (modeSelect) modeSelect.value = sharingMode;
+      if (archiveCheckbox) archiveCheckbox.checked = prefill?.archiveSource !== false;
+      if (openCheckbox) openCheckbox.checked = prefill?.openProjectAfterConvert !== false;
+      if (errorEl) errorEl.classList.add('hidden');
+
+      pendingTaskConvertRef = taskRef;
+      modal.classList.remove('hidden');
+      requestAnimationFrame(() => {
+        projectNameInput?.focus();
+        projectNameInput?.select();
+      });
+    }
+
+    async function convertTaskToProject(taskRef, options = {}) {
+      if (!options?.__fromModal) {
+        await openTaskConvertModal(taskRef, options || {});
+        return;
+      }
+
+      const resolved = await resolveGlobalTaskFromRef(taskRef);
+      if (!resolved?.task) {
+        showToast('Tache introuvable');
+        return;
+      }
+      const task = resolved.task;
+      const sourceType = resolved.sourceType;
+      const sourceState = sourceType === 'project' ? resolved.state : null;
+      if (sourceType === 'project' && !canEditTaskInProject(task, sourceState)) {
+        showToast('Action non autorisee');
+        return;
+      }
+
+      const suggestedName = String(task.title || '').trim() || 'Nouveau projet';
+      const projectName = String(options?.projectName || suggestedName).trim();
+      if (!projectName) return;
+
+      const archiveSourceTask = options?.archiveSource === true;
+
+      const projectId = `project-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      const sourceProject = sourceState?.project || null;
+      const sharingMode = normalizeSharingMode(
+        options?.sharingMode || task.sharingMode || sourceProject?.sharingMode || 'private',
+        'private'
+      );
+      const readAccess = String(sourceProject?.readAccess || 'private') === 'public' ? 'public' : 'private';
+      const descriptionHtml = sanitizeProjectDescriptionHtml(
+        String(task.descriptionHtml || task.description || '').trim()
+      );
+      const assignees = Array.isArray(task.assignees) && task.assignees.length > 0
+        ? task.assignees
+        : getTaskAssigneeEntries(task, sourceState);
+      const preparedAssignees = assignees
+        .map((entry) => ({
+          userId: entry?.userId ? String(entry.userId).trim() : null,
+          name: String(entry?.name || '').trim(),
+          email: String(entry?.email || '').trim()
+        }))
+        .filter((entry) => entry.userId || entry.name || entry.email);
+      const primaryAssignee = preparedAssignees[0] || { userId: null, name: '', email: '' };
+      const firstTaskId = uuidv4();
+      const firstGroupName = String(task.groupName || getTaskGroupName(task, sourceState) || '').trim();
+      const firstGroupId = firstGroupName ? uuidv4() : null;
+
+      let sharedKeyHex = null;
+      try {
+        await runWithLoading(async () => {
+          if (sharingMode === 'shared') {
+            const sharedKey = await window.TaskMDACrypto.generateSharedKey();
+            sharedKeyHex = await window.TaskMDACrypto.exportSharedKey(sharedKey);
+            await putEncrypted('sharedKeys', {
+              projectId,
+              sharedKey: sharedKeyHex,
+              passphrase: null,
+              createdAt: Date.now()
+            }, 'projectId');
+          }
+
+          const createProjectEvent = createEvent(
+            EventTypes.CREATE_PROJECT,
+            projectId,
+            currentUser.userId,
+            {
+              name: projectName,
+              description: descriptionHtml,
+              status: mapTaskStatusToProjectStatus(task.status || ''),
+              readAccess,
+              sharingMode,
+              joinPassphrase: null
+            }
+          );
+          await publishEvent(createProjectEvent);
+
+          const addOwnerEvent = createEvent(
+            EventTypes.ADD_MEMBER,
+            projectId,
+            currentUser.userId,
+            { userId: currentUser.userId, role: 'owner' }
+          );
+          await publishEvent(addOwnerEvent);
+
+          const createGroupEvent = firstGroupId
+            ? createEvent(
+                EventTypes.CREATE_GROUP,
+                projectId,
+                currentUser.userId,
+                { groupId: firstGroupId, name: firstGroupName, description: 'Groupe importé depuis une tâche convertie' }
+              )
+            : null;
+          if (createGroupEvent) {
+            await publishEvent(createGroupEvent);
+          }
+
+          const createTaskEvent = createEvent(
+            EventTypes.CREATE_TASK,
+            projectId,
+            currentUser.userId,
+            {
+              taskId: firstTaskId,
+              createdBy: task.createdBy || currentUser.userId,
+              title: task.title || 'Tâche convertie',
+              assignee: primaryAssignee.name || '',
+              assigneeUserId: primaryAssignee.userId || null,
+              assignees: preparedAssignees,
+              description: getProjectDescriptionPlainText(descriptionHtml).trim() || String(task.description || '').trim(),
+              descriptionHtml: descriptionHtml || '',
+              requestDate: task.requestDate || null,
+              dueDate: task.dueDate || null,
+              status: task.status || 'todo',
+              urgency: task.urgency || 'medium',
+              theme: String(task.theme || '').trim(),
+              groupId: firstGroupId,
+              groupName: firstGroupName || null,
+              subtasks: normalizeTaskSubtasks(task),
+              attachments: Array.isArray(task.attachments) ? task.attachments : []
+            }
+          );
+          await publishEvent(createTaskEvent);
+
+          if (sharingMode === 'shared') {
+            await registerProject(projectId);
+            if (sharedKeyHex) await writeProjectSharedKeyToFolder(projectId, sharedKeyHex);
+            if (sharedFolderHandle) {
+              await writeEventToSharedFolder(projectId, createProjectEvent);
+              await writeEventToSharedFolder(projectId, addOwnerEvent);
+              if (createGroupEvent) await writeEventToSharedFolder(projectId, createGroupEvent);
+              await writeEventToSharedFolder(projectId, createTaskEvent);
+              if (!isPolling) startPolling();
+            }
+          }
+
+          if (archiveSourceTask) {
+            if (sourceType === 'project') {
+              const sourceProjectId = resolved.projectId;
+              const archiveEvent = createEvent(
+                EventTypes.UPDATE_TASK,
+                sourceProjectId,
+                currentUser.userId,
+                {
+                  taskId: task.taskId,
+                  changes: {
+                    status: 'termine',
+                    archivedAt: Date.now(),
+                    convertedProjectId: projectId,
+                    convertedAt: Date.now()
+                  }
+                }
+              );
+              await publishEvent(archiveEvent);
+              if (sharedFolderHandle) {
+                await writeEventToSharedFolder(sourceProjectId, archiveEvent);
+              }
+            } else {
+              await putEncrypted('globalTasks', {
+                ...task,
+                status: 'termine',
+                archivedAt: Date.now(),
+                convertedProjectId: projectId,
+                convertedAt: Date.now(),
+                updatedAt: Date.now()
+              }, 'id');
+            }
+          }
+        });
+
+        closeGlobalTaskDetails();
+        await refreshStats();
+        await renderProjects();
+        if (workspaceMode === 'global') {
+          await renderGlobalTasks();
+        }
+        if (resolved.sourceType === 'project' && currentProjectId === resolved.projectId) {
+          await showProjectDetail(currentProjectId);
+        }
+        showToast('✅ Tâche convertie en projet');
+        if (options?.openProjectAfterConvert !== false) {
+          await showProjectDetail(projectId);
+        }
+      } catch (error) {
+        console.error('Task convert to project failed:', error);
+        showToast('❌ Conversion impossible');
+      }
+    }
+
     async function openGlobalTaskDetails(taskRef) {
       const modal = document.getElementById('modal-global-task-details');
       if (!modal) return;
@@ -6201,6 +6876,7 @@
       const groupEl = document.getElementById('global-task-detail-group');
       const subtasksEl = document.getElementById('global-task-detail-subtasks');
       const attachmentsEl = document.getElementById('global-task-detail-attachments');
+      const btnConvert = document.getElementById('btn-global-task-detail-convert');
       const btnEdit = document.getElementById('btn-global-task-detail-edit');
       const btnArchive = document.getElementById('btn-global-task-detail-archive');
       const btnDelete = document.getElementById('btn-global-task-detail-delete');
@@ -6212,7 +6888,6 @@
       const sourceTheme = String(task.theme || 'General');
       const assigneeNames = getTaskAssigneeName(task, state) || 'Non assigne';
       const groupName = getTaskGroupName(task, state) || task.groupName || 'Aucun groupe';
-      const description = String(task.description || '').trim() || 'Aucune description.';
       const subtasks = normalizeTaskSubtasks(task);
       const doneSubtasks = subtasks.filter(item => item.done).length;
       const attachments = Array.isArray(task.attachments) ? task.attachments : [];
@@ -6226,7 +6901,7 @@
           ${sharingModeBadge(task.sharingMode)}
         `;
       }
-      if (descriptionEl) descriptionEl.textContent = description;
+      renderTaskDescriptionToElement(task, descriptionEl);
       if (requestDateEl) requestDateEl.textContent = formatDate(task.requestDate);
       if (dueDateEl) dueDateEl.textContent = formatDate(task.dueDate);
       if (assigneesEl) assigneesEl.textContent = assigneeNames;
@@ -6259,6 +6934,13 @@
         }
       }
 
+      if (btnConvert) {
+        btnConvert.classList.toggle('hidden', !canEdit);
+        btnConvert.onclick = async () => {
+          closeGlobalTaskDetails();
+          await convertTaskToProject(taskRef);
+        };
+      }
       if (btnEdit) {
         btnEdit.classList.toggle('hidden', !canEdit);
         btnEdit.onclick = async () => {
@@ -6310,6 +6992,7 @@
       const groupEl = document.getElementById('global-task-detail-group');
       const subtasksEl = document.getElementById('global-task-detail-subtasks');
       const attachmentsEl = document.getElementById('global-task-detail-attachments');
+      const btnConvert = document.getElementById('btn-global-task-detail-convert');
       const btnEdit = document.getElementById('btn-global-task-detail-edit');
       const btnArchive = document.getElementById('btn-global-task-detail-archive');
       const btnDelete = document.getElementById('btn-global-task-detail-delete');
@@ -6319,7 +7002,6 @@
       const sourceTheme = String(task.theme || 'General');
       const assigneeNames = getTaskAssigneeName(task, state) || 'Non assigne';
       const groupName = getTaskGroupName(task, state) || task.groupName || 'Aucun groupe';
-      const description = String(task.description || '').trim() || 'Aucune description.';
       const subtasks = normalizeTaskSubtasks(task);
       const doneSubtasks = subtasks.filter(item => item.done).length;
       const attachments = Array.isArray(task.attachments) ? task.attachments : [];
@@ -6335,7 +7017,7 @@
           ${sharingModeBadge(sharingMode)}
         `;
       }
-      if (descriptionEl) descriptionEl.textContent = description;
+      renderTaskDescriptionToElement(task, descriptionEl);
       if (requestDateEl) requestDateEl.textContent = formatDate(task.requestDate);
       if (dueDateEl) dueDateEl.textContent = formatDate(task.dueDate);
       if (assigneesEl) assigneesEl.textContent = assigneeNames;
@@ -6384,6 +7066,18 @@
         }
       }
 
+      if (btnConvert) {
+        btnConvert.classList.toggle('hidden', !canEdit);
+        btnConvert.onclick = async () => {
+          const taskRef = buildGlobalTaskRef({
+            sourceType: 'project',
+            sourceProjectId: currentProjectId,
+            taskId: task.taskId
+          });
+          closeGlobalTaskDetails();
+          await convertTaskToProject(taskRef);
+        };
+      }
       if (btnEdit) {
         btnEdit.classList.toggle('hidden', !canEdit);
         btnEdit.onclick = async () => {
@@ -7595,7 +8289,11 @@
         editingTaskId = task.taskId;
         editingStandaloneTaskId = standaloneTaskMode ? (task.id || editingStandaloneTaskId || null) : null;
         document.getElementById('task-title').value = task.title || '';
-        document.getElementById('task-description').value = task.description || '';
+        setProjectDescriptionEditorContent(
+          'task-description-editor',
+          'task-description',
+          task.descriptionHtml || task.description || ''
+        );
         const manualAssignees = currentAssignees
           .filter(a => !a.userId && a.name)
           .map(a => (a.email && normalizeSearch(a.email) !== normalizeSearch(a.name || '')) ? `${a.name} <${a.email}>` : a.name);
@@ -7606,6 +8304,8 @@
         document.getElementById('task-urgency').value = task.urgency || 'medium';
         document.getElementById('task-subtasks').value = (task.subtasks || []).map(st => st.label).join('\n');
         document.getElementById('task-files').value = '';
+        const taskEditorImageInput = document.getElementById('task-description-image-input');
+        if (taskEditorImageInput) taskEditorImageInput.value = '';
         document.getElementById('task-share-docs').checked = true;
         document.getElementById('btn-save-task').textContent = 'Mettre à jour';
         if (standaloneModeInput) standaloneModeInput.value = normalizeSharingMode(task.sharingMode, 'private');
@@ -7636,7 +8336,7 @@
         editingTaskId = null;
         editingStandaloneTaskId = null;
         document.getElementById('task-title').value = '';
-        document.getElementById('task-description').value = '';
+        setProjectDescriptionEditorContent('task-description-editor', 'task-description', '');
         document.getElementById('task-assignee-manual').value = '';
         document.getElementById('task-request-date').value = toYmd(new Date());
         document.getElementById('task-due-date').value = '';
@@ -7644,6 +8344,8 @@
         document.getElementById('task-urgency').value = 'medium';
         document.getElementById('task-subtasks').value = '';
         document.getElementById('task-files').value = '';
+        const taskEditorImageInput = document.getElementById('task-description-image-input');
+        if (taskEditorImageInput) taskEditorImageInput.value = '';
         document.getElementById('task-share-docs').checked = true;
         document.getElementById('btn-save-task').textContent = 'Créer';
         if (standaloneModeInput) standaloneModeInput.value = 'private';
@@ -7820,6 +8522,7 @@
       renderTasks(visibleTasks);
       renderArchivedTasks(state.tasks || []);
       renderKanban(visibleTasks);
+      renderGantt(visibleTasks);
       renderTimeline(visibleTasks);
       renderCalendar(visibleTasks);
       renderDocuments(state);
@@ -7827,6 +8530,8 @@
       const events = await getProjectEvents(projectId);
       currentProjectEvents = events;
       await renderActivity(events);
+      applyProjectSubnavLayout();
+      syncProjectWorkFocusButton();
       setProjectDetailMode(projectDetailMode);
       setProjectView(activeProjectView);
       applyLiveSearchFilter();
@@ -7868,6 +8573,9 @@
       setProjectDescriptionEditorContent('edit-project-description-editor', 'edit-project-description', state.project.description || '');
       const editImageInput = document.getElementById('edit-project-description-image-input');
       if (editImageInput) editImageInput.value = '';
+      const editProjectDocInput = document.getElementById('edit-project-doc-files');
+      if (editProjectDocInput) editProjectDocInput.value = '';
+      updateEditProjectDocFilesSummary();
       document.getElementById('edit-project-status').value = state.project.status || 'en-cours';
       document.getElementById('edit-project-read-access').value = normalizeProjectReadAccess(
         state.project.readAccess,
@@ -7902,6 +8610,7 @@
         readAccess: (document.getElementById('edit-project-read-access')?.value || 'private') === 'public' ? 'public' : 'private'
       };
       const selectedGlobalGroups = readSelectedGlobalGroups('edit-project-group-presets');
+      const editProjectDocuments = await readEditProjectDocumentFiles();
       const existingGroupKeys = new Set((state.groups || []).map(g => normalizeCatalogKey(g.name)));
 
       const event = createEvent(
@@ -7917,6 +8626,7 @@
       const refreshedState = await getProjectState(currentProjectId, { ignoreAccessCheck: true });
       await syncDescriptionImagesAsProjectDocs(currentProjectId, refreshedState, changes.description);
       let addedGroupsCount = 0;
+      let addedDocsCount = 0;
       for (const group of selectedGlobalGroups) {
         const groupKey = normalizeCatalogKey(group.name);
         if (!groupKey || existingGroupKeys.has(groupKey)) continue;
@@ -7933,11 +8643,35 @@
         }
         addedGroupsCount += 1;
       }
+      for (const file of editProjectDocuments) {
+        const addDocEvent = createEvent(
+          EventTypes.CREATE_DOCUMENT,
+          currentProjectId,
+          currentUser.userId,
+          {
+            ...file,
+            linkedTaskIds: [],
+            notes: 'Document ajoute lors de la modification du projet',
+            origin: 'project-edit-upload'
+          }
+        );
+        await publishEvent(addDocEvent);
+        if (sharedFolderHandle) {
+          await writeEventToSharedFolder(currentProjectId, addDocEvent);
+        }
+        addedDocsCount += 1;
+      }
       await releaseActiveProjectEditLock();
       document.getElementById('modal-edit-project').classList.add('hidden');
+      const editProjectDocInput = document.getElementById('edit-project-doc-files');
+      if (editProjectDocInput) editProjectDocInput.value = '';
+      updateEditProjectDocFilesSummary();
       showToast('Projet mis à jour');
       if (addedGroupsCount > 0) {
         addNotification('Groupe', `${addedGroupsCount} groupe(s) global(aux) associe(s) au projet`, currentProjectId);
+      }
+      if (addedDocsCount > 0) {
+        addNotification('Document', `${addedDocsCount} document(s) ajoute(s) au projet`, currentProjectId);
       }
       addNotification('Projet', 'Informations projet mises à jour', currentProjectId);
       if (editProjectFromDashboard) {
@@ -8091,6 +8825,7 @@
     function showDashboard() {
       resetWorkspaceScrollTop();
       closeMobileSidebar();
+      clearProjectWorkFocusState();
       workspaceMode = 'dashboard';
       projectsPage = 1;
       document.getElementById('project-detail').classList.add('hidden');
@@ -8116,6 +8851,7 @@
     async function showProjectsWorkspace() {
       resetWorkspaceScrollTop();
       closeMobileSidebar();
+      clearProjectWorkFocusState();
       workspaceMode = 'dashboard';
       projectsPage = 1;
       document.getElementById('project-detail').classList.add('hidden');
@@ -8124,7 +8860,7 @@
       document.getElementById('dashboard-head')?.classList.remove('hidden');
       document.getElementById('dashboard-title')?.classList.remove('hidden');
       if (document.getElementById('dashboard-title')) {
-        document.getElementById('dashboard-title').textContent = 'Projets';
+        document.getElementById('dashboard-title').textContent = 'Vue Projets';
       }
       document.getElementById('dashboard-stats')?.classList.add('hidden');
       document.getElementById('dashboard-quick-actions')?.classList.add('hidden');
@@ -8316,6 +9052,7 @@
         });
         const taskActions = (task) => `
           ${task._canEdit ? `<button onclick="event.stopPropagation(); editGlobalTask('${task._taskRef}')" class="task-action-btn task-action-btn-subtle">Modifier</button>` : ''}
+          ${task._canEdit ? `<button onclick="event.stopPropagation(); convertTaskToProject('${task._taskRef}')" class="task-action-btn task-action-btn-subtle">Convertir</button>` : ''}
           ${task._canArchive ? `<button onclick="event.stopPropagation(); archiveGlobalTask('${task._taskRef}')" class="task-action-btn task-action-btn-subtle task-action-btn-warn">Archiver</button>` : ''}
           ${task._canDelete ? `<button onclick="event.stopPropagation(); deleteGlobalTask('${task._taskRef}')" class="task-action-btn task-action-btn-subtle task-action-btn-danger">Supprimer</button>` : ''}
         `;
@@ -8709,6 +9446,7 @@
           </div>
           <div class="mt-3 flex flex-wrap gap-2 text-xs">
             ${canEdit ? `<button onclick="event.stopPropagation(); editGlobalTask('${taskRef}')" class="task-action-btn task-action-btn-subtle">Modifier</button>` : ''}
+            ${canEdit ? `<button onclick="event.stopPropagation(); convertTaskToProject('${taskRef}')" class="task-action-btn task-action-btn-subtle">Convertir</button>` : ''}
             ${canArchive ? `<button onclick="event.stopPropagation(); archiveGlobalTask('${taskRef}')" class="task-action-btn task-action-btn-subtle task-action-btn-warn">Archiver</button>` : ''}
             ${canDelete ? `<button onclick="event.stopPropagation(); deleteGlobalTask('${taskRef}')" class="task-action-btn task-action-btn-subtle task-action-btn-danger">Supprimer</button>` : ''}
           </div>
@@ -9196,6 +9934,7 @@
     window.archiveGlobalTask = archiveGlobalTask;
     window.restoreGlobalTask = restoreGlobalTask;
     window.deleteGlobalTask = deleteGlobalTask;
+    window.convertTaskToProject = convertTaskToProject;
     window.openGlobalTaskDetails = openGlobalTaskDetails;
     window.openProjectTaskDetails = openProjectTaskDetails;
     window.closeGlobalTaskDetails = closeGlobalTaskDetails;
@@ -9401,7 +10140,13 @@
           <div class="mt-3 flex items-center justify-between text-xs">
             <span class="text-slate-500">${formatFileSize(doc.size || 0)}</span>
             <div class="flex items-center gap-3">
-              <a class="text-primary font-semibold hover:underline" href="${doc.data || '#'}" download="${escapeHtml(doc.name || 'document')}">Télécharger</a>
+              ${(() => {
+                const safeHref = sanitizeDownloadHref(doc.data || '', String(doc.type || ''));
+                if (!safeHref) {
+                  return '<span class="text-slate-400">Téléchargement indisponible</span>';
+                }
+                return `<a class="text-primary font-semibold hover:underline" href="${safeHref.replace(/"/g, '&quot;')}" download="${escapeHtml(doc.name || 'document')}">Télécharger</a>`;
+              })()}
               ${(() => {
                 const canManageDocBinding = doc.sourceType === 'standalone'
                   || (doc.sourceType === 'project-doc' && (() => {
@@ -9817,6 +10562,37 @@
       }
     }
 
+    function getGlobalMessageHiddenGroupsStorageKey() {
+      const uid = String(currentUser?.userId || '').trim() || 'anonymous';
+      return `${GLOBAL_MESSAGE_HIDDEN_GROUPS_STORAGE_KEY}:${uid}`;
+    }
+
+    function loadGlobalMessageHiddenGroupChannels() {
+      try {
+        const raw = localStorage.getItem(getGlobalMessageHiddenGroupsStorageKey());
+        const parsed = raw ? JSON.parse(raw) : [];
+        if (!Array.isArray(parsed)) return new Set();
+        return new Set(parsed.map((id) => String(id || '').trim()).filter(Boolean));
+      } catch {
+        return new Set();
+      }
+    }
+
+    function saveGlobalMessageHiddenGroupChannels() {
+      try {
+        localStorage.setItem(
+          getGlobalMessageHiddenGroupsStorageKey(),
+          JSON.stringify(Array.from(globalMessageHiddenGroupChannels || []))
+        );
+      } catch {
+        // ignore quota/storage errors
+      }
+    }
+
+    function refreshGlobalMessageHiddenGroupsForCurrentUser() {
+      globalMessageHiddenGroupChannels = loadGlobalMessageHiddenGroupChannels();
+    }
+
     function getGlobalConversationLastRead(conversationId) {
       const key = String(conversationId || '').trim();
       if (!key) return 0;
@@ -9923,6 +10699,34 @@
       return recipientsLabel ? `Groupe: ${recipientsLabel}` : 'Canal de groupe';
     }
 
+    function findGlobalGroupNameByMembers(memberIds = []) {
+      const me = String(currentUser?.userId || '').trim();
+      const normalized = Array.from(new Set((memberIds || [])
+        .map((id) => String(id || '').trim())
+        .filter((id) => id && id !== me)))
+        .sort();
+      if (normalized.length === 0) return '';
+      for (const group of (globalGroupCatalog || [])) {
+        const groupMembers = Array.from(new Set(((group?.memberUserIds || [])
+          .map((id) => String(id || '').trim())
+          .filter((id) => id && id !== me))))
+          .sort();
+        if (groupMembers.length !== normalized.length) continue;
+        if (groupMembers.every((id, idx) => id === normalized[idx])) {
+          return String(group?.name || '').trim();
+        }
+      }
+      return '';
+    }
+
+    function formatGlobalMessageNamedGroupLabel(memberIds = [], fallbackLabel = '') {
+      const groupName = findGlobalGroupNameByMembers(memberIds);
+      if (groupName) return `Groupe: ${groupName}`;
+      const fallback = String(fallbackLabel || '').trim();
+      if (fallback) return fallback;
+      return formatGlobalMessageGroupChannelLabel(memberIds);
+    }
+
     async function ensureKnownGlobalMessageIdsLoaded() {
       if (knownGlobalMessageIds.size > 0) return;
       const rows = await getAllDecrypted('globalMessages', 'messageId');
@@ -9974,8 +10778,16 @@
           if (!parsed || parsed.type !== 'taskmda_global_message' || !parsed.payload) continue;
           const msg = parsed.payload;
           const messageId = String(msg.messageId || '').trim();
-          if (!messageId || knownGlobalMessageIds.has(messageId)) continue;
+          if (!messageId) continue;
           if (!msg.fromUserId || !msg.toUserId || !msg.conversationId) continue;
+          const existing = await getDecrypted('globalMessages', messageId, 'messageId');
+          const incomingCreatedAt = Number(msg.createdAt || Date.now());
+          const incomingUpdatedAt = Number(msg.updatedAt || msg.editedAt || msg.deletedAt || incomingCreatedAt);
+          const existingUpdatedAt = Number(existing?.updatedAt || existing?.editedAt || existing?.deletedAt || existing?.createdAt || 0);
+          if (existing && existingUpdatedAt >= incomingUpdatedAt) {
+            knownGlobalMessageIds.add(messageId);
+            continue;
+          }
           const normalizedRecipientIds = getGlobalMessageRecipientIds(msg);
           await putEncrypted('globalMessages', {
             messageId,
@@ -9986,11 +10798,16 @@
             toUserIds: normalizedRecipientIds,
             toName: String(msg.toName || ''),
             content: String(msg.content || ''),
-            createdAt: Number(msg.createdAt || Date.now()),
+            attachments: Array.isArray(msg.attachments) ? msg.attachments : [],
+            createdAt: incomingCreatedAt,
+            editedAt: Number(msg.editedAt || 0) || undefined,
+            deletedAt: Number(msg.deletedAt || 0) || undefined,
+            updatedAt: incomingUpdatedAt,
             source: 'shared'
           }, 'messageId');
           knownGlobalMessageIds.add(messageId);
           loaded += 1;
+          if (existing) continue;
           const me = String(currentUser?.userId || '');
           const toUserId = String(msg.toUserId || '');
           const isBroadcast = isGlobalBroadcastTarget(toUserId);
@@ -10038,7 +10855,9 @@
       const users = await getKnownUsersForGlobalGroups();
       const me = String(currentUser?.userId || '');
       const allMessages = await getAllDecrypted('globalMessages', 'messageId');
-      const scoped = (allMessages || []).filter((msg) => isGlobalMessageVisibleForUser(msg, me));
+      const scoped = (allMessages || [])
+        .filter((msg) => !msg?.deletedAt)
+        .filter((msg) => isGlobalMessageVisibleForUser(msg, me));
       const lastByUser = new Map();
       scoped.forEach((msg) => {
         const other = String(msg.fromUserId || '') === me ? String(msg.toUserId || '') : String(msg.fromUserId || '');
@@ -10093,6 +10912,7 @@
       const empty = document.getElementById('global-message-thread-empty');
       const input = document.getElementById('global-message-input');
       const targetLabel = document.getElementById('global-message-target-label');
+      const groupBadge = document.getElementById('global-message-group-badge');
       const groupChannelSelect = document.getElementById('global-message-group-channel-select');
       if (!contactsList || !thread || !empty || !input) return;
       const query = String(contactSearch?.value || '').trim();
@@ -10115,6 +10935,7 @@
       visibleMessages.forEach((msg) => {
         const conversationId = String(msg.conversationId || '').trim();
         if (!isGlobalGroupConversationId(conversationId)) return;
+        if (globalMessageHiddenGroupChannels?.has(conversationId)) return;
         const memberIds = getGlobalMessageRecipientIds(msg);
         if (!memberIds.includes(me)) return;
         const previous = groupChannelMap.get(conversationId);
@@ -10193,6 +11014,8 @@
               id: `${GLOBAL_MESSAGE_GROUP_SELECTION_PREFIX}${channel.conversationId}`,
               isBroadcast: false,
               isGroup: true,
+              groupRemovable: true,
+              conversationId: channel.conversationId,
               clickHandler: 'selectGlobalMessageChannel',
               isActive: channel.conversationId === globalMessageActiveGroupConversationId,
               name: channel.label || formatGlobalMessageGroupChannelLabel(channel.memberIds),
@@ -10257,27 +11080,43 @@
       const items = hasMoreThreadItems ? activeItems.slice(activeItems.length - maxThreadItems) : activeItems;
       thread.dataset.hasMore = hasMoreThreadItems ? '1' : '0';
       if (targetLabel) {
-        if (globalMessageRecipientUserIds.size > 0) {
+        if (isGroupView) {
+          const activeChannel = groupChannelMap.get(globalMessageActiveGroupConversationId);
+          const members = (activeChannel?.memberIds?.length
+            ? activeChannel.memberIds
+            : parseGroupConversationMemberIds(globalMessageActiveGroupConversationId));
+          const groupLabel = formatGlobalMessageNamedGroupLabel(members, activeChannel?.label || '');
+          targetLabel.textContent = `Destinataire: ${groupLabel}`;
+          input.placeholder = `Ecrire dans ${groupLabel}...`;
+          if (groupBadge) {
+            groupBadge.textContent = groupLabel;
+            groupBadge.classList.remove('hidden');
+          }
+        } else if (globalMessageRecipientUserIds.size > 0) {
           const selectedIds = Array.from(globalMessageRecipientUserIds);
           const label = formatGlobalMessageRecipientLabel(selectedIds, allContacts);
           if (selectedIds.length > 1) {
-            targetLabel.textContent = `Canal groupe (${selectedIds.length}): ${label}`;
-            input.placeholder = `Ecrire dans le canal groupe (${selectedIds.length} agents)...`;
+            const groupLabel = formatGlobalMessageNamedGroupLabel(selectedIds);
+            targetLabel.textContent = `Destinataire: ${groupLabel}`;
+            input.placeholder = `Ecrire dans ${groupLabel}...`;
+            if (groupBadge) {
+              groupBadge.textContent = groupLabel;
+              groupBadge.classList.remove('hidden');
+            }
           } else {
             targetLabel.textContent = `Destinataire: ${label}`;
             input.placeholder = `Ecrire un message prive a ${label}...`;
+            groupBadge?.classList.add('hidden');
           }
-        } else if (isGroupView) {
-          const members = parseGroupConversationMemberIds(globalMessageActiveGroupConversationId).filter((id) => id !== me);
-          targetLabel.textContent = formatGlobalMessageGroupChannelLabel(members);
-          input.placeholder = `Ecrire dans ${formatGlobalMessageGroupChannelLabel(members)}...`;
         } else if (isBroadcastView) {
           targetLabel.textContent = 'Destinataire: Canal general (tous les agents connus)';
           input.placeholder = 'Ecrire un message pour tous les agents connus...';
+          groupBadge?.classList.add('hidden');
         } else {
           const targetIdentity = resolveKnownUserIdentity(globalMessagePeerUserId, allContacts.find(c => c.userId === globalMessagePeerUserId)?.name || '');
           targetLabel.textContent = `Destinataire: ${targetIdentity.name}`;
           input.placeholder = `Ecrire un message prive a ${targetIdentity.name}...`;
+          groupBadge?.classList.add('hidden');
         }
       }
 
@@ -10295,11 +11134,35 @@
         const identity = resolveKnownUserIdentity(msg.fromUserId, msg.fromName || '');
         const identityName = mine ? (currentUser?.name || identity.name || 'Vous') : (identity.name || fallbackDirectoryName(msg.fromUserId));
         const timeLabel = new Date(Number(msg.createdAt || Date.now())).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        const isEditing = mine && editingGlobalMessageId === String(msg.messageId || '');
+        const editorHtml = isEditing
+          ? `
+            <div class="space-y-2">
+              <textarea id="global-message-edit-input-${escapeHtml(String(msg.messageId || ''))}" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">${escapeHtml(editingGlobalMessageDraft)}</textarea>
+              <div class="flex items-center gap-3 text-xs">
+                <button onclick="saveEditedGlobalMessage('${escapeHtml(String(msg.messageId || ''))}')" class="text-primary hover:underline">Enregistrer</button>
+                <button onclick="cancelEditGlobalMessage()" class="text-slate-600 hover:underline">Annuler</button>
+              </div>
+            </div>
+          `
+          : '';
+        const footerActionsHtml = mine && !isEditing
+          ? `
+            <div class="mt-2 flex items-center gap-3 text-xs">
+              <button onclick="startEditGlobalMessage('${escapeHtml(String(msg.messageId || ''))}')" class="text-primary hover:underline">Editer</button>
+              <button onclick="deleteGlobalMessage('${escapeHtml(String(msg.messageId || ''))}')" class="text-rose-600 hover:underline">Supprimer</button>
+            </div>
+          `
+          : '';
         return {
           mine,
           author: identityName,
           timeLabel,
           content: msg.content || '',
+          attachmentsHtml: renderMessageAttachments(msg.attachments),
+          editedLabel: msg.editedAt ? '(modifié)' : '',
+          editorHtml,
+          footerActionsHtml,
           avatarDataUrl: (mine ? currentUser?.avatarDataUrl : identity.avatarDataUrl) || '',
           avatarInitials: getInitials(identityName),
           avatarColor: stringToColor(msg.fromUserId || identityName || '')
@@ -10333,6 +11196,10 @@
         globalMessagePeerUserId = GLOBAL_MESSAGE_BROADCAST_TARGET;
       } else if (next.startsWith(GLOBAL_MESSAGE_GROUP_SELECTION_PREFIX)) {
         const conversationId = next.slice(GLOBAL_MESSAGE_GROUP_SELECTION_PREFIX.length);
+        if (conversationId) {
+          globalMessageHiddenGroupChannels.delete(conversationId);
+          saveGlobalMessageHiddenGroupChannels();
+        }
         globalMessageActiveGroupConversationId = conversationId;
         globalMessagePeerUserId = GLOBAL_MESSAGE_BROADCAST_TARGET;
       } else {
@@ -10411,10 +11278,26 @@
       }
       const conversationId = getGroupConversationId(memberIds);
       if (!conversationId) return;
+      globalMessageHiddenGroupChannels.delete(conversationId);
+      saveGlobalMessageHiddenGroupChannels();
       globalMessageActiveGroupConversationId = conversationId;
       globalMessagePeerUserId = GLOBAL_MESSAGE_BROADCAST_TARGET;
       globalMessageRecipientUserIds = new Set(memberIds.filter((id) => id !== me));
       await renderGlobalMessages();
+    }
+
+    async function hideGlobalMessageGroupChannel(conversationId) {
+      const id = String(conversationId || '').trim();
+      if (!id || !isGlobalGroupConversationId(id)) return;
+      globalMessageHiddenGroupChannels.add(id);
+      saveGlobalMessageHiddenGroupChannels();
+      if (globalMessageActiveGroupConversationId === id) {
+        globalMessageActiveGroupConversationId = '';
+        globalMessagePeerUserId = GLOBAL_MESSAGE_BROADCAST_TARGET;
+      }
+      globalMessageRecipientUserIds = new Set();
+      await renderGlobalMessages();
+      showToast('Canal de groupe masqué pour votre session locale.');
     }
 
     function normalizeMentionHandle(value) {
@@ -10491,16 +11374,28 @@
     }
 
     function renderGlobalFeedContentHtml(content, catalog) {
-      let html = escapeHtml(String(content || ''));
-      html = html.replace(/@\[(.+?)\]/g, (_full, name) => {
+      const text = String(content || '');
+      const tokens = [];
+      const tokenPrefix = '__MENTION_TOKEN_';
+      let tokenized = text.replace(/@\[(.+?)\]/g, (_full, name) => {
         const user = catalog?.byDisplayName?.get(normalizeSearch(name));
         const label = user ? `${user.name} (@${user.handle})` : String(name || '');
-        return `<span class="feed-mention">@${escapeHtml(label)}</span>`;
+        const html = `<span class="feed-mention">@${escapeHtml(label)}</span>`;
+        const key = `${tokenPrefix}${tokens.length}__`;
+        tokens.push({ key, html });
+        return key;
       });
-      html = html.replace(/@([a-z0-9][a-z0-9._-]{1,30})/gi, (_full, handle) => {
+      tokenized = tokenized.replace(/@([a-z0-9][a-z0-9._-]{1,30})/gi, (_full, handle) => {
         const user = catalog?.byHandle?.get(normalizeMentionHandle(handle));
         const label = user ? `${user.name} (@${user.handle})` : `@${handle}`;
-        return `<span class="feed-mention">${escapeHtml(label)}</span>`;
+        const html = `<span class="feed-mention">${escapeHtml(label)}</span>`;
+        const key = `${tokenPrefix}${tokens.length}__`;
+        tokens.push({ key, html });
+        return key;
+      });
+      let html = escapeHtml(tokenized);
+      tokens.forEach((token) => {
+        html = html.replace(token.key, token.html);
       });
       return html.replace(/\n/g, '<br>');
     }
@@ -10804,13 +11699,12 @@
         const typeLabel = isAuto ? 'Activité auto' : 'Post manuel';
         const typeClass = isAuto ? 'feed-item-type-auto' : 'feed-item-type-manual';
         const identity = resolveKnownUserIdentity(post.authorUserId || '', post.authorName || fallbackDirectoryName(post.authorUserId || ''));
+        const avatarStyle = safeAvatarInlineStyle(identity.avatarDataUrl, stringToColor(post.authorUserId || post.authorName || ''));
         return `
           <article id="global-feed-post-${postId}" class="feed-item ${isFocused ? 'border-blue-400 shadow-[0_0_0_2px_rgba(59,130,246,0.15)]' : ''}">
             <div class="feed-item-head">
               <div class="feed-item-meta">
-                ${identity.avatarDataUrl
-                  ? `<span class="discussion-avatar" style="background-image:url('${identity.avatarDataUrl}');background-size:cover;background-position:center;"></span>`
-                  : `<span class="discussion-avatar" style="background:${stringToColor(post.authorUserId || post.authorName || '')}">${escapeHtml(getInitials(post.authorName || 'U'))}</span>`}
+                <span class="discussion-avatar" style="${avatarStyle}">${escapeHtml(getInitials(post.authorName || 'U'))}</span>
                 <div>
                   <p class="text-sm font-semibold text-slate-800">${escapeHtml(post.authorName || fallbackDirectoryName(post.authorUserId || ''))}</p>
                   <p class="text-xs text-slate-500">${new Date(Number(post.createdAt || Date.now())).toLocaleString('fr-FR')}</p>
@@ -10859,18 +11753,40 @@
 
     async function sendGlobalMessage() {
       const input = document.getElementById('global-message-input');
+      const filesInput = document.getElementById('global-message-files');
+      const filesList = document.getElementById('global-message-files-list');
       const selectedTarget = String(globalMessagePeerUserId || '').trim();
       const isBroadcast = !selectedTarget || selectedTarget === GLOBAL_MESSAGE_BROADCAST_TARGET;
       if (!input) return;
       const content = String(input.value || '').trim();
-      if (!content) return;
+      let attachments = [];
+      try {
+        attachments = await runWithLoading(async () => readMessageFiles('global-message-files'));
+      } catch (error) {
+        showToast(`❌ ${error.message}`);
+        return;
+      }
+      if (!content && attachments.length === 0) return;
       const senderUserId = String(currentUser?.userId || '');
       const senderName = String(currentUser?.name || fallbackDirectoryName(currentUser?.userId || ''));
       const selectedRecipients = Array.from(globalMessageRecipientUserIds || [])
         .map(id => String(id || '').trim())
         .filter(id => id && id !== senderUserId && id !== GLOBAL_MESSAGE_BROADCAST_TARGET);
       const sendTargets = [];
-      if (selectedRecipients.length > 1) {
+      if (globalMessageActiveGroupConversationId) {
+        const fromConversation = parseGroupConversationMemberIds(globalMessageActiveGroupConversationId);
+        const groupMemberIds = normalizeGlobalMessageUserIds([
+          senderUserId,
+          ...fromConversation
+        ]);
+        sendTargets.push({
+          mode: 'group',
+          toUserId: buildGlobalGroupTargetUserId(globalMessageActiveGroupConversationId),
+          toUserIds: groupMemberIds,
+          toName: formatGlobalMessageNamedGroupLabel(groupMemberIds),
+          conversationId: globalMessageActiveGroupConversationId
+        });
+      } else if (selectedRecipients.length > 1) {
         const groupMemberIds = normalizeGlobalMessageUserIds([senderUserId, ...selectedRecipients]);
         const conversationId = getGroupConversationId(groupMemberIds);
         if (!conversationId) return;
@@ -10880,7 +11796,7 @@
           mode: 'group',
           toUserId: buildGlobalGroupTargetUserId(conversationId),
           toUserIds: groupMemberIds,
-          toName: formatGlobalMessageGroupChannelLabel(groupMemberIds),
+          toName: formatGlobalMessageNamedGroupLabel(groupMemberIds),
           conversationId
         });
       } else if (selectedRecipients.length === 1) {
@@ -10893,19 +11809,6 @@
           toUserIds: normalizeGlobalMessageUserIds([senderUserId, id]),
           toName: knownUsersCache.get(id)?.name || fallbackDirectoryName(id),
           conversationId: getDirectConversationId(currentUser?.userId, id)
-        });
-      } else if (globalMessageActiveGroupConversationId) {
-        const fromConversation = parseGroupConversationMemberIds(globalMessageActiveGroupConversationId);
-        const groupMemberIds = normalizeGlobalMessageUserIds([
-          senderUserId,
-          ...fromConversation
-        ]);
-        sendTargets.push({
-          mode: 'group',
-          toUserId: buildGlobalGroupTargetUserId(globalMessageActiveGroupConversationId),
-          toUserIds: groupMemberIds,
-          toName: formatGlobalMessageGroupChannelLabel(groupMemberIds),
-          conversationId: globalMessageActiveGroupConversationId
         });
       } else {
         sendTargets.push({
@@ -10924,6 +11827,7 @@
       }
 
       for (const target of sendTargets) {
+        const nowTs = Date.now();
         const message = {
           messageId: uuidv4(),
           conversationId: target.conversationId,
@@ -10933,7 +11837,9 @@
           toUserIds: target.toUserIds,
           toName: target.toName,
           content,
-          createdAt: Date.now(),
+          attachments,
+          createdAt: nowTs,
+          updatedAt: nowTs,
           source: sharedFolderHandle ? 'shared' : 'local'
         };
         await putEncrypted('globalMessages', message, 'messageId');
@@ -10943,17 +11849,112 @@
         }
       }
       input.value = '';
+      toggleGlobalEmojiPicker(false);
+      if (filesInput) filesInput.value = '';
+      if (filesList) filesList.textContent = 'Aucun fichier sélectionné';
       if (selectedRecipients.length > 0) {
         globalMessageRecipientUserIds = new Set();
       }
       await renderGlobalMessages({ forceScrollBottom: true });
     }
 
+    function cancelEditGlobalMessage() {
+      editingGlobalMessageId = null;
+      editingGlobalMessageDraft = '';
+      renderGlobalMessages({ keepThreadAnchor: true });
+    }
+
+    async function startEditGlobalMessage(messageId) {
+      const id = String(messageId || '').trim();
+      if (!id) return;
+      const msg = await getDecrypted('globalMessages', id, 'messageId');
+      if (!msg || msg.deletedAt) return;
+      if (String(msg.fromUserId || '') !== String(currentUser?.userId || '')) {
+        showToast('Action non autorisée');
+        return;
+      }
+      editingGlobalMessageId = id;
+      editingGlobalMessageDraft = String(msg.content || '');
+      await renderGlobalMessages({ keepThreadAnchor: true });
+      requestAnimationFrame(() => {
+        const input = document.getElementById(`global-message-edit-input-${id}`);
+        if (input) {
+          input.focus();
+          input.setSelectionRange(input.value.length, input.value.length);
+        }
+      });
+    }
+
+    async function saveEditedGlobalMessage(messageId) {
+      const id = String(messageId || '').trim();
+      if (!id || editingGlobalMessageId !== id) return;
+      const existing = await getDecrypted('globalMessages', id, 'messageId');
+      if (!existing || existing.deletedAt) return;
+      if (String(existing.fromUserId || '') !== String(currentUser?.userId || '')) {
+        showToast('Action non autorisée');
+        return;
+      }
+      const input = document.getElementById(`global-message-edit-input-${id}`);
+      const content = String(input?.value || '').trim();
+      if (!content) {
+        showToast('Le message ne peut pas être vide');
+        return;
+      }
+      const nowTs = Date.now();
+      const updated = {
+        ...existing,
+        content,
+        editedAt: nowTs,
+        updatedAt: nowTs
+      };
+      await putEncrypted('globalMessages', updated, 'messageId');
+      if (sharedFolderHandle) {
+        await writeGlobalMessageToSharedFolder(updated);
+      }
+      editingGlobalMessageId = null;
+      editingGlobalMessageDraft = '';
+      showToast('Message modifié');
+      await renderGlobalMessages({ keepThreadAnchor: true });
+    }
+
+    async function deleteGlobalMessage(messageId) {
+      const id = String(messageId || '').trim();
+      if (!id) return;
+      const existing = await getDecrypted('globalMessages', id, 'messageId');
+      if (!existing || existing.deletedAt) return;
+      if (String(existing.fromUserId || '') !== String(currentUser?.userId || '')) {
+        showToast('Action non autorisée');
+        return;
+      }
+      if (!confirm('Supprimer ce message ?')) return;
+      const nowTs = Date.now();
+      const updated = {
+        ...existing,
+        deletedAt: nowTs,
+        updatedAt: nowTs
+      };
+      await putEncrypted('globalMessages', updated, 'messageId');
+      if (sharedFolderHandle) {
+        await writeGlobalMessageToSharedFolder(updated);
+      }
+      if (editingGlobalMessageId === id) {
+        editingGlobalMessageId = null;
+        editingGlobalMessageDraft = '';
+      }
+      showToast('Message supprimé');
+      await renderGlobalMessages({ keepThreadAnchor: true });
+    }
+
     window.selectGlobalMessagePeer = selectGlobalMessagePeer;
     window.selectGlobalMessageChannel = selectGlobalMessageChannel;
     window.toggleGlobalMessageRecipient = toggleGlobalMessageRecipient;
+    window.hideGlobalMessageGroupChannel = hideGlobalMessageGroupChannel;
     window.selectAllGlobalMessageRecipients = selectAllGlobalMessageRecipients;
     window.clearGlobalMessageRecipients = clearGlobalMessageRecipients;
+    window.startEditGlobalMessage = startEditGlobalMessage;
+    window.saveEditedGlobalMessage = saveEditedGlobalMessage;
+    window.cancelEditGlobalMessage = cancelEditGlobalMessage;
+    window.deleteGlobalMessage = deleteGlobalMessage;
 
     function setGlobalHubView(view) {
       globalWorkspaceView = view;
@@ -11242,6 +12243,7 @@
             <div class="task-card-participants">${participantsHtml}</div>
             <div class="flex items-center gap-2">
               ${canEditTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); editTask('${task.taskId}')" class="task-action-btn-subtle text-xs">Modifier</button>` : ''}
+              ${canEditTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); convertTaskToProject('${buildGlobalTaskRef({ sourceType: 'project', sourceProjectId: currentProjectId, taskId: task.taskId })}')" class="task-action-btn-subtle text-xs">Convertir</button>` : ''}
               ${canDeleteTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); deleteTask('${task.taskId}')" class="task-action-btn-subtle text-xs text-red-600">Supprimer</button>` : ''}
             </div>
           </div>
@@ -11298,6 +12300,7 @@
           <div class="task-card-bottom flex items-center justify-between text-sm gap-3 flex-wrap">
             <div class="task-card-participants">${participantsHtml}</div>
             <div class="task-card-actions flex items-center gap-3">
+              ${canEditTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); convertTaskToProject('${buildGlobalTaskRef({ sourceType: 'project', sourceProjectId: currentProjectId, taskId: task.taskId })}')" class="text-slate-600 hover:underline">Convertir en projet</button>` : ''}
               <button onclick="event.stopPropagation(); sendTaskStatusEmail('${task.taskId}', false)" class="text-slate-600 hover:underline">Email statut</button>
               ${task.status === 'termine' ? `<button onclick="event.stopPropagation(); sendTaskStatusEmail('${task.taskId}', true)" class="text-emerald-700 hover:underline">Email achevée</button>` : ''}
               ${canChangeTaskStatus(task, currentProjectState) ? `<button onclick="event.stopPropagation(); toggleTaskStatus('${task.taskId}')" class="text-primary hover:underline">Changer statut</button>` : ''}
@@ -11424,6 +12427,7 @@
               ${buildProjectLockHintHtml(currentProjectState, LOCK_SCOPE_TASK, task.taskId, true)}
               <div class="mt-2 flex flex-wrap items-center gap-2 text-xs">
                 ${canEditTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); editTask('${task.taskId}')" class="task-action-btn">Modifier</button>` : ''}
+                ${canEditTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); convertTaskToProject('${buildGlobalTaskRef({ sourceType: 'project', sourceProjectId: currentProjectId, taskId: task.taskId })}')" class="task-action-btn">Convertir</button>` : ''}
                 ${canEditTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); archiveTask('${task.taskId}')" class="task-action-btn task-action-btn-warn">Archiver</button>` : ''}
                 ${canDeleteTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); deleteTask('${task.taskId}')" class="task-action-btn task-action-btn-danger">Supprimer</button>` : ''}
               </div>
@@ -11440,6 +12444,184 @@
           </div>
         `;
       }).join('');
+    }
+
+    function parseTaskDateOrNull(rawDate) {
+      if (!rawDate) return null;
+      const d = new Date(rawDate);
+      return Number.isNaN(d.getTime()) ? null : d;
+    }
+
+    function startOfDay(date) {
+      const d = new Date(date);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    }
+
+    function addDays(date, delta) {
+      const d = new Date(date);
+      d.setDate(d.getDate() + delta);
+      return d;
+    }
+
+    function diffDaysInclusive(fromDate, toDate) {
+      const ms = startOfDay(toDate).getTime() - startOfDay(fromDate).getTime();
+      return Math.max(0, Math.round(ms / 86400000));
+    }
+
+    function getTaskProgressPercent(task) {
+      const subtasks = Array.isArray(task?.subtasks) ? task.subtasks : [];
+      if (subtasks.length > 0) {
+        const done = subtasks.filter((st) => Boolean(st?.done)).length;
+        return Math.round((done / subtasks.length) * 100);
+      }
+      if (task?.status === 'termine') return 100;
+      if (task?.status === 'en-cours') return 55;
+      if (task?.status === 'suspendu') return 30;
+      return 10;
+    }
+
+    function renderGantt(tasks) {
+      const container = document.getElementById('gantt-container');
+      if (!container) return;
+
+      const scopedTasks = filterProjectTasksByControls(tasks);
+      if (scopedTasks.length === 0) {
+        container.innerHTML = '<p class="text-gray-500 text-center py-8">Aucune tâche planifiée pour la vue Gantt</p>';
+        return;
+      }
+
+      const today = startOfDay(new Date());
+      const normalized = scopedTasks.map((task) => {
+        const startCandidate = parseTaskDateOrNull(task.requestDate) || parseTaskDateOrNull(task.createdAt) || today;
+        const endCandidate = parseTaskDateOrNull(task.dueDate) || addDays(startCandidate, 10);
+        const start = startOfDay(startCandidate);
+        const end = startOfDay(endCandidate < start ? start : endCandidate);
+        return {
+          task,
+          start,
+          end,
+          progress: getTaskProgressPercent(task)
+        };
+      }).sort((a, b) => a.start.getTime() - b.start.getTime());
+
+      let minDate = normalized.reduce((acc, item) => item.start < acc ? item.start : acc, normalized[0].start);
+      let maxDate = normalized.reduce((acc, item) => item.end > acc ? item.end : acc, normalized[0].end);
+      if (today < minDate) minDate = today;
+      if (today > maxDate) maxDate = today;
+      minDate = addDays(minDate, -2);
+      maxDate = addDays(maxDate, 2);
+
+      const dayWidth = 34;
+      const totalDays = diffDaysInclusive(minDate, maxDate) + 1;
+      const trackWidth = totalDays * dayWidth;
+      const rowHeight = 58;
+
+      const months = [];
+      let monthCursor = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+      while (monthCursor <= maxDate) {
+        const monthStart = monthCursor < minDate ? minDate : monthCursor;
+        const monthEnd = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 0);
+        const clampedEnd = monthEnd > maxDate ? maxDate : monthEnd;
+        const monthDays = diffDaysInclusive(monthStart, clampedEnd) + 1;
+        months.push({
+          label: monthCursor.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }),
+          width: monthDays * dayWidth
+        });
+        monthCursor = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 1);
+      }
+
+      const getIsoWeek = (date) => {
+        const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+        const dayNum = d.getUTCDay() || 7;
+        d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+        const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+        const week = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+        return { week, year: d.getUTCFullYear() };
+      };
+
+      const weeks = [];
+      let weekCursor = startOfDay(minDate);
+      while (weekCursor <= maxDate) {
+        const dayIndex = (weekCursor.getDay() + 6) % 7; // 0=lundi ... 6=dimanche
+        const weekEnd = addDays(weekCursor, 6 - dayIndex);
+        const clampedEnd = weekEnd > maxDate ? maxDate : weekEnd;
+        const weekDays = diffDaysInclusive(weekCursor, clampedEnd) + 1;
+        const iso = getIsoWeek(weekCursor);
+        weeks.push({
+          label: `S${String(iso.week).padStart(2, '0')}`,
+          year: iso.year,
+          width: weekDays * dayWidth
+        });
+        weekCursor = addDays(clampedEnd, 1);
+      }
+
+      const leftRows = normalized.map(({ task, start, end, progress }) => `
+        <div class="gantt-left-row">
+          <div class="gantt-left-title">${escapeHtml(task.title || 'Tâche')}</div>
+          <div class="gantt-left-meta">
+            <span>${escapeHtml(getTaskAssigneeName(task, currentProjectState) || 'Non assigné')}</span>
+            <span>${formatDate(start.toISOString().slice(0, 10))} → ${formatDate(end.toISOString().slice(0, 10))}</span>
+            <span class="gantt-left-progress">${progress}%</span>
+          </div>
+        </div>
+      `).join('');
+
+      const bars = normalized.map(({ task, start, end, progress }, index) => {
+        const urgencyKey = String(task?.urgency || 'medium').toLowerCase();
+        const urgencyClass = urgencyKey === 'high'
+          ? 'gantt-urg-high'
+          : urgencyKey === 'low'
+            ? 'gantt-urg-low'
+            : 'gantt-urg-medium';
+        const left = diffDaysInclusive(minDate, start) * dayWidth + 4;
+        const width = Math.max(14, (diffDaysInclusive(start, end) + 1) * dayWidth - 8);
+        const top = index * rowHeight + 12;
+        return `
+          <div class="gantt-row-line" style="top:${index * rowHeight}px"></div>
+          <div class="gantt-bar ${urgencyClass}" style="left:${left}px;top:${top}px;width:${width}px" onclick="openProjectTaskDetails('${task.taskId}')" title="${escapeHtml(task.title || 'Tâche')}">
+            <div class="gantt-bar-fill" style="width:${Math.max(6, Math.min(100, progress))}%"></div>
+            <span class="gantt-bar-label">${progress}%</span>
+          </div>
+        `;
+      }).join('');
+
+      const todayLeft = diffDaysInclusive(minDate, today) * dayWidth;
+      const bodyHeight = normalized.length * rowHeight;
+
+      container.innerHTML = `
+        <div class="gantt-shell">
+          <div class="gantt-grid">
+            <div class="gantt-head-left">Structure des tâches</div>
+            <div class="gantt-right-head">
+              <div class="gantt-timescale" style="width:${trackWidth}px">
+                <div class="gantt-months">
+                  ${months.map((m) => `<div class="gantt-month" style="width:${m.width}px">${escapeHtml(m.label)}</div>`).join('')}
+                </div>
+                <div class="gantt-weeks">
+                  ${weeks.map((w) => `<div class="gantt-week" style="width:${w.width}px" title="Semaine ${escapeHtml(w.label)} / ${escapeHtml(String(w.year))}">${escapeHtml(w.label)}</div>`).join('')}
+                </div>
+              </div>
+            </div>
+            <div class="gantt-left-body">${leftRows}</div>
+            <div class="gantt-right-scroll">
+              <div class="gantt-timescale-spacer" style="width:${trackWidth}px"></div>
+              <div class="gantt-track" style="width:${trackWidth}px;height:${bodyHeight}px">
+                <div class="gantt-today-line" style="left:${todayLeft}px"></div>
+                ${bars}
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const headerPane = container.querySelector('.gantt-right-head');
+      const bodyPane = container.querySelector('.gantt-right-scroll');
+      if (headerPane && bodyPane) {
+        bodyPane.addEventListener('scroll', () => {
+          headerPane.scrollLeft = bodyPane.scrollLeft;
+        }, { passive: true });
+      }
     }
 
     function renderTimeline(tasks) {
@@ -11757,6 +12939,20 @@
         || type === 'text/x-markdown';
     }
 
+    function isCssDocument(doc) {
+      const type = String(doc?.type || '').toLowerCase();
+      const ext = getDocumentFileExtension(doc);
+      return ext === 'css' || type === 'text/css' || type.includes('/css');
+    }
+
+    function isXlsxDocument(doc) {
+      const type = String(doc?.type || '').toLowerCase();
+      const ext = getDocumentFileExtension(doc);
+      return ext === 'xlsx'
+        || type.includes('spreadsheetml')
+        || type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    }
+
     function isWordDocumentEditable(doc) {
       const type = String(doc?.type || '').toLowerCase();
       const ext = getDocumentFileExtension(doc);
@@ -11769,7 +12965,7 @@
     }
 
     function isDocumentEditable(doc) {
-      return isDirectTextDocumentEditable(doc) || isWordDocumentEditable(doc);
+      return isDirectTextDocumentEditable(doc) || isWordDocumentEditable(doc) || isCssDocument(doc) || isXlsxDocument(doc);
     }
 
     function decodeDataUrlToText(dataUrl) {
@@ -11802,6 +12998,8 @@
     }
 
     function resolveDocumentEditMode(doc) {
+      if (isXlsxDocument(doc)) return 'spreadsheet-xlsx';
+      if (isCssDocument(doc)) return 'spreadsheet-css';
       if (isDirectTextDocumentEditable(doc)) return 'text';
       if (isWordDocumentEditable(doc)) return 'word-replace';
       return 'none';
@@ -11817,17 +13015,75 @@
       const name = decodeURIComponent(nameEncoded || '');
       const type = decodeURIComponent(typeEncoded || '');
       title.textContent = `Aperçu: ${name || 'document'}`;
+      content.innerHTML = '';
 
       if (!data) {
-        content.innerHTML = '<p class="text-sm text-slate-500">Aucun contenu disponible pour ce document.</p>';
+        const p = document.createElement('p');
+        p.className = 'text-sm text-slate-500';
+        p.textContent = 'Aucun contenu disponible pour ce document.';
+        content.appendChild(p);
       } else if ((type || '').startsWith('image/')) {
-        content.innerHTML = `<img src="${data}" alt="${escapeHtml(name || 'image')}" class="max-w-full h-auto rounded-lg mx-auto">`;
+        const safeSrc = sanitizeUrlForDom(data, {
+          allowHttp: true,
+          allowBlob: true,
+          allowData: true,
+          allowDataMimePrefixes: ['image/']
+        });
+        if (!safeSrc) {
+          const p = document.createElement('p');
+          p.className = 'text-sm text-slate-500';
+          p.textContent = 'Prévisualisation bloquée (source non sûre).';
+          content.appendChild(p);
+        } else {
+          const img = document.createElement('img');
+          img.src = safeSrc;
+          img.alt = String(name || 'image');
+          img.className = 'max-w-full h-auto rounded-lg mx-auto';
+          content.appendChild(img);
+        }
       } else if ((type || '').includes('pdf') || String(name || '').toLowerCase().endsWith('.pdf')) {
-        content.innerHTML = `<iframe src="${data}" class="w-full h-[70vh] rounded-lg border border-slate-200" title="${escapeHtml(name || 'PDF')}"></iframe>`;
+        const safeSrc = sanitizeUrlForDom(data, {
+          allowHttp: true,
+          allowBlob: true,
+          allowData: true,
+          allowDataMimePrefixes: ['application/pdf']
+        });
+        if (!safeSrc) {
+          const p = document.createElement('p');
+          p.className = 'text-sm text-slate-500';
+          p.textContent = 'Prévisualisation bloquée (source non sûre).';
+          content.appendChild(p);
+        } else {
+          const frame = document.createElement('iframe');
+          frame.src = safeSrc;
+          frame.className = 'w-full h-[70vh] rounded-lg border border-slate-200';
+          frame.title = String(name || 'PDF');
+          content.appendChild(frame);
+        }
       } else if ((type || '').startsWith('text/')) {
-        content.innerHTML = `<iframe src="${data}" class="w-full h-[70vh] rounded-lg border border-slate-200 bg-white" title="${escapeHtml(name || 'Texte')}"></iframe>`;
+        const safeSrc = sanitizeUrlForDom(data, {
+          allowHttp: false,
+          allowBlob: true,
+          allowData: true,
+          allowDataMimePrefixes: ['text/']
+        });
+        if (!safeSrc) {
+          const p = document.createElement('p');
+          p.className = 'text-sm text-slate-500';
+          p.textContent = 'Prévisualisation bloquée (source non sûre).';
+          content.appendChild(p);
+        } else {
+          const frame = document.createElement('iframe');
+          frame.src = safeSrc;
+          frame.className = 'w-full h-[70vh] rounded-lg border border-slate-200 bg-white';
+          frame.title = String(name || 'Texte');
+          content.appendChild(frame);
+        }
       } else {
-        content.innerHTML = '<p class="text-sm text-slate-500">Prévisualisation non disponible. Utilisez Télécharger.</p>';
+        const p = document.createElement('p');
+        p.className = 'text-sm text-slate-500';
+        p.textContent = 'Prévisualisation non disponible. Utilisez Télécharger.';
+        content.appendChild(p);
       }
 
       modal.classList.remove('hidden');
@@ -11849,12 +13105,25 @@
       const input = document.getElementById('doc-editor-file-input');
       const summary = document.getElementById('doc-editor-file-summary');
       const tools = document.getElementById('doc-editor-markdown-tools');
+      const spreadsheetWrap = document.getElementById('doc-editor-spreadsheet-mode');
+      const sheetSelect = document.getElementById('doc-editor-xlsx-sheet-select');
       const formatHint = document.getElementById('doc-editor-format-hint');
       if (textarea) textarea.value = '';
       if (input) input.value = '';
       if (summary) summary.textContent = 'Aucun fichier sélectionné.';
       tools?.classList.add('hidden');
+      spreadsheetWrap?.classList.add('hidden');
+      if (sheetSelect) sheetSelect.innerHTML = '';
       if (formatHint) formatHint.textContent = 'Edition directe du contenu (markdown/texte).';
+      destroySpreadsheetEditorTable();
+      docSpreadsheetEditorState = {
+        table: null,
+        activeTab: 'css',
+        workbook: null,
+        sheetName: '',
+        xlsxColumns: 8,
+        cssRows: []
+      };
       modal?.classList.add('hidden');
     }
 
@@ -11974,6 +13243,292 @@
         : 'Aucun fichier sélectionné.';
     }
 
+    function parseCssToTableRows(cssText) {
+      const rows = [];
+      const source = String(cssText || '');
+      const blockRegex = /([^{}]+)\{([^}]*)\}/gms;
+      let match;
+      while ((match = blockRegex.exec(source)) !== null) {
+        const selector = String(match[1] || '').trim().replace(/\s+/g, ' ');
+        const block = String(match[2] || '');
+        if (!selector) continue;
+        block.split(';').forEach((rawLine) => {
+          const line = String(rawLine || '').trim();
+          if (!line) return;
+          const sep = line.indexOf(':');
+          if (sep <= 0) return;
+          const property = line.slice(0, sep).trim();
+          const value = line.slice(sep + 1).trim();
+          if (!property || !value) return;
+          rows.push({ selector, property, value });
+        });
+      }
+      return rows;
+    }
+
+    function canUseSpreadsheetEditor() {
+      return typeof window.Tabulator === 'function' && !!window.XLSX;
+    }
+
+    function destroySpreadsheetEditorTable() {
+      if (docSpreadsheetEditorState.table && typeof docSpreadsheetEditorState.table.destroy === 'function') {
+        docSpreadsheetEditorState.table.destroy();
+      }
+      docSpreadsheetEditorState.table = null;
+    }
+
+    function decodeDataUrlToBytes(dataUrl) {
+      const value = String(dataUrl || '');
+      const commaIdx = value.indexOf(',');
+      if (commaIdx < 0) return new Uint8Array(0);
+      const meta = value.slice(0, commaIdx).toLowerCase();
+      const payload = value.slice(commaIdx + 1);
+      try {
+        if (meta.includes(';base64')) {
+          const binary = atob(payload);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+          return bytes;
+        }
+        return new TextEncoder().encode(decodeURIComponent(payload));
+      } catch {
+        return new Uint8Array(0);
+      }
+    }
+
+    function encodeBytesToDataUrl(bytes, mimeType = 'application/octet-stream') {
+      const safeBytes = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
+      let binary = '';
+      safeBytes.forEach((b) => {
+        binary += String.fromCharCode(b);
+      });
+      return `data:${mimeType};base64,${btoa(binary)}`;
+    }
+
+    function getA1ColumnLabel(index) {
+      let n = Number(index) + 1;
+      let label = '';
+      while (n > 0) {
+        const rem = (n - 1) % 26;
+        label = String.fromCharCode(65 + rem) + label;
+        n = Math.floor((n - 1) / 26);
+      }
+      return label || 'A';
+    }
+
+    function normalizeSpreadsheetRows(rows, minRows = 1, minCols = 1) {
+      const matrix = Array.isArray(rows) ? rows.map((row) => (Array.isArray(row) ? [...row] : [])) : [];
+      const maxCols = Math.max(
+        Number(minCols) || 1,
+        1,
+        ...matrix.map((row) => (Array.isArray(row) ? row.length : 0))
+      );
+      const rowCount = Math.max(Number(minRows) || 1, matrix.length || 0, 1);
+      const normalized = [];
+      for (let r = 0; r < rowCount; r += 1) {
+        const source = Array.isArray(matrix[r]) ? matrix[r] : [];
+        const target = [];
+        for (let c = 0; c < maxCols; c += 1) {
+          target.push(source[c] == null ? '' : source[c]);
+        }
+        normalized.push(target);
+      }
+      return { matrix: normalized, colCount: maxCols };
+    }
+
+    function buildSpreadsheetTableFromXlsxRows(rows, colCountHint = 8) {
+      const { matrix, colCount } = normalizeSpreadsheetRows(rows, Math.max(20, (rows || []).length || 0), Math.max(1, colCountHint || 8));
+      docSpreadsheetEditorState.xlsxColumns = colCount;
+      const columns = [
+        {
+          title: '#',
+          field: '__row',
+          width: 54,
+          hozAlign: 'center',
+          headerSort: false,
+          editor: false,
+          cssClass: 'doc-sheet-row-number'
+        }
+      ];
+      for (let col = 0; col < colCount; col += 1) {
+        columns.push({
+          title: getA1ColumnLabel(col),
+          field: `c${col}`,
+          headerSort: false,
+          editor: 'input',
+          editable: true
+        });
+      }
+      const data = matrix.map((row, rowIndex) => {
+        const item = { __row: rowIndex + 1 };
+        for (let col = 0; col < colCount; col += 1) item[`c${col}`] = row[col];
+        return item;
+      });
+      return { columns, data };
+    }
+
+    function buildSpreadsheetTableFromCssRows(rows) {
+      const safeRows = Array.isArray(rows) && rows.length > 0
+        ? rows
+        : [{ selector: '.selector', property: 'color', value: '#1f2937' }];
+      const columns = [
+        { title: 'Sélecteur', field: 'selector', editor: 'input', headerSort: false, widthGrow: 2 },
+        { title: 'Propriété', field: 'property', editor: 'input', headerSort: false, widthGrow: 1.4 },
+        { title: 'Valeur', field: 'value', editor: 'input', headerSort: false, widthGrow: 1.6 }
+      ];
+      const data = safeRows.map((row, idx) => ({
+        __row: idx + 1,
+        selector: String(row.selector || ''),
+        property: String(row.property || ''),
+        value: String(row.value || '')
+      }));
+      return { columns, data };
+    }
+
+    function renderSpreadsheetEditorTable(columns, data) {
+      const host = document.getElementById('doc-editor-table-container');
+      if (!host) return;
+      destroySpreadsheetEditorTable();
+      docSpreadsheetEditorState.table = new window.Tabulator(host, {
+        layout: 'fitColumns',
+        reactiveData: false,
+        height: '420px',
+        clipboard: true,
+        history: true,
+        cellEdited: () => {},
+        columns: columns || [],
+        data: data || []
+      });
+    }
+
+    function setSpreadsheetEditorTab(tabKey) {
+      const ctxMode = String(currentDocEditorContext?.mode || '');
+      if (ctxMode === 'spreadsheet-css' && tabKey === 'xlsx') return;
+      if (ctxMode === 'spreadsheet-xlsx' && tabKey === 'css') return;
+      persistCurrentSpreadsheetXlsxSheet();
+      const normalized = tabKey === 'xlsx' ? 'xlsx' : 'css';
+      docSpreadsheetEditorState.activeTab = normalized;
+      const tabXlsx = document.getElementById('doc-editor-tab-xlsx');
+      const tabCss = document.getElementById('doc-editor-tab-css');
+      const sheetWrap = document.getElementById('doc-editor-sheet-select-wrap');
+      const hint = document.getElementById('doc-editor-sheet-hint');
+      [tabXlsx, tabCss].forEach((btn) => {
+        if (!btn) return;
+        const isActive = btn.id === (normalized === 'xlsx' ? 'doc-editor-tab-xlsx' : 'doc-editor-tab-css');
+        btn.classList.toggle('is-active', isActive);
+        btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+      });
+      sheetWrap?.classList.toggle('hidden', normalized !== 'xlsx');
+      const addColBtn = document.getElementById('btn-doc-editor-sheet-add-col');
+      if (addColBtn) addColBtn.disabled = normalized !== 'xlsx';
+      if (hint) {
+        hint.textContent = normalized === 'xlsx'
+          ? 'Mode tableur XLSX: double-cliquez une cellule pour modifier.'
+          : 'Mode tableur CSS: une ligne = sélecteur + propriété + valeur.';
+      }
+
+      if (normalized === 'xlsx') {
+        const wb = docSpreadsheetEditorState.workbook;
+        const sheetName = docSpreadsheetEditorState.sheetName || wb?.SheetNames?.[0] || 'Feuille1';
+        docSpreadsheetEditorState.sheetName = sheetName;
+        const ws = wb?.Sheets?.[sheetName];
+        const rows = ws ? window.XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) : [];
+        const { columns, data } = buildSpreadsheetTableFromXlsxRows(rows, docSpreadsheetEditorState.xlsxColumns);
+        renderSpreadsheetEditorTable(columns, data);
+      } else {
+        const cssRows = Array.isArray(docSpreadsheetEditorState.cssRows) ? docSpreadsheetEditorState.cssRows : [];
+        const { columns, data } = buildSpreadsheetTableFromCssRows(cssRows);
+        renderSpreadsheetEditorTable(columns, data);
+      }
+    }
+
+    function collectSpreadsheetCssRows() {
+      const table = docSpreadsheetEditorState.table;
+      if (!table || docSpreadsheetEditorState.activeTab !== 'css') return [];
+      return table.getData()
+        .map((row) => ({
+          selector: String(row?.selector || '').trim(),
+          property: String(row?.property || '').trim(),
+          value: String(row?.value || '').trim()
+        }))
+        .filter((row) => row.selector && row.property && row.value);
+    }
+
+    function collectSpreadsheetXlsxDataUrl(doc) {
+      const table = docSpreadsheetEditorState.table;
+      const wb = docSpreadsheetEditorState.workbook;
+      const sheetName = docSpreadsheetEditorState.sheetName || wb?.SheetNames?.[0];
+      if (!table || !wb || !sheetName) return null;
+      const rows = table.getData() || [];
+      const colCount = Math.max(1, docSpreadsheetEditorState.xlsxColumns || 1);
+      const aoa = rows.map((row) => {
+        const current = [];
+        for (let c = 0; c < colCount; c += 1) {
+          current.push(row?.[`c${c}`] ?? '');
+        }
+        return current;
+      });
+      while (aoa.length > 1 && aoa[aoa.length - 1].every((value) => String(value ?? '').trim() === '')) aoa.pop();
+      const trimmed = aoa.map((line) => {
+        const next = [...line];
+        while (next.length > 1 && String(next[next.length - 1] ?? '').trim() === '') next.pop();
+        return next;
+      });
+      wb.Sheets[sheetName] = window.XLSX.utils.aoa_to_sheet(trimmed);
+      if (!wb.SheetNames.includes(sheetName)) wb.SheetNames.push(sheetName);
+      const out = window.XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const type = String(doc?.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      return encodeBytesToDataUrl(new Uint8Array(out), type);
+    }
+
+    function persistCurrentSpreadsheetXlsxSheet() {
+      if (docSpreadsheetEditorState.activeTab !== 'xlsx') return;
+      const table = docSpreadsheetEditorState.table;
+      const wb = docSpreadsheetEditorState.workbook;
+      const sheetName = docSpreadsheetEditorState.sheetName || wb?.SheetNames?.[0];
+      if (!table || !wb || !sheetName || !window.XLSX) return;
+      const rows = table.getData() || [];
+      const colCount = Math.max(1, docSpreadsheetEditorState.xlsxColumns || 1);
+      const aoa = rows.map((row) => {
+        const current = [];
+        for (let c = 0; c < colCount; c += 1) current.push(row?.[`c${c}`] ?? '');
+        return current;
+      });
+      while (aoa.length > 1 && aoa[aoa.length - 1].every((value) => String(value ?? '').trim() === '')) aoa.pop();
+      const trimmed = aoa.map((line) => {
+        const next = [...line];
+        while (next.length > 1 && String(next[next.length - 1] ?? '').trim() === '') next.pop();
+        return next;
+      });
+      wb.Sheets[sheetName] = window.XLSX.utils.aoa_to_sheet(trimmed);
+      if (!wb.SheetNames.includes(sheetName)) wb.SheetNames.push(sheetName);
+    }
+
+    function buildCssFromRows(rows = []) {
+      const grouped = new Map();
+      (rows || []).forEach((row) => {
+        const selector = String(row.selector || '').trim();
+        const property = String(row.property || '').trim();
+        const value = String(row.value || '').trim();
+        if (!selector || !property || !value) return;
+        if (!grouped.has(selector)) grouped.set(selector, []);
+        grouped.get(selector).push(`${property}: ${value};`);
+      });
+      return Array.from(grouped.entries())
+        .map(([selector, declarations]) => `${selector} {\n  ${declarations.join('\n  ')}\n}`)
+        .join('\n\n');
+    }
+
+    function getDocumentEditorTextByMode(mode, textarea, doc = null) {
+      if (mode === 'spreadsheet-css') {
+        return buildCssFromRows(collectSpreadsheetCssRows());
+      }
+      if (mode === 'spreadsheet-xlsx') {
+        return collectSpreadsheetXlsxDataUrl(doc);
+      }
+      return String(textarea?.value || '');
+    }
+
     async function readSingleDocumentFileFromInput(inputId) {
       const input = document.getElementById(inputId);
       const file = input?.files?.[0];
@@ -11996,28 +13551,51 @@
       const title = document.getElementById('doc-editor-title');
       const subtitle = document.getElementById('doc-editor-subtitle');
       const textWrap = document.getElementById('doc-editor-text-mode');
+      const spreadsheetWrap = document.getElementById('doc-editor-spreadsheet-mode');
       const wordWrap = document.getElementById('doc-editor-word-mode');
       const textarea = document.getElementById('doc-editor-textarea');
       const fileInput = document.getElementById('doc-editor-file-input');
       const markdownTools = document.getElementById('doc-editor-markdown-tools');
       const formatHint = document.getElementById('doc-editor-format-hint');
-      if (!modal || !title || !subtitle || !textWrap || !wordWrap || !textarea || !fileInput || !markdownTools || !formatHint) return;
+      const sheetSelect = document.getElementById('doc-editor-xlsx-sheet-select');
+      if (!modal || !title || !subtitle || !textWrap || !spreadsheetWrap || !wordWrap || !textarea || !fileInput || !markdownTools || !formatHint || !sheetSelect) return;
 
-      const mode = resolveDocumentEditMode(context?.doc);
+      let mode = resolveDocumentEditMode(context?.doc);
       if (mode === 'none') {
         showToast('Edition non disponible pour ce format');
         return;
       }
+      if ((mode === 'spreadsheet-css' || mode === 'spreadsheet-xlsx') && !canUseSpreadsheetEditor()) {
+        if (mode === 'spreadsheet-css') {
+          mode = 'text';
+          showToast("Mode tableur indisponible localement, bascule en édition texte");
+        } else {
+          showToast('Mode XLSX indisponible: vérifiez le chargement des librairies tableur');
+          return;
+        }
+      }
+
       currentDocEditorContext = { ...context, mode, isMarkdown: isMarkdownDocument(context?.doc) };
+      const xlsxTabBtn = document.getElementById('doc-editor-tab-xlsx');
+      const cssTabBtn = document.getElementById('doc-editor-tab-css');
+      if (xlsxTabBtn) xlsxTabBtn.disabled = mode !== 'spreadsheet-xlsx';
+      if (cssTabBtn) cssTabBtn.disabled = mode !== 'spreadsheet-css';
       title.textContent = `Modifier: ${context.doc?.name || 'document'}`;
       subtitle.textContent = mode === 'text'
         ? 'Edition directe du contenu'
+        : mode === 'spreadsheet-css'
+          ? 'Editeur tableur CSS (Tabulator)'
+          : mode === 'spreadsheet-xlsx'
+            ? 'Editeur tableur XLSX (Tabulator + SheetJS)'
         : 'Format Word: remplacement du fichier';
       textWrap.classList.toggle('hidden', mode !== 'text');
+      spreadsheetWrap.classList.toggle('hidden', !(mode === 'spreadsheet-css' || mode === 'spreadsheet-xlsx'));
       wordWrap.classList.toggle('hidden', mode !== 'word-replace');
       markdownTools.classList.toggle('hidden', !(mode === 'text' && currentDocEditorContext.isMarkdown));
       formatHint.textContent = currentDocEditorContext.isMarkdown
         ? 'Editeur Markdown assisté: utilisez la barre ci-dessous pour insérer le balisage.'
+        : mode === 'spreadsheet-css' || mode === 'spreadsheet-xlsx'
+          ? 'Edition en mode tableur.'
         : 'Edition directe du contenu (texte brut).';
       fileInput.accept = mode === 'word-replace' ? '.doc,.docx,.odt,.rtf' : '';
       fileInput.value = '';
@@ -12026,6 +13604,37 @@
       if (mode === 'text') {
         textarea.value = decodeDataUrlToText(context.doc?.data || '');
         textarea.focus();
+      } else if (mode === 'spreadsheet-css' || mode === 'spreadsheet-xlsx') {
+        textarea.value = '';
+        destroySpreadsheetEditorTable();
+        docSpreadsheetEditorState.cssRows = [];
+        docSpreadsheetEditorState.workbook = null;
+        docSpreadsheetEditorState.sheetName = '';
+        docSpreadsheetEditorState.xlsxColumns = 8;
+        if (mode === 'spreadsheet-css') {
+          const cssText = decodeDataUrlToText(context.doc?.data || '');
+          docSpreadsheetEditorState.cssRows = parseCssToTableRows(cssText);
+          setSpreadsheetEditorTab('css');
+        } else {
+          const bytes = decodeDataUrlToBytes(context.doc?.data || '');
+          let workbook = null;
+          try {
+            workbook = bytes?.length ? window.XLSX.read(bytes, { type: 'array' }) : window.XLSX.utils.book_new();
+          } catch {
+            workbook = window.XLSX.utils.book_new();
+          }
+          if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
+            const ws = window.XLSX.utils.aoa_to_sheet([[]]);
+            window.XLSX.utils.book_append_sheet(workbook, ws, 'Feuille1');
+          }
+          docSpreadsheetEditorState.workbook = workbook;
+          docSpreadsheetEditorState.sheetName = workbook.SheetNames[0] || 'Feuille1';
+          sheetSelect.innerHTML = workbook.SheetNames
+            .map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`)
+            .join('');
+          sheetSelect.value = docSpreadsheetEditorState.sheetName;
+          setSpreadsheetEditorTab('xlsx');
+        }
       } else {
         textarea.value = '';
       }
@@ -12037,11 +13646,23 @@
       const ctx = currentDocEditorContext;
       if (!ctx?.doc || !ctx.mode) return;
       const textarea = document.getElementById('doc-editor-textarea');
+      const nextContent = getDocumentEditorTextByMode(ctx.mode, textarea, ctx.doc);
       const replacement = ctx.mode === 'word-replace'
         ? await readSingleDocumentFileFromInput('doc-editor-file-input')
+        : ctx.mode === 'spreadsheet-xlsx'
+          ? {
+              name: ctx.doc?.name,
+              type: ctx.doc?.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+              data: String(nextContent || ''),
+              size: Math.max(0, decodeDataUrlToBytes(String(nextContent || '')).byteLength || 0)
+            }
         : null;
       if (ctx.mode === 'word-replace' && !replacement) {
         showToast('Sélectionnez un fichier Word');
+        return;
+      }
+      if (ctx.mode === 'spreadsheet-xlsx' && !replacement?.data) {
+        showToast('Aucune donnée XLSX à enregistrer');
         return;
       }
 
@@ -12055,10 +13676,26 @@
           const next = ctx.mode === 'text'
             ? {
                 ...row,
-                data: encodeTextToDataUrl(textarea?.value || '', row.type || 'text/plain;charset=utf-8'),
-                size: new TextEncoder().encode(String(textarea?.value || '')).length,
+                data: encodeTextToDataUrl(nextContent, row.type || 'text/plain;charset=utf-8'),
+                size: new TextEncoder().encode(String(nextContent)).length,
                 updatedAt: Date.now()
               }
+            : ctx.mode === 'spreadsheet-css'
+              ? {
+                  ...row,
+                  data: encodeTextToDataUrl(nextContent, row.type || 'text/css;charset=utf-8'),
+                  size: new TextEncoder().encode(String(nextContent)).length,
+                  updatedAt: Date.now()
+                }
+            : ctx.mode === 'spreadsheet-xlsx'
+              ? {
+                  ...row,
+                  name: replacement.name || row.name,
+                  type: replacement.type || row.type,
+                  size: replacement.size || row.size,
+                  data: replacement.data || row.data,
+                  updatedAt: Date.now()
+                }
             : {
                 ...row,
                 name: replacement.name || row.name,
@@ -12088,10 +13725,26 @@
           const updated = ctx.mode === 'text'
             ? {
                 ...existing,
-                data: encodeTextToDataUrl(textarea?.value || '', existing.type || 'text/plain;charset=utf-8'),
-                size: new TextEncoder().encode(String(textarea?.value || '')).length,
+                data: encodeTextToDataUrl(nextContent, existing.type || 'text/plain;charset=utf-8'),
+                size: new TextEncoder().encode(String(nextContent)).length,
                 uploadedAt: Date.now()
               }
+            : ctx.mode === 'spreadsheet-css'
+              ? {
+                  ...existing,
+                  data: encodeTextToDataUrl(nextContent, existing.type || 'text/css;charset=utf-8'),
+                  size: new TextEncoder().encode(String(nextContent)).length,
+                  uploadedAt: Date.now()
+                }
+            : ctx.mode === 'spreadsheet-xlsx'
+              ? {
+                  ...existing,
+                  name: replacement.name || existing.name,
+                  type: replacement.type || existing.type,
+                  size: replacement.size || existing.size,
+                  data: replacement.data || existing.data,
+                  uploadedAt: Date.now()
+                }
             : {
                 ...existing,
                 name: replacement.name || existing.name,
@@ -12144,9 +13797,23 @@
           attachments[idx] = ctx.mode === 'text'
             ? {
                 ...attachments[idx],
-                data: encodeTextToDataUrl(textarea?.value || '', attachments[idx].type || 'text/plain;charset=utf-8'),
-                size: new TextEncoder().encode(String(textarea?.value || '')).length
+                data: encodeTextToDataUrl(nextContent, attachments[idx].type || 'text/plain;charset=utf-8'),
+                size: new TextEncoder().encode(String(nextContent)).length
               }
+            : ctx.mode === 'spreadsheet-css'
+              ? {
+                  ...attachments[idx],
+                  data: encodeTextToDataUrl(nextContent, attachments[idx].type || 'text/css;charset=utf-8'),
+                  size: new TextEncoder().encode(String(nextContent)).length
+                }
+            : ctx.mode === 'spreadsheet-xlsx'
+              ? {
+                  ...attachments[idx],
+                  name: replacement.name || attachments[idx].name,
+                  type: replacement.type || attachments[idx].type,
+                  size: replacement.size || attachments[idx].size,
+                  data: replacement.data || attachments[idx].data
+                }
             : {
                 ...attachments[idx],
                 name: replacement.name || attachments[idx].name,
@@ -12362,7 +14029,11 @@
             <div class="flex items-center gap-2">
               ${isDocumentPreviewable(doc) ? `<button onclick="openDocumentPreview('${encodeURIComponent(doc.data || '')}','${encodeURIComponent(doc.name || '')}','${encodeURIComponent(doc.type || '')}')" class="text-slate-700 hover:underline">Aperçu</button>` : ''}
               ${isDocumentEditable(doc) && (canEditTaskDoc || canEditProjectDoc) ? `<button onclick="openProjectDocumentEditor('${doc.sourceType}','${escapeHtml(doc.sourceType === 'project-doc' ? doc.docId : doc.taskId)}',${Number(doc.attachmentIndex ?? -1)})" class="text-slate-700 hover:underline">Modifier</button>` : ''}
-              <a class="text-primary font-semibold hover:underline" href="${doc.data || '#'}" download="${escapeHtml(doc.name || 'document')}">Télécharger</a>
+              ${(() => {
+                const safeHref = sanitizeDownloadHref(doc.data || '', String(doc.type || ''));
+                if (!safeHref) return '<span class="text-slate-400">Téléchargement indisponible</span>';
+                return `<a class="text-primary font-semibold hover:underline" href="${safeHref.replace(/"/g, '&quot;')}" download="${escapeHtml(doc.name || 'document')}">Télécharger</a>`;
+              })()}
               ${canManageProjectDocBinding ? `<button onclick="openDocumentBindingModal('${escapeHtml(`${currentProjectId}:project-doc:${doc.docId}`)}')" class="text-slate-700 font-semibold hover:underline">Gerer</button>` : ''}
               ${canDeleteTaskDoc ? `<button onclick="removeAttachment('${doc.taskId}', ${doc.attachmentIndex})" class="text-red-600 hover:underline">Suppr.</button>` : ''}
               ${canDeleteProjectDoc ? `<button onclick="deleteProjectDocument('${doc.docId}')" class="text-red-600 hover:underline">Suppr.</button>` : ''}
@@ -12456,14 +14127,28 @@
     function renderMessageAttachments(attachments) {
       if (!attachments || attachments.length === 0) return '';
       return `
-        <div class="mt-2 flex flex-wrap gap-2">
+        <div class="message-attachments">
           ${attachments.map((att, idx) => {
             const isImage = String(att.type || '').startsWith('image/');
             const label = escapeHtml(att.name || `fichier-${idx + 1}`);
+            const rawName = String(att.name || `fichier-${idx + 1}`);
+            const safeHref = sanitizeDownloadHref(att.data || '', String(att.type || ''));
+            const href = safeHref ? safeHref.replace(/"/g, '&quot;') : '#';
+            const sizeLabel = formatFileSize(Number(att.size || 0));
+            const isDownloadable = Boolean(safeHref);
             return `
-              <a href="${att.data || '#'}" download="${label}" class="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 text-slate-700 text-xs hover:bg-slate-200">
-                <span class="material-symbols-outlined text-sm">${isImage ? 'image' : 'attach_file'}</span>
-                <span class="max-w-[180px] truncate">${label}</span>
+              <a href="${href}" ${isDownloadable ? `download="${escapeHtml(rawName)}"` : ''} class="message-attachment-chip ${isImage ? 'is-image' : 'is-file'} ${isDownloadable ? '' : 'opacity-60 pointer-events-none'}">
+                ${isImage ? `
+                  <span class="message-attachment-thumb">
+                    <img src="${href}" alt="${label}" loading="lazy">
+                  </span>
+                ` : `
+                  <span class="material-symbols-outlined text-base">attach_file</span>
+                `}
+                <span class="message-attachment-meta">
+                  <span class="message-attachment-name">${label}</span>
+                  <span class="message-attachment-size">${escapeHtml(sizeLabel)}</span>
+                </span>
               </a>
             `;
           }).join('')}
@@ -12514,10 +14199,9 @@
       }
 
       listEl.innerHTML = rows.map((row, idx) => {
-        const avatarUrl = String(row.avatarDataUrl || '').replace(/'/g, '%27');
-        const avatar = row.avatarDataUrl
-          ? `<span class="discussion-member-avatar" style="background-image:url('${avatarUrl}')"></span>`
-          : `<span class="discussion-member-avatar" style="background:${stringToColor(row.userId || row.name || String(idx))}">${escapeHtml(getInitials(row.name))}</span>`;
+        const avatar = `<span class="discussion-member-avatar" style="${
+          safeAvatarInlineStyle(row.avatarDataUrl, stringToColor(row.userId || row.name || String(idx)))
+        }">${escapeHtml(getInitials(row.name))}</span>`;
         return `
           <div class="discussion-member-item">
             <div class="discussion-member-avatar-wrap">
@@ -12614,10 +14298,9 @@
       container.innerHTML = filtered.map((msg, idx) => {
         const mine = msg.author === currentUser?.userId;
         const identity = resolveKnownUserIdentity(msg.author, msg.authorName || 'Utilisateur');
-        const avatarUrl = String(identity.avatarDataUrl || '').replace(/'/g, '%27');
-        const avatarHtml = identity.avatarDataUrl
-          ? `<span class="discussion-avatar" style="background-image:url('${avatarUrl}')"></span>`
-          : `<span class="discussion-avatar" style="background:${stringToColor(identity.userId || identity.name || String(idx))}">${escapeHtml(getInitials(identity.name))}</span>`;
+        const avatarHtml = `<span class="discussion-avatar" style="${
+          safeAvatarInlineStyle(identity.avatarDataUrl, stringToColor(identity.userId || identity.name || String(idx)))
+        }">${escapeHtml(getInitials(identity.name))}</span>`;
         const timeLabel = new Date(msg.timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 
         return `
@@ -12864,6 +14547,10 @@
 
     async function readCreateProjectDocumentFiles() {
       return readDocumentFilesFromInput('project-create-doc-files');
+    }
+
+    async function readEditProjectDocumentFiles() {
+      return readDocumentFilesFromInput('edit-project-doc-files');
     }
 
     function estimateDataUrlBytes(dataUrl) {
@@ -13169,6 +14856,7 @@
 
         // Init user
         currentUser = await initializeCurrentUser();
+        refreshGlobalMessageHiddenGroupsForCurrentUser();
         await upsertDirectoryUser({
           userId: currentUser.userId,
           name: currentUser.name,
@@ -13361,10 +15049,16 @@
     });
     document.getElementById('mobile-menu-btn')?.addEventListener('click', openMobileSidebar);
     document.getElementById('mobile-overlay')?.addEventListener('click', closeMobileSidebar);
+    updateTopbarHeightVar();
+    requestAnimationFrame(updateTopbarHeightVar);
     window.addEventListener('resize', () => {
+      updateTopbarHeightVar();
       const collapsed = localStorage.getItem(SIDEBAR_COMPACT_STORAGE_KEY) === '1';
       applySidebarCollapsedState(collapsed, false);
+      syncProjectWorkFocusButton();
     });
+    applyProjectSubnavLayout();
+    syncProjectWorkFocusButton();
     document.getElementById('btn-notifications')?.addEventListener('click', (e) => {
       e.stopPropagation();
       toggleNotificationsPanel();
@@ -13397,6 +15091,10 @@
     });
     document.getElementById('projects-view-list')?.addEventListener('click', async () => {
       await setProjectsViewMode('list');
+    });
+    document.getElementById('btn-open-feed-from-dashboard-news')?.addEventListener('click', async () => {
+      await showGlobalWorkspace('feed');
+      closeMobileSidebar();
     });
     document.getElementById('nav-tasks')?.addEventListener('click', async (e) => {
       e.preventDefault();
@@ -13578,6 +15276,7 @@
       const visibleTasks = (currentProjectState.tasks || []).filter(t => !t.archivedAt);
       renderTasks(visibleTasks);
       renderKanban(visibleTasks);
+      renderGantt(visibleTasks);
       renderTimeline(visibleTasks);
     };
     document.getElementById('project-task-search')?.addEventListener('input', rerenderProjectTasksFromFilters);
@@ -13731,6 +15430,54 @@
       if (!button) return;
       const action = button.getAttribute('data-md-action') || '';
       applyMarkdownEditorAction(action);
+    });
+    document.getElementById('doc-editor-tab-xlsx')?.addEventListener('click', () => {
+      if (!currentDocEditorContext || !currentDocEditorContext.mode.startsWith('spreadsheet')) return;
+      setSpreadsheetEditorTab('xlsx');
+    });
+    document.getElementById('doc-editor-tab-css')?.addEventListener('click', () => {
+      if (!currentDocEditorContext || !currentDocEditorContext.mode.startsWith('spreadsheet')) return;
+      setSpreadsheetEditorTab('css');
+    });
+    document.getElementById('doc-editor-xlsx-sheet-select')?.addEventListener('change', (e) => {
+      const nextSheet = String(e?.target?.value || '').trim();
+      if (!nextSheet) return;
+      persistCurrentSpreadsheetXlsxSheet();
+      docSpreadsheetEditorState.sheetName = nextSheet;
+      if (docSpreadsheetEditorState.activeTab === 'xlsx') {
+        setSpreadsheetEditorTab('xlsx');
+      }
+    });
+    document.getElementById('btn-doc-editor-sheet-add-row')?.addEventListener('click', () => {
+      const table = docSpreadsheetEditorState.table;
+      if (!table) return;
+      if (docSpreadsheetEditorState.activeTab === 'css') {
+        table.addData([{ selector: '', property: '', value: '' }], false);
+        return;
+      }
+      const row = { __row: table.getDataCount() + 1 };
+      const cols = Math.max(1, docSpreadsheetEditorState.xlsxColumns || 1);
+      for (let c = 0; c < cols; c += 1) row[`c${c}`] = '';
+      table.addData([row], false);
+      const all = table.getData();
+      all.forEach((item, idx) => { item.__row = idx + 1; });
+      table.replaceData(all);
+    });
+    document.getElementById('btn-doc-editor-sheet-add-col')?.addEventListener('click', () => {
+      if (docSpreadsheetEditorState.activeTab !== 'xlsx') return;
+      const table = docSpreadsheetEditorState.table;
+      if (!table) return;
+      const nextCol = Math.max(1, docSpreadsheetEditorState.xlsxColumns || 1);
+      table.addColumn({
+        title: getA1ColumnLabel(nextCol),
+        field: `c${nextCol}`,
+        headerSort: false,
+        editor: 'input'
+      }, false);
+      docSpreadsheetEditorState.xlsxColumns = nextCol + 1;
+      const data = table.getData();
+      data.forEach((row) => { row[`c${nextCol}`] = row[`c${nextCol}`] ?? ''; });
+      table.replaceData(data);
     });
     document.getElementById('doc-editor-textarea')?.addEventListener('keydown', (e) => {
       if (!currentDocEditorContext?.isMarkdown) return;
@@ -14069,6 +15816,9 @@
       editProjectFromDashboard = false;
       await releaseActiveProjectEditLock();
       document.getElementById('modal-edit-project').classList.add('hidden');
+      const editProjectDocInput = document.getElementById('edit-project-doc-files');
+      if (editProjectDocInput) editProjectDocInput.value = '';
+      updateEditProjectDocFilesSummary();
     });
     document.getElementById('btn-save-edit-project')?.addEventListener('click', saveProjectEdits);
 
@@ -14412,12 +16162,16 @@
         });
       const primaryAssignee = assignees[0] || { userId: null, name: '' };
 
+      const taskDescriptionHtml = getProjectDescriptionHtmlForStorage('task-description-editor', 'task-description');
+      const taskDescriptionText = getProjectDescriptionPlainText(taskDescriptionHtml).trim();
+
       const payload = {
         title: title,
         assignee: primaryAssignee.name || '',
         assigneeUserId: primaryAssignee.userId || null,
         assignees,
-        description: document.getElementById('task-description').value.trim(),
+        description: taskDescriptionText,
+        descriptionHtml: taskDescriptionHtml || '',
         requestDate: document.getElementById('task-request-date').value || null,
         dueDate: document.getElementById('task-due-date').value || null,
         status: document.getElementById('task-status').value,
@@ -14458,6 +16212,7 @@
           assigneeUserId: payload.assigneeUserId,
           assignees: payload.assignees || [],
           description: payload.description,
+          descriptionHtml: payload.descriptionHtml || '',
           requestDate: payload.requestDate,
           dueDate: payload.dueDate,
           status: payload.status,
@@ -14572,6 +16327,46 @@
     document.getElementById('btn-close-global-task-details')?.addEventListener('click', () => {
       closeGlobalTaskDetails();
     });
+    document.getElementById('btn-close-task-convert-modal')?.addEventListener('click', () => {
+      closeTaskConvertModal();
+    });
+    document.getElementById('btn-task-convert-cancel')?.addEventListener('click', () => {
+      closeTaskConvertModal();
+    });
+    document.getElementById('btn-task-convert-confirm')?.addEventListener('click', async () => {
+      const taskRef = pendingTaskConvertRef;
+      if (!taskRef) {
+        closeTaskConvertModal();
+        return;
+      }
+      const projectName = String(document.getElementById('task-convert-project-name')?.value || '').trim();
+      const sharingMode = normalizeSharingMode(
+        document.getElementById('task-convert-mode')?.value || 'private',
+        'private'
+      );
+      const archiveSource = !!document.getElementById('task-convert-archive-source')?.checked;
+      const openProjectAfterConvert = !!document.getElementById('task-convert-open-project')?.checked;
+      const errorEl = document.getElementById('task-convert-error');
+      if (!projectName) {
+        if (errorEl) errorEl.classList.remove('hidden');
+        document.getElementById('task-convert-project-name')?.focus();
+        return;
+      }
+      if (errorEl) errorEl.classList.add('hidden');
+      closeTaskConvertModal();
+      await convertTaskToProject(taskRef, {
+        __fromModal: true,
+        projectName,
+        sharingMode,
+        archiveSource,
+        openProjectAfterConvert
+      });
+    });
+    document.getElementById('task-convert-project-name')?.addEventListener('keydown', async (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      document.getElementById('btn-task-convert-confirm')?.click();
+    });
     document.getElementById('btn-close-calendar-info-details')?.addEventListener('click', () => {
       closeStandaloneCalendarDetails();
     });
@@ -14602,6 +16397,52 @@
     });
     document.getElementById('message-input')?.setAttribute('placeholder', "Ecrire un message a l'equipe...");
 
+    let lastPasteTs = 0;
+    const modalBackdropPointerState = new Map();
+
+    document.addEventListener('paste', () => {
+      lastPasteTs = Date.now();
+    }, true);
+
+    function hasActiveTextSelection() {
+      try {
+        const selection = window.getSelection?.();
+        if (!selection) return false;
+        return String(selection.type || '').toLowerCase() === 'range' && !selection.isCollapsed;
+      } catch {
+        return false;
+      }
+    }
+
+    function registerSafeBackdropClose(modalId, closeHandler) {
+      const modal = document.getElementById(modalId);
+      if (!modal) return;
+      modal.addEventListener('pointerdown', (e) => {
+        const onBackdrop = e.target === modal;
+        modalBackdropPointerState.set(modalId, {
+          onBackdrop,
+          x: Number(e.clientX || 0),
+          y: Number(e.clientY || 0),
+          ts: Date.now()
+        });
+      });
+      modal.addEventListener('click', async (e) => {
+        if (e.target !== modal) return;
+        const state = modalBackdropPointerState.get(modalId);
+        const now = Date.now();
+        modalBackdropPointerState.delete(modalId);
+        if (!state?.onBackdrop) return;
+        const dx = Math.abs(Number(e.clientX || 0) - Number(state.x || 0));
+        const dy = Math.abs(Number(e.clientY || 0) - Number(state.y || 0));
+        const moved = dx > 6 || dy > 6;
+        const tooCloseToPaste = (now - lastPasteTs) < 450;
+        if (moved || tooCloseToPaste || hasActiveTextSelection()) return;
+        if (typeof closeHandler === 'function') {
+          await closeHandler();
+        }
+      });
+    }
+
     // Close modals on escape key
     document.addEventListener('keydown', async (e) => {
       if (e.key === 'Escape') {
@@ -14620,6 +16461,7 @@
         document.getElementById('modal-doc-preview').classList.add('hidden');
         closeDocumentBindingModal();
         closeDocumentEditorModal();
+        closeTaskConvertModal();
         document.getElementById('modal-app-help')?.classList.add('hidden');
         closeGlobalTaskDetails();
         toggleNotificationsPanel(false);
@@ -14631,64 +16473,54 @@
     });
 
     // Close modals on overlay click
-    document.getElementById('modal-new-project').addEventListener('click', (e) => {
-      if (e.target.id === 'modal-new-project') {
-        document.getElementById('modal-new-project').classList.add('hidden');
-      }
+    registerSafeBackdropClose('modal-new-project', () => {
+      document.getElementById('modal-new-project')?.classList.add('hidden');
     });
 
-    document.getElementById('modal-new-task').addEventListener('click', async (e) => {
-      if (e.target.id === 'modal-new-task') {
+    registerSafeBackdropClose('modal-new-task', async () => {
         await releaseActiveTaskEditLock();
-        document.getElementById('modal-new-task').classList.add('hidden');
+        document.getElementById('modal-new-task')?.classList.add('hidden');
         editingTaskId = null;
         editingStandaloneTaskId = null;
-      }
     });
-    document.getElementById('modal-global-task-details')?.addEventListener('click', (e) => {
-      if (e.target.id === 'modal-global-task-details') {
-        closeGlobalTaskDetails();
-      }
+    registerSafeBackdropClose('modal-global-task-details', () => {
+      closeGlobalTaskDetails();
     });
-    document.getElementById('modal-calendar-info-details')?.addEventListener('click', (e) => {
-      if (e.target.id === 'modal-calendar-info-details') {
-        closeStandaloneCalendarDetails();
-      }
+    registerSafeBackdropClose('modal-task-convert', () => {
+      closeTaskConvertModal();
     });
-    document.getElementById('modal-doc-binding')?.addEventListener('click', (e) => {
-      if (e.target.id === 'modal-doc-binding') {
-        closeDocumentBindingModal();
-      }
+    registerSafeBackdropClose('modal-calendar-info-details', () => {
+      closeStandaloneCalendarDetails();
     });
-    document.getElementById('modal-doc-editor')?.addEventListener('click', (e) => {
-      if (e.target.id === 'modal-doc-editor') {
-        closeDocumentEditorModal();
-      }
+    registerSafeBackdropClose('modal-doc-binding', () => {
+      closeDocumentBindingModal();
     });
-    document.getElementById('modal-app-help')?.addEventListener('click', (e) => {
-      if (e.target.id === 'modal-app-help') {
-        document.getElementById('modal-app-help')?.classList.add('hidden');
-      }
+    registerSafeBackdropClose('modal-doc-editor', () => {
+      closeDocumentEditorModal();
+    });
+    registerSafeBackdropClose('modal-app-help', () => {
+      document.getElementById('modal-app-help')?.classList.add('hidden');
     });
 
-    document.getElementById('modal-edit-user-name').addEventListener('click', (e) => {
-      if (e.target.id === 'modal-edit-user-name') {
-        document.getElementById('modal-edit-user-name').classList.add('hidden');
-        pendingProfilePhotoDirty = false;
-      }
+    registerSafeBackdropClose('modal-edit-user-name', () => {
+      document.getElementById('modal-edit-user-name')?.classList.add('hidden');
+      pendingProfilePhotoDirty = false;
     });
-    document.getElementById('modal-edit-project')?.addEventListener('click', async (e) => {
-      if (e.target.id === 'modal-edit-project') {
-        editProjectFromDashboard = false;
-        await releaseActiveProjectEditLock();
-        document.getElementById('modal-edit-project').classList.add('hidden');
-      }
+    registerSafeBackdropClose('modal-edit-project', async () => {
+      editProjectFromDashboard = false;
+      await releaseActiveProjectEditLock();
+      document.getElementById('modal-edit-project')?.classList.add('hidden');
+      const editProjectDocInput = document.getElementById('edit-project-doc-files');
+      if (editProjectDocInput) editProjectDocInput.value = '';
+      updateEditProjectDocFilesSummary();
     });
 
     // Project views
+    document.getElementById('view-overview')?.addEventListener('click', () => setProjectView('overview'));
     document.getElementById('view-cards')?.addEventListener('click', () => setProjectTaskPresentationMode('cards'));
     document.getElementById('view-list').addEventListener('click', () => setProjectTaskPresentationMode('list'));
     document.getElementById('view-kanban').addEventListener('click', () => setProjectView('kanban'));
+    document.getElementById('view-gantt')?.addEventListener('click', () => setProjectView('gantt'));
     document.getElementById('view-timeline').addEventListener('click', () => setProjectView('timeline'));
     document.getElementById('view-docs').addEventListener('click', () => setProjectView('docs'));
     document.getElementById('view-chat').addEventListener('click', () => setProjectView('chat'));
@@ -14697,6 +16529,9 @@
     document.getElementById('project-task-view-2')?.addEventListener('click', () => setProjectTaskCardsColumns(2));
     document.getElementById('project-task-view-3')?.addEventListener('click', () => setProjectTaskCardsColumns(3));
     document.getElementById('project-task-view-4')?.addEventListener('click', () => setProjectTaskCardsColumns(4));
+    document.getElementById('btn-project-subnav-horizontal')?.addEventListener('click', () => setProjectSubnavLayout('horizontal'));
+    document.getElementById('btn-project-subnav-vertical')?.addEventListener('click', () => setProjectSubnavLayout('vertical'));
+    document.getElementById('btn-project-work-focus')?.addEventListener('click', toggleProjectWorkFocus);
     document.getElementById('global-task-view-1')?.addEventListener('click', () => setGlobalTaskCardsColumns(1));
     document.getElementById('global-task-view-2')?.addEventListener('click', () => setGlobalTaskCardsColumns(2));
     document.getElementById('global-task-view-3')?.addEventListener('click', () => setGlobalTaskCardsColumns(3));
@@ -14713,14 +16548,17 @@
       await renderActivity(currentProjectEvents);
     });
 
-    const orderedViews = ['cards', 'list', 'kanban', 'timeline', 'docs', 'chat', 'activity', 'archives'];
+    const orderedViews = ['overview', 'cards', 'list', 'kanban', 'gantt', 'timeline', 'docs', 'chat', 'activity', 'archives'];
     orderedViews.forEach((viewKey, idx) => {
       const btn = document.getElementById(`view-${viewKey === 'docs' ? 'docs' : viewKey}`);
       if (!btn) return;
       btn.addEventListener('keydown', (e) => {
-        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+        const isVertical = projectSubnavLayout === 'vertical';
+        const prevKeyPressed = e.key === 'ArrowLeft' || (isVertical && e.key === 'ArrowUp');
+        const nextKeyPressed = e.key === 'ArrowRight' || (isVertical && e.key === 'ArrowDown');
+        if (!prevKeyPressed && !nextKeyPressed) return;
         e.preventDefault();
-        const nextIdx = e.key === 'ArrowRight'
+        const nextIdx = nextKeyPressed
           ? (idx + 1) % orderedViews.length
           : (idx - 1 + orderedViews.length) % orderedViews.length;
         let nextKey = orderedViews[nextIdx];
@@ -14796,6 +16634,21 @@
       const input = document.getElementById('message-input');
       insertTextAtCursor(input, button.dataset.emoji || '');
     });
+
+    document.addEventListener('fullscreenchange', () => {
+      syncProjectWorkFocusButton();
+    });
+    document.getElementById('btn-global-toggle-emoji-picker')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleGlobalEmojiPicker();
+    });
+    document.getElementById('global-emoji-picker-panel')?.addEventListener('click', (e) => {
+      const button = e.target.closest('[data-emoji]');
+      if (!button) return;
+      const input = document.getElementById('global-message-input');
+      insertTextAtCursor(input, button.dataset.emoji || '');
+    });
     document.addEventListener('click', (e) => {
       const target = e.target;
       if (projectEditorEmojiPickerOpen) {
@@ -14810,6 +16663,14 @@
       const trigger = document.getElementById('btn-toggle-emoji-picker');
       if (panel?.contains(target) || trigger?.contains(target)) return;
       toggleEmojiPicker(false);
+    });
+    document.addEventListener('click', (e) => {
+      if (!globalEmojiPickerOpen) return;
+      const target = e.target;
+      const panel = document.getElementById('global-emoji-picker-panel');
+      const trigger = document.getElementById('btn-global-toggle-emoji-picker');
+      if (panel?.contains(target) || trigger?.contains(target)) return;
+      toggleGlobalEmojiPicker(false);
     });
     document.addEventListener('click', (e) => {
       const button = e.target.closest('#project-editor-emoji-panel [data-emoji]');
@@ -14924,6 +16785,18 @@
       list.textContent = files.map(f => `${f.name} (${formatFileSize(f.size)})`).join(' • ');
     });
 
+    document.getElementById('global-message-files')?.addEventListener('change', () => {
+      const input = document.getElementById('global-message-files');
+      const list = document.getElementById('global-message-files-list');
+      if (!input || !list) return;
+      const files = Array.from(input.files || []);
+      if (files.length === 0) {
+        list.textContent = 'Aucun fichier sélectionné';
+        return;
+      }
+      list.textContent = files.map(f => `${f.name} (${formatFileSize(f.size)})`).join(' • ');
+    });
+
     function updateProjectDocFilesSummary() {
       const input = document.getElementById('project-doc-files');
       const summary = document.getElementById('project-doc-selected-files');
@@ -14948,8 +16821,21 @@
       summary.textContent = files.map(f => `${f.name} (${formatFileSize(f.size)})`).join(' • ');
     }
 
+    function updateEditProjectDocFilesSummary() {
+      const input = document.getElementById('edit-project-doc-files');
+      const summary = document.getElementById('edit-project-doc-files-summary');
+      if (!summary) return;
+      const files = Array.from(input?.files || []);
+      if (files.length === 0) {
+        summary.textContent = 'Aucun fichier sélectionné';
+        return;
+      }
+      summary.textContent = files.map(f => `${f.name} (${formatFileSize(f.size)})`).join(' • ');
+    }
+
     document.getElementById('project-doc-files')?.addEventListener('change', updateProjectDocFilesSummary);
     document.getElementById('project-create-doc-files')?.addEventListener('change', updateCreateProjectDocFilesSummary);
+    document.getElementById('edit-project-doc-files')?.addEventListener('change', updateEditProjectDocFilesSummary);
 
     initFileDropInputs();
     initProjectDescriptionEditors();
@@ -14995,10 +16881,8 @@
     });
     document.getElementById('btn-add-project-documents')?.addEventListener('click', addProjectDocuments);
     document.getElementById('btn-close-doc-preview')?.addEventListener('click', closeDocumentPreview);
-    document.getElementById('modal-doc-preview')?.addEventListener('click', (e) => {
-      if (e.target.id === 'modal-doc-preview') {
-        closeDocumentPreview();
-      }
+    registerSafeBackdropClose('modal-doc-preview', () => {
+      closeDocumentPreview();
     });
 
     async function readTaskFiles() {
@@ -15024,8 +16908,8 @@
       return attachments;
     }
 
-    async function readMessageFiles() {
-      const input = document.getElementById('message-files');
+    async function readMessageFiles(inputId = 'message-files') {
+      const input = document.getElementById(inputId);
       const files = Array.from(input?.files || []);
       const maxFileSize = 3 * 1024 * 1024;
 
@@ -15093,6 +16977,33 @@
       }
       if (nextOpen) {
         renderEmojiPicker();
+      }
+    }
+
+    function renderGlobalEmojiPicker() {
+      const panel = document.getElementById('global-emoji-picker-panel');
+      if (!panel || panel.dataset.ready === '1') return;
+      panel.innerHTML = extendedEmojiPalette
+        .map((emoji) => `<button type="button" class="emoji-picker-btn" data-emoji="${emoji}" aria-label="Insérer ${emoji}">${emoji}</button>`)
+        .join('');
+      panel.dataset.ready = '1';
+    }
+
+    function toggleGlobalEmojiPicker(forceOpen) {
+      const panel = document.getElementById('global-emoji-picker-panel');
+      const toggle = document.getElementById('btn-global-toggle-emoji-picker');
+      if (!panel) return;
+      const nextOpen = typeof forceOpen === 'boolean' ? forceOpen : !globalEmojiPickerOpen;
+      globalEmojiPickerOpen = nextOpen;
+      panel.classList.toggle('hidden', !nextOpen);
+      if (toggle) {
+        toggle.classList.toggle('bg-primary', nextOpen);
+        toggle.classList.toggle('text-white', nextOpen);
+        toggle.classList.toggle('bg-slate-100', !nextOpen);
+        toggle.classList.toggle('text-slate-700', !nextOpen);
+      }
+      if (nextOpen) {
+        renderGlobalEmojiPicker();
       }
     }
 

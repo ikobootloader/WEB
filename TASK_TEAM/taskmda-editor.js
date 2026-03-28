@@ -304,6 +304,79 @@
       return value;
     }
 
+    function normalizeProjectVideoEmbedUrl(rawValue) {
+      const raw = String(rawValue || '').trim();
+      if (!raw) return '';
+      let url;
+      try {
+        url = new URL(raw);
+      } catch {
+        return '';
+      }
+      const protocol = String(url.protocol || '').toLowerCase();
+      if (protocol !== 'https:' && protocol !== 'http:') return '';
+      const hostname = String(url.hostname || '').toLowerCase().replace(/^www\./, '');
+      const path = String(url.pathname || '');
+
+      if (hostname === 'youtu.be') {
+        const id = path.split('/').filter(Boolean)[0];
+        return id ? `https://www.youtube.com/embed/${encodeURIComponent(id)}` : '';
+      }
+      if (hostname === 'youtube.com' || hostname === 'm.youtube.com') {
+        if (path.startsWith('/watch')) {
+          const id = url.searchParams.get('v');
+          return id ? `https://www.youtube.com/embed/${encodeURIComponent(id)}` : '';
+        }
+        if (path.startsWith('/embed/')) {
+          const id = path.split('/').filter(Boolean)[1];
+          return id ? `https://www.youtube.com/embed/${encodeURIComponent(id)}` : '';
+        }
+        if (path.startsWith('/shorts/')) {
+          const id = path.split('/').filter(Boolean)[1];
+          return id ? `https://www.youtube.com/embed/${encodeURIComponent(id)}` : '';
+        }
+      }
+      if (hostname === 'vimeo.com') {
+        const id = path.split('/').filter(Boolean)[0];
+        return id ? `https://player.vimeo.com/video/${encodeURIComponent(id)}` : '';
+      }
+      if (hostname === 'player.vimeo.com' && path.startsWith('/video/')) {
+        const id = path.split('/').filter(Boolean)[1];
+        return id ? `https://player.vimeo.com/video/${encodeURIComponent(id)}` : '';
+      }
+      if (hostname === 'dai.ly') {
+        const id = path.split('/').filter(Boolean)[0];
+        return id ? `https://www.dailymotion.com/embed/video/${encodeURIComponent(id)}` : '';
+      }
+      if (hostname === 'dailymotion.com' && path.includes('/video/')) {
+        const id = path.split('/video/')[1]?.split(/[/?#]/)[0];
+        return id ? `https://www.dailymotion.com/embed/video/${encodeURIComponent(id)}` : '';
+      }
+      if (hostname === 'loom.com' && path.startsWith('/share/')) {
+        const id = path.split('/').filter(Boolean)[1];
+        return id ? `https://www.loom.com/embed/${encodeURIComponent(id)}` : '';
+      }
+      if (hostname === 'loom.com' && path.startsWith('/embed/')) {
+        const id = path.split('/').filter(Boolean)[1];
+        return id ? `https://www.loom.com/embed/${encodeURIComponent(id)}` : '';
+      }
+      return '';
+    }
+
+    function pickProjectEditorVideoUrl() {
+      const raw = window.prompt(
+        'URL vidéo (YouTube, Vimeo, Dailymotion, Loom)',
+        'https://www.youtube.com/watch?v='
+      );
+      if (!raw) return '';
+      const embedUrl = normalizeProjectVideoEmbedUrl(raw);
+      if (!embedUrl) {
+        showToast('URL vidéo non reconnue (YouTube/Vimeo/Dailymotion/Loom uniquement)');
+        return '';
+      }
+      return embedUrl;
+    }
+
     function placeCaretAtEnd(node) {
       if (!(node instanceof Element)) return;
       const selection = window.getSelection?.();
@@ -387,6 +460,14 @@
           case 'image':
             document.getElementById(fileInputId)?.click();
             return;
+          case 'video': {
+            const videoUrl = pickProjectEditorVideoUrl();
+            if (!videoUrl) return;
+            quill.insertEmbed(selection.index, 'video', videoUrl, 'user');
+            quill.insertText(selection.index + 1, '\n', 'user');
+            quill.setSelection(selection.index + 2, 0, 'user');
+            return;
+          }
           case 'image-size':
             showToast("Redimensionnement Quill actif: cliquez l'image puis utilisez les poignées.");
             return;
@@ -443,6 +524,13 @@
         case 'image':
           document.getElementById(fileInputId)?.click();
           break;
+        case 'video': {
+          const videoUrl = pickProjectEditorVideoUrl();
+          if (!videoUrl) break;
+          const html = `<p><iframe src="${escapeHtml(videoUrl)}" class="desc-video-embed" frameborder="0" allowfullscreen loading="lazy"></iframe></p><p><br></p>`;
+          insertHtmlAtCursor(html);
+          break;
+        }
         case 'image-size':
           applyProjectEditorImageSize(editor);
           break;
@@ -471,13 +559,25 @@
         quillCtor.register('modules/imageResize', window.ImageResize);
       }
       const modules = {
-        toolbar: [
-          [{ header: [1, 2, 3, false] }],
-          ['bold', 'italic', 'underline', 'blockquote'],
-          [{ list: 'ordered' }, { list: 'bullet' }],
-          [{ align: [] }],
-          ['link', 'image', 'clean']
-        ],
+        toolbar: {
+          container: [
+            [{ header: [1, 2, 3, false] }],
+            ['bold', 'italic', 'underline', 'blockquote'],
+            [{ list: 'ordered' }, { list: 'bullet' }],
+            [{ align: [] }],
+            [{ background: [] }],
+            ['link', 'image', 'video', 'emoji', 'clean']
+          ],
+          handlers: {
+            emoji() {
+              const emoji = pickProjectEditorEmoji();
+              if (!emoji) return;
+              const selection = this.quill.getSelection(true) || { index: this.quill.getLength(), length: 0 };
+              this.quill.insertText(selection.index, emoji, 'user');
+              this.quill.setSelection(selection.index + emoji.length, 0, 'user');
+            }
+          }
+        },
         history: {
           delay: 600,
           maxStack: 100,
@@ -493,12 +593,17 @@
         theme: 'snow',
         modules
       });
+      const emojiButton = host.parentElement?.querySelector('.ql-emoji');
+      if (emojiButton) {
+        emojiButton.setAttribute('aria-label', 'Inserer un emoji');
+        emojiButton.setAttribute('title', 'Inserer un emoji');
+      }
       projectDescriptionQuillEditors.set(editorId, quill);
       return quill;
     }
 
     function initProjectDescriptionEditors() {
-      ['project-description-editor', 'edit-project-description-editor'].forEach((editorId) => {
+      ['project-description-editor', 'edit-project-description-editor', 'task-description-editor'].forEach((editorId) => {
         const quill = ensureProjectDescriptionQuillEditor(editorId);
         const fallbackToolbar = document.querySelector(`.project-editor-toolbar-fallback [data-editor-target="${editorId}"]`)?.closest('.project-editor-toolbar-fallback');
         if (fallbackToolbar) {
@@ -521,7 +626,8 @@
 
       const imageBindings = [
         { editorId: 'project-description-editor', inputId: 'project-description-image-input' },
-        { editorId: 'edit-project-description-editor', inputId: 'edit-project-description-image-input' }
+        { editorId: 'edit-project-description-editor', inputId: 'edit-project-description-image-input' },
+        { editorId: 'task-description-editor', inputId: 'task-description-image-input' }
       ];
       imageBindings.forEach(({ editorId, inputId }) => {
         const editor = document.getElementById(editorId);

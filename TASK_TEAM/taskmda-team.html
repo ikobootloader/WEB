@@ -28,6 +28,9 @@
   </script>
   <script src="https://cdn.jsdelivr.net/npm/idb@8.0.0/build/umd.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
+  <link href="https://unpkg.com/tabulator-tables@5.6.2/dist/css/tabulator.min.css" rel="stylesheet">
+  <script src="https://unpkg.com/tabulator-tables@5.6.2/dist/js/tabulator.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <link href="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.snow.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/quill-image-resize-module@3.0.0/image-resize.min.js"></script>
@@ -40,7 +43,7 @@
       });
     };
   </script>
-  <link rel="stylesheet" href="taskmda-team.css?v=20260327-03">
+  <link rel="stylesheet" href="taskmda-team.css?v=20260328-22">
   <script src="taskmda-crypto.js"></script>
 </head>
 <body>
@@ -255,9 +258,9 @@
         </div>
         </div>
 
-        <div id="projects-list" class="mt-4 hidden">
+        <div id="projects-list" class="mt-1 hidden">
           <div class="flex items-center justify-between gap-3 mb-4">
-            <h3 class="section-title text-2xl font-extrabold">Projets</h3>
+            <p class="text-xs text-slate-400">Tous les projets accessibles (privés assignés + publics).</p>
             <div class="inline-flex items-center gap-1 rounded-xl bg-slate-100 p-1">
               <button id="projects-view-grid" class="p-2 rounded-lg text-slate-600" title="Vue grille" aria-label="Vue grille">
                 <span class="material-symbols-outlined text-[20px]">grid_view</span>
@@ -268,10 +271,17 @@
             </div>
           </div>
           <div id="projects-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
-          <div id="projects-pagination" class="mt-4 flex items-center justify-between gap-3 text-sm text-slate-600"></div>
+          <div id="projects-pagination" class="mt-4 flex items-center justify-between gap-3 text-xs text-slate-500"></div>
+          <section id="dashboard-news" class="dashboard-news mt-5 hidden" aria-live="polite">
+            <div class="dashboard-news-head">
+              <h3 class="dashboard-news-title">Actualités majeures</h3>
+              <button id="btn-open-feed-from-dashboard-news" type="button" class="dashboard-news-link">Voir le fil d'info</button>
+            </div>
+            <div id="dashboard-news-list" class="dashboard-news-list"></div>
+          </section>
         </div>
 
-        <div id="global-hub" class="mt-4 hidden">
+        <div id="global-hub" class="mt-0 hidden">
           <div class="global-hub-head mb-3">
             <h3 id="global-hub-title" class="section-title text-2xl font-extrabold mb-1">Vue transverse</h3>
             <p id="global-hub-subtitle" class="text-sm text-slate-500">Tous projets confondus, y compris les éléments hors projet.</p>
@@ -376,8 +386,23 @@
                 <div class="discussion-composer mt-3">
                   <div class="discussion-composer-top">
                     <p id="global-message-target-label" class="text-sm text-slate-600">Destinataire: Canal général (tous les agents connus)</p>
+                    <span id="global-message-group-badge" class="discussion-channel-badge hidden" aria-live="polite"></span>
+                    <div class="flex items-center gap-2">
+                      <button id="btn-global-toggle-emoji-picker" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700">Émojis</button>
+                    </div>
                   </div>
                   <textarea id="global-message-input" rows="3" placeholder="Écrire un message..." class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"></textarea>
+                  <div id="global-emoji-picker-panel" class="hidden emoji-picker-panel" aria-label="Sélecteur d'émojis"></div>
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <input
+                      id="global-message-files"
+                      type="file"
+                      multiple
+                      class="js-file-drop-input w-full px-3 py-2 border border-slate-300 rounded-lg bg-slate-50 text-sm"
+                      data-drop-label="Déposez des fichiers pour ce message"
+                    >
+                    <div id="global-message-files-list" class="text-xs text-slate-500 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">Aucun fichier sélectionné</div>
+                  </div>
                   <div class="discussion-composer-actions">
                     <button id="btn-global-send-message" class="btn-primary discussion-send-btn text-white font-semibold rounded-lg" aria-label="Envoyer le message hors projet" title="Envoyer">
                       <span class="material-symbols-outlined">send</span>
@@ -435,7 +460,10 @@
                   <h4 class="font-bold text-slate-800 mb-2">Nouveau post d'information</h4>
                   <span id="global-feed-mention-counter" class="feed-mention-counter" aria-live="polite">0 mention détectée</span>
                 </div>
-                <textarea id="global-feed-input" rows="5" placeholder="Publier une information (ex: @[Prenom Nom] merci de relire). Vous pouvez aussi utiliser @handle." class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"></textarea>
+                <div class="feed-editor-wrap border border-slate-300 rounded-xl bg-white overflow-hidden">
+                  <div id="global-feed-editor" class="global-feed-editor"></div>
+                  <textarea id="global-feed-input" rows="5" placeholder="Publier une information (ex: @prenom.nom merci de relire)." class="hidden"></textarea>
+                </div>
                 <div class="grid grid-cols-1 gap-2 mt-3">
                   <div class="feed-mention-row flex items-center gap-2">
                     <select id="global-feed-mention-select" class="px-3 py-2 border border-slate-300 rounded-lg text-sm flex-1"></select>
@@ -576,7 +604,8 @@
             <span class="back-dashboard-link-text">Retour à la liste des projets</span>
           </button>
 
-          <div id="project-overview-panel" class="panel p-6 mb-5">
+          <div id="project-overview-anchor"></div>
+          <div id="project-overview-panel" class="panel p-6 mb-3">
             <div class="flex items-start justify-between gap-3">
               <h2 id="project-title" class="section-title text-3xl font-extrabold mb-2"></h2>
               <div class="flex items-center gap-2">
@@ -611,13 +640,14 @@
               <button id="btn-email-project-complete" class="px-3 py-1.5 rounded-lg border border-emerald-200 text-emerald-700 text-sm font-semibold">Email projet achevé</button>
             </div>
             <div id="project-lock-warning" class="hidden mt-3 text-xs px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 text-amber-800"></div>
-            <div class="project-detail-mode-tabs mt-5">
-              <button id="project-mode-work" class="project-mode-tab view-tab-active">Travail</button>
-              <button id="project-mode-settings" class="project-mode-tab">Paramètres du projet</button>
+            <div class="project-mode-context-label mt-6">Navigation du projet</div>
+            <div class="project-detail-mode-tabs mt-2">
+              <button id="project-mode-work" class="project-mode-tab view-tab-active">Espace de travail</button>
+              <button id="project-mode-settings" class="project-mode-tab">Configuration</button>
             </div>
             <div id="project-settings-panel" class="hidden">
-            <div class="global-settings-tabs-wrap mt-4 mb-4">
-              <div class="project-view-tabs flex items-center gap-2 overflow-x-auto" role="tablist" aria-label="Sous-onglets paramètres projet">
+            <div id="project-settings-tabs-wrap" class="global-settings-tabs-wrap mt-4 mb-4">
+              <div id="project-settings-tabs-list" class="project-view-tabs flex items-center gap-2 overflow-x-auto" role="tablist" aria-label="Sous-onglets paramètres projet">
                 <button id="project-settings-tab-members" role="tab" aria-selected="true" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap view-tab-active">Membres</button>
                 <button id="project-settings-tab-collab" role="tab" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Collaboration</button>
                 <button id="project-settings-tab-themes" role="tab" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Thématiques</button>
@@ -732,24 +762,42 @@
           </div>
 
           <div id="project-work-panel" class="panel p-6 mb-6">
-            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-              <div class="project-view-tabs flex items-center gap-2 overflow-x-auto" role="tablist" aria-label="Vues du projet">
-                <button id="view-cards" role="tab" aria-controls="task-list-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Cartes</button>
-                <button id="view-list" role="tab" aria-controls="task-list-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Liste</button>
-                <button id="view-kanban" role="tab" aria-controls="kanban-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Kanban</button>
-                <button id="view-timeline" role="tab" aria-controls="timeline-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Timeline</button>
-                <button id="view-docs" role="tab" aria-controls="documents-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Documents</button>
-                <button id="view-chat" role="tab" aria-controls="discussion-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Discussion</button>
-                <button id="view-activity" role="tab" aria-controls="activity-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Activité</button>
-                <button id="view-archives" role="tab" aria-controls="archives-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Archives <span id="archived-tasks-count" class="text-xs opacity-80">(0)</span></button>
-              </div>
-              <button id="btn-add-task" class="btn-primary px-4 py-2 text-white font-semibold rounded-lg transition-all flex items-center justify-center gap-2">
-                <span class="material-symbols-outlined">add</span>
-                <span>Nouvelle tâche</span>
-              </button>
-            </div>
+            <div id="project-work-layout" class="project-work-layout">
+              <aside id="project-work-nav" class="project-work-nav">
+                <div id="project-view-tabs-wrap" class="project-view-tabs flex items-center gap-2 overflow-x-auto" role="tablist" aria-label="Vues du projet">
+                  <button id="view-overview" role="tab" aria-controls="project-overview-panel" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Aperçu projet</button>
+                  <button id="view-cards" role="tab" aria-controls="task-list-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Cartes</button>
+                  <button id="view-list" role="tab" aria-controls="task-list-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Liste</button>
+                  <button id="view-kanban" role="tab" aria-controls="kanban-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Kanban</button>
+                  <button id="view-gantt" role="tab" aria-controls="gantt-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Gantt</button>
+                  <button id="view-timeline" role="tab" aria-controls="timeline-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Timeline</button>
+                  <button id="view-docs" role="tab" aria-controls="documents-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Documents</button>
+                  <button id="view-chat" role="tab" aria-controls="discussion-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Discussion</button>
+                  <button id="view-activity" role="tab" aria-controls="activity-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Activité</button>
+                  <button id="view-archives" role="tab" aria-controls="archives-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Archives <span id="archived-tasks-count" class="text-xs opacity-80">(0)</span></button>
+                </div>
+                <div class="project-work-nav-controls">
+                  <div class="project-subnav-layout-group" role="group" aria-label="Disposition des sous-onglets">
+                    <button id="btn-project-subnav-horizontal" type="button" class="project-subnav-layout-btn" title="Disposition horizontale" aria-label="Disposition horizontale">
+                      <span class="material-symbols-outlined">top_panel_open</span>
+                    </button>
+                    <button id="btn-project-subnav-vertical" type="button" class="project-subnav-layout-btn" title="Disposition verticale" aria-label="Disposition verticale">
+                      <span class="material-symbols-outlined">left_panel_open</span>
+                    </button>
+                    <button id="btn-project-work-focus" type="button" class="project-subnav-focus-btn" title="Plein écran" aria-label="Plein écran">
+                      <span class="material-symbols-outlined">fullscreen</span>
+                      <span class="project-subnav-focus-text">Plein écran</span>
+                    </button>
+                  </div>
+                  <button id="btn-add-task" class="btn-primary px-4 py-2 text-white font-semibold rounded-lg transition-all flex items-center justify-center gap-2">
+                    <span class="material-symbols-outlined">add</span>
+                    <span>Nouvelle tâche</span>
+                  </button>
+                </div>
+              </aside>
 
-            <div id="task-list-section" class="project-view-section">
+              <div id="project-work-main" class="project-work-main">
+                <div id="task-list-section" class="project-view-section">
               <div class="project-task-layout-toolbar mb-3">
                 <span class="project-task-layout-label">Affichage cartes</span>
                 <div class="project-task-layout-buttons" role="group" aria-label="Densité d'affichage des tâches">
@@ -775,9 +823,12 @@
               </div>
               <div id="tasks-container" class="space-y-4"><p class="text-slate-500 text-center py-8">Aucune tâche pour le moment</p></div>
               <div id="tasks-pagination" class="mt-4 flex items-center justify-between gap-3 text-sm text-slate-600"></div>
-            </div>
-            <div id="kanban-section" class="project-view-section hidden"><div id="kanban-board" class="grid grid-cols-1 lg:grid-cols-4 gap-4"></div></div>
-            <div id="timeline-section" class="project-view-section hidden">
+                </div>
+                <div id="kanban-section" class="project-view-section hidden"><div id="kanban-board" class="grid grid-cols-1 lg:grid-cols-4 gap-4"></div></div>
+                <div id="gantt-section" class="project-view-section hidden">
+              <div id="gantt-container" class="gantt-container"></div>
+                </div>
+                <div id="timeline-section" class="project-view-section hidden">
               <div class="mb-3 flex flex-wrap items-center gap-2 text-xs">
                 <button id="timeline-filter-all" class="px-2 py-1 rounded bg-slate-100 font-semibold">Toutes</button>
                 <button id="timeline-filter-milestone" class="px-2 py-1 rounded bg-slate-100 font-semibold">Jalons</button>
@@ -797,8 +848,8 @@
               </div>
               <div id="calendar-day-agenda" class="mb-4"></div>
               <div id="timeline-container" class="space-y-3"></div>
-            </div>
-            <div id="documents-section" class="project-view-section hidden">
+                </div>
+                <div id="documents-section" class="project-view-section hidden">
               <div class="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
                 <div class="project-doc-upload-grid grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
                   <div class="space-y-1 project-doc-drop-col">
@@ -853,9 +904,9 @@
                 <button id="docs-filter-reset" class="px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold">Réinitialiser</button>
               </div>
               <div id="documents-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
-            </div>
+                </div>
 
-            <div id="discussion-section" class="project-view-section hidden">
+                <div id="discussion-section" class="project-view-section hidden">
               <div class="mb-4 grid grid-cols-1 md:grid-cols-3 gap-2">
                 <input id="chat-search-input" type="text" placeholder="Rechercher dans les messages" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
                 <label class="inline-flex items-center gap-2 px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
@@ -899,9 +950,9 @@
                   </div>
                 </aside>
               </div>
-            </div>
+                </div>
 
-            <div id="activity-section" class="project-view-section hidden">
+                <div id="activity-section" class="project-view-section hidden">
               <h3 class="section-title text-2xl font-extrabold mb-4">Journal d'activité</h3>
               <div class="mb-4 grid grid-cols-1 md:grid-cols-4 gap-2">
                 <select id="activity-filter-type" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
@@ -939,12 +990,14 @@
                 <button id="activity-filter-reset" class="px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold">Réinitialiser</button>
               </div>
               <div id="activity-container" class="space-y-3"></div>
-            </div>
-            <div id="archives-section" class="project-view-section hidden">
+                </div>
+                <div id="archives-section" class="project-view-section hidden">
               <div id="archived-tasks-section" class="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <h4 class="font-bold text-slate-800 mb-3">Tâches archivées</h4>
                 <div id="archived-tasks-container" class="space-y-2">
                   <p class="text-sm text-slate-500">Aucune tâche archivée.</p>
+                </div>
+              </div>
                 </div>
               </div>
             </div>
@@ -971,6 +1024,7 @@
             <button type="button" class="project-editor-btn" data-editor-target="project-description-editor" data-editor-action="ol" title="Liste numérotée"><span class="material-symbols-outlined">format_list_numbered</span></button>
             <button type="button" class="project-editor-btn" data-editor-target="project-description-editor" data-editor-action="emoji" title="Emoji"><span class="material-symbols-outlined">sentiment_satisfied</span></button>
             <button type="button" class="project-editor-btn" data-editor-target="project-description-editor" data-editor-file-input="project-description-image-input" data-editor-action="image" title="Insérer image"><span class="material-symbols-outlined">image</span></button>
+            <button type="button" class="project-editor-btn" data-editor-target="project-description-editor" data-editor-action="video" title="Insérer vidéo"><span class="material-symbols-outlined">smart_display</span></button>
             <button type="button" class="project-editor-btn" data-editor-target="project-description-editor" data-editor-action="align-left" title="Aligner à gauche"><span class="material-symbols-outlined">format_align_left</span></button>
             <button type="button" class="project-editor-btn" data-editor-target="project-description-editor" data-editor-action="align-center" title="Centrer"><span class="material-symbols-outlined">format_align_center</span></button>
             <button type="button" class="project-editor-btn" data-editor-target="project-description-editor" data-editor-action="align-right" title="Aligner à droite"><span class="material-symbols-outlined">format_align_right</span></button>
@@ -978,7 +1032,7 @@
           <div id="project-description-editor" class="project-description-editor" contenteditable="true" aria-label="Description projet (éditeur riche)"></div>
           <textarea id="project-description-input" class="hidden"></textarea>
           <input id="project-description-image-input" type="file" accept="image/*" multiple class="hidden">
-          <p class="text-[11px] text-slate-500 mt-1">Mise en forme riche Quill activée. Astuce: cliquez une image pour afficher les poignées de redimensionnement.</p>
+          <p class="text-[11px] text-slate-500 mt-1">Mise en forme riche Quill activée (images + vidéos). Astuce: cliquez une image pour afficher les poignées de redimensionnement.</p>
         </div>
         <div><label class="block text-sm font-semibold mb-2">Statut</label><select id="project-status" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"><option value="en-cours">En cours</option><option value="planifie">Planifié</option><option value="urgent">Urgent</option><option value="termine">Terminé</option></select></div>
         <div>
@@ -1016,7 +1070,7 @@
   </div>
 
   <div id="modal-new-task" class="task-modal hidden fixed inset-0 bg-black/50 flex items-start md:items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
-    <div class="task-modal-panel bg-white rounded-2xl p-8 max-w-md w-full mx-auto my-2 sm:my-4 md:my-0 max-h-[92vh] overflow-y-auto overscroll-contain">
+    <div class="task-modal-panel bg-white rounded-2xl p-6 sm:p-8 max-w-4xl w-full mx-auto my-2 sm:my-4 md:my-0 max-h-[92vh] overflow-y-auto overscroll-contain">
       <h3 class="section-title text-2xl font-extrabold mb-6">Nouvelle tâche</h3>
       <div id="task-edit-lock-badge" class="hidden mb-4 text-xs px-3 py-2 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800"></div>
       <div class="space-y-4">
@@ -1040,7 +1094,29 @@
           <datalist id="task-assignee-quick-options"></datalist>
           <p class="text-[11px] text-slate-500 mt-1">Astuce: si le nom correspond à un membre du projet, il sera sélectionné automatiquement.</p>
         </div>
-        <div><label class="block text-sm font-semibold mb-2">Description</label><textarea id="task-description" rows="3" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"></textarea></div>
+        <div>
+          <label class="block text-sm font-semibold mb-2">Description</label>
+          <div class="project-editor-wrap">
+            <input id="task-description-image-input" type="file" accept="image/*" class="hidden">
+            <div class="project-editor-toolbar project-editor-toolbar-fallback">
+              <button type="button" class="project-editor-btn" data-editor-target="task-description-editor" data-editor-action="bold" title="Gras"><span class="material-symbols-outlined">format_bold</span></button>
+              <button type="button" class="project-editor-btn" data-editor-target="task-description-editor" data-editor-action="italic" title="Italique"><span class="material-symbols-outlined">format_italic</span></button>
+              <button type="button" class="project-editor-btn project-editor-btn-text" data-editor-target="task-description-editor" data-editor-action="h1" title="Titre 1">H1</button>
+              <button type="button" class="project-editor-btn project-editor-btn-text" data-editor-target="task-description-editor" data-editor-action="h2" title="Titre 2">H2</button>
+              <button type="button" class="project-editor-btn project-editor-btn-text" data-editor-target="task-description-editor" data-editor-action="h3" title="Titre 3">H3</button>
+              <button type="button" class="project-editor-btn" data-editor-target="task-description-editor" data-editor-action="ul" title="Liste"><span class="material-symbols-outlined">format_list_bulleted</span></button>
+              <button type="button" class="project-editor-btn" data-editor-target="task-description-editor" data-editor-action="ol" title="Liste numérotée"><span class="material-symbols-outlined">format_list_numbered</span></button>
+            <button type="button" class="project-editor-btn" data-editor-target="task-description-editor" data-editor-action="emoji" title="Emoji"><span class="material-symbols-outlined">sentiment_satisfied</span></button>
+            <button type="button" class="project-editor-btn" data-editor-target="task-description-editor" data-editor-file-input="task-description-image-input" data-editor-action="image" title="Insérer image"><span class="material-symbols-outlined">image</span></button>
+            <button type="button" class="project-editor-btn" data-editor-target="task-description-editor" data-editor-action="video" title="Insérer vidéo"><span class="material-symbols-outlined">smart_display</span></button>
+            <button type="button" class="project-editor-btn" data-editor-target="task-description-editor" data-editor-action="align-left" title="Aligner à gauche"><span class="material-symbols-outlined">format_align_left</span></button>
+              <button type="button" class="project-editor-btn" data-editor-target="task-description-editor" data-editor-action="align-center" title="Centrer"><span class="material-symbols-outlined">format_align_center</span></button>
+              <button type="button" class="project-editor-btn" data-editor-target="task-description-editor" data-editor-action="align-right" title="Aligner à droite"><span class="material-symbols-outlined">format_align_right</span></button>
+            </div>
+            <div id="task-description-editor" class="project-description-editor task-description-editor" contenteditable="true" aria-label="Description tâche (éditeur riche)"></div>
+            <textarea id="task-description" rows="3" class="hidden"></textarea>
+          </div>
+        </div>
         <div><label class="block text-sm font-semibold mb-2">Date de demande</label><input id="task-request-date" type="date" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"></div>
         <div><label class="block text-sm font-semibold mb-2">Échéance</label><input id="task-due-date" type="date" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"></div>
         <div><label class="block text-sm font-semibold mb-2">Statut</label><select id="task-status" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"><option value="todo">À faire</option><option value="en-cours">En cours</option><option value="suspendu">Suspendu</option><option value="termine">Terminé</option></select></div>
@@ -1148,6 +1224,25 @@
         <textarea id="doc-editor-textarea" rows="16" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono"></textarea>
       </div>
 
+      <div id="doc-editor-spreadsheet-mode" class="hidden space-y-3">
+        <div class="doc-editor-sheet-tabs" role="tablist" aria-label="Type tableur">
+          <button id="doc-editor-tab-xlsx" type="button" role="tab" aria-selected="false" class="doc-editor-sheet-tab">XLSX</button>
+          <button id="doc-editor-tab-css" type="button" role="tab" aria-selected="false" class="doc-editor-sheet-tab">CSS</button>
+        </div>
+        <div class="doc-editor-sheet-toolbar">
+          <div id="doc-editor-sheet-select-wrap" class="hidden doc-editor-sheet-select-wrap">
+            <label for="doc-editor-xlsx-sheet-select" class="text-xs font-semibold text-slate-600">Onglet</label>
+            <select id="doc-editor-xlsx-sheet-select" class="px-2 py-1.5 border border-slate-300 rounded-lg text-sm"></select>
+          </div>
+          <div class="doc-editor-sheet-actions">
+            <button id="btn-doc-editor-sheet-add-row" type="button" class="doc-editor-css-add-btn">+ Ligne</button>
+            <button id="btn-doc-editor-sheet-add-col" type="button" class="doc-editor-css-add-btn">+ Colonne</button>
+          </div>
+        </div>
+        <p id="doc-editor-sheet-hint" class="text-xs text-slate-500">Edition tableur.</p>
+        <div id="doc-editor-table-container" class="doc-editor-tabulator-wrap"></div>
+      </div>
+
       <div id="doc-editor-word-mode" class="hidden space-y-2">
         <p class="text-sm text-slate-700">Ce format Word est modifiable par remplacement du fichier.</p>
         <p class="text-xs text-slate-500">Choisissez une nouvelle version du document, puis enregistrez.</p>
@@ -1190,9 +1285,54 @@
         <div id="global-task-detail-attachments" class="space-y-1 text-sm text-slate-700"></div>
       </div>
       <div class="flex flex-wrap items-center justify-end gap-2">
+        <button id="btn-global-task-detail-convert" class="task-action-btn">Convertir en projet</button>
         <button id="btn-global-task-detail-edit" class="task-action-btn">Modifier</button>
         <button id="btn-global-task-detail-archive" class="task-action-btn task-action-btn-warn">Archiver</button>
         <button id="btn-global-task-detail-delete" class="task-action-btn task-action-btn-danger">Supprimer</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-task-convert" class="hidden fixed inset-0 bg-black/55 flex items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
+    <div class="task-detail-modal-panel bg-white rounded-2xl p-5 sm:p-6 max-w-2xl w-full mx-auto max-h-[92vh] overflow-y-auto overscroll-contain">
+      <div class="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <h3 class="section-title text-2xl font-extrabold">Convertir la tâche en projet</h3>
+          <p class="text-sm text-slate-500 mt-1">Assistant rapide avec options avancées.</p>
+        </div>
+        <button id="btn-close-task-convert-modal" class="px-3 py-1.5 rounded-lg border border-slate-300 text-sm font-semibold">Fermer</button>
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 mb-3">
+        <p class="text-xs uppercase tracking-wide text-slate-500 mb-1">Tâche source</p>
+        <p id="task-convert-source-label" class="text-sm font-semibold text-slate-800">-</p>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+        <div class="md:col-span-2">
+          <label for="task-convert-project-name" class="block text-sm font-semibold mb-1">Nom du nouveau projet</label>
+          <input id="task-convert-project-name" type="text" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Ex: Projet modernisation">
+        </div>
+        <div>
+          <label for="task-convert-mode" class="block text-sm font-semibold mb-1">Mode du projet</label>
+          <select id="task-convert-mode" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+            <option value="private">Solo</option>
+            <option value="shared">Collaboratif</option>
+          </select>
+        </div>
+      </div>
+      <div class="space-y-2 mb-4">
+        <label class="inline-flex items-center gap-2 text-sm text-slate-700">
+          <input id="task-convert-archive-source" type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked>
+          <span>Archiver la tâche source après conversion</span>
+        </label>
+        <label class="inline-flex items-center gap-2 text-sm text-slate-700">
+          <input id="task-convert-open-project" type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked>
+          <span>Ouvrir le nouveau projet après conversion</span>
+        </label>
+      </div>
+      <p id="task-convert-error" class="hidden text-sm text-rose-600 font-semibold mb-3">Merci de saisir un nom de projet.</p>
+      <div class="flex items-center justify-end gap-2">
+        <button id="btn-task-convert-cancel" class="px-3 py-1.5 rounded-lg border border-slate-300 text-sm font-semibold">Annuler</button>
+        <button id="btn-task-convert-confirm" class="btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold">Convertir en projet</button>
       </div>
     </div>
   </div>
@@ -1294,6 +1434,7 @@
             <button type="button" class="project-editor-btn" data-editor-target="edit-project-description-editor" data-editor-action="ol" title="Liste numérotée"><span class="material-symbols-outlined">format_list_numbered</span></button>
             <button type="button" class="project-editor-btn" data-editor-target="edit-project-description-editor" data-editor-action="emoji" title="Emoji"><span class="material-symbols-outlined">sentiment_satisfied</span></button>
             <button type="button" class="project-editor-btn" data-editor-target="edit-project-description-editor" data-editor-file-input="edit-project-description-image-input" data-editor-action="image" title="Insérer image"><span class="material-symbols-outlined">image</span></button>
+            <button type="button" class="project-editor-btn" data-editor-target="edit-project-description-editor" data-editor-action="video" title="Insérer vidéo"><span class="material-symbols-outlined">smart_display</span></button>
             <button type="button" class="project-editor-btn" data-editor-target="edit-project-description-editor" data-editor-action="align-left" title="Aligner à gauche"><span class="material-symbols-outlined">format_align_left</span></button>
             <button type="button" class="project-editor-btn" data-editor-target="edit-project-description-editor" data-editor-action="align-center" title="Centrer"><span class="material-symbols-outlined">format_align_center</span></button>
             <button type="button" class="project-editor-btn" data-editor-target="edit-project-description-editor" data-editor-action="align-right" title="Aligner à droite"><span class="material-symbols-outlined">format_align_right</span></button>
@@ -1301,7 +1442,13 @@
           <div id="edit-project-description-editor" class="project-description-editor" contenteditable="true" aria-label="Description projet (éditeur riche)"></div>
           <textarea id="edit-project-description" class="hidden"></textarea>
           <input id="edit-project-description-image-input" type="file" accept="image/*" multiple class="hidden">
-          <p class="text-[11px] text-slate-500 mt-1">Les images intégrées seront indexées automatiquement dans les documents du projet.</p>
+          <p class="text-[11px] text-slate-500 mt-1">Les images intégrées seront indexées automatiquement dans les documents du projet (les vidéos restent en lien intégré).</p>
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-2">Documents à ajouter au projet</label>
+          <input id="edit-project-doc-files" type="file" multiple class="js-file-drop-input w-full px-3 py-2 border border-slate-300 rounded-lg bg-white text-sm" data-drop-label="Déposez les documents à ajouter au projet">
+          <p id="edit-project-doc-files-summary" class="text-xs text-slate-500 mt-2">Aucun fichier sélectionné</p>
+          <p class="text-[11px] text-slate-500 mt-1">Ces documents seront ajoutés automatiquement dans l’onglet Documents du projet après enregistrement.</p>
         </div>
         <div><label class="block text-sm font-semibold mb-2">Statut</label><select id="edit-project-status" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"><option value="en-cours">En cours</option><option value="planifie">Planifié</option><option value="urgent">Urgent</option><option value="termine">Terminé</option></select></div>
         <div>
@@ -1354,9 +1501,9 @@
   <script src="taskmda-theme.js?v=20260325-02"></script>
   <script src="taskmda-notifications.js?v=20260325-02"></script>
   <script src="taskmda-tasks.js?v=20260325-02"></script>
-  <script src="taskmda-social.js?v=20260327-03"></script>
-  <script src="taskmda-editor.js?v=20260327-02"></script>
-  <script src="taskmda-team.js?v=20260327-05"></script>
+  <script src="taskmda-social.js?v=20260328-06"></script>
+  <script src="taskmda-editor.js?v=20260328-03"></script>
+  <script src="taskmda-team.js?v=20260328-21"></script>
 </body>
 </html>
 
