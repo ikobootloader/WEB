@@ -93,10 +93,59 @@
     background: linear-gradient(135deg, #006c4a 0%, #3fb687 100%);
   }
 
+  /* Scrollbar discrète pour Demandeur(s) et Sujet(s) */
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+    border-radius: 10px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 10px;
+    transition: background 0.2s;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.25);
+  }
+
+  /* Firefox */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+  }
+
+  /* Dark mode scrollbar */
+  html.dark .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+  }
+
+  html.dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+
+  html.dark .scrollbar-thin {
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  }
+
   /* Animations */
   @keyframes fadeIn {
     from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes rotate {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  .sync-active {
+    animation: rotate 1s linear infinite;
+    color: var(--primary) !important;
   }
 
   .task-card {
@@ -275,7 +324,7 @@
     <div class="flex items-center gap-2 lg:gap-4">
       <!-- FSA Status (discret) -->
       <div class="hidden lg:flex items-center gap-1.5 px-2 py-1 rounded-lg bg-surface-container/50 text-xs text-on-surface-variant">
-        <span class="material-symbols-outlined" style="font-size: 16px;">sync</span>
+        <span id="fsaSyncIcon" class="material-symbols-outlined" style="font-size: 16px;">sync</span>
         <span id="fsaStatus" class="w-2 h-2 rounded-full bg-gray-400"></span>
         <span id="fsaStatusText">Non connecté</span>
       </div>
@@ -975,7 +1024,7 @@
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label class="block text-sm font-semibold mb-2">Demandeur(s)</label>
-          <div id="requesterCheckboxes" class="p-3 bg-surface-container-low rounded-xl space-y-2">
+          <div id="requesterCheckboxes" class="p-3 bg-surface-container-low rounded-xl space-y-2 max-h-48 overflow-y-auto scrollbar-thin">
             <label class="flex items-center gap-2 cursor-pointer hover:bg-surface-container px-2 py-1 rounded">
               <input type="checkbox" value="S3AD" class="requester-checkbox">
               <span class="text-sm">S3AD</span>
@@ -1006,7 +1055,7 @@
 
         <div>
           <label class="block text-sm font-semibold mb-2">Sujet(s)</label>
-          <div id="typeCheckboxes" class="p-3 bg-surface-container-low rounded-xl space-y-2">
+          <div id="typeCheckboxes" class="p-3 bg-surface-container-low rounded-xl space-y-2 max-h-48 overflow-y-auto scrollbar-thin">
             <label class="flex items-center gap-2 cursor-pointer hover:bg-surface-container px-2 py-1 rounded">
               <input type="checkbox" value="SOLIS" class="type-checkbox">
               <span class="text-sm">SOLIS</span>
@@ -1266,10 +1315,14 @@
 
     <!-- Footer with action buttons -->
     <div class="border-t border-surface-container p-6 shrink-0">
-      <div class="flex justify-end gap-3">
-        <button id="detailBtnEmail" onclick="sendTaskInquiryEmailFromDetail()" class="px-4 py-2 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold flex items-center gap-2 hidden">
-          <span class="material-symbols-outlined text-sm">email</span>
-          Contacter
+      <div class="flex justify-end gap-3 flex-wrap">
+        <button id="detailBtnEmailInquiry" onclick="sendTaskInquiryEmailFromDetail()" class="px-4 py-2 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold flex items-center gap-2 hidden">
+          <span class="material-symbols-outlined text-sm">help</span>
+          Demander infos
+        </button>
+        <button id="detailBtnEmailCompletion" onclick="sendTaskCompletionEmailFromDetail()" class="px-4 py-2 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold flex items-center gap-2 hidden">
+          <span class="material-symbols-outlined text-sm">mark_email_read</span>
+          Notifier réalisation
         </button>
         <button id="detailBtnEdit" onclick="editTaskFromDetail()" class="px-4 py-2 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold flex items-center gap-2">
           <span class="material-symbols-outlined text-sm">edit</span>
@@ -1309,7 +1362,7 @@
 </div>
 
 <!-- Toast Notification -->
-<div id="toast" class="fixed bottom-8 right-8 backdrop-blur-xl border border-primary/30 text-on-surface px-6 py-3.5 rounded-xl shadow-2xl transform translate-y-32 opacity-0 transition-all duration-300 z-50 flex items-center gap-3" style="background-color: rgb(133 248 196 / 0.95);">
+<div id="toast" class="fixed bottom-8 right-8 backdrop-blur-xl border border-primary/30 text-on-surface px-6 py-3.5 rounded-xl shadow-2xl transform translate-y-32 opacity-0 transition-all duration-300 z-[200] flex items-center gap-3" style="background-color: rgb(133 248 196 / 0.95);">
   <div class="w-1 h-8 bg-primary rounded-full"></div>
   <span id="toastMsg" class="font-medium text-sm"></span>
 </div>
@@ -1595,7 +1648,18 @@
     border: 2px solid transparent;
   }
 
-  .urgency-pill.active, .status-pill.active {
+  .urgency-pill.active {
+    background: linear-gradient(135deg, #006c4a 0%, #3fb687 100%);
+    color: white;
+    border-color: var(--primary);
+  }
+
+  /* Icônes blanches quand le bouton d'urgence est actif */
+  .urgency-pill.active .material-symbols-outlined {
+    color: white !important;
+  }
+
+  .status-pill.active {
     background: var(--primary-fixed);
     color: var(--on-primary-fixed-variant);
     border-color: var(--primary);
@@ -1970,7 +2034,7 @@
     </div>
 
     <!-- Error Message -->
-    <div id="lockError" class="text-error text-sm text-center mb-4 min-h-[20px]"></div>
+    <div id="lockError" class="text-error text-sm text-center mb-2 min-h-[20px]"></div>
 
     <!-- Submit Button -->
     <button

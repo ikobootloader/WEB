@@ -126,9 +126,6 @@ window.addEventListener('DOMContentLoaded', async () => {
   // Initialize FSA database
   await initFSADB();
 
-  // Check and restore folder connection
-  await checkFolderConnection();
-
   // Migrate from localStorage if needed
   await migrateFromLocalStorage();
 
@@ -616,8 +613,29 @@ function initFilterButtons() {
   document.querySelectorAll('.filter-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       activeFilter = btn.dataset.filter;
-      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
+
+      // Update active state and icon colors
+      document.querySelectorAll('.filter-btn').forEach(b => {
+        const isActive = b === btn;
+        b.classList.toggle('active', isActive);
+
+        // Get the icon inside the button
+        const icon = b.querySelector('.material-symbols-outlined');
+        if (icon) {
+          if (isActive) {
+            // Force icon color to white when active
+            icon.style.setProperty('color', 'white', 'important');
+          } else {
+            // Restore original icon color based on urgency
+            const colors = { low: '#16a34a', medium: '#f59e0b', high: '#ef4444' };
+            const filter = b.dataset.filter;
+            if (colors[filter]) {
+              icon.style.setProperty('color', colors[filter], 'important');
+            }
+          }
+        }
+      });
+
       currentPage = 1;
       renderTasks();
     });
@@ -819,6 +837,9 @@ async function submitPassword() {
 
     // Initialize notification system
     initNotificationSystem();
+
+    // Check and restore folder connection (after successful unlock)
+    await checkFolderConnection();
 
   } catch {
     err.textContent = mode === 'unlock' ? 'Mot de passe incorrect.' : 'Erreur inattendue.';
@@ -1369,43 +1390,6 @@ async function removeDirectoryInfo() {
   });
 }
 
-// Reconnecter au dossier sauvegardé (demande de nouveau les permissions)
-async function relinkBackupFolder() {
-  try {
-    // Demander à nouveau le dossier
-    const dirHandle = await window.showDirectoryPicker({
-      mode: 'readwrite',
-      startIn: 'documents'
-    });
-
-    // Vérifier les permissions
-    const hasPermission = await verifyDirectoryPermission(dirHandle, true);
-    if (!hasPermission) {
-      alert('Permission refusée pour accéder au dossier.');
-      return false;
-    }
-
-    // Stocker le nouveau handle (même dossier mais nouveau handle)
-    await storeDirectoryHandle(dirHandle);
-    await storeDirectoryInfo(dirHandle.name);
-    linkedDirectoryHandle = dirHandle;
-    fsaConnected = true;
-
-    // Mettre à jour l'UI
-    updateFSAStatus();
-
-    showToast('✅ Reconnexion au dossier de sauvegarde réussie !');
-    return true;
-
-  } catch (err) {
-    if (err.name !== 'AbortError') {
-      console.error('Erreur lors de la reconnexion:', err);
-      alert('Erreur lors de la reconnexion au dossier: ' + err.message);
-    }
-    return false;
-  }
-}
-
 // Vérifier les permissions du dossier
 async function verifyDirectoryPermission(dirHandle, requestIfNeeded = false) {
   const opts = { mode: 'readwrite' };
@@ -1505,14 +1489,14 @@ async function checkFolderConnection() {
       console.log('✅ Connexion au dossier de sauvegarde restaurée');
       return true;
     } else {
-      // Permission perdue - proposer de reconnecter
+      // Permission perdue - proposer de redemander les permissions sur le handle existant
       fsaConnected = false;
       updateFSAStatus();
-      console.log('⚠️ Permission dossier perdue - reconnexion manuelle nécessaire');
+      console.log('⚠️ Permission dossier perdue - reconnexion nécessaire');
 
-      // Proposer de se reconnecter au même dossier
+      // Proposer de redemander les permissions (après un délai pour que l'UI soit chargée)
       if (dirInfo && dirInfo.name) {
-        setTimeout(() => {
+        setTimeout(async () => {
           const reconnect = confirm(
             `Vous aviez précédemment lié le dossier "${dirInfo.name}" pour les sauvegardes automatiques.\n\n` +
             `Souhaitez-vous vous reconnecter à ce dossier maintenant ?\n\n` +
@@ -1520,9 +1504,19 @@ async function checkFolderConnection() {
           );
 
           if (reconnect) {
-            relinkBackupFolder();
+            // Demander à nouveau les permissions sur le handle existant
+            const hasPermission = await verifyDirectoryPermission(dirHandle, true);
+            if (hasPermission) {
+              linkedDirectoryHandle = dirHandle;
+              fsaConnected = true;
+              updateFSAStatus();
+              showToast('✅ Reconnexion au dossier de sauvegarde réussie !');
+              console.log('✅ Reconnexion réussie via requestPermission()');
+            } else {
+              showToast('❌ Permission refusée. Vous pouvez réessayer depuis les paramètres.', 5000);
+            }
           }
-        }, 2000); // Attendre 2s pour que l'UI soit chargée
+        }, 2000);
       }
 
       return false;
@@ -1921,14 +1915,28 @@ async function saveToStorage() {
   isSaving = true;
 
   try {
+    // Sauvegarde SYNCHRONE dans IndexedDB (chiffré)
     await idbSet('tasks', await encrypt(tasks));
     await idbSet('versions', await encrypt(versions));
     await idbSet('projects', await encrypt(projects));
     await idbSet('config', await encrypt(config));
 
-    // Sauvegarde automatique dans le dossier lié (si connecté)
+    // Sauvegarde ASYNCHRONE dans le dossier lié (en arrière-plan, transparent pour l'utilisateur)
     if (fsaConnected && linkedDirectoryHandle) {
-      await saveToLinkedFolder();
+      // Afficher l'indicateur de synchronisation
+      const syncIcon = document.getElementById('fsaSyncIcon');
+      if (syncIcon) syncIcon.classList.add('sync-active');
+
+      saveToLinkedFolder()
+        .then(() => {
+          // Masquer l'indicateur après sauvegarde réussie
+          if (syncIcon) syncIcon.classList.remove('sync-active');
+        })
+        .catch(err => {
+          console.error('Erreur lors de la sauvegarde FSA en arrière-plan:', err);
+          // Masquer l'indicateur même en cas d'erreur
+          if (syncIcon) syncIcon.classList.remove('sync-active');
+        });
     }
   } finally {
     isSaving = false;
@@ -2088,8 +2096,7 @@ function openTaskDetailModal(taskId, isArchive = false) {
   const urgencyColors = { low: 'badge-urgency-low', medium: 'badge-urgency-medium', high: 'badge-urgency-high' };
   urgencyBadge.className = `px-3 py-1 rounded-full text-xs font-bold uppercase ${urgencyColors[task.urgency || 'low']}`;
   const urgencyIcon = task.urgency === 'low' ? 'eco' : task.urgency === 'medium' ? 'warning' : 'local_fire_department';
-  const urgencyIconColor = task.urgency === 'low' ? '#16a34a' : task.urgency === 'medium' ? '#f59e0b' : '#ef4444';
-  urgencyBadge.innerHTML = `<span class="material-symbols-outlined" style="font-size: 14px; vertical-align: middle; color: ${urgencyIconColor};">${urgencyIcon}</span> ${urgencyLabels[task.urgency] || task.urgency}`;
+  urgencyBadge.innerHTML = `<span class="material-symbols-outlined" style="font-size: 14px; vertical-align: middle; color: white;">${urgencyIcon}</span> ${urgencyLabels[task.urgency] || task.urgency}`;
 
   const statusBadge = document.getElementById('detailBadgeStatus');
   const statusColors = { 'en-cours': 'badge-status-encours', 'en-attente': 'badge-status-enattente', 'realise': 'badge-status-realise' };
@@ -2217,7 +2224,8 @@ function openTaskDetailModal(taskId, isArchive = false) {
   }
 
   // Update action buttons based on context
-  const btnEmail = document.getElementById('detailBtnEmail');
+  const btnEmailInquiry = document.getElementById('detailBtnEmailInquiry');
+  const btnEmailCompletion = document.getElementById('detailBtnEmailCompletion');
   const btnComplete = document.getElementById('detailBtnComplete');
   const btnRestore = document.getElementById('detailBtnRestore');
 
@@ -2225,7 +2233,8 @@ function openTaskDetailModal(taskId, isArchive = false) {
 
   if (isArchive) {
     console.log('YZ [openTaskDetailModal] Mode ARCHIVE - cachant btnComplete');
-    btnEmail.classList.add('hidden');
+    btnEmailInquiry.classList.add('hidden');
+    btnEmailCompletion.classList.add('hidden');
     btnComplete.classList.add('hidden');
     btnRestore.classList.remove('hidden');
     console.log('YZ [openTaskDetailModal] btnComplete classes après:', btnComplete.className);
@@ -2233,10 +2242,19 @@ function openTaskDetailModal(taskId, isArchive = false) {
     console.log('YZ [openTaskDetailModal] Mode ACTIF - affichant btnComplete');
     btnComplete.classList.remove('hidden');
     btnRestore.classList.add('hidden');
+
+    // Show email buttons if task has requester and email is configured
     if (task.requester && canSendEmailForTask(task)) {
-      btnEmail.classList.remove('hidden');
+      btnEmailInquiry.classList.remove('hidden');
+      // Show completion email only if task is completed
+      if (task.status === 'realise') {
+        btnEmailCompletion.classList.remove('hidden');
+      } else {
+        btnEmailCompletion.classList.add('hidden');
+      }
     } else {
-      btnEmail.classList.add('hidden');
+      btnEmailInquiry.classList.add('hidden');
+      btnEmailCompletion.classList.add('hidden');
     }
     console.log('YZ [openTaskDetailModal] btnComplete classes après:', btnComplete.className);
   }
@@ -2286,6 +2304,11 @@ function deleteTaskFromDetail() {
 function sendTaskInquiryEmailFromDetail() {
   if (!currentDetailTaskId) return;
   sendTaskInquiryEmail(currentDetailTaskId);
+}
+
+function sendTaskCompletionEmailFromDetail() {
+  if (!currentDetailTaskId) return;
+  sendTaskCompletionEmail(currentDetailTaskId);
 }
 
 // ............................................................
@@ -2428,13 +2451,24 @@ function setUrgencyPill(value) {
   document.querySelectorAll('.urgency-pill').forEach(p => {
     const isSelected = p.dataset.urgency === value;
     p.classList.toggle('active', isSelected);
+
+    // Get the icon inside the pill
+    const icon = p.querySelector('.material-symbols-outlined');
+
     // Add/remove Tailwind classes for selected state
     if (isSelected) {
       p.classList.add('bg-primary-gradient', 'text-white', 'shadow-sm');
       p.classList.remove('bg-surface-container', 'text-on-surface-variant');
+      // Force icon color to white with !important flag
+      if (icon) icon.style.setProperty('color', 'white', 'important');
     } else {
       p.classList.remove('bg-primary-gradient', 'text-white', 'shadow-sm');
       p.classList.add('bg-surface-container', 'text-on-surface-variant');
+      // Restore original icon color based on urgency
+      if (icon) {
+        const colors = { low: '#16a34a', medium: '#f59e0b', high: '#ef4444' };
+        icon.style.setProperty('color', colors[p.dataset.urgency] || '#16a34a', 'important');
+      }
     }
   });
 }
@@ -3787,7 +3821,7 @@ function buildCard(task, idx, isArchive) {
         <span class="${badgeSize} ${urgencyChipBg[task.urgency || 'low']} font-bold rounded-full uppercase tracking-tight flex items-center gap-1">
           ${taskViewMode === 4
             ? (urgencyLabels[task.urgency]||task.urgency)
-            : `<span class="material-symbols-outlined" style="font-size: 14px; color: ${task.urgency === 'low' ? '#16a34a' : task.urgency === 'medium' ? '#f59e0b' : '#ef4444'};">${task.urgency === 'low' ? 'eco' : task.urgency === 'medium' ? 'warning' : 'local_fire_department'}</span> ${urgencyLabels[task.urgency]||task.urgency}`}
+            : `<span class="material-symbols-outlined" style="font-size: 14px; color: white;">${task.urgency === 'low' ? 'eco' : task.urgency === 'medium' ? 'warning' : 'local_fire_department'}</span> ${urgencyLabels[task.urgency]||task.urgency}`}
         </span>
         ${!isArchive && taskViewMode !== 4 ? `<span class="${badgeSize} ${statusChipBg[task.status] || 'bg-secondary-container text-on-secondary-container'} font-bold rounded-full uppercase tracking-tight">
           ${statusLabels[task.status]||task.status}
@@ -5290,9 +5324,6 @@ function openProjectModal(id = null) {
     resetProjectForm();
     archiveBtn.classList.add('hidden');
   }
-
-  // Init status pills
-  initProjectStatusPills();
 
   modal.classList.remove('hidden');
 }
