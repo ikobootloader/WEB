@@ -5820,10 +5820,9 @@ function renderGanttChart() {
 
   // Calculer la largeur totale en mode semaines
   const totalWidth = ganttViewMode === 'week' ? `${(totalColumns * 100) + 256}px` : '100%';
-  const wrapperDisplay = ganttViewMode === 'week' ? 'inline-block' : 'block';
 
-  // Wrapper - en mode semaines, on force une largeur fixe avec inline-block pour ne pas forcer le parent
-  let html = `<div style="width: ${totalWidth}; display: ${wrapperDisplay};">`;
+  // Wrapper - on force la largeur exacte et on utilise flex-col pour que le contenu s'étire correctement sans fuite
+  let html = `<div style="width: ${totalWidth}; min-width: 100%; display: flex; flex-direction: column;">`;
 
   // Header row with time labels
   if (ganttViewMode === 'month' || ganttViewMode === 'quarter') {
@@ -6248,8 +6247,3 @@ function calculateBarPosition(project, minDate, maxDate, totalMonths) {
 
   return { left: Math.max(0, left), width: Math.min(100 - left, width) };
 }
-
-
-
-
-

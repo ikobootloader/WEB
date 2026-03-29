@@ -269,22 +269,22 @@
   }
 
   #ganttChart::-webkit-scrollbar {
-    height: 8px;
-    width: 8px;
+    height: 10px;
+    width: 10px;
   }
 
   #ganttChart::-webkit-scrollbar-track {
-    background: var(--surface-container);
-    border-radius: 4px;
+    background: #eceef0; /* surface-container */
+    border-radius: 5px;
   }
 
   #ganttChart::-webkit-scrollbar-thumb {
-    background: var(--primary);
-    border-radius: 4px;
+    background: #006c4a; /* primary */
+    border-radius: 5px;
   }
 
   #ganttChart::-webkit-scrollbar-thumb:hover {
-    background: var(--primary-dark);
+    background: #005137; /* primary-dark */
   }
 
   /* View mode buttons */
@@ -380,7 +380,7 @@
 </style>
 </head>
 
-<body class="bg-background font-body text-on-surface flex min-h-screen">
+<body class="bg-background font-body text-on-surface flex min-h-screen overflow-x-hidden">
 
 <!-- App Loader (initial) -->
 <div id="appLoader">
@@ -451,7 +451,7 @@
 <div id="sidebarOverlay" class="fixed inset-0 bg-black/50 z-40 hidden lg:hidden"></div>
 
 <!-- Main Content -->
-<main id="mainContent" class="flex-1 lg:ml-64 min-h-screen flex flex-col bg-surface">
+<main id="mainContent" class="flex-1 min-w-0 lg:ml-64 min-h-screen flex flex-col bg-surface">
 
   <!-- Top Navigation Bar -->
   <header class="w-full h-16 sticky top-0 z-40 bg-surface/80 backdrop-blur-xl flex items-center justify-between px-4 lg:px-8 shadow-sm">
@@ -1983,6 +1983,15 @@
 
   html.dark .text-on-tertiary-container {
     color: #ff6b6b !important;
+  }
+
+  /* Dark mode scrollbars pour Gantt */
+  html.dark #ganttChart::-webkit-scrollbar-track {
+    background: #2a2a2a; /* dark surface-container */
+  }
+
+  html.dark #ganttChart::-webkit-scrollbar-thumb {
+    background: #3fb687; /* dark primary */
   }
 
   /* Hover states */
