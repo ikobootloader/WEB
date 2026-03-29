@@ -27,6 +27,30 @@
 
 ---
 
+## 🆕 Nouveautés v1.2.0 (Phase 2)
+
+### Score de Crise Dynamique
+**Calcul automatique** du score de crise pour prioriser les plans :
+- 📊 **Formule** : `criticité × priorité × nombre d'impacts` (échelle 0-100)
+- 🎨 **Affichage visuel** : Badge coloré (Vert → Bleu → Orange → Rouge)
+- 📈 **Dashboard** : Statistique "Score Maximum" avec identification du plan le plus critique
+- 🔢 **Cartes de plans** : Score affiché en haut à droite de chaque carte
+
+### Tri Avancé
+**Nouveau sélecteur** de tri dans la liste des plans :
+- 📅 **Date de mise à jour** (par défaut)
+- 🎯 **Score de crise** (du plus élevé au plus faible)
+- ⚡ **Priorité** (de 5 à 1)
+
+### Analyse des Conflits de Ressources
+**Nouvelle vue dédiée** accessible via l'onglet "Conflits" :
+- 🔍 **Détection automatique** : Identifie les personnes sollicitées sur plusieurs plans critiques
+- ⚠️ **Niveau de sévérité** : Badge Critique (>1 plan critique) ou Modéré (>1 haute priorité)
+- 📋 **Vue détaillée** : Pour chaque personne, liste des plans, rôles et responsabilités
+- ✅ **Message de succès** : "Aucun conflit détecté" si tout est optimal
+
+---
+
 ## 🆕 Nouveautés v1.1.0 (Phase 1)
 
 ### Schéma des Plans Enrichi

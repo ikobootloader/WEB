@@ -58,6 +58,14 @@ const STATUSES = [
   { value: "archive", label: "Archivé" }
 ];
 
+// Mapping criticality to numeric value for score calculation
+const CRITICALITY_WEIGHT = {
+  "basse": 1,
+  "moyenne": 2,
+  "haute": 3,
+  "critique": 4
+};
+
 const initialState = {
   plans: [],
   selectedId: null,
@@ -65,6 +73,7 @@ const initialState = {
   filterCategory: "all",
   filterCriticality: "all",
   filterStatus: "all",
+  sortBy: "updatedAt", // updatedAt | crisisScore | priority
   pendingImport: null,
   currentView: "plans", // default view
   activeCrisisPlanId: null, // ID du plan actif en mode crise
@@ -88,6 +97,7 @@ const el = {
   filterCategory: document.getElementById("filterCategory"),
   filterCriticality: document.getElementById("filterCriticality"),
   filterStatus: document.getElementById("filterStatus"),
+  sortBy: document.getElementById("sortBy"),
   globalSearch: document.getElementById("globalSearch"),
 
   // Navigation
@@ -98,11 +108,15 @@ const el = {
   viewPlans: document.getElementById("viewPlans"),
   viewEditor: document.getElementById("viewEditor"),
   viewCrisis: document.getElementById("viewCrisis"),
+  viewConflicts: document.getElementById("viewConflicts"),
   viewSettings: document.getElementById("viewSettings"),
+  conflictsContent: document.getElementById("conflictsContent"),
 
   // Dashboard elements
   statTotalPlans: document.getElementById("statTotalPlans"),
   statCriticalPlans: document.getElementById("statCriticalPlans"),
+  statMaxScore: document.getElementById("statMaxScore"),
+  statMaxScoreMeta: document.getElementById("statMaxScoreMeta"),
   statLastBackup: document.getElementById("statLastBackup"),
   statBackupMeta: document.getElementById("statBackupMeta"),
   dashboardEmergencyBtn: document.getElementById("dashboardEmergencyBtn"),
@@ -215,6 +229,7 @@ function navigateTo(view) {
   el.viewPlans?.classList.add("hidden");
   el.viewEditor?.classList.add("hidden");
   el.viewCrisis?.classList.add("hidden");
+  el.viewConflicts?.classList.add("hidden");
   el.viewSettings?.classList.add("hidden");
 
   // Update Crisis Mode indicator
@@ -244,6 +259,10 @@ function navigateTo(view) {
     case "crisis":
       el.viewCrisis?.classList.remove("hidden");
       renderUrgency();
+      break;
+    case "conflicts":
+      el.viewConflicts?.classList.remove("hidden");
+      renderConflicts();
       break;
     case "settings":
       el.viewSettings?.classList.remove("hidden");
@@ -276,7 +295,7 @@ function updateActiveNav(view) {
 
 function handleHashChange() {
   const hash = window.location.hash.slice(1);
-  const validViews = ["dashboard", "plans", "editor", "crisis", "settings", "support"];
+  const validViews = ["dashboard", "plans", "editor", "crisis", "conflicts", "settings", "support"];
   const view = validViews.includes(hash) ? hash : "plans";
   navigateTo(view);
 }
@@ -297,6 +316,26 @@ async function renderDashboard() {
     el.statCriticalPlans.textContent = criticalCount;
   }
 
+  // Maximum Crisis Score (Phase 2)
+  if (el.statMaxScore && el.statMaxScoreMeta) {
+    if (state.plans.length > 0) {
+      const scores = state.plans.map(p => calculateCrisisScore(p));
+      const maxScore = Math.max(...scores);
+      const maxPlan = state.plans.find(p => calculateCrisisScore(p) === maxScore);
+
+      el.statMaxScore.textContent = maxScore;
+      if (maxPlan) {
+        const scoreLabel = getScoreLabel(maxScore);
+        el.statMaxScoreMeta.textContent = `${scoreLabel} - ${maxPlan.title}`;
+      } else {
+        el.statMaxScoreMeta.textContent = "Score de crise le plus élevé";
+      }
+    } else {
+      el.statMaxScore.textContent = "0";
+      el.statMaxScoreMeta.textContent = "Aucun plan enregistré";
+    }
+  }
+
   // Last backup
   const lastBackupAt = await getSetting("lastBackupAt");
   if (el.statLastBackup && el.statBackupMeta) {
@@ -309,6 +348,192 @@ async function renderDashboard() {
       el.statBackupMeta.textContent = "Aucune sauvegarde détectée";
     }
   }
+}
+
+// ============================================
+// CONFLICTS ANALYSIS (Phase 2)
+// ============================================
+
+/**
+ * Analyze resource conflicts across plans
+ * Detects when the same person is responsible in multiple critical plans
+ */
+function analyzeResourceConflicts() {
+  // Map: person name -> array of {plan, role}
+  const resourceMap = new Map();
+
+  // Analyze roles in each plan
+  state.plans.forEach(plan => {
+    // Skip archived plans
+    if (plan.status === "archive") return;
+
+    // Analyze roles
+    if (Array.isArray(plan.roles)) {
+      plan.roles.forEach(role => {
+        const name = (role.role || "").trim();
+        if (!name) return;
+
+        if (!resourceMap.has(name)) {
+          resourceMap.set(name, []);
+        }
+        resourceMap.get(name).push({
+          plan: plan,
+          responsibility: role.responsibility,
+          type: "role"
+        });
+      });
+    }
+
+    // Analyze decision matrix
+    if (Array.isArray(plan.decisionMatrix)) {
+      plan.decisionMatrix.forEach(decision => {
+        const responsibleName = (decision.responsible || "").trim();
+        const backupName = (decision.backup || "").trim();
+
+        if (responsibleName) {
+          if (!resourceMap.has(responsibleName)) {
+            resourceMap.set(responsibleName, []);
+          }
+          resourceMap.get(responsibleName).push({
+            plan: plan,
+            responsibility: `Décision: ${decision.decision}`,
+            type: "decision"
+          });
+        }
+
+        if (backupName) {
+          if (!resourceMap.has(backupName)) {
+            resourceMap.set(backupName, []);
+          }
+          resourceMap.get(backupName).push({
+            plan: plan,
+            responsibility: `Backup décision: ${decision.decision}`,
+            type: "backup"
+          });
+        }
+      });
+    }
+
+    // Analyze contacts
+    if (Array.isArray(plan.contacts)) {
+      plan.contacts.forEach(contact => {
+        const name = (contact.name || "").trim();
+        if (!name) return;
+
+        if (!resourceMap.has(name)) {
+          resourceMap.set(name, []);
+        }
+        resourceMap.get(name).push({
+          plan: plan,
+          responsibility: "Contact stratégique",
+          type: "contact"
+        });
+      });
+    }
+  });
+
+  // Identify conflicts (person in multiple critical/high priority plans)
+  const conflicts = [];
+  resourceMap.forEach((assignments, personName) => {
+    if (assignments.length > 1) {
+      // Count critical plans
+      const criticalCount = assignments.filter(a => a.plan.criticality === "critique").length;
+      const highPriorityCount = assignments.filter(a => (a.plan.priority || 3) >= 4).length;
+
+      if (criticalCount > 1 || highPriorityCount > 1) {
+        conflicts.push({
+          personName,
+          assignments,
+          criticalCount,
+          highPriorityCount,
+          totalPlans: assignments.length,
+          severity: criticalCount > 1 ? "high" : "medium"
+        });
+      }
+    }
+  });
+
+  // Sort by severity
+  conflicts.sort((a, b) => {
+    if (a.severity !== b.severity) {
+      return a.severity === "high" ? -1 : 1;
+    }
+    return b.totalPlans - a.totalPlans;
+  });
+
+  return conflicts;
+}
+
+/**
+ * Render conflicts view
+ */
+function renderConflicts() {
+  if (!el.conflictsContent) return;
+
+  const conflicts = analyzeResourceConflicts();
+
+  if (conflicts.length === 0) {
+    el.conflictsContent.innerHTML = `
+      <div class="card" style="padding: var(--spacing-8); text-align: center;">
+        <span class="material-symbols-outlined" style="font-size: 64px; color: var(--primary); margin-bottom: var(--spacing-4);">check_circle</span>
+        <h3 class="headline-md" style="margin-bottom: var(--spacing-2);">Aucun conflit détecté</h3>
+        <p class="body-md text-muted">Toutes les ressources humaines sont correctement réparties entre les plans.</p>
+      </div>
+    `;
+    return;
+  }
+
+  const conflictsHtml = conflicts.map(conflict => {
+    const severityBadge = conflict.severity === "high"
+      ? `<span class="badge badge-error">Critique</span>`
+      : `<span class="badge badge-warning">Modéré</span>`;
+
+    const assignmentsHtml = conflict.assignments.map(assignment => {
+      const score = calculateCrisisScore(assignment.plan);
+      const scoreBadge = getScoreBadgeClass(score);
+
+      return `
+        <div style="padding: var(--spacing-3); background: var(--surface-container-low); border-radius: var(--border-radius-md); margin-bottom: var(--spacing-2);">
+          <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: var(--spacing-1);">
+            <strong class="body-md">${escapeHtml(assignment.plan.title)}</strong>
+            <span class="badge ${scoreBadge}">Score ${score}</span>
+          </div>
+          <p class="body-sm text-muted">${escapeHtml(assignment.responsibility)}</p>
+          <div style="display: flex; gap: var(--spacing-2); margin-top: var(--spacing-1);">
+            <span class="label-sm">${escapeHtml(criticalityLabelByValue[assignment.plan.criticality])}</span>
+            <span class="label-sm">Priorité ${assignment.plan.priority || 3}</span>
+            <span class="label-sm">${escapeHtml(assignment.type)}</span>
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    return `
+      <div class="card" style="padding: var(--spacing-6); margin-bottom: var(--spacing-4);">
+        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: var(--spacing-4);">
+          <div>
+            <h3 class="headline-md" style="margin-bottom: var(--spacing-2);">${escapeHtml(conflict.personName)}</h3>
+            <p class="body-sm text-muted">Sollicité sur ${conflict.totalPlans} plan${conflict.totalPlans > 1 ? "s" : ""} · ${conflict.criticalCount} critique${conflict.criticalCount > 1 ? "s" : ""} · ${conflict.highPriorityCount} haute priorité</p>
+          </div>
+          ${severityBadge}
+        </div>
+        ${assignmentsHtml}
+      </div>
+    `;
+  }).join("");
+
+  el.conflictsContent.innerHTML = `
+    <div class="card" style="padding: var(--spacing-6); margin-bottom: var(--spacing-6); background: linear-gradient(135deg, var(--error-container), var(--surface-container));">
+      <div style="display: flex; align-items: center; gap: var(--spacing-4);">
+        <span class="material-symbols-outlined filled" style="font-size: 48px; color: var(--error);">flag</span>
+        <div>
+          <h3 class="headline-md" style="margin-bottom: var(--spacing-1);">${conflicts.length} Conflit${conflicts.length > 1 ? "s" : ""} Détecté${conflicts.length > 1 ? "s" : ""}</h3>
+          <p class="body-md">Ressources humaines sollicitées sur plusieurs plans critiques simultanément</p>
+        </div>
+      </div>
+    </div>
+    ${conflictsHtml}
+  `;
 }
 
 // ============================================
@@ -326,6 +551,48 @@ function escapeHtml(text) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+}
+
+/**
+ * Calculate Crisis Score (Phase 2)
+ * Formula: criticality_weight × priority × impact_count
+ *
+ * @param {Object} plan - The plan object
+ * @returns {number} - Crisis score (0-100)
+ */
+function calculateCrisisScore(plan) {
+  if (!plan) return 0;
+
+  const criticalityWeight = CRITICALITY_WEIGHT[plan.criticality] || 2;
+  const priority = plan.priority || 3;
+  const impactCount = Array.isArray(plan.impacts) ? plan.impacts.length : 0;
+
+  // Base score: criticality (1-4) × priority (1-5) × impacts (0-N)
+  const baseScore = criticalityWeight * priority * Math.min(impactCount, 5);
+
+  // Normalize to 0-100 scale
+  // Max theoretical: 4 × 5 × 5 = 100
+  return Math.min(baseScore, 100);
+}
+
+/**
+ * Get crisis score badge class
+ */
+function getScoreBadgeClass(score) {
+  if (score >= 75) return "badge-error"; // Rouge
+  if (score >= 50) return "badge-warning"; // Orange
+  if (score >= 25) return "badge-info"; // Bleu
+  return "badge-success"; // Vert
+}
+
+/**
+ * Get crisis score label
+ */
+function getScoreLabel(score) {
+  if (score >= 75) return "Critique";
+  if (score >= 50) return "Élevé";
+  if (score >= 25) return "Modéré";
+  return "Faible";
 }
 
 function optionHtml(value, label) {
@@ -616,7 +883,7 @@ function showInfo(message) {
 function filteredPlans() {
   const q = state.search.trim().toLowerCase();
 
-  return state.plans
+  const filtered = state.plans
     .filter((plan) => (state.filterCategory === "all" ? true : plan.category === state.filterCategory))
     .filter((plan) =>
       state.filterCriticality === "all" ? true : plan.criticality === state.filterCriticality
@@ -637,8 +904,17 @@ function filteredPlans() {
         .join(" ")
         .toLowerCase();
       return bag.includes(q);
-    })
-    .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+    });
+
+  // Sort based on sortBy state (Phase 2)
+  if (state.sortBy === "crisisScore") {
+    return filtered.sort((a, b) => calculateCrisisScore(b) - calculateCrisisScore(a));
+  } else if (state.sortBy === "priority") {
+    return filtered.sort((a, b) => (b.priority || 3) - (a.priority || 3));
+  } else {
+    // Default: sort by updatedAt
+    return filtered.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+  }
 }
 
 function getBadgeClass(criticality) {
@@ -667,13 +943,20 @@ function renderPlansList() {
     .map((plan) => {
       const active = plan.id === state.selectedId ? "active" : "";
       const badgeClass = getBadgeClass(plan.criticality);
+      const crisisScore = calculateCrisisScore(plan);
+      const scoreBadgeClass = getScoreBadgeClass(crisisScore);
+      const scoreLabel = getScoreLabel(crisisScore);
+
       return `<li>
         <button type="button" class="plan-item ${active}" data-id="${escapeHtml(plan.id)}">
           <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: var(--spacing-2);">
             <strong class="title-lg">${escapeHtml(plan.title || plan.id)}</strong>
-            <span class="badge ${badgeClass}">${escapeHtml(criticalityLabelByValue[plan.criticality] || plan.criticality)}</span>
+            <div style="display: flex; gap: var(--spacing-2);">
+              <span class="badge ${scoreBadgeClass}" style="font-weight: 700;">Score ${crisisScore}</span>
+              <span class="badge ${badgeClass}">${escapeHtml(criticalityLabelByValue[plan.criticality] || plan.criticality)}</span>
+            </div>
           </div>
-          <span class="body-md text-muted" style="display: block; margin-bottom: var(--spacing-1);">${escapeHtml(categoryLabelByValue[plan.category] || plan.category)} · ${escapeHtml(statusLabelByValue[plan.status] || plan.status)} · Priorité ${plan.priority || 3}</span>
+          <span class="body-md text-muted" style="display: block; margin-bottom: var(--spacing-1);">${escapeHtml(categoryLabelByValue[plan.category] || plan.category)} · ${escapeHtml(statusLabelByValue[plan.status] || plan.status)} · Priorité ${plan.priority || 3} · ${scoreLabel}</span>
           <small class="label-sm text-muted">MàJ ${escapeHtml(new Date(plan.updatedAt).toLocaleDateString("fr-FR"))}</small>
         </button>
       </li>`;
@@ -1729,6 +2012,14 @@ function bindEvents() {
   if (el.filterStatus) {
     el.filterStatus.addEventListener("change", () => {
       state.filterStatus = el.filterStatus.value;
+      renderPlansList();
+    });
+  }
+
+  // Sort By (Phase 2)
+  if (el.sortBy) {
+    el.sortBy.addEventListener("change", () => {
+      state.sortBy = el.sortBy.value;
       renderPlansList();
     });
   }

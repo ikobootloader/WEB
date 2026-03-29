@@ -60,6 +60,10 @@
         <span class="material-symbols-outlined">warning</span>
         <span>Mode Urgence</span>
       </a>
+      <a href="#conflicts" class="sidenav-item" data-view="conflicts">
+        <span class="material-symbols-outlined">flag</span>
+        <span>Conflits</span>
+      </a>
       <a href="#settings" class="sidenav-item" data-view="settings">
         <span class="material-symbols-outlined">settings</span>
         <span>Paramètres</span>
@@ -172,6 +176,17 @@
           </div>
         </div>
 
+        <div class="stat-card" style="border-left-color: var(--error);">
+          <div class="stat-card-header">
+            <span class="stat-card-label">Score Maximum</span>
+            <span class="material-symbols-outlined filled text-error">speed</span>
+          </div>
+          <div>
+            <div class="stat-card-value text-error" id="statMaxScore">0</div>
+            <p class="stat-card-meta" id="statMaxScoreMeta">Score de crise le plus élevé</p>
+          </div>
+        </div>
+
         <div class="stat-card" style="border-left-color: var(--secondary);">
           <div class="stat-card-header">
             <span class="stat-card-label">Dernière Sauvegarde</span>
@@ -256,6 +271,14 @@
           <div>
             <label for="filterStatus" class="label">Statut</label>
             <select id="filterStatus" class="select"></select>
+          </div>
+          <div>
+            <label for="sortBy" class="label">Trier par</label>
+            <select id="sortBy" class="select">
+              <option value="updatedAt">Date de mise à jour</option>
+              <option value="crisisScore">Score de crise</option>
+              <option value="priority">Priorité</option>
+            </select>
           </div>
           <div>
             <label for="searchInput" class="label">Recherche</label>
@@ -534,6 +557,18 @@
          ============================================ -->
     <div id="viewCrisis" class="view-container hidden">
       <div id="urgencyContent"></div>
+    </div>
+
+    <!-- ============================================
+         VIEW: CONFLICTS (Phase 2)
+         ============================================ -->
+    <div id="viewConflicts" class="view-container hidden">
+      <div class="page-header">
+        <h2 class="page-title">Analyse des Conflits de Ressources</h2>
+        <p class="page-subtitle">Détection automatique des responsables sollicités sur plusieurs plans critiques</p>
+      </div>
+
+      <div id="conflictsContent"></div>
     </div>
 
     <!-- ============================================
