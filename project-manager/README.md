@@ -78,9 +78,13 @@ Interface redesignée avec le système de design **"Emerald Flux"** :
 - **Vues multiples** :
   - 🖥️ **Desktop** : Gantt complet avec barres de progression et timeline
   - 📱 **Mobile** : vue cartes optimisée pour petits écrans
-- **Toggle MOIS/SEMAINES** : affichage par mois ou par semaines
-  - Vue mois : colonnes mensuelles avec année
-  - **Vue semaines** : header sur deux lignes (mois + année / numéros de semaines)
+- **Zoom chronologique 3 niveaux** : basculement fluide entre vues
+  - 📅 **TRIMESTRES** : vue macro pour planification long terme
+  - 📆 **MOIS** : vue standard pour suivi mensuel (par défaut)
+  - 📊 **SEMAINES** : vue détaillée pour suivi fin
+    - Header sur deux lignes (mois + numéros de semaines)
+    - Scroll horizontal contenu dans le cadre de la frise
+    - Barres de projet calculées en pixels pour précision maximale
 - **Statuts colorés** :
   - 🟢 EN COURS (#006c4a) - projet actif
   - 🔵 PLANIFIÉ (#6366f1) - projet à venir
@@ -89,10 +93,10 @@ Interface redesignée avec le système de design **"Emerald Flux"** :
 - **Informations projet** :
   - Nom, dates de début/fin, progression (0-100%)
   - Description détaillée
-  - Demandeurs multiples
+  - Demandeurs multiples avec emails
   - Calcul automatique des jours restants
 - **Actions rapides** :
-  - ✏️ **Édition** : modifier le projet
+  - ✏️ **Édition** : modifier le projet (clic sur carte ou barre)
   - 📦 **Archivage** : archiver le projet rapidement
   - 🗑️ **Suppression** : supprimer définitivement
   - Boutons visibles au survol en haut à droite des cartouches
@@ -107,18 +111,28 @@ Interface redesignée avec le système de design **"Emerald Flux"** :
 - **Stockage chiffré** : projets sauvegardés avec chiffrement AES-256-GCM
 
 ### 📧 Notifications par email
-- **Templates personnalisables** : modèles d'emails pour tâches complétées et demandes de renseignements
+- **Templates personnalisables** : modèles d'emails pour tâches/projets complétés et demandes de renseignements
 - **Variables dynamiques** :
-  - `{{TITLE}}` : titre de la tâche
-  - `{{REQUESTER}}` : demandeur
+  - `{{TITLE}}` : titre de la tâche/projet
+  - `{{REQUESTER}}` : demandeur(s)
   - `{{SUJET}}` : sujet de la tâche (anciennement TYPE)
   - `{{URGENCY}}` : niveau d'urgence
   - `{{STATUS}}` : statut
   - `{{DEADLINE}}` : date limite
   - `{{COMMENT}}` : commentaire
   - Support rétro-compatible de `{{TYPE}}`
-- **Configuration dans Paramètres** : personnalisation des sujets et corps des emails
-- **Boutons d'envoi rapide** : directement depuis les cartouches de tâches
+- **Multi-destinataires** : envoi simultané à plusieurs demandeurs
+  - Support des tâches et projets avec plusieurs demandeurs
+  - Tous les demandeurs doivent avoir un email configuré
+  - Destinataires séparés par points-virgules dans le mailto
+- **Configuration emails** : gestion dans Paramètres > Templates d'emails & Signature
+  - Configuration des emails par demandeur
+  - Signature textuelle personnalisable
+  - Note : Les images ne peuvent pas être intégrées via mailto (limitation du protocole)
+- **Boutons d'envoi rapide** :
+  - Directement depuis les cartouches de tâches
+  - Dans les modales de détail tâches/projets
+  - Apparition automatique si tous les demandeurs ont un email
 
 ### 📦 Gestion des versions logicielles
 - **Registre des versions** : suivi des versions de SOLIS, MULTIGEST, BO, etc.
@@ -196,17 +210,22 @@ Interface redesignée avec le système de design **"Emerald Flux"** :
 | Responsive design | ✅ | Desktop, tablette, mobile |
 | Gestionnaire de versions | ✅ | Modal avec CRUD complet |
 
-### 🆕 Fonctionnalités NON documentées (nouvelles)
+### 🆕 Fonctionnalités récemment ajoutées
 
 | Fonctionnalité | Description | Importance |
 |---|---|---|
+| **Zoom Gantt 3 niveaux** | Trimestres / Mois / Semaines avec scroll horizontal contenu | ⭐⭐⭐ |
+| **Scroll horizontal isolé** | Frise chronologique avec scroll dans son cadre uniquement | ⭐⭐⭐ |
+| **Emails multi-destinataires** | Envoi simultané à plusieurs demandeurs (tâches + projets) | ⭐⭐⭐ |
+| **Paramètres accordéon** | Sections pliables/dépliables dans les Paramètres | ⭐⭐ |
+| **Badge échéance coloré vue 4 colonnes** | Badge avec couleur d'urgence pour meilleure visibilité | ⭐⭐ |
+| **Gestion versions dans Paramètres** | Section "Versions des logiciels" déplacée dans Paramètres | ⭐⭐ |
 | **Mode sombre** | Thème sombre harmonieux avec palette cohérente | ⭐⭐⭐ |
 | **Mode contraste renforcé** | Amélioration accessibilité | ⭐⭐⭐ |
 | **Validation formulaires** | Messages d'erreur explicites + focus automatique | ⭐⭐⭐ |
-| **Vue semaines 2 lignes** | Header Gantt avec mois et semaines séparés | ⭐⭐ |
+| **Vue semaines 2 lignes** | Header Gantt avec mois et semaines séparés | ⭐⭐⭐ |
 | **Actions rapides projets** | Boutons éditer/archiver/supprimer au survol | ⭐⭐⭐ |
 | **Tooltip titre projet** | Affichage titre complet si tronqué | ⭐⭐ |
-| **Notifications email** | Templates personnalisables avec variables | ⭐⭐⭐ |
 | **Demandeurs multiples projets** | Support de plusieurs demandeurs par projet | ⭐⭐ |
 | **Refresh Dashboard après édition** | Synchronisation automatique des vues | ⭐⭐ |
 | **Export Excel amélioré** | Feuilles séparées + compteur toast | ⭐⭐ |
@@ -217,6 +236,7 @@ Interface redesignée avec le système de design **"Emerald Flux"** :
 | **Bordures Statistics Cards** | Bordures fines bottom/right pour meilleure visibilité | ⭐⭐ |
 | **Terminologie "Sujets"** | Remplacement de "Types" par "Sujets" dans l'UI | ⭐⭐ |
 | **Navigation rapide Dashboard** | Liens "Voir tout" discrets vers vues complètes | ⭐⭐ |
+| **Anti-FOUC** | Loader initial avant affichage de l'écran de connexion | ⭐⭐ |
 
 ### 📝 Changements majeurs v5.0
 
