@@ -44,6 +44,14 @@ const CRITICALITIES = [
   { value: "critique", label: "Critique" }
 ];
 
+const PRIORITIES = [
+  { value: 1, label: "1 - Très basse" },
+  { value: 2, label: "2 - Basse" },
+  { value: 3, label: "3 - Moyenne" },
+  { value: 4, label: "4 - Haute" },
+  { value: 5, label: "5 - Critique" }
+];
+
 const STATUSES = [
   { value: "brouillon", label: "Brouillon" },
   { value: "valide", label: "Validé" },
@@ -165,6 +173,7 @@ const el = {
     title: document.getElementById("planTitle"),
     category: document.getElementById("planCategory"),
     criticality: document.getElementById("planCriticality"),
+    priority: document.getElementById("planPriority"),
     status: document.getElementById("planStatus"),
     updatedAt: document.getElementById("planUpdatedAt"),
     summary: document.getElementById("planSummary"),
@@ -179,12 +188,16 @@ const el = {
     contacts: document.getElementById("planContacts"),
     resources: document.getElementById("planResources"),
     checklists: document.getElementById("planChecklist"),
-    attachments: document.getElementById("planAttachments")
+    attachments: document.getElementById("planAttachments"),
+    decisionMatrix: document.getElementById("planDecisionMatrix"),
+    communicationChannels: document.getElementById("planCommunicationChannels"),
+    exitCriteria: document.getElementById("planExitCriteria")
   }
 };
 
 const categoryLabelByValue = Object.fromEntries(CATEGORIES.map((x) => [x.value, x.label]));
 const criticalityLabelByValue = Object.fromEntries(CRITICALITIES.map((x) => [x.value, x.label]));
+const priorityLabelByValue = Object.fromEntries(PRIORITIES.map((x) => [x.value, x.label]));
 const statusLabelByValue = Object.fromEntries(STATUSES.map((x) => [x.value, x.label]));
 
 // ============================================
@@ -387,6 +400,54 @@ function multilineToChecklists(text) {
   });
 }
 
+function decisionMatrixToMultiline(matrix) {
+  if (!Array.isArray(matrix)) {
+    return "";
+  }
+  return matrix
+    .map((d) => `${d.decision || ""} | ${d.responsible || ""} | ${d.backup || ""}`)
+    .join("\n");
+}
+
+function multilineToDecisionMatrix(text) {
+  return multilineToList(text).map((line) => {
+    const [decision = "", responsible = "", backup = ""] = line.split("|").map((x) => x.trim());
+    return { decision, responsible, backup };
+  });
+}
+
+function communicationChannelsToMultiline(channels) {
+  if (!Array.isArray(channels)) {
+    return "";
+  }
+  return channels
+    .map((c) => `${c.type || ""} | ${c.frequency || ""} | ${c.recipients || ""} | ${c.template || ""}`)
+    .join("\n");
+}
+
+function multilineToCommunicationChannels(text) {
+  return multilineToList(text).map((line) => {
+    const [type = "", frequency = "", recipients = "", template = ""] = line.split("|").map((x) => x.trim());
+    return { type, frequency, recipients, template };
+  });
+}
+
+function exitCriteriaToMultiline(criteria) {
+  if (!Array.isArray(criteria)) {
+    return "";
+  }
+  return criteria
+    .map((e) => `${e.criterion || ""} | ${e.indicator || ""} | ${e.target || ""}`)
+    .join("\n");
+}
+
+function multilineToExitCriteria(text) {
+  return multilineToList(text).map((line) => {
+    const [criterion = "", indicator = "", target = ""] = line.split("|").map((x) => x.trim());
+    return { criterion, indicator, target };
+  });
+}
+
 function createEmptyPlan() {
   const id = `plan-${Date.now()}`;
   return {
@@ -395,6 +456,7 @@ function createEmptyPlan() {
     category: CATEGORIES[0].value,
     criticality: CRITICALITIES[1].value,
     status: STATUSES[0].value,
+    priority: 3, // 1=Très basse, 2=Basse, 3=Moyenne, 4=Haute, 5=Critique
     summary: "",
     scenario: "",
     triggers: [],
@@ -408,6 +470,9 @@ function createEmptyPlan() {
     resources: [],
     checklists: [],
     attachments: [],
+    decisionMatrix: [], // [{decision: "", responsible: "", backup: ""}]
+    communicationChannels: [], // [{type: "", frequency: "", recipients: "", template: ""}]
+    exitCriteria: [], // [{criterion: "", indicator: "", target: ""}]
     version: 1,
     createdAt: nowIso(),
     updatedAt: nowIso()
@@ -422,6 +487,7 @@ function normalizePlan(input) {
   plan.category = String(plan.category || base.category).trim();
   plan.criticality = String(plan.criticality || base.criticality).trim();
   plan.status = String(plan.status || base.status).trim();
+  plan.priority = Number.isFinite(plan.priority) && plan.priority >= 1 && plan.priority <= 5 ? plan.priority : 3;
   plan.summary = String(plan.summary || "");
   plan.scenario = String(plan.scenario || "");
   plan.triggers = Array.isArray(plan.triggers) ? plan.triggers.map(String) : [];
@@ -457,6 +523,28 @@ function normalizePlan(input) {
       }))
     : [];
   plan.attachments = Array.isArray(plan.attachments) ? plan.attachments.map(String) : [];
+  plan.decisionMatrix = Array.isArray(plan.decisionMatrix)
+    ? plan.decisionMatrix.map((d) => ({
+        decision: String(d.decision || ""),
+        responsible: String(d.responsible || ""),
+        backup: String(d.backup || "")
+      }))
+    : [];
+  plan.communicationChannels = Array.isArray(plan.communicationChannels)
+    ? plan.communicationChannels.map((c) => ({
+        type: String(c.type || ""),
+        frequency: String(c.frequency || ""),
+        recipients: String(c.recipients || ""),
+        template: String(c.template || "")
+      }))
+    : [];
+  plan.exitCriteria = Array.isArray(plan.exitCriteria)
+    ? plan.exitCriteria.map((e) => ({
+        criterion: String(e.criterion || ""),
+        indicator: String(e.indicator || ""),
+        target: String(e.target || "")
+      }))
+    : [];
   plan.version = Number.isFinite(plan.version) ? plan.version : 1;
   plan.createdAt = plan.createdAt || nowIso();
   plan.updatedAt = plan.updatedAt || nowIso();
@@ -585,7 +673,7 @@ function renderPlansList() {
             <strong class="title-lg">${escapeHtml(plan.title || plan.id)}</strong>
             <span class="badge ${badgeClass}">${escapeHtml(criticalityLabelByValue[plan.criticality] || plan.criticality)}</span>
           </div>
-          <span class="body-md text-muted" style="display: block; margin-bottom: var(--spacing-1);">${escapeHtml(categoryLabelByValue[plan.category] || plan.category)} · ${escapeHtml(statusLabelByValue[plan.status] || plan.status)}</span>
+          <span class="body-md text-muted" style="display: block; margin-bottom: var(--spacing-1);">${escapeHtml(categoryLabelByValue[plan.category] || plan.category)} · ${escapeHtml(statusLabelByValue[plan.status] || plan.status)} · Priorité ${plan.priority || 3}</span>
           <small class="label-sm text-muted">MàJ ${escapeHtml(new Date(plan.updatedAt).toLocaleDateString("fr-FR"))}</small>
         </button>
       </li>`;
@@ -606,6 +694,7 @@ function fillForm(plan) {
   if (el.fields.title) el.fields.title.value = p.title;
   if (el.fields.category) el.fields.category.value = p.category;
   if (el.fields.criticality) el.fields.criticality.value = p.criticality;
+  if (el.fields.priority) el.fields.priority.value = p.priority;
   if (el.fields.status) el.fields.status.value = p.status;
   if (el.fields.updatedAt) el.fields.updatedAt.value = new Date(p.updatedAt).toLocaleString("fr-FR");
   if (el.fields.summary) el.fields.summary.value = p.summary;
@@ -621,6 +710,9 @@ function fillForm(plan) {
   if (el.fields.resources) el.fields.resources.value = listToMultiline(p.resources);
   if (el.fields.checklists) el.fields.checklists.value = checklistsToMultiline(p.checklists);
   if (el.fields.attachments) el.fields.attachments.value = listToMultiline(p.attachments);
+  if (el.fields.decisionMatrix) el.fields.decisionMatrix.value = decisionMatrixToMultiline(p.decisionMatrix);
+  if (el.fields.communicationChannels) el.fields.communicationChannels.value = communicationChannelsToMultiline(p.communicationChannels);
+  if (el.fields.exitCriteria) el.fields.exitCriteria.value = exitCriteriaToMultiline(p.exitCriteria);
   if (el.editorTitle) el.editorTitle.textContent = p.title ? `${p.title}` : "Nouveau Plan";
 }
 
@@ -634,6 +726,7 @@ function planFromForm() {
     title: el.fields.title.value.trim(),
     category: el.fields.category.value,
     criticality: el.fields.criticality.value,
+    priority: parseInt(el.fields.priority.value, 10),
     status: el.fields.status.value,
     summary: el.fields.summary.value.trim(),
     scenario: el.fields.scenario.value.trim(),
@@ -648,6 +741,9 @@ function planFromForm() {
     resources: multilineToList(el.fields.resources.value),
     checklists: multilineToChecklists(el.fields.checklists.value),
     attachments: multilineToList(el.fields.attachments.value),
+    decisionMatrix: multilineToDecisionMatrix(el.fields.decisionMatrix.value),
+    communicationChannels: multilineToCommunicationChannels(el.fields.communicationChannels.value),
+    exitCriteria: multilineToExitCriteria(el.fields.exitCriteria.value),
     createdAt,
     updatedAt: nowIso(),
     version
@@ -717,6 +813,7 @@ function flattenPlanForCsv(plan) {
     title: plan.title,
     category: categoryLabelByValue[plan.category] || plan.category,
     criticality: criticalityLabelByValue[plan.criticality] || plan.criticality,
+    priority: priorityLabelByValue[plan.priority] || plan.priority || 3,
     status: statusLabelByValue[plan.status] || plan.status,
     summary: plan.summary || "",
     scenario: plan.scenario || "",
@@ -735,6 +832,15 @@ function flattenPlanForCsv(plan) {
       .map((c) => `${c.title}: ${(c.items || []).join("; ")}`)
       .join(" | "),
     attachments: (plan.attachments || []).join(" | "),
+    decisionMatrix: (plan.decisionMatrix || [])
+      .map((d) => `${d.decision}: ${d.responsible} (backup: ${d.backup})`)
+      .join(" | "),
+    communicationChannels: (plan.communicationChannels || [])
+      .map((c) => `${c.type} - ${c.frequency} - ${c.recipients}`)
+      .join(" | "),
+    exitCriteria: (plan.exitCriteria || [])
+      .map((e) => `${e.criterion}: ${e.indicator} (cible: ${e.target})`)
+      .join(" | "),
     version: plan.version,
     createdAt: plan.createdAt,
     updatedAt: plan.updatedAt
@@ -2078,6 +2184,7 @@ function setupStaticOptions() {
 
   setSelectOptions(el.fields.category, CATEGORIES, false);
   setSelectOptions(el.fields.criticality, CRITICALITIES, false);
+  setSelectOptions(el.fields.priority, PRIORITIES, false);
   setSelectOptions(el.fields.status, STATUSES, false);
 }
 

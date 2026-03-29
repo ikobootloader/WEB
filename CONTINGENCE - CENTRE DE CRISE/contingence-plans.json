@@ -1,0 +1,2087 @@
+[
+  {
+    "id": "PLAN-ELECT-001",
+    "title": "Coupure électrique prolongée sur site stratégique",
+    "category": "technique",
+    "criticality": "critique",
+    "status": "valide",
+    "priority": 3,
+    "summary": "Panne électrique prolongée affectant un ou plusieurs sites administratifs avec impact sur l'accueil du public et la continuité de service.",
+    "scenario": "Panne générale du réseau électrique suite à une défaillance du transformateur principal, à des intempéries majeures ou à un incident sur le réseau de distribution. Durée estimée : 4 à 72 heures.",
+    "triggers": [
+      "Coupure électrique confirmée par le gestionnaire de réseau",
+      "Défaillance des onduleurs et groupes électrogènes",
+      "Impossibilité d'utiliser les équipements informatiques",
+      "Dysfonctionnement des systèmes de sécurité (alarmes, contrôle d'accès)"
+    ],
+    "impacts": [
+      "Arrêt complet des systèmes informatiques et téléphoniques",
+      "Impossibilité d'accueillir les usagers (éclairage, ascenseurs)",
+      "Perte de données non sauvegardées",
+      "Détérioration potentielle de matériel sensible",
+      "Risque sanitaire (réfrigération, climatisation)"
+    ],
+    "services": [
+      "Direction des Systèmes d'Information",
+      "Service Logistique et Patrimoine",
+      "Accueil et Relations Usagers",
+      "Direction Générale"
+    ],
+    "roles": [
+      {
+        "role": "Responsable Technique Bâtiment",
+        "responsibility": "Coordination avec le gestionnaire réseau, activation groupe électrogène de secours"
+      },
+      {
+        "role": "DSI",
+        "responsibility": "Protection des équipements IT, arrêt contrôlé des serveurs, plan de reprise"
+      },
+      {
+        "role": "Responsable Accueil",
+        "responsibility": "Information usagers, réorientation vers sites de secours"
+      },
+      {
+        "role": "DGS",
+        "responsibility": "Activation cellule de crise, communication institutionnelle"
+      }
+    ],
+    "immediateActions": [
+      "Vérifier l'étendue de la panne et contacter le gestionnaire réseau",
+      "Activer les groupes électrogènes de secours si disponibles",
+      "Arrêter de manière contrôlée les serveurs et équipements sensibles",
+      "Informer les usagers présents et afficher les consignes d'évacuation",
+      "Fermer l'accueil public si nécessaire",
+      "Alerter le personnel et activer le télétravail si possible"
+    ],
+    "continuityActions": [
+      "Mettre en place des permanences sur sites équipés électriquement",
+      "Activer les numéros d'urgence sur mobiles",
+      "Organiser le report des rendez-vous usagers",
+      "Surveiller l'état des équipements (température serveurs, congélateurs)",
+      "Coordonner avec le prestataire électrique pour suivi réparation",
+      "Maintenir une communication régulière avec le personnel et les usagers"
+    ],
+    "recoveryActions": [
+      "Procéder au redémarrage progressif des équipements informatiques",
+      "Vérifier l'intégrité des systèmes et données après remise sous tension",
+      "Tester tous les équipements critiques (alarmes, contrôle d'accès, téléphonie)",
+      "Réouvrir l'accueil public après validation de la sécurité",
+      "Établir un bilan des impacts et dommages",
+      "Planifier les travaux de mise en conformité électrique si nécessaire"
+    ],
+    "contacts": [
+      {
+        "name": "Gestionnaire Réseau Électrique",
+        "phone": "09 726 XXXXX",
+        "email": "depannage@energie.fr"
+      },
+      {
+        "name": "Responsable Technique Bâtiment",
+        "phone": "06 XX XX XX XX",
+        "email": "technique@admin.fr"
+      },
+      {
+        "name": "Prestataire Maintenance Groupes Électrogènes",
+        "phone": "06 YY YY YY YY",
+        "email": "maintenance@energy-backup.fr"
+      }
+    ],
+    "resources": [
+      "Groupes électrogènes de secours",
+      "Onduleurs UPS pour serveurs critiques",
+      "Lampes torches et éclairage de secours",
+      "Téléphones mobiles chargés avec forfaits data",
+      "Site de repli avec électricité fonctionnelle"
+    ],
+    "checklists": [
+      {
+        "title": "0-1h",
+        "items": [
+          "Constater la panne et appeler le gestionnaire réseau",
+          "Activer le groupe électrogène si disponible",
+          "Arrêter proprement les serveurs si batterie UPS faible",
+          "Informer les usagers et fermer l'accueil si nécessaire"
+        ]
+      },
+      {
+        "title": "1h-4h",
+        "items": [
+          "Activer la cellule de crise",
+          "Communiquer sur les réseaux sociaux et site web",
+          "Organiser des permanences sur sites de secours",
+          "Surveiller la température des locaux techniques"
+        ]
+      },
+      {
+        "title": "4h-48h",
+        "items": [
+          "Maintenir la communication avec le gestionnaire réseau",
+          "Gérer le carburant des groupes électrogènes",
+          "Assurer la continuité minimale des services prioritaires",
+          "Préparer le plan de reprise informatique"
+        ]
+      }
+    ],
+    "attachments": [],
+    "decisionMatrix": [],
+    "communicationChannels": [],
+    "exitCriteria": [],
+    "version": 1,
+    "createdAt": "2026-03-28T12:00:00.000Z",
+    "updatedAt": "2026-03-28T12:00:00.000Z"
+  },
+  {
+    "id": "PLAN-ENV-001",
+    "title": "Pollution ou contamination environnementale (amiante, légionellose)",
+    "category": "environnemental",
+    "criticality": "importante",
+    "status": "valide",
+    "priority": 3,
+    "summary": "Découverte d'une pollution environnementale dans les locaux (amiante, plomb, légionellose, moisissures) nécessitant des mesures sanitaires d'urgence.",
+    "scenario": "Détection de fibres d'amiante suite à des travaux, contamination du réseau d'eau par légionelle, présence de moisissures toxiques, ou pollution chimique accidentelle dans les locaux.",
+    "triggers": [
+      "Résultat d'analyse révélant une contamination",
+      "Signalement de cas de maladie chez les occupants",
+      "Travaux ayant dégradé des matériaux amiantés",
+      "Alerte de l'ARS (Agence Régionale de Santé)",
+      "Odeurs suspectes ou manifestations sanitaires"
+    ],
+    "impacts": [
+      "Risque sanitaire pour les agents et usagers",
+      "Fermeture obligatoire du site contaminé",
+      "Interruption prolongée de l'activité",
+      "Coûts de décontamination très élevés",
+      "Responsabilité juridique de l'employeur",
+      "Impact psychologique et perte de confiance"
+    ],
+    "services": [
+      "Direction Générale",
+      "Service Logistique et Patrimoine",
+      "Service Hygiène et Sécurité",
+      "Direction des Ressources Humaines"
+    ],
+    "roles": [
+      {
+        "role": "Responsable Hygiène Sécurité",
+        "responsibility": "Coordination avec l'ARS, gestion des analyses, plan de décontamination"
+      },
+      {
+        "role": "Responsable Patrimoine",
+        "responsibility": "Évaluation technique, choix des prestataires, suivi travaux"
+      },
+      {
+        "role": "DRH",
+        "responsibility": "Information et protection des agents, suivi médical"
+      },
+      {
+        "role": "Directeur Général",
+        "responsibility": "Décision de fermeture, communication institutionnelle"
+      }
+    ],
+    "immediateActions": [
+      "Évacuer immédiatement le site contaminé",
+      "Alerter l'ARS et déclarer l'incident",
+      "Faire réaliser des analyses par un laboratoire agréé",
+      "Interdire l'accès au site (arrêté municipal si nécessaire)",
+      "Informer tous les agents et usagers exposés",
+      "Activer la médecine du travail pour suivi sanitaire"
+    ],
+    "continuityActions": [
+      "Identifier un site de repli pour maintenir l'activité",
+      "Lancer un appel d'offres pour entreprise de décontamination",
+      "Organiser le suivi médical des personnes exposées",
+      "Communiquer de manière transparente sur la situation",
+      "Coordonner avec l'inspection du travail",
+      "Mettre en place un registre de suivi de l'exposition"
+    ],
+    "recoveryActions": [
+      "Superviser les travaux de décontamination/désamiantage",
+      "Faire réaliser des analyses de conformité post-travaux",
+      "Obtenir l'autorisation de réouverture de l'ARS",
+      "Organiser une visite de réassurance pour les agents",
+      "Capitaliser et mettre à jour le Diagnostic Technique Amiante",
+      "Renforcer les procédures de prévention et contrôles périodiques"
+    ],
+    "contacts": [
+      {
+        "name": "ARS - Agence Régionale de Santé",
+        "phone": "0 801 XXX XXX",
+        "email": "contact@ars.sante.fr"
+      },
+      {
+        "name": "Médecine du Travail",
+        "phone": "01 XX XX XX XX",
+        "email": "medecin@sante-travail.fr"
+      },
+      {
+        "name": "Inspection du Travail",
+        "phone": "01 YY YY YY YY",
+        "email": "inspection@travail.gouv.fr"
+      },
+      {
+        "name": "Entreprise Décontamination Agréée",
+        "phone": "01 ZZ ZZ ZZ ZZ",
+        "email": "urgence@decontamination.fr"
+      }
+    ],
+    "resources": [
+      "Diagnostic Technique Amiante (DTA) du bâtiment",
+      "Laboratoire agréé pour analyses environnementales",
+      "Liste d'entreprises de décontamination certifiées",
+      "Site de repli identifié",
+      "Budget d'urgence pour travaux sanitaires",
+      "Convention avec médecine du travail"
+    ],
+    "checklists": [
+      {
+        "title": "0-4h",
+        "items": [
+          "Évacuer et interdire l'accès au site",
+          "Alerter l'ARS et faire prélever des échantillons",
+          "Informer tous les occupants exposés",
+          "Activer la médecine du travail"
+        ]
+      },
+      {
+        "title": "4h-72h",
+        "items": [
+          "Obtenir les résultats d'analyses",
+          "Identifier un site de repli opérationnel",
+          "Lancer la procédure de décontamination",
+          "Organiser le suivi médical des personnes exposées"
+        ]
+      },
+      {
+        "title": "72h-30j",
+        "items": [
+          "Superviser les travaux de décontamination",
+          "Faire réaliser les analyses de conformité",
+          "Obtenir l'autorisation de réouverture",
+          "Communiquer sur les mesures correctives"
+        ]
+      }
+    ],
+    "attachments": [],
+    "decisionMatrix": [],
+    "communicationChannels": [],
+    "exitCriteria": [],
+    "version": 1,
+    "createdAt": "2026-03-28T13:00:00.000Z",
+    "updatedAt": "2026-03-28T13:00:00.000Z"
+  },
+  {
+    "id": "PLAN-SECU-001",
+    "title": "Menace sécuritaire ou intrusion sur site",
+    "category": "humain",
+    "criticality": "critique",
+    "status": "valide",
+    "priority": 3,
+    "summary": "Gestion d'une menace à la sécurité des personnes : intrusion violente, individu menaçant, colis suspect, ou alerte attentat sur un site accueillant du public.",
+    "scenario": "Présence d'un individu violent ou déséquilibré dans les locaux, menace verbale ou physique contre des agents ou usagers, découverte d'un colis suspect, ou activation du plan Vigipirate suite à une alerte attentat.",
+    "triggers": [
+      "Signalement d'un individu menaçant ou violent",
+      "Découverte d'un objet ou colis suspect",
+      "Alerte attentat transmise par les autorités",
+      "Intrusion par effraction dans les locaux",
+      "Menace explicite reçue par téléphone ou mail"
+    ],
+    "impacts": [
+      "Risque vital pour les agents et usagers présents",
+      "Traumatisme psychologique des équipes",
+      "Fermeture immédiate du site",
+      "Interruption totale de l'activité",
+      "Impact sur l'image et la confiance",
+      "Procédures judiciaires et enquêtes"
+    ],
+    "services": [
+      "Direction Générale",
+      "Service Sécurité",
+      "Accueil et Relations Usagers",
+      "Direction des Ressources Humaines"
+    ],
+    "roles": [
+      {
+        "role": "Responsable Sécurité",
+        "responsibility": "Évaluation de la menace, contact forces de l'ordre, gestion évacuation"
+      },
+      {
+        "role": "Directeur de Site",
+        "responsibility": "Activation du plan d'urgence, coordination des équipes"
+      },
+      {
+        "role": "Agent d'Accueil",
+        "responsibility": "Alerte immédiate, mise en sécurité des usagers présents"
+      },
+      {
+        "role": "DRH",
+        "responsibility": "Accompagnement psychologique des agents, suivi post-incident"
+      }
+    ],
+    "immediateActions": [
+      "Alerter immédiatement la police/gendarmerie (17 ou 112)",
+      "Activer l'alarme d'évacuation si nécessaire",
+      "Confiner ou évacuer les personnes selon la nature de la menace",
+      "Ne pas approcher l'individu ou l'objet suspect",
+      "Sécuriser les accès et empêcher toute entrée",
+      "Informer la direction et activer la cellule de crise"
+    ],
+    "continuityActions": [
+      "Maintenir le périmètre de sécurité jusqu'à l'arrivée des forces de l'ordre",
+      "Recenser les personnes présentes et évacuées",
+      "Fournir toutes les informations utiles aux enquêteurs",
+      "Fermer le site et reporter les rendez-vous",
+      "Activer un numéro d'urgence pour les familles des agents",
+      "Communiquer de manière contrôlée (pas de panique médiatique)"
+    ],
+    "recoveryActions": [
+      "Organiser un débriefing avec les équipes présentes",
+      "Proposer un soutien psychologique aux agents impactés",
+      "Réaliser un audit de sécurité complet du site",
+      "Renforcer les mesures de contrôle d'accès",
+      "Former les agents aux gestes de sécurité et alerte",
+      "Communiquer sur les mesures de sécurité renforcées"
+    ],
+    "contacts": [
+      {
+        "name": "Police / Gendarmerie",
+        "phone": "17",
+        "email": ""
+      },
+      {
+        "name": "SAMU",
+        "phone": "15",
+        "email": ""
+      },
+      {
+        "name": "Préfecture - Cellule Sécurité",
+        "phone": "01 XX XX XX XX",
+        "email": "securite@prefecture.gouv.fr"
+      },
+      {
+        "name": "Psychologue du Travail",
+        "phone": "06 YY YY YY YY",
+        "email": "psy@admin.fr"
+      }
+    ],
+    "resources": [
+      "Plan d'évacuation et points de rassemblement",
+      "Système d'alarme et vidéosurveillance",
+      "Badges et contrôle d'accès renforcé",
+      "Téléphones mobiles pour alerte discrète",
+      "Cellule de soutien psychologique",
+      "Convention avec prestataire de sécurité privée"
+    ],
+    "checklists": [
+      {
+        "title": "0-15 min",
+        "items": [
+          "Alerter police/gendarmerie immédiatement (17)",
+          "Activer l'alarme d'évacuation ou de confinement",
+          "Mettre les personnes en sécurité",
+          "Ne pas intervenir directement face à la menace"
+        ]
+      },
+      {
+        "title": "15 min-2h",
+        "items": [
+          "Maintenir le périmètre de sécurité",
+          "Recenser les personnes présentes",
+          "Collaborer avec les forces de l'ordre",
+          "Fermer le site et communiquer"
+        ]
+      },
+      {
+        "title": "2h-48h",
+        "items": [
+          "Organiser le débriefing des équipes",
+          "Activer le soutien psychologique",
+          "Réaliser l'audit de sécurité",
+          "Planifier la réouverture sécurisée du site"
+        ]
+      }
+    ],
+    "attachments": [],
+    "decisionMatrix": [],
+    "communicationChannels": [],
+    "exitCriteria": [],
+    "version": 1,
+    "createdAt": "2026-03-28T12:45:00.000Z",
+    "updatedAt": "2026-03-28T12:45:00.000Z"
+  },
+  {
+    "id": "PLAN-SOCIAL-001",
+    "title": "Crise médiatique et atteinte à l'image de l'institution",
+    "category": "social",
+    "criticality": "importante",
+    "status": "valide",
+    "priority": 3,
+    "summary": "Gestion d'une crise médiatique suite à une affaire sensible, un dysfonctionnement grave ou une polémique publique affectant la réputation de l'administration.",
+    "scenario": "Révélation médiatique d'un dysfonctionnement, plainte d'usager relayée massivement, polémique sur les réseaux sociaux, ou affaire judiciaire impliquant l'institution ou un agent.",
+    "triggers": [
+      "Article de presse négatif avec forte audience",
+      "Buzz sur les réseaux sociaux (> 1000 partages)",
+      "Plainte formelle d'usager relayée par les médias",
+      "Interpellation d'élus ou autorités de tutelle",
+      "Mobilisation associative ou citoyenne contre l'institution"
+    ],
+    "impacts": [
+      "Dégradation de l'image institutionnelle",
+      "Perte de confiance des usagers et partenaires",
+      "Démobilisation des équipes et climat social tendu",
+      "Pression hiérarchique et politique",
+      "Risques juridiques et financiers",
+      "Difficulté de recrutement et turnover"
+    ],
+    "services": [
+      "Direction Générale",
+      "Service Communication",
+      "Direction des Ressources Humaines",
+      "Service Juridique"
+    ],
+    "roles": [
+      {
+        "role": "Directeur Général",
+        "responsibility": "Porte-parole officiel, validation de la stratégie de communication"
+      },
+      {
+        "role": "Responsable Communication",
+        "responsibility": "Élaboration des messages, gestion réseaux sociaux, relation presse"
+      },
+      {
+        "role": "Conseiller Juridique",
+        "responsibility": "Analyse risques juridiques, validation des prises de parole"
+      },
+      {
+        "role": "DRH",
+        "responsibility": "Accompagnement des agents concernés, gestion climat social"
+      }
+    ],
+    "immediateActions": [
+      "Activer la cellule de crise communication",
+      "Établir les faits de manière objective et complète",
+      "Rédiger un communiqué de presse officiel",
+      "Désigner un porte-parole unique",
+      "Monitorer en temps réel les réseaux sociaux et la presse",
+      "Préparer des éléments de langage pour tous les agents"
+    ],
+    "continuityActions": [
+      "Organiser une conférence de presse ou point d'information",
+      "Activer les canaux de communication institutionnels (site web, réseaux sociaux)",
+      "Mettre en place une FAQ pour le personnel et les usagers",
+      "Renforcer l'accueil téléphonique et physique",
+      "Coordonner avec la tutelle et les partenaires institutionnels",
+      "Envisager des mesures correctrices visibles"
+    ],
+    "recoveryActions": [
+      "Réaliser un audit ou enquête interne si nécessaire",
+      "Communiquer sur les actions correctives mises en œuvre",
+      "Organiser des temps d'échange avec les équipes",
+      "Mettre en place un plan de reconquête de l'image",
+      "Capitaliser sur les enseignements de la crise",
+      "Renforcer la formation des agents à la communication sensible"
+    ],
+    "contacts": [
+      {
+        "name": "Attaché de Presse",
+        "phone": "06 XX XX XX XX",
+        "email": "presse@admin.fr"
+      },
+      {
+        "name": "Cabinet Conseil Communication de Crise",
+        "phone": "01 XX XX XX XX",
+        "email": "contact@com-crise.fr"
+      },
+      {
+        "name": "Autorité de Tutelle",
+        "phone": "01 YY YY YY YY",
+        "email": "cabinet@prefecture.gouv.fr"
+      }
+    ],
+    "resources": [
+      "Cellule de veille médias et réseaux sociaux",
+      "Modèles de communiqués de presse",
+      "Plateforme de social listening",
+      "Cabinet externe en communication de crise",
+      "Accès prioritaire au community manager"
+    ],
+    "checklists": [
+      {
+        "title": "0-2h",
+        "items": [
+          "Identifier la source et l'ampleur de la crise",
+          "Réunir la cellule de crise communication",
+          "Établir une chronologie factuelle des événements",
+          "Rédiger un premier communiqué de position"
+        ]
+      },
+      {
+        "title": "2h-24h",
+        "items": [
+          "Diffuser le communiqué officiel",
+          "Activer la veille médias 24h/24",
+          "Organiser un briefing interne du personnel",
+          "Répondre aux sollicitations médiatiques via le porte-parole"
+        ]
+      },
+      {
+        "title": "24h-7j",
+        "items": [
+          "Maintenir une communication régulière et transparente",
+          "Annoncer les mesures correctives",
+          "Organiser des actions de terrain (rencontre usagers, partenaires)",
+          "Préparer le plan de reconquête de l'image"
+        ]
+      }
+    ],
+    "attachments": [],
+    "decisionMatrix": [],
+    "communicationChannels": [],
+    "exitCriteria": [],
+    "version": 1,
+    "createdAt": "2026-03-28T12:15:00.000Z",
+    "updatedAt": "2026-03-28T12:15:00.000Z"
+  },
+  {
+    "id": "PLAN-TECH-002",
+    "title": "Défaillance système de gestion documentaire (GED/archivage)",
+    "category": "technique",
+    "criticality": "importante",
+    "status": "valide",
+    "priority": 3,
+    "summary": "Panne ou corruption du système de gestion électronique des documents entraînant une perte d'accès aux dossiers usagers et documents administratifs critiques.",
+    "scenario": "Défaillance technique de la GED, corruption de base de données, erreur de migration, ou cyberattaque ciblant le système d'archivage électronique.",
+    "triggers": [
+      "Impossibilité d'accéder à la GED",
+      "Messages d'erreur de corruption de données",
+      "Lenteur extrême ou plantages répétés",
+      "Perte de documents récemment archivés",
+      "Alerte du prestataire ou éditeur logiciel"
+    ],
+    "impacts": [
+      "Impossibilité de consulter les dossiers usagers",
+      "Blocage des procédures administratives en cours",
+      "Non-respect des délais réglementaires",
+      "Risque de perte définitive de documents",
+      "Paralysie partielle des services métiers",
+      "Non-conformité RGPD et obligations d'archivage"
+    ],
+    "services": [
+      "Direction des Systèmes d'Information",
+      "Services métiers utilisateurs de la GED",
+      "Archives départementales",
+      "Service Juridique"
+    ],
+    "roles": [
+      {
+        "role": "Responsable DSI",
+        "responsibility": "Diagnostic technique, coordination avec l'éditeur, plan de restauration"
+      },
+      {
+        "role": "Administrateur GED",
+        "responsibility": "Analyse des logs, tentatives de récupération, tests de restauration"
+      },
+      {
+        "role": "Responsables Services Métiers",
+        "responsibility": "Recensement des besoins urgents, activation procédures dégradées"
+      },
+      {
+        "role": "Archiviste",
+        "responsibility": "Accès aux archives papier de secours, traçabilité"
+      }
+    ],
+    "immediateActions": [
+      "Isoler le système pour éviter l'aggravation",
+      "Alerter l'éditeur ou le prestataire de maintenance",
+      "Évaluer l'étendue de la panne (nombre de documents concernés)",
+      "Identifier les procédures bloquées et les priorités",
+      "Activer les sauvegardes et tester leur intégrité",
+      "Informer les services utilisateurs et la direction"
+    ],
+    "continuityActions": [
+      "Mettre en place un mode dégradé avec accès aux archives papier",
+      "Prioriser la restauration des documents critiques",
+      "Organiser des permanences pour consultation manuelle de dossiers",
+      "Communiquer les délais de rétablissement aux usagers",
+      "Suspendre temporairement certaines procédures non urgentes",
+      "Documenter tous les incidents et actions de récupération"
+    ],
+    "recoveryActions": [
+      "Restaurer la GED à partir des sauvegardes validées",
+      "Vérifier l'intégrité complète de la base documentaire",
+      "Comparer avec les archives papier en cas de doute",
+      "Reprendre les procédures suspendues",
+      "Effectuer une sauvegarde complète post-restauration",
+      "Planifier un audit de la GED et renforcement des sauvegardes"
+    ],
+    "contacts": [
+      {
+        "name": "Éditeur GED - Support Technique",
+        "phone": "01 XX XX XX XX",
+        "email": "support@ged-editeur.fr"
+      },
+      {
+        "name": "Prestataire Infogérance",
+        "phone": "01 YY YY YY YY",
+        "email": "hotline@infogerance.fr"
+      },
+      {
+        "name": "Responsable Archives Départementales",
+        "phone": "01 ZZ ZZ ZZ ZZ",
+        "email": "archives@departement.fr"
+      }
+    ],
+    "resources": [
+      "Sauvegardes GED (journalières, hebdomadaires)",
+      "Accès aux archives papier de secours",
+      "Licences de récupération de données",
+      "Plateforme de GED de secours (environnement de test)",
+      "Documentation technique complète du système"
+    ],
+    "checklists": [
+      {
+        "title": "0-2h",
+        "items": [
+          "Isoler le système et prévenir l'éditeur",
+          "Lancer un diagnostic technique approfondi",
+          "Tester l'accès aux sauvegardes",
+          "Recenser les procédures urgentes bloquées"
+        ]
+      },
+      {
+        "title": "2h-24h",
+        "items": [
+          "Activer le mode dégradé avec archives papier",
+          "Coordonner avec l'éditeur pour la restauration",
+          "Communiquer aux services les consignes de continuité",
+          "Prioriser la récupération des documents critiques"
+        ]
+      },
+      {
+        "title": "24h-72h",
+        "items": [
+          "Finaliser la restauration complète de la GED",
+          "Vérifier l'intégrité de tous les documents",
+          "Reprendre les procédures en attente",
+          "Planifier un audit post-incident"
+        ]
+      }
+    ],
+    "attachments": [],
+    "decisionMatrix": [],
+    "communicationChannels": [],
+    "exitCriteria": [],
+    "version": 1,
+    "createdAt": "2026-03-28T12:30:00.000Z",
+    "updatedAt": "2026-03-28T12:30:00.000Z"
+  },
+  {
+    "id": "mda-batiment-004",
+    "title": "Sinistre bâtiment MDA (incendie, dégât des eaux, intrusion)",
+    "category": "sinistre-batiment",
+    "criticality": "critique",
+    "status": "valide",
+    "priority": 3,
+    "summary": "Événement rendant les locaux de la MDA inaccessibles ou dangereux, nécessitant une délocalisation d'urgence.",
+    "scenario": "Incendie, inondation, dégât des eaux majeur, ou intrusion/vandalisme rendant le bâtiment MDA inutilisable. Impact sur accueil usagers et continuité administrative.",
+    "triggers": [
+      "Déclenchement alarme incendie",
+      "Inondation (rupture canalisation, intempéries)",
+      "Arrêté municipal évacuation bâtiment",
+      "Acte malveillance/vandalisme",
+      "Problème structure (fissure, effondrement partiel)"
+    ],
+    "impacts": [
+      "Impossibilité accueillir usagers",
+      "Perte potentielle dossiers papier",
+      "Arrêt activité équipe pluridisciplinaire",
+      "Matériel informatique endommagé",
+      "Stress agents et usagers",
+      "Image dégradée institution"
+    ],
+    "services": [
+      "Direction MDA",
+      "Service patrimoine Département",
+      "DSI (sauvetage matériel)",
+      "Service accueil",
+      "Communication",
+      "Sécurité/pompiers"
+    ],
+    "roles": [
+      {
+        "role": "Directeur MDA",
+        "responsibility": "Coordination évacuation, activation site secours, liaison autorités"
+      },
+      {
+        "role": "Service patrimoine",
+        "responsibility": "Expertise bâtiment, recherche site provisoire, travaux urgence"
+      },
+      {
+        "role": "Responsable accueil",
+        "responsibility": "Information usagers, redirection vers site secours"
+      }
+    ],
+    "immediateActions": [
+      "ÉVACUATION immédiate selon protocole sécurité",
+      "Appel pompiers/police si nécessaire",
+      "Sécurisation périmètre (interdiction accès)",
+      "Comptage agents évacués",
+      "Information usagers sur site (report RDV)",
+      "Sauvetage dossiers critiques si possible",
+      "Activation site secours pré-identifié"
+    ],
+    "continuityActions": [
+      "Délocalisation vers site départemental alternatif",
+      "Mise en place accueil provisoire (guichet unique)",
+      "Communication : nouvelle adresse temporaire",
+      "Récupération sauvegardes SI-MDPH (cloud)",
+      "Fourniture matériel informatique secours",
+      "Maintien permanence téléphonique"
+    ],
+    "recoveryActions": [
+      "Expertise assurance et patrimoine",
+      "Évaluation dégâts matériels/documents",
+      "Travaux remise en état ou relogement définitif",
+      "Reconstitution dossiers perdus (si applicable)",
+      "Réinstallation progressive",
+      "Bilan psychologique agents si traumatisme"
+    ],
+    "contacts": [
+      {
+        "name": "Pompiers",
+        "phone": "18",
+        "email": ""
+      },
+      {
+        "name": "Service patrimoine",
+        "phone": "0102030409",
+        "email": "patrimoine@departement.fr"
+      },
+      {
+        "name": "Assurance Département",
+        "phone": "0800111222",
+        "email": "sinistres@assurance-dept.fr"
+      },
+      {
+        "name": "Directeur MDA",
+        "phone": "0607080911",
+        "email": "direction.mda@departement.fr"
+      }
+    ],
+    "resources": [
+      "Plan évacuation bâtiment (affiché)",
+      "Liste sites secours identifiés (3 options)",
+      "Stock matériel informatique secours",
+      "Coordonnées assurance/patrimoine",
+      "Sauvegardes SI-MDPH externalisées"
+    ],
+    "checklists": [
+      {
+        "title": "0-15 min",
+        "items": [
+          "Évacuation effectuée",
+          "Secours appelés",
+          "Comptage agents OK",
+          "Périmètre sécurisé"
+        ]
+      },
+      {
+        "title": "15 min - 2h",
+        "items": [
+          "Usagers informés/redirigés",
+          "Site secours activé",
+          "Communication publique diffusée",
+          "Expertise dégâts lancée"
+        ]
+      },
+      {
+        "title": "2h - 48h",
+        "items": [
+          "Accueil provisoire opérationnel",
+          "Matériel informatique restauré",
+          "Plan travaux établi"
+        ]
+      }
+    ],
+    "attachments": [
+      "Plan évacuation",
+      "Liste sites secours départementaux",
+      "Coordonnées assurance"
+    ],
+    "decisionMatrix": [],
+    "communicationChannels": [],
+    "exitCriteria": [],
+    "version": 1,
+    "createdAt": "2026-03-28T10:15:00.000Z",
+    "updatedAt": "2026-03-28T10:15:00.000Z"
+  },
+  {
+    "id": "mda-canicule-007",
+    "title": "Canicule et protection des usagers vulnérables",
+    "category": "catastrophe-naturelle",
+    "criticality": "haute",
+    "status": "valide",
+    "priority": 3,
+    "summary": "Épisode de canicule nécessitant activation du plan de protection des personnes âgées et handicapées suivies par la MDA.",
+    "scenario": "Alerte Météo France niveau 3 ou 4 canicule. Risque vital pour usagers MDA (personnes âgées isolées, handicap moteur/cognitif). Activation registre communal et coordination protection.",
+    "triggers": [
+      "Alerte Météo France canicule niveau 3+",
+      "Préfecture : activation plan canicule",
+      "Signalement décès liés chaleur",
+      "Appels familles/CCAS inquiètes"
+    ],
+    "impacts": [
+      "Risque mortalité usagers fragiles",
+      "Surcharge services urgences",
+      "Déshydratation, malaises",
+      "Isolement personnes sans famille",
+      "Agents MDA exposés chaleur (visites)"
+    ],
+    "services": [
+      "Direction MDA",
+      "Service autonomie",
+      "CCAS (Centres Communaux Action Sociale)",
+      "Services à domicile (SAAD, SSIAD)",
+      "Préfecture",
+      "ARS (Agence Régionale Santé)"
+    ],
+    "roles": [
+      {
+        "role": "Directeur MDA",
+        "responsibility": "Activation plan canicule MDA, coordination CCAS"
+      },
+      {
+        "role": "Responsable autonomie",
+        "responsibility": "Identification usagers à risque, déclenchement appels préventifs"
+      },
+      {
+        "role": "CCAS",
+        "responsibility": "Visites domicile registre communal, orientation"
+      }
+    ],
+    "immediateActions": [
+      "Activation plan canicule départemental",
+      "Extraction liste usagers à risque (base MDA)",
+      "Alerte CCAS et services à domicile partenaires",
+      "Campagne appels préventifs (usagers isolés)",
+      "Information familles/aidants (SMS, email)",
+      "Recensement lieux climatisés accessibles"
+    ],
+    "continuityActions": [
+      "Visites domicile renforcées (aide à domicile)",
+      "Ouverture salles rafraîchies communales",
+      "Distribution bouteilles d'eau (mairies)",
+      "Suivi quotidien personnes à risque",
+      "Coordination avec hôpitaux (lits disponibles)",
+      "Aménagement horaires agents MDA (chaleur)"
+    ],
+    "recoveryActions": [
+      "Bilan : personnes contactées, secourues, décès",
+      "REX avec CCAS et partenaires",
+      "Mise à jour registre canicule",
+      "Amélioration repérage isolement",
+      "Renforcement prévention (sensibilisation aidants)"
+    ],
+    "contacts": [
+      {
+        "name": "Préfecture (cellule crise)",
+        "phone": "0102030414",
+        "email": "prefecture-crise@region.gouv.fr"
+      },
+      {
+        "name": "ARS",
+        "phone": "0102030415",
+        "email": "ars-alerte@region.sante.fr"
+      },
+      {
+        "name": "Plateforme canicule info service",
+        "phone": "0800060066",
+        "email": ""
+      },
+      {
+        "name": "Directeur MDA",
+        "phone": "0607080911",
+        "email": "direction.mda@departement.fr"
+      }
+    ],
+    "resources": [
+      "Liste usagers à risque (âge, isolement, pathologies)",
+      "Registre communal canicule (CCAS)",
+      "Plaquette prévention canicule",
+      "Cartographie lieux climatisés",
+      "Contacts services à domicile"
+    ],
+    "checklists": [
+      {
+        "title": "J-1 alerte",
+        "items": [
+          "Plan canicule activé",
+          "Liste usagers à risque extraite",
+          "CCAS et partenaires alertés",
+          "Lieux rafraîchis identifiés"
+        ]
+      },
+      {
+        "title": "Pendant épisode (quotidien)",
+        "items": [
+          "Appels préventifs effectués",
+          "Visites domicile réalisées",
+          "Signalements urgences traités",
+          "Bilan quotidien Préfecture"
+        ]
+      },
+      {
+        "title": "Fin épisode",
+        "items": [
+          "Bilan final établi",
+          "REX organisé",
+          "Registre mis à jour"
+        ]
+      }
+    ],
+    "attachments": [
+      "Plan canicule départemental",
+      "Modèle appel préventif usagers"
+    ],
+    "decisionMatrix": [],
+    "communicationChannels": [],
+    "exitCriteria": [],
+    "version": 1,
+    "createdAt": "2026-03-28T10:30:00.000Z",
+    "updatedAt": "2026-03-28T10:30:00.000Z"
+  },
+  {
+    "id": "mda-cyber-001",
+    "title": "Cyberattaque avec chiffrement des données usagers",
+    "category": "cyberattaque",
+    "criticality": "critique",
+    "status": "valide",
+    "priority": 3,
+    "summary": "Plan de réaction immédiate en cas de ransomware ciblant les dossiers usagers et les bases de données MDPH.",
+    "scenario": "Attaque ransomware bloquant l'accès aux dossiers usagers, demandes MDPH, et systèmes métiers (SI-MDPH, iodas). Impact sur l'instruction des demandes et le versement des prestations.",
+    "triggers": [
+      "Fichiers chiffrés sur serveurs métiers",
+      "Message de rançon affiché",
+      "Impossibilité d'accéder à SI-MDPH",
+      "Alertes EDR/antivirus",
+      "Signalement personnel IT"
+    ],
+    "impacts": [
+      "Arrêt total de l'instruction des demandes",
+      "Impossibilité de notifier les décisions",
+      "Risque RGPD (données de santé exposées)",
+      "Rupture de continuité pour usagers fragiles",
+      "Impact médiatique et confiance citoyens"
+    ],
+    "services": [
+      "DSI",
+      "Direction générale",
+      "Équipe pluridisciplinaire MDPH",
+      "Service accueil",
+      "DPO (Délégué Protection Données)",
+      "Communication"
+    ],
+    "roles": [
+      {
+        "role": "Directeur de crise",
+        "responsibility": "Décision isolation réseau, activation cellule, contact autorités"
+      },
+      {
+        "role": "DSI",
+        "responsibility": "Isolation technique, analyse forensique, coordination restauration"
+      },
+      {
+        "role": "DPO",
+        "responsibility": "Notification CNIL sous 72h, information usagers concernés"
+      },
+      {
+        "role": "Chef service MDPH",
+        "responsibility": "Activation mode dégradé papier, priorisation dossiers urgents"
+      }
+    ],
+    "immediateActions": [
+      "ISOLER immédiatement les segments réseau infectés",
+      "Déclencher cellule de crise DSI + Direction",
+      "Interdire toute connexion VPN/distanciel",
+      "Contacter ANSSI et gendarmerie (cybercrime)",
+      "Bloquer tous accès externes (internet, partenaires)",
+      "Inventorier systèmes touchés et sains",
+      "Activer mode dégradé papier pour accueil"
+    ],
+    "continuityActions": [
+      "Basculer instruction dossiers urgents en mode papier",
+      "Utiliser postes de secours non connectés au réseau",
+      "Activer numéros d'urgence dédiés pour usagers",
+      "Communication publique : information transparente",
+      "Récupérer sauvegardes externalisées (hors-site)",
+      "Mobiliser équipes pluridisciplinaires en présentiel"
+    ],
+    "recoveryActions": [
+      "Restaurer sauvegardes sur infrastructure assainie",
+      "Réinitialiser tous mots de passe (AD, SI-MDPH)",
+      "Audit forensique complet (prestataire spécialisé)",
+      "Notification CNIL et usagers si fuite de données",
+      "Renforcer supervision (EDR, SIEM)",
+      "Formation sensibilisation agents"
+    ],
+    "contacts": [
+      {
+        "name": "DSI Département",
+        "phone": "0102030405",
+        "email": "dsi@departement.fr"
+      },
+      {
+        "name": "ANSSI (alerte)",
+        "phone": "0800110120",
+        "email": "cert-fr.cossi@ssi.gouv.fr"
+      },
+      {
+        "name": "DPO",
+        "phone": "0102030406",
+        "email": "dpo@departement.fr"
+      },
+      {
+        "name": "Directeur MDA",
+        "phone": "0102030407",
+        "email": "direction.mda@departement.fr"
+      }
+    ],
+    "resources": [
+      "Annuaire papier des agents",
+      "Formulaires MDPH vierges (stock secours)",
+      "Guide procédure mode dégradé",
+      "Postes de secours hors réseau (3 unités)",
+      "Sauvegardes externalisées (MAJ J-1)",
+      "Contact prestataire forensique"
+    ],
+    "checklists": [
+      {
+        "title": "0-30 min",
+        "items": [
+          "Isolation réseau effectuée",
+          "Cellule de crise activée",
+          "ANSSI et autorités contactées",
+          "Inventaire systèmes touchés démarré"
+        ]
+      },
+      {
+        "title": "30 min - 4h",
+        "items": [
+          "Mode dégradé papier activé",
+          "Communication publique diffusée",
+          "Sauvegardes récupérées",
+          "Analyse forensique lancée"
+        ]
+      },
+      {
+        "title": "4h - 48h",
+        "items": [
+          "Restauration infrastructure propre",
+          "Notification CNIL si nécessaire",
+          "Reprise progressive SI-MDPH"
+        ]
+      }
+    ],
+    "attachments": [
+      "Procédure mode dégradé MDPH",
+      "Modèle notification CNIL",
+      "Liste contacts ANSSI/Gendarmerie"
+    ],
+    "decisionMatrix": [],
+    "communicationChannels": [],
+    "exitCriteria": [],
+    "version": 1,
+    "createdAt": "2026-03-28T10:00:00.000Z",
+    "updatedAt": "2026-03-28T10:00:00.000Z"
+  },
+  {
+    "id": "mda-inondation-010",
+    "title": "Inondation majeure et évacuation d'établissements",
+    "category": "catastrophe-naturelle",
+    "criticality": "critique",
+    "status": "valide",
+    "priority": 3,
+    "summary": "Crue importante nécessitant l'évacuation d'établissements médico-sociaux ou domiciles d'usagers en zone inondable.",
+    "scenario": "Alerte crue majeure Vigicrues, submersion établissements (EHPAD, foyer handicap) ou domiciles usagers MDA. Évacuation d'urgence de personnes à mobilité réduite.",
+    "triggers": [
+      "Vigicrues : vigilance rouge",
+      "Préfecture : ordre évacuation",
+      "Montée eaux rapide constatée",
+      "Établissement isolé (routes coupées)",
+      "Coupure électricité/chauffage"
+    ],
+    "impacts": [
+      "Risque vital résidents (noyade, hypothermie)",
+      "Évacuation complexe (personnes alitées, handicap)",
+      "Destruction matériel médical",
+      "Relogement d'urgence massif",
+      "Trauma psychologique usagers",
+      "Dégâts bâtiments (fermeture longue durée)"
+    ],
+    "services": [
+      "Préfecture (COD)",
+      "Pompiers",
+      "Direction MDA",
+      "Établissements concernés",
+      "SAMU",
+      "Mairies zones inondables"
+    ],
+    "roles": [
+      {
+        "role": "Préfet",
+        "responsibility": "Déclenchement évacuation, coordination secours"
+      },
+      {
+        "role": "Directeur MDA",
+        "responsibility": "Activation plan évacuation, coordination relogement"
+      },
+      {
+        "role": "Directeur établissement",
+        "responsibility": "Évacuation résidents, sauvetage dossiers médicaux"
+      },
+      {
+        "role": "Pompiers",
+        "responsibility": "Évacuation physique, transport médicalisé"
+      }
+    ],
+    "immediateActions": [
+      "Activation plan évacuation établissement",
+      "Alerte pompiers et SAMU",
+      "Recensement résidents à évacuer (priorisation)",
+      "Préparation dossiers médicaux urgents",
+      "Information familles (SMS/appels)",
+      "Activation sites accueil secours",
+      "Évacuation assistée (brancards, fauteuils)"
+    ],
+    "continuityActions": [
+      "Relogement provisoire (autres EHPAD/foyers)",
+      "Transport médicalisé si nécessaire",
+      "Reconstitution dossiers médicaux",
+      "Fourniture matériel médical secours",
+      "Soutien psychologique évacués",
+      "Maintien soins et traitements",
+      "Information quotidienne familles"
+    ],
+    "recoveryActions": [
+      "Expertise dégâts bâtiment",
+      "Travaux réhabilitation ou fermeture définitive",
+      "Réintégration progressive ou relogement pérenne",
+      "Indemnisation assurance",
+      "Bilan traumatismes (usagers et agents)",
+      "REX : amélioration plans évacuation"
+    ],
+    "contacts": [
+      {
+        "name": "Préfecture COD (Centre Opérationnel Départemental)",
+        "phone": "0102030418",
+        "email": "cod@prefecture.gouv.fr"
+      },
+      {
+        "name": "Pompiers (CODIS)",
+        "phone": "18",
+        "email": ""
+      },
+      {
+        "name": "SAMU",
+        "phone": "15",
+        "email": ""
+      },
+      {
+        "name": "Directeur MDA",
+        "phone": "0607080911",
+        "email": "direction.mda@departement.fr"
+      }
+    ],
+    "resources": [
+      "Plan évacuation établissements",
+      "Liste sites accueil secours",
+      "Matériel évacuation (brancards, fauteuils)",
+      "Véhicules transport adapté",
+      "Stock matériel médical urgence",
+      "Cartographie zones inondables"
+    ],
+    "checklists": [
+      {
+        "title": "Alerte (H-12 à H-2)",
+        "items": [
+          "Vigicrues surveillée",
+          "Plan évacuation révisé",
+          "Sites secours contactés",
+          "Familles pré-alertées"
+        ]
+      },
+      {
+        "title": "Évacuation (H-0)",
+        "items": [
+          "Secours sur site",
+          "Résidents évacués",
+          "Dossiers médicaux sauvegardés",
+          "Accueil secours opérationnel"
+        ]
+      },
+      {
+        "title": "Post-évacuation (J+1 à J+7)",
+        "items": [
+          "Relogement finalisé",
+          "Soins assurés",
+          "Familles informées",
+          "Expertise dégâts lancée"
+        ]
+      }
+    ],
+    "attachments": [
+      "Plan évacuation type établissement",
+      "Cartographie établissements zones inondables"
+    ],
+    "decisionMatrix": [],
+    "communicationChannels": [],
+    "exitCriteria": [],
+    "version": 1,
+    "createdAt": "2026-03-28T10:45:00.000Z",
+    "updatedAt": "2026-03-28T10:45:00.000Z"
+  },
+  {
+    "id": "mda-it-002",
+    "title": "Panne majeure SI-MDPH (iodas/système métier)",
+    "category": "panne-it",
+    "criticality": "haute",
+    "status": "valide",
+    "priority": 3,
+    "summary": "Indisponibilité du système d'information MDPH empêchant l'instruction des demandes et la consultation des dossiers.",
+    "scenario": "Panne technique du SI-MDPH (serveur applicatif, base de données, ou infrastructure hébergeur) rendant impossible l'instruction et le suivi des demandes.",
+    "triggers": [
+      "Erreur critique application SI-MDPH",
+      "Panne serveur applicatif ou BDD",
+      "Indisponibilité plateforme hébergeur",
+      "Corruption base de données",
+      "Signalements agents multiples"
+    ],
+    "impacts": [
+      "Arrêt instruction nouvelles demandes",
+      "Impossibilité consulter dossiers en cours",
+      "Retard notification décisions",
+      "Non-respect délais légaux (4 mois)",
+      "Tension usagers et familles"
+    ],
+    "services": [
+      "DSI",
+      "Équipe MDPH",
+      "Service accueil",
+      "Direction",
+      "Prestataire SI-MDPH (éditeur)"
+    ],
+    "roles": [
+      {
+        "role": "Responsable SI-MDPH",
+        "responsibility": "Diagnostic panne, escalade éditeur, suivi rétablissement"
+      },
+      {
+        "role": "Chef service MDPH",
+        "responsibility": "Activation continuité, priorisation dossiers urgents"
+      },
+      {
+        "role": "DSI",
+        "responsibility": "Support infrastructure, coordination technique"
+      }
+    ],
+    "immediateActions": [
+      "Diagnostic rapide : applicatif vs infrastructure",
+      "Escalade support éditeur SI-MDPH (ticket P1)",
+      "Vérification sauvegardes disponibles",
+      "Information agents : basculement mode dégradé",
+      "Communication usagers (site web, accueil physique)"
+    ],
+    "continuityActions": [
+      "Traitement dossiers urgents en mode papier",
+      "Utilisation tableur temporaire (suivi simplifié)",
+      "Priorisation : APA urgente, PCH enfants, situations critiques",
+      "Renforcement accueil téléphonique",
+      "Reporting quotidien à la Direction"
+    ],
+    "recoveryActions": [
+      "Restauration SI-MDPH (éditeur + DSI)",
+      "Vérification intégrité données",
+      "Ressaisie manuelle si perte partielle",
+      "Test complet avant reprise production",
+      "Rattrapage dossiers en attente",
+      "REX avec éditeur pour éviter récidive"
+    ],
+    "contacts": [
+      {
+        "name": "Support SI-MDPH éditeur",
+        "phone": "0800123456",
+        "email": "support@editeur-simdph.fr"
+      },
+      {
+        "name": "DSI Département",
+        "phone": "0102030405",
+        "email": "dsi@departement.fr"
+      },
+      {
+        "name": "Chef service MDPH",
+        "phone": "0102030408",
+        "email": "chef.mdph@departement.fr"
+      }
+    ],
+    "resources": [
+      "Accès admin SI-MDPH",
+      "Documentation technique éditeur",
+      "Formulaires papier MDPH",
+      "Tableur suivi dégradé",
+      "Guide priorisation dossiers urgents"
+    ],
+    "checklists": [
+      {
+        "title": "0-1h",
+        "items": [
+          "Diagnostic effectué",
+          "Éditeur contacté (ticket P1)",
+          "Mode dégradé activé",
+          "Communication interne diffusée"
+        ]
+      },
+      {
+        "title": "1h-8h",
+        "items": [
+          "Dossiers urgents identifiés",
+          "Traitement papier lancé",
+          "Point situation avec éditeur",
+          "Communication usagers publiée"
+        ]
+      }
+    ],
+    "attachments": [
+      "Contrat support éditeur SI-MDPH",
+      "Procédure mode dégradé instruction"
+    ],
+    "decisionMatrix": [],
+    "communicationChannels": [],
+    "exitCriteria": [],
+    "version": 1,
+    "createdAt": "2026-03-28T10:05:00.000Z",
+    "updatedAt": "2026-03-28T10:05:00.000Z"
+  },
+  {
+    "id": "mda-pandemie-009",
+    "title": "Pandémie et protection des usagers en établissement",
+    "category": "catastrophe-naturelle",
+    "criticality": "critique",
+    "status": "valide",
+    "priority": 3,
+    "summary": "Gestion de crise sanitaire type Covid-19 avec impact sur établissements médico-sociaux et services à domicile.",
+    "scenario": "Pandémie virale nécessitant mesures barrières, confinement, et protection renforcée des personnes vulnérables (EHPAD, foyers handicap, usagers à domicile).",
+    "triggers": [
+      "Déclaration pandémie OMS",
+      "Consignes ARS niveau 3",
+      "Clusters en établissements MDA",
+      "Confinement national/régional",
+      "Pénurie EPI (masques, gants)"
+    ],
+    "impacts": [
+      "Mortalité élevée usagers fragiles",
+      "Saturation établissements sanitaires",
+      "Rupture services à domicile (peur agents)",
+      "Isolement social dramatique",
+      "Suspension visites familles",
+      "Absentéisme massif personnel"
+    ],
+    "services": [
+      "Direction MDA",
+      "ARS",
+      "Établissements médico-sociaux",
+      "Services à domicile",
+      "Préfecture",
+      "Médecine du travail"
+    ],
+    "roles": [
+      {
+        "role": "Directeur MDA",
+        "responsibility": "Coordination crise, liaison ARS/Préfecture, plan continuité"
+      },
+      {
+        "role": "ARS",
+        "responsibility": "Consignes sanitaires, approvisionnement EPI, coordination sanitaire"
+      },
+      {
+        "role": "Directeurs établissements",
+        "responsibility": "Application protocole, gestion clusters, information familles"
+      }
+    ],
+    "immediateActions": [
+      "Activation cellule crise départementale",
+      "Diffusion consignes ARS (gestes barrières, EPI)",
+      "Stock EPI : recensement et commande urgente",
+      "Suspension visites établissements (si consigne)",
+      "Renforcement hygiène locaux MDA",
+      "Plan continuité activité (télétravail maximal)"
+    ],
+    "continuityActions": [
+      "Approvisionnement continu EPI établissements",
+      "Dépistage systématique résidents et agents",
+      "Isolement clusters (confinement chambres)",
+      "Maintien lien social : visio, téléphone",
+      "Soutien psychologique usagers isolés",
+      "Priorisation interventions domicile (urgences vitales)",
+      "Vaccination prioritaire usagers MDA"
+    ],
+    "recoveryActions": [
+      "Déconfinement progressif établissements",
+      "Bilan mortalité et impact psychologique",
+      "Soutien deuil familles",
+      "REX : stocks EPI pérennes, PCA renforcés",
+      "Indemnisation agents mobilisés",
+      "Renforcement résilience établissements"
+    ],
+    "contacts": [
+      {
+        "name": "ARS cellule crise",
+        "phone": "0102030417",
+        "email": "ars-covid@region.sante.fr"
+      },
+      {
+        "name": "Préfecture",
+        "phone": "0102030414",
+        "email": "prefecture-crise@region.gouv.fr"
+      },
+      {
+        "name": "Médecine du travail",
+        "phone": "0102030411",
+        "email": "medecine.travail@departement.fr"
+      },
+      {
+        "name": "Plateforme EPI",
+        "phone": "0800130000",
+        "email": ""
+      }
+    ],
+    "resources": [
+      "Stock EPI MDA (masques, gels, gants)",
+      "Protocole sanitaire ARS",
+      "Liste établissements MDA partenaires",
+      "Plateforme visio familles",
+      "Contacts fournisseurs EPI"
+    ],
+    "checklists": [
+      {
+        "title": "Phase 1 : alerte",
+        "items": [
+          "Cellule crise activée",
+          "Consignes ARS diffusées",
+          "Stock EPI recensé",
+          "PCA télétravail activé"
+        ]
+      },
+      {
+        "title": "Phase 2 : pic pandémie",
+        "items": [
+          "EPI approvisionnés",
+          "Dépistages réalisés",
+          "Clusters isolés",
+          "Lien social maintenu"
+        ]
+      },
+      {
+        "title": "Phase 3 : sortie crise",
+        "items": [
+          "Déconfinement progressif",
+          "Bilan établi",
+          "REX organisé"
+        ]
+      }
+    ],
+    "attachments": [
+      "Protocole sanitaire ARS",
+      "Plan continuité MDA pandémie"
+    ],
+    "decisionMatrix": [],
+    "communicationChannels": [],
+    "exitCriteria": [],
+    "version": 1,
+    "createdAt": "2026-03-28T10:40:00.000Z",
+    "updatedAt": "2026-03-28T10:40:00.000Z"
+  },
+  {
+    "id": "mda-personnel-005",
+    "title": "Indisponibilité massive du personnel (épidémie, grève)",
+    "category": "indispo-personnel",
+    "criticality": "haute",
+    "status": "valide",
+    "priority": 3,
+    "summary": "Absence simultanée d'un grand nombre d'agents empêchant le fonctionnement normal de la MDA.",
+    "scenario": "Épidémie (grippe, Covid), mouvement social/grève, ou événement affectant massivement la disponibilité des agents (>30% absents).",
+    "triggers": [
+      "Vague épidémique (arrêts maladie multiples)",
+      "Préavis de grève déposé",
+      "Intempéries bloquant déplacements",
+      "Événement personnel collectif (accident transport)"
+    ],
+    "impacts": [
+      "Réduction capacité instruction dossiers",
+      "Délais traitement allongés",
+      "Difficulté maintenir accueil physique",
+      "Tension équipe pluridisciplinaire",
+      "Risque non-respect délais légaux"
+    ],
+    "services": [
+      "Direction MDA",
+      "RH Département",
+      "Équipe MDPH",
+      "Service accueil"
+    ],
+    "roles": [
+      {
+        "role": "Directeur MDA",
+        "responsibility": "Évaluation effectifs, décision mode dégradé, priorisation activités"
+      },
+      {
+        "role": "RH Département",
+        "responsibility": "Mobilisation renforts, gestion contractuels temporaires"
+      },
+      {
+        "role": "Chef service",
+        "responsibility": "Réorganisation équipes, suivi charge de travail"
+      }
+    ],
+    "immediateActions": [
+      "Recensement effectifs disponibles",
+      "Activation plan continuité activité (PCA)",
+      "Priorisation : dossiers urgents uniquement",
+      "Report RDV non-urgents",
+      "Communication usagers : délais allongés",
+      "Demande renforts RH départementales"
+    ],
+    "continuityActions": [
+      "Réaffectation agents polyvalents",
+      "Recrutement contractuels temporaires (si grève longue)",
+      "Télétravail maximal pour agents disponibles",
+      "Réduction horaires accueil physique",
+      "Concentration sur dossiers à échéance proche",
+      "Mutualisation avec autres MDPH (si épidémie régionale)"
+    ],
+    "recoveryActions": [
+      "Retour progressif effectifs normaux",
+      "Rattrapage dossiers en attente",
+      "Évaluation impact sur délais légaux",
+      "Soutien psychologique agents (burn-out, surcharge)",
+      "REX : amélioration résilience RH"
+    ],
+    "contacts": [
+      {
+        "name": "DRH Département",
+        "phone": "0102030410",
+        "email": "drh@departement.fr"
+      },
+      {
+        "name": "Médecine du travail",
+        "phone": "0102030411",
+        "email": "medecine.travail@departement.fr"
+      },
+      {
+        "name": "Directeur MDA",
+        "phone": "0607080911",
+        "email": "direction.mda@departement.fr"
+      }
+    ],
+    "resources": [
+      "Liste agents polyvalents mobilisables",
+      "Procédure priorisation dossiers",
+      "Contacts RH pour renforts",
+      "Guide télétravail MDPH",
+      "Modèle communication délais"
+    ],
+    "checklists": [
+      {
+        "title": "0-2h",
+        "items": [
+          "Effectifs recensés",
+          "Mode dégradé activé",
+          "Dossiers urgents identifiés",
+          "RH contactée pour renforts"
+        ]
+      },
+      {
+        "title": "2h - 24h",
+        "items": [
+          "Communication usagers diffusée",
+          "RDV non-urgents reportés",
+          "Télétravail maximisé",
+          "Point situation Direction"
+        ]
+      }
+    ],
+    "attachments": [
+      "PCA MDPH",
+      "Grille priorisation dossiers urgents"
+    ],
+    "decisionMatrix": [],
+    "communicationChannels": [],
+    "exitCriteria": [],
+    "version": 1,
+    "createdAt": "2026-03-28T10:20:00.000Z",
+    "updatedAt": "2026-03-28T10:20:00.000Z"
+  },
+  {
+    "id": "mda-prestataire-008",
+    "title": "Défaillance prestataire critique (transport, portage repas)",
+    "category": "prestataire-critique",
+    "criticality": "haute",
+    "status": "valide",
+    "priority": 3,
+    "summary": "Arrêt brutal d'un prestataire essentiel (transport adapté, portage repas, aide à domicile) mettant en danger usagers.",
+    "scenario": "Cessation activité, dépôt de bilan, ou grève d'un prestataire critique financé par la MDA (ex: SAVS, service transport handicap, portage repas), laissant usagers sans solution.",
+    "triggers": [
+      "Notification liquidation judiciaire prestataire",
+      "Grève illimitée annoncée",
+      "Signalements usagers multiples (service non rendu)",
+      "Alerte tutelles/familles",
+      "Article presse local"
+    ],
+    "impacts": [
+      "Rupture continuité services vitaux (repas, transport)",
+      "Risque dénutrition (portage repas)",
+      "Isolement personnes handicapées (transport)",
+      "Responsabilité morale et juridique Département",
+      "Tension médiatique et politique"
+    ],
+    "services": [
+      "Direction MDA",
+      "Service autonomie/handicap",
+      "Cellule achats/marchés publics",
+      "CCAS",
+      "Communication",
+      "Juridique"
+    ],
+    "roles": [
+      {
+        "role": "Directeur MDA",
+        "responsibility": "Activation cellule crise, recherche prestataires substitution"
+      },
+      {
+        "role": "Service autonomie",
+        "responsibility": "Recensement usagers impactés, coordination réorientation"
+      },
+      {
+        "role": "Achats publics",
+        "responsibility": "Contacts prestataires alternatifs, marché urgence"
+      }
+    ],
+    "immediateActions": [
+      "Recensement usagers impactés (base SI-MDPH)",
+      "Appels urgence familles/aidants",
+      "Activation prestataires alternatifs (liste secours)",
+      "Cellule crise MDA + Département",
+      "Information CCAS et tutelles",
+      "Déclenchement procédure marché urgence si nécessaire"
+    ],
+    "continuityActions": [
+      "Réaffectation usagers vers autres prestataires",
+      "Solutions transitoires (bénévolat, famille, CCAS)",
+      "Portage repas : activation solidarité voisinage/mairies",
+      "Transport : mutualisation avec autres dispositifs",
+      "Suivi quotidien usagers fragiles",
+      "Communication rassurante (courrier, SMS)"
+    ],
+    "recoveryActions": [
+      "Attribution marché pérenne nouveau prestataire",
+      "Évaluation qualité service remplacement",
+      "Indemnisation usagers si préjudice",
+      "REX : diversification prestataires critiques",
+      "Clauses continuité renforcées futurs marchés"
+    ],
+    "contacts": [
+      {
+        "name": "Service achats Département",
+        "phone": "0102030416",
+        "email": "achats@departement.fr"
+      },
+      {
+        "name": "Fédération aide à domicile",
+        "phone": "0800222333",
+        "email": "contact@federation-sad.fr"
+      },
+      {
+        "name": "Directeur MDA",
+        "phone": "0607080911",
+        "email": "direction.mda@departement.fr"
+      }
+    ],
+    "resources": [
+      "Liste prestataires alternatifs (SAD, transport)",
+      "Base usagers par prestataire",
+      "Procédure marché urgence",
+      "Contacts fédérations sectorielles",
+      "Modèle communication usagers"
+    ],
+    "checklists": [
+      {
+        "title": "0-4h",
+        "items": [
+          "Usagers impactés recensés",
+          "Familles/aidants contactés",
+          "Prestataires alternatifs sollicités",
+          "Cellule crise activée"
+        ]
+      },
+      {
+        "title": "4h - 24h",
+        "items": [
+          "Solutions transitoires en place",
+          "CCAS mobilisés",
+          "Communication usagers diffusée",
+          "Marché urgence lancé"
+        ]
+      },
+      {
+        "title": "24h - 7 jours",
+        "items": [
+          "Réaffectation usagers finalisée",
+          "Nouveau prestataire opérationnel",
+          "Suivi satisfaction"
+        ]
+      }
+    ],
+    "attachments": [
+      "Annuaire prestataires MDA",
+      "Procédure marché urgence"
+    ],
+    "decisionMatrix": [],
+    "communicationChannels": [],
+    "exitCriteria": [],
+    "version": 1,
+    "createdAt": "2026-03-28T10:35:00.000Z",
+    "updatedAt": "2026-03-28T10:35:00.000Z"
+  },
+  {
+    "id": "mda-rgpd-006",
+    "title": "Violation de données personnelles (fuite RGPD)",
+    "category": "cyberattaque",
+    "criticality": "critique",
+    "status": "valide",
+    "priority": 3,
+    "summary": "Fuite ou accès non autorisé à des données personnelles sensibles d'usagers (données de santé, handicap).",
+    "scenario": "Violation RGPD suite à : cyberattaque réussie, erreur humaine (envoi email mauvais destinataire), perte matériel (clé USB, ordinateur portable), ou accès illégitime base de données.",
+    "triggers": [
+      "Détection intrusion base de données",
+      "Signalement usager (reçu données autrui)",
+      "Perte/vol matériel contenant données",
+      "Erreur envoi email groupé",
+      "Alerte sécurité SI"
+    ],
+    "impacts": [
+      "Violation RGPD → sanctions CNIL (jusqu'à 20M€ ou 4% CA)",
+      "Atteinte vie privée usagers vulnérables",
+      "Obligation notification CNIL sous 72h",
+      "Perte confiance citoyens",
+      "Risque contentieux usagers",
+      "Impact médiatique majeur"
+    ],
+    "services": [
+      "DPO (Délégué Protection Données)",
+      "DSI",
+      "Direction MDA",
+      "Service concerné",
+      "Juridique Département",
+      "Communication"
+    ],
+    "roles": [
+      {
+        "role": "DPO",
+        "responsibility": "Évaluation gravité, notification CNIL, coordination réponse"
+      },
+      {
+        "role": "DSI",
+        "responsibility": "Investigation technique, mesures correctives sécurité"
+      },
+      {
+        "role": "Directeur MDA",
+        "responsibility": "Décision information usagers, gestion crise"
+      },
+      {
+        "role": "Communication",
+        "responsibility": "Préparation éléments médias, transparence"
+      }
+    ],
+    "immediateActions": [
+      "STOP propagation : bloquer accès, récupérer email/document",
+      "Alerter DPO immédiatement",
+      "Documenter : nature données, volume, personnes concernées",
+      "Évaluation gravité risque pour usagers",
+      "Mesures urgentes confinement (changement MDP, etc.)",
+      "Constitution dossier notification CNIL"
+    ],
+    "continuityActions": [
+      "Notification CNIL sous 72h (formulaire en ligne)",
+      "Information usagers concernés si risque élevé",
+      "Investigation complète : origine, étendue, responsabilités",
+      "Mesures correctives sécurité",
+      "Communication publique si médiatisé",
+      "Accompagnement usagers (hotline, excuses)"
+    ],
+    "recoveryActions": [
+      "Mise en conformité renforcée RGPD",
+      "Formation agents protection données",
+      "Audit sécurité SI complet",
+      "Révision procédures (chiffrement, accès)",
+      "Gestion contentieux éventuels",
+      "Suivi CNIL (réponse mise en demeure)"
+    ],
+    "contacts": [
+      {
+        "name": "DPO Département",
+        "phone": "0102030406",
+        "email": "dpo@departement.fr"
+      },
+      {
+        "name": "CNIL (notification)",
+        "phone": "0153732222",
+        "email": "notifications@cnil.fr"
+      },
+      {
+        "name": "DSI sécurité",
+        "phone": "0102030412",
+        "email": "ssi@departement.fr"
+      },
+      {
+        "name": "Service juridique",
+        "phone": "0102030413",
+        "email": "juridique@departement.fr"
+      }
+    ],
+    "resources": [
+      "Registre violations RGPD (tenu par DPO)",
+      "Formulaire notification CNIL",
+      "Guide analyse impact RGPD",
+      "Modèle information usagers",
+      "Contacts CNIL délégation régionale"
+    ],
+    "checklists": [
+      {
+        "title": "0-1h",
+        "items": [
+          "Propagation stoppée",
+          "DPO alerté",
+          "Documentation violation lancée",
+          "Gravité évaluée"
+        ]
+      },
+      {
+        "title": "1h - 24h",
+        "items": [
+          "Investigation origine complète",
+          "Mesures correctives prises",
+          "Dossier CNIL constitué"
+        ]
+      },
+      {
+        "title": "24h - 72h",
+        "items": [
+          "Notification CNIL envoyée",
+          "Usagers informés si nécessaire",
+          "Communication publique si applicable"
+        ]
+      }
+    ],
+    "attachments": [
+      "Procédure notification CNIL",
+      "Modèle information usagers violation",
+      "Guide RGPD secteur médico-social"
+    ],
+    "decisionMatrix": [],
+    "communicationChannels": [],
+    "exitCriteria": [],
+    "version": 1,
+    "createdAt": "2026-03-28T10:25:00.000Z",
+    "updatedAt": "2026-03-28T10:25:00.000Z"
+  },
+  {
+    "id": "mda-telecom-003",
+    "title": "Panne téléphonie et internet (accueil usagers)",
+    "category": "reseau-telecom",
+    "criticality": "haute",
+    "status": "valide",
+    "priority": 3,
+    "summary": "Perte des lignes téléphoniques et/ou connexion internet empêchant l'accueil et l'accompagnement des usagers.",
+    "scenario": "Coupure ligne opérateur télécom affectant l'accueil téléphonique, la plateforme internet departement.fr/mda, et les échanges emails avec usagers.",
+    "triggers": [
+      "Coupure fibre optique (travaux, vandalisme)",
+      "Panne opérateur télécom",
+      "Incident technique central téléphonique",
+      "Saturation réseau suite incident majeur"
+    ],
+    "impacts": [
+      "Usagers ne peuvent plus joindre MDPH par téléphone",
+      "Impossibilité recevoir/envoyer emails",
+      "Accès site web MDA indisponible",
+      "Isolement personnes fragiles sans recours",
+      "Tension forte accueil physique"
+    ],
+    "services": [
+      "Service accueil MDPH",
+      "DSI",
+      "Communication",
+      "Direction"
+    ],
+    "roles": [
+      {
+        "role": "Responsable accueil",
+        "responsibility": "Activation numéros alternatifs, gestion flux physique"
+      },
+      {
+        "role": "DSI",
+        "responsibility": "Liaison opérateur, recherche solution contournement"
+      },
+      {
+        "role": "Communication",
+        "responsibility": "Diffusion numéros secours, médias sociaux"
+      }
+    ],
+    "immediateActions": [
+      "Diagnostic : téléphonie seule ou internet aussi ?",
+      "Contact opérateur télécom (incident P1)",
+      "Activation numéros mobiles secours",
+      "Affichage numéros urgence sur portes/vitrines",
+      "Communication réseaux sociaux (Facebook, Twitter)"
+    ],
+    "continuityActions": [
+      "Redirection appels vers mobiles agents (liste dédiée)",
+      "Utilisation 4G/5G pour accès internet dégradé",
+      "Permanence physique renforcée",
+      "Partenariat avec autres sites départementaux (délocalisation)",
+      "Communication mairies/CCAS relais"
+    ],
+    "recoveryActions": [
+      "Suivi rétablissement avec opérateur",
+      "Test complet téléphonie avant reprise normale",
+      "Rattrapage messages vocaux/emails",
+      "Statistiques impact (appels perdus, durée coupure)",
+      "REX et plan redondance opérateur"
+    ],
+    "contacts": [
+      {
+        "name": "Support opérateur télécom",
+        "phone": "0800654321",
+        "email": "incidents@operateur.fr"
+      },
+      {
+        "name": "DSI Département",
+        "phone": "0102030405",
+        "email": "dsi@departement.fr"
+      },
+      {
+        "name": "Responsable accueil MDA",
+        "phone": "0607080910",
+        "email": "accueil.mda@departement.fr"
+      }
+    ],
+    "resources": [
+      "Téléphones mobiles secours (5 unités)",
+      "Routeur 4G backup",
+      "Liste numéros directs agents",
+      "Panneaux affichage numéros urgence",
+      "Accès réseaux sociaux MDA"
+    ],
+    "checklists": [
+      {
+        "title": "0-30 min",
+        "items": [
+          "Opérateur contacté",
+          "Numéros mobiles activés",
+          "Affichage urgence installé",
+          "Communication réseaux sociaux publiée"
+        ]
+      },
+      {
+        "title": "30 min - 4h",
+        "items": [
+          "Routeur 4G déployé si besoin",
+          "Partenariat délocalisation activé",
+          "Information mairies diffusée"
+        ]
+      }
+    ],
+    "attachments": [
+      "Liste numéros mobiles secours",
+      "Modèle communication coupure télécom"
+    ],
+    "decisionMatrix": [],
+    "communicationChannels": [],
+    "exitCriteria": [],
+    "version": 1,
+    "createdAt": "2026-03-28T10:10:00.000Z",
+    "updatedAt": "2026-03-28T10:10:00.000Z"
+  },
+  {
+    "id": "plan-cyber-001",
+    "title": "Cyberattaque avec chiffrement des postes",
+    "category": "cyberattaque",
+    "criticality": "critique",
+    "status": "valide",
+    "priority": 3,
+    "summary": "Plan de réaction rapide en cas de ransomware.",
+    "scenario": "Blocage généralisé des postes et serveurs avec demande de rançon.",
+    "triggers": [
+      "Fichiers chiffrés",
+      "Alertes EDR",
+      "Arrêt services métiers"
+    ],
+    "impacts": [
+      "Interruption de service",
+      "Risque perte de données",
+      "Stress usagers"
+    ],
+    "services": [
+      "DSI",
+      "Direction générale",
+      "Communication"
+    ],
+    "roles": [
+      {
+        "role": "Directeur de crise",
+        "responsibility": "Décisions et coordination globale"
+      }
+    ],
+    "immediateActions": [
+      "Isoler les segments réseau",
+      "Déclencher cellule de crise",
+      "Informer les agents"
+    ],
+    "continuityActions": [
+      "Basculer en mode papier",
+      "Activer procédures manuelles"
+    ],
+    "recoveryActions": [
+      "Restaurer sauvegardes saines",
+      "Changer secrets d'accès"
+    ],
+    "contacts": [
+      {
+        "name": "DSI astreinte",
+        "phone": "0102030405",
+        "email": "dsi@collectivite.fr"
+      }
+    ],
+    "resources": [
+      "Annuaire papier",
+      "Postes de secours",
+      "Guide réflexe imprimé"
+    ],
+    "checklists": [
+      {
+        "title": "0-30 min",
+        "items": [
+          "Alerte",
+          "Isolement réseau",
+          "Point de situation"
+        ]
+      }
+    ],
+    "attachments": [
+      "Lien interne: \\intranet\\secours\\guide-ransomware"
+    ],
+    "decisionMatrix": [],
+    "communicationChannels": [],
+    "exitCriteria": [],
+    "version": 1,
+    "createdAt": "2026-03-27T06:33:34.287Z",
+    "updatedAt": "2026-03-27T06:33:34.287Z"
+  }
+]

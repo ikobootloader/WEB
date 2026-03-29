@@ -337,6 +337,10 @@
                   <select id="planCriticality" name="criticality" class="select" required></select>
                 </div>
                 <div>
+                  <label for="planPriority" class="label">Priorité d'Activation</label>
+                  <select id="planPriority" name="priority" class="select" required></select>
+                </div>
+                <div>
                   <label for="planStatus" class="label">Statut</label>
                   <select id="planStatus" name="status" class="select" required></select>
                 </div>
@@ -461,6 +465,56 @@
                 </div>
               </div>
             </div>
+
+            <!-- Phase 1: Nouveaux Champs -->
+            <div class="section">
+              <div class="section-header">
+                <h3 class="section-title">
+                  <span class="material-symbols-outlined section-icon">gavel</span>
+                  Matrice Décisionnelle
+                </h3>
+              </div>
+              <div class="section-content">
+                <div>
+                  <label for="planDecisionMatrix" class="label">Décisions Clés (format: décision | responsable | backup)</label>
+                  <textarea id="planDecisionMatrix" name="decisionMatrix" class="textarea" rows="5" placeholder="Déclencher la cellule de crise | Directeur Général | Directeur Adjoint&#10;Communiquer aux médias | Responsable Communication | Directeur Général&#10;Fermer le site | Directeur des Opérations | Chef de Service"></textarea>
+                  <p class="help-text">Qui décide quoi en situation de crise ? Format: décision | responsable principal | responsable de backup</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="section">
+              <div class="section-header">
+                <h3 class="section-title">
+                  <span class="material-symbols-outlined section-icon">forum</span>
+                  Canaux de Communication
+                </h3>
+              </div>
+              <div class="section-content">
+                <div>
+                  <label for="planCommunicationChannels" class="label">Canaux (format: type | fréquence | destinataires | message type)</label>
+                  <textarea id="planCommunicationChannels" name="communicationChannels" class="textarea" rows="5" placeholder="SMS | Immédiat + toutes les heures | Cellule de crise | Plan {plan} activé à {heure}&#10;Email | Toutes les 4h | Ensemble du personnel | Point de situation: {détails}&#10;Affichage | Dès activation | Public accueilli | Service temporairement indisponible"></textarea>
+                  <p class="help-text">Comment communiquer pendant la crise ? Format: canal | fréquence | qui reçoit | modèle de message</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="section">
+              <div class="section-header">
+                <h3 class="section-title">
+                  <span class="material-symbols-outlined section-icon">check_circle</span>
+                  Critères de Sortie de Crise
+                </h3>
+              </div>
+              <div class="section-content">
+                <div>
+                  <label for="planExitCriteria" class="label">KPI de Retour à la Normale (format: critère | indicateur | cible)</label>
+                  <textarea id="planExitCriteria" name="exitCriteria" class="textarea" rows="5" placeholder="Services restaurés | % services opérationnels | 100%&#10;Backlog traité | Nombre de dossiers en attente | < 50&#10;Personnel disponible | % effectif présent | > 80%&#10;Systèmes informatiques | Disponibilité SI | 100%"></textarea>
+                  <p class="help-text">Quand peut-on considérer la crise terminée ? Format: critère | comment le mesurer | objectif cible</p>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
 

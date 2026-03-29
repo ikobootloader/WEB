@@ -27,16 +27,23 @@
 
 ---
 
-## 🆕 Nouveautés v1.0.0
+## 🆕 Nouveautés v1.1.0 (Phase 1)
 
-### Persistance du Mode Crise
+### Schéma des Plans Enrichi
+**4 nouveaux champs** pour améliorer la gestion de crise (basé sur retour d'analyse professionnelle) :
+- 🎯 **Priorité d'activation** (1-5) - Priorisation inter-plans en cas de crises multiples
+- ⚖️ **Matrice décisionnelle** - Qui décide quoi ? (décision | responsable | backup)
+- 📡 **Canaux de communication** - Comment communiquer ? (type | fréquence | destinataires | template)
+- ✅ **Critères de sortie de crise** - KPI de retour à la normale (critère | indicateur | cible)
+
+### Persistance du Mode Crise (v1.0.0)
 Le mode urgence a été considérablement amélioré avec une **persistance complète** :
 - 🕐 **Chronomètre continu** - Continue de compter même après fermeture du navigateur
 - 💾 **Restauration automatique** - Le centre de crise se recharge automatiquement au redémarrage
 - ✅ **État checklist sauvegardé** - Les cases cochées sont préservées par plan
 - 🔴 **Indicateur TopBar** - Badge rouge permanent tant que le mode crise est actif
 
-### Nouveaux Plans Pré-Configurés
+### Nouveaux Plans Pré-Configurés (v1.0.0)
 **5 nouveaux plans** pour administrations publiques dans [nouveaux-plans.json](nouveaux-plans.json) :
 - ⚡ Coupure électrique prolongée sur site stratégique (Critique)
 - 📢 Crise médiatique et communication de crise (Importante)
@@ -44,7 +51,7 @@ Le mode urgence a été considérablement amélioré avec une **persistance comp
 - 🚨 Menace sécuritaire ou intrusion malveillante (Critique)
 - 🌊 Pollution environnementale accidentelle (Importante)
 
-### Améliorations UX
+### Améliorations UX (v1.0.0)
 - 🔝 **Auto-scroll** - La page remonte automatiquement lors des changements de vue
 - 🏷️ **Branding dynamique** - Le nom personnalisé apparaît dans le fil d'Ariane du mode crise
 - 🔘 **Navigation checklist** - Le bouton "Voir Protocole Complet" ouvre directement le plan dans l'éditeur
@@ -355,7 +362,7 @@ La sauvegarde FSA s'exécute automatiquement après :
 
 ## 📄 Structure des Plans
 
-Chaque plan de contingence contient **20+ champs structurés** :
+Chaque plan de contingence contient **25+ champs structurés** :
 
 ### Identité & Métadonnées
 
@@ -365,6 +372,7 @@ Chaque plan de contingence contient **20+ champs structurés** :
   title: "Cyberattaque ransomware",  // Titre (max 180 car.)
   category: "cyberattaque",          // Catégorie (10 types)
   criticality: "critique",           // basse|moyenne|haute|critique
+  priority: 5,                       // 1-5 : Priorité d'activation (🆕 v1.1)
   status: "valide",                  // brouillon|valide|archive
   version: 1,                        // Numéro de version
   createdAt: "2026-03-28T10:00:00Z", // Date création ISO
@@ -386,6 +394,12 @@ Chaque plan de contingence contient **20+ champs structurés** :
 - **ImmediateActions** - Actions T0-T2h (tableau)
 - **ContinuityActions** - Procédures T2h-T48h (tableau)
 - **RecoveryActions** - Retour à la normale (tableau)
+
+### Gestion de Crise (🆕 v1.1)
+
+- **DecisionMatrix** - Matrice décisionnelle (format: `décision | responsable | backup`)
+- **CommunicationChannels** - Canaux de communication (format: `type | fréquence | destinataires | template`)
+- **ExitCriteria** - Critères de sortie de crise / KPI (format: `critère | indicateur | cible`)
 
 ### Support & Ressources
 
