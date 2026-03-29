@@ -1,0 +1,17532 @@
+    // ============================================================================
+    // TASKMDA TEAM - STANDALONE VERSION
+    // Toutes les fonctionnalités event-sourcing dans un seul fichier HTML
+    // ============================================================================
+
+    // Vérifier que les dépendances sont chargées
+    function checkDependencies() {
+      if (!window.uuidv4 || !window.idb || !window.marked) {
+        console.error('❌ Dépendances manquantes:', {
+          uuidv4: !!window.uuidv4,
+          idb: !!window.idb,
+          marked: !!window.marked
+        });
+        alert('❌ Erreur: Dépendances CDN non chargées.\n\nVérifiez votre connexion internet.');
+        return false;
+      }
+      debugLog('Dependances CDN chargees');
+      return true;
+    }
+
+    // Charger les dépendances
+    const uuidv4 = window.uuidv4;
+    const { openDB } = window.idb;
+    const APP_DEBUG = localStorage.getItem('taskmda_debug') === '1';
+
+    function debugLog(...args) {
+      if (!APP_DEBUG) return;
+      console.log(...args);
+    }
+
+    // ----------------------------------------------------------------------------
+    // FRONT MODULE BOUNDARIES (maintenabilite)
+    // - taskmda-ui.js: helpers UI generiques (modales, editeur, utilitaires visuels)
+    // - taskmda-theme.js: theming, dark mode, tokens visuels
+    // - taskmda-notifications.js: centre de notifications + persistance
+    // - taskmda-tasks.js: rendu/operations taches (listes, kanban, timeline)
+    // - taskmda-social.js: templates UI social (messagerie hors projet + fil d info)
+    // - taskmda-team.js: orchestration applicative, data flow, synchronisation FSA
+    // ----------------------------------------------------------------------------
+
+    // ============================================================================
+    // MODULE 1: DATABASE (IndexedDB)
+    // ============================================================================
+
+    const DB_NAME = 'taskmda-team-standalone';
+    const DB_VERSION = 11; // + fil d'information transverse (posts + mentions)
+    const DATA_EXPORT_STORES = {
+      events: 'eventId',
+      processedEvents: 'eventId',
+      snapshots: 'snapshotId',
+      localState: 'projectId',
+      users: 'userId',
+      sharedKeys: 'projectId',
+      globalTasks: 'id',
+      globalDocs: 'id',
+      globalCalendarItems: 'id',
+      globalMessages: 'messageId',
+      globalPosts: 'postId',
+      globalThemes: 'themeKey',
+      globalGroups: 'groupKey',
+      softwareVersions: 'softwareId',
+      directoryUsers: 'userId',
+      appSettings: 'key'
+    };
+    let dbInstance = null;
+
+    async function initDatabase() {
+      if (!dbInstance) {
+        dbInstance = await openDB(DB_NAME, DB_VERSION, {
+          upgrade(db) {
+            // Events store
+            if (!db.objectStoreNames.contains('events')) {
+              const eventsStore = db.createObjectStore('events', { keyPath: 'eventId' });
+              eventsStore.createIndex('timestamp', 'timestamp');
+              eventsStore.createIndex('projectId', 'projectId');
+              eventsStore.createIndex('projectId_timestamp', ['projectId', 'timestamp']);
+            }
+
+            // Processed events
+            if (!db.objectStoreNames.contains('processedEvents')) {
+              db.createObjectStore('processedEvents', { keyPath: 'eventId' });
+            }
+
+            // Snapshots
+            if (!db.objectStoreNames.contains('snapshots')) {
+              const snapshotsStore = db.createObjectStore('snapshots', { keyPath: 'snapshotId' });
+              snapshotsStore.createIndex('projectId', 'projectId');
+              snapshotsStore.createIndex('timestamp', 'timestamp');
+            }
+
+            // Local state
+            if (!db.objectStoreNames.contains('localState')) {
+              db.createObjectStore('localState', { keyPath: 'projectId' });
+            }
+
+            // Users
+            if (!db.objectStoreNames.contains('users')) {
+              db.createObjectStore('users', { keyPath: 'userId' });
+            }
+
+            // Annuaire local des utilisateurs connus (sync + local)
+            if (!db.objectStoreNames.contains('directoryUsers')) {
+              const directoryUsers = db.createObjectStore('directoryUsers', { keyPath: 'userId' });
+              directoryUsers.createIndex('name', 'name');
+              directoryUsers.createIndex('lastSeenAt', 'lastSeenAt');
+            }
+
+            // Shared keys (pour chiffrement E2E)
+            if (!db.objectStoreNames.contains('sharedKeys')) {
+              db.createObjectStore('sharedKeys', { keyPath: 'projectId' });
+            }
+
+            // Tâches hors projet (vue transverse)
+            if (!db.objectStoreNames.contains('globalTasks')) {
+              const globalTasks = db.createObjectStore('globalTasks', { keyPath: 'id' });
+              globalTasks.createIndex('createdAt', 'createdAt');
+              globalTasks.createIndex('status', 'status');
+              globalTasks.createIndex('theme', 'theme');
+            }
+
+            // Documents hors projet (classement thématique)
+            if (!db.objectStoreNames.contains('globalDocs')) {
+              const globalDocs = db.createObjectStore('globalDocs', { keyPath: 'id' });
+              globalDocs.createIndex('createdAt', 'createdAt');
+              globalDocs.createIndex('theme', 'theme');
+            }
+
+            // Informations calendrier hors projet (agenda transverse)
+            if (!db.objectStoreNames.contains('globalCalendarItems')) {
+              const globalCalendarItems = db.createObjectStore('globalCalendarItems', { keyPath: 'id' });
+              globalCalendarItems.createIndex('createdAt', 'createdAt');
+              globalCalendarItems.createIndex('date', 'date');
+              globalCalendarItems.createIndex('theme', 'theme');
+            }
+
+            // Messagerie hors projet (directe entre agents connus)
+            if (!db.objectStoreNames.contains('globalMessages')) {
+              const globalMessages = db.createObjectStore('globalMessages', { keyPath: 'messageId' });
+              globalMessages.createIndex('createdAt', 'createdAt');
+              globalMessages.createIndex('conversationId', 'conversationId');
+              globalMessages.createIndex('toUserId', 'toUserId');
+              globalMessages.createIndex('fromUserId', 'fromUserId');
+            }
+
+            // Fil d'information transverse (micro-posts + mentions + references)
+            if (!db.objectStoreNames.contains('globalPosts')) {
+              const globalPosts = db.createObjectStore('globalPosts', { keyPath: 'postId' });
+              globalPosts.createIndex('createdAt', 'createdAt');
+              globalPosts.createIndex('authorUserId', 'authorUserId');
+            }
+
+            // Catalogue global des thematiques reutilisables
+            if (!db.objectStoreNames.contains('globalThemes')) {
+              const globalThemes = db.createObjectStore('globalThemes', { keyPath: 'themeKey' });
+              globalThemes.createIndex('name', 'name');
+              globalThemes.createIndex('updatedAt', 'updatedAt');
+            }
+
+            // Catalogue global des groupes reutilisables
+            if (!db.objectStoreNames.contains('globalGroups')) {
+              const globalGroups = db.createObjectStore('globalGroups', { keyPath: 'groupKey' });
+              globalGroups.createIndex('name', 'name');
+              globalGroups.createIndex('updatedAt', 'updatedAt');
+            }
+
+            // Registre global des versions logicielles metier
+            if (!db.objectStoreNames.contains('softwareVersions')) {
+              const softwareVersions = db.createObjectStore('softwareVersions', { keyPath: 'softwareId' });
+              softwareVersions.createIndex('softwareName', 'softwareName');
+              softwareVersions.createIndex('updatedAt', 'updatedAt');
+            }
+
+            // Parametres globaux de l'application (branding + admin)
+            if (!db.objectStoreNames.contains('appSettings')) {
+              db.createObjectStore('appSettings', { keyPath: 'key' });
+            }
+
+            debugLog('Database initialized');
+          }
+        });
+      }
+      return dbInstance;
+    }
+
+    function getDatabase() {
+      if (!dbInstance) {
+        throw new Error('Database not initialized. Call initDatabase() first.');
+      }
+      return dbInstance;
+    }
+
+    // ============================================================================
+    // DATABASE CRYPTO WRAPPERS
+    // ============================================================================
+
+    function isValidIdbKey(key) {
+      if (key === null || key === undefined) return false;
+      if (typeof key === 'number') return Number.isFinite(key);
+      if (key instanceof Date) return Number.isFinite(key.getTime());
+      if (Array.isArray(key)) return key.length > 0 && key.every(isValidIdbKey);
+      return true;
+    }
+
+    /**
+     * Sauvegarde chiffrée dans IndexedDB
+     */
+    async function putEncrypted(storeName, obj, idField) {
+      const db = getDatabase();
+
+      return await runWithLoading(async () => {
+      if (window.TaskMDACrypto && window.TaskMDACrypto.isUnlocked()) {
+        const encrypted = await window.TaskMDACrypto.encryptForDB(obj, idField);
+        return await db.put(storeName, encrypted);
+      } else {
+        // Fallback sans chiffrement si non déverrouillé
+        return await db.put(storeName, obj);
+      }
+      });
+    }
+
+    /**
+     * Lecture déchiffrée depuis IndexedDB
+     */
+    async function deleteFromStore(storeName, key) {
+      const db = getDatabase();
+      return await runWithLoading(async () => db.delete(storeName, key));
+    }
+
+    async function getDecrypted(storeName, id, idField) {
+      if (!isValidIdbKey(id)) return null;
+      const db = getDatabase();
+      const obj = await db.get(storeName, id);
+
+      if (!obj) return null;
+
+      if (window.TaskMDACrypto && window.TaskMDACrypto.isUnlocked() && obj._isEncrypted) {
+        return await window.TaskMDACrypto.decryptFromDB(obj, idField);
+      } else {
+        return obj;
+      }
+    }
+
+    /**
+     * Lecture de tous les objets déchiffrés
+     */
+    async function getAllDecrypted(storeName, idField) {
+      const db = getDatabase();
+      const objs = await db.getAll(storeName);
+
+      if (!objs || objs.length === 0) return [];
+
+      if (window.TaskMDACrypto && window.TaskMDACrypto.isUnlocked()) {
+        return await Promise.all(
+          objs.map(obj => {
+            if (obj._isEncrypted) {
+              return window.TaskMDACrypto.decryptFromDB(obj, idField);
+            }
+            return obj;
+          })
+        );
+      } else {
+        return objs;
+      }
+    }
+
+    /**
+     * Lecture par index déchiffrée
+     */
+    async function getAllFromIndexDecrypted(storeName, indexName, query, idField) {
+      const db = getDatabase();
+      const objs = await db.getAllFromIndex(storeName, indexName, query);
+
+      if (!objs || objs.length === 0) return [];
+
+      if (window.TaskMDACrypto && window.TaskMDACrypto.isUnlocked()) {
+        return await Promise.all(
+          objs.map(obj => {
+            if (obj._isEncrypted) {
+              return window.TaskMDACrypto.decryptFromDB(obj, idField);
+            }
+            return obj;
+          })
+        );
+      } else {
+        return objs;
+      }
+    }
+
+    // ============================================================================
+    // MODULE 2: EVENT TYPES
+    // ============================================================================
+
+    const EventTypes = {
+      CREATE_PROJECT: 'CREATE_PROJECT',
+      UPDATE_PROJECT: 'UPDATE_PROJECT',
+      DELETE_PROJECT: 'DELETE_PROJECT',
+      CREATE_TASK: 'CREATE_TASK',
+      UPDATE_TASK: 'UPDATE_TASK',
+      DELETE_TASK: 'DELETE_TASK',
+      SEND_MESSAGE: 'SEND_MESSAGE',
+      UPDATE_MESSAGE: 'UPDATE_MESSAGE',
+      DELETE_MESSAGE: 'DELETE_MESSAGE',
+      ADD_MEMBER: 'ADD_MEMBER',
+      REMOVE_MEMBER: 'REMOVE_MEMBER',
+      CREATE_INVITE: 'CREATE_INVITE',
+      UPDATE_INVITE: 'UPDATE_INVITE',
+      CREATE_GROUP: 'CREATE_GROUP',
+      UPDATE_GROUP: 'UPDATE_GROUP',
+      DELETE_GROUP: 'DELETE_GROUP',
+      CREATE_USER_GROUP: 'CREATE_USER_GROUP',
+      UPDATE_USER_GROUP: 'UPDATE_USER_GROUP',
+      DELETE_USER_GROUP: 'DELETE_USER_GROUP',
+      ADD_THEME: 'ADD_THEME',
+      REMOVE_THEME: 'REMOVE_THEME',
+      CREATE_DOCUMENT: 'CREATE_DOCUMENT',
+      DELETE_DOCUMENT: 'DELETE_DOCUMENT',
+      LOCK_RESOURCE: 'LOCK_RESOURCE',
+      UNLOCK_RESOURCE: 'UNLOCK_RESOURCE'
+    };
+
+    const DEFAULT_LOCK_TTL_MS = 10 * 60 * 1000;
+
+    function pruneResourceLocksMap(lockMap, now = Date.now()) {
+      const source = (lockMap && typeof lockMap === 'object') ? lockMap : {};
+      const next = {};
+      Object.entries(source).forEach(([key, value]) => {
+        if (!value || typeof value !== 'object') return;
+        const expiresAt = Number(value.expiresAt || 0);
+        if (!Number.isFinite(expiresAt) || expiresAt <= now) return;
+        next[key] = value;
+      });
+      return next;
+    }
+
+    // ============================================================================
+    // MODULE 3: EVENT STORE
+    // ============================================================================
+
+    function createEvent(type, projectId, author, payload) {
+      return {
+        eventId: uuidv4(),
+        type,
+        projectId,
+        author,
+        timestamp: Date.now(),
+        payload,
+        metadata: {
+          appVersion: '1.0-standalone',
+          clientId: getCurrentClientId()
+        }
+      };
+    }
+
+    async function publishEvent(event) {
+      // Sauvegarder localement (chiffré)
+      await putEncrypted('events', event, 'eventId');
+
+      // Traiter immédiatement
+      await processEvent(event);
+
+      debugLog('Event published:', event.type);
+    }
+
+    async function processEvent(event) {
+      const db = getDatabase();
+
+      // Vérifier si déjà traité (pas besoin de déchiffrer, juste vérifier l'existence)
+      const processed = await db.get('processedEvents', event.eventId);
+      if (processed) return;
+
+      // Appliquer à l'état
+      await applyEventToState(event);
+      await ingestDirectoryFromEvent(event);
+      await maybeNotifyCollaboratorEvent(event);
+
+      // Marquer comme traité (chiffré)
+      await putEncrypted('processedEvents', { eventId: event.eventId, processedAt: Date.now() }, 'eventId');
+
+      debugLog('Event processed:', event.type);
+    }
+
+    async function mirrorCreationEventToGlobalFeed(event, state) {
+      if (!event || !state?.project || state.project.deletedAt) return;
+      const isProjectCreate = event.type === EventTypes.CREATE_PROJECT;
+      const isTaskCreate = event.type === EventTypes.CREATE_TASK;
+      if (!isProjectCreate && !isTaskCreate) return;
+      if (!hasProjectAccess(state)) return;
+
+      const sourceEventId = String(event.eventId || '').trim();
+      if (!sourceEventId) return;
+      const postId = `auto-event-${sourceEventId}`;
+      const existing = await getDecrypted('globalPosts', postId, 'postId');
+      if (existing) return;
+
+      const projectName = String(state.project.name || 'Projet').trim() || 'Projet';
+      const authorUserId = String(event.author || '').trim();
+      const authorIdentity = resolveKnownUserIdentity(authorUserId, fallbackDirectoryName(authorUserId));
+      const authorName = authorIdentity?.name || fallbackDirectoryName(authorUserId);
+
+      const refs = [{ type: 'project', id: event.projectId, label: projectName }];
+      let content = `Nouveau projet créé: ${projectName}`;
+      let autoKind = 'project-created';
+
+      if (isTaskCreate) {
+        const taskId = String(event.payload?.taskId || '').trim();
+        const createdTask = (state.tasks || []).find((task) => String(task.taskId || '') === taskId);
+        const taskTitle = String(createdTask?.title || event.payload?.title || 'Tâche').trim() || 'Tâche';
+        const taskRef = buildGlobalTaskRef({
+          sourceType: 'project',
+          sourceProjectId: event.projectId,
+          taskId,
+          id: null
+        });
+        refs.push({ type: 'task', id: taskRef, label: `${taskTitle} • ${projectName}` });
+        content = `Nouvelle tâche créée: ${taskTitle}\nProjet: ${projectName}`;
+        autoKind = 'task-created';
+      }
+
+      const autoPost = {
+        postId,
+        authorUserId,
+        authorName,
+        content,
+        mentions: [],
+        refs,
+        createdAt: Number(event.timestamp || Date.now()),
+        source: sharedFolderHandle ? 'shared' : 'local',
+        isAuto: true,
+        autoKind,
+        sourceEventId
+      };
+
+      await putEncrypted('globalPosts', autoPost, 'postId');
+      knownGlobalPostIds.add(postId);
+      if (sharedFolderHandle) {
+        await writeGlobalFeedPostToSharedFolder(autoPost);
+      }
+      if (workspaceMode === 'global' && globalWorkspaceView === 'feed') {
+        await renderGlobalFeed();
+      }
+    }
+
+    async function applyEventToState(event) {
+      // Charger l'état (déchiffré)
+      let state = await getDecrypted('localState', event.projectId, 'projectId') || {
+        projectId: event.projectId,
+        tasks: [],
+        messages: [],
+        members: [],
+        invites: [],
+        groups: [],
+        userGroups: [],
+        themes: [],
+        documents: [],
+        resourceLocks: {},
+        project: null
+      };
+
+      if (!Array.isArray(state.tasks)) state.tasks = [];
+      if (!Array.isArray(state.messages)) state.messages = [];
+      if (!Array.isArray(state.members)) state.members = [];
+      if (!Array.isArray(state.invites)) state.invites = [];
+      if (!Array.isArray(state.groups)) state.groups = [];
+      if (!Array.isArray(state.userGroups)) state.userGroups = [];
+      if (!Array.isArray(state.themes)) state.themes = [];
+      if (!Array.isArray(state.documents)) state.documents = [];
+      if (!state.resourceLocks || typeof state.resourceLocks !== 'object') state.resourceLocks = {};
+      state.resourceLocks = pruneResourceLocksMap(state.resourceLocks);
+      const themesToUpsert = [];
+      const registerTheme = (rawTheme) => {
+        const theme = String(rawTheme || '').trim();
+        if (!theme) return;
+        if (!state.themes.find(t => normalizeSearch(t) === normalizeSearch(theme))) {
+          state.themes.push(theme);
+        }
+        if (!themesToUpsert.some(t => normalizeSearch(t) === normalizeSearch(theme))) {
+          themesToUpsert.push(theme);
+        }
+      };
+
+      // Appliquer selon le type
+      switch (event.type) {
+        case EventTypes.CREATE_PROJECT:
+          state.project = {
+            projectId: event.projectId,
+            ...event.payload,
+            createdBy: event.author,
+            createdAt: event.timestamp
+          };
+          break;
+        case EventTypes.UPDATE_PROJECT:
+          if (state.project) {
+            state.project = { ...state.project, ...event.payload.changes, updatedAt: event.timestamp };
+          }
+          break;
+
+        case EventTypes.DELETE_PROJECT:
+          if (state.project) {
+            state.project = { ...state.project, deletedAt: event.timestamp, status: 'deleted' };
+          }
+          break;
+
+        case EventTypes.CREATE_TASK:
+          state.tasks.push({
+            taskId: event.payload.taskId || uuidv4(),
+            ...event.payload,
+            createdBy: event.payload.createdBy || event.author,
+            createdAt: event.timestamp
+          });
+          registerTheme(event.payload?.theme);
+          break;
+
+        case EventTypes.UPDATE_TASK:
+          state.tasks = state.tasks.map(t =>
+            t.taskId === event.payload.taskId ? { ...t, ...event.payload.changes, updatedAt: event.timestamp } : t
+          );
+          registerTheme(event.payload?.changes?.theme);
+          break;
+
+        case EventTypes.DELETE_TASK:
+          state.tasks = state.tasks.filter(t => t.taskId !== event.payload.taskId);
+          break;
+
+        case EventTypes.SEND_MESSAGE:
+          state.messages.push({ messageId: event.eventId, author: event.author, ...event.payload, timestamp: event.timestamp });
+          break;
+
+        case EventTypes.UPDATE_MESSAGE:
+          state.messages = state.messages.map(m =>
+            m.messageId === event.payload.messageId
+              ? { ...m, content: event.payload.content, editedAt: event.timestamp }
+              : m
+          );
+          break;
+
+        case EventTypes.DELETE_MESSAGE:
+          state.messages = state.messages.filter(m => m.messageId !== event.payload.messageId);
+          break;
+
+        case EventTypes.ADD_MEMBER:
+          if (!state.members.find(m => m.userId === event.payload.userId)) {
+            state.members.push({
+              ...event.payload,
+              role: normalizeProjectRole(event.payload.role),
+              joinedAt: event.timestamp
+            });
+          }
+          break;
+
+        case EventTypes.REMOVE_MEMBER:
+          state.members = state.members.filter(m => m.userId !== event.payload.userId);
+          state.userGroups = state.userGroups.map(g => ({
+            ...g,
+            memberUserIds: (g.memberUserIds || []).filter(id => id !== event.payload.userId)
+          }));
+          break;
+
+        case EventTypes.CREATE_INVITE:
+          if (!state.invites.find(i => i.inviteId === event.payload.inviteId)) {
+            state.invites.push({ ...event.payload, invitedAt: event.timestamp });
+          }
+          break;
+
+        case EventTypes.UPDATE_INVITE:
+          state.invites = state.invites.map(inv =>
+            inv.inviteId === event.payload.inviteId
+              ? { ...inv, ...event.payload.changes, updatedAt: event.timestamp }
+              : inv
+          );
+          break;
+
+        case EventTypes.CREATE_GROUP:
+          if (!state.groups.find(g => g.groupId === event.payload.groupId)) {
+            state.groups.push({ ...event.payload, createdAt: event.timestamp });
+          }
+          break;
+
+        case EventTypes.UPDATE_GROUP:
+          state.groups = state.groups.map(g =>
+            g.groupId === event.payload.groupId
+              ? { ...g, ...event.payload.changes, updatedAt: event.timestamp }
+              : g
+          );
+          break;
+
+        case EventTypes.DELETE_GROUP:
+          state.groups = state.groups.filter(g => g.groupId !== event.payload.groupId);
+          state.tasks = state.tasks.map(t => t.groupId === event.payload.groupId ? { ...t, groupId: null } : t);
+          break;
+
+        case EventTypes.CREATE_USER_GROUP:
+          if (!state.userGroups.find(g => g.groupId === event.payload.groupId)) {
+            state.userGroups.push({
+              groupId: event.payload.groupId,
+              name: event.payload.name,
+              memberUserIds: Array.isArray(event.payload.memberUserIds) ? [...new Set(event.payload.memberUserIds)] : [],
+              createdAt: event.timestamp
+            });
+          }
+          break;
+
+        case EventTypes.UPDATE_USER_GROUP:
+          state.userGroups = state.userGroups.map(g =>
+            g.groupId === event.payload.groupId
+              ? { ...g, ...event.payload.changes, updatedAt: event.timestamp }
+              : g
+          );
+          break;
+
+        case EventTypes.DELETE_USER_GROUP:
+          state.userGroups = state.userGroups.filter(g => g.groupId !== event.payload.groupId);
+          break;
+
+        case EventTypes.ADD_THEME:
+          registerTheme(event.payload?.theme);
+          break;
+
+        case EventTypes.REMOVE_THEME:
+          state.themes = state.themes.filter(t => normalizeSearch(t) !== normalizeSearch(event.payload.theme));
+          break;
+
+        case EventTypes.CREATE_DOCUMENT:
+          if (!state.documents.find(d => d.docId === event.payload.docId)) {
+            state.documents.push({
+              ...event.payload,
+              createdBy: event.author,
+              createdAt: event.timestamp
+            });
+          }
+          break;
+
+        case EventTypes.DELETE_DOCUMENT:
+          state.documents = state.documents.filter(d => d.docId !== event.payload.docId);
+          break;
+
+        case EventTypes.LOCK_RESOURCE: {
+          const resourceType = String(event.payload?.resourceType || '').trim();
+          const resourceId = String(event.payload?.resourceId || '').trim();
+          if (!resourceType || !resourceId) break;
+          const key = `${resourceType}:${resourceId}`;
+          const ttlMs = Math.max(30 * 1000, Math.min(60 * 60 * 1000, Number(event.payload?.ttlMs || 0) || DEFAULT_LOCK_TTL_MS));
+          const lockId = String(event.payload?.lockId || '').trim() || uuidv4();
+          state.resourceLocks[key] = {
+            resourceType,
+            resourceId,
+            lockId,
+            ownerUserId: String(event.payload?.ownerUserId || event.author || '').trim(),
+            ownerName: String(event.payload?.ownerName || '').trim(),
+            scope: String(event.payload?.scope || '').trim(),
+            updatedAt: event.timestamp,
+            expiresAt: event.timestamp + ttlMs
+          };
+          break;
+        }
+
+        case EventTypes.UNLOCK_RESOURCE: {
+          const resourceType = String(event.payload?.resourceType || '').trim();
+          const resourceId = String(event.payload?.resourceId || '').trim();
+          if (!resourceType || !resourceId) break;
+          const key = `${resourceType}:${resourceId}`;
+          const existing = state.resourceLocks[key];
+          if (!existing) break;
+          const wantedLockId = String(event.payload?.lockId || '').trim();
+          const ownerUserId = String(event.payload?.ownerUserId || event.author || '').trim();
+          if (wantedLockId && String(existing.lockId || '') !== wantedLockId) break;
+          if (ownerUserId && String(existing.ownerUserId || '') !== ownerUserId) break;
+          delete state.resourceLocks[key];
+          break;
+        }
+      }
+
+      state.lastUpdated = Date.now();
+      for (const theme of themesToUpsert) {
+        await upsertGlobalTheme(theme);
+      }
+      await mirrorCreationEventToGlobalFeed(event, state);
+
+      // Sauvegarder l'état (chiffré)
+      await putEncrypted('localState', state, 'projectId');
+    }
+
+    function hasProjectAccess(state, userId = getCurrentUserId()) {
+      if (!state || !state.project || state.project.deletedAt) return false;
+      const members = Array.isArray(state.members) ? state.members : [];
+      const normalizedMode = normalizeSharingMode(state.project.sharingMode, 'private');
+      const readAccess = normalizeProjectReadAccess(
+        state.project.readAccess,
+        normalizedMode === 'private' ? 'private' : 'members'
+      );
+      const isMember = members.some(m => m.userId === userId);
+      if (isMember) return true;
+      if (state.project.createdBy && state.project.createdBy === userId) return true;
+      if (members.length === 0 && !state.project.createdBy) return true; // compatibilité anciens jeux de données
+      if (normalizedMode === 'private') return false;
+      if (readAccess === 'public') return true;
+      return false;
+    }
+
+    async function getProjectState(projectId, options = {}) {
+      if (!isValidIdbKey(projectId)) return null;
+      const state = await getDecrypted('localState', projectId, 'projectId');
+      if (!state) return null;
+      if (!state.resourceLocks || typeof state.resourceLocks !== 'object') {
+        state.resourceLocks = {};
+      } else {
+        state.resourceLocks = pruneResourceLocksMap(state.resourceLocks);
+      }
+      if (options.ignoreAccessCheck) return state;
+      return hasProjectAccess(state) ? state : null;
+    }
+
+    async function getProjectEvents(projectId) {
+      try {
+        const events = await getAllFromIndexDecrypted('events', 'projectId', projectId, 'eventId');
+        return events.sort((a, b) => b.timestamp - a.timestamp);
+      } catch (error) {
+        console.error('Error getting project events:', error);
+        return [];
+      }
+    }
+
+    async function getAllProjects() {
+      try {
+        const states = await getAllDecrypted('localState', 'projectId');
+        return states
+          .filter(s => s && s.project && !s.project.deletedAt)
+          .filter(s => hasProjectAccess(s))
+          .map(s => s.project);
+      } catch (error) {
+        console.error('Error getting projects:', error);
+        return [];
+      }
+    }
+
+    // ============================================================================
+    // MODULE 4: USERS
+    // ============================================================================
+
+    function detectOsUsernameGuess() {
+      try {
+        const rawPath = decodeURIComponent(window.location.pathname || '');
+        const normalized = rawPath.replace(/\\/g, '/');
+
+        const windowsMatch = normalized.match(/\/Users\/([^/]+)/i);
+        const unixMatch = normalized.match(/\/home\/([^/]+)/i);
+        const picked = windowsMatch?.[1] || unixMatch?.[1] || '';
+        if (!picked) return null;
+
+        const clean = picked.replace(/[._-]+/g, ' ').trim();
+        if (!clean) return null;
+
+        return clean
+          .split(' ')
+          .filter(Boolean)
+          .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+          .join(' ');
+      } catch {
+        return null;
+      }
+    }
+
+    async function initializeCurrentUser() {
+      let userId = localStorage.getItem('userId');
+
+      if (!userId) {
+        userId = uuidv4();
+        localStorage.setItem('userId', userId);
+      }
+
+      let user = await getDecrypted('users', userId, 'userId');
+
+      if (!user) {
+        const nameGuess = detectOsUsernameGuess();
+        user = {
+          userId,
+          name: nameGuess || ('Utilisateur ' + Math.floor(Math.random() * 1000)),
+          createdAt: Date.now()
+        };
+        await putEncrypted('users', user, 'userId');
+      }
+
+      return user;
+    }
+
+    const DEFAULT_APP_BRANDING = Object.freeze({
+      appName: 'NEXUS MDA',
+      appSubtitle: 'Espace collaboratif MDA'
+    });
+
+    const DEFAULT_PROJECT_ROLE_CATALOG = Object.freeze([
+      { roleKey: 'owner', label: 'Proprietaire', baseRole: 'owner', isSystem: true },
+      { roleKey: 'manager', label: 'Manager', baseRole: 'manager', isSystem: true },
+      { roleKey: 'member', label: 'Membre', baseRole: 'member', isSystem: true }
+    ]);
+
+    function normalizeProjectRoleBase(role) {
+      return role === 'owner' || role === 'manager' || role === 'member' ? role : 'member';
+    }
+
+    function normalizeProjectRoleCatalog(rawCatalog = []) {
+      const defaultsByKey = new Map(DEFAULT_PROJECT_ROLE_CATALOG.map(item => [item.roleKey, item]));
+      const merged = new Map(DEFAULT_PROJECT_ROLE_CATALOG.map(item => [item.roleKey, { ...item }]));
+      (Array.isArray(rawCatalog) ? rawCatalog : []).forEach((item) => {
+        const inputKey = String(item?.roleKey || '').trim();
+        const fallbackKey = defaultsByKey.has(inputKey) ? inputKey : `custom:${normalizeCatalogKey(item?.label || '')}`;
+        const roleKey = fallbackKey || `custom:${uuidv4()}`;
+        const baseRole = normalizeProjectRoleBase(item?.baseRole || roleKey);
+        const defaultEntry = defaultsByKey.get(roleKey);
+        const label = String(item?.label || defaultEntry?.label || '').trim() || (defaultEntry?.label || 'Role');
+        if (defaultEntry) {
+          merged.set(roleKey, {
+            roleKey,
+            label,
+            baseRole,
+            isSystem: true
+          });
+          return;
+        }
+        merged.set(roleKey, {
+          roleKey,
+          label,
+          baseRole,
+          isSystem: false
+        });
+      });
+      return Array.from(merged.values())
+        .filter(item => item && item.roleKey && item.label)
+        .sort((a, b) => {
+          if (a.isSystem && !b.isSystem) return -1;
+          if (!a.isSystem && b.isSystem) return 1;
+          return String(a.label || '').localeCompare(String(b.label || ''), 'fr');
+        });
+    }
+
+    function getProjectRoleCatalog() {
+      return normalizeProjectRoleCatalog(appBranding?.roleCatalog || []);
+    }
+
+    function getBaseProjectRoleLabel(baseRole) {
+      const normalized = normalizeProjectRoleBase(baseRole);
+      if (normalized === 'owner') return 'Proprietaire';
+      if (normalized === 'manager') return 'Manager';
+      return 'Membre';
+    }
+
+    function getProjectRoleMeta(role) {
+      const roleKey = String(role || '').trim();
+      const catalog = getProjectRoleCatalog();
+      const byKey = new Map(catalog.map(item => [String(item.roleKey || ''), item]));
+      const exact = roleKey ? byKey.get(roleKey) : null;
+      if (exact) {
+        return {
+          roleKey: exact.roleKey,
+          label: exact.label,
+          baseRole: normalizeProjectRoleBase(exact.baseRole),
+          isSystem: Boolean(exact.isSystem)
+        };
+      }
+      const baseRole = normalizeProjectRoleBase(roleKey);
+      const base = byKey.get(baseRole) || DEFAULT_PROJECT_ROLE_CATALOG.find(item => item.roleKey === baseRole);
+      return {
+        roleKey: baseRole,
+        label: base?.label || getBaseProjectRoleLabel(baseRole),
+        baseRole,
+        isSystem: true
+      };
+    }
+
+    function getProjectRoleLabel(role) {
+      return getProjectRoleMeta(role).label;
+    }
+
+    function normalizeAppBrandingConfig(raw = {}) {
+      const appName = String(raw?.appName || '').trim() || DEFAULT_APP_BRANDING.appName;
+      const appSubtitle = String(raw?.appSubtitle || '').trim() || DEFAULT_APP_BRANDING.appSubtitle;
+      const adminUserId = String(raw?.adminUserId || '').trim() || '';
+      const updatedAt = Number(raw?.updatedAt || 0) || Date.now();
+      const roleCatalog = normalizeProjectRoleCatalog(raw?.roleCatalog || []);
+      return { appName, appSubtitle, adminUserId, roleCatalog, updatedAt };
+    }
+
+    async function getAppBrandingConfig() {
+      const row = await getDecrypted('appSettings', 'branding', 'key');
+      return row ? normalizeAppBrandingConfig(row) : null;
+    }
+
+    async function saveAppBrandingConfig(config, options = {}) {
+      const normalized = normalizeAppBrandingConfig(config);
+      await putEncrypted('appSettings', {
+        key: 'branding',
+        ...normalized
+      }, 'key');
+      appBranding = normalized;
+      applyAppBrandingToHeader();
+      if (options.sync !== false) {
+        await writeAppBrandingToSharedFolder();
+      }
+      return normalized;
+    }
+
+    function applyAppBrandingToHeader() {
+      const effective = normalizeAppBrandingConfig(appBranding || {});
+      const titleEl = document.getElementById('app-header-name');
+      const subtitleEl = document.getElementById('app-header-subtitle');
+      if (titleEl) titleEl.textContent = effective.appName;
+      if (subtitleEl) subtitleEl.textContent = effective.appSubtitle;
+      document.title = `${effective.appName} | Solo et Collaboratif`;
+    }
+
+    function isAppAdmin(userId = currentUser?.userId) {
+      if (!userId) return false;
+      return String(appBranding?.adminUserId || '') === String(userId);
+    }
+
+    function getCurrentUserId() {
+      return localStorage.getItem('userId');
+    }
+
+    function getCurrentClientId() {
+      let clientId = localStorage.getItem('clientId');
+      if (!clientId) {
+        clientId = uuidv4();
+        localStorage.setItem('clientId', clientId);
+      }
+      return clientId;
+    }
+
+    function getInitials(name) {
+      if (!name) return '?';
+      const parts = name.trim().split(' ');
+      if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+      return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+    }
+
+    function stringToColor(str) {
+      const colors = ['#006c4a', '#6366f1', '#ec4899', '#f59e0b', '#10b981', '#8b5cf6', '#ef4444', '#3b82f6'];
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) {
+        hash = str.charCodeAt(i) + ((hash << 5) - hash);
+      }
+      return colors[Math.abs(hash) % colors.length];
+    }
+
+    function fallbackDirectoryName(userId) {
+      const raw = String(userId || '').trim();
+      if (!raw) return 'Utilisateur';
+      return `Utilisateur ${raw.slice(0, 8)}`;
+    }
+
+    async function upsertDirectoryUser({ userId, name, email = '', source = 'unknown', lastSeenAt = Date.now() }) {
+      const id = String(userId || '').trim();
+      if (!id) return;
+      const existing = await getDecrypted('directoryUsers', id, 'userId');
+      const cleanName = String(name || '').trim();
+      const mergedName = cleanName || existing?.name || fallbackDirectoryName(id);
+      await putEncrypted('directoryUsers', {
+        userId: id,
+        name: mergedName,
+        email: String(email || existing?.email || '').trim(),
+        source: source || existing?.source || 'unknown',
+        firstSeenAt: existing?.firstSeenAt || Date.now(),
+        lastSeenAt: Math.max(Number(existing?.lastSeenAt || 0), Number(lastSeenAt || Date.now()))
+      }, 'userId');
+    }
+
+    async function ingestDirectoryFromEvent(event) {
+      if (!event) return;
+      await upsertDirectoryUser({
+        userId: event.author,
+        name: event.payload?.authorName || '',
+        source: 'event',
+        lastSeenAt: event.timestamp || Date.now()
+      });
+      if (event.type === EventTypes.ADD_MEMBER && event.payload?.userId) {
+        await upsertDirectoryUser({
+          userId: event.payload.userId,
+          name: event.payload.displayName || '',
+          source: 'event_add_member',
+          lastSeenAt: event.timestamp || Date.now()
+        });
+      }
+    }
+
+    async function refreshDirectoryFromKnownSources() {
+      const users = await getAllDecrypted('users', 'userId');
+      for (const user of users || []) {
+        await upsertDirectoryUser({
+          userId: user.userId,
+          name: user.name,
+          email: user.email,
+          source: 'users_store',
+          lastSeenAt: user.updatedAt || user.createdAt || Date.now()
+        });
+      }
+
+      const states = await getAllDecrypted('localState', 'projectId');
+      for (const state of states || []) {
+        for (const member of state?.members || []) {
+          await upsertDirectoryUser({
+            userId: member.userId,
+            name: member.displayName || '',
+            source: 'project_member',
+            lastSeenAt: member.joinedAt || Date.now()
+          });
+        }
+        for (const msg of state?.messages || []) {
+          await upsertDirectoryUser({
+            userId: msg.author,
+            name: msg.authorName || '',
+            source: 'message',
+            lastSeenAt: msg.timestamp || Date.now()
+          });
+        }
+      }
+    }
+
+    async function refreshKnownUsersCache() {
+      const [users, directoryUsers] = await Promise.all([
+        getAllDecrypted('users', 'userId'),
+        getAllDecrypted('directoryUsers', 'userId')
+      ]);
+      const map = new Map();
+      (users || []).forEach(user => {
+        if (!user?.userId) return;
+        map.set(user.userId, {
+          userId: user.userId,
+          name: String(user.name || '').trim(),
+          avatarDataUrl: String(user.avatarDataUrl || '').trim()
+        });
+      });
+      (directoryUsers || []).forEach(user => {
+        if (!user?.userId) return;
+        const existing = map.get(user.userId) || {};
+        map.set(user.userId, {
+          userId: user.userId,
+          name: existing.name || String(user.name || '').trim(),
+          avatarDataUrl: existing.avatarDataUrl || ''
+        });
+      });
+      if (currentUser?.userId) {
+        const existing = map.get(currentUser.userId) || {};
+        map.set(currentUser.userId, {
+          userId: currentUser.userId,
+          name: String(currentUser.name || existing.name || '').trim(),
+          avatarDataUrl: String(currentUser.avatarDataUrl || existing.avatarDataUrl || '').trim()
+        });
+      }
+      knownUsersCache = map;
+    }
+
+    function resolveKnownUserIdentity(userId, fallbackName = '') {
+      const id = String(userId || '').trim();
+      const known = id ? knownUsersCache.get(id) : null;
+      const name = String(known?.name || fallbackName || (id ? fallbackDirectoryName(id) : 'Utilisateur')).trim();
+      return {
+        userId: id,
+        name,
+        avatarDataUrl: String(known?.avatarDataUrl || '').trim()
+      };
+    }
+
+    function renderParticipantsStack(participants, maxVisible = 3) {
+      const normalized = [];
+      const seen = new Set();
+      (participants || []).forEach(item => {
+        const uid = String(item?.userId || '').trim();
+        const key = uid || `name:${normalizeSearch(item?.name || '')}`;
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        normalized.push(resolveKnownUserIdentity(uid, String(item?.name || '').trim()));
+      });
+      if (normalized.length === 0) return '';
+      const visible = normalized.slice(0, Math.max(1, maxVisible));
+      const extra = Math.max(0, normalized.length - visible.length);
+      return `
+        <div class="participants-stack" title="${escapeHtml(normalized.map(p => p.name).join(', '))}">
+          ${visible.map((p, idx) => {
+            const style = safeAvatarInlineStyle(
+              p.avatarDataUrl,
+              stringToColor(p.userId || p.name || String(idx))
+            );
+            return `<span class="participant-chip" style="${style}" aria-label="${escapeHtml(p.name)}">${escapeHtml(getInitials(p.name))}</span>`;
+          }).join('')}
+          ${extra > 0 ? `<span class="participant-chip participant-chip-more">+${extra}</span>` : ''}
+        </div>
+      `;
+    }
+
+    // ============================================================================
+    // MODULE 5: FILE SYSTEM (Synchronisation)
+    // ============================================================================
+
+    let sharedFolderHandle = null;
+    let projectFolders = new Map();
+    let isPolling = false;
+    let pollInterval = null;
+    let knownEventIds = new Set();
+    let sharedWriteQueue = [];
+    let sharedWriteQueuedIds = new Set();
+    let isSharedWriteProcessing = false;
+
+    function isFileSystemSupported() {
+      return 'showDirectoryPicker' in window;
+    }
+
+    async function selectSharedFolder() {
+      if (!isFileSystemSupported()) {
+        throw new Error('File System Access API non supporté');
+      }
+
+      const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+      const permission = await dirHandle.requestPermission({ mode: 'readwrite' });
+
+      if (permission !== 'granted') {
+        throw new Error('Permission refusée');
+      }
+
+      sharedFolderHandle = dirHandle;
+
+      await saveSharedFolderHandle(dirHandle);
+
+      debugLog('Shared folder selected:', dirHandle.name);
+      return dirHandle;
+    }
+
+    async function saveSharedFolderHandle(handle) {
+      if (!handle) return;
+      try {
+        const db = await openDB('taskmda-handles', 1, {
+          upgrade(db) {
+            if (!db.objectStoreNames.contains('handles')) {
+              db.createObjectStore('handles', { keyPath: 'key' });
+            }
+          }
+        });
+        await runWithLoading(async () => db.put('handles', { key: 'sharedFolder', handle }));
+      } catch (error) {
+        console.warn('Could not save handle:', error);
+      }
+    }
+
+    async function clearSavedSharedFolderHandle() {
+      try {
+        const db = await openDB('taskmda-handles', 1, {
+          upgrade(db) {
+            if (!db.objectStoreNames.contains('handles')) {
+              db.createObjectStore('handles', { keyPath: 'key' });
+            }
+          }
+        });
+        await runWithLoading(async () => db.delete('handles', 'sharedFolder'));
+      } catch (error) {
+        console.warn('Could not clear saved handle:', error);
+      }
+    }
+
+    async function registerProject(projectId) {
+      if (!sharedFolderHandle) return;
+
+      try {
+        const projectsDir = await sharedFolderHandle.getDirectoryHandle('projects', { create: true });
+        const projectDir = await projectsDir.getDirectoryHandle(projectId, { create: true });
+        const eventsDir = await projectDir.getDirectoryHandle('events', { create: true });
+        const snapshotsDir = await projectDir.getDirectoryHandle('snapshots', { create: true });
+
+        projectFolders.set(projectId, { projectDir, eventsDir, snapshotsDir });
+        debugLog('Project registered:', projectId);
+      } catch (error) {
+        console.error('Error registering project:', error);
+      }
+    }
+
+    async function writeProjectSharedKeyToFolder(projectId, sharedKeyHex) {
+      const key = String(sharedKeyHex || '').trim();
+      if (!projectId || !key) return;
+      const folders = projectFolders.get(projectId);
+      if (!folders?.projectDir) return;
+      try {
+        const keyFile = await folders.projectDir.getFileHandle('shared-key.json', { create: true });
+        const writable = await keyFile.createWritable();
+        const payload = {
+          type: 'taskmda_shared_key',
+          version: 1,
+          projectId,
+          sharedKey: key,
+          updatedAt: Date.now(),
+          updatedBy: currentUser?.userId || ''
+        };
+        await writable.write(JSON.stringify(payload, null, 2));
+        await writable.close();
+      } catch (error) {
+        console.warn('Unable to persist project shared key in folder:', error);
+      }
+    }
+
+    async function importProjectSharedKeyFromFolder(projectId) {
+      if (!projectId) return null;
+      const folders = projectFolders.get(projectId);
+      if (!folders?.projectDir) return null;
+      try {
+        const keyFile = await folders.projectDir.getFileHandle('shared-key.json', { create: false });
+        const file = await keyFile.getFile();
+        const content = await file.text();
+        const parsed = JSON.parse(content || '{}');
+        const sharedKey = String(parsed?.sharedKey || '').trim();
+        if (!sharedKey) return null;
+        const row = {
+          projectId,
+          sharedKey,
+          passphrase: null,
+          createdAt: Number(parsed?.updatedAt || Date.now()) || Date.now()
+        };
+        await putEncrypted('sharedKeys', row, 'projectId');
+        return row;
+      } catch (error) {
+        if (error?.name !== 'NotFoundError') {
+          console.warn('Unable to import project shared key from folder:', error);
+        }
+        return null;
+      }
+    }
+
+    /**
+     * Découvre et charge tous les projets existants dans le dossier partagé
+     * Appelé lors de la connexion initiale au dossier
+     */
+    async function discoverAndLoadExistingProjects(options = {}) {
+      const stats = {
+        projectsFound: 0,
+        projectsLoaded: 0,
+        projectsSkippedMissingKey: 0,
+        eventsLoaded: 0
+      };
+      if (!sharedFolderHandle) return stats;
+      const shouldRebuildLocal = options.rebuildLocal === true;
+
+      debugLog('Discovering existing projects...');
+
+      try {
+        const projectsDir = await sharedFolderHandle.getDirectoryHandle('projects', { create: true });
+
+        // Parcourir tous les dossiers de projets
+        for await (const entry of projectsDir.values()) {
+          if (entry.kind !== 'directory') continue;
+
+          const projectId = entry.name;
+          debugLog('Found project:', projectId);
+
+          // Enregistrer le projet
+          await registerProject(projectId);
+
+          // Charger tous les événements de ce projet (onlyNew = false pour tout charger)
+          const events = await readEventsFromSharedFolder(projectId, false);
+
+          debugLog(`Loading ${events.length} events from project ${projectId}`);
+
+          // Traiter tous les événements dans l'ordre chronologique
+          if (shouldRebuildLocal) {
+            const db = getDatabase();
+            await deleteFromStore('localState', projectId);
+            for (const event of events) {
+              await applyEventToState(event);
+              await maybeNotifyCollaboratorEvent(event);
+              knownEventIds.add(event.eventId);
+            }
+          } else {
+            for (const event of events) {
+              await processEvent(event);
+              knownEventIds.add(event.eventId);
+            }
+          }
+        }
+
+        debugLog('All existing projects loaded');
+      } catch (error) {
+        console.error('❌ Error discovering projects:', error);
+      }
+    }
+
+    // Override: rechargement robuste des projets collaboratifs
+    async function discoverAndLoadExistingProjects(options = {}) {
+      const stats = {
+        projectsFound: 0,
+        projectsLoaded: 0,
+        projectsSkippedMissingKey: 0,
+        eventsLoaded: 0
+      };
+      if (!sharedFolderHandle) return stats;
+      const shouldRebuildLocal = options.rebuildLocal === true;
+
+      debugLog('Discovering existing projects...');
+
+      try {
+        const projectsDir = await sharedFolderHandle.getDirectoryHandle('projects', { create: true });
+
+        for await (const entry of projectsDir.values()) {
+          if (entry.kind !== 'directory') continue;
+          stats.projectsFound += 1;
+
+          const projectId = entry.name;
+          debugLog('Found project:', projectId);
+          await registerProject(projectId);
+
+          let sharedKeyData = await getDecrypted('sharedKeys', projectId, 'projectId');
+          if (!sharedKeyData) {
+            sharedKeyData = await importProjectSharedKeyFromFolder(projectId);
+          }
+          if (sharedKeyData?.sharedKey) {
+            await writeProjectSharedKeyToFolder(projectId, sharedKeyData.sharedKey);
+          }
+
+          const events = await readEventsFromSharedFolder(projectId, false);
+          debugLog(`Loading ${events.length} events from project ${projectId}`);
+          stats.eventsLoaded += events.length;
+          if (events.length > 0) {
+            stats.projectsLoaded += 1;
+          } else if (!sharedKeyData) {
+            stats.projectsSkippedMissingKey += 1;
+          }
+
+          if (shouldRebuildLocal) {
+            const db = getDatabase();
+            await deleteFromStore('localState', projectId);
+            for (const event of events) {
+              await applyEventToState(event);
+              await maybeNotifyCollaboratorEvent(event);
+              knownEventIds.add(event.eventId);
+            }
+          } else {
+            for (const event of events) {
+              await processEvent(event);
+              knownEventIds.add(event.eventId);
+            }
+          }
+
+          const refreshedState = await getProjectState(projectId, { ignoreAccessCheck: true });
+          if (refreshedState && !hasProjectAccess(refreshedState)) {
+            const db = getDatabase();
+            await deleteFromStore('localState', projectId);
+          }
+        }
+
+        debugLog('All existing projects loaded');
+      } catch (error) {
+        console.error('Error discovering projects:', error);
+      }
+      return stats;
+    }
+
+    async function getSavedSharedFolderHandle() {
+      try {
+        const handlesDb = await openDB('taskmda-handles', 1, {
+          upgrade(db) {
+            if (!db.objectStoreNames.contains('handles')) {
+              db.createObjectStore('handles', { keyPath: 'key' });
+            }
+          }
+        });
+        const row = await handlesDb.get('handles', 'sharedFolder');
+        return row?.handle || null;
+      } catch (error) {
+        console.warn('Could not load saved handle:', error);
+        return null;
+      }
+    }
+
+    async function connectSharedFolderHandle(handle, showNotice = true, options = {}) {
+      if (!handle) return false;
+      sharedFolderHandle = handle;
+      projectFolders = new Map();
+      knownEventIds = new Set();
+      sharedWriteQueue = [];
+      sharedWriteQueuedIds = new Set();
+      isSharedWriteProcessing = false;
+      updateBackgroundSyncStatus('idle', 0);
+      await loadAppBrandingConfig({ ensureRemote: true });
+      const loadStats = await discoverAndLoadExistingProjects(options);
+      await syncGlobalMessagesFromSharedFolder();
+      await syncGlobalFeedFromSharedFolder();
+      if (!isPolling) startPolling();
+      updateSyncStatus('connected');
+      await refreshStats();
+      await renderProjects();
+      ensureAutoEncryptedUserBackupToSharedFolder({ force: true, silent: true });
+      if (showNotice) {
+        if ((loadStats?.projectsFound || 0) === 0) {
+          showToast('Dossier connecté, aucun projet collaboratif détecté');
+        } else {
+          const loaded = Number(loadStats?.projectsLoaded || 0);
+          const skipped = Number(loadStats?.projectsSkippedMissingKey || 0);
+          showToast(`Dossier connecté: ${loaded} projet(s) chargé(s), ${skipped} ignoré(s)`);
+          if (skipped > 0) {
+            addNotification(
+              'Synchronisation',
+              'Certains projets n ont pas pu etre lus (cle partagee manquante)',
+              null,
+              { targetView: 'settings' }
+            );
+          }
+        }
+        addNotification('Connexion', 'Dossier partage connecte', null);
+      }
+      return true;
+    }
+
+    function askCollaborativeReload(sourceLabel = 'liaison') {
+      return confirm(
+        `Recharger les projets/tâches collaboratifs (${sourceLabel}) ?\n\n` +
+        'Oui = reconstruction locale depuis le dossier lié.\n' +
+        'Non = connexion sans reconstruction immédiate.'
+      );
+    }
+
+    async function tryConnectSavedFolder() {
+      if (!isFileSystemSupported()) return false;
+      const savedHandle = await getSavedSharedFolderHandle();
+      if (!savedHandle) {
+        updateFolderButtons();
+        return false;
+      }
+      try {
+        let permission = await savedHandle.queryPermission({ mode: 'readwrite' });
+        if (permission === 'prompt') {
+          permission = await savedHandle.requestPermission({ mode: 'readwrite' });
+        }
+        if (permission !== 'granted') {
+          updateFolderButtons();
+          return false;
+        }
+        const shouldReload = askCollaborativeReload('reconnexion automatique');
+        await connectSharedFolderHandle(savedHandle, false, { rebuildLocal: shouldReload });
+        return true;
+      } catch (error) {
+        console.warn('Saved folder re-connection failed:', error);
+        await clearSavedSharedFolderHandle();
+        updateFolderButtons();
+        return false;
+      }
+    }
+
+    async function disconnectSharedFolder(forgetSavedHandle = true) {
+      sharedFolderHandle = null;
+      projectFolders = new Map();
+      knownEventIds = new Set();
+      sharedWriteQueue = [];
+      sharedWriteQueuedIds = new Set();
+      isSharedWriteProcessing = false;
+      updateBackgroundSyncStatus('idle', 0);
+      stopPolling();
+      if (forgetSavedHandle) {
+        await clearSavedSharedFolderHandle();
+      }
+      updateSyncStatus('disconnected');
+      updateFolderButtons();
+      await refreshStats();
+      await renderProjects();
+      showToast('Mode solo actif');
+    }
+
+    async function readAppBrandingFromSharedFolder() {
+      if (!sharedFolderHandle) return null;
+      try {
+        const configDir = await sharedFolderHandle.getDirectoryHandle('config', { create: true });
+        const fileHandle = await configDir.getFileHandle('app-branding.json', { create: false });
+        const file = await fileHandle.getFile();
+        const content = await file.text();
+        const parsed = JSON.parse(content);
+        if (!parsed || parsed.type !== 'taskmda_app_branding') return null;
+        return normalizeAppBrandingConfig(parsed.payload || {});
+      } catch (error) {
+        if (error?.name !== 'NotFoundError') {
+          console.warn('App branding shared config read failed:', error);
+        }
+        return null;
+      }
+    }
+
+    async function writeAppBrandingToSharedFolder() {
+      if (!sharedFolderHandle || !appBranding) return;
+      try {
+        const configDir = await sharedFolderHandle.getDirectoryHandle('config', { create: true });
+        const fileHandle = await configDir.getFileHandle('app-branding.json', { create: true });
+        const writable = await fileHandle.createWritable();
+        const payload = {
+          type: 'taskmda_app_branding',
+          version: 1,
+          payload: normalizeAppBrandingConfig(appBranding),
+          updatedBy: currentUser?.userId || '',
+          updatedAt: Date.now()
+        };
+        await writable.write(JSON.stringify(payload, null, 2));
+        await writable.close();
+      } catch (error) {
+        console.warn('App branding shared config write failed:', error);
+      }
+    }
+
+    async function loadAppBrandingConfig(options = {}) {
+      const local = await getAppBrandingConfig();
+      if (local) {
+        appBranding = local;
+      } else {
+        appBranding = normalizeAppBrandingConfig({
+          appName: DEFAULT_APP_BRANDING.appName,
+          appSubtitle: DEFAULT_APP_BRANDING.appSubtitle,
+          adminUserId: currentUser?.userId || '',
+          updatedAt: Date.now()
+        });
+        await saveAppBrandingConfig(appBranding, { sync: false });
+      }
+
+      if (sharedFolderHandle) {
+        const remote = await readAppBrandingFromSharedFolder();
+        if (remote && (!appBranding?.updatedAt || remote.updatedAt >= appBranding.updatedAt)) {
+          appBranding = remote;
+          await saveAppBrandingConfig(appBranding, { sync: false });
+        } else if (!remote && options.ensureRemote !== false) {
+          await writeAppBrandingToSharedFolder();
+        }
+      }
+
+      if (!String(appBranding?.adminUserId || '').trim() && currentUser?.userId) {
+        appBranding = normalizeAppBrandingConfig({
+          ...(appBranding || {}),
+          adminUserId: currentUser.userId,
+          updatedAt: Date.now()
+        });
+        await saveAppBrandingConfig(appBranding, { sync: !!sharedFolderHandle });
+      }
+
+      applyAppBrandingToHeader();
+      return appBranding;
+    }
+
+    async function writeEventToSharedFolderNow(projectId, event) {
+      const folders = projectFolders.get(projectId);
+      if (!folders) return false;
+      try {
+        // Récupérer la clé partagée du projet
+        let sharedKeyData = await getDecrypted('sharedKeys', projectId, 'projectId');
+        if (!sharedKeyData?.sharedKey) {
+          sharedKeyData = await importProjectSharedKeyFromFolder(projectId);
+        }
+
+        if (!sharedKeyData?.sharedKey) {
+          const fileName = `${event.timestamp}_${event.eventId}.json`;
+          const fileHandle = await folders.eventsDir.getFileHandle(fileName, { create: true });
+          const writable = await fileHandle.createWritable();
+          await writable.write(JSON.stringify({
+            ...event,
+            version: 'v1-clear-fallback'
+          }));
+          await writable.close();
+          knownEventIds.add(event.eventId);
+          console.warn('Shared key unavailable, writing clear fallback event:', projectId, event?.type);
+          debugLog('Fallback event written to shared folder:', fileName);
+          return true;
+        }
+
+        const sharedKey = await window.TaskMDACrypto.importSharedKey(sharedKeyData.sharedKey);
+
+        // Chiffrer l'événement avec la clé partagée
+        const encryptedEvent = await window.TaskMDACrypto.encryptWithSharedKey(event, sharedKey);
+
+        // Wrapper pour le fichier JSON
+        const wrapper = {
+          eventId: event.eventId,
+          projectId: event.projectId,
+          timestamp: event.timestamp,
+          encrypted: encryptedEvent,
+          version: 'v1-e2e-encrypted'
+        };
+
+        const fileName = `${event.timestamp}_${event.eventId}.json`;
+        const fileHandle = await folders.eventsDir.getFileHandle(fileName, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(JSON.stringify(wrapper));
+        await writable.close();
+
+        knownEventIds.add(event.eventId);
+        debugLog('E2E encrypted event written to shared folder:', fileName);
+        return true;
+      } catch (error) {
+        console.error('Error writing encrypted event:', error);
+        return false;
+      }
+    }
+
+    async function processSharedWriteQueue() {
+      if (isSharedWriteProcessing || !sharedFolderHandle) return;
+      isSharedWriteProcessing = true;
+      updateBackgroundSyncStatus('syncing', sharedWriteQueue.length);
+      try {
+        while (sharedWriteQueue.length > 0 && sharedFolderHandle) {
+          const item = sharedWriteQueue[0];
+          const synced = await writeEventToSharedFolderNow(item.projectId, item.event);
+          if (synced) {
+            sharedWriteQueue.shift();
+            if (item.queueKey) sharedWriteQueuedIds.delete(item.queueKey);
+            updateBackgroundSyncStatus(sharedWriteQueue.length > 0 ? 'syncing' : 'idle', sharedWriteQueue.length);
+            continue;
+          }
+
+          item.attempts = Number(item.attempts || 0) + 1;
+          updateBackgroundSyncStatus('queued', sharedWriteQueue.length);
+          if (item.attempts >= 3) {
+            sharedWriteQueue.shift();
+            if (item.queueKey) sharedWriteQueuedIds.delete(item.queueKey);
+            addNotification('Synchronisation', `Evenement non synchronise: ${item.event?.type || 'inconnu'}`, item.projectId);
+            updateBackgroundSyncStatus('error', Math.max(sharedWriteQueue.length, 1));
+            continue;
+          }
+          await new Promise(resolve => setTimeout(resolve, Math.min(1200 * item.attempts, 4000)));
+        }
+      } finally {
+        isSharedWriteProcessing = false;
+        updateBackgroundSyncStatus(sharedWriteQueue.length > 0 ? 'queued' : 'idle', sharedWriteQueue.length);
+      }
+    }
+
+    async function writeEventToSharedFolder(projectId, event) {
+      if (!sharedFolderHandle || !event?.eventId || !projectId) return false;
+      const folders = projectFolders.get(projectId);
+      if (!folders) return false;
+      const queueKey = `${projectId}:${event.eventId}`;
+      if (sharedWriteQueuedIds.has(queueKey)) return true;
+      sharedWriteQueuedIds.add(queueKey);
+      sharedWriteQueue.push({
+        projectId,
+        event,
+        attempts: 0,
+        queueKey
+      });
+      updateBackgroundSyncStatus('queued', sharedWriteQueue.length);
+      processSharedWriteQueue();
+      return true;
+    }
+
+    async function readEventsFromSharedFolder(projectId, onlyNew = true) {
+      const folders = projectFolders.get(projectId);
+      if (!folders) return [];
+
+      const events = [];
+
+      // Récupérer la clé partagée du projet
+      const sharedKeyData = await getDecrypted('sharedKeys', projectId, 'projectId');
+      const sharedKey = sharedKeyData?.sharedKey
+        ? await window.TaskMDACrypto.importSharedKey(sharedKeyData.sharedKey)
+        : null;
+
+      try {
+        for await (const entry of folders.eventsDir.values()) {
+          if (entry.kind !== 'file' || !entry.name.endsWith('.json')) continue;
+
+          const file = await entry.getFile();
+          const content = await file.text();
+          const wrapper = JSON.parse(content);
+
+          let event = null;
+
+          // Vérifier le format
+          if (wrapper.version === 'v1-e2e-encrypted' && wrapper.encrypted) {
+            // Nouveau format : chiffré E2E
+            if (!sharedKey) continue;
+            event = await window.TaskMDACrypto.decryptWithSharedKey(wrapper.encrypted, sharedKey);
+          } else if (wrapper.eventId && wrapper.type) {
+            // Ancien format : JSON clair (compatibilité)
+            event = wrapper;
+          }
+
+          // Si onlyNew=false, charger tous les événements (lors de la découverte initiale)
+          // Si onlyNew=true, charger uniquement les nouveaux (polling)
+          if (event && (!onlyNew || !knownEventIds.has(event.eventId))) {
+            events.push(event);
+          }
+        }
+      } catch (error) {
+        console.error('Error reading encrypted events:', error);
+      }
+
+      return events.sort((a, b) => a.timestamp - b.timestamp);
+    }
+
+    async function startPolling() {
+      if (isPolling) return;
+      isPolling = true;
+
+      pollInterval = setInterval(async () => {
+        for (const [projectId] of projectFolders) {
+          const newEvents = await readEventsFromSharedFolder(projectId, true); // onlyNew = true
+
+          for (const event of newEvents) {
+            debugLog('New event from shared folder:', event.type);
+            await processEvent(event);
+            knownEventIds.add(event.eventId);
+            notifyNewEvent(projectId, event);
+          }
+        }
+        await syncGlobalMessagesFromSharedFolder();
+        await syncGlobalFeedFromSharedFolder();
+      }, 5000); // 5 secondes
+
+      debugLog('Polling started');
+    }
+
+    function stopPolling() {
+      if (pollInterval) {
+        clearInterval(pollInterval);
+        pollInterval = null;
+        isPolling = false;
+        debugLog('Polling stopped');
+      }
+    }
+
+    // ============================================================================
+    // MODULE 6: UI MANAGEMENT
+    // ============================================================================
+
+    let currentUser = null;
+    let appBranding = null;
+    let pendingProfilePhotoDataUrl = '';
+    let pendingProfilePhotoDirty = false;
+    let loadingCounter = 0;
+    let backgroundSyncState = 'idle';
+    let loadingVisible = false;
+    let loadingShowTimer = null;
+    let loadingHideTimer = null;
+    let loadingLastShownAt = 0;
+    const LOADING_SHOW_DELAY_MS = 120;
+    const LOADING_MIN_VISIBLE_MS = 220;
+
+    function showLoading(show) {
+      const loader = document.getElementById('loading');
+      if (!loader) return;
+      if (show) {
+        if (loadingHideTimer) {
+          clearTimeout(loadingHideTimer);
+          loadingHideTimer = null;
+        }
+        if (loadingVisible || loadingShowTimer) return;
+        loadingShowTimer = setTimeout(() => {
+          loadingShowTimer = null;
+          if (loadingCounter <= 0) return;
+          loader.classList.remove('hidden');
+          loadingVisible = true;
+          loadingLastShownAt = Date.now();
+        }, LOADING_SHOW_DELAY_MS);
+        return;
+      }
+
+      if (loadingShowTimer) {
+        clearTimeout(loadingShowTimer);
+        loadingShowTimer = null;
+      }
+      if (!loadingVisible) {
+        loader.classList.add('hidden');
+        return;
+      }
+      const elapsed = Date.now() - loadingLastShownAt;
+      const waitMs = Math.max(0, LOADING_MIN_VISIBLE_MS - elapsed);
+      if (loadingHideTimer) {
+        clearTimeout(loadingHideTimer);
+      }
+      loadingHideTimer = setTimeout(() => {
+        loadingHideTimer = null;
+        if (loadingCounter > 0) return;
+        loader.classList.add('hidden');
+        loadingVisible = false;
+      }, waitMs);
+    }
+
+    async function runWithLoading(action) {
+      loadingCounter += 1;
+      showLoading(true);
+      try {
+        return await action();
+      } finally {
+        loadingCounter = Math.max(0, loadingCounter - 1);
+        showLoading(loadingCounter > 0);
+      }
+    }
+
+    function showSetupError(message) {
+      const errorEl = document.getElementById('setup-error');
+      errorEl.textContent = message;
+      errorEl.classList.remove('hidden');
+    }
+
+    function showMainContent() {
+      document.getElementById('setup-screen').classList.add('hidden');
+      document.getElementById('main-content').classList.remove('hidden');
+      initSidebarCollapsedState();
+      setActiveSidebarNav('dashboard');
+      startDueReminders();
+      startBackupReminders();
+      ensureBrowserNotificationPermission();
+    }
+
+    function getStoredThemeChoice() {
+      if (window.TaskMDATheme?.getStoredThemeChoice) {
+        return window.TaskMDATheme.getStoredThemeChoice();
+      }
+      const value = localStorage.getItem('taskmda_theme_choice');
+      return (value === 'light' || value === 'dark') ? value : 'system';
+    }
+
+    function setThemeIcon(isDark) {
+      if (window.TaskMDATheme?.setThemeIcon) {
+        window.TaskMDATheme.setThemeIcon(isDark);
+        return;
+      }
+      const icon = document.getElementById('theme-toggle-icon');
+      const btn = document.getElementById('btn-theme-toggle');
+      if (icon) icon.textContent = isDark ? 'light_mode' : 'dark_mode';
+      if (btn) {
+        const label = isDark ? 'Activer le mode clair' : 'Activer le mode sombre';
+        btn.setAttribute('aria-label', label);
+        btn.setAttribute('title', label);
+      }
+    }
+
+    function applyTheme(choice, persist = true) {
+      if (window.TaskMDATheme?.applyTheme) {
+        window.TaskMDATheme.applyTheme(choice, persist);
+        return;
+      }
+      const value = (choice === 'light' || choice === 'dark') ? choice : 'system';
+      const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const useDark = value === 'dark' || (value === 'system' && prefersDark);
+      document.documentElement.classList.toggle('dark', useDark);
+      document.documentElement.classList.toggle('light', !useDark);
+      setThemeIcon(useDark);
+      if (!persist) return;
+      if (value === 'system') localStorage.removeItem('taskmda_theme_choice');
+      else localStorage.setItem('taskmda_theme_choice', value);
+    }
+
+    function toggleTheme() {
+      if (window.TaskMDATheme?.toggleTheme) {
+        window.TaskMDATheme.toggleTheme();
+        return;
+      }
+      const isDark = document.documentElement.classList.contains('dark');
+      applyTheme(isDark ? 'light' : 'dark', true);
+    }
+
+    function initTheme() {
+      if (window.TaskMDATheme?.initTheme) {
+        window.TaskMDATheme.initTheme();
+        return;
+      }
+      applyTheme(getStoredThemeChoice(), false);
+    }
+
+    function openMobileSidebar() {
+      document.getElementById('sidebar')?.classList.add('open');
+      document.getElementById('mobile-overlay')?.classList.remove('hidden');
+    }
+
+    function closeMobileSidebar() {
+      document.getElementById('sidebar')?.classList.remove('open');
+      document.getElementById('mobile-overlay')?.classList.add('hidden');
+    }
+
+    const SIDEBAR_COMPACT_STORAGE_KEY = 'taskmda_sidebar_compact';
+    let sidebarTransitionTimer = null;
+
+    function updateSidebarCollapseButton() {
+      const main = document.getElementById('main-content');
+      const btn = document.getElementById('btn-sidebar-collapse');
+      const icon = document.getElementById('sidebar-collapse-icon');
+      const label = document.getElementById('sidebar-collapse-label');
+      if (!main || !btn || !icon || !label) return;
+      const collapsed = main.classList.contains('sidebar-collapsed');
+      icon.textContent = collapsed ? 'left_panel_open' : 'left_panel_close';
+      label.textContent = collapsed ? 'Déplier' : 'Réduire';
+      const action = collapsed ? 'Déplier' : 'Réduire';
+      btn.setAttribute('aria-label', `${action} la barre latérale`);
+      btn.setAttribute('title', `${action} la barre latérale`);
+
+      document.querySelectorAll('.nav-link').forEach((link) => {
+        const text = String(link.querySelector('.nav-link-label')?.textContent || '').trim();
+        if (!text) return;
+        if (collapsed) {
+          link.setAttribute('title', text);
+          link.setAttribute('aria-label', text);
+        } else {
+          link.removeAttribute('title');
+          link.removeAttribute('aria-label');
+        }
+      });
+
+      ['sidebar-create-project', 'sidebar-link-folder', 'sidebar-logout'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const text = String(el.textContent || '').replace(/\s+/g, ' ').trim();
+        if (!text) return;
+        if (collapsed) {
+          el.setAttribute('title', text);
+          el.setAttribute('aria-label', text);
+        } else {
+          el.removeAttribute('title');
+          el.removeAttribute('aria-label');
+        }
+      });
+    }
+
+    function applySidebarCollapsedState(collapsed, persist = true) {
+      const main = document.getElementById('main-content');
+      if (!main) return;
+      const isMobile = window.matchMedia('(max-width: 1023px)').matches;
+      const shouldCollapse = !isMobile && !!collapsed;
+      main.classList.toggle('sidebar-collapsed', shouldCollapse);
+      updateSidebarCollapseButton();
+      if (persist) {
+        if (shouldCollapse) {
+          localStorage.setItem(SIDEBAR_COMPACT_STORAGE_KEY, '1');
+        } else {
+          localStorage.removeItem(SIDEBAR_COMPACT_STORAGE_KEY);
+        }
+      }
+    }
+
+    function initSidebarCollapsedState() {
+      const saved = localStorage.getItem(SIDEBAR_COMPACT_STORAGE_KEY) === '1';
+      applySidebarCollapsedState(saved, false);
+    }
+
+    function toggleSidebarCollapsed() {
+      const main = document.getElementById('main-content');
+      if (!main) return;
+      const nextCollapsed = !main.classList.contains('sidebar-collapsed');
+      main.classList.remove('sidebar-transitioning-collapse', 'sidebar-transitioning-expand');
+      main.classList.add('sidebar-transitioning', nextCollapsed ? 'sidebar-transitioning-collapse' : 'sidebar-transitioning-expand');
+      if (sidebarTransitionTimer) {
+        clearTimeout(sidebarTransitionTimer);
+      }
+      sidebarTransitionTimer = setTimeout(() => {
+        main.classList.remove('sidebar-transitioning', 'sidebar-transitioning-collapse', 'sidebar-transitioning-expand');
+        sidebarTransitionTimer = null;
+      }, 260);
+      applySidebarCollapsedState(nextCollapsed, true);
+    }
+
+    function updateSyncStatus(status) {
+      const statusEl = document.getElementById('sync-status');
+      const statusConfig = {
+        connected: { class: 'bg-green-100 text-green-700', icon: 'cloud_done', text: 'Connecté' },
+        disconnected: { class: 'bg-red-100 text-red-700', icon: 'cloud_off', text: 'Non connecté' },
+        syncing: { class: 'bg-yellow-100 text-yellow-700', icon: 'cloud_sync', text: 'Synchronisation...' }
+      };
+
+      const config = statusConfig[status];
+      statusEl.className = `flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold ${config.class}`;
+      statusEl.innerHTML = `
+        <span class="material-symbols-outlined text-lg">${config.icon}</span>
+        <span>${config.text}</span>
+      `;
+      updateFolderButtons();
+    }
+
+    function updateBackgroundSyncStatus(state = 'idle', pendingCount = sharedWriteQueue.length) {
+      const indicator = document.getElementById('bg-sync-indicator');
+      if (!indicator) return;
+      backgroundSyncState = state;
+      const count = Math.max(0, Number(pendingCount || 0));
+      const countEl = indicator.querySelector('[data-bg-sync-count]');
+      const textEl = indicator.querySelector('[data-bg-sync-text]');
+      indicator.classList.remove('hidden', 'is-idle', 'is-queued', 'is-syncing', 'is-error');
+      if (state === 'idle' && count === 0) {
+        indicator.classList.add('hidden', 'is-idle');
+        return;
+      }
+      const mode = state === 'error' ? 'is-error' : (state === 'syncing' ? 'is-syncing' : 'is-queued');
+      indicator.classList.add(mode);
+      if (countEl) countEl.textContent = String(count);
+      if (textEl) {
+        textEl.textContent = state === 'error'
+          ? 'Synchronisation en attente'
+          : (state === 'syncing' ? 'Synchro en cours' : 'Synchro planifiee');
+      }
+    }
+
+    function updateFolderButtons() {
+      const linkBtn = document.getElementById('btn-link-folder');
+      const unlinkBtn = document.getElementById('btn-unlink-folder');
+      const sidebarLinkBtn = document.getElementById('sidebar-link-folder');
+      const supported = isFileSystemSupported();
+      if (linkBtn) {
+        linkBtn.disabled = !supported;
+        linkBtn.classList.toggle('opacity-50', !supported);
+        linkBtn.textContent = supported
+          ? (sharedFolderHandle ? 'Changer dossier' : 'Lier un dossier')
+          : 'Dossier non supporte';
+      }
+      if (unlinkBtn) {
+        unlinkBtn.classList.toggle('hidden', !sharedFolderHandle);
+      }
+      if (sidebarLinkBtn) {
+        sidebarLinkBtn.disabled = !supported;
+        sidebarLinkBtn.classList.toggle('opacity-50', !supported);
+      }
+    }
+
+    function updateUserInfo() {
+      if (!currentUser) return;
+
+      const userInfo = document.getElementById('user-info');
+      const userAvatar = document.getElementById('user-avatar');
+      const userName = document.getElementById('user-name');
+
+      if (currentUser.avatarDataUrl) {
+        userAvatar.textContent = '';
+        userAvatar.style.background = `center / cover no-repeat url('${currentUser.avatarDataUrl}')`;
+      } else {
+        userAvatar.textContent = getInitials(currentUser.name);
+        userAvatar.style.background = stringToColor(currentUser.userId);
+      }
+      userName.textContent = currentUser.name;
+
+      userInfo.classList.remove('hidden');
+    }
+
+    function escapeCsvValue(value) {
+      const raw = String(value ?? '');
+      if (/[;"\n\r]/.test(raw)) {
+        return `"${raw.replace(/"/g, '""')}"`;
+      }
+      return raw;
+    }
+
+    function toCsv(rows, headers) {
+      const head = headers.map(escapeCsvValue).join(';');
+      const lines = rows.map(row => headers.map(h => escapeCsvValue(row[h])).join(';'));
+      return '\uFEFF' + [head, ...lines].join('\n');
+    }
+
+    function downloadBlobFile(content, filename, mimeType = 'application/octet-stream') {
+      const blob = content instanceof Blob ? content : new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function formatExportDateTag() {
+      const d = new Date();
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const hh = String(d.getHours()).padStart(2, '0');
+      const mi = String(d.getMinutes()).padStart(2, '0');
+      return `${yyyy}${mm}${dd}_${hh}${mi}`;
+    }
+
+    async function buildUserDataSnapshot(version = 1) {
+      const snapshot = {
+        meta: {
+          app: 'NEXUS MDA',
+          exportedAt: new Date().toISOString(),
+          exportedByUserId: currentUser?.userId || null,
+          version
+        },
+        stores: {}
+      };
+      for (const [storeName, idField] of Object.entries(DATA_EXPORT_STORES)) {
+        snapshot.stores[storeName] = await getAllDecrypted(storeName, idField);
+      }
+      return snapshot;
+    }
+
+    async function restoreUserDataSnapshot(snapshot) {
+      if (!snapshot || typeof snapshot !== 'object' || !snapshot.stores) return;
+      const db = getDatabase();
+      for (const storeName of Object.keys(DATA_EXPORT_STORES)) {
+        await db.clear(storeName);
+      }
+      for (const [storeName, idField] of Object.entries(DATA_EXPORT_STORES)) {
+        const rows = Array.isArray(snapshot.stores[storeName]) ? snapshot.stores[storeName] : [];
+        for (const row of rows) {
+          await putEncrypted(storeName, row, idField);
+        }
+      }
+    }
+
+    function showRecoveryKeyInstructions(recoveryCode, contextLabel = 'Clé de récupération') {
+      const code = String(recoveryCode || '').trim();
+      if (!code) return;
+      window.alert(
+        `${contextLabel}:\n\n${code}\n\nConservez cette clé hors ligne (papier / coffre mot de passe). ` +
+        `Elle permet de restaurer l'accès en cas d'oubli du mot de passe.`
+      );
+    }
+
+    function getSharedBackupThrottleKey() {
+      const userId = String(currentUser?.userId || 'anonymous');
+      return `taskmda_shared_backup_last_ts_${userId}`;
+    }
+
+    function getLastSharedBackupTimestamp() {
+      const raw = localStorage.getItem(getSharedBackupThrottleKey());
+      if (!raw) return 0;
+      const parsed = Number(raw);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+
+    function setLastSharedBackupTimestamp(ts = Date.now()) {
+      localStorage.setItem(getSharedBackupThrottleKey(), String(ts));
+    }
+
+    async function writeEncryptedUserBackupToSharedFolder(snapshot) {
+      if (!sharedFolderHandle) return false;
+      if (!window.TaskMDACrypto || !window.TaskMDACrypto.isUnlocked()) return false;
+      const userId = String(currentUser?.userId || '').trim();
+      if (!userId) return false;
+
+      const backupsRoot = await sharedFolderHandle.getDirectoryHandle('backups', { create: true });
+      const usersDir = await backupsRoot.getDirectoryHandle('users', { create: true });
+      const userDir = await usersDir.getDirectoryHandle(userId, { create: true });
+      const fileHandle = await userDir.getFileHandle('user-data.latest.enc.json', { create: true });
+
+      const payload = {
+        type: 'taskmda_user_backup_encrypted',
+        version: 1,
+        userId,
+        updatedAt: Date.now(),
+        encrypted: await window.TaskMDACrypto.encrypt(snapshot)
+      };
+
+      const writable = await fileHandle.createWritable();
+      await writable.write(JSON.stringify(payload, null, 2));
+      await writable.close();
+      return true;
+    }
+
+    async function ensureAutoEncryptedUserBackupToSharedFolder(options = {}) {
+      const force = options.force === true;
+      const silent = options.silent !== false;
+      if (!sharedFolderHandle) return;
+      if (!window.TaskMDACrypto || !window.TaskMDACrypto.isUnlocked()) return;
+      if (!currentUser?.userId) return;
+
+      const nowTs = Date.now();
+      const throttleMs = 6 * 60 * 60 * 1000; // 6h
+      if (!force && (nowTs - getLastSharedBackupTimestamp()) < throttleMs) return;
+
+      try {
+        const snapshot = await buildUserDataSnapshot(1);
+        const written = await writeEncryptedUserBackupToSharedFolder(snapshot);
+        if (written) {
+          setLastSharedBackupTimestamp(nowTs);
+          if (!silent) showToast('Sauvegarde chiffrée utilisateur mise à jour dans le dossier lié');
+        }
+      } catch (error) {
+        console.warn('Auto encrypted backup to shared folder failed:', error);
+      }
+    }
+
+    async function exportUserDataJson() {
+      const snapshot = await buildUserDataSnapshot(1);
+      const tag = formatExportDateTag();
+      downloadBlobFile(
+        JSON.stringify(snapshot, null, 2),
+        `taskmda_user_backup_${tag}.json`,
+        'application/json;charset=utf-8'
+      );
+      showToast('Export JSON généré');
+    }
+
+    async function importUserDataJsonFromFile(file) {
+      if (!file) return;
+      const raw = await file.text();
+      let parsed;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        throw new Error('Fichier JSON invalide');
+      }
+      if (!parsed || typeof parsed !== 'object' || !parsed.stores || typeof parsed.stores !== 'object') {
+        throw new Error('Format de sauvegarde non reconnu');
+      }
+
+      const db = getDatabase();
+      for (const storeName of Object.keys(DATA_EXPORT_STORES)) {
+        await db.clear(storeName);
+      }
+
+      for (const [storeName, idField] of Object.entries(DATA_EXPORT_STORES)) {
+        const rows = Array.isArray(parsed.stores[storeName]) ? parsed.stores[storeName] : [];
+        for (const row of rows) {
+          await putEncrypted(storeName, row, idField);
+        }
+      }
+
+      const preferredUserId = parsed?.meta?.exportedByUserId;
+      if (preferredUserId) {
+        localStorage.setItem('userId', preferredUserId);
+      }
+
+      await refreshGlobalTaxonomyCache();
+      await refreshDirectoryFromKnownSources();
+      currentUser = await initializeCurrentUser();
+      refreshGlobalMessageHiddenGroupsForCurrentUser();
+      updateUserInfo();
+      await refreshStats();
+      await renderProjects();
+      showToast('Import JSON terminé');
+    }
+
+    async function exportProjectsAndTasksCsv() {
+      const states = await getAllProjectStates();
+      const projectsRows = states.map(state => {
+        const tasks = (state.tasks || []);
+        const visibleTasks = tasks.filter(t => !t.archivedAt);
+        const done = visibleTasks.filter(t => t.status === 'termine').length;
+        return {
+          project_id: state.project?.projectId || '',
+          projet: state.project?.name || '',
+          statut: state.project?.status || '',
+          mode: normalizeSharingMode(state.project?.sharingMode, 'private') === 'shared' ? 'Collaboratif' : 'Solo',
+          date_creation: state.project?.createdAt ? new Date(state.project.createdAt).toLocaleString('fr-FR') : '',
+          membres: (state.members || []).length,
+          taches: visibleTasks.length,
+          taches_terminees: done,
+          description: state.project?.description || ''
+        };
+      });
+
+      const tasksRows = [];
+      states.forEach(state => {
+        (state.tasks || []).forEach(task => {
+          tasksRows.push({
+            projet: state.project?.name || '',
+            task_id: task.taskId || '',
+            titre: task.title || '',
+            assigne: getTaskAssigneeName(task, state) || '',
+            statut: task.status || 'todo',
+            urgence: task.urgency || '',
+            echeance: task.dueDate ? formatDate(task.dueDate) : '',
+            thematique: task.theme || '',
+            groupe_thematique: getTaskGroupName(task, state) || '',
+            archivee: task.archivedAt ? 'Oui' : 'Non',
+            mode_projet: normalizeSharingMode(state.project?.sharingMode, 'private') === 'shared' ? 'Collaboratif' : 'Solo',
+            description: task.description || ''
+          });
+        });
+      });
+
+      const tag = formatExportDateTag();
+      const projectsCsv = toCsv(projectsRows, ['project_id', 'projet', 'statut', 'mode', 'date_creation', 'membres', 'taches', 'taches_terminees', 'description']);
+      const tasksCsv = toCsv(tasksRows, ['projet', 'task_id', 'titre', 'assigne', 'statut', 'urgence', 'echeance', 'thematique', 'groupe_thematique', 'archivee', 'mode_projet', 'description']);
+      downloadBlobFile(projectsCsv, `taskmda_projets_${tag}.csv`, 'text/csv;charset=utf-8');
+      downloadBlobFile(tasksCsv, `taskmda_taches_${tag}.csv`, 'text/csv;charset=utf-8');
+      showToast('Exports Excel (CSV) générés');
+    }
+
+    function normalizeSearch(value) {
+      return String(value || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
+    }
+
+    function normalizeCatalogKey(value) {
+      return normalizeSearch(value).trim().replace(/\s+/g, '-');
+    }
+
+    async function refreshGlobalTaxonomyCache() {
+      const themes = await getAllDecrypted('globalThemes', 'themeKey');
+      const groups = await getAllDecrypted('globalGroups', 'groupKey');
+      const softwareVersions = await getAllDecrypted('softwareVersions', 'softwareId');
+
+      // Migration : Corriger les groupKeys avec espaces (ancienne version)
+      for (const group of (groups || [])) {
+        if (group && group.name && group.groupKey) {
+          const correctKey = normalizeCatalogKey(group.name);
+          if (correctKey !== group.groupKey) {
+            console.log(`Migrating group "${group.name}" from key "${group.groupKey}" to "${correctKey}"`);
+            // Supprimer l'ancienne entrée
+            await deleteFromStore('globalGroups', group.groupKey);
+            // Créer la nouvelle avec la bonne clé
+            await putEncrypted('globalGroups', {
+              ...group,
+              groupKey: correctKey
+            }, 'groupKey');
+          }
+        }
+      }
+
+      // Recharger après migration
+      const migratedGroups = await getAllDecrypted('globalGroups', 'groupKey');
+
+      globalThemeCatalog = (themes || [])
+        .filter(item => item && item.themeKey && item.name)
+        .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'fr'));
+      globalGroupCatalog = (migratedGroups || [])
+        .filter(item => item && item.groupKey && item.name)
+        .map((item) => {
+          const fromMemberUserIds = Array.isArray(item.memberUserIds) ? item.memberUserIds : [];
+          const fromMemberIds = Array.isArray(item.memberIds) ? item.memberIds : [];
+          const fromMembersArray = Array.isArray(item.members)
+            ? item.members.map((m) => typeof m === 'string' ? m : (m?.userId || '')).filter(Boolean)
+            : [];
+          const memberUserIds = Array.from(new Set([
+            ...fromMemberUserIds,
+            ...fromMemberIds,
+            ...fromMembersArray
+          ].map(id => String(id || '').trim()).filter(Boolean)));
+          return {
+            ...item,
+            memberUserIds
+          };
+        })
+        .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'fr'));
+      globalSoftwareVersionCatalog = (softwareVersions || [])
+        .filter(item => item && item.softwareId && item.softwareName && item.version)
+        .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
+    }
+
+    async function upsertGlobalTheme(theme) {
+      const name = String(theme || '').trim();
+      const themeKey = normalizeCatalogKey(name);
+      if (!themeKey) return;
+      const existing = await getDecrypted('globalThemes', themeKey, 'themeKey');
+      await putEncrypted('globalThemes', {
+        themeKey,
+        name,
+        createdAt: existing?.createdAt || Date.now(),
+        updatedAt: Date.now()
+      }, 'themeKey');
+    }
+
+    async function upsertGlobalGroup(group) {
+      const name = String(group?.name || '').trim();
+      const description = String(group?.description || '').trim();
+      const hasExplicitMembers = Boolean(
+        group && typeof group === 'object' && (
+          Object.prototype.hasOwnProperty.call(group, 'memberUserIds')
+          || Object.prototype.hasOwnProperty.call(group, 'memberIds')
+          || Object.prototype.hasOwnProperty.call(group, 'members')
+        )
+      );
+      const sourceMemberUserIds = Array.isArray(group?.memberUserIds) ? group.memberUserIds : [];
+      const sourceMemberIds = Array.isArray(group?.memberIds) ? group.memberIds : [];
+      const sourceMembers = Array.isArray(group?.members)
+        ? group.members.map((m) => typeof m === 'string' ? m : (m?.userId || '')).filter(Boolean)
+        : [];
+      let memberUserIds = Array.from(new Set([
+        ...sourceMemberUserIds,
+        ...sourceMemberIds,
+        ...sourceMembers
+      ].map(id => String(id || '').trim()).filter(Boolean)));
+      const groupKey = normalizeCatalogKey(name);
+      if (!groupKey) return;
+      const existing = await getDecrypted('globalGroups', groupKey, 'groupKey');
+      if (!hasExplicitMembers && existing) {
+        const existingMemberUserIds = Array.isArray(existing.memberUserIds) ? existing.memberUserIds : [];
+        const existingMemberIds = Array.isArray(existing.memberIds) ? existing.memberIds : [];
+        const existingMembers = Array.isArray(existing.members)
+          ? existing.members.map((m) => typeof m === 'string' ? m : (m?.userId || '')).filter(Boolean)
+          : [];
+        memberUserIds = Array.from(new Set([
+          ...existingMemberUserIds,
+          ...existingMemberIds,
+          ...existingMembers
+        ].map(id => String(id || '').trim()).filter(Boolean)));
+      }
+      await putEncrypted('globalGroups', {
+        groupKey,
+        name,
+        description: description || existing?.description || '',
+        memberUserIds,
+        members: memberUserIds,
+        projectId: group?.projectId || existing?.projectId || null,  // Préserver/ajouter l'origine du groupe
+        createdAt: existing?.createdAt || Date.now(),
+        updatedAt: Date.now()
+      }, 'groupKey');
+    }
+
+    function toDomSafeKey(value) {
+      return String(value || '').replace(/[^a-zA-Z0-9_-]/g, '_');
+    }
+
+    function getGlobalGroupMembersSelectId(groupKey) {
+      return `global-group-members-${toDomSafeKey(groupKey)}`;
+    }
+
+    function readSelectedUserIdsFromSelect(selectId) {
+      const select = document.getElementById(selectId);
+      if (!select) return [];
+      return Array.from(select.selectedOptions || [])
+        .map(opt => String(opt.value || '').trim())
+        .filter(Boolean);
+    }
+
+    async function getKnownUsersForGlobalGroups() {
+      await refreshKnownUsersCache();
+      return Array.from(knownUsersCache.values())
+        .filter(u => u && u.userId && u.name)
+        .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'fr'));
+    }
+
+    async function renderGlobalGroupMembersInputOptions(selectedIds = []) {
+      const select = document.getElementById('global-group-members-input');
+      if (!select) return;
+      const selected = new Set((selectedIds || []).map(id => String(id || '').trim()).filter(Boolean));
+      const users = await getKnownUsersForGlobalGroups();
+      if (users.length === 0) {
+        select.disabled = true;
+        select.innerHTML = '<option value="" disabled>Aucun utilisateur connu</option>';
+        return;
+      }
+      select.disabled = false;
+      select.innerHTML = users
+        .map(user => `<option value="${escapeHtml(user.userId)}" ${selected.has(user.userId) ? 'selected' : ''}>${escapeHtml(user.name)}</option>`)
+        .join('');
+      bindMultiSelectToggle('global-group-members-input');
+    }
+
+    function filterUserSelectOptions(selectId, query) {
+      const select = document.getElementById(selectId);
+      if (!select) return;
+      const needle = normalizeSearch(query || '');
+      Array.from(select.options || []).forEach((option) => {
+        if (!needle) {
+          option.hidden = false;
+          return;
+        }
+        const label = normalizeSearch(option.textContent || option.label || '');
+        // Keep selected options always visible to avoid losing context.
+        option.hidden = !(option.selected || label.includes(needle));
+      });
+    }
+
+    function bindGlobalGroupMemberSearchInputs() {
+      const createSearch = document.getElementById('global-group-members-search');
+      if (createSearch) {
+        createSearch.oninput = (e) => {
+          filterUserSelectOptions('global-group-members-input', e?.target?.value || '');
+        };
+      }
+
+      document.querySelectorAll('.global-group-members-search').forEach((input) => {
+        input.oninput = (e) => {
+          const selectId = input.getAttribute('data-target-select');
+          if (!selectId) return;
+          filterUserSelectOptions(selectId, e?.target?.value || '');
+        };
+      });
+    }
+
+    function bindMultiSelectToggle(selectId) {
+      const select = document.getElementById(selectId);
+      if (!select || select.dataset.toggleBound === '1') return;
+      select.dataset.toggleBound = '1';
+      select.addEventListener('mousedown', (event) => {
+        const option = event.target?.closest?.('option');
+        if (!option) return;
+        event.preventDefault();
+        option.selected = !option.selected;
+        select.focus();
+      });
+    }
+
+    function bindGlobalGroupMemberSelectsToggle() {
+      bindMultiSelectToggle('global-group-members-input');
+      document.querySelectorAll('.global-group-members-select').forEach((select) => {
+        if (!select?.id) return;
+        bindMultiSelectToggle(select.id);
+      });
+    }
+
+    async function refreshGroupSelectorsAfterCatalogChange() {
+      await populateProjectGroupPresetOptions('project-group-presets');
+      if (currentProjectState) {
+        await refreshTaskAssigneeOptionsMulti(currentProjectState);
+        refreshTaskMetadataOptions(currentProjectState);
+      }
+      // Rafraîchir également le sélecteur de canaux de groupe dans la messagerie
+      await populateGlobalMessageGroupChannelSelect();
+    }
+
+    async function deleteGlobalThemeByKey(themeKey) {
+      if (!isValidIdbKey(themeKey)) return;
+      const db = getDatabase();
+      await deleteFromStore('globalThemes', themeKey);
+    }
+
+    async function deleteGlobalGroupByKey(groupKey) {
+      if (!isValidIdbKey(groupKey)) return;
+      const db = getDatabase();
+      await deleteFromStore('globalGroups', groupKey);
+    }
+
+    async function repairGlobalGroupsMembersFromProjects() {
+      if (globalGroupMemberRepairAttempted) return 0;
+      globalGroupMemberRepairAttempted = true;
+
+      const groups = await getAllDecrypted('globalGroups', 'groupKey');
+      const emptyGroups = (groups || []).filter((group) => {
+        const ids = Array.isArray(group?.memberUserIds) ? group.memberUserIds : [];
+        return ids.length === 0 && String(group?.groupKey || '').trim();
+      });
+      if (emptyGroups.length === 0) return 0;
+
+      const projects = await getAllProjects();
+      if (!projects || projects.length === 0) return 0;
+
+      const membersByGroupKey = new Map();
+      for (const project of projects) {
+        const projectId = String(project?.projectId || '').trim();
+        if (!projectId) continue;
+        let state = null;
+        try {
+          state = await getProjectState(projectId, { ignoreAccessCheck: true });
+        } catch {
+          state = null;
+        }
+        if (!state) continue;
+        const userGroups = Array.isArray(state.userGroups) ? state.userGroups : [];
+        userGroups.forEach((group) => {
+          const key = normalizeCatalogKey(group?.name || '');
+          if (!key) return;
+          const memberIds = Array.from(new Set((group?.memberUserIds || []).map((id) => String(id || '').trim()).filter(Boolean)));
+          if (memberIds.length === 0) return;
+          if (!membersByGroupKey.has(key)) membersByGroupKey.set(key, new Set());
+          const bucket = membersByGroupKey.get(key);
+          memberIds.forEach((id) => bucket.add(id));
+        });
+      }
+
+      let updates = 0;
+      for (const group of emptyGroups) {
+        const key = String(group.groupKey || '').trim();
+        if (!key) continue;
+        const membersSet = membersByGroupKey.get(key);
+        const memberUserIds = membersSet ? Array.from(membersSet) : [];
+        if (memberUserIds.length === 0) continue;
+        await putEncrypted('globalGroups', {
+          ...group,
+          memberUserIds,
+          members: memberUserIds,
+          updatedAt: Date.now()
+        }, 'groupKey');
+        updates += 1;
+      }
+
+      return updates;
+    }
+
+    async function saveAppBrandingFromSettings(useDefaults = false) {
+      if (!isAppAdmin()) {
+        showToast('Action reservee a l Admin application');
+        return;
+      }
+      const nameInput = document.getElementById('app-display-name-input');
+      const subtitleInput = document.getElementById('app-display-subtitle-input');
+      const appName = useDefaults ? DEFAULT_APP_BRANDING.appName : String(nameInput?.value || '').trim();
+      const appSubtitle = useDefaults ? DEFAULT_APP_BRANDING.appSubtitle : String(subtitleInput?.value || '').trim();
+      const next = normalizeAppBrandingConfig({
+        ...(appBranding || {}),
+        appName,
+        appSubtitle,
+        adminUserId: appBranding?.adminUserId || currentUser?.userId || '',
+        updatedAt: Date.now()
+      });
+      await saveAppBrandingConfig(next, { sync: true });
+      await renderGlobalSettings();
+      showToast(useDefaults ? 'Identite application reinitialisee' : 'Identite application enregistree');
+    }
+
+    async function assignAppAdminFromSettings() {
+      if (!isAppAdmin()) {
+        showToast('Action reservee a l Admin application');
+        return;
+      }
+      const select = document.getElementById('app-admin-user-select');
+      const targetUserId = String(select?.value || '').trim();
+      if (!targetUserId) {
+        showToast('Selectionnez un utilisateur');
+        return;
+      }
+      const targetName = (knownUsersCache.get(targetUserId)?.name || fallbackDirectoryName(targetUserId));
+      const confirmed = window.confirm(`Confirmer le transfert du role Admin application vers "${targetName}" ?`);
+      if (!confirmed) return;
+      const next = normalizeAppBrandingConfig({
+        ...(appBranding || {}),
+        adminUserId: targetUserId,
+        updatedAt: Date.now()
+      });
+      await saveAppBrandingConfig(next, { sync: true });
+      await renderGlobalSettings();
+      showToast(`Admin application: ${targetName}`);
+    }
+
+    async function saveProjectRoleCatalogFromSettings(nextCatalog, successMessage = 'Habilitations mises a jour') {
+      if (!isAppAdmin()) {
+        showToast('Action reservee a l Admin application');
+        return false;
+      }
+      const next = normalizeAppBrandingConfig({
+        ...(appBranding || {}),
+        roleCatalog: normalizeProjectRoleCatalog(nextCatalog),
+        updatedAt: Date.now()
+      });
+      await saveAppBrandingConfig(next, { sync: true });
+      showToast(successMessage);
+      await renderGlobalSettings();
+      if (currentProjectState) {
+        renderProjectRoleSelectors(currentProjectState);
+        await renderProjectMembers(currentProjectState);
+        renderProjectInvitations(currentProjectState);
+        renderProjectPermissionMatrix(currentProjectState);
+      }
+      return true;
+    }
+
+    async function createProjectRoleFromSettings() {
+      const nameInput = document.getElementById('global-role-name-input');
+      const baseRoleInput = document.getElementById('global-role-base-input');
+      const label = String(nameInput?.value || '').trim();
+      const baseRole = normalizeProjectRoleBase(baseRoleInput?.value || 'member');
+      if (!label) {
+        showToast('Nom d habilitation requis');
+        return;
+      }
+      const currentCatalog = getProjectRoleCatalog();
+      const exists = currentCatalog.some(item => normalizeCatalogKey(item.label) === normalizeCatalogKey(label));
+      if (exists) {
+        showToast('Cette habilitation existe deja');
+        return;
+      }
+      const customRoleKey = `custom:${uuidv4()}`;
+      const nextCatalog = [...currentCatalog, {
+        roleKey: customRoleKey,
+        label,
+        baseRole,
+        isSystem: false
+      }];
+      const saved = await saveProjectRoleCatalogFromSettings(nextCatalog, 'Habilitation ajoutee');
+      if (!saved) return;
+      if (nameInput) nameInput.value = '';
+      if (baseRoleInput) baseRoleInput.value = 'member';
+    }
+
+    async function editProjectRole(roleKey) {
+      const key = String(roleKey || '').trim();
+      if (!key) return;
+      const currentCatalog = getProjectRoleCatalog();
+      const current = currentCatalog.find(item => item.roleKey === key);
+      if (!current) return;
+      const nextLabel = (window.prompt('Nom du role/habilitation', current.label || '') || '').trim();
+      if (!nextLabel) return;
+      const nextBaseRole = normalizeProjectRoleBase(
+        (window.prompt('Role technique sous-jacent (owner/manager/member)', current.baseRole || 'member') || '').trim()
+      );
+      const nextCatalog = currentCatalog.map((item) => {
+        if (item.roleKey !== key) return item;
+        return {
+          ...item,
+          label: nextLabel,
+          baseRole: nextBaseRole
+        };
+      });
+      await saveProjectRoleCatalogFromSettings(nextCatalog, 'Habilitation modifiee');
+    }
+
+    async function deleteProjectRole(roleKey) {
+      const key = String(roleKey || '').trim();
+      if (!key) return;
+      const currentCatalog = getProjectRoleCatalog();
+      const current = currentCatalog.find(item => item.roleKey === key);
+      if (!current) return;
+      if (current.isSystem) {
+        showToast('Les roles systeme ne peuvent pas etre supprimes');
+        return;
+      }
+      if (!window.confirm(`Supprimer l habilitation "${current.label}" ?`)) return;
+      const nextCatalog = currentCatalog.filter(item => item.roleKey !== key);
+      await saveProjectRoleCatalogFromSettings(nextCatalog, 'Habilitation supprimee');
+    }
+
+    async function createGlobalThemeFromSettings() {
+      const input = document.getElementById('global-theme-name-input');
+      const name = (input?.value || '').trim();
+      if (!name) {
+        showToast('Thématique requise');
+        return;
+      }
+      await runWithLoading(async () => {
+        await upsertGlobalTheme(name);
+      await refreshGlobalTaxonomyCache();
+      if (input) input.value = '';
+      showToast('Thématique globale ajoutée');
+      await renderGlobalSettings();
+        await refreshGroupSelectorsAfterCatalogChange();
+      });
+    }
+
+    async function createGlobalGroupFromSettings() {
+      const nameInput = document.getElementById('global-group-name-input');
+      const descInput = document.getElementById('global-group-description-input');
+      const name = (nameInput?.value || '').trim();
+      const description = (descInput?.value || '').trim();
+      const memberUserIds = readSelectedUserIdsFromSelect('global-group-members-input');
+      if (!name) {
+        showToast('Nom de groupe requis');
+        return;
+      }
+      if (memberUserIds.length === 0) {
+        showToast('Sélectionnez au moins un membre pour ce groupe');
+        return;
+      }
+      await runWithLoading(async () => {
+        await upsertGlobalGroup({ name, description, memberUserIds });
+      await refreshGlobalTaxonomyCache();
+      if (nameInput) nameInput.value = '';
+      if (descInput) descInput.value = '';
+      const membersSearchInput = document.getElementById('global-group-members-search');
+      if (membersSearchInput) membersSearchInput.value = '';
+      const membersInput = document.getElementById('global-group-members-input');
+      if (membersInput) {
+        Array.from(membersInput.options || []).forEach(opt => { opt.selected = false; });
+      }
+      showToast('Groupe global ajouté');
+      await renderGlobalSettings();
+        await refreshGroupSelectorsAfterCatalogChange();
+      });
+    }
+
+    async function editGlobalTheme(themeKey) {
+      const key = String(themeKey || '').trim();
+      const current = (globalThemeCatalog || []).find(t => t.themeKey === key);
+      if (!current) return;
+      const nextName = (window.prompt('Modifier la thématique', current.name || '') || '').trim();
+      if (!nextName || normalizeCatalogKey(nextName) === key) return;
+      await deleteGlobalThemeByKey(key);
+      await upsertGlobalTheme(nextName);
+      await refreshGlobalTaxonomyCache();
+      showToast('Thématique globale modifiée');
+      await renderGlobalSettings();
+      await refreshGroupSelectorsAfterCatalogChange();
+    }
+
+    async function deleteGlobalTheme(themeKey) {
+      const key = String(themeKey || '').trim();
+      if (!key) return;
+      const current = (globalThemeCatalog || []).find(t => t.themeKey === key);
+      if (!current) return;
+      if (!confirm(`Supprimer la thématique globale "${current.name}" ?`)) return;
+      await deleteGlobalThemeByKey(key);
+      await refreshGlobalTaxonomyCache();
+      showToast('Thématique globale supprimée');
+      await renderGlobalSettings();
+      await refreshGroupSelectorsAfterCatalogChange();
+    }
+
+    async function editGlobalGroup(groupKey) {
+      const key = String(groupKey || '').trim();
+      const current = (globalGroupCatalog || []).find(g => g.groupKey === key);
+      if (!current) return;
+      const nextName = (window.prompt('Modifier le nom du groupe', current.name || '') || '').trim();
+      if (!nextName) return;
+      const nextDescription = (window.prompt('Modifier la description du groupe', current.description || '') || '').trim();
+      const nextKey = normalizeCatalogKey(nextName);
+      if (nextKey !== key) {
+        await deleteGlobalGroupByKey(key);
+      }
+      await runWithLoading(async () => {
+        await upsertGlobalGroup({
+        name: nextName,
+        description: nextDescription,
+        memberUserIds: current.memberUserIds || [],
+        projectId: current.projectId  // Préserver l'origine du groupe
+      });
+      await refreshGlobalTaxonomyCache();
+      showToast('Groupe global modifié');
+        await renderGlobalSettings();
+      });
+      await refreshGroupSelectorsAfterCatalogChange();
+    }
+
+    async function deleteGlobalGroup(groupKey) {
+      const key = String(groupKey || '').trim();
+      if (!key) return;
+      const current = (globalGroupCatalog || []).find(g => g.groupKey === key);
+      if (!current) return;
+      if (!confirm(`Supprimer le groupe global "${current.name}" ?`)) return;
+      await deleteGlobalGroupByKey(key);
+      await refreshGlobalTaxonomyCache();
+      showToast('Groupe global supprimé');
+      await renderGlobalSettings();
+      await refreshGroupSelectorsAfterCatalogChange();
+    }
+
+    async function saveGlobalGroupMembers(groupKey) {
+      const key = String(groupKey || '').trim();
+      if (!key) return;
+      const current = (globalGroupCatalog || []).find(g => g.groupKey === key);
+      if (!current) return;
+      const selectId = getGlobalGroupMembersSelectId(key);
+      const memberUserIds = readSelectedUserIdsFromSelect(selectId);
+      await upsertGlobalGroup({
+        name: current.name,
+        description: current.description || '',
+        memberUserIds,
+        projectId: current.projectId  // Préserver l'origine du groupe
+      });
+      await refreshGlobalTaxonomyCache();
+      showToast('Membres du groupe mis à jour');
+      await renderGlobalSettings();
+      await refreshGroupSelectorsAfterCatalogChange();
+    }
+
+    async function createSoftwareVersionEntry() {
+      const softwareNameInput = document.getElementById('software-name-input');
+      const versionInput = document.getElementById('software-version-input');
+      const notesInput = document.getElementById('software-notes-input');
+      const softwareName = String(softwareNameInput?.value || '').trim();
+      const version = String(versionInput?.value || '').trim();
+      const notes = String(notesInput?.value || '').trim();
+      if (!softwareName || !version) {
+        showToast('Logiciel et version sont requis');
+        return;
+      }
+      await runWithLoading(async () => {
+        await putEncrypted('softwareVersions', {
+        softwareId: uuidv4(),
+        softwareName,
+        version,
+        notes,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        updatedBy: currentUser?.userId || ''
+      }, 'softwareId');
+      if (softwareNameInput) softwareNameInput.value = '';
+      if (versionInput) versionInput.value = '';
+      if (notesInput) notesInput.value = '';
+      showToast('Version logicielle ajoutée');
+        await renderGlobalSettings();
+      });
+    }
+
+    async function editSoftwareVersionEntry(softwareId) {
+      const id = String(softwareId || '').trim();
+      if (!id) return;
+      const current = await getDecrypted('softwareVersions', id, 'softwareId');
+      if (!current) return;
+      const nextSoftwareName = (window.prompt('Logiciel', current.softwareName || '') || '').trim();
+      if (!nextSoftwareName) return;
+      const nextVersion = (window.prompt('Version', current.version || '') || '').trim();
+      if (!nextVersion) return;
+      const nextNotes = (window.prompt('Notes', current.notes || '') || '').trim();
+      await putEncrypted('softwareVersions', {
+        ...current,
+        softwareName: nextSoftwareName,
+        version: nextVersion,
+        notes: nextNotes,
+        updatedAt: Date.now(),
+        updatedBy: currentUser?.userId || current.updatedBy || ''
+      }, 'softwareId');
+      showToast('Version logicielle modifiée');
+      await renderGlobalSettings();
+    }
+
+    async function deleteSoftwareVersionEntry(softwareId) {
+      const id = String(softwareId || '').trim();
+      if (!id) return;
+      const current = await getDecrypted('softwareVersions', id, 'softwareId');
+      if (!current) return;
+      if (!confirm(`Supprimer l'entree ${current.softwareName} ${current.version} ?`)) return;
+      const db = getDatabase();
+      await deleteFromStore('softwareVersions', id);
+      showToast('Version logicielle supprimée');
+      await renderGlobalSettings();
+    }
+
+    async function renderGlobalSettings() {
+      await refreshGlobalTaxonomyCache();
+      const repairedGroupsCount = await repairGlobalGroupsMembersFromProjects();
+      if (repairedGroupsCount > 0) {
+        await refreshGlobalTaxonomyCache();
+        showToast(`${repairedGroupsCount} groupe(s) global(aux) restauré(s) depuis les projets`);
+      }
+      const themesList = document.getElementById('global-themes-admin-list');
+      const groupsList = document.getElementById('global-groups-admin-list');
+      const rolesList = document.getElementById('global-roles-admin-list');
+      const softwareList = document.getElementById('software-versions-list');
+      const roleNameInput = document.getElementById('global-role-name-input');
+      const roleBaseInput = document.getElementById('global-role-base-input');
+      const roleAddBtn = document.getElementById('btn-global-role-add');
+      const appNameInput = document.getElementById('app-display-name-input');
+      const appSubtitleInput = document.getElementById('app-display-subtitle-input');
+      const appAdminSelect = document.getElementById('app-admin-user-select');
+      const appAdminBadge = document.getElementById('app-admin-badge');
+      const saveBrandingBtn = document.getElementById('btn-save-app-branding');
+      const assignAdminBtn = document.getElementById('btn-assign-app-admin');
+      const resetBrandingBtn = document.getElementById('btn-reset-app-branding');
+      if (!themesList || !groupsList || !softwareList || !rolesList) return;
+      if (!appBranding) {
+        await loadAppBrandingConfig({ ensureRemote: false });
+      }
+      const knownUsers = await getKnownUsersForGlobalGroups();
+      await renderGlobalGroupMembersInputOptions();
+
+      const branding = normalizeAppBrandingConfig(appBranding || {});
+      const canManageBranding = isAppAdmin();
+      const adminName = String(branding.adminUserId || '').trim()
+        ? (knownUsersCache.get(branding.adminUserId)?.name || fallbackDirectoryName(branding.adminUserId))
+        : 'Non defini';
+
+      if (appNameInput) {
+        appNameInput.value = branding.appName;
+        appNameInput.disabled = !canManageBranding;
+      }
+      if (appSubtitleInput) {
+        appSubtitleInput.value = branding.appSubtitle;
+        appSubtitleInput.disabled = !canManageBranding;
+      }
+      if (appAdminSelect) {
+        const knownByName = [...knownUsers];
+        if (currentUser?.userId && !knownByName.some(u => u.userId === currentUser.userId)) {
+          knownByName.unshift({
+            userId: currentUser.userId,
+            name: currentUser.name || fallbackDirectoryName(currentUser.userId)
+          });
+        }
+        appAdminSelect.innerHTML = knownByName.length === 0
+          ? '<option value="" disabled>Aucun utilisateur connu</option>'
+          : knownByName.map((u) => `<option value="${escapeHtml(u.userId)}" ${u.userId === branding.adminUserId ? 'selected' : ''}>${escapeHtml(u.name)}</option>`).join('');
+        appAdminSelect.disabled = !canManageBranding;
+      }
+      if (saveBrandingBtn) saveBrandingBtn.disabled = !canManageBranding;
+      if (assignAdminBtn) assignAdminBtn.disabled = !canManageBranding;
+      if (resetBrandingBtn) resetBrandingBtn.disabled = !canManageBranding;
+      if (roleNameInput) roleNameInput.disabled = !canManageBranding;
+      if (roleBaseInput) roleBaseInput.disabled = !canManageBranding;
+      if (roleAddBtn) roleAddBtn.disabled = !canManageBranding;
+      if (appAdminBadge) {
+        appAdminBadge.textContent = canManageBranding
+          ? `Role: Admin application (${adminName})`
+          : `Admin application: ${adminName}`;
+        appAdminBadge.className = canManageBranding
+          ? 'text-[11px] font-semibold px-2 py-1 rounded-full bg-emerald-100 text-emerald-700'
+          : 'text-[11px] font-semibold px-2 py-1 rounded-full bg-slate-200 text-slate-700';
+      }
+
+      const filteredThemes = (globalThemeCatalog || [])
+        .filter(item => matchesQuery([item?.name], globalSearchQuery));
+      const filteredGroups = (globalGroupCatalog || [])
+        .filter(item => matchesQuery([item?.name, item?.description], globalSearchQuery));
+      const filteredSoftwareVersions = (globalSoftwareVersionCatalog || [])
+        .filter(item => matchesQuery([item?.softwareName, item?.version, item?.notes], globalSearchQuery));
+      const filteredRoles = getProjectRoleCatalog()
+        .filter(item => matchesQuery([item?.label, item?.baseRole, item?.roleKey], globalSearchQuery));
+
+      if (roleBaseInput) {
+        roleBaseInput.innerHTML = ['owner', 'manager', 'member'].map((baseRole) => `
+          <option value="${baseRole}">${getBaseProjectRoleLabel(baseRole)}</option>
+        `).join('');
+      }
+
+      themesList.innerHTML = filteredThemes.length === 0
+        ? '<p class="text-xs text-slate-500">Aucune thématique globale.</p>'
+        : filteredThemes.map(item => `
+            <div class="rounded-lg border border-slate-200 bg-white p-2 flex items-center justify-between gap-2">
+              <span class="text-sm font-semibold text-slate-700 truncate">${escapeHtml(item.name)}</span>
+              <div class="flex items-center gap-1 shrink-0">
+                <button onclick="editGlobalTheme('${escapeHtml(item.themeKey)}')" class="text-xs px-2 py-1 rounded bg-slate-100 text-slate-700">Modifier</button>
+                <button onclick="deleteGlobalTheme('${escapeHtml(item.themeKey)}')" class="text-xs px-2 py-1 rounded bg-rose-100 text-rose-700">Supprimer</button>
+              </div>
+            </div>
+          `).join('');
+
+      groupsList.innerHTML = filteredGroups.length === 0
+        ? '<p class="text-xs text-slate-500">Aucun groupe global.</p>'
+        : filteredGroups.map(item => `
+            <div class="software-version-row rounded-lg border border-slate-200 bg-white p-3">
+              <div class="software-version-main min-w-0">
+                <div class="min-w-0">
+                  <p class="text-sm font-semibold text-slate-700 truncate">${escapeHtml(item.name)}</p>
+                  <p class="text-xs text-slate-500 truncate">${escapeHtml(item.description || 'Sans description')}</p>
+                  <p class="text-[11px] text-slate-500 mt-1">${(item.memberUserIds || []).length} membre(s)</p>
+                </div>
+                <div class="flex items-center gap-1 shrink-0">
+                  <button onclick="editGlobalGroup('${escapeHtml(item.groupKey)}')" class="text-xs px-2 py-1 rounded bg-slate-100 text-slate-700">Modifier</button>
+                  <button onclick="deleteGlobalGroup('${escapeHtml(item.groupKey)}')" class="text-xs px-2 py-1 rounded bg-rose-100 text-rose-700">Supprimer</button>
+                </div>
+              </div>
+              <div class="mt-2 grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2">
+                <input
+                  type="text"
+                  class="global-group-members-search px-3 py-2 border border-slate-300 rounded-lg text-xs"
+                  data-target-select="${escapeHtml(getGlobalGroupMembersSelectId(item.groupKey))}"
+                  placeholder="Rechercher un membre..."
+                >
+                <select id="${escapeHtml(getGlobalGroupMembersSelectId(item.groupKey))}" multiple class="global-group-members-select px-3 py-2 border border-slate-300 rounded-lg text-xs min-h-[84px]">
+                  ${knownUsers.map(user => `
+                    <option value="${escapeHtml(user.userId)}" ${(item.memberUserIds || []).includes(user.userId) ? 'selected' : ''}>
+                      ${escapeHtml(user.name)}
+                    </option>
+                  `).join('')}
+                </select>
+                <button onclick="saveGlobalGroupMembers('${escapeHtml(item.groupKey)}')" class="text-xs px-3 py-2 rounded bg-blue-100 text-blue-700 font-semibold">Sauver membres</button>
+              </div>
+            </div>
+          `).join('');
+
+      rolesList.innerHTML = filteredRoles.length === 0
+        ? '<p class="text-xs text-slate-500">Aucune habilitation definie.</p>'
+        : filteredRoles.map(item => `
+            <div class="rounded-lg border border-slate-200 bg-white p-2 flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <p class="text-sm font-semibold text-slate-700 truncate">${escapeHtml(item.label)}</p>
+                <p class="text-xs text-slate-500">Niveau technique: ${escapeHtml(getBaseProjectRoleLabel(item.baseRole))}</p>
+                ${item.isSystem ? '<p class="text-[11px] text-slate-400 mt-1">Role systeme</p>' : ''}
+              </div>
+              <div class="flex items-center gap-1 shrink-0">
+                ${canManageBranding
+                  ? `<button onclick="editProjectRole('${escapeHtml(item.roleKey)}')" class="text-xs px-2 py-1 rounded bg-slate-100 text-slate-700">Modifier</button>`
+                  : '<button class="text-xs px-2 py-1 rounded bg-slate-100 text-slate-400 cursor-not-allowed" disabled>Modifier</button>'
+                }
+                ${item.isSystem
+                  ? '<button class="text-xs px-2 py-1 rounded bg-slate-100 text-slate-400 cursor-not-allowed" disabled>Supprimer</button>'
+                  : (canManageBranding
+                    ? `<button onclick="deleteProjectRole('${escapeHtml(item.roleKey)}')" class="text-xs px-2 py-1 rounded bg-rose-100 text-rose-700">Supprimer</button>`
+                    : '<button class="text-xs px-2 py-1 rounded bg-slate-100 text-slate-400 cursor-not-allowed" disabled>Supprimer</button>')
+                }
+              </div>
+            </div>
+          `).join('');
+
+      softwareList.innerHTML = filteredSoftwareVersions.length === 0
+        ? '<p class="text-xs text-slate-500">Aucune version logicielle enregistrée.</p>'
+        : filteredSoftwareVersions.map(item => `
+            <div class="software-version-row rounded-lg border border-slate-200 bg-white p-3">
+              <div class="software-version-main min-w-0">
+                <p class="text-sm font-semibold text-slate-700 break-words">${escapeHtml(item.softwareName)}</p>
+                <p class="text-xs text-slate-500 mt-0.5">Version: <span class="font-medium text-slate-700">${escapeHtml(item.version)}</span></p>
+                <p class="text-xs text-slate-500 mt-0.5 break-words">${escapeHtml(item.notes || 'Sans note')}</p>
+                <p class="text-[11px] text-slate-400 mt-1">Mise à jour: ${new Date(item.updatedAt || item.createdAt || Date.now()).toLocaleString('fr-FR')}</p>
+              </div>
+              <div class="software-version-actions flex items-center gap-1 shrink-0">
+                <button onclick="editSoftwareVersionEntry('${escapeHtml(item.softwareId)}')" class="text-xs px-2 py-1 rounded bg-slate-100 text-slate-700">Modifier</button>
+                <button onclick="deleteSoftwareVersionEntry('${escapeHtml(item.softwareId)}')" class="text-xs px-2 py-1 rounded bg-rose-100 text-rose-700">Supprimer</button>
+              </div>
+            </div>
+          `).join('');
+      bindGlobalGroupMemberSearchInputs();
+      bindGlobalGroupMemberSelectsToggle();
+      applyGlobalSettingsTabView();
+    }
+
+    function readSelectedGlobalGroups(selectId) {
+      const select = document.getElementById(selectId);
+      if (!select) return [];
+      const selectedKeys = Array.from(select.selectedOptions || [])
+        .map(opt => String(opt.value || '').trim())
+        .filter(Boolean);
+      const byKey = new Map((globalGroupCatalog || []).map(g => [String(g.groupKey || ''), g]));
+      return selectedKeys
+        .map(key => byKey.get(key))
+        .filter(Boolean)
+        .map(g => ({ name: String(g.name || '').trim(), description: String(g.description || '').trim() }))
+        .filter(g => g.name);
+    }
+
+    async function populateProjectGroupPresetOptions(selectId, selectedNames = []) {
+      const select = document.getElementById(selectId);
+      if (!select) return;
+      await refreshGlobalTaxonomyCache();
+      const selectedKeys = new Set((selectedNames || []).map(name => normalizeCatalogKey(name)).filter(Boolean));
+      const rows = (globalGroupCatalog || []).filter(g => g && g.groupKey && g.name);
+      if (rows.length === 0) {
+        select.innerHTML = '<option value="" disabled>Aucun groupe global disponible</option>';
+        select.disabled = true;
+        return;
+      }
+      select.disabled = false;
+      select.innerHTML = rows
+        .map(g => `<option value="${escapeHtml(g.groupKey)}" ${selectedKeys.has(g.groupKey) ? 'selected' : ''}>${escapeHtml(g.name)}</option>`)
+        .join('');
+    }
+
+    async function syncProjectTaxonomyToGlobal(state) {
+      if (!state?.project) return;
+      const themes = state.themes || [];
+      const groups = state.groups || [];
+      for (const theme of themes) {
+        await upsertGlobalTheme(theme);
+      }
+      for (const group of groups) {
+        await upsertGlobalGroup(group);
+      }
+      await refreshGlobalTaxonomyCache();
+    }
+
+    function matchesQuery(fields, query) {
+      if (!query) return true;
+      const needle = normalizeSearch(query);
+      return fields
+        .filter(v => v !== null && v !== undefined)
+        .some(v => normalizeSearch(v).includes(needle));
+    }
+
+    function setActiveSidebarNav(navKey) {
+      const links = {
+        dashboard: document.getElementById('nav-dashboard'),
+        projects: document.getElementById('nav-projects'),
+        tasks: document.getElementById('nav-tasks'),
+        calendar: document.getElementById('nav-calendar'),
+        docs: document.getElementById('nav-docs'),
+        messages: document.getElementById('nav-messages'),
+        feed: document.getElementById('nav-feed'),
+        settings: document.getElementById('nav-settings')
+      };
+      Object.entries(links).forEach(([key, link]) => {
+        if (!link) return;
+        link.classList.toggle('active', key === navKey);
+      });
+    }
+
+    async function rerenderCurrentContext() {
+      if (currentProjectId && currentProjectState) {
+        renderTasks(currentProjectState.tasks || []);
+        renderKanban(currentProjectState.tasks || []);
+        renderGantt(currentProjectState.tasks || []);
+        renderTimeline(currentProjectState.tasks || []);
+        renderDocuments(currentProjectState);
+        renderMessages(currentProjectState.messages || []);
+        renderActivity(currentProjectEvents || []);
+        applyLiveSearchFilter();
+        return;
+      }
+      await renderProjects();
+      applyLiveSearchFilter();
+    }
+
+    function applyLiveSearchFilter() {
+      const query = (globalSearchQuery || '').trim().toLowerCase();
+      const targets = currentProjectId
+        ? [
+            ['tasks-container', '#tasks-container > div', 'Aucune tache ne correspond a votre recherche'],
+            ['kanban-board', '#kanban-board .kanban-col .bg-white', 'Aucune tache ne correspond a votre recherche'],
+            ['timeline-container', '#timeline-container > div', 'Aucune tache ne correspond a votre recherche'],
+            ['documents-container', '#documents-container > div', 'Aucun document ne correspond a votre recherche'],
+            ['messages-container', '#messages-container > div', 'Aucun message ne correspond a votre recherche'],
+            ['activity-container', '#activity-container > div', 'Aucune activite ne correspond a votre recherche']
+          ]
+        : [
+            ['projects-container', '#projects-container > div', 'Aucun projet ne correspond a votre recherche']
+          ];
+
+      targets.forEach(([containerId, selector, emptyText]) => {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        const cards = Array.from(document.querySelectorAll(selector));
+        const hintId = `${containerId}-search-empty`;
+        const existingHint = document.getElementById(hintId);
+
+        if (!query) {
+          cards.forEach(card => card.classList.remove('hidden'));
+          if (existingHint) existingHint.remove();
+          return;
+        }
+
+        let visibleCount = 0;
+        cards.forEach(card => {
+          const visible = (card.textContent || '').toLowerCase().includes(query);
+          card.classList.toggle('hidden', !visible);
+          if (visible) visibleCount += 1;
+        });
+
+        if (visibleCount === 0) {
+          if (!existingHint) {
+            const hint = document.createElement('p');
+            hint.id = hintId;
+            hint.className = 'text-slate-500 text-center py-6';
+            hint.textContent = emptyText;
+            container.appendChild(hint);
+          }
+        } else if (existingHint) {
+          existingHint.remove();
+        }
+      });
+    }
+
+    function hideHeaderSearchResults() {
+      const panel = document.getElementById('header-search-results');
+      if (!panel) return;
+      panel.classList.add('hidden');
+      headerSearchActiveIndex = -1;
+    }
+
+    function renderHeaderSearchResults() {
+      const panel = document.getElementById('header-search-results');
+      if (!panel) return;
+      if (!headerSearchResults.length) {
+        panel.innerHTML = '<p class="header-search-empty">Aucun resultat global.</p>';
+        panel.classList.remove('hidden');
+        return;
+      }
+      panel.innerHTML = headerSearchResults.map((item, idx) => `
+        <button type="button" class="header-search-item ${idx === headerSearchActiveIndex ? 'is-active' : ''}" data-search-result-index="${idx}" role="option" aria-selected="${idx === headerSearchActiveIndex ? 'true' : 'false'}">
+          <span class="material-symbols-outlined header-search-item-icon">${escapeHtml(item.icon || 'search')}</span>
+          <span class="min-w-0">
+            <span class="header-search-item-title block truncate">${escapeHtml(item.title || '')}</span>
+            <span class="header-search-item-meta block truncate">${escapeHtml(item.meta || '')}</span>
+          </span>
+          ${item.badge ? `<span class="header-search-item-badge">${escapeHtml(item.badge)}</span>` : ''}
+        </button>
+      `).join('');
+      panel.classList.remove('hidden');
+    }
+
+    async function executeHeaderSearchResult(item) {
+      if (!item) return;
+      hideHeaderSearchResults();
+      const searchInput = document.getElementById('search-input');
+      if (searchInput) searchInput.value = '';
+      globalSearchQuery = '';
+      closeMobileSidebar();
+      if (item.action === 'workspace') {
+        if (item.view === 'dashboard') {
+          showDashboard();
+          return;
+        }
+        if (item.view === 'projects') {
+          await showProjectsWorkspace();
+          return;
+        }
+        await showGlobalWorkspace(item.view);
+        if (item.view === 'settings' && item.settingsTab) {
+          setGlobalSettingsTab(item.settingsTab);
+          await renderGlobalSettings();
+        }
+        return;
+      }
+      if (item.action === 'open-project') {
+        await showProjectDetail(item.projectId, { resetScroll: true });
+        if (item.projectTab) setProjectView(item.projectTab);
+        return;
+      }
+      if (item.action === 'open-project-task') {
+        await showProjectDetail(item.projectId, { resetScroll: true });
+        setProjectView('list');
+        await openProjectTaskDetails(item.taskId);
+        return;
+      }
+      if (item.action === 'open-project-message') {
+        await showProjectDetail(item.projectId, { resetScroll: true });
+        setProjectView('chat');
+        const chatSearch = document.getElementById('chat-search-input');
+        if (chatSearch) {
+          chatSearch.value = item.hint || '';
+          messageFilters.query = item.hint || '';
+          renderMessages(currentProjectState?.messages || []);
+        }
+        return;
+      }
+      if (item.action === 'open-project-document') {
+        await showProjectDetail(item.projectId, { resetScroll: true });
+        setProjectView('docs');
+        docsFilters.query = item.hint || '';
+        const docsSearch = document.getElementById('docs-search-input');
+        if (docsSearch) docsSearch.value = item.hint || '';
+        renderDocuments(currentProjectState);
+        return;
+      }
+      if (item.action === 'open-global-task') {
+        await showGlobalWorkspace('tasks');
+        await openGlobalTaskDetails(item.taskRef);
+        return;
+      }
+      if (item.action === 'open-global-calendar-item') {
+        await showGlobalWorkspace('calendar');
+        await openStandaloneCalendarDetails(item.itemId);
+        return;
+      }
+      if (item.action === 'open-global-document') {
+        await showGlobalWorkspace('docs');
+        const input = document.getElementById('global-doc-search');
+        if (input) input.value = item.hint || '';
+        await renderGlobalDocs();
+        return;
+      }
+      if (item.action === 'open-global-message') {
+        await showGlobalWorkspace('messages');
+        const channelId = String(item.hint || '').trim();
+        if (channelId) {
+          await selectGlobalMessageChannel(channelId);
+        }
+        return;
+      }
+      if (item.action === 'open-global-post') {
+        await openGlobalFeedPost(item.postId);
+      }
+    }
+
+    async function buildHeaderSearchResults(query) {
+      const q = String(query || '').trim();
+      if (q.length < 2) return [];
+      const results = [];
+      const seen = new Set();
+      const push = (item) => {
+        if (!item) return;
+        const key = String(item.key || `${item.action}|${item.title}|${item.meta}`);
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        results.push(item);
+      };
+      const quickLinks = [
+        { view: 'dashboard', label: 'Tableau de bord', badge: 'Rubrique', icon: 'dashboard' },
+        { view: 'projects', label: 'Projets', badge: 'Rubrique', icon: 'folder_shared' },
+        { view: 'tasks', label: 'Taches', badge: 'Rubrique', icon: 'assignment' },
+        { view: 'calendar', label: 'Calendrier', badge: 'Rubrique', icon: 'calendar_today' },
+        { view: 'docs', label: 'Documents', badge: 'Rubrique', icon: 'description' },
+        { view: 'messages', label: 'Messagerie', badge: 'Rubrique', icon: 'chat' },
+        { view: 'feed', label: "Fil d'info", badge: 'Rubrique', icon: 'campaign' },
+        { view: 'settings', label: 'Referentiels', badge: 'Rubrique', icon: 'tune' }
+      ];
+      quickLinks.forEach((link) => {
+        if (matchesQuery([link.label, link.view], q)) {
+          push({
+            key: `quick:${link.view}`,
+            action: 'workspace',
+            view: link.view,
+            icon: link.icon,
+            title: link.label,
+            meta: 'Navigation rapide',
+            badge: link.badge
+          });
+        }
+      });
+
+      const projectStates = await getAllProjectStates();
+      projectStates.forEach((state) => {
+        const project = state?.project;
+        if (!project) return;
+        if (matchesQuery([project.name, project.description, project.status], q)) {
+          push({
+            key: `project:${project.projectId}`,
+            action: 'open-project',
+            projectId: project.projectId,
+            icon: 'folder_open',
+            title: project.name || 'Projet',
+            meta: 'Projet',
+            badge: 'Projet'
+          });
+        }
+
+        (state.tasks || []).forEach((task) => {
+          if (task.archivedAt) return;
+          if (!matchesQuery([task.title, task.description, task.theme, getTaskAssigneeName(task, state), task.status], q)) return;
+          push({
+            key: `project-task:${project.projectId}:${task.taskId}`,
+            action: 'open-project-task',
+            projectId: project.projectId,
+            taskId: task.taskId,
+            icon: 'task_alt',
+            title: task.title || 'Tache',
+            meta: `${project.name || 'Projet'} > Travail`,
+            badge: 'Tache'
+          });
+        });
+
+        (state.documents || []).forEach((doc) => {
+          if (!matchesQuery([doc.name, doc.theme, doc.notes], q)) return;
+          push({
+            key: `project-doc:${project.projectId}:${doc.docId}`,
+            action: 'open-project-document',
+            projectId: project.projectId,
+            hint: doc.name || '',
+            icon: 'description',
+            title: doc.name || 'Document',
+            meta: `${project.name || 'Projet'} > Documents`,
+            badge: 'Doc'
+          });
+        });
+
+        (state.messages || []).forEach((msg) => {
+          if (!matchesQuery([msg.content, msg.author], q)) return;
+          const hint = String(msg.content || '').slice(0, 80);
+          push({
+            key: `project-msg:${project.projectId}:${msg.messageId}`,
+            action: 'open-project-message',
+            projectId: project.projectId,
+            hint,
+            icon: 'chat',
+            title: project.name || 'Discussion',
+            meta: `${project.name || 'Projet'} > Discussion`,
+            badge: 'Msg'
+          });
+        });
+      });
+
+      const globalTasks = await getAllDecrypted('globalTasks', 'id');
+      (globalTasks || []).forEach((task) => {
+        if (task.archivedAt) return;
+        if (!matchesQuery([task.title, task.description, task.theme, task.status], q)) return;
+        push({
+          key: `global-task:${task.id}`,
+          action: 'open-global-task',
+          taskRef: `standalone:${task.id}`,
+          icon: 'task',
+          title: task.title || 'Tache hors projet',
+          meta: 'Taches > Vue transverse',
+          badge: 'Hors projet'
+        });
+      });
+
+      const globalDocs = await getAllDecrypted('globalDocs', 'id');
+      (globalDocs || []).forEach((doc) => {
+        if (!matchesQuery([doc.name, doc.theme, doc.notes], q)) return;
+        push({
+          key: `global-doc:${doc.id}`,
+          action: 'open-global-document',
+          hint: doc.name || '',
+          icon: 'description',
+          title: doc.name || 'Document hors projet',
+          meta: 'Documents > Tous projets',
+          badge: 'Hors projet'
+        });
+      });
+
+      const me = String(currentUser?.userId || '');
+      const globalMessages = await getAllDecrypted('globalMessages', 'messageId');
+      (globalMessages || []).forEach((msg) => {
+        const fromId = String(msg.fromUserId || '');
+        const toId = String(msg.toUserId || '');
+        if (!me || !isGlobalMessageVisibleForUser(msg, me)) return;
+        const conversationId = String(msg.conversationId || '').trim();
+        const isGroup = isGlobalGroupConversationId(conversationId) || isGlobalGroupTarget(toId);
+        const peerId = isGroup ? `${GLOBAL_MESSAGE_GROUP_SELECTION_PREFIX}${conversationId}` : (fromId === me ? toId : fromId);
+        const recipients = getGlobalMessageRecipientIds(msg).filter((id) => id !== me);
+        const peerName = isGroup
+          ? (String(msg.toName || '').trim() || formatGlobalMessageGroupChannelLabel(recipients))
+          : (fromId === me
+            ? (msg.toName || fallbackDirectoryName(peerId))
+            : (msg.fromName || fallbackDirectoryName(peerId)));
+        if (!matchesQuery([msg.content, msg.fromName, msg.toName, peerName, recipients.join(' ')], q)) return;
+        push({
+          key: `global-message:${msg.messageId}`,
+          action: 'open-global-message',
+          hint: peerId,
+          icon: 'chat',
+          title: peerName || 'Messagerie hors projet',
+          meta: String(msg.content || '').slice(0, 80) || 'Message privé',
+          badge: isGroup ? 'Groupe' : 'Msg'
+        });
+      });
+
+      const globalCalendarItems = await getAllDecrypted('globalCalendarItems', 'id');
+      (globalCalendarItems || []).forEach((item) => {
+        if (item.archivedAt) return;
+        if (!matchesQuery([item.title, item.description, item.theme], q)) return;
+        push({
+          key: `calendar-item:${item.id}`,
+          action: 'open-global-calendar-item',
+          itemId: item.id,
+          icon: 'event',
+          title: item.title || 'Info calendrier',
+          meta: 'Calendrier > Infos hors projet',
+          badge: 'Calendrier'
+        });
+      });
+
+      const globalPosts = await getAllDecrypted('globalPosts', 'postId');
+      (globalPosts || []).forEach((post) => {
+        if (post.deletedAt) return;
+        if (!matchesQuery([post.content, post.authorName, ...(post.refs || []).map((r) => r?.label || '')], q)) return;
+        push({
+          key: `global-post:${post.postId}`,
+          action: 'open-global-post',
+          postId: post.postId,
+          icon: 'campaign',
+          title: String(post.authorName || 'Post information'),
+          meta: String(post.content || '').slice(0, 80) || "Fil d'info",
+          badge: 'Post'
+        });
+      });
+
+      const settingsHits = [
+        ...(globalThemeCatalog || []).filter((item) => matchesQuery([item?.name], q)).map((item) => ({
+          key: `settings-theme:${item.themeKey}`,
+          action: 'workspace',
+          view: 'settings',
+          settingsTab: 'themes',
+          icon: 'label',
+          title: item.name || 'Thematique',
+          meta: 'Referentiels > Thematiques globales',
+          badge: 'Parametre'
+        })),
+        ...(globalGroupCatalog || []).filter((item) => matchesQuery([item?.name, item?.description], q)).map((item) => ({
+          key: `settings-group:${item.groupKey}`,
+          action: 'workspace',
+          view: 'settings',
+          settingsTab: 'groups',
+          icon: 'groups',
+          title: item.name || 'Groupe',
+          meta: 'Referentiels > Groupes globaux',
+          badge: 'Parametre'
+        })),
+        ...(globalSoftwareVersionCatalog || []).filter((item) => matchesQuery([item?.softwareName, item?.version, item?.notes], q)).map((item) => ({
+          key: `settings-soft:${item.softwareId}`,
+          action: 'workspace',
+          view: 'settings',
+          settingsTab: 'software',
+          icon: 'deployed_code',
+          title: `${item.softwareName || 'Logiciel'} ${item.version || ''}`.trim(),
+          meta: 'Referentiels > Suivi versions logicielles',
+          badge: 'Parametre'
+        })),
+        ...getProjectRoleCatalog().filter((item) => matchesQuery([item?.label, item?.baseRole], q)).map((item) => ({
+          key: `settings-role:${item.roleKey}`,
+          action: 'workspace',
+          view: 'settings',
+          settingsTab: 'roles',
+          icon: 'admin_panel_settings',
+          title: item.label || 'Habilitation',
+          meta: 'Referentiels > Habilitations',
+          badge: 'Parametre'
+        }))
+      ];
+      settingsHits.forEach(push);
+
+      return results.slice(0, 40);
+    }
+
+    async function refreshStats() {
+      try {
+        const projects = await getAllProjects();
+        document.getElementById('stat-projects').textContent = projects.length;
+
+        let totalTasks = 0;
+        let totalMessages = 0;
+        const uniqueMembers = new Set();
+        for (const project of projects) {
+          const state = await getProjectState(project.projectId);
+          if (state) {
+            totalTasks += state.tasks.length;
+            totalMessages += state.messages.length;
+            (state.members || []).forEach(member => {
+              if (member?.userId) uniqueMembers.add(member.userId);
+            });
+          }
+        }
+        const standaloneTasks = await getAllDecrypted('globalTasks', 'id');
+        totalTasks += (standaloneTasks || []).length;
+
+        document.getElementById('stat-tasks').textContent = totalTasks;
+        document.getElementById('stat-messages').textContent = totalMessages;
+        document.getElementById('stat-members').textContent = Math.max(1, uniqueMembers.size);
+      } catch (error) {
+        console.error('Error refreshing stats:', error);
+        document.getElementById('stat-projects').textContent = '0';
+        document.getElementById('stat-tasks').textContent = '0';
+        document.getElementById('stat-messages').textContent = '0';
+        document.getElementById('stat-members').textContent = '1';
+      }
+    }
+
+    function loadNotifications() {
+      if (window.TaskMDANotifications?.load) {
+        notifications = window.TaskMDANotifications.load('taskmda_notifications', 120);
+        return;
+      }
+      try {
+        const raw = localStorage.getItem('taskmda_notifications');
+        notifications = raw ? JSON.parse(raw) : [];
+      } catch {
+        notifications = [];
+      }
+      if (!Array.isArray(notifications)) notifications = [];
+      notifications = notifications.slice(0, 120);
+    }
+
+    function saveNotifications() {
+      if (window.TaskMDANotifications?.save) {
+        window.TaskMDANotifications.save(notifications, 'taskmda_notifications', 120);
+        return;
+      }
+      try {
+        localStorage.setItem('taskmda_notifications', JSON.stringify(notifications.slice(0, 120)));
+      } catch {
+        // ignore quota/storage errors
+      }
+    }
+
+    function renderNotifications() {
+      const list = document.getElementById('notifications-list');
+      const badge = document.getElementById('notif-badge');
+      if (!list || !badge) return;
+
+      const unread = window.TaskMDANotifications?.unreadCount
+        ? window.TaskMDANotifications.unreadCount(notifications)
+        : notifications.filter(n => !n.read).length;
+      badge.textContent = unread > 99 ? '99+' : String(unread);
+      badge.classList.toggle('hidden', unread === 0);
+
+      if (notifications.length === 0) {
+        list.innerHTML = '<p class="text-sm text-slate-500 text-center py-6">Aucune notification</p>';
+        return;
+      }
+
+      list.innerHTML = notifications.map(item => `
+        <button onclick="openNotification('${item.id}')" class="w-full text-left rounded-xl border px-3 py-2 ${
+          item.read ? 'border-slate-100 bg-white' : 'border-blue-200 bg-blue-50'
+        } hover:bg-slate-50">
+          <div class="flex items-start justify-between gap-2">
+            <p class="text-sm font-semibold text-slate-800">${escapeHtml(item.title || 'Information')}</p>
+            <span class="text-[10px] text-slate-500">${new Date(item.timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
+          </div>
+          <p class="text-xs text-slate-600 mt-1">${escapeHtml(item.body || '')}</p>
+          <div class="mt-1 flex flex-wrap items-center gap-2 text-[11px]">
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+              <span class="material-symbols-outlined text-[13px]">person</span>
+              <span>${escapeHtml(item.actorName || 'Système')}</span>
+            </span>
+            ${item.linkLabel ? `
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">
+                <span class="material-symbols-outlined text-[13px]">link</span>
+                <span>${escapeHtml(item.linkLabel)}</span>
+              </span>
+            ` : ''}
+          </div>
+        </button>
+      `).join('');
+    }
+
+    function addNotification(title, body, projectId = null, meta = {}) {
+      const payload = meta && typeof meta === 'object' ? meta : {};
+      const actorUserId = String(payload.actorUserId || (currentUser?.userId || '')).trim();
+      const inferredSelfAction = !payload.actorUserId && !payload.actorName;
+      const suppressSelf = payload.allowSelf === true ? false : (
+        (actorUserId && actorUserId === String(currentUser?.userId || '')) || inferredSelfAction
+      );
+      if (suppressSelf) return;
+      const nextNotification = {
+        id: uuidv4(),
+        title: String(title || 'Notification'),
+        body: String(body || ''),
+        projectId: projectId || null,
+        actorUserId: actorUserId || null,
+        actorName: String(payload.actorName || currentUser?.name || 'Système'),
+        targetType: payload.targetType || null,
+        targetId: payload.targetId || null,
+        targetView: payload.targetView || null,
+        linkLabel: payload.linkLabel || null,
+        timestamp: Date.now(),
+        read: false
+      };
+      notifications = window.TaskMDANotifications?.add
+        ? window.TaskMDANotifications.add(notifications, nextNotification, 120)
+        : [nextNotification, ...notifications].slice(0, 120);
+      saveNotifications();
+      renderNotifications();
+    }
+
+    function isCurrentUserAssignedToTask(task, state) {
+      const me = String(currentUser?.userId || '').trim();
+      if (!me || !task) return false;
+      const entries = getTaskAssigneeEntries(task, state);
+      return entries.some(entry => String(entry?.userId || '').trim() === me);
+    }
+
+    function buildCollaboratorNotificationFromEvent(event, state) {
+      if (!event || !state?.project) return null;
+      const me = String(currentUser?.userId || '').trim();
+      if (!me) return null;
+      if (String(event.author || '') === me) return null;
+      if (!hasProjectAccess(state, me)) return null;
+      const actor = resolveKnownUserIdentity(event.author, event.payload?.authorName || 'Collaborateur');
+      const actorName = actor.name || 'Collaborateur';
+      const projectName = state.project.name || 'Projet';
+
+      if (event.type === EventTypes.ADD_MEMBER && String(event.payload?.userId || '') === me) {
+        return {
+          title: 'Ajout au projet',
+          body: `${actorName} vous a ajoute au projet "${projectName}".`,
+          projectId: event.projectId,
+          meta: { actorUserId: event.author, actorName, targetView: 'list', linkLabel: 'Ouvrir le projet' },
+          browserTag: `member:${event.projectId}:${event.eventId}`
+        };
+      }
+
+      if (event.type === EventTypes.SEND_MESSAGE) {
+        return {
+          title: 'Nouveau message',
+          body: `${actorName} a envoye un message dans "${projectName}".`,
+          projectId: event.projectId,
+          meta: { actorUserId: event.author, actorName, targetType: 'message', targetId: event.eventId, targetView: 'chat', linkLabel: 'Ouvrir la discussion' },
+          browserTag: `msg:${event.projectId}:${event.eventId}`
+        };
+      }
+
+      if (event.type === EventTypes.CREATE_TASK || event.type === EventTypes.UPDATE_TASK) {
+        const taskId = String(event.payload?.taskId || '').trim();
+        const task = (state.tasks || []).find(t => String(t.taskId || '') === taskId);
+        if (!task || !isCurrentUserAssignedToTask(task, state)) return null;
+        const statusLabel = getTaskStatusMeta(task.status).label;
+        const isCreated = event.type === EventTypes.CREATE_TASK;
+        return {
+          title: isCreated ? 'Tache assignee' : 'Tache mise a jour',
+          body: isCreated
+            ? `${actorName} vous a assigne la tache "${task.title || 'Tache'}".`
+            : `${actorName} a mis a jour "${task.title || 'Tache'}" (${statusLabel}).`,
+          projectId: event.projectId,
+          meta: { actorUserId: event.author, actorName, targetType: 'task', targetId: task.taskId, targetView: 'list', linkLabel: 'Ouvrir la tache' },
+          browserTag: `task:${event.projectId}:${task.taskId}:${event.eventId}`
+        };
+      }
+      return null;
+    }
+
+    async function maybeNotifyCollaboratorEvent(event) {
+      if (!event?.projectId) return false;
+      const state = await getProjectState(event.projectId, { ignoreAccessCheck: true });
+      if (!state?.project) return false;
+      const info = buildCollaboratorNotificationFromEvent(event, state);
+      if (!info) return false;
+      addNotification(info.title, info.body, info.projectId, info.meta);
+      emitBrowserNotification(info.title, info.body, info.browserTag);
+      return true;
+    }
+
+    function toggleNotificationsPanel(forceOpen = null) {
+      const panel = document.getElementById('notifications-panel');
+      if (!panel) return;
+      notificationsOpen = typeof forceOpen === 'boolean' ? forceOpen : !notificationsOpen;
+      panel.classList.toggle('hidden', !notificationsOpen);
+      if (notificationsOpen) {
+        notifications = window.TaskMDANotifications?.markAllRead
+          ? window.TaskMDANotifications.markAllRead(notifications)
+          : notifications.map(n => ({ ...n, read: true }));
+        saveNotifications();
+        renderNotifications();
+      }
+    }
+
+    async function openNotification(notificationId) {
+      const notif = notifications.find(n => n.id === notificationId);
+      if (!notif) return;
+      let openedGlobalMessages = false;
+      notifications = window.TaskMDANotifications?.markRead
+        ? window.TaskMDANotifications.markRead(notifications, notificationId)
+        : notifications.map(n => n.id === notificationId ? { ...n, read: true } : n);
+      saveNotifications();
+      renderNotifications();
+      if (notif.projectId) {
+        await showProjectDetail(notif.projectId);
+        if (notif.targetView) {
+          setProjectView(notif.targetView);
+        }
+      } else if (notif.targetView === 'profile') {
+        document.getElementById('btn-edit-user-name')?.click();
+      } else if (notif.targetView === 'global-tasks') {
+        await showGlobalWorkspace('tasks');
+      } else if (notif.targetView === 'global-calendar') {
+        await showGlobalWorkspace('calendar');
+      } else if (notif.targetView === 'global-docs') {
+        await showGlobalWorkspace('docs');
+      } else if (notif.targetView === 'feed') {
+        await showGlobalWorkspace('feed');
+      } else if (notif.targetView === 'messages') {
+        await showGlobalWorkspace('messages');
+        openedGlobalMessages = true;
+        const hinted = String(notif.hint || '').trim();
+        const channelId = hinted || String(notif.actorUserId || '').trim();
+        if (channelId) {
+          await selectGlobalMessageChannel(channelId);
+        }
+      }
+      if (notif.targetType === 'task' && notif.targetId) {
+        const target = document.getElementById(`task-card-${notif.targetId}`);
+        target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      if (notif.targetType === 'message' && notif.targetId) {
+        const target = document.getElementById(`message-item-${notif.targetId}`);
+        target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      if (notif.targetType === 'global-message') {
+        if (!openedGlobalMessages) {
+          await showGlobalWorkspace('messages');
+        }
+        const hinted = String(notif.hint || '').trim();
+        const channelId = hinted || String(notif.actorUserId || '').trim();
+        if (channelId) {
+          await selectGlobalMessageChannel(channelId);
+        }
+      }
+      if (notif.targetType === 'global-post' && notif.targetId) {
+        await openGlobalFeedPost(notif.targetId);
+      }
+      toggleNotificationsPanel(false);
+    }
+
+    function markAllNotificationsRead() {
+      notifications = window.TaskMDANotifications?.markAllRead
+        ? window.TaskMDANotifications.markAllRead(notifications)
+        : notifications.map(n => ({ ...n, read: true }));
+      saveNotifications();
+      renderNotifications();
+    }
+
+    function clearNotifications() {
+      notifications = [];
+      saveNotifications();
+      renderNotifications();
+    }
+
+    const NOTIFIED_EVENT_IDS_STORAGE_KEY = 'taskmda_notified_event_ids_v1';
+    const NOTIFIED_EVENT_IDS_MAX = 3000;
+
+    function loadNotifiedEventIds() {
+      try {
+        const raw = localStorage.getItem(NOTIFIED_EVENT_IDS_STORAGE_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+        if (!Array.isArray(parsed)) return new Set();
+        return new Set(parsed.filter(Boolean).map((id) => String(id)));
+      } catch {
+        return new Set();
+      }
+    }
+
+    function saveNotifiedEventIds(idsSet) {
+      try {
+        const arr = Array.from(idsSet || []).slice(-NOTIFIED_EVENT_IDS_MAX);
+        localStorage.setItem(NOTIFIED_EVENT_IDS_STORAGE_KEY, JSON.stringify(arr));
+      } catch {
+        // ignore quota/storage errors
+      }
+    }
+
+    renderNotifications = function renderNotificationsEnhanced() {
+      const list = document.getElementById('notifications-list');
+      const badge = document.getElementById('notif-badge');
+      if (!list || !badge) return;
+
+      const unread = window.TaskMDANotifications?.unreadCount
+        ? window.TaskMDANotifications.unreadCount(notifications)
+        : notifications.filter(n => !n.read).length;
+      badge.textContent = unread > 99 ? '99+' : String(unread);
+      badge.classList.toggle('hidden', unread === 0);
+
+      if (notifications.length === 0) {
+        list.innerHTML = '<p class="text-sm text-slate-500 text-center py-6">Aucune notification</p>';
+        return;
+      }
+
+      list.innerHTML = notifications.map(item => `
+        <button onclick="openNotification('${item.id}')" class="w-full text-left rounded-xl border px-3 py-2 ${
+          item.read ? 'border-slate-100 bg-white' : 'border-blue-200 bg-blue-50 shadow-sm'
+        } hover:bg-slate-50">
+          <div class="flex items-start justify-between gap-2">
+            <p class="text-sm ${item.read ? 'font-medium text-slate-700' : 'font-bold text-slate-900'}">${escapeHtml(item.title || 'Information')}</p>
+            <span class="text-[10px] text-slate-500">${new Date(item.timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
+          </div>
+          <p class="text-xs ${item.read ? 'text-slate-600' : 'text-slate-700'} mt-1">${escapeHtml(item.body || '')}</p>
+          <div class="mt-1 flex flex-wrap items-center gap-2 text-[11px]">
+            ${item.read ? '' : '<span class="inline-block w-2 h-2 rounded-full bg-blue-500" aria-hidden="true"></span>'}
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+              <span class="material-symbols-outlined text-[13px]">person</span>
+              <span>${escapeHtml(item.actorName || 'Systeme')}</span>
+            </span>
+            ${item.linkLabel ? `
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">
+                <span class="material-symbols-outlined text-[13px]">link</span>
+                <span>${escapeHtml(item.linkLabel)}</span>
+              </span>
+            ` : ''}
+          </div>
+        </button>
+      `).join('');
+    };
+
+    const addNotificationBase = addNotification;
+    addNotification = function addNotificationEnhanced(title, body, projectId = null, meta = {}) {
+      const payload = meta && typeof meta === 'object' ? meta : {};
+      const dedupeKey = String(payload.dedupeKey || '').trim();
+      if (dedupeKey) {
+        const duplicate = notifications.find(n => String(n?.dedupeKey || '') === dedupeKey);
+        if (duplicate) {
+          notifications = notifications.map(n => (
+            String(n?.dedupeKey || '') === dedupeKey
+              ? { ...n, read: false, timestamp: Date.now() }
+              : n
+          ));
+          saveNotifications();
+          renderNotifications();
+          return;
+        }
+      }
+      addNotificationBase(title, body, projectId, { ...payload, dedupeKey });
+    };
+
+    const buildCollaboratorNotificationFromEventBase = buildCollaboratorNotificationFromEvent;
+    buildCollaboratorNotificationFromEvent = function buildCollaboratorNotificationFromEventWithDedupe(event, state) {
+      const info = buildCollaboratorNotificationFromEventBase(event, state);
+      if (!info || !event?.eventId) return info;
+      const meta = info.meta && typeof info.meta === 'object' ? info.meta : {};
+      return {
+        ...info,
+        meta: {
+          ...meta,
+          dedupeKey: String(meta.dedupeKey || `event:${event.eventId}`)
+        }
+      };
+    };
+
+    const maybeNotifyCollaboratorEventBase = maybeNotifyCollaboratorEvent;
+    maybeNotifyCollaboratorEvent = async function maybeNotifyCollaboratorEventOnce(event) {
+      const eventId = String(event?.eventId || '').trim();
+      if (eventId && notifiedCollaboratorEventIds.has(eventId)) {
+        return false;
+      }
+      const notified = await maybeNotifyCollaboratorEventBase(event);
+      if (notified && eventId) {
+        notifiedCollaboratorEventIds.add(eventId);
+        if (notifiedCollaboratorEventIds.size > NOTIFIED_EVENT_IDS_MAX) {
+          const trimmed = Array.from(notifiedCollaboratorEventIds).slice(-NOTIFIED_EVENT_IDS_MAX);
+          notifiedCollaboratorEventIds = new Set(trimmed);
+        }
+        saveNotifiedEventIds(notifiedCollaboratorEventIds);
+      }
+      return notified;
+    };
+
+    toggleNotificationsPanel = function toggleNotificationsPanelEnhanced(forceOpen = null) {
+      const panel = document.getElementById('notifications-panel');
+      if (!panel) return;
+      notificationsOpen = typeof forceOpen === 'boolean' ? forceOpen : !notificationsOpen;
+      panel.classList.toggle('hidden', !notificationsOpen);
+    };
+
+    function loadReminderMemory() {
+      try {
+        const raw = localStorage.getItem('taskmda_due_reminders');
+        const parsed = raw ? JSON.parse(raw) : {};
+        if (!parsed || typeof parsed !== 'object') return {};
+        return parsed;
+      } catch {
+        return {};
+      }
+    }
+
+    function saveReminderMemory() {
+      try {
+        localStorage.setItem('taskmda_due_reminders', JSON.stringify(dueReminderMemory));
+      } catch {
+        // ignore quota/storage errors
+      }
+    }
+
+    function shouldEmitReminder(key, cooldownMs = 20 * 60 * 60 * 1000) {
+      const lastTs = Number(dueReminderMemory[key] || 0);
+      if (!Number.isFinite(lastTs) || lastTs <= 0) return true;
+      return (Date.now() - lastTs) > cooldownMs;
+    }
+
+    function markReminderSent(key) {
+      dueReminderMemory[key] = Date.now();
+      const cutoff = Date.now() - (45 * 24 * 60 * 60 * 1000);
+      Object.keys(dueReminderMemory).forEach((k) => {
+        if (Number(dueReminderMemory[k] || 0) < cutoff) delete dueReminderMemory[k];
+      });
+      saveReminderMemory();
+    }
+
+    async function ensureBrowserNotificationPermission() {
+      if (browserNotifPermissionChecked) return;
+      browserNotifPermissionChecked = true;
+      if (!('Notification' in window)) return;
+      if (Notification.permission !== 'default') return;
+      const notifPromptKey = 'taskmda_notif_prompted_v1';
+      if (localStorage.getItem(notifPromptKey) === '1') return;
+      try {
+        await Notification.requestPermission();
+      } catch (error) {
+        console.warn('Browser notification permission failed:', error);
+      } finally {
+        localStorage.setItem(notifPromptKey, '1');
+      }
+    }
+
+    function emitBrowserNotification(title, body, tag) {
+      if (!('Notification' in window)) return;
+      if (Notification.permission !== 'granted') return;
+      try {
+        const n = new Notification(title, {
+          body,
+          tag: tag || undefined,
+          renotify: false
+        });
+        setTimeout(() => n.close(), 9000);
+      } catch (error) {
+        console.warn('Browser notification failed:', error);
+      }
+    }
+
+    async function runDueReminderCheck() {
+      if (dueReminderBusy) return;
+      dueReminderBusy = true;
+      try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const scopedTasks = [];
+        const projects = await getAllProjects();
+        for (const project of projects) {
+          const state = await getProjectState(project.projectId);
+          (state?.tasks || []).forEach((task) => {
+            scopedTasks.push({
+              task,
+              scope: project.name || 'Projet',
+              scopeId: project.projectId || null
+            });
+          });
+        }
+
+        const globalTasks = await getAllDecrypted('globalTasks', 'id');
+        (globalTasks || []).forEach((task) => {
+          scopedTasks.push({
+            task,
+            scope: 'Hors projet',
+            scopeId: null
+          });
+        });
+
+        scopedTasks.forEach(({ task, scope, scopeId }) => {
+          if (!task || task.status === 'termine' || task.status === 'suspendu') return;
+          const dueKey = taskDueDateKey(task);
+          if (!dueKey) return;
+          const dueDate = new Date(`${dueKey}T00:00:00`);
+          if (Number.isNaN(dueDate.getTime())) return;
+          const diffDays = Math.round((dueDate.getTime() - today.getTime()) / 86400000);
+
+          let level = null;
+          if (diffDays < 0) level = 'overdue';
+          else if (diffDays === 0) level = 'today';
+          else if (diffDays === 1) level = 'tomorrow';
+          if (!level) return;
+
+          const reminderKey = `${task.id || task.taskId || task.title || 'task'}:${level}`;
+          if (!shouldEmitReminder(reminderKey)) return;
+
+          const taskTitle = String(task.title || 'Tache');
+          const body = level === 'overdue'
+            ? `${taskTitle} est en retard (${scope}).`
+            : level === 'today'
+              ? `${taskTitle} arrive a echeance aujourd'hui (${scope}).`
+              : `${taskTitle} arrive a echeance demain (${scope}).`;
+          const title = level === 'overdue' ? 'Tache en retard' : 'Rappel echeance';
+
+          addNotification(title, body, scopeId, {
+            actorName: 'Système',
+            targetType: 'task',
+            targetId: task.taskId || task.id || null,
+            targetView: scopeId ? 'list' : 'global-tasks',
+            linkLabel: scopeId ? 'Ouvrir la tâche' : 'Ouvrir les tâches'
+          });
+          emitBrowserNotification(title, body, reminderKey);
+          markReminderSent(reminderKey);
+        });
+      } catch (error) {
+        console.warn('Due reminder check failed:', error);
+      } finally {
+        dueReminderBusy = false;
+      }
+    }
+
+    function startDueReminders() {
+      if (dueReminderInterval) return;
+      runDueReminderCheck();
+      dueReminderInterval = setInterval(() => {
+        runDueReminderCheck();
+      }, 60000);
+    }
+
+    function stopDueReminders() {
+      if (!dueReminderInterval) return;
+      clearInterval(dueReminderInterval);
+      dueReminderInterval = null;
+    }
+
+    function loadBackupReminderLastTs() {
+      const raw = localStorage.getItem('taskmda_backup_reminder_last_ts');
+      const ts = Number(raw || 0);
+      return Number.isFinite(ts) ? ts : 0;
+    }
+
+    function markBackupReminderShown() {
+      localStorage.setItem('taskmda_backup_reminder_last_ts', String(Date.now()));
+    }
+
+    function shouldShowBackupReminder(cooldownMs = 36 * 60 * 60 * 1000) {
+      const lastTs = loadBackupReminderLastTs();
+      if (!lastTs) return true;
+      return (Date.now() - lastTs) >= cooldownMs;
+    }
+
+    async function hasBackupWorthyData() {
+      const [projects, globalTasks, globalDocs, globalCalendarItems] = await Promise.all([
+        getAllProjects(),
+        getAllDecrypted('globalTasks', 'id'),
+        getAllDecrypted('globalDocs', 'id'),
+        getAllDecrypted('globalCalendarItems', 'id')
+      ]);
+      return (projects?.length || 0) > 0
+        || (globalTasks?.length || 0) > 0
+        || (globalDocs?.length || 0) > 0
+        || (globalCalendarItems?.length || 0) > 0;
+    }
+
+    async function runBackupReminderCheck() {
+      try {
+        if (!shouldShowBackupReminder()) return;
+        if (Math.random() > 0.33) return;
+        if (!(await hasBackupWorthyData())) return;
+        const body = 'Exportez vos donnees utilisateur en JSON pour limiter le risque de perte en cas de suppression des donnees de site (IndexedDB incluse).';
+        showToast('Sauvegarde conseillee: export JSON disponible dans le profil');
+        addNotification('Sauvegarde conseillee', body, null, {
+          actorName: 'Système',
+          targetView: 'profile',
+          linkLabel: 'Ouvrir profil (export JSON)'
+        });
+        markBackupReminderShown();
+      } catch (error) {
+        console.warn('Backup reminder check failed:', error);
+      }
+    }
+
+    function startBackupReminders() {
+      if (backupReminderInterval) return;
+      setTimeout(() => {
+        runBackupReminderCheck();
+      }, 45000);
+      backupReminderInterval = setInterval(() => {
+        runBackupReminderCheck();
+      }, 20 * 60 * 1000);
+    }
+
+    function stopBackupReminders() {
+      if (!backupReminderInterval) return;
+      clearInterval(backupReminderInterval);
+      backupReminderInterval = null;
+    }
+
+    function showToast(message, duration = 3000) {
+      if (window.TaskMDAUI?.showToast) {
+        window.TaskMDAUI.showToast(message, duration);
+        return;
+      }
+      const toast = document.getElementById('toast');
+      if (!toast) return;
+      toast.textContent = message;
+      toast.classList.remove('hidden');
+      setTimeout(() => {
+        toast.classList.add('hidden');
+      }, duration);
+    }
+
+    async function notifyNewEvent(projectId, event = null) {
+      await refreshStats();
+
+      // Si on est dans la vue détaillée de ce projet, la rafraîchir
+      if (currentProjectId === projectId) {
+        await showProjectDetail(projectId);
+      } else {
+        await renderProjects();
+        applyLiveSearchFilter();
+      }
+    }
+
+    function isDashboardNewsVisibleContext() {
+      if (workspaceMode !== 'dashboard') return false;
+      const stats = document.getElementById('dashboard-stats');
+      return !stats || !stats.classList.contains('hidden');
+    }
+
+    function getDashboardNewsTypeMeta(post) {
+      if (post?.isAuto && post?.autoKind === 'project-created') return { label: 'Projet', icon: 'folder' };
+      if (post?.isAuto && post?.autoKind === 'task-created') return { label: 'Tâche', icon: 'assignment_add' };
+      if ((post?.mentions || []).length > 0) return { label: 'Mention', icon: 'alternate_email' };
+      if ((post?.refs || []).length > 0) return { label: 'Référence', icon: 'link' };
+      return { label: 'Post', icon: 'campaign' };
+    }
+
+    function getDashboardMajorNewsItems(posts, limit = 4) {
+      const source = Array.isArray(posts) ? posts : [];
+      return source
+        .filter((post) => post && !post.deletedAt)
+        .filter((post) => {
+          const content = String(post.content || '').trim();
+          return Boolean(post.isAuto)
+            || (Array.isArray(post.mentions) && post.mentions.length > 0)
+            || (Array.isArray(post.refs) && post.refs.length > 0)
+            || content.length >= 45;
+        })
+        .sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0))
+        .slice(0, Math.max(1, limit));
+    }
+
+    function stripMentionMarkupForDashboard(value) {
+      const text = String(value || '');
+      return text
+        .replace(/@\[(.*?)\]/g, (_, name) => String(name || '').trim())
+        .replace(/@([a-z0-9][a-z0-9._-]{1,63})/gi, '$1')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+    }
+
+    function extractFirstImageSrcFromHtml(html) {
+      if (!html) return null;
+      try {
+        const div = document.createElement('div');
+        div.innerHTML = String(html);
+        const img = div.querySelector('img');
+        return img ? img.src : null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    async function renderDashboardNews() {
+      const panel = document.getElementById('dashboard-news');
+      const list = document.getElementById('dashboard-news-list');
+      if (!panel || !list) return;
+
+      if (!isDashboardNewsVisibleContext()) {
+        panel.classList.add('hidden');
+        list.innerHTML = '';
+        return;
+      }
+
+      const posts = await getAllDecrypted('globalPosts', 'postId') || [];
+      const items = getDashboardMajorNewsItems(posts, 4);
+      if (!items.length) {
+        panel.classList.remove('hidden');
+        list.innerHTML = '<div class="dashboard-news-empty">Aucune actualité majeure pour le moment.</div>';
+        return;
+      }
+
+      list.innerHTML = items.map((post, index) => {
+        const isHero = index === 0;
+        const plainText = getProjectDescriptionPlainText(post.content || '');
+        const content = stripMentionMarkupForDashboard(plainText);
+        let [headlineRaw, ...subtitleRaws] = content.split('\\n');
+        const headline = stripMentionMarkupForDashboard(headlineRaw || '') || 'Mise à jour';
+        
+        let subtitleSrc = subtitleRaws.join(' ').trim();
+        if (!subtitleSrc) {
+          subtitleSrc = (post.refs || []).map((ref) => ref?.label).filter(Boolean).slice(0, 2).join(' • ');
+        }
+        const subtitle = stripMentionMarkupForDashboard(subtitleSrc);
+        
+        const imgSrc = extractFirstImageSrcFromHtml(post.content);
+        let imgHtml = '';
+        if (imgSrc) {
+          // Si limage est un base64 très long, il fonctionnera comme nimporte quelle URL
+          imgHtml = `<img src="${escapeHtml(imgSrc)}" class="dashboard-news-image" alt="" loading="lazy">`;
+        } else if (isHero) {
+          // Visuel par défaut pour la Une quand il n'y a pas d'image
+          const firstLetter = headline.charAt(0).toUpperCase() || 'A';
+          const gradients = [
+            'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+            'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+            'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+            'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+            'linear-gradient(135deg, #30cfd0 0%, #330867 100%)',
+            'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
+            'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)'
+          ];
+          // Sélectionner un gradient basé sur le hash du titre pour cohérence
+          const gradientIndex = Math.abs(headline.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % gradients.length;
+          const gradient = gradients[gradientIndex];
+
+          imgHtml = `
+            <div class="dashboard-news-hero-default" style="background: ${gradient}">
+              <div class="dashboard-news-hero-letter">${escapeHtml(firstLetter)}</div>
+              <div class="dashboard-news-hero-title">${escapeHtml(headline)}</div>
+            </div>
+          `;
+        }
+
+        const typeMeta = getDashboardNewsTypeMeta(post);
+        const ts = Number(post.createdAt || Date.now());
+        const timeText = new Date(ts).toLocaleString('fr-FR', {
+          day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
+        });
+        
+        const heroClass = isHero ? 'dashboard-news-item-hero' : '';
+        const hasDefaultHero = isHero && !imgSrc;  // Visuel par défaut utilisé
+
+        return `
+          <article class="dashboard-news-item ${heroClass}">
+            <div class="dashboard-news-item-top">
+              <span class="dashboard-news-type">
+                <span class="material-symbols-outlined">${escapeHtml(typeMeta.icon)}</span>
+                ${escapeHtml(typeMeta.label)}
+              </span>
+            </div>
+            ${imgHtml}
+            <div class="dashboard-news-item-main">
+              ${!hasDefaultHero ? `<div class="dashboard-news-text">${escapeHtml(headline)}</div>` : ''}
+              ${subtitle ? `<div class="dashboard-news-sub">${escapeHtml(subtitle)}</div>` : ''}
+            </div>
+            <time class="dashboard-news-time">${escapeHtml(timeText)}</time>
+          </article>
+        `;
+      }).join('');
+      panel.classList.remove('hidden');
+    }
+
+    async function renderProjects() {
+      await refreshKnownUsersCache();
+      const projects = await getAllProjects();
+      const projectsWithDescriptionMeta = projects.map((project) => {
+        const descriptionPlain = getProjectDescriptionPlainText(project.description || '');
+        return {
+          ...project,
+          _descriptionPlain: descriptionPlain,
+          _descriptionCard: getProjectCardDescription(project.description || '')
+        };
+      });
+      const container = document.getElementById('projects-container');
+      const projectsList = document.getElementById('projects-list');
+      const paginationContainer = document.getElementById('projects-pagination');
+      const shouldShowProjectsList = workspaceMode === 'dashboard';
+      const isListView = projectsViewMode === 'list';
+      container.className = isListView
+        ? 'space-y-3'
+        : 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4';
+      updateProjectsViewButtons();
+      const filteredProjects = projectsWithDescriptionMeta.filter(project => matchesQuery([
+        project.name,
+        project._descriptionPlain,
+        project.status,
+        project.sharingMode
+      ], globalSearchQuery));
+      if (paginationContainer) paginationContainer.innerHTML = '';
+
+      if (projectsWithDescriptionMeta.length === 0) {
+        projectsList.classList.toggle('hidden', !shouldShowProjectsList);
+        container.className = 'grid grid-cols-1';
+        container.innerHTML = `
+          <button
+            type="button"
+            class="projects-empty-state"
+            onclick="document.getElementById('btn-create-project')?.click()"
+            aria-label="Créer un nouveau projet"
+          >
+            <span class="projects-empty-icon material-symbols-outlined">add</span>
+            <span class="projects-empty-title">Démarrer un autre projet</span>
+            <span class="projects-empty-subtitle">Créez un projet solo ou collaboratif pour organiser les tâches, documents et échanges de votre équipe.</span>
+          </button>
+        `;
+        if (paginationContainer) paginationContainer.innerHTML = '';
+        await renderDashboardNews();
+        return;
+      }
+
+      projectsList.classList.toggle('hidden', !shouldShowProjectsList);
+      if (filteredProjects.length === 0) {
+        container.innerHTML = '<p class="text-slate-500 text-center py-8">Aucun projet ne correspond à la recherche</p>';
+        await renderDashboardNews();
+        return;
+      }
+
+      const pagination = paginateItems(filteredProjects, projectsPage, paginationConfig.projectsPerPage);
+      projectsPage = pagination.currentPage;
+      const pageStates = await Promise.all(
+        pagination.pageItems.map(async (project) => {
+          const state = await getProjectState(project.projectId);
+          return [project.projectId, state];
+        })
+      );
+      const stateByProjectId = new Map(pageStates);
+      container.innerHTML = pagination.pageItems.map(project => {
+        const state = stateByProjectId.get(project.projectId);
+        const canEdit = canEditProjectMeta(state);
+        const canDelete = canDeleteProjectMeta(state);
+        const isPrivate = project.sharingMode === 'private';
+        const icon = isPrivate ? 'lock' : 'groups';
+        const badge = isPrivate
+          ? '<span class="text-xs px-2 py-1 bg-slate-100 text-slate-700 rounded-full font-semibold whitespace-nowrap">PRIVE</span>'
+          : '<span class="text-xs px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full font-semibold whitespace-nowrap">PARTAGE</span>';
+        const status = String(project.status || 'en-cours');
+        const statusBadge = status === 'urgent'
+          ? '<span class="text-[10px] px-2 py-1 rounded-full bg-red-100 text-red-700 font-semibold uppercase whitespace-nowrap">Urgent</span>'
+          : status === 'termine'
+            ? '<span class="text-[10px] px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 font-semibold uppercase whitespace-nowrap">Termine</span>'
+            : status === 'planifie'
+              ? '<span class="text-[10px] px-2 py-1 rounded-full bg-amber-100 text-amber-700 font-semibold uppercase whitespace-nowrap">Planifie</span>'
+              : '<span class="text-[10px] px-2 py-1 rounded-full bg-blue-100 text-blue-700 font-semibold uppercase whitespace-nowrap">En&nbsp;cours</span>';
+        const progressClass = status === 'urgent'
+          ? 'bg-red-500 w-[82%]'
+          : status === 'termine'
+            ? 'bg-emerald-500 w-full'
+            : status === 'planifie'
+              ? 'bg-amber-500 w-[28%]'
+              : 'bg-primary w-[58%]';
+        const participantRows = (state?.members || []).map(member => ({
+          userId: member.userId,
+          name: member.displayName || ''
+        }));
+        if (participantRows.length === 0 && project?.createdBy) {
+          participantRows.push({ userId: project.createdBy, name: '' });
+        }
+        const participantsHtml = renderParticipantsStack(participantRows, 3);
+        const projectCreatorIdentity = resolveKnownUserIdentity(project?.createdBy || '', project?.createdBy ? fallbackDirectoryName(project.createdBy) : 'Utilisateur');
+        const projectCreatorName = projectCreatorIdentity?.name || 'Utilisateur';
+        const creatorTooltip = `Projet cree par ${projectCreatorName}`;
+
+        return `
+          <div class="project-card rounded-xl p-6 cursor-pointer ${isListView ? 'project-card-list' : ''}" onclick="showProjectDetail('${project.projectId}')">
+            <div class="flex items-start justify-between mb-2 gap-3">
+              <h4 class="text-xl font-bold font-headline text-slate-900 flex items-center gap-2">
+                <span class="material-symbols-outlined text-primary text-lg">${icon}</span>
+                <span>${project.name}</span>
+              </h4>
+              <div class="flex items-center gap-1">${badge}${statusBadge}</div>
+            </div>
+            <p class="text-gray-600 text-sm mb-4 line-clamp-2">${escapeHtml(project._descriptionCard || 'Aucune description')}</p>
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2 text-sm text-gray-500">
+                <span class="material-symbols-outlined text-lg">calendar_today</span>
+                <span>${new Date(project.createdAt).toLocaleDateString('fr-FR')}</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span title="${escapeHtml(creatorTooltip)}" aria-label="${escapeHtml(creatorTooltip)}">${participantsHtml}</span>
+                <span class="text-[11px] font-semibold text-slate-500">${isPrivate ? 'Mode solo' : 'Mode collaboratif'}</span>
+              </div>
+            </div>
+            <div class="mt-3 flex items-center gap-2">
+              <button
+                class="px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-slate-300 ${canEdit ? 'bg-white text-slate-700 hover:bg-slate-50' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}"
+                ${canEdit ? '' : 'disabled title="Reserve aux Proprietaires/Managers"'}
+                onclick="event.stopPropagation(); openEditProjectModalFromDashboard('${project.projectId}')"
+              >Modifier</button>
+              <button
+                class="px-2.5 py-1.5 rounded-lg text-xs font-semibold border ${canDelete ? 'border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100' : 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'}"
+                ${canDelete ? '' : 'disabled title="Reserve au Proprietaire"'}
+                onclick="event.stopPropagation(); deleteProjectFromDashboard('${project.projectId}')"
+              >Supprimer</button>
+            </div>
+            <div class="mt-4 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+              <div class="h-full rounded-full ${progressClass}"></div>
+            </div>
+            <div class="mt-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">${status}</div>
+          </div>
+        `;
+      }).join('');
+      renderPagination('projects-pagination', pagination, 'setProjectsPage', 'projets');
+      await renderDashboardNews();
+    }
+
+    let currentProjectId = null;
+    let currentProjectState = null;
+    let currentProjectEvents = [];
+    let workspaceMode = 'dashboard'; // dashboard | project | global
+    let globalWorkspaceView = 'tasks'; // tasks | calendar | docs | messages | feed | settings
+    let globalSettingsTab = localStorage.getItem('taskmda_global_settings_tab') || 'branding'; // branding | themes | groups | roles | software
+    let globalSettingsHelpOpen = false;
+    let projectDetailMode = 'work'; // work | settings
+    let projectSettingsTab = 'members'; // members | collab | permissions
+    let projectSubnavLayout = localStorage.getItem('taskmda_project_subnav_layout') === 'vertical' ? 'vertical' : 'horizontal';
+    let projectPermissionDetailsOpen = false;
+    let activeProjectView = 'list';
+    let projectTaskPresentationMode = localStorage.getItem('taskmda_project_task_presentation') === 'list' ? 'list' : 'cards';
+    let editingTaskId = null;
+    let draggedTaskId = null;
+    let timelineFilter = 'all';
+    let calendarCursor = new Date();
+    let selectedCalendarDayKey = null;
+    let calendarDayFilterEnabled = false;
+    let editingMessageId = null;
+    let editingMessageDraft = '';
+    let messageMarkdownDebounceTimer = null;
+    let messageRenderedDraftHtml = '';
+    let projectDescriptionExpanded = false;
+    let emojiPickerOpen = false;
+    let globalEmojiPickerOpen = false;
+    let messageFilters = { query: '', onlyMine: false };
+    let globalSearchQuery = '';
+    let headerSearchResults = [];
+    let headerSearchActiveIndex = -1;
+    let headerSearchDebounceTimer = null;
+    let headerSearchRequestToken = 0;
+    let docsFilters = { query: '', type: 'all', sort: 'recent' };
+    let activityFilters = { type: 'all', author: '', period: 'all' };
+    let notifications = [];
+    let notificationsOpen = false;
+    let notifiedCollaboratorEventIds = new Set();
+    let dueReminderInterval = null;
+    let backupReminderInterval = null;
+    let dueReminderBusy = false;
+    let editProjectFromDashboard = false;
+    let dueReminderMemory = {};
+    let browserNotifPermissionChecked = false;
+    let standaloneTaskMode = false;
+    let globalTasksViewMode = localStorage.getItem('taskmda_global_tasks_view') || 'cards'; // cards | list | kanban | timeline
+    let globalTimelineDisplayMode = localStorage.getItem('taskmda_global_timeline_mode') === 'list' ? 'list' : 'columns'; // columns | list
+    let globalTimelineExpandedGroups = {
+      overdue: false,
+      today: false,
+      upcoming: false,
+      nodue: false
+    };
+    let globalCalendarViewMode = 'grid'; // list | grid
+    let globalCalendarSelectedDay = null;
+    let editingGlobalCalendarItemId = null;
+    let currentCalendarInfoDetailId = null;
+    let currentDocBindingContext = null;
+    let currentDocEditorContext = null;
+    let docSpreadsheetEditorState = {
+      table: null,
+      activeTab: 'css',
+      workbook: null,
+      sheetName: '',
+      xlsxColumns: 8,
+      cssRows: []
+    };
+    let selectedUserGroupId = null;
+    let selectedProjectGroupId = null;
+    let taskPendingGroupMemberUserIds = [];
+    let editingStandaloneTaskId = null;
+    let pendingTaskConvertRef = null;
+    let globalThemeCatalog = [];
+    let globalGroupCatalog = [];
+    let globalSoftwareVersionCatalog = [];
+    let globalGroupMemberRepairAttempted = false;
+    let knownUsersCache = new Map();
+    let projectsViewMode = localStorage.getItem('taskmda_projects_view') === 'list' ? 'list' : 'grid';
+    const paginationConfig = {
+      projectsPerPage: 6,
+      tasksPerPage: 8,
+      globalTasksPerPage: 10
+    };
+    let projectsPage = 1;
+    let tasksPage = 1;
+    let globalTasksPage = 1;
+    const GLOBAL_MESSAGE_BROADCAST_TARGET = '__all__';
+    const GLOBAL_MESSAGE_BROADCAST_USER_ID = '*';
+    const GLOBAL_MESSAGE_GROUP_TARGET_PREFIX = '__group__:';
+    const GLOBAL_MESSAGE_GROUP_CONVERSATION_PREFIX = 'group__';
+    const GLOBAL_MESSAGE_GROUP_SELECTION_PREFIX = 'group:';
+    const GLOBAL_MESSAGE_CONTACTS_INITIAL_BATCH = 24;
+    const GLOBAL_MESSAGE_CONTACTS_BATCH_SIZE = 20;
+    const GLOBAL_MESSAGE_THREAD_INITIAL_BATCH = 40;
+    const GLOBAL_MESSAGE_THREAD_BATCH_SIZE = 32;
+    const GLOBAL_MESSAGE_BROADCAST_LABEL = 'Canal général (tous les agents connus)';
+    const GLOBAL_MESSAGE_HIDDEN_GROUPS_STORAGE_KEY = 'taskmda_global_hidden_group_channels_v1';
+    let globalMessagePeerUserId = GLOBAL_MESSAGE_BROADCAST_TARGET;
+    let globalMessageActiveGroupConversationId = '';
+    let globalMessageRecipientUserIds = new Set();
+    let globalMessageContactsRenderLimit = GLOBAL_MESSAGE_CONTACTS_INITIAL_BATCH;
+    let globalMessageThreadRenderLimit = GLOBAL_MESSAGE_THREAD_INITIAL_BATCH;
+    let editingGlobalMessageId = null;
+    let editingGlobalMessageDraft = '';
+    let knownGlobalMessageIds = new Set();
+    let knownGlobalPostIds = new Set();
+    let globalFeedFocusPostId = '';
+    let globalFeedFilterMode = 'all'; // all | auto | manual | mentions | project-refs | task-refs
+    let globalFeedSortMode = 'desc'; // desc | asc
+    let globalFeedMentionCatalogCache = null;
+    const GLOBAL_MESSAGE_READ_STORAGE_KEY = 'taskmda_global_message_reads_v1';
+    let globalMessageReadMap = loadGlobalMessageReadMap();
+    let globalMessageHiddenGroupChannels = loadGlobalMessageHiddenGroupChannels();
+    let projectTaskCardsColumns = Math.min(4, Math.max(1, Number.parseInt(localStorage.getItem('taskmda_project_task_cards_cols') || '1', 10) || 1));
+    let globalTaskCardsColumns = Math.min(4, Math.max(1, Number.parseInt(localStorage.getItem('taskmda_global_task_cards_cols') || '1', 10) || 1));
+    const GLOBAL_KANBAN_INITIAL_BATCH = 18;
+    const GLOBAL_KANBAN_BATCH_SIZE = 18;
+    const GLOBAL_KANBAN_SCROLL_THRESHOLD_PX = 84;
+    const GLOBAL_TIMELINE_INITIAL_BATCH = 16;
+    const GLOBAL_TIMELINE_BATCH_SIZE = 16;
+    const GLOBAL_TIMELINE_SCROLL_THRESHOLD_PX = 84;
+    let draggedGlobalTaskRef = null;
+    let currentGlobalTaskDetailRef = '';
+    let globalKanbanInfiniteScrollState = null;
+    const chatEmojiPalette = [
+      '\u{1F600}', '\u{1F604}', '\u{1F642}', '\u{1F609}', '\u{1F60A}', '\u{1F60D}', '\u{1F60E}', '\u{1F91D}',
+      '\u{1F44D}', '\u{1F44F}', '\u{1F64C}', '\u{1F64F}', '\u{1F4A1}', '\u{2705}', '\u{26A0}\u{FE0F}', '\u{1F680}',
+      '\u{1F4CC}', '\u{1F4C5}', '\u{1F4CE}', '\u{1F4DD}', '\u{1F4E3}', '\u{1F3AF}', '\u{1F525}', '\u{1F4AC}'
+    ];
+    let projectEditorEmojiPickerOpen = false;
+    let projectEditorEmojiTarget = '';
+    let projectEditorEmojiAnchorId = '';
+    const projectDescriptionQuillEditors = new Map();
+    let activeProjectEditorImage = null;
+    let activeProjectEditorId = '';
+    let projectImageResizeDragState = null;
+    const extendedEmojiPalette = [
+      ...chatEmojiPalette,
+      '\u{1F972}', '\u{1F976}', '\u{1F92F}', '\u{1F913}', '\u{1F60C}', '\u{1F644}', '\u{1F914}', '\u{1F631}', '\u{1F92D}', '\u{1F92B}',
+      '\u{1F47B}', '\u{1F916}', '\u{1F47E}', '\u{1F4A4}', '\u{1F9D1}\u{200D}\u{1F4BB}', '\u{1F9D1}\u{200D}\u{1F4BC}', '\u{1F468}\u{200D}\u{1F4BB}', '\u{1F469}\u{200D}\u{1F4BB}', '\u{1F52E}', '\u{1F3A8}',
+      '\u{1F4B0}', '\u{1F4B3}', '\u{1F4B8}', '\u{1F3E2}', '\u{1F3DB}\u{FE0F}', '\u{1F3E5}', '\u{1F3EB}', '\u{1F3E6}', '\u{1F4E6}', '\u{1F69A}',
+      '\u{1F9FE}', '\u{1F5C3}\u{FE0F}', '\u{1F5C4}\u{FE0F}', '\u{1F4DC}', '\u{1F4C3}', '\u{1F9FE}', '\u{1F4F0}', '\u{1F3F7}\u{FE0F}', '\u{1F4A2}', '\u{1F53D}'
+    ];
+
+    function escapeHtml(value) {
+      if (value === null || value === undefined) return '';
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function extractDataUrlMimeType(url) {
+      const raw = String(url || '').trim();
+      if (!raw.toLowerCase().startsWith('data:')) return '';
+      const withoutPrefix = raw.slice(5);
+      const sepIdx = withoutPrefix.search(/[;,]/);
+      const mime = (sepIdx >= 0 ? withoutPrefix.slice(0, sepIdx) : withoutPrefix).trim().toLowerCase();
+      return mime;
+    }
+
+    function isDangerousUrlScheme(url) {
+      const lower = String(url || '').trim().toLowerCase();
+      return lower.startsWith('javascript:') || lower.startsWith('vbscript:');
+    }
+
+    function sanitizeUrlForDom(url, options = {}) {
+      const raw = String(url || '').trim();
+      if (!raw) return '';
+      if (isDangerousUrlScheme(raw)) return '';
+      const lower = raw.toLowerCase();
+      const allowHttp = options.allowHttp !== false;
+      const allowBlob = options.allowBlob !== false;
+      const allowData = options.allowData !== false;
+      const allowDataMimePrefixes = Array.isArray(options.allowDataMimePrefixes)
+        ? options.allowDataMimePrefixes.map((v) => String(v || '').toLowerCase()).filter(Boolean)
+        : [];
+
+      if (lower.startsWith('https://') || lower.startsWith('http://')) {
+        return allowHttp ? raw : '';
+      }
+      if (lower.startsWith('blob:')) {
+        return allowBlob ? raw : '';
+      }
+      if (lower.startsWith('data:')) {
+        if (!allowData) return '';
+        const mime = extractDataUrlMimeType(raw);
+        if (!mime) return '';
+        if (allowDataMimePrefixes.length === 0) return raw;
+        const ok = allowDataMimePrefixes.some((prefix) => mime.startsWith(prefix));
+        return ok ? raw : '';
+      }
+      return '';
+    }
+
+    function sanitizeAvatarDataUrl(url) {
+      return sanitizeUrlForDom(url, {
+        allowHttp: true,
+        allowBlob: true,
+        allowData: true,
+        allowDataMimePrefixes: ['image/']
+      });
+    }
+
+    function safeAvatarInlineStyle(url, fallbackColor) {
+      const safeUrl = sanitizeAvatarDataUrl(url);
+      if (safeUrl) {
+        const escapedUrl = safeUrl.replace(/'/g, '%27').replace(/"/g, '%22');
+        return `background-image:url('${escapedUrl}'); background-size:cover; background-position:center; color:transparent;`;
+      }
+      return `background:${fallbackColor};`;
+    }
+
+    function sanitizeDownloadHref(url, mimeHint = '') {
+      const hints = [String(mimeHint || '').toLowerCase()];
+      return sanitizeUrlForDom(url, {
+        allowHttp: true,
+        allowBlob: true,
+        allowData: true,
+        allowDataMimePrefixes: [
+          ...hints.filter(Boolean),
+          'application/octet-stream',
+          'application/pdf',
+          'image/',
+          'text/',
+          'application/msword',
+          'application/vnd',
+          'application/rtf',
+          'application/zip'
+        ]
+      });
+    }
+
+    const LOCK_SCOPE_TASK = 'task';
+    const LOCK_SCOPE_PROJECT = 'project';
+    const LOCK_SCOPE_CALENDAR = 'calendar-item';
+    const CALENDAR_LOCKS_SETTINGS_KEY = 'calendar_resource_locks';
+    let activeTaskEditLock = null;
+    let activeProjectEditLock = null;
+    let activeCalendarEditLock = null;
+
+    function buildResourceLockKey(resourceType, resourceId) {
+      return `${String(resourceType || '').trim()}:${String(resourceId || '').trim()}`;
+    }
+
+    function getCurrentUserLockDisplayName() {
+      return String(currentUser?.name || fallbackDirectoryName(currentUser?.userId || '') || 'Utilisateur').trim();
+    }
+
+    function normalizeResourceLockRow(lock, now = Date.now()) {
+      if (!lock || typeof lock !== 'object') return null;
+      const resourceType = String(lock.resourceType || '').trim();
+      const resourceId = String(lock.resourceId || '').trim();
+      const ownerUserId = String(lock.ownerUserId || '').trim();
+      const expiresAt = Number(lock.expiresAt || 0);
+      if (!resourceType || !resourceId || !ownerUserId) return null;
+      if (!Number.isFinite(expiresAt) || expiresAt <= now) return null;
+      return {
+        resourceType,
+        resourceId,
+        lockId: String(lock.lockId || '').trim(),
+        ownerUserId,
+        ownerName: String(lock.ownerName || '').trim(),
+        scope: String(lock.scope || '').trim(),
+        updatedAt: Number(lock.updatedAt || now) || now,
+        expiresAt
+      };
+    }
+
+    function getProjectResourceLock(state, resourceType, resourceId, options = {}) {
+      const lockKey = buildResourceLockKey(resourceType, resourceId);
+      const source = (state?.resourceLocks && typeof state.resourceLocks === 'object') ? state.resourceLocks : {};
+      const normalized = normalizeResourceLockRow(source[lockKey], Number(options.now || Date.now()));
+      return normalized;
+    }
+
+    function isProjectResourceLockedByOther(state, resourceType, resourceId, userId = currentUser?.userId) {
+      const lock = getProjectResourceLock(state, resourceType, resourceId);
+      if (!lock) return false;
+      return String(lock.ownerUserId || '') !== String(userId || '');
+    }
+
+    function formatLockOwner(lock) {
+      if (!lock) return 'Un autre utilisateur';
+      const name = String(lock.ownerName || '').trim();
+      if (name) return name;
+      return fallbackDirectoryName(lock.ownerUserId || '') || 'Un autre utilisateur';
+    }
+
+    function buildProjectLockHintHtml(state, resourceType, resourceId, compact = false) {
+      const lock = getProjectResourceLock(state, resourceType, resourceId);
+      if (!lock || String(lock.ownerUserId || '') === String(currentUser?.userId || '')) return '';
+      const owner = escapeHtml(formatLockOwner(lock));
+      const minutesLeft = Math.max(1, Math.ceil((Number(lock.expiresAt || 0) - Date.now()) / 60000));
+      if (compact) {
+        return `<span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold" title="${owner} modifie en ce moment">${owner} modifie…</span>`;
+      }
+      return `<div class="text-xs mt-2 px-2 py-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-200">${owner} modifie en ce moment (${minutesLeft} min max).</div>`;
+    }
+
+    async function publishProjectLockEvent(projectId, type, payload) {
+      if (!projectId) return;
+      const event = createEvent(type, projectId, currentUser.userId, payload);
+      await publishEvent(event);
+      if (sharedFolderHandle) {
+        await writeEventToSharedFolder(projectId, event);
+      }
+    }
+
+    async function acquireProjectResourceLock(projectId, resourceType, resourceId, options = {}) {
+      const pid = String(projectId || '').trim();
+      const rid = String(resourceId || '').trim();
+      const rtype = String(resourceType || '').trim();
+      if (!pid || !rid || !rtype) return { ok: false, reason: 'invalid' };
+      const state = await getProjectState(pid, { ignoreAccessCheck: true });
+      const existing = getProjectResourceLock(state, rtype, rid);
+      if (existing && String(existing.ownerUserId || '') !== String(currentUser?.userId || '')) {
+        return { ok: false, reason: 'locked-by-other', lock: existing };
+      }
+      const lockId = String(options.lockId || '').trim() || uuidv4();
+      const ttlMs = Math.max(60 * 1000, Math.min(30 * 60 * 1000, Number(options.ttlMs || DEFAULT_LOCK_TTL_MS) || DEFAULT_LOCK_TTL_MS));
+      await publishProjectLockEvent(pid, EventTypes.LOCK_RESOURCE, {
+        resourceType: rtype,
+        resourceId: rid,
+        lockId,
+        scope: String(options.scope || '').trim(),
+        ownerUserId: currentUser.userId,
+        ownerName: getCurrentUserLockDisplayName(),
+        ttlMs
+      });
+      return { ok: true, lockId };
+    }
+
+    async function releaseProjectResourceLock(projectId, resourceType, resourceId, lockId = '') {
+      const pid = String(projectId || '').trim();
+      const rid = String(resourceId || '').trim();
+      const rtype = String(resourceType || '').trim();
+      if (!pid || !rid || !rtype) return false;
+      await publishProjectLockEvent(pid, EventTypes.UNLOCK_RESOURCE, {
+        resourceType: rtype,
+        resourceId: rid,
+        lockId: String(lockId || '').trim(),
+        ownerUserId: currentUser.userId
+      });
+      return true;
+    }
+
+    function buildLockBlockedMessage(lock, fallback = "Ressource en cours d'édition") {
+      const owner = formatLockOwner(lock);
+      return `${owner} modifie en ce moment. Réessayez dans un instant.`;
+    }
+
+    function ensureProjectResourceUnlockedForAction(state, resourceType, resourceId, actionLabel = 'action') {
+      const lock = getProjectResourceLock(state, resourceType, resourceId);
+      if (!lock) return { ok: true, lock: null };
+      if (String(lock.ownerUserId || '') === String(currentUser?.userId || '')) {
+        return { ok: true, lock };
+      }
+      showToast(`${formatLockOwner(lock)} modifie en ce moment. ${actionLabel} temporairement bloquée.`);
+      return { ok: false, lock };
+    }
+
+    async function getCalendarLocksMap() {
+      const row = await getDecrypted('appSettings', CALENDAR_LOCKS_SETTINGS_KEY, 'key');
+      const map = (row && typeof row.value === 'object' && row.value) ? row.value : {};
+      return pruneResourceLocksMap(map);
+    }
+
+    async function saveCalendarLocksMap(lockMap) {
+      const cleaned = pruneResourceLocksMap(lockMap);
+      await putEncrypted('appSettings', {
+        key: CALENDAR_LOCKS_SETTINGS_KEY,
+        value: cleaned,
+        updatedAt: Date.now()
+      }, 'key');
+    }
+
+    async function acquireCalendarItemLock(itemId) {
+      const id = String(itemId || '').trim();
+      if (!id) return { ok: false, reason: 'invalid' };
+      const lockKey = buildResourceLockKey(LOCK_SCOPE_CALENDAR, id);
+      const locks = await getCalendarLocksMap();
+      const existing = normalizeResourceLockRow(locks[lockKey]);
+      if (existing && String(existing.ownerUserId || '') !== String(currentUser?.userId || '')) {
+        return { ok: false, reason: 'locked-by-other', lock: existing };
+      }
+      const lockId = uuidv4();
+      locks[lockKey] = {
+        resourceType: LOCK_SCOPE_CALENDAR,
+        resourceId: id,
+        lockId,
+        ownerUserId: currentUser.userId,
+        ownerName: getCurrentUserLockDisplayName(),
+        scope: 'calendar',
+        updatedAt: Date.now(),
+        expiresAt: Date.now() + DEFAULT_LOCK_TTL_MS
+      };
+      await saveCalendarLocksMap(locks);
+      return { ok: true, lockId };
+    }
+
+    async function releaseCalendarItemLock(itemId, lockId = '') {
+      const id = String(itemId || '').trim();
+      if (!id) return false;
+      const lockKey = buildResourceLockKey(LOCK_SCOPE_CALENDAR, id);
+      const locks = await getCalendarLocksMap();
+      const existing = normalizeResourceLockRow(locks[lockKey]);
+      if (!existing) return false;
+      if (String(existing.ownerUserId || '') !== String(currentUser?.userId || '')) return false;
+      if (lockId && String(existing.lockId || '') !== String(lockId || '')) return false;
+      delete locks[lockKey];
+      await saveCalendarLocksMap(locks);
+      return true;
+    }
+
+    async function ensureCalendarItemUnlockedForAction(itemId, actionLabel = 'Action') {
+      const id = String(itemId || '').trim();
+      if (!id) return { ok: true };
+      const locks = await getCalendarLocksMap();
+      const lock = normalizeResourceLockRow(locks[buildResourceLockKey(LOCK_SCOPE_CALENDAR, id)]);
+      if (!lock || String(lock.ownerUserId || '') === String(currentUser?.userId || '')) {
+        return { ok: true, lock };
+      }
+      showToast(`${formatLockOwner(lock)} modifie cette information. ${actionLabel} temporairement bloquée.`);
+      return { ok: false, lock };
+    }
+
+    function formatDate(dateValue) {
+      if (!dateValue) return 'Non définie';
+      const date = new Date(dateValue);
+      if (Number.isNaN(date.getTime())) return 'Non définie';
+      return date.toLocaleDateString('fr-FR');
+    }
+
+    function resetWorkspaceScrollTop() {
+      if (typeof window.scrollTo === 'function') {
+        window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      }
+      const candidates = [
+        document.scrollingElement,
+        document.documentElement,
+        document.body,
+        document.querySelector('.content'),
+        document.querySelector('.workspace')
+      ];
+      candidates.forEach((node) => {
+        if (node && typeof node.scrollTop === 'number') {
+          node.scrollTop = 0;
+        }
+      });
+    }
+
+    function updateTopbarHeightVar() {
+      const topbar = document.querySelector('.topbar');
+      const root = document.documentElement;
+      if (!topbar || !root) return;
+      const measured = Math.max(56, Math.round(topbar.getBoundingClientRect().height || 0));
+      root.style.setProperty('--topbar-height', `${measured}px`);
+    }
+
+    function detachGlobalKanbanInfiniteScroll() {
+      const handler = globalKanbanInfiniteScrollState?.handler;
+      if (handler) {
+        window.removeEventListener('scroll', handler);
+      }
+      globalKanbanInfiniteScrollState = null;
+    }
+
+    function scrollProjectTitleIntoView(behavior = 'smooth') {
+      const projectTitle = document.getElementById('project-title');
+      if (!projectTitle) return;
+      const topbar = document.querySelector('.topbar');
+      const topbarHeight = topbar?.getBoundingClientRect?.().height || 0;
+      const offset = Math.max(56, Math.round(topbarHeight + 14));
+      const targetTop = Math.max(0, Math.round(window.scrollY + projectTitle.getBoundingClientRect().top - offset));
+      window.scrollTo({ top: targetTop, left: 0, behavior });
+    }
+
+    function normalizeSharingMode(mode, fallback = 'private') {
+      return mode === 'shared' || mode === 'private' ? mode : fallback;
+    }
+
+    function normalizeProjectReadAccess(value, fallback = 'private') {
+      return value === 'public' || value === 'members' || value === 'private' ? value : fallback;
+    }
+
+    function sharingModeLabel(mode) {
+      return normalizeSharingMode(mode, 'private') === 'shared' ? 'Collaboratif' : 'Solo';
+    }
+
+    function sharingModeBadge(mode) {
+      const normalized = normalizeSharingMode(mode, 'private');
+      if (normalized === 'shared') {
+        return '<span class="text-[10px] px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 font-semibold">Collaboratif</span>';
+      }
+      return '<span class="text-[10px] px-2 py-1 rounded-full bg-slate-100 text-slate-700 font-semibold">Solo</span>';
+    }
+
+    function toYmd(date) {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    function taskDueDateKey(task) {
+      if (!task?.dueDate) return null;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(task.dueDate)) return task.dueDate;
+      const d = new Date(task.dueDate);
+      if (Number.isNaN(d.getTime())) return null;
+      return toYmd(d);
+    }
+
+    function formatFileSize(size) {
+      if (!size) return '0 o';
+      if (size < 1024) return `${size} o`;
+      if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} Ko`;
+      return `${(size / (1024 * 1024)).toFixed(1)} Mo`;
+    }
+
+    function paginateItems(items, page, pageSize) {
+      const totalItems = items.length;
+      const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+      const currentPage = Math.min(Math.max(1, page), totalPages);
+      const start = (currentPage - 1) * pageSize;
+      const end = Math.min(totalItems, start + pageSize);
+      const pageItems = items.slice(start, start + pageSize);
+      return { totalItems, totalPages, currentPage, start, end, pageItems };
+    }
+
+    function renderPagination(containerId, pagination, setPageFunctionName, label) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+
+      const { totalItems, totalPages, currentPage, start, end } = pagination;
+      if (totalItems === 0) {
+        container.innerHTML = '';
+        return;
+      }
+
+      const info = `Affichage ${start + 1}-${end} sur ${totalItems} ${label}`;
+      if (totalPages <= 1) {
+        container.innerHTML = `<span>${info}</span><span></span>`;
+        return;
+      }
+
+      container.innerHTML = `
+        <span>${info}</span>
+        <div class="flex items-center gap-2">
+          <button
+            class="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 ${currentPage <= 1 ? 'opacity-50 cursor-not-allowed' : ''}"
+            ${currentPage <= 1 ? 'disabled' : `onclick="${setPageFunctionName}(${currentPage - 1})"`}
+          >
+            Précédent
+          </button>
+          <span class="text-xs text-slate-500">Page ${currentPage}/${totalPages}</span>
+          <button
+            class="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 ${currentPage >= totalPages ? 'opacity-50 cursor-not-allowed' : ''}"
+            ${currentPage >= totalPages ? 'disabled' : `onclick="${setPageFunctionName}(${currentPage + 1})"`}
+          >
+            Suivant
+          </button>
+        </div>
+      `;
+    }
+
+    async function setProjectsPage(page) {
+      projectsPage = Math.max(1, Number(page) || 1);
+      await renderProjects();
+    }
+
+    function updateProjectsViewButtons() {
+      const gridBtn = document.getElementById('projects-view-grid');
+      const listBtn = document.getElementById('projects-view-list');
+      if (!gridBtn || !listBtn) return;
+      gridBtn.classList.toggle('view-tab-active', projectsViewMode === 'grid');
+      listBtn.classList.toggle('view-tab-active', projectsViewMode === 'list');
+    }
+
+    async function setProjectsViewMode(mode) {
+      const next = mode === 'list' ? 'list' : 'grid';
+      projectsViewMode = next;
+      localStorage.setItem('taskmda_projects_view', next);
+      updateProjectsViewButtons();
+      await renderProjects();
+    }
+
+    async function setTasksPage(page) {
+      tasksPage = Math.max(1, Number(page) || 1);
+      renderTasks(currentProjectState?.tasks || []);
+    }
+
+    async function setGlobalTasksPage(page) {
+      globalTasksPage = Math.max(1, Number(page) || 1);
+      await renderGlobalTasks();
+    }
+
+    function updateGlobalTasksViewButtons() {
+      const buttons = {
+        cards: document.getElementById('global-tasks-view-cards'),
+        list: document.getElementById('global-tasks-view-list'),
+        kanban: document.getElementById('global-tasks-view-kanban'),
+        timeline: document.getElementById('global-tasks-view-timeline'),
+        calendar: document.getElementById('global-tasks-view-calendar'),
+        archives: document.getElementById('global-tasks-view-archives')
+      };
+      Object.entries(buttons).forEach(([mode, btn]) => {
+        if (!btn) return;
+        const isActive = mode === globalTasksViewMode;
+        btn.classList.toggle('view-tab-active', isActive);
+        btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+      });
+      updateGlobalTaskLayoutButtons();
+    }
+
+    function toggleGlobalTasksInlineCalendar(showCalendar) {
+      const tasksSection = document.getElementById('global-tasks-section');
+      const calendarSection = document.getElementById('global-calendar-section');
+      if (!tasksSection || !calendarSection) return;
+      const layoutToolbar = document.getElementById('global-task-layout-toolbar');
+      const filterRow = document.getElementById('global-task-filter-row');
+      const tasksContainer = document.getElementById('global-tasks-container');
+      const tasksPagination = document.getElementById('global-tasks-pagination');
+      if (showCalendar) {
+        tasksSection.classList.remove('hidden');
+        layoutToolbar?.classList.add('hidden');
+        filterRow?.classList.add('hidden');
+        tasksContainer?.classList.add('hidden');
+        tasksPagination?.classList.add('hidden');
+        calendarSection.classList.remove('hidden');
+        setActiveSidebarNav('tasks');
+      } else if (globalWorkspaceView === 'tasks') {
+        tasksSection.classList.remove('hidden');
+        filterRow?.classList.remove('hidden');
+        tasksContainer?.classList.remove('hidden');
+        calendarSection.classList.add('hidden');
+      }
+    }
+
+    function getGlobalSettingsHelpContent(tabKey) {
+      const helpByTab = {
+        branding: {
+          title: 'Aide: Identite',
+          text: "Definissez le nom et le sous-titre de la plateforme. Le role Admin application peut etre attribue a un utilisateur connu."
+        },
+        themes: {
+          title: 'Aide: Thematiques',
+          text: "Ajoutez des thematiques courtes et stables pour faciliter les filtres transverses et la recherche dans les projets."
+        },
+        groups: {
+          title: 'Aide: Groupes',
+          text: "Creez des groupes reutilisables entre projets. Ajoutez les membres depuis l'annuaire local pour accelerer les assignations."
+        },
+        roles: {
+          title: 'Aide: Habilitations',
+          text: "Les habilitations globales se basent sur les niveaux techniques Proprietaire, Manager et Membre, avec des libelles metier personnalisables."
+        },
+        software: {
+          title: 'Aide: Versions logicielles',
+          text: "Maintenez ici un registre des versions de vos logiciels metier. Mettez a jour apres chaque changement pour garder un suivi fiable."
+        }
+      };
+      return helpByTab[tabKey] || helpByTab.branding;
+    }
+
+    function renderGlobalSettingsHelpBox() {
+      const box = document.getElementById('global-settings-help-box');
+      const title = document.getElementById('global-settings-help-title');
+      const text = document.getElementById('global-settings-help-text');
+      const btn = document.getElementById('btn-global-settings-help');
+      if (!box || !title || !text || !btn) return;
+      const help = getGlobalSettingsHelpContent(globalSettingsTab);
+      title.textContent = help.title;
+      text.textContent = help.text;
+      const tooltipLabel = String(help.title || 'Aide').replace(/^Aide:\s*/i, '').trim();
+      const tooltipText = tooltipLabel ? `Aide: ${tooltipLabel}` : 'Aide';
+      btn.setAttribute('data-tooltip', tooltipText);
+      btn.setAttribute('aria-label', tooltipText);
+      box.classList.toggle('hidden', !globalSettingsHelpOpen);
+      btn.setAttribute('aria-expanded', globalSettingsHelpOpen ? 'true' : 'false');
+    }
+
+    function applyGlobalSettingsTabView() {
+      const allowed = new Set(['branding', 'themes', 'groups', 'roles', 'software']);
+      if (!allowed.has(String(globalSettingsTab || ''))) {
+        globalSettingsTab = 'branding';
+      }
+      const tabButtons = {
+        branding: document.getElementById('global-settings-tab-branding'),
+        themes: document.getElementById('global-settings-tab-themes'),
+        groups: document.getElementById('global-settings-tab-groups'),
+        roles: document.getElementById('global-settings-tab-roles'),
+        software: document.getElementById('global-settings-tab-software')
+      };
+      Object.entries(tabButtons).forEach(([key, btn]) => {
+        if (!btn) return;
+        const active = key === globalSettingsTab;
+        btn.classList.toggle('view-tab-active', active);
+        btn.setAttribute('aria-selected', active ? 'true' : 'false');
+      });
+
+      const brandingCard = document.querySelector('#global-settings-section .global-settings-card-branding');
+      const themesCard = document.querySelector('#global-settings-section .global-settings-card-themes');
+      const groupsCard = document.querySelector('#global-settings-section .global-settings-card-groups');
+      const rolesCard = document.querySelector('#global-settings-section .global-settings-card-roles');
+      const softwareCard = document.querySelector('#global-settings-section .global-settings-card-software');
+      const softwareTipsCard = document.querySelector('#global-settings-section .global-settings-card-software-tips');
+      const globalSettingsSection = document.getElementById('global-settings-section');
+
+      if (brandingCard) brandingCard.classList.toggle('hidden', globalSettingsTab !== 'branding');
+      if (themesCard) themesCard.classList.toggle('hidden', globalSettingsTab !== 'themes');
+      if (groupsCard) groupsCard.classList.toggle('hidden', globalSettingsTab !== 'groups');
+      if (rolesCard) rolesCard.classList.toggle('hidden', globalSettingsTab !== 'roles');
+      if (softwareCard) softwareCard.classList.toggle('hidden', globalSettingsTab !== 'software');
+      if (softwareTipsCard) softwareTipsCard.classList.toggle('hidden', globalSettingsTab !== 'software');
+      globalSettingsSection?.classList.toggle('software-tab-active', globalSettingsTab === 'software');
+      renderGlobalSettingsHelpBox();
+    }
+
+    function setGlobalSettingsTab(tabKey) {
+      const allowed = new Set(['branding', 'themes', 'groups', 'roles', 'software']);
+      const next = allowed.has(String(tabKey || '')) ? String(tabKey) : 'branding';
+      globalSettingsTab = next;
+      localStorage.setItem('taskmda_global_settings_tab', next);
+      applyGlobalSettingsTabView();
+    }
+
+    function getViewButtons() {
+      return {
+        overview: document.getElementById('view-overview'),
+        cards: document.getElementById('view-cards'),
+        list: document.getElementById('view-list'),
+        kanban: document.getElementById('view-kanban'),
+        gantt: document.getElementById('view-gantt'),
+        timeline: document.getElementById('view-timeline'),
+        docs: document.getElementById('view-docs'),
+        chat: document.getElementById('view-chat'),
+        activity: document.getElementById('view-activity'),
+        archives: document.getElementById('view-archives')
+      };
+    }
+
+    function relocateProjectOverviewPanel() {
+      const overviewPanel = document.getElementById('project-overview-panel');
+      const overviewAnchor = document.getElementById('project-overview-anchor');
+      const workMain = document.querySelector('#project-work-layout .project-work-main');
+      if (!overviewPanel || !overviewAnchor || !workMain) return;
+      const shouldInlineInWorkArea = (
+        projectDetailMode === 'work'
+        && projectSubnavLayout === 'vertical'
+        && activeProjectView === 'overview'
+      );
+      if (shouldInlineInWorkArea) {
+        if (overviewPanel.parentElement !== workMain) {
+          workMain.prepend(overviewPanel);
+        }
+        return;
+      }
+      const shouldInlineInSettingsArea = (
+        projectDetailMode === 'settings'
+        && projectSubnavLayout === 'vertical'
+        && projectSettingsTab === 'overview'
+      );
+      if (shouldInlineInSettingsArea) {
+        const settingsPanel = document.getElementById('project-settings-panel');
+        if (overviewPanel.parentElement !== settingsPanel) {
+          settingsPanel.appendChild(overviewPanel);
+        }
+        return;
+      }
+      if (overviewPanel.parentElement !== overviewAnchor.parentElement) {
+        overviewAnchor.insertAdjacentElement('afterend', overviewPanel);
+      }
+    }
+
+    function updateProjectOverviewVisibility() {
+      const overviewPanel = document.getElementById('project-overview-panel');
+      if (!overviewPanel) return;
+      relocateProjectOverviewPanel();
+      let shouldShowOverview = true;
+      if (projectSubnavLayout === 'vertical') {
+        if (projectDetailMode === 'work') {
+          shouldShowOverview = activeProjectView === 'overview';
+        } else if (projectDetailMode === 'settings') {
+          shouldShowOverview = projectSettingsTab === 'overview';
+        }
+      }
+      overviewPanel.classList.toggle('hidden', !shouldShowOverview);
+      overviewPanel.setAttribute('aria-hidden', shouldShowOverview ? 'false' : 'true');
+    }
+
+    function applyProjectSettingsLayout() {
+      const settingsPanel = document.getElementById('project-settings-panel');
+      const settingsTabsList = document.getElementById('project-settings-tabs-list');
+      if (!settingsPanel || !settingsTabsList) return;
+      const isVertical = projectSubnavLayout === 'vertical';
+      settingsPanel.classList.toggle('is-vertical', isVertical);
+      settingsTabsList.setAttribute('aria-orientation', isVertical ? 'vertical' : 'horizontal');
+    }
+
+    function setProjectTaskPresentationMode(mode) {
+      const nextMode = mode === 'list' ? 'list' : 'cards';
+      projectTaskPresentationMode = nextMode;
+      localStorage.setItem('taskmda_project_task_presentation', nextMode);
+      if (workspaceMode === 'project' && activeProjectView === 'list' && currentProjectState) {
+        renderTasks(currentProjectState.tasks || []);
+      }
+      setProjectView('list');
+    }
+
+    function renderSafeMarkdown(text) {
+      let html = escapeHtml(text || '');
+      html = html.replace(/^### (.*)$/gm, '<h4>$1</h4>');
+      html = html.replace(/^## (.*)$/gm, '<h3>$1</h3>');
+      html = html.replace(/^# (.*)$/gm, '<h2>$1</h2>');
+      html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+      html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+      html = html.replace(/`(.+?)`/g, '<code>$1</code>');
+      html = html.replace(/\n/g, '<br>');
+      return html;
+    }
+
+    function looksLikeHtml(value) {
+      return /<\/?[a-z][\s\S]*>/i.test(String(value || ''));
+    }
+
+    function plainTextToRichHtml(text) {
+      const normalized = String(text || '').replace(/\r\n/g, '\n').trim();
+      if (!normalized) return '';
+      return normalized
+        .split(/\n{2,}/)
+        .map(chunk => `<p>${escapeHtml(chunk).replace(/\n/g, '<br>')}</p>`)
+        .join('');
+    }
+
+    function sanitizeProjectDescriptionHtml(htmlInput) {
+      const parser = new DOMParser();
+      const html = String(htmlInput || '').trim();
+      const normalized = html
+        ? (looksLikeHtml(html) ? html : plainTextToRichHtml(html))
+        : '';
+      const doc = parser.parseFromString(`<div>${normalized}</div>`, 'text/html');
+      const root = doc.body.firstElementChild;
+      if (!root) return '';
+
+      root.querySelectorAll('.project-editor-image-overlay').forEach((el) => el.remove());
+      root.querySelectorAll('.project-editor-image-overlay-panel').forEach((el) => el.remove());
+      root.querySelectorAll('.project-editor-image-overlay-btn').forEach((el) => el.remove());
+      root.querySelectorAll('.project-editor-image-resize-handle').forEach((el) => el.remove());
+      root.querySelectorAll('.material-symbols-outlined').forEach((el) => {
+        const text = String(el.textContent || '').trim().toLowerCase();
+        if (text === 'photo_size_select_large' || text === 'open_with') {
+          el.remove();
+        }
+      });
+      root.querySelectorAll('p,div,span').forEach((el) => {
+        const text = String(el.textContent || '').trim().toLowerCase();
+        if (text !== 'photo_size_select_large') return;
+        const parent = el.parentElement;
+        const next = el.nextElementSibling;
+        el.remove();
+        if (next && /^\s*\d{1,3}%\s*$/.test(String(next.textContent || '').trim())) {
+          next.remove();
+        }
+        if (parent && ['p', 'div', 'span'].includes(parent.tagName.toLowerCase()) && !String(parent.textContent || '').trim()) {
+          parent.remove();
+        }
+      });
+
+      const allowedTags = new Set(['p', 'br', 'strong', 'em', 'u', 's', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'blockquote', 'code', 'pre', 'a', 'img', 'figure', 'figcaption', 'span', 'div', 'iframe']);
+      const allowedImageClasses = new Set(['desc-img-align-left', 'desc-img-align-center', 'desc-img-align-right']);
+
+      function safeHref(value) {
+        const raw = String(value || '').trim();
+        if (!raw) return '';
+        const lower = raw.toLowerCase();
+        if (lower.startsWith('http://') || lower.startsWith('https://') || lower.startsWith('mailto:')) return raw;
+        return '';
+      }
+
+      function safeImageSrc(value) {
+        const raw = String(value || '').trim();
+        if (!raw) return '';
+        const lower = raw.toLowerCase();
+        if (lower.startsWith('data:image/')) return raw;
+        if (lower.startsWith('http://') || lower.startsWith('https://')) return raw;
+        return '';
+      }
+
+      function safeVideoEmbedSrc(value) {
+        const raw = String(value || '').trim();
+        if (!raw) return '';
+        let url;
+        try {
+          url = new URL(raw);
+        } catch {
+          return '';
+        }
+        const protocol = String(url.protocol || '').toLowerCase();
+        if (protocol !== 'https:' && protocol !== 'http:') return '';
+        const hostname = String(url.hostname || '').toLowerCase().replace(/^www\./, '');
+        const pathname = String(url.pathname || '');
+        if (hostname === 'youtube.com' || hostname === 'm.youtube.com') {
+          if (pathname.startsWith('/embed/')) return raw;
+          return '';
+        }
+        if (hostname === 'youtube-nocookie.com' && pathname.startsWith('/embed/')) return raw;
+        if (hostname === 'player.vimeo.com' && pathname.startsWith('/video/')) return raw;
+        if (hostname === 'dailymotion.com' && pathname.startsWith('/embed/video/')) return raw;
+        if (hostname === 'loom.com' && pathname.startsWith('/embed/')) return raw;
+        return '';
+      }
+
+      function safeImageWidthPercent(node) {
+        if (!(node instanceof Element)) return 100;
+        const dataWidth = node.getAttribute('data-desc-image-width');
+        if (dataWidth) return normalizeProjectImageWidthPercent(dataWidth, 100);
+        const styleWidth = parseImageWidthPercentFromStyle(node.getAttribute('style'));
+        if (styleWidth) return styleWidth;
+        const widthAttr = node.getAttribute('width');
+        if (widthAttr) return normalizeProjectImageWidthPercent(widthAttr, 100);
+        return 100;
+      }
+
+      function sanitizeNode(node) {
+        if (node.nodeType === Node.TEXT_NODE) {
+          return doc.createTextNode(node.textContent || '');
+        }
+        if (node.nodeType !== Node.ELEMENT_NODE) {
+          return null;
+        }
+        const tag = node.tagName.toLowerCase();
+        if (!allowedTags.has(tag)) {
+          const fragment = doc.createDocumentFragment();
+          Array.from(node.childNodes || []).forEach((child) => {
+            const sanitizedChild = sanitizeNode(child);
+            if (sanitizedChild) fragment.appendChild(sanitizedChild);
+          });
+          return fragment;
+        }
+
+        const out = doc.createElement(tag);
+        if (tag === 'a') {
+          const href = safeHref(node.getAttribute('href'));
+          if (href) {
+            out.setAttribute('href', href);
+            out.setAttribute('target', '_blank');
+            out.setAttribute('rel', 'noopener noreferrer');
+          }
+        } else if (tag === 'img') {
+          const src = safeImageSrc(node.getAttribute('src'));
+          if (!src) return null;
+          out.setAttribute('src', src);
+          out.setAttribute('alt', String(node.getAttribute('alt') || '').slice(0, 180));
+          const currentId = String(node.getAttribute('data-desc-image-id') || '').trim();
+          out.setAttribute('data-desc-image-id', currentId || uuidv4());
+          const widthPercent = safeImageWidthPercent(node);
+          out.setAttribute('data-desc-image-width', String(widthPercent));
+          out.setAttribute('style', `width:${widthPercent}%;max-width:100%;height:auto`);
+          const cls = String(node.getAttribute('class') || '').split(/\s+/).find(c => allowedImageClasses.has(c));
+          out.setAttribute('class', cls || 'desc-img-align-center');
+          return out;
+        } else if (tag === 'iframe') {
+          const src = safeVideoEmbedSrc(node.getAttribute('src'));
+          if (!src) return null;
+          out.setAttribute('src', src);
+          out.setAttribute('class', 'desc-video-embed');
+          out.setAttribute('frameborder', '0');
+          out.setAttribute('allowfullscreen', 'true');
+          out.setAttribute('loading', 'lazy');
+          out.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+          out.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share');
+          return out;
+        }
+
+        Array.from(node.childNodes || []).forEach((child) => {
+          const sanitizedChild = sanitizeNode(child);
+          if (sanitizedChild) out.appendChild(sanitizedChild);
+        });
+        return out;
+      }
+
+      const sanitized = doc.createElement('div');
+      Array.from(root.childNodes || []).forEach((child) => {
+        const clean = sanitizeNode(child);
+        if (clean) sanitized.appendChild(clean);
+      });
+      return sanitized.innerHTML.trim();
+    }
+
+    function getProjectDescriptionHtmlForStorage(editorId, fallbackInputId) {
+      const editor = document.getElementById(editorId);
+      const fallbackInput = document.getElementById(fallbackInputId);
+      const quill = projectDescriptionQuillEditors.get(editorId);
+      const raw = quill
+        ? quill.root.innerHTML
+        : (editor ? editor.innerHTML : (fallbackInput?.value || ''));
+      const sanitized = sanitizeProjectDescriptionHtml(raw);
+      if (fallbackInput) fallbackInput.value = sanitized;
+      return sanitized;
+    }
+
+    function getProjectDescriptionPlainText(descriptionHtml = '') {
+      const safeHtml = sanitizeProjectDescriptionHtml(descriptionHtml || '');
+      if (!safeHtml) return '';
+      const doc = new DOMParser().parseFromString(`<div>${safeHtml}</div>`, 'text/html');
+      return String(doc.body.textContent || '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
+    function getProjectCardDescription(descriptionHtml = '', maxLength = 220) {
+      const plain = getProjectDescriptionPlainText(descriptionHtml);
+      if (!plain) return 'Aucune description';
+      if (plain.length <= maxLength) return plain;
+      return `${plain.slice(0, Math.max(40, maxLength - 1)).trimEnd()}…`;
+    }
+
+    function setProjectDescriptionEditorContent(editorId, inputId, value) {
+      const editor = document.getElementById(editorId);
+      const hiddenInput = document.getElementById(inputId);
+      const safeHtml = sanitizeProjectDescriptionHtml(value || '');
+      const quill = projectDescriptionQuillEditors.get(editorId);
+      if (quill) {
+        quill.clipboard.dangerouslyPasteHTML(safeHtml || '<p><br></p>');
+      }
+      if (editor) {
+        if (!quill) editor.innerHTML = safeHtml;
+        if (activeProjectEditorId === editor.id) {
+          clearProjectEditorImageSelection();
+        }
+      }
+      if (hiddenInput) hiddenInput.value = safeHtml;
+    }
+
+    function focusElementById(id) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.focus();
+      if (typeof el.select === 'function') {
+        el.select();
+      }
+    }
+
+    function collapseProjectDescriptionIfExpanded() {
+      if (!projectDescriptionExpanded) return;
+      projectDescriptionExpanded = false;
+      renderProjectDescription(currentProjectState?.project?.description || '');
+    }
+
+    function setProjectDetailMode(mode) {
+      const nextMode = mode === 'settings' ? 'settings' : 'work';
+      if (nextMode !== 'work') {
+        collapseProjectDescriptionIfExpanded();
+      }
+      projectDetailMode = nextMode;
+      const workPanel = document.getElementById('project-work-panel');
+      const settingsPanel = document.getElementById('project-settings-panel');
+      const workBtn = document.getElementById('project-mode-work');
+      const settingsBtn = document.getElementById('project-mode-settings');
+      const addTaskBtn = document.getElementById('btn-add-task');
+
+      if (workPanel) workPanel.classList.toggle('hidden', nextMode !== 'work');
+      if (settingsPanel) settingsPanel.classList.toggle('hidden', nextMode !== 'settings');
+      if (addTaskBtn) addTaskBtn.classList.toggle('hidden', nextMode !== 'work');
+      if (workBtn) workBtn.classList.toggle('view-tab-active', nextMode === 'work');
+      if (settingsBtn) settingsBtn.classList.toggle('view-tab-active', nextMode === 'settings');
+      if (nextMode !== 'work') {
+        clearProjectWorkFocusState();
+      }
+      if (nextMode === 'work') {
+        applyProjectSubnavLayout();
+        syncProjectWorkFocusButton();
+      }
+      if (nextMode === 'settings') {
+        applyProjectSettingsLayout();
+        applyProjectSettingsTabView();
+      }
+      updateProjectOverviewVisibility();
+    }
+
+    function applyProjectSettingsTabView() {
+      const allowed = new Set(['overview', 'members', 'collab', 'themes', 'permissions']);
+      if (!allowed.has(String(projectSettingsTab || ''))) {
+        projectSettingsTab = projectSubnavLayout === 'vertical' ? 'overview' : 'members';
+      }
+      const tabButtons = {
+        overview: document.getElementById('project-settings-tab-overview'),
+        members: document.getElementById('project-settings-tab-members'),
+        collab: document.getElementById('project-settings-tab-collab'),
+        themes: document.getElementById('project-settings-tab-themes'),
+        permissions: document.getElementById('project-settings-tab-permissions')
+      };
+      Object.entries(tabButtons).forEach(([key, btn]) => {
+        if (!btn) return;
+        const active = key === projectSettingsTab;
+        btn.classList.toggle('view-tab-active', active);
+        btn.setAttribute('aria-selected', active ? 'true' : 'false');
+      });
+
+      const membersCard = document.querySelector('#project-settings-panel .project-settings-card-members');
+      const collabCard = document.querySelector('#project-settings-panel .project-settings-card-collab');
+      const themesCard = document.querySelector('#project-settings-panel .project-settings-card-themes');
+      const permissionsCard = document.querySelector('#project-settings-panel .project-settings-card-permissions');
+      if (membersCard) membersCard.classList.toggle('hidden', projectSettingsTab !== 'members');
+      if (collabCard) collabCard.classList.toggle('hidden', projectSettingsTab !== 'collab');
+      if (themesCard) themesCard.classList.toggle('hidden', projectSettingsTab !== 'themes');
+      if (permissionsCard) permissionsCard.classList.toggle('hidden', projectSettingsTab !== 'permissions');
+      
+      updateProjectOverviewVisibility();
+    }
+
+    function setProjectSettingsTab(tabKey) {
+      const allowed = new Set(['overview', 'members', 'collab', 'themes', 'permissions']);
+      const next = allowed.has(String(tabKey || '')) ? String(tabKey) : 'members';
+      projectSettingsTab = next;
+      applyProjectSettingsTabView();
+    }
+
+    function syncProjectWorkFocusButton() {
+      const btn = document.getElementById('btn-project-work-focus');
+      const panel = document.getElementById('project-work-panel');
+      const addTaskBtn = document.getElementById('btn-add-task');
+      if (!btn || !panel) return;
+      const icon = btn.querySelector('.material-symbols-outlined');
+      const text = btn.querySelector('.project-subnav-focus-text');
+      const nativeFullscreenActive = document.fullscreenElement === panel;
+      const fallbackActive = panel.classList.contains('project-work-focus-fallback');
+      const browserFullscreenLike = (
+        workspaceMode === 'project'
+        && projectDetailMode === 'work'
+        && (
+          Math.abs(window.innerHeight - window.screen.height) <= 2
+          || Math.abs(window.innerHeight - window.screen.availHeight) <= 2
+        )
+      );
+      const active = nativeFullscreenActive || fallbackActive;
+      const hideAddTask = active || browserFullscreenLike;
+      btn.classList.toggle('is-active', active);
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+      btn.setAttribute('title', active ? 'Quitter le plein écran' : 'Plein écran');
+      if (icon) icon.textContent = active ? 'fullscreen_exit' : 'fullscreen';
+      if (text) text.textContent = active ? 'Quitter plein écran' : 'Plein écran';
+      if (addTaskBtn) addTaskBtn.classList.toggle('hidden', hideAddTask);
+    }
+
+    function clearProjectWorkFocusState() {
+      const panel = document.getElementById('project-work-panel');
+      if (!panel) return;
+      panel.classList.remove('project-work-focus-fallback');
+      if (document.fullscreenElement === panel && typeof document.exitFullscreen === 'function') {
+        document.exitFullscreen().catch(() => {});
+      }
+      syncProjectWorkFocusButton();
+    }
+
+    function applyProjectSubnavLayout() {
+      const layout = document.getElementById('project-work-layout');
+      const panel = document.getElementById('project-work-panel');
+      const tabsWrap = document.getElementById('project-view-tabs-wrap');
+      const horizontalBtn = document.getElementById('btn-project-subnav-horizontal');
+      const verticalBtn = document.getElementById('btn-project-subnav-vertical');
+      const settingsVerticalBtn = document.getElementById('btn-project-settings-subnav-vertical');
+      const settingsHorizontalBtn = document.getElementById('btn-project-settings-subnav-horizontal');
+      const overviewBtn = document.getElementById('view-overview');
+      if (!layout || !panel) return;
+      layout.classList.toggle('is-vertical', projectSubnavLayout === 'vertical');
+      panel.classList.toggle('project-subnav-vertical-active', projectSubnavLayout === 'vertical');
+      if (tabsWrap) {
+        tabsWrap.setAttribute('aria-orientation', projectSubnavLayout === 'vertical' ? 'vertical' : 'horizontal');
+      }
+      if (horizontalBtn) {
+        horizontalBtn.classList.toggle('is-active', projectSubnavLayout === 'horizontal');
+        horizontalBtn.setAttribute('aria-pressed', projectSubnavLayout === 'horizontal' ? 'true' : 'false');
+      }
+      if (settingsVerticalBtn) {
+        settingsVerticalBtn.classList.toggle('is-active', projectSubnavLayout === 'vertical');
+        settingsVerticalBtn.setAttribute('aria-pressed', projectSubnavLayout === 'vertical' ? 'true' : 'false');
+      }
+      if (settingsHorizontalBtn) {
+        settingsHorizontalBtn.classList.toggle('is-active', projectSubnavLayout === 'horizontal');
+        settingsHorizontalBtn.setAttribute('aria-pressed', projectSubnavLayout === 'horizontal' ? 'true' : 'false');
+      }
+      
+      const settingsOverviewBtn = document.getElementById('project-settings-tab-overview');
+      if (settingsOverviewBtn) {
+        settingsOverviewBtn.classList.toggle('hidden', projectSubnavLayout !== 'vertical');
+      }
+      if (verticalBtn) {
+        verticalBtn.classList.toggle('is-active', projectSubnavLayout === 'vertical');
+        verticalBtn.setAttribute('aria-pressed', projectSubnavLayout === 'vertical' ? 'true' : 'false');
+      }
+      if (overviewBtn) {
+        const showOverviewTab = projectSubnavLayout === 'vertical';
+        overviewBtn.classList.toggle('hidden', !showOverviewTab);
+        overviewBtn.setAttribute('aria-hidden', showOverviewTab ? 'false' : 'true');
+        overviewBtn.setAttribute('tabindex', showOverviewTab ? '0' : '-1');
+      }
+      applyProjectSettingsLayout();
+      updateProjectOverviewVisibility();
+    }
+
+    function setProjectSubnavLayout(mode) {
+      const next = mode === 'vertical' ? 'vertical' : 'horizontal';
+      const wasOverviewWork = projectDetailMode === 'work' && activeProjectView === 'overview';
+      const wasOverviewSettings = projectDetailMode === 'settings' && projectSettingsTab === 'overview';
+      projectSubnavLayout = next;
+      localStorage.setItem('taskmda_project_subnav_layout', next);
+      
+      if (next === 'horizontal') {
+        if (wasOverviewWork) setProjectView('list');
+        if (wasOverviewSettings) setProjectSettingsTab('members');
+      }
+      
+      applyProjectSubnavLayout();
+    }
+
+    async function toggleProjectWorkFocus() {
+      const panel = document.getElementById('project-work-panel');
+      if (!panel) return;
+      const supportsFullscreen = typeof panel.requestFullscreen === 'function';
+      if (supportsFullscreen) {
+        try {
+          if (document.fullscreenElement === panel) {
+            await document.exitFullscreen();
+          } else {
+            await panel.requestFullscreen();
+          }
+        } catch (_) {
+          panel.classList.toggle('project-work-focus-fallback');
+        }
+      } else {
+        panel.classList.toggle('project-work-focus-fallback');
+      }
+      syncProjectWorkFocusButton();
+    }
+
+
+    async function toggleProjectSettingsFocus() {
+      const panel = document.getElementById('project-settings-panel');
+      if (!panel) return;
+      const supportsFullscreen = typeof panel.requestFullscreen === 'function';
+      if (supportsFullscreen) {
+        try {
+          if (document.fullscreenElement === panel) {
+            await document.exitFullscreen();
+          } else {
+            await panel.requestFullscreen();
+          }
+        } catch (_) {
+          panel.classList.toggle('project-settings-focus-fallback');
+        }
+      } else {
+        panel.classList.toggle('project-settings-focus-fallback');
+      }
+      syncProjectSettingsFocusButton();
+    }
+
+    function syncProjectSettingsFocusButton() {
+      const panel = document.getElementById('project-settings-panel');
+      const btn = document.getElementById('btn-project-settings-work-focus');
+      if (!panel || !btn) return;
+      const isFullscreen = document.fullscreenElement === panel || panel.classList.contains('project-settings-focus-fallback');
+      const icon = btn.querySelector('.material-symbols-outlined');
+      const text = btn.querySelector('.project-subnav-focus-text');
+      if (icon) icon.textContent = isFullscreen ? 'fullscreen_exit' : 'fullscreen';
+      if (text) text.textContent = isFullscreen ? 'Quitter' : 'Plein écran';
+      btn.classList.toggle('is-active', isFullscreen);
+    }
+
+    function setProjectView(view) {
+      const previousView = activeProjectView;
+      if (previousView === 'overview' && view !== 'overview') {
+        collapseProjectDescriptionIfExpanded();
+      }
+      if (view === 'activity' && !canReadProjectActivity(currentProjectState)) {
+        showToast('Action non autorisee');
+        view = 'list';
+      }
+      activeProjectView = view;
+
+      const taskListSection = document.getElementById('task-list-section');
+      const sections = {
+        kanban: document.getElementById('kanban-section'),
+        gantt: document.getElementById('gantt-section'),
+        timeline: document.getElementById('timeline-section'),
+        docs: document.getElementById('documents-section'),
+        chat: document.getElementById('discussion-section'),
+        activity: document.getElementById('activity-section'),
+        archives: document.getElementById('archives-section')
+      };
+
+      if (taskListSection) {
+        taskListSection.classList.toggle('hidden', view !== 'list');
+      }
+      Object.entries(sections).forEach(([key, el]) => {
+        if (!el) return;
+        el.classList.toggle('hidden', key !== view);
+      });
+
+      const buttons = getViewButtons();
+      Object.entries(buttons).forEach(([key, btn]) => {
+        if (!btn) return;
+        if (key === 'activity' && !canReadProjectActivity(currentProjectState)) {
+          btn.classList.add('opacity-50');
+          btn.setAttribute('aria-disabled', 'true');
+          btn.setAttribute('title', 'Reserve aux Proprietaires/Managers');
+        } else if (key === 'activity') {
+          btn.classList.remove('opacity-50');
+          btn.removeAttribute('aria-disabled');
+          btn.removeAttribute('title');
+        }
+        const isTaskPresentationButton = key === 'cards' || key === 'list';
+        const isActive = isTaskPresentationButton
+          ? view === 'list' && key === projectTaskPresentationMode
+          : key === view;
+        if (isActive) {
+          btn.classList.add('view-tab-active');
+          btn.setAttribute('aria-selected', 'true');
+          btn.setAttribute('tabindex', '0');
+        } else {
+          btn.classList.remove('view-tab-active');
+          btn.setAttribute('aria-selected', 'false');
+          btn.setAttribute('tabindex', '-1');
+        }
+      });
+
+      if (workspaceMode === 'project') {
+        setActiveSidebarNav('projects');
+      } else {
+        const navKey = view === 'docs'
+          ? 'docs'
+          : view === 'timeline' || view === 'gantt'
+            ? 'calendar'
+            : 'tasks';
+        setActiveSidebarNav(navKey);
+      }
+      updateProjectOverviewVisibility();
+      if (view === 'list' && workspaceMode === 'project' && currentProjectState) {
+        renderTasks(currentProjectState.tasks || []);
+      }
+      applyLiveSearchFilter();
+    }
+
+    async function getDirectoryUsersMap() {
+      const directoryUsers = await getAllDecrypted('directoryUsers', 'userId');
+      return new Map((directoryUsers || []).map(u => [u.userId, u]));
+    }
+
+    async function getProjectMembersResolved(state) {
+      const directoryMap = await getDirectoryUsersMap();
+      const users = await getAllDecrypted('users', 'userId');
+      const usersMap = new Map((users || []).map(u => [u.userId, u]));
+      return (state?.members || []).map(member => {
+        const known = usersMap.get(member.userId) || directoryMap.get(member.userId);
+        return {
+          ...member,
+          displayNameResolved: member.displayName || known?.name || fallbackDirectoryName(member.userId)
+        };
+      });
+    }
+
+    function bindProjectKpiActions() {
+      const actions = [
+        {
+          valueId: 'project-kpi-tasks',
+          onClick: () => {
+            setProjectDetailMode('work');
+            setProjectView('list');
+            document.getElementById('task-list-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        },
+        {
+          valueId: 'project-kpi-done',
+          onClick: () => {
+            setProjectDetailMode('work');
+            timelineFilter = 'milestone';
+            setProjectView('timeline');
+            renderTimeline((currentProjectState?.tasks || []).filter(t => !t.archivedAt));
+            document.getElementById('timeline-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        },
+        {
+          valueId: 'project-kpi-messages',
+          onClick: () => {
+            setProjectDetailMode('work');
+            setProjectView('chat');
+            document.getElementById('discussion-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }
+      ];
+
+      actions.forEach(({ valueId, onClick }) => {
+        const value = document.getElementById(valueId);
+        const block = value?.parentElement;
+        if (!block) return;
+        block.classList.add('project-kpi-action');
+        block.setAttribute('role', 'button');
+        block.setAttribute('tabindex', '0');
+        block.onclick = onClick;
+        block.onkeydown = (e) => {
+          if (e.key !== 'Enter' && e.key !== ' ') return;
+          e.preventDefault();
+          onClick();
+        };
+      });
+    }
+
+    async function renderMemberDirectoryAutocomplete(state) {
+      const input = document.getElementById('member-name-input');
+      const list = document.getElementById('member-name-options');
+      if (!input || !list) return;
+      const directoryUsers = await getAllDecrypted('directoryUsers', 'userId');
+      const existingMemberIds = new Set((state?.members || []).map(m => m.userId));
+      const names = Array.from(new Set(
+        (directoryUsers || [])
+          .filter(u => u && u.userId && !existingMemberIds.has(u.userId))
+          .map(u => String(u.name || '').trim())
+          .filter(Boolean)
+      )).sort((a, b) => a.localeCompare(b, 'fr'));
+      list.innerHTML = names.map(name => `<option value="${escapeHtml(name)}"></option>`).join('');
+    }
+
+    async function refreshTaskAssigneeOptions(state, selectedUserId = '', selectedName = '') {
+      const assigneeSelect = document.getElementById('task-assignee');
+      if (!assigneeSelect) return;
+      const legacyName = String(selectedName || '').trim();
+
+      if (!state?.project) {
+        const currentName = currentUser?.name || 'Moi';
+        let html = `
+          <option value="">Non assigné</option>
+          <option value="${escapeHtml(currentUser?.userId || '')}">${escapeHtml(currentName)}</option>
+        `;
+        if (!selectedUserId && legacyName && normalizeSearch(legacyName) !== normalizeSearch(currentName)) {
+          html += `<option value="legacy:${escapeHtml(legacyName)}">${escapeHtml(`${legacyName} (hors annuaire)`)}</option>`;
+        }
+        assigneeSelect.innerHTML = html;
+        assigneeSelect.value = selectedUserId || (legacyName ? `legacy:${legacyName}` : '');
+        return;
+      }
+
+      const members = await getProjectMembersResolved(state);
+      const options = ['<option value="">Non assigné</option>', ...members.map(m => `<option value="${escapeHtml(m.userId)}">${escapeHtml(m.displayNameResolved)}</option>`)];
+      assigneeSelect.innerHTML = options.join('');
+
+      let value = selectedUserId || '';
+      if (!value && selectedName) {
+        const matched = members.find(m => normalizeSearch(m.displayNameResolved) === normalizeSearch(selectedName));
+        value = matched?.userId || '';
+      }
+      if (!value && legacyName) {
+        const legacyValue = `legacy:${legacyName}`;
+        assigneeSelect.innerHTML += `<option value="${escapeHtml(legacyValue)}">${escapeHtml(`${legacyName} (hors annuaire)`)}</option>`;
+        value = legacyValue;
+      }
+      assigneeSelect.value = value;
+    }
+
+    function parseManualAssigneeNames(value) {
+      return String(value || '')
+        .split(/\n|,/g)
+        .map(v => v.trim())
+        .filter(Boolean);
+    }
+
+    function isValidEmailAddress(value) {
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
+    }
+
+    function parseAssigneeToken(rawToken) {
+      const token = String(rawToken || '').trim();
+      if (!token) return null;
+      const bracketMatch = token.match(/^(.*?)<([^<>]+)>$/);
+      if (bracketMatch) {
+        const name = String(bracketMatch[1] || '').trim();
+        const email = String(bracketMatch[2] || '').trim().toLowerCase();
+        if (isValidEmailAddress(email)) {
+          return {
+            name: name || email,
+            email
+          };
+        }
+      }
+      if (isValidEmailAddress(token)) {
+        return { name: token, email: token.toLowerCase() };
+      }
+      return { name: token, email: '' };
+    }
+
+    function parseManualAssigneeEntries(value) {
+      const tokens = String(value || '')
+        .split(/\n|,/g)
+        .map(v => v.trim())
+        .filter(Boolean);
+      const entries = [];
+      const seen = new Set();
+      tokens.forEach((token) => {
+        const parsed = parseAssigneeToken(token);
+        if (!parsed) return;
+        const key = `${normalizeSearch(parsed.name || '')}|${String(parsed.email || '').toLowerCase()}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        entries.push(parsed);
+      });
+      return entries;
+    }
+
+    async function refreshTaskQuickAssigneeSuggestions(state) {
+      const datalist = document.getElementById('task-assignee-quick-options');
+      if (!datalist) return;
+      await refreshKnownUsersCache();
+
+      const names = new Set();
+      (state?.members || []).forEach((member) => {
+        const name = String(member?.displayName || '').trim();
+        if (name) names.add(name);
+      });
+      Array.from(knownUsersCache.values() || []).forEach((user) => {
+        const name = String(user?.name || '').trim();
+        if (name) names.add(name);
+      });
+      const sorted = Array.from(names).sort((a, b) => a.localeCompare(b, 'fr'));
+      datalist.innerHTML = sorted.map((name) => `<option value="${escapeHtml(name)}"></option>`).join('');
+    }
+
+    function addQuickTaskAssignee(rawName) {
+      const name = String(rawName || '').trim();
+      if (!name) return;
+      const select = document.getElementById('task-assignee');
+      const manual = document.getElementById('task-assignee-manual');
+      const quickInput = document.getElementById('task-assignee-quick-input');
+      if (!manual) return;
+
+      const options = Array.from(select?.options || []);
+      const matched = options.find((opt) => normalizeSearch(opt.dataset.assigneeName || opt.textContent || '') === normalizeSearch(name));
+      if (matched) {
+        matched.selected = true;
+        if (quickInput) quickInput.value = '';
+        return;
+      }
+
+      const existingManual = parseManualAssigneeNames(manual.value || '');
+      const dedup = new Set(existingManual.map(v => normalizeSearch(v)));
+      if (!dedup.has(normalizeSearch(name))) {
+        existingManual.push(name);
+        manual.value = existingManual.join('\n');
+      }
+      if (quickInput) quickInput.value = '';
+    }
+
+    async function refreshTaskAssigneeOptionsMulti(state, selectedUserIds = [], pendingMembers = []) {
+      const assigneeSelect = document.getElementById('task-assignee');
+      if (!assigneeSelect) return;
+      const selectedSet = new Set((selectedUserIds || []).filter(Boolean));
+
+      if (!state?.project) {
+        const currentName = currentUser?.name || 'Moi';
+        assigneeSelect.innerHTML = `<option value="${escapeHtml(currentUser?.userId || '')}" data-assignee-name="${escapeHtml(currentName)}">${escapeHtml(currentName)}</option>`;
+        Array.from(assigneeSelect.options || []).forEach(opt => {
+          opt.selected = selectedSet.has(opt.value);
+        });
+        return;
+      }
+
+      const members = await getProjectMembersResolved(state);
+      const options = members.map(m => ({
+        userId: String(m.userId || ''),
+        label: String(m.displayNameResolved || '').trim() || fallbackDirectoryName(m.userId),
+        pending: false
+      }));
+      const optionIds = new Set(options.map(o => o.userId));
+      (pendingMembers || []).forEach((member) => {
+        const userId = String(member?.userId || '').trim();
+        if (!userId || optionIds.has(userId)) return;
+        optionIds.add(userId);
+        const label = String(member?.displayName || '').trim() || fallbackDirectoryName(userId);
+        options.push({
+          userId,
+          label,
+          pending: true
+        });
+      });
+      assigneeSelect.innerHTML = options.map((entry) => {
+        const suffix = entry.pending ? ' (groupe - en attente)' : '';
+        return `<option value="${escapeHtml(entry.userId)}" data-assignee-name="${escapeHtml(entry.label)}" ${entry.pending ? 'data-pending-group-member="1"' : ''}>${escapeHtml(entry.label + suffix)}</option>`;
+      }).join('');
+      Array.from(assigneeSelect.options || []).forEach(opt => {
+        opt.selected = selectedSet.has(opt.value);
+      });
+    }
+
+    async function resolveUserRowsByIds(userIds = []) {
+      const ids = Array.from(new Set((userIds || []).map(id => String(id || '').trim()).filter(Boolean)));
+      if (ids.length === 0) return [];
+      const users = await getAllDecrypted('users', 'userId');
+      const usersById = new Map((users || []).map(user => [String(user.userId || ''), user]));
+      const directory = await getAllDecrypted('directoryUsers', 'userId');
+      const directoryById = new Map((directory || []).map(user => [String(user.userId || ''), user]));
+      return ids.map((userId) => {
+        const user = usersById.get(userId) || directoryById.get(userId);
+        return {
+          userId,
+          displayName: String(user?.name || '').trim() || fallbackDirectoryName(userId)
+        };
+      });
+    }
+
+    async function resolveTaskSelectedGroupContext(state, rawGroupValue = '') {
+      const rawValue = String(rawGroupValue || '').trim();
+      if (!state?.project || !rawValue) return null;
+      if (rawValue.startsWith('global:')) {
+        const groupKey = rawValue.slice('global:'.length);
+        const globalGroup = (globalGroupCatalog || []).find(group => String(group.groupKey || '') === groupKey);
+        if (!globalGroup) return null;
+        return {
+          scope: 'global',
+          groupKey,
+          groupId: null,
+          groupName: String(globalGroup.name || '').trim(),
+          groupDescription: String(globalGroup.description || '').trim(),
+          memberUserIds: Array.from(new Set((globalGroup.memberUserIds || []).map(id => String(id || '').trim()).filter(Boolean)))
+        };
+      }
+      const projectGroup = (state.groups || []).find(group => group.groupId === rawValue);
+      const groupName = String(projectGroup?.name || '').trim();
+      const linkedUserGroup = (state.userGroups || []).find(group =>
+        group.groupId === rawValue || (groupName && normalizeSearch(group.name) === normalizeSearch(groupName))
+      );
+      return {
+        scope: 'project',
+        groupKey: normalizeCatalogKey(groupName),
+        groupId: rawValue,
+        groupName,
+        groupDescription: String(projectGroup?.description || '').trim(),
+        memberUserIds: Array.from(new Set((linkedUserGroup?.memberUserIds || []).map(id => String(id || '').trim()).filter(Boolean)))
+      };
+    }
+
+    async function refreshTaskGroupSelectionPreview(state, selectedUserIds = null) {
+      const groupSelect = document.getElementById('task-group');
+      const pendingBox = document.getElementById('task-group-pending-members');
+      const assigneeSelect = document.getElementById('task-assignee');
+      if (!groupSelect || !assigneeSelect) return;
+      if (!state?.project || standaloneTaskMode) {
+        taskPendingGroupMemberUserIds = [];
+        if (pendingBox) {
+          pendingBox.classList.add('hidden');
+          pendingBox.innerHTML = '';
+        }
+        await refreshTaskAssigneeOptionsMulti(state, selectedUserIds || []);
+        return;
+      }
+
+      const currentlySelected = Array.isArray(selectedUserIds)
+        ? selectedUserIds
+        : Array.from(assigneeSelect.selectedOptions || []).map(opt => String(opt.value || '').trim()).filter(Boolean);
+      const groupContext = await resolveTaskSelectedGroupContext(state, groupSelect.value);
+      if (!groupContext || !groupContext.groupName) {
+        taskPendingGroupMemberUserIds = [];
+        if (pendingBox) {
+          pendingBox.classList.add('hidden');
+          pendingBox.innerHTML = '';
+        }
+        await refreshTaskAssigneeOptionsMulti(state, currentlySelected);
+        return;
+      }
+
+      const groupMemberIds = Array.from(new Set((groupContext.memberUserIds || []).filter(Boolean)));
+      const memberIdsSet = new Set((state.members || []).map(member => String(member.userId || '').trim()).filter(Boolean));
+      const pendingMemberIds = groupMemberIds.filter(userId => !memberIdsSet.has(userId));
+      taskPendingGroupMemberUserIds = pendingMemberIds;
+      const pendingMembers = await resolveUserRowsByIds(pendingMemberIds);
+      const mergedSelected = Array.from(new Set([...currentlySelected, ...groupMemberIds]));
+      await refreshTaskAssigneeOptionsMulti(state, mergedSelected, pendingMembers);
+
+      if (!pendingBox) return;
+      if (pendingMembers.length === 0) {
+        pendingBox.classList.add('hidden');
+        pendingBox.innerHTML = '';
+        return;
+      }
+      pendingBox.classList.remove('hidden');
+      const names = pendingMembers.map(member => escapeHtml(member.displayName)).join(', ');
+      pendingBox.innerHTML = `<strong>En attente de validation</strong>: ${escapeHtml(groupContext.groupName)} ajoutera ${pendingMembers.length} membre(s) au projet lors de l'enregistrement de la tache. <span class="font-medium">${names}</span>`;
+    }
+
+    async function ensureTaskGroupAssociationInProject(state, groupContext) {
+      if (!state?.project || !groupContext?.groupName) {
+        return { state, groupId: null, groupName: null, addedMembersCount: 0 };
+      }
+
+      let latestState = state;
+      let groupId = groupContext.groupId || null;
+      const uniqueMemberIds = Array.from(new Set((groupContext.memberUserIds || []).map(id => String(id || '').trim()).filter(Boolean)));
+
+      if (groupContext.scope === 'global') {
+        let existingProjectGroup = (latestState.groups || []).find(group =>
+          normalizeCatalogKey(group.name) === normalizeCatalogKey(groupContext.groupName)
+        );
+        if (!existingProjectGroup) {
+          if (!canManageProjectCollaboration(latestState)) {
+            throw new Error('Seuls Proprietaire/Manager peuvent associer un groupe global au projet.');
+          }
+          const createdGroupId = uuidv4();
+          const createGroupEvent = createEvent(
+            EventTypes.CREATE_GROUP,
+            currentProjectId,
+            currentUser.userId,
+            { groupId: createdGroupId, name: groupContext.groupName, description: groupContext.groupDescription || '' }
+          );
+          await publishEvent(createGroupEvent);
+          if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, createGroupEvent);
+          latestState = await getProjectState(currentProjectId, { ignoreAccessCheck: true });
+          existingProjectGroup = (latestState?.groups || []).find(group => group.groupId === createdGroupId)
+            || (latestState?.groups || []).find(group => normalizeCatalogKey(group.name) === normalizeCatalogKey(groupContext.groupName));
+        }
+        groupId = existingProjectGroup?.groupId || groupId;
+      }
+
+      if (!groupId) {
+        return { state: latestState, groupId: null, groupName: groupContext.groupName, addedMembersCount: 0 };
+      }
+
+      if (uniqueMemberIds.length > 0) {
+        const linkedUserGroup = (latestState.userGroups || []).find(group =>
+          group.groupId === groupId || normalizeCatalogKey(group.name) === normalizeCatalogKey(groupContext.groupName)
+        );
+        const linkedMemberIds = Array.from(new Set((linkedUserGroup?.memberUserIds || []).map(id => String(id || '').trim()).filter(Boolean)));
+        const mergedLinkedMemberIds = Array.from(new Set([...linkedMemberIds, ...uniqueMemberIds]));
+        if (!linkedUserGroup) {
+          const createUserGroupEvent = createEvent(
+            EventTypes.CREATE_USER_GROUP,
+            currentProjectId,
+            currentUser.userId,
+            { groupId, name: groupContext.groupName, memberUserIds: mergedLinkedMemberIds }
+          );
+          await publishEvent(createUserGroupEvent);
+          if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, createUserGroupEvent);
+        } else if (mergedLinkedMemberIds.length !== linkedMemberIds.length) {
+          const updateUserGroupEvent = createEvent(
+            EventTypes.UPDATE_USER_GROUP,
+            currentProjectId,
+            currentUser.userId,
+            { groupId: linkedUserGroup.groupId, changes: { memberUserIds: mergedLinkedMemberIds, name: groupContext.groupName } }
+          );
+          await publishEvent(updateUserGroupEvent);
+          if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, updateUserGroupEvent);
+        }
+        latestState = await getProjectState(currentProjectId, { ignoreAccessCheck: true });
+      }
+
+      const existingMemberIds = new Set((latestState.members || []).map(member => String(member.userId || '').trim()).filter(Boolean));
+      const membersToAdd = uniqueMemberIds.filter(userId => !existingMemberIds.has(userId));
+      if (membersToAdd.length > 0) {
+        if (!canManageProjectCollaboration(latestState)) {
+          throw new Error('Le groupe contient des membres hors projet. Droits Proprietaire/Manager requis pour les ajouter.');
+        }
+        const memberRows = await resolveUserRowsByIds(membersToAdd);
+        const displayById = new Map(memberRows.map(row => [row.userId, row.displayName]));
+        for (const userId of membersToAdd) {
+          const addMemberEvent = createEvent(
+            EventTypes.ADD_MEMBER,
+            currentProjectId,
+            currentUser.userId,
+            {
+              userId,
+              role: 'member',
+              displayName: displayById.get(userId) || fallbackDirectoryName(userId)
+            }
+          );
+          await publishEvent(addMemberEvent);
+          if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, addMemberEvent);
+        }
+        latestState = await getProjectState(currentProjectId, { ignoreAccessCheck: true });
+      }
+
+      return {
+        state: latestState,
+        groupId,
+        groupName: groupContext.groupName,
+        addedMembersCount: membersToAdd.length
+      };
+    }
+
+    async function renderMemberSelectOptions(state, selectId) {
+      const select = document.getElementById(selectId);
+      if (!select) return;
+      const members = await getProjectMembersResolved(state);
+      select.innerHTML = members.map(member => `
+        <option value="${escapeHtml(member.userId)}">${escapeHtml(member.displayNameResolved)}</option>
+      `).join('');
+    }
+
+    async function renderUserGroupMemberSelect(state) {
+      await renderMemberSelectOptions(state, 'user-group-members-input');
+    }
+
+    async function renderProjectGroupMemberSelect(state) {
+      await renderMemberSelectOptions(state, 'group-members-input');
+    }
+
+    async function renderProjectUserGroups(state) {
+      const list = document.getElementById('project-user-groups-list');
+      const createBtn = document.getElementById('btn-create-user-group');
+      const updateBtn = document.getElementById('btn-update-user-group');
+      const membersSelect = document.getElementById('user-group-members-input');
+      if (!list || !createBtn || !updateBtn || !membersSelect) return;
+
+      const canManage = canManageProjectCollaboration(state);
+      createBtn.disabled = !canManage;
+      createBtn.classList.toggle('opacity-50', !canManage);
+      updateBtn.disabled = !canManage;
+      updateBtn.classList.toggle('opacity-50', !canManage);
+      membersSelect.disabled = !canManage;
+
+      await renderUserGroupMemberSelect(state);
+      const members = await getProjectMembersResolved(state);
+      const byId = new Map(members.map(m => [m.userId, m.displayNameResolved]));
+      const userGroups = state?.userGroups || [];
+
+      if (userGroups.length === 0) {
+        list.innerHTML = `
+          <div class="empty-state-card">
+            <p class="empty-state-title">Aucun groupe utilisateurs</p>
+            <p class="empty-state-text">Regroupez des membres pour assigner plus vite les tâches collaboratives.</p>
+            ${canManage ? '<button class="empty-state-cta" onclick="focusElementById(\'user-group-name-input\')">Créer un groupe utilisateurs</button>' : ''}
+          </div>
+        `;
+        selectedUserGroupId = null;
+        return;
+      }
+
+      if (!selectedUserGroupId || !userGroups.find(g => g.groupId === selectedUserGroupId)) {
+        selectedUserGroupId = userGroups[0].groupId;
+      }
+
+      list.innerHTML = userGroups.map(group => {
+        const active = group.groupId === selectedUserGroupId;
+        const memberNames = (group.memberUserIds || []).map(id => byId.get(id) || fallbackDirectoryName(id));
+        return `
+          <div class="rounded-lg border ${active ? 'border-primary bg-blue-50' : 'border-slate-200 bg-white'} p-3">
+            <div class="flex items-start justify-between gap-2">
+              <div>
+                <p class="text-sm font-semibold text-slate-800">${escapeHtml(group.name || 'Groupe')}</p>
+                <p class="text-xs text-slate-500 mt-1">${escapeHtml(memberNames.join(', ') || 'Aucun membre')}</p>
+              </div>
+              <div class="flex items-center gap-2 text-xs">
+                <button onclick="selectUserGroup('${group.groupId}')" class="px-2 py-1 rounded bg-slate-100 text-slate-700">Selectionner</button>
+                ${canManage ? `<button onclick="deleteUserGroup('${group.groupId}')" class="px-2 py-1 rounded bg-rose-100 text-rose-700">Supprimer</button>` : ''}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      const selected = userGroups.find(g => g.groupId === selectedUserGroupId);
+      const selectedIds = new Set(selected?.memberUserIds || []);
+      Array.from(membersSelect.options || []).forEach(opt => {
+        opt.selected = selectedIds.has(opt.value);
+      });
+    }
+
+    async function renderProjectMembers(state) {
+      const container = document.getElementById('project-members-list');
+      const addBtn = document.getElementById('btn-add-member');
+      const nameInput = document.getElementById('member-name-input');
+      const roleInput = document.getElementById('member-role-input');
+      if (!container || !addBtn || !nameInput || !roleInput) return;
+
+      const members = await getProjectMembersResolved(state);
+      const canManage = canManageProjectCollaboration(state);
+      const myRole = normalizeProjectRole(getMyProjectRole(state));
+      renderProjectRoleSelectors(state);
+
+      addBtn.disabled = !canManage;
+      addBtn.classList.toggle('opacity-50', !canManage);
+      nameInput.disabled = !canManage;
+      roleInput.disabled = !canManage;
+      await renderMemberDirectoryAutocomplete(state);
+
+      if (members.length === 0) {
+        container.innerHTML = '<p class="text-sm text-slate-500">Aucun membre dans ce projet.</p>';
+        return;
+      }
+
+      container.innerHTML = members.map(member => {
+        const displayName = escapeHtml(member.displayNameResolved || fallbackDirectoryName(member.userId));
+        const normalizedRole = normalizeProjectRole(member.role);
+        const role = escapeHtml(getProjectRoleLabel(member.role));
+        const canRemoveMember = canManage
+          && member.userId !== currentUser?.userId
+          && (myRole === 'owner' || normalizedRole === 'member');
+        const removeBtn = canRemoveMember
+          ? `<button onclick="removeProjectMember('${escapeHtml(member.userId)}')" class="text-red-600 hover:underline text-xs">Retirer</button>`
+          : '';
+        return `
+          <div class="flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2 bg-slate-50">
+            <div class="min-w-0">
+              <p class="text-sm font-semibold text-slate-800 truncate">${displayName}</p>
+              <p class="text-xs text-slate-500">Rôle: ${role}</p>
+            </div>
+            ${removeBtn}
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderProjectPermissionMatrix(state) {
+      const tbody = document.getElementById('project-permissions-matrix');
+      const roleBadge = document.getElementById('project-permission-role-badge');
+      const summary = document.getElementById('project-permission-summary');
+      const details = document.getElementById('project-permissions-details');
+      const toggle = document.getElementById('btn-toggle-permissions-details');
+      if (!tbody) return;
+
+      const roleRaw = getMyProjectRole(state);
+      const role = normalizeProjectRole(roleRaw);
+      const roleLabel = roleRaw ? getProjectRoleLabel(roleRaw) : 'Aucun';
+      if (roleBadge) {
+        roleBadge.textContent = `Role: ${roleLabel}`;
+        roleBadge.className = `text-xs font-semibold px-2 py-1 rounded-full ${
+          role === 'owner'
+            ? 'bg-amber-100 text-amber-800'
+            : role === 'manager'
+              ? 'bg-blue-100 text-blue-800'
+              : role === 'member'
+                ? 'bg-emerald-100 text-emerald-800'
+                : 'bg-slate-100 text-slate-700'
+        }`;
+      }
+
+      const rows = [
+        { action: 'Lire le projet (taches, docs, discussion)', owner: true, manager: true, member: true },
+        { action: 'Modifier les infos projet', owner: true, manager: true, member: false },
+        { action: 'Supprimer le projet', owner: true, manager: false, member: false },
+        { action: 'Creer une tache', owner: true, manager: true, member: true },
+        { action: 'Editer/supprimer ses taches', owner: true, manager: true, member: true },
+        { action: 'Editer/supprimer toutes les taches', owner: true, manager: true, member: false },
+        { action: 'Changer statut de toute tache', owner: true, manager: true, member: false },
+        { action: 'Envoyer un message', owner: true, manager: true, member: true },
+        { action: 'Editer/supprimer tous les messages', owner: true, manager: true, member: false },
+        { action: 'Consulter le journal activite', owner: true, manager: true, member: false },
+        { action: 'Invitations / Groupes sur-mesure (avec membres) / Thematiques', owner: true, manager: true, member: false },
+        { action: 'Gerer les membres du projet*', owner: true, manager: true, member: false }
+      ];
+
+      const roleRules = {
+        owner: { label: getProjectRoleLabel('owner'), description: 'Pilotage complet du projet', allowed: rows.filter(r => r.owner).length, total: rows.length, chip: 'bg-amber-100 text-amber-800' },
+        manager: { label: 'Manager', description: 'Gestion opérationnelle avancée', allowed: rows.filter(r => r.manager).length, total: rows.length, chip: 'bg-blue-100 text-blue-800' },
+        member: { label: 'Membre', description: 'Exécution et contribution', allowed: rows.filter(r => r.member).length, total: rows.length, chip: 'bg-emerald-100 text-emerald-800' }
+      };
+      if (summary) {
+        summary.innerHTML = ['owner', 'manager', 'member'].map((key) => {
+          const rr = roleRules[key];
+          const active = role === key ? ' ring-2 ring-indigo-200' : '';
+          return `
+            <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2${active}">
+              <div class="flex items-center justify-between gap-2">
+                <p class="text-sm font-semibold text-slate-800">${rr.label}</p>
+                <span class="text-[11px] px-2 py-0.5 rounded-full font-semibold ${rr.chip}">${rr.allowed}/${rr.total}</span>
+              </div>
+              <p class="text-xs text-slate-500 mt-1">${rr.description}</p>
+            </div>
+          `;
+        }).join('');
+      }
+
+      const renderCell = (allowed, isCurrentCol) => {
+        const base = 'py-2 px-2 border-b border-slate-100';
+        const current = isCurrentCol ? ' bg-indigo-50' : '';
+        if (allowed) {
+          return `<td class="${base}${current}"><span class="inline-flex items-center text-emerald-700 font-semibold" title="Autorisé"><span class="material-symbols-outlined text-base">check_circle</span></span></td>`;
+        }
+        return `<td class="${base}${current}"><span class="inline-flex items-center text-slate-400 font-semibold" title="Non autorisé"><span class="material-symbols-outlined text-base">remove_circle</span></span></td>`;
+      };
+
+      tbody.innerHTML = rows.map((row) => `
+        <tr>
+          <td class="py-2 pr-3 border-b border-slate-100 text-slate-700">${escapeHtml(row.action)}</td>
+          ${renderCell(row.owner, role === 'owner')}
+          ${renderCell(row.manager, role === 'manager')}
+          ${renderCell(row.member, role === 'member')}
+        </tr>
+      `).join('');
+
+      if (details) {
+        details.classList.toggle('hidden', !projectPermissionDetailsOpen);
+      }
+      if (toggle) {
+        toggle.textContent = projectPermissionDetailsOpen ? 'Masquer le détail des droits' : 'Voir le détail des droits';
+      }
+    }
+
+    function getMyProjectRole(state = currentProjectState) {
+      if (!state?.project || !currentUser?.userId) return null;
+      const member = (state?.members || []).find(m => m.userId === currentUser?.userId);
+      if (member?.role) return member.role;
+      if (state.project.createdBy && state.project.createdBy === currentUser.userId) return 'owner';
+      return null;
+    }
+
+    function normalizeProjectRole(role) {
+      return getProjectRoleMeta(role).baseRole;
+    }
+
+    function hasProjectRole(state = currentProjectState) {
+      return Boolean(getMyProjectRole(state));
+    }
+
+    function isProjectOwner(state = currentProjectState) {
+      return normalizeProjectRole(getMyProjectRole(state)) === 'owner';
+    }
+
+    function isProjectManagerOrOwner(state = currentProjectState) {
+      const role = normalizeProjectRole(getMyProjectRole(state));
+      return role === 'owner' || role === 'manager';
+    }
+
+    function canEditProjectMeta(state = currentProjectState) {
+      return isProjectManagerOrOwner(state);
+    }
+
+    function canDeleteProjectMeta(state = currentProjectState) {
+      return isProjectOwner(state);
+    }
+
+    function getAssignableProjectRolesForUser(state = currentProjectState) {
+      const myRole = normalizeProjectRole(getMyProjectRole(state));
+      const catalog = getProjectRoleCatalog();
+      if (myRole === 'owner') return catalog;
+      if (myRole === 'manager') return catalog.filter(item => normalizeProjectRoleBase(item.baseRole) === 'member');
+      return [];
+    }
+
+    function renderProjectRoleSelectors(state = currentProjectState) {
+      const roleInputs = [
+        document.getElementById('member-role-input'),
+        document.getElementById('invite-role-input')
+      ].filter(Boolean);
+      if (roleInputs.length === 0) return;
+      const options = getAssignableProjectRolesForUser(state);
+      roleInputs.forEach((input) => {
+        const previous = String(input.value || '').trim();
+        input.innerHTML = options.length === 0
+          ? ''
+          : options.map((item) => {
+            const baseLabel = getBaseProjectRoleLabel(item.baseRole);
+            const label = item.isSystem ? item.label : `${item.label} (${baseLabel})`;
+            return `<option value="${escapeHtml(item.roleKey)}">${escapeHtml(label)}</option>`;
+          }).join('');
+        if (options.length === 0) {
+          input.disabled = true;
+          return;
+        }
+        input.disabled = false;
+        const hasPrev = options.some(item => item.roleKey === previous);
+        input.value = hasPrev ? previous : options[0].roleKey;
+      });
+    }
+
+    function canCreateTaskInProject(state = currentProjectState) {
+      return hasProjectRole(state);
+    }
+
+    function canEditTaskInProject(task, state = currentProjectState) {
+      if (!task) return false;
+      if (isProjectManagerOrOwner(state)) return true;
+      return task.createdBy === currentUser?.userId;
+    }
+
+    function canChangeTaskStatus(task, state = currentProjectState) {
+      if (!task) return false;
+      if (canEditTaskInProject(task, state)) return true;
+      const assigneeEntries = getTaskAssigneeEntries(task, state);
+      if (assigneeEntries.some(a => a.userId && a.userId === currentUser?.userId)) return true;
+      const me = normalizeSearch(currentUser?.name || '');
+      return assigneeEntries.some(a => normalizeSearch(a.name || '') === me);
+    }
+
+    function canDeleteTaskInProject(task, state = currentProjectState) {
+      if (!task) return false;
+      if (isProjectManagerOrOwner(state)) return true;
+      return task.createdBy === currentUser?.userId;
+    }
+
+    function canSendProjectMessage(state = currentProjectState) {
+      return hasProjectRole(state);
+    }
+
+    function canEditProjectMessage(msg, state = currentProjectState) {
+      if (!msg) return false;
+      if (isProjectManagerOrOwner(state)) return true;
+      return msg.author === currentUser?.userId;
+    }
+
+    function canDeleteProjectMessage(msg, state = currentProjectState) {
+      return canEditProjectMessage(msg, state);
+    }
+
+    function canReadProjectActivity(state = currentProjectState) {
+      return isProjectManagerOrOwner(state);
+    }
+
+    function canManageProjectCollaboration(state = currentProjectState) {
+      return isProjectManagerOrOwner(state);
+    }
+
+    function getGroupNameById(state, groupId) {
+      if (!groupId) return '';
+      const group = (state?.groups || []).find(g => g.groupId === groupId);
+      return group?.name || '';
+    }
+
+    function getTaskGroupName(task, state = currentProjectState) {
+      if (!task) return '';
+      if (task.groupName) return String(task.groupName);
+      return getGroupNameById(state, task.groupId);
+    }
+
+    function getTaskAssigneeEntries(task, state = currentProjectState) {
+      if (!task) return [];
+      const memberMap = new Map((state?.members || []).map(m => [m.userId, m.displayName || '']));
+      if (Array.isArray(task.assignees) && task.assignees.length > 0) {
+        const dedup = [];
+        const seen = new Set();
+        task.assignees.forEach((entry) => {
+          const userId = String(entry?.userId || '').trim();
+          const fallbackName = userId ? (memberMap.get(userId) || '') : '';
+          const name = String(entry?.name || fallbackName || '').trim();
+          const email = String(entry?.email || '').trim().toLowerCase();
+          const key = `${userId}|${normalizeSearch(name)}|${email}`;
+          if (!userId && !name) return;
+          if (seen.has(key)) return;
+          seen.add(key);
+          dedup.push({ userId: userId || null, name, email });
+        });
+        return dedup;
+      }
+      const member = (state?.members || []).find(m => m.userId === task.assigneeUserId);
+      const legacyName = task.assignee || member?.displayName || '';
+      if (!task.assigneeUserId && !legacyName) return [];
+      const parsedLegacy = parseAssigneeToken(legacyName);
+      return [{
+        userId: task.assigneeUserId || null,
+        name: String(parsedLegacy?.name || legacyName || '').trim(),
+        email: String(parsedLegacy?.email || '').trim().toLowerCase()
+      }];
+    }
+
+    function getTaskAssigneeNames(task, state = currentProjectState) {
+      return getTaskAssigneeEntries(task, state)
+        .map(a => String(a.name || '').trim())
+        .filter(Boolean);
+    }
+
+    function getTaskAssigneeName(task, state = currentProjectState, firstOnly = false) {
+      const names = getTaskAssigneeNames(task, state);
+      if (names.length === 0) return '';
+      return firstOnly ? names[0] : names.join(', ');
+    }
+
+    function buildGlobalTaskRef(task) {
+      return encodeURIComponent(JSON.stringify({
+        sourceType: task?.sourceType || '',
+        sourceProjectId: task?.sourceProjectId || null,
+        taskId: task?.taskId || null,
+        id: task?.id || null
+      }));
+    }
+
+    function parseGlobalTaskRef(ref) {
+      try {
+        return JSON.parse(decodeURIComponent(ref || ''));
+      } catch {
+        return null;
+      }
+    }
+
+    async function resolveGlobalTaskFromRef(ref) {
+      const parsed = parseGlobalTaskRef(ref);
+      if (!parsed) return null;
+      if (parsed.sourceType === 'standalone' && parsed.id) {
+        const task = await getDecrypted('globalTasks', parsed.id, 'id');
+        if (!task) return null;
+        return { task, sourceType: 'standalone' };
+      }
+      if (parsed.sourceType === 'project' && parsed.sourceProjectId && parsed.taskId) {
+        const state = await getProjectState(parsed.sourceProjectId);
+        if (!state?.project) return null;
+        const task = (state.tasks || []).find(t => t.taskId === parsed.taskId);
+        if (!task) return null;
+        return { task, state, sourceType: 'project', projectId: parsed.sourceProjectId };
+      }
+      return null;
+    }
+
+    function normalizeTaskSubtasks(task) {
+      const subtasks = Array.isArray(task?.subtasks) ? task.subtasks : [];
+      return subtasks
+        .map((item, index) => {
+          if (typeof item === 'string') {
+            return { id: `subtask-${index}`, text: item, done: false };
+          }
+          return {
+            id: String(item?.id || `subtask-${index}`),
+            text: String(item?.text || item?.label || item?.title || '').trim(),
+            done: Boolean(item?.done)
+          };
+        })
+        .filter(item => item.text);
+    }
+
+    function closeGlobalTaskDetails() {
+      const modal = document.getElementById('modal-global-task-details');
+      if (!modal) return;
+      modal.classList.add('hidden');
+      currentGlobalTaskDetailRef = '';
+    }
+
+    async function releaseActiveProjectEditLock() {
+      if (!activeProjectEditLock) return;
+      await releaseProjectResourceLock(
+        activeProjectEditLock.projectId,
+        activeProjectEditLock.resourceType,
+        activeProjectEditLock.resourceId,
+        activeProjectEditLock.lockId
+      );
+      activeProjectEditLock = null;
+      updateEditLockBadges();
+    }
+
+    async function releaseActiveTaskEditLock() {
+      if (!activeTaskEditLock) return;
+      await releaseProjectResourceLock(
+        activeTaskEditLock.projectId,
+        activeTaskEditLock.resourceType,
+        activeTaskEditLock.resourceId,
+        activeTaskEditLock.lockId
+      );
+      activeTaskEditLock = null;
+      updateEditLockBadges();
+    }
+
+    function updateEditLockBadges() {
+      const taskBadge = document.getElementById('task-edit-lock-badge');
+      const projectBadge = document.getElementById('project-edit-lock-badge');
+
+      if (taskBadge) {
+        if (activeTaskEditLock?.lockId) {
+          taskBadge.textContent = 'Verrou actif: cette tache est reservee a votre edition temporaire.';
+          taskBadge.classList.remove('hidden');
+        } else {
+          taskBadge.classList.add('hidden');
+          taskBadge.textContent = '';
+        }
+      }
+
+      if (projectBadge) {
+        if (activeProjectEditLock?.lockId) {
+          projectBadge.textContent = 'Verrou actif: ce projet est reserve a votre edition temporaire.';
+          projectBadge.classList.remove('hidden');
+        } else {
+          projectBadge.classList.add('hidden');
+          projectBadge.textContent = '';
+        }
+      }
+    }
+
+    function renderTaskDescriptionToElement(task = {}, targetEl = null) {
+      if (!targetEl) return;
+      const html = sanitizeProjectDescriptionHtml(task.descriptionHtml || '');
+      if (html) {
+        targetEl.innerHTML = html;
+        return;
+      }
+      targetEl.textContent = String(task.description || '').trim() || 'Aucune description.';
+    }
+
+    function mapTaskStatusToProjectStatus(taskStatus = '') {
+      const status = String(taskStatus || '').trim();
+      if (status === 'termine') return 'termine';
+      if (status === 'todo') return 'planifie';
+      return 'en-cours';
+    }
+
+    function closeTaskConvertModal() {
+      const modal = document.getElementById('modal-task-convert');
+      if (!modal) return;
+      modal.classList.add('hidden');
+      pendingTaskConvertRef = null;
+      const errorEl = document.getElementById('task-convert-error');
+      if (errorEl) errorEl.classList.add('hidden');
+    }
+
+    async function openTaskConvertModal(taskRef, prefill = {}) {
+      const modal = document.getElementById('modal-task-convert');
+      if (!modal) {
+        await convertTaskToProject(taskRef, { ...prefill, __fromModal: true });
+        return;
+      }
+      const resolved = await resolveGlobalTaskFromRef(taskRef);
+      if (!resolved?.task) {
+        showToast('Tache introuvable');
+        return;
+      }
+      const task = resolved.task;
+      const sourceType = resolved.sourceType;
+      const sourceState = sourceType === 'project' ? resolved.state : null;
+      if (sourceType === 'project' && !canEditTaskInProject(task, sourceState)) {
+        showToast('Action non autorisee');
+        return;
+      }
+
+      const suggestedName = String(task.title || '').trim() || 'Nouveau projet';
+      const sharingMode = normalizeSharingMode(
+        prefill?.sharingMode || task.sharingMode || sourceState?.project?.sharingMode || 'private',
+        'private'
+      );
+      const sourceProjectName = sourceType === 'project'
+        ? String(sourceState?.project?.name || '').trim()
+        : 'Hors projet';
+
+      const sourceLabelEl = document.getElementById('task-convert-source-label');
+      const projectNameInput = document.getElementById('task-convert-project-name');
+      const modeSelect = document.getElementById('task-convert-mode');
+      const archiveCheckbox = document.getElementById('task-convert-archive-source');
+      const openCheckbox = document.getElementById('task-convert-open-project');
+      const errorEl = document.getElementById('task-convert-error');
+
+      if (sourceLabelEl) sourceLabelEl.textContent = `${String(task.title || 'Tâche').trim()} • ${sourceProjectName}`;
+      if (projectNameInput) projectNameInput.value = String(prefill?.projectName || suggestedName);
+      if (modeSelect) modeSelect.value = sharingMode;
+      if (archiveCheckbox) archiveCheckbox.checked = prefill?.archiveSource !== false;
+      if (openCheckbox) openCheckbox.checked = prefill?.openProjectAfterConvert !== false;
+      if (errorEl) errorEl.classList.add('hidden');
+
+      pendingTaskConvertRef = taskRef;
+      modal.classList.remove('hidden');
+      requestAnimationFrame(() => {
+        projectNameInput?.focus();
+        projectNameInput?.select();
+      });
+    }
+
+    async function convertTaskToProject(taskRef, options = {}) {
+      if (!options?.__fromModal) {
+        await openTaskConvertModal(taskRef, options || {});
+        return;
+      }
+
+      const resolved = await resolveGlobalTaskFromRef(taskRef);
+      if (!resolved?.task) {
+        showToast('Tache introuvable');
+        return;
+      }
+      const task = resolved.task;
+      const sourceType = resolved.sourceType;
+      const sourceState = sourceType === 'project' ? resolved.state : null;
+      if (sourceType === 'project' && !canEditTaskInProject(task, sourceState)) {
+        showToast('Action non autorisee');
+        return;
+      }
+
+      const suggestedName = String(task.title || '').trim() || 'Nouveau projet';
+      const projectName = String(options?.projectName || suggestedName).trim();
+      if (!projectName) return;
+
+      const archiveSourceTask = options?.archiveSource === true;
+
+      const projectId = `project-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      const sourceProject = sourceState?.project || null;
+      const sharingMode = normalizeSharingMode(
+        options?.sharingMode || task.sharingMode || sourceProject?.sharingMode || 'private',
+        'private'
+      );
+      const readAccess = String(sourceProject?.readAccess || 'private') === 'public' ? 'public' : 'private';
+      const descriptionHtml = sanitizeProjectDescriptionHtml(
+        String(task.descriptionHtml || task.description || '').trim()
+      );
+      const assignees = Array.isArray(task.assignees) && task.assignees.length > 0
+        ? task.assignees
+        : getTaskAssigneeEntries(task, sourceState);
+      const preparedAssignees = assignees
+        .map((entry) => ({
+          userId: entry?.userId ? String(entry.userId).trim() : null,
+          name: String(entry?.name || '').trim(),
+          email: String(entry?.email || '').trim()
+        }))
+        .filter((entry) => entry.userId || entry.name || entry.email);
+      const primaryAssignee = preparedAssignees[0] || { userId: null, name: '', email: '' };
+      const firstTaskId = uuidv4();
+      const firstGroupName = String(task.groupName || getTaskGroupName(task, sourceState) || '').trim();
+      const firstGroupId = firstGroupName ? uuidv4() : null;
+
+      let sharedKeyHex = null;
+      try {
+        await runWithLoading(async () => {
+          if (sharingMode === 'shared') {
+            const sharedKey = await window.TaskMDACrypto.generateSharedKey();
+            sharedKeyHex = await window.TaskMDACrypto.exportSharedKey(sharedKey);
+            await putEncrypted('sharedKeys', {
+              projectId,
+              sharedKey: sharedKeyHex,
+              passphrase: null,
+              createdAt: Date.now()
+            }, 'projectId');
+          }
+
+          const createProjectEvent = createEvent(
+            EventTypes.CREATE_PROJECT,
+            projectId,
+            currentUser.userId,
+            {
+              name: projectName,
+              description: descriptionHtml,
+              status: mapTaskStatusToProjectStatus(task.status || ''),
+              readAccess,
+              sharingMode,
+              joinPassphrase: null
+            }
+          );
+          await publishEvent(createProjectEvent);
+
+          const addOwnerEvent = createEvent(
+            EventTypes.ADD_MEMBER,
+            projectId,
+            currentUser.userId,
+            { userId: currentUser.userId, role: 'owner' }
+          );
+          await publishEvent(addOwnerEvent);
+
+          const createGroupEvent = firstGroupId
+            ? createEvent(
+                EventTypes.CREATE_GROUP,
+                projectId,
+                currentUser.userId,
+                { groupId: firstGroupId, name: firstGroupName, description: 'Groupe importé depuis une tâche convertie' }
+              )
+            : null;
+          if (createGroupEvent) {
+            await publishEvent(createGroupEvent);
+          }
+
+          const createTaskEvent = createEvent(
+            EventTypes.CREATE_TASK,
+            projectId,
+            currentUser.userId,
+            {
+              taskId: firstTaskId,
+              createdBy: task.createdBy || currentUser.userId,
+              title: task.title || 'Tâche convertie',
+              assignee: primaryAssignee.name || '',
+              assigneeUserId: primaryAssignee.userId || null,
+              assignees: preparedAssignees,
+              description: getProjectDescriptionPlainText(descriptionHtml).trim() || String(task.description || '').trim(),
+              descriptionHtml: descriptionHtml || '',
+              requestDate: task.requestDate || null,
+              dueDate: task.dueDate || null,
+              status: task.status || 'todo',
+              urgency: task.urgency || 'medium',
+              theme: String(task.theme || '').trim(),
+              groupId: firstGroupId,
+              groupName: firstGroupName || null,
+              subtasks: normalizeTaskSubtasks(task),
+              attachments: Array.isArray(task.attachments) ? task.attachments : []
+            }
+          );
+          await publishEvent(createTaskEvent);
+
+          if (sharingMode === 'shared') {
+            await registerProject(projectId);
+            if (sharedKeyHex) await writeProjectSharedKeyToFolder(projectId, sharedKeyHex);
+            if (sharedFolderHandle) {
+              await writeEventToSharedFolder(projectId, createProjectEvent);
+              await writeEventToSharedFolder(projectId, addOwnerEvent);
+              if (createGroupEvent) await writeEventToSharedFolder(projectId, createGroupEvent);
+              await writeEventToSharedFolder(projectId, createTaskEvent);
+              if (!isPolling) startPolling();
+            }
+          }
+
+          if (archiveSourceTask) {
+            if (sourceType === 'project') {
+              const sourceProjectId = resolved.projectId;
+              const archiveEvent = createEvent(
+                EventTypes.UPDATE_TASK,
+                sourceProjectId,
+                currentUser.userId,
+                {
+                  taskId: task.taskId,
+                  changes: {
+                    status: 'termine',
+                    archivedAt: Date.now(),
+                    convertedProjectId: projectId,
+                    convertedAt: Date.now()
+                  }
+                }
+              );
+              await publishEvent(archiveEvent);
+              if (sharedFolderHandle) {
+                await writeEventToSharedFolder(sourceProjectId, archiveEvent);
+              }
+            } else {
+              await putEncrypted('globalTasks', {
+                ...task,
+                status: 'termine',
+                archivedAt: Date.now(),
+                convertedProjectId: projectId,
+                convertedAt: Date.now(),
+                updatedAt: Date.now()
+              }, 'id');
+            }
+          }
+        });
+
+        closeGlobalTaskDetails();
+        await refreshStats();
+        await renderProjects();
+        if (workspaceMode === 'global') {
+          await renderGlobalTasks();
+        }
+        if (resolved.sourceType === 'project' && currentProjectId === resolved.projectId) {
+          await showProjectDetail(currentProjectId);
+        }
+        showToast('✅ Tâche convertie en projet');
+        if (options?.openProjectAfterConvert !== false) {
+          await showProjectDetail(projectId);
+        }
+      } catch (error) {
+        console.error('Task convert to project failed:', error);
+        showToast('❌ Conversion impossible');
+      }
+    }
+
+    async function openGlobalTaskDetails(taskRef) {
+      const modal = document.getElementById('modal-global-task-details');
+      if (!modal) return;
+      const resolved = await resolveGlobalTaskFromRef(taskRef);
+      if (!resolved?.task) {
+        showToast('Tache introuvable');
+        return;
+      }
+      const task = resolved.task;
+      const state = resolved.sourceType === 'project' ? resolved.state : null;
+      const isStandalone = resolved.sourceType === 'standalone';
+      const canEdit = isStandalone ? true : canEditTaskInProject(task, state);
+      const canArchive = isStandalone ? true : canEditTaskInProject(task, state);
+      const canDelete = isStandalone ? true : canDeleteTaskInProject(task, state);
+      const titleEl = document.getElementById('global-task-detail-title');
+      const subtitleEl = document.getElementById('global-task-detail-subtitle');
+      const badgesEl = document.getElementById('global-task-detail-badges');
+      const descriptionEl = document.getElementById('global-task-detail-description');
+      const requestDateEl = document.getElementById('global-task-detail-request-date');
+      const dueDateEl = document.getElementById('global-task-detail-due-date');
+      const assigneesEl = document.getElementById('global-task-detail-assignees');
+      const groupEl = document.getElementById('global-task-detail-group');
+      const subtasksEl = document.getElementById('global-task-detail-subtasks');
+      const attachmentsEl = document.getElementById('global-task-detail-attachments');
+      const btnConvert = document.getElementById('btn-global-task-detail-convert');
+      const btnEdit = document.getElementById('btn-global-task-detail-edit');
+      const btnArchive = document.getElementById('btn-global-task-detail-archive');
+      const btnDelete = document.getElementById('btn-global-task-detail-delete');
+      const statusMeta = getTaskStatusMeta(task.status || 'todo');
+      const urgencyMeta = getTaskUrgencyMeta(task.urgency || 'medium');
+      const sourceProjectName = isStandalone
+        ? 'Hors projet'
+        : (state?.project?.name || 'Projet');
+      const sourceTheme = String(task.theme || 'General');
+      const assigneeNames = getTaskAssigneeName(task, state) || 'Non assigne';
+      const groupName = getTaskGroupName(task, state) || task.groupName || 'Aucun groupe';
+      const subtasks = normalizeTaskSubtasks(task);
+      const doneSubtasks = subtasks.filter(item => item.done).length;
+      const attachments = Array.isArray(task.attachments) ? task.attachments : [];
+
+      if (titleEl) titleEl.textContent = task.title || 'Tache';
+      if (subtitleEl) subtitleEl.textContent = `${sourceProjectName} • ${sourceTheme}`;
+      if (badgesEl) {
+        badgesEl.innerHTML = `
+          <span class="${urgencyMeta.chipClass}">${urgencyMeta.label}</span>
+          <span class="${statusMeta.chipClass}">${statusMeta.label}</span>
+          ${sharingModeBadge(task.sharingMode)}
+        `;
+      }
+      renderTaskDescriptionToElement(task, descriptionEl);
+      if (requestDateEl) requestDateEl.textContent = formatDate(task.requestDate);
+      if (dueDateEl) dueDateEl.textContent = formatDate(task.dueDate);
+      if (assigneesEl) assigneesEl.textContent = assigneeNames;
+      if (groupEl) groupEl.textContent = groupName;
+      if (subtasksEl) {
+        if (subtasks.length === 0) {
+          subtasksEl.innerHTML = '<p class="text-slate-500">Aucune sous-tache.</p>';
+        } else {
+          subtasksEl.innerHTML = `
+            <p class="text-xs text-slate-500 mb-2">${doneSubtasks}/${subtasks.length} terminees</p>
+            ${subtasks.map(item => `
+              <div class="flex items-center gap-2">
+                <span class="text-sm ${item.done ? 'text-emerald-600' : 'text-slate-400'}">${item.done ? '☑' : '☐'}</span>
+                <span class="${item.done ? 'line-through text-slate-400' : 'text-slate-700'}">${escapeHtml(item.text)}</span>
+              </div>
+            `).join('')}
+          `;
+        }
+      }
+      if (attachmentsEl) {
+        if (attachments.length === 0) {
+          attachmentsEl.innerHTML = '<p class="text-slate-500">Aucun document lié.</p>';
+        } else {
+          attachmentsEl.innerHTML = attachments.map((file, index) => `
+            <a class="inline-flex items-center gap-1 text-primary hover:underline mr-3" href="${file?.data || '#'}" download="${escapeHtml(file?.name || `piece-jointe-${index + 1}`)}">
+              <span class="material-symbols-outlined text-sm">attach_file</span>
+              <span>${escapeHtml(file?.name || `piece-jointe-${index + 1}`)}</span>
+            </a>
+          `).join('');
+        }
+      }
+
+      if (btnConvert) {
+        btnConvert.classList.toggle('hidden', !canEdit);
+        btnConvert.onclick = async () => {
+          closeGlobalTaskDetails();
+          await convertTaskToProject(taskRef);
+        };
+      }
+      if (btnEdit) {
+        btnEdit.classList.toggle('hidden', !canEdit);
+        btnEdit.onclick = async () => {
+          closeGlobalTaskDetails();
+          await editGlobalTask(taskRef);
+        };
+      }
+      if (btnArchive) {
+        btnArchive.classList.toggle('hidden', !canArchive);
+        btnArchive.onclick = async () => {
+          closeGlobalTaskDetails();
+          await archiveGlobalTask(taskRef);
+        };
+      }
+      if (btnDelete) {
+        btnDelete.classList.toggle('hidden', !canDelete);
+        btnDelete.onclick = async () => {
+          closeGlobalTaskDetails();
+          await deleteGlobalTask(taskRef);
+        };
+      }
+
+      currentGlobalTaskDetailRef = taskRef;
+      modal.classList.remove('hidden');
+    }
+
+    async function openProjectTaskDetails(taskId) {
+      if (!currentProjectId || !taskId) return;
+      const modal = document.getElementById('modal-global-task-details');
+      if (!modal) return;
+      const state = await getProjectState(currentProjectId);
+      if (!state?.project) return;
+      const task = (state.tasks || []).find(t => t.taskId === taskId);
+      if (!task) {
+        showToast('Tache introuvable');
+        return;
+      }
+
+      const canEdit = canEditTaskInProject(task, state);
+      const canArchive = canEditTaskInProject(task, state);
+      const canDelete = canDeleteTaskInProject(task, state);
+      const titleEl = document.getElementById('global-task-detail-title');
+      const subtitleEl = document.getElementById('global-task-detail-subtitle');
+      const badgesEl = document.getElementById('global-task-detail-badges');
+      const descriptionEl = document.getElementById('global-task-detail-description');
+      const requestDateEl = document.getElementById('global-task-detail-request-date');
+      const dueDateEl = document.getElementById('global-task-detail-due-date');
+      const assigneesEl = document.getElementById('global-task-detail-assignees');
+      const groupEl = document.getElementById('global-task-detail-group');
+      const subtasksEl = document.getElementById('global-task-detail-subtasks');
+      const attachmentsEl = document.getElementById('global-task-detail-attachments');
+      const btnConvert = document.getElementById('btn-global-task-detail-convert');
+      const btnEdit = document.getElementById('btn-global-task-detail-edit');
+      const btnArchive = document.getElementById('btn-global-task-detail-archive');
+      const btnDelete = document.getElementById('btn-global-task-detail-delete');
+      const statusMeta = getTaskStatusMeta(task.status || 'todo');
+      const urgencyMeta = getTaskUrgencyMeta(task.urgency || 'medium');
+      const sourceProjectName = state?.project?.name || 'Projet';
+      const sourceTheme = String(task.theme || 'General');
+      const assigneeNames = getTaskAssigneeName(task, state) || 'Non assigne';
+      const groupName = getTaskGroupName(task, state) || task.groupName || 'Aucun groupe';
+      const subtasks = normalizeTaskSubtasks(task);
+      const doneSubtasks = subtasks.filter(item => item.done).length;
+      const attachments = Array.isArray(task.attachments) ? task.attachments : [];
+      const linkedDocs = (state.documents || []).filter(doc => (doc.linkedTaskIds || []).includes(taskId));
+      const sharingMode = task.sharingMode || state?.project?.sharingMode || 'shared';
+
+      if (titleEl) titleEl.textContent = task.title || 'Tache';
+      if (subtitleEl) subtitleEl.textContent = `${sourceProjectName} • ${sourceTheme}`;
+      if (badgesEl) {
+        badgesEl.innerHTML = `
+          <span class="${urgencyMeta.chipClass}">${urgencyMeta.label}</span>
+          <span class="${statusMeta.chipClass}">${statusMeta.label}</span>
+          ${sharingModeBadge(sharingMode)}
+        `;
+      }
+      renderTaskDescriptionToElement(task, descriptionEl);
+      if (requestDateEl) requestDateEl.textContent = formatDate(task.requestDate);
+      if (dueDateEl) dueDateEl.textContent = formatDate(task.dueDate);
+      if (assigneesEl) assigneesEl.textContent = assigneeNames;
+      if (groupEl) groupEl.textContent = groupName;
+      if (subtasksEl) {
+        if (subtasks.length === 0) {
+          subtasksEl.innerHTML = '<p class="text-slate-500">Aucune sous-tache.</p>';
+        } else {
+          subtasksEl.innerHTML = `
+            <p class="text-xs text-slate-500 mb-2">${doneSubtasks}/${subtasks.length} terminees</p>
+            ${subtasks.map(item => `
+              <div class="flex items-center gap-2">
+                <span class="text-sm ${item.done ? 'text-emerald-600' : 'text-slate-400'}">${item.done ? '☑' : '☐'}</span>
+                <span class="${item.done ? 'line-through text-slate-400' : 'text-slate-700'}">${escapeHtml(item.text)}</span>
+              </div>
+            `).join('')}
+          `;
+        }
+      }
+      if (attachmentsEl) {
+        const allItems = [
+          ...attachments.map((file, index) => ({ type: 'attachment', file, index })),
+          ...linkedDocs.map((doc) => ({ type: 'project-doc', doc }))
+        ];
+        if (allItems.length === 0) {
+          attachmentsEl.innerHTML = '<p class="text-slate-500">Aucun document lie.</p>';
+        } else {
+          attachmentsEl.innerHTML = allItems.map((item) => {
+            if (item.type === 'attachment') {
+              const file = item.file || {};
+              return `
+                <a class="inline-flex items-center gap-1 text-primary hover:underline mr-3" href="${file?.data || '#'}" download="${escapeHtml(file?.name || `piece-jointe-${item.index + 1}`)}">
+                  <span class="material-symbols-outlined text-sm">attach_file</span>
+                  <span>${escapeHtml(file?.name || `piece-jointe-${item.index + 1}`)}</span>
+                </a>
+              `;
+            }
+            const doc = item.doc || {};
+            return `
+              <a class="inline-flex items-center gap-1 text-primary hover:underline mr-3" href="${doc?.data || '#'}" download="${escapeHtml(doc?.name || 'document')}">
+                <span class="material-symbols-outlined text-sm">description</span>
+                <span>${escapeHtml(doc?.name || 'document')}</span>
+              </a>
+            `;
+          }).join('');
+        }
+      }
+
+      if (btnConvert) {
+        btnConvert.classList.toggle('hidden', !canEdit);
+        btnConvert.onclick = async () => {
+          const taskRef = buildGlobalTaskRef({
+            sourceType: 'project',
+            sourceProjectId: currentProjectId,
+            taskId: task.taskId
+          });
+          closeGlobalTaskDetails();
+          await convertTaskToProject(taskRef);
+        };
+      }
+      if (btnEdit) {
+        btnEdit.classList.toggle('hidden', !canEdit);
+        btnEdit.onclick = async () => {
+          closeGlobalTaskDetails();
+          await editTask(taskId);
+        };
+      }
+      if (btnArchive) {
+        btnArchive.classList.toggle('hidden', !canArchive);
+        btnArchive.onclick = async () => {
+          closeGlobalTaskDetails();
+          await archiveTask(taskId);
+        };
+      }
+      if (btnDelete) {
+        btnDelete.classList.toggle('hidden', !canDelete);
+        btnDelete.onclick = async () => {
+          closeGlobalTaskDetails();
+          await deleteTask(taskId);
+        };
+      }
+
+      currentGlobalTaskDetailRef = `project:${currentProjectId}:${taskId}`;
+      modal.classList.remove('hidden');
+    }
+
+    async function collectProjectRecipientEmails(state = currentProjectState, options = {}) {
+      const recipients = new Set();
+      const includeInvites = options.includeInvites !== false;
+      const includeProjectAssignees = options.includeProjectAssignees === true;
+      const task = options.task || null;
+
+      if (includeInvites) {
+        (state?.invites || []).forEach((inv) => {
+          const email = String(inv?.email || '').trim().toLowerCase();
+          if (inv?.status === 'declined') return;
+          if (isValidEmailAddress(email)) recipients.add(email);
+        });
+      }
+
+      const users = await getAllDecrypted('users', 'userId');
+      const directoryUsers = await getAllDecrypted('directoryUsers', 'userId');
+      const emailByUserId = new Map();
+      (directoryUsers || []).forEach((user) => {
+        const id = String(user?.userId || '').trim();
+        const email = String(user?.email || '').trim().toLowerCase();
+        if (id && isValidEmailAddress(email)) emailByUserId.set(id, email);
+      });
+      (users || []).forEach((user) => {
+        const id = String(user?.userId || '').trim();
+        const email = String(user?.email || '').trim().toLowerCase();
+        if (id && isValidEmailAddress(email)) emailByUserId.set(id, email);
+      });
+
+      (state?.members || []).forEach((member) => {
+        const memberEmail = String(member?.email || '').trim().toLowerCase();
+        if (isValidEmailAddress(memberEmail)) recipients.add(memberEmail);
+        const mapped = emailByUserId.get(String(member?.userId || '').trim());
+        if (mapped) recipients.add(mapped);
+      });
+
+      const addAssigneeEmail = (entry) => {
+        if (!entry) return;
+        const directEmail = String(entry?.email || '').trim().toLowerCase();
+        if (isValidEmailAddress(directEmail)) recipients.add(directEmail);
+        const mappedById = emailByUserId.get(String(entry?.userId || '').trim());
+        if (mappedById) recipients.add(mappedById);
+        const parsedFromName = parseAssigneeToken(entry?.name || '');
+        if (isValidEmailAddress(parsedFromName?.email || '')) {
+          recipients.add(String(parsedFromName.email).toLowerCase());
+        }
+      };
+
+      if (task) {
+        getTaskAssigneeEntries(task, state).forEach(addAssigneeEmail);
+      } else if (includeProjectAssignees) {
+        (state?.tasks || []).forEach((projectTask) => {
+          getTaskAssigneeEntries(projectTask, state).forEach(addAssigneeEmail);
+        });
+      }
+
+      return Array.from(recipients);
+    }
+
+    function normalizeMailText(value) {
+      return String(value || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[’‘]/g, "'")
+        .replace(/[“”]/g, '"')
+        .replace(/\u2026/g, '...');
+    }
+
+    function openMailto({ to = [], subject = '', body = '' }) {
+      const toValue = Array.isArray(to) ? to.join(',') : String(to || '');
+      // Outlook/clients Windows can misread UTF-8 percent-encoding in mailto.
+      // We normalize to ASCII-safe text to avoid mojibake in generated drafts.
+      const safeSubject = normalizeMailText(subject);
+      const safeBody = normalizeMailText(body);
+      const mailto = `mailto:${encodeURIComponent(toValue)}?subject=${encodeURIComponent(safeSubject)}&body=${encodeURIComponent(safeBody)}`;
+      window.location.href = mailto;
+    }
+
+    async function sendInvitationEmail(inviteId) {
+      if (!currentProjectId) return;
+      if (!canManageProjectCollaboration(currentProjectState)) {
+        showToast('Seuls Proprietaire/Manager peuvent envoyer des invitations');
+        return;
+      }
+      const state = await getProjectState(currentProjectId);
+      const invite = (state?.invites || []).find(i => i.inviteId === inviteId);
+      if (!invite) return;
+
+      const projectName = state?.project?.name || 'Projet';
+      const roleLabel = getProjectRoleLabel(invite.role);
+      const typeLabel = invite.inviteType === 'agent' ? 'agent' : 'utilisateur';
+      const subject = `[NEXUS MDA] Invitation projet: ${projectName}`;
+      const body = [
+        `Bonjour ${invite.displayName || ''},`,
+        '',
+        `Vous êtes invité(e) en tant que ${typeLabel} (${roleLabel}) sur le projet "${projectName}".`,
+        '',
+        'Merci de confirmer votre disponibilité et votre prise en charge.',
+        '',
+        `Envoyé par: ${currentUser?.name || 'Equipe projet'}`,
+        `Date: ${new Date().toLocaleDateString('fr-FR')}`
+      ].join('\n');
+
+      openMailto({ to: [invite.email], subject, body });
+
+      const event = createEvent(
+        EventTypes.UPDATE_INVITE,
+        currentProjectId,
+        currentUser.userId,
+        { inviteId, changes: { status: 'sent', lastSentAt: Date.now() } }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+      await showProjectDetail(currentProjectId);
+    }
+
+    async function updateInviteStatus(inviteId, status) {
+      if (!currentProjectId || !inviteId) return;
+      if (!canManageProjectCollaboration(currentProjectState)) {
+        showToast('Seuls Proprietaire/Manager peuvent mettre a jour les invitations');
+        return;
+      }
+      const normalized = ['pending', 'sent', 'accepted', 'declined'].includes(status) ? status : 'pending';
+      const invite = (currentProjectState?.invites || []).find(i => i.inviteId === inviteId);
+      const myRole = normalizeProjectRole(getMyProjectRole(currentProjectState));
+      if (normalized === 'accepted' && myRole === 'manager' && normalizeProjectRole(invite?.role) !== 'member') {
+        showToast('Action non autorisee');
+        return;
+      }
+      const event = createEvent(
+        EventTypes.UPDATE_INVITE,
+        currentProjectId,
+        currentUser.userId,
+        { inviteId, changes: { status: normalized } }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+      if (normalized === 'accepted' && invite) {
+        const users = await getAllDecrypted('users', 'userId');
+        let user = users.find(u => normalizeSearch(u.name) === normalizeSearch(invite.displayName));
+        if (!user) {
+          user = { userId: uuidv4(), name: invite.displayName, email: invite.email, createdAt: Date.now() };
+          await putEncrypted('users', user, 'userId');
+        }
+        await upsertDirectoryUser({
+          userId: user.userId,
+          name: user.name,
+          email: user.email || '',
+          source: 'invite_accept',
+          lastSeenAt: Date.now()
+        });
+        const memberExists = (currentProjectState?.members || []).some(m => m.userId === user.userId);
+        if (!memberExists) {
+          const memberEvent = createEvent(
+            EventTypes.ADD_MEMBER,
+            currentProjectId,
+            currentUser.userId,
+            { userId: user.userId, role: invite.role || 'member', displayName: user.name }
+          );
+          await publishEvent(memberEvent);
+          if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, memberEvent);
+        }
+      }
+      showToast(`Invitation marquée: ${normalized}`);
+      await showProjectDetail(currentProjectId);
+    }
+
+    async function addProjectInvite() {
+      if (!currentProjectId || !currentProjectState) return;
+      if (!canManageProjectCollaboration(currentProjectState)) {
+        showToast('Seuls Proprietaire/Manager peuvent inviter');
+        return;
+      }
+
+      const nameInput = document.getElementById('invite-name-input');
+      const emailInput = document.getElementById('invite-email-input');
+      const typeInput = document.getElementById('invite-type-input');
+      const roleInput = document.getElementById('invite-role-input');
+      const displayName = (nameInput?.value || '').trim();
+      const email = (emailInput?.value || '').trim().toLowerCase();
+      const inviteType = (typeInput?.value || 'user').trim();
+      const selectedRoleKey = String(roleInput?.value || 'member').trim() || 'member';
+      const role = getProjectRoleMeta(selectedRoleKey).roleKey;
+      const targetRoleBase = normalizeProjectRole(selectedRoleKey);
+      const myRole = normalizeProjectRole(getMyProjectRole(currentProjectState));
+      if (myRole === 'manager' && targetRoleBase !== 'member') {
+        showToast('Action non autorisee');
+        return;
+      }
+
+      if (!displayName) {
+        showToast('Nom invité requis');
+        return;
+      }
+      const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+      if (!emailOk) {
+        showToast('Email professionnel invalide');
+        return;
+      }
+      const exists = (currentProjectState.invites || []).some(inv => normalizeSearch(inv.email) === normalizeSearch(email));
+      if (exists) {
+        showToast('Cette adresse est déjà invitée');
+        return;
+      }
+
+      const event = createEvent(
+        EventTypes.CREATE_INVITE,
+        currentProjectId,
+        currentUser.userId,
+        {
+          inviteId: uuidv4(),
+          displayName,
+          email,
+          inviteType: inviteType === 'agent' ? 'agent' : 'user',
+          role,
+          status: 'pending'
+        }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+
+      if (nameInput) nameInput.value = '';
+      if (emailInput) emailInput.value = '';
+      showToast('Invitation créée');
+      addNotification('Invitation', `${displayName} invité(e)`, currentProjectId);
+      await showProjectDetail(currentProjectId);
+    }
+
+    function renderProjectInvitations(state) {
+      const container = document.getElementById('project-invites-list');
+      const btn = document.getElementById('btn-send-invite');
+      if (!container || !btn) return;
+      const canManage = canManageProjectCollaboration(state);
+      const myRole = normalizeProjectRole(getMyProjectRole(state));
+      btn.disabled = !canManage;
+      btn.classList.toggle('opacity-50', !canManage);
+
+      const invites = state?.invites || [];
+      if (invites.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state-card">
+            <p class="empty-state-title">Aucune invitation envoyée</p>
+            <p class="empty-state-text">Invitez un utilisateur ou un agent pour activer la collaboration.</p>
+            ${canManage ? '<button class="empty-state-cta" onclick="focusElementById(\'invite-email-input\')">Envoyer une invitation</button>' : ''}
+          </div>
+        `;
+        return;
+      }
+
+      const statusClass = {
+        pending: 'bg-amber-100 text-amber-700',
+        sent: 'bg-blue-100 text-blue-700',
+        accepted: 'bg-emerald-100 text-emerald-700',
+        declined: 'bg-rose-100 text-rose-700'
+      };
+
+      container.innerHTML = invites
+        .slice()
+        .sort((a, b) => (b.invitedAt || 0) - (a.invitedAt || 0))
+        .map(inv => `
+          <div class="rounded-lg border border-slate-200 bg-white p-3">
+            <div class="flex items-start justify-between gap-2">
+              <div>
+                <p class="text-sm font-semibold text-slate-800">${escapeHtml(inv.displayName || 'Invité')}</p>
+                <p class="text-xs text-slate-500">${escapeHtml(inv.email || '')} • ${(inv.inviteType === 'agent' ? 'Agent' : 'Utilisateur')} • ${escapeHtml(getProjectRoleLabel(inv.role || 'member'))}</p>
+              </div>
+              <span class="text-[10px] px-2 py-1 rounded-full font-semibold ${statusClass[inv.status] || statusClass.pending}">${escapeHtml(inv.status || 'pending')}</span>
+            </div>
+            <div class="mt-2 flex flex-wrap gap-2 text-xs">
+              ${canManage ? `<button onclick="sendInvitationEmail('${inv.inviteId}')" class="px-2 py-1 rounded bg-slate-100 text-slate-700">Email</button>` : ''}
+              ${canManage && (myRole === 'owner' || normalizeProjectRole(inv.role) === 'member') ? `<button onclick="updateInviteStatus('${inv.inviteId}','accepted')" class="px-2 py-1 rounded bg-emerald-100 text-emerald-700">Accepté</button>` : ''}
+              ${canManage ? `<button onclick="updateInviteStatus('${inv.inviteId}','declined')" class="px-2 py-1 rounded bg-rose-100 text-rose-700">Refusé</button>` : ''}
+            </div>
+          </div>
+        `).join('');
+    }
+
+    async function createProjectGroup() {
+      if (!currentProjectId || !currentProjectState) return;
+      if (!canManageProjectCollaboration(currentProjectState)) {
+        showToast('Seuls Proprietaire/Manager peuvent creer des groupes');
+        return;
+      }
+      const nameInput = document.getElementById('group-name-input');
+      const descInput = document.getElementById('group-description-input');
+      const membersSelect = document.getElementById('group-members-input');
+      const name = (nameInput?.value || '').trim();
+      const description = (descInput?.value || '').trim();
+      const selectedIds = Array.from(membersSelect?.selectedOptions || []).map(o => o.value).filter(Boolean);
+      if (!name) {
+        showToast('Nom de groupe requis');
+        return;
+      }
+      const editGroup = selectedProjectGroupId
+        ? (currentProjectState.groups || []).find(g => g.groupId === selectedProjectGroupId)
+        : null;
+      const exists = (currentProjectState.groups || []).some(g =>
+        normalizeSearch(g.name) === normalizeSearch(name)
+        && (!editGroup || g.groupId !== editGroup.groupId)
+      );
+      if (exists) {
+        showToast('Ce groupe existe déjà');
+        return;
+      }
+
+      const groupId = editGroup?.groupId || uuidv4();
+      if (editGroup) {
+        const event = createEvent(
+          EventTypes.UPDATE_GROUP,
+          currentProjectId,
+          currentUser.userId,
+          { groupId, changes: { name, description } }
+        );
+        await publishEvent(event);
+        if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+      } else {
+        const event = createEvent(
+          EventTypes.CREATE_GROUP,
+          currentProjectId,
+          currentUser.userId,
+          { groupId, name, description }
+        );
+        await publishEvent(event);
+        if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+      }
+      const existingUserGroup = (currentProjectState.userGroups || []).find(g =>
+        g.groupId === groupId || normalizeSearch(g.name) === normalizeSearch(editGroup?.name || name)
+      );
+      if (existingUserGroup) {
+        const eventUserGroupUpdate = createEvent(
+          EventTypes.UPDATE_USER_GROUP,
+          currentProjectId,
+          currentUser.userId,
+          { groupId: existingUserGroup.groupId, changes: { memberUserIds: [...new Set(selectedIds)], name, description } }
+        );
+        await publishEvent(eventUserGroupUpdate);
+        if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, eventUserGroupUpdate);
+      } else {
+        const eventUserGroupCreate = createEvent(
+          EventTypes.CREATE_USER_GROUP,
+          currentProjectId,
+          currentUser.userId,
+          { groupId, name, memberUserIds: [...new Set(selectedIds)] }
+        );
+        await publishEvent(eventUserGroupCreate);
+        if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, eventUserGroupCreate);
+      }
+      const refreshedAfterGroupSave = await getProjectState(currentProjectId, { ignoreAccessCheck: true });
+      const savedGroup = (refreshedAfterGroupSave?.groups || []).find(g => g.groupId === groupId)
+        || { name, description };
+      const savedLinkedUserGroup = (refreshedAfterGroupSave?.userGroups || []).find(ug =>
+        ug.groupId === groupId || normalizeSearch(ug.name) === normalizeSearch(savedGroup.name || name)
+      );
+      const savedMemberUserIds = Array.from(new Set(
+        (savedLinkedUserGroup?.memberUserIds || selectedIds).map(id => String(id || '').trim()).filter(Boolean)
+      ));
+      await upsertGlobalGroup({
+        name: savedGroup.name || name,
+        description: savedGroup.description || description,
+        memberUserIds: savedMemberUserIds,
+        projectId: currentProjectId  // Tracker l'origine du groupe
+      });
+      await refreshGlobalTaxonomyCache();
+      if (nameInput) nameInput.value = '';
+      if (descInput) descInput.value = '';
+      if (membersSelect) {
+        Array.from(membersSelect.options || []).forEach(opt => { opt.selected = false; });
+      }
+      selectedProjectGroupId = null;
+      showToast(editGroup ? 'Groupe modifié' : 'Groupe créé');
+      addNotification('Groupe', editGroup ? `Groupe ${name} modifié` : `Groupe ${name} créé`, currentProjectId);
+      await showProjectDetail(currentProjectId);
+    }
+
+    async function deleteProjectGroup(groupId) {
+      if (!currentProjectId || !currentProjectState || !groupId) return;
+      if (!canManageProjectCollaboration(currentProjectState)) {
+        showToast('Seuls Proprietaire/Manager peuvent supprimer des groupes');
+        return;
+      }
+      const groupName = getGroupNameById(currentProjectState, groupId) || 'ce groupe';
+      if (!confirm(`Supprimer le groupe "${groupName}" ?`)) return;
+
+      const event = createEvent(
+        EventTypes.DELETE_GROUP,
+        currentProjectId,
+        currentUser.userId,
+        { groupId }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+      const linkedUserGroups = (currentProjectState.userGroups || []).filter(g =>
+        g.groupId === groupId || normalizeSearch(g.name) === normalizeSearch(groupName)
+      );
+      for (const userGroup of linkedUserGroups) {
+        const userGroupDeleteEvent = createEvent(
+          EventTypes.DELETE_USER_GROUP,
+          currentProjectId,
+          currentUser.userId,
+          { groupId: userGroup.groupId }
+        );
+        await publishEvent(userGroupDeleteEvent);
+        if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, userGroupDeleteEvent);
+      }
+      showToast('Groupe supprimé');
+      await showProjectDetail(currentProjectId);
+    }
+
+    function renderProjectGroups(state) {
+      const container = document.getElementById('project-groups-list');
+      const btn = document.getElementById('btn-create-group');
+      if (!container || !btn) return;
+      const canManage = canManageProjectCollaboration(state);
+      btn.disabled = !canManage;
+      btn.classList.toggle('opacity-50', !canManage);
+
+      const groups = state?.groups || [];
+      if (groups.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state-card">
+            <p class="empty-state-title">Aucun groupe configuré</p>
+            <p class="empty-state-text">Créez des groupes métier pour structurer les tâches et les documents.</p>
+            ${canManage ? '<button class="empty-state-cta" onclick="focusElementById(\'group-name-input\')">Créer un groupe</button>' : ''}
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = groups.map(group => {
+        const assignedCount = (state?.tasks || []).filter(t => t.groupId === group.groupId).length;
+        return `
+          <div class="rounded-lg border border-slate-200 bg-white p-3 flex items-center justify-between gap-3">
+            <div class="min-w-0">
+              <p class="text-sm font-semibold text-slate-800 truncate">${escapeHtml(group.name)}</p>
+              <p class="text-xs text-slate-500 truncate">${escapeHtml(group.description || 'Sans description')}</p>
+              <p class="text-[11px] text-slate-500 mt-1">${assignedCount} tâche(s)</p>
+            </div>
+            ${canManage ? `<button onclick="deleteProjectGroup('${group.groupId}')" class="text-xs px-2 py-1 rounded bg-rose-100 text-rose-700">Supprimer</button>` : ''}
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function renderProjectGroups(state) {
+      const container = document.getElementById('project-groups-list');
+      const createBtn = document.getElementById('btn-create-group');
+      const membersSelect = document.getElementById('group-members-input');
+      if (!container || !createBtn || !membersSelect) return;
+      const canManage = canManageProjectCollaboration(state);
+      createBtn.disabled = !canManage;
+      createBtn.classList.toggle('opacity-50', !canManage);
+      membersSelect.disabled = !canManage;
+
+      await renderProjectGroupMemberSelect(state);
+      const members = await getProjectMembersResolved(state);
+      const byId = new Map(members.map(m => [m.userId, m.displayNameResolved]));
+
+      const groups = state?.groups || [];
+      if (groups.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state-card">
+            <p class="empty-state-title">Aucun groupe configuré</p>
+            <p class="empty-state-text">Créez des groupes et assignez des membres pour faciliter la répartition.</p>
+            ${canManage ? '<button class="empty-state-cta" onclick="focusElementById(\'group-name-input\')">Créer un groupe</button>' : ''}
+          </div>
+        `;
+        selectedProjectGroupId = null;
+        createBtn.textContent = 'Créer groupe';
+        const groupNameInput = document.getElementById('group-name-input');
+        const groupDescriptionInput = document.getElementById('group-description-input');
+        if (groupNameInput) groupNameInput.value = '';
+        if (groupDescriptionInput) groupDescriptionInput.value = '';
+        Array.from(membersSelect.options || []).forEach(opt => { opt.selected = false; });
+        return;
+      }
+
+      if (selectedProjectGroupId && !groups.find(g => g.groupId === selectedProjectGroupId)) {
+        selectedProjectGroupId = null;
+      }
+
+      container.innerHTML = groups.map(group => {
+        const active = group.groupId === selectedProjectGroupId;
+        const assignedCount = (state?.tasks || []).filter(t => t.groupId === group.groupId).length;
+        const linkedUserGroup = (state?.userGroups || []).find(ug =>
+          ug.groupId === group.groupId || normalizeSearch(ug.name) === normalizeSearch(group.name)
+        );
+        const memberNames = (linkedUserGroup?.memberUserIds || []).map(id => byId.get(id) || fallbackDirectoryName(id));
+        return `
+          <div class="rounded-lg border ${active ? 'border-primary bg-blue-50' : 'border-slate-200 bg-white'} p-3">
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <p class="text-sm font-semibold text-slate-800 truncate">${escapeHtml(group.name)}</p>
+                <p class="text-xs text-slate-500 truncate">${escapeHtml(group.description || 'Sans description')}</p>
+                <p class="text-[11px] text-slate-500 mt-1">${assignedCount} tâche(s) • ${(linkedUserGroup?.memberUserIds || []).length} membre(s)</p>
+                <p class="text-[11px] text-slate-500 truncate">${escapeHtml(memberNames.join(', ') || 'Aucun membre')}</p>
+              </div>
+              <div class="flex items-center gap-2 text-xs">
+                <button onclick="selectProjectGroup('${group.groupId}')" class="px-2 py-1 rounded bg-slate-100 text-slate-700">Modifier</button>
+                ${canManage ? `<button onclick="deleteProjectGroup('${group.groupId}')" class="px-2 py-1 rounded bg-rose-100 text-rose-700">Supprimer</button>` : ''}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      const selectedGroup = selectedProjectGroupId
+        ? (groups.find(g => g.groupId === selectedProjectGroupId) || null)
+        : null;
+      const linkedSelectedUserGroup = selectedGroup
+        ? (state?.userGroups || []).find(ug =>
+            ug.groupId === selectedGroup.groupId || normalizeSearch(ug.name) === normalizeSearch(selectedGroup.name)
+          )
+        : null;
+      const selectedIds = new Set(linkedSelectedUserGroup?.memberUserIds || []);
+      Array.from(membersSelect.options || []).forEach(opt => {
+        opt.selected = selectedIds.has(opt.value);
+      });
+      const groupNameInput = document.getElementById('group-name-input');
+      const groupDescriptionInput = document.getElementById('group-description-input');
+      if (selectedGroup) {
+        if (groupNameInput) groupNameInput.value = selectedGroup.name || '';
+        if (groupDescriptionInput) groupDescriptionInput.value = selectedGroup.description || '';
+      }
+      createBtn.textContent = selectedGroup ? 'Enregistrer modifications' : 'Créer groupe';
+    }
+
+    function selectProjectGroup(groupId) {
+      selectedProjectGroupId = groupId || null;
+      renderProjectGroups(currentProjectState);
+      const membersSelect = document.getElementById('group-members-input');
+      if (membersSelect) membersSelect.focus();
+    }
+
+    async function updateProjectGroupMembers() {
+      if (!currentProjectId || !currentProjectState || !selectedProjectGroupId) return;
+      if (!canManageProjectCollaboration(currentProjectState)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const group = (currentProjectState.groups || []).find(g => g.groupId === selectedProjectGroupId);
+      if (!group) {
+        showToast('Sélectionnez un groupe');
+        return;
+      }
+      const membersSelect = document.getElementById('group-members-input');
+      const selectedIds = Array.from(membersSelect?.selectedOptions || []).map(o => o.value).filter(Boolean);
+      const linked = (currentProjectState.userGroups || []).find(ug =>
+        ug.groupId === group.groupId || normalizeSearch(ug.name) === normalizeSearch(group.name)
+      );
+      const event = linked
+        ? createEvent(
+            EventTypes.UPDATE_USER_GROUP,
+            currentProjectId,
+            currentUser.userId,
+            { groupId: linked.groupId, changes: { memberUserIds: [...new Set(selectedIds)], name: group.name } }
+          )
+        : createEvent(
+            EventTypes.CREATE_USER_GROUP,
+            currentProjectId,
+            currentUser.userId,
+            { groupId: group.groupId, name: group.name, memberUserIds: [...new Set(selectedIds)] }
+          );
+      await publishEvent(event);
+      if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+      showToast('Membres du groupe mis à jour');
+      await showProjectDetail(currentProjectId);
+    }
+
+    window.selectProjectGroup = selectProjectGroup;
+
+    async function addProjectTheme() {
+      if (!currentProjectId || !currentProjectState) return;
+      if (!canManageProjectCollaboration(currentProjectState)) {
+        showToast('Seuls Proprietaire/Manager peuvent gerer les themes');
+        return;
+      }
+      const input = document.getElementById('theme-name-input');
+      const theme = (input?.value || '').trim();
+      if (!theme) {
+        showToast('Thématique requise');
+        return;
+      }
+      const exists = (currentProjectState.themes || []).some(t => normalizeSearch(t) === normalizeSearch(theme));
+      if (exists) {
+        showToast('Thématique déjà présente');
+        return;
+      }
+
+      const event = createEvent(
+        EventTypes.ADD_THEME,
+        currentProjectId,
+        currentUser.userId,
+        { theme }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+      await upsertGlobalTheme(theme);
+      await refreshGlobalTaxonomyCache();
+      if (input) input.value = '';
+      showToast('Thématique ajoutée');
+      await showProjectDetail(currentProjectId);
+    }
+
+    async function removeProjectTheme(theme) {
+      if (!currentProjectId || !currentProjectState || !theme) return;
+      if (!canManageProjectCollaboration(currentProjectState)) {
+        showToast('Seuls Proprietaire/Manager peuvent gerer les themes');
+        return;
+      }
+      const event = createEvent(
+        EventTypes.REMOVE_THEME,
+        currentProjectId,
+        currentUser.userId,
+        { theme }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+      showToast('Thématique retirée');
+      await showProjectDetail(currentProjectId);
+    }
+
+    function renderProjectThemes(state) {
+      const container = document.getElementById('project-themes-list');
+      const btn = document.getElementById('btn-add-theme');
+      if (!container || !btn) return;
+      const canManage = canManageProjectCollaboration(state);
+      btn.disabled = !canManage;
+      btn.classList.toggle('opacity-50', !canManage);
+      const themes = state?.themes || [];
+      if (themes.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state-card">
+            <p class="empty-state-title">Aucune thématique définie</p>
+            <p class="empty-state-text">Ajoutez des thématiques pour faciliter la recherche transverse.</p>
+            ${canManage ? '<button class="empty-state-cta" onclick="focusElementById(\'theme-name-input\')">Ajouter une thématique</button>' : ''}
+          </div>
+        `;
+        return;
+      }
+      container.innerHTML = themes.map(theme => `
+        <span class="inline-flex items-center gap-2 text-xs px-2 py-1 rounded-full bg-slate-200 text-slate-700">
+          ${escapeHtml(theme)}
+          ${canManage ? `<button onclick="removeProjectTheme(decodeURIComponent('${encodeURIComponent(theme)}'))" class="text-slate-600 hover:text-rose-700">x</button>` : ''}
+        </span>
+      `).join('');
+    }
+
+    function refreshTaskMetadataOptions(state) {
+      const groupSelect = document.getElementById('task-group');
+      const themeInput = document.getElementById('task-theme');
+      if (!groupSelect) return;
+      const groups = state?.groups || [];
+      const projectGroupRows = groups.map(g => ({
+        value: g.groupId,
+        label: g.name,
+        scope: 'project',
+        key: normalizeCatalogKey(g.name),
+        groupName: g.name
+      }));
+      const projectKeys = new Set(projectGroupRows.map(g => g.key).filter(Boolean));
+      const globalGroupRows = (globalGroupCatalog || [])
+        .filter(g => g && g.groupKey && g.name)
+        .filter(g => !projectKeys.has(g.groupKey))
+        .map(g => ({
+          value: `global:${g.groupKey}`,
+          label: `${g.name} (global)`,
+          scope: 'global',
+          key: g.groupKey,
+          groupName: g.name
+        }));
+
+      const options = ['<option value="">Aucun groupe</option>'];
+      if (projectGroupRows.length > 0) {
+        options.push('<optgroup label="Groupes du projet">');
+        options.push(...projectGroupRows.map(g => `<option value="${escapeHtml(g.value)}" data-group-scope="${g.scope}" data-group-name="${escapeHtml(g.groupName)}">${escapeHtml(g.label)}</option>`));
+        options.push('</optgroup>');
+      }
+      if (globalGroupRows.length > 0) {
+        options.push('<optgroup label="Groupes globaux">');
+        options.push(...globalGroupRows.map(g => `<option value="${escapeHtml(g.value)}" data-group-scope="${g.scope}" data-group-name="${escapeHtml(g.groupName)}">${escapeHtml(g.label)}</option>`));
+        options.push('</optgroup>');
+      }
+      groupSelect.innerHTML = options.join('');
+
+      if (themeInput) {
+        const projectThemes = (state?.themes || []).map(t => String(t || '').trim()).filter(Boolean);
+        const globalThemes = (globalThemeCatalog || []).map(t => String(t.name || '').trim()).filter(Boolean);
+        const uniqThemes = Array.from(new Set([...projectThemes, ...globalThemes].map(t => `${normalizeCatalogKey(t)}|||${t}`)))
+          .map(item => item.split('|||')[1])
+          .filter(Boolean);
+
+        let datalist = document.getElementById('task-theme-options');
+        if (!datalist) {
+          datalist = document.createElement('datalist');
+          datalist.id = 'task-theme-options';
+          document.body.appendChild(datalist);
+        }
+        datalist.innerHTML = uniqThemes.map(theme => `<option value="${escapeHtml(theme)}"></option>`).join('');
+        themeInput.setAttribute('list', 'task-theme-options');
+      }
+    }
+
+    function uniqueThemeNames(rawThemes) {
+      const seen = new Set();
+      const out = [];
+      (rawThemes || []).forEach((item) => {
+        const name = String(item || '').trim();
+        if (!name) return;
+        const key = normalizeCatalogKey(name);
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        out.push(name);
+      });
+      return out.sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+    }
+
+    function fillThemePicker(selectId, inputId, themes, emptyLabel = 'Thématiques existantes...') {
+      const select = document.getElementById(selectId);
+      const input = document.getElementById(inputId);
+      if (!select || !input) return;
+      const unique = uniqueThemeNames(themes);
+      const currentInput = String(input.value || '').trim();
+      const currentInputKey = normalizeCatalogKey(currentInput);
+
+      select.innerHTML = [
+        `<option value="">${escapeHtml(emptyLabel)}</option>`,
+        ...unique.map((theme) => `<option value="${escapeHtml(theme)}" data-theme-key="${escapeHtml(normalizeCatalogKey(theme))}">${escapeHtml(theme)}</option>`)
+      ].join('');
+
+      const matchOption = Array.from(select.options).find((opt) => {
+        if (!opt.value) return false;
+        return normalizeCatalogKey(opt.value) === currentInputKey;
+      });
+      select.value = matchOption ? matchOption.value : '';
+
+      let datalist = document.getElementById(`${inputId}-options`);
+      if (!datalist) {
+        datalist = document.createElement('datalist');
+        datalist.id = `${inputId}-options`;
+        document.body.appendChild(datalist);
+      }
+      datalist.innerHTML = unique.map((theme) => `<option value="${escapeHtml(theme)}"></option>`).join('');
+      input.setAttribute('list', datalist.id);
+    }
+
+    function syncThemePickerSelectionFromInput(selectId, inputId) {
+      const select = document.getElementById(selectId);
+      const input = document.getElementById(inputId);
+      if (!select || !input) return;
+      const inputKey = normalizeCatalogKey(String(input.value || '').trim());
+      if (!inputKey) {
+        select.value = '';
+        return;
+      }
+      const matchOption = Array.from(select.options).find((opt) => {
+        if (!opt.value) return false;
+        return normalizeCatalogKey(opt.value) === inputKey;
+      });
+      select.value = matchOption ? matchOption.value : '';
+    }
+
+    function syncProjectThemeFilterAssist(state) {
+      const themes = [
+        ...(state?.themes || []),
+        ...((state?.tasks || []).map((task) => String(task?.theme || '').trim())),
+        ...((globalThemeCatalog || []).map((t) => String(t?.name || '').trim()))
+      ];
+      fillThemePicker('project-task-theme-known', 'project-task-theme-filter', themes, 'Thématiques du projet...');
+    }
+
+    function syncGlobalThemeFilterAssist(tasks = []) {
+      const themes = [
+        ...((tasks || []).map((task) => String(task?.theme || '').trim())),
+        ...((globalThemeCatalog || []).map((t) => String(t?.name || '').trim()))
+      ];
+      fillThemePicker('global-task-theme-known', 'global-task-theme', themes, 'Thématiques existantes...');
+    }
+
+    function refreshProjectDocumentTaskOptions(state) {
+      const select = document.getElementById('project-doc-task-links');
+      if (!select) return;
+      const tasks = (state?.tasks || []).filter(t => !t.archivedAt);
+      if (tasks.length === 0) {
+        select.innerHTML = '<option value="">Aucune tâche active</option>';
+        select.disabled = true;
+        bindProjectDocTaskSelector();
+        return;
+      }
+      select.disabled = false;
+      select.innerHTML = tasks.map(task => `
+        <option value="${escapeHtml(task.taskId)}">${escapeHtml(task.title || 'Tâche')}</option>
+      `).join('');
+    }
+
+    function bindProjectDocTaskSelector() {
+      const select = document.getElementById('project-doc-task-links');
+      if (!select) return;
+
+      if (!select.dataset.toggleClickBound) {
+        select.addEventListener('mousedown', (e) => {
+          const option = e.target?.closest?.('option');
+          if (!option || select.disabled) return;
+          e.preventDefault();
+          option.selected = !option.selected;
+          select.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        select.dataset.toggleClickBound = '1';
+      }
+
+      const btnSelectAll = document.getElementById('btn-project-doc-select-all');
+      const btnClear = document.getElementById('btn-project-doc-clear-selection');
+      if (btnSelectAll && !btnSelectAll.dataset.bound) {
+        btnSelectAll.addEventListener('click', () => {
+          if (select.disabled) return;
+          Array.from(select.options || []).forEach(opt => {
+            opt.selected = !!opt.value;
+          });
+          select.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        btnSelectAll.dataset.bound = '1';
+      }
+      if (btnClear && !btnClear.dataset.bound) {
+        btnClear.addEventListener('click', () => {
+          Array.from(select.options || []).forEach(opt => { opt.selected = false; });
+          select.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        btnClear.dataset.bound = '1';
+      }
+    }
+
+    const refreshProjectDocumentTaskOptionsBase = refreshProjectDocumentTaskOptions;
+    refreshProjectDocumentTaskOptions = function refreshProjectDocumentTaskOptionsWithEnhancements(state) {
+      const select = document.getElementById('project-doc-task-links');
+      const selectedBefore = new Set(Array.from(select?.selectedOptions || []).map(opt => String(opt.value || '')));
+      refreshProjectDocumentTaskOptionsBase(state);
+      const currentSelect = document.getElementById('project-doc-task-links');
+      if (currentSelect && !currentSelect.disabled) {
+        Array.from(currentSelect.options || []).forEach(opt => {
+          opt.selected = selectedBefore.has(String(opt.value || ''));
+        });
+      }
+      bindProjectDocTaskSelector();
+    };
+
+    function renderProjectDocTaskSelector() {
+      const select = document.getElementById('project-doc-task-links');
+      const container = document.getElementById('project-doc-task-options');
+      const filterInput = document.getElementById('project-doc-task-filter');
+      const countEl = document.getElementById('project-doc-task-selection-count');
+      if (!select || !container) return;
+      const filter = String(filterInput?.value || '').trim().toLowerCase();
+      const options = Array.from(select.options || []).filter(opt => String(opt.value || '').trim());
+      const selectedCount = options.filter(opt => !!opt.selected).length;
+      if (countEl) {
+        countEl.textContent = `${selectedCount} tache${selectedCount > 1 ? 's' : ''} selectionnee${selectedCount > 1 ? 's' : ''}`;
+      }
+
+      if (select.disabled || options.length === 0) {
+        container.innerHTML = '<div class="project-doc-task-empty">Aucune tache active a associer.</div>';
+        return;
+      }
+
+      const filtered = options.filter(opt => String(opt.textContent || '').toLowerCase().includes(filter));
+      if (filtered.length === 0) {
+        detachGlobalKanbanInfiniteScroll();
+        container.innerHTML = '<div class="project-doc-task-empty">Aucune tache ne correspond au filtre.</div>';
+        return;
+      }
+
+      container.innerHTML = filtered.map(opt => `
+        <button type="button" class="project-doc-task-option ${opt.selected ? 'is-selected' : ''}" data-task-id="${escapeHtml(opt.value)}">
+          <span class="project-doc-task-option-label">${escapeHtml(opt.textContent || 'Tache')}</span>
+          <span class="project-doc-task-option-check">${opt.selected ? '&#10003;' : ''}</span>
+        </button>
+      `).join('');
+    }
+
+    function toggleProjectDocTaskSelection(taskId) {
+      const select = document.getElementById('project-doc-task-links');
+      if (!select || !taskId) return;
+      const option = Array.from(select.options || []).find(opt => String(opt.value || '') === String(taskId || ''));
+      if (!option) return;
+      option.selected = !option.selected;
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    const bindProjectDocTaskSelectorBase = bindProjectDocTaskSelector;
+    bindProjectDocTaskSelector = function bindProjectDocTaskSelectorEnhanced() {
+      bindProjectDocTaskSelectorBase();
+      const select = document.getElementById('project-doc-task-links');
+      if (!select) return;
+      const taskOptionsContainer = document.getElementById('project-doc-task-options');
+      const taskFilterInput = document.getElementById('project-doc-task-filter');
+      if (taskOptionsContainer && !taskOptionsContainer.dataset.bound) {
+        taskOptionsContainer.addEventListener('click', (e) => {
+          const btn = e.target?.closest?.('.project-doc-task-option');
+          if (!btn || select.disabled) return;
+          toggleProjectDocTaskSelection(btn.dataset.taskId || '');
+        });
+        taskOptionsContainer.dataset.bound = '1';
+      }
+      if (taskFilterInput && !taskFilterInput.dataset.bound) {
+        taskFilterInput.addEventListener('input', () => renderProjectDocTaskSelector());
+        taskFilterInput.dataset.bound = '1';
+      }
+      if (!select.dataset.changeBound) {
+        select.addEventListener('change', () => renderProjectDocTaskSelector());
+        select.dataset.changeBound = '1';
+      }
+      renderProjectDocTaskSelector();
+    };
+
+    const refreshProjectDocumentTaskOptionsEnhancedBase = refreshProjectDocumentTaskOptions;
+    refreshProjectDocumentTaskOptions = function refreshProjectDocumentTaskOptionsWithTaskList(state) {
+      refreshProjectDocumentTaskOptionsEnhancedBase(state);
+      renderProjectDocTaskSelector();
+    };
+
+    async function addProjectMember() {
+      if (!currentProjectId || !currentProjectState) return;
+
+      if (!canManageProjectCollaboration(currentProjectState)) {
+        showToast('Action non autorisee');
+        return;
+      }
+
+      const input = document.getElementById('member-name-input');
+      const roleInput = document.getElementById('member-role-input');
+      const name = (input?.value || '').trim();
+      const selectedRoleKey = String(roleInput?.value || 'member').trim() || 'member';
+      const role = getProjectRoleMeta(selectedRoleKey).roleKey;
+      const targetRoleBase = normalizeProjectRole(selectedRoleKey);
+      const myRole = normalizeProjectRole(getMyProjectRole(currentProjectState));
+      if (myRole === 'manager' && targetRoleBase !== 'member') {
+        showToast('Action non autorisee');
+        return;
+      }
+      if (!name) {
+        showToast('Saisissez le nom du membre');
+        input?.focus();
+        return;
+      }
+
+      const users = await getAllDecrypted('users', 'userId');
+      const directoryUsers = await getAllDecrypted('directoryUsers', 'userId');
+      const byName = (entry) => normalizeSearch(entry?.name || '') === normalizeSearch(name);
+      let user = users.find(byName);
+      const directoryUser = directoryUsers.find(byName);
+      if (!user && directoryUser) {
+        user = {
+          userId: directoryUser.userId,
+          name: directoryUser.name,
+          email: directoryUser.email || '',
+          createdAt: Date.now()
+        };
+        await putEncrypted('users', user, 'userId');
+      }
+      if (!user) {
+        user = { userId: uuidv4(), name, createdAt: Date.now() };
+        await putEncrypted('users', user, 'userId');
+      }
+      await upsertDirectoryUser({
+        userId: user.userId,
+        name: user.name,
+        email: user.email || '',
+        source: 'member_add',
+        lastSeenAt: Date.now()
+      });
+
+      const exists = (currentProjectState.members || []).some(m => m.userId === user.userId);
+      if (exists) {
+        showToast('Ce membre est déjà dans le projet');
+        return;
+      }
+
+      const event = createEvent(
+        EventTypes.ADD_MEMBER,
+        currentProjectId,
+        currentUser.userId,
+        { userId: user.userId, role, displayName: user.name }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) {
+        await writeEventToSharedFolder(currentProjectId, event);
+      }
+
+      input.value = '';
+      showToast('Membre ajouté');
+      addNotification('Membre', `${user.name} a ete ajoute au projet`, currentProjectId);
+      await showProjectDetail(currentProjectId);
+    }
+
+    async function removeProjectMember(userId) {
+      if (!currentProjectId || !currentProjectState || !userId) return;
+      if (userId === currentUser.userId) {
+        showToast('Vous ne pouvez pas vous retirer vous-même');
+        return;
+      }
+
+      if (!canManageProjectCollaboration(currentProjectState)) {
+        showToast('Action non autorisee');
+        return;
+      }
+
+      const target = (currentProjectState.members || []).find(m => m.userId === userId);
+      if (!target) return;
+      const myRole = normalizeProjectRole(getMyProjectRole(currentProjectState));
+      const targetRole = normalizeProjectRole(target.role);
+      if (myRole === 'manager' && targetRole !== 'member') {
+        showToast('Action non autorisee');
+        return;
+      }
+      if (!confirm(`Retirer ${target.displayName || userId} du projet ?`)) return;
+
+      const event = createEvent(
+        EventTypes.REMOVE_MEMBER,
+        currentProjectId,
+        currentUser.userId,
+        { userId }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) {
+        const synced = await writeEventToSharedFolder(currentProjectId, event);
+        if (!synced) {
+          showToast('Projet supprime localement, mais synchro dossier en echec');
+          addNotification('Synchronisation', 'Suppression projet non synchronisee dans le dossier partage', projectId);
+        }
+      }
+      showToast('Membre retiré');
+      addNotification('Membre', 'Un membre a ete retire du projet', currentProjectId);
+      await showProjectDetail(currentProjectId);
+    }
+
+    window.removeProjectMember = removeProjectMember;
+    window.focusElementById = focusElementById;
+    window.editGlobalTheme = editGlobalTheme;
+    window.deleteGlobalTheme = deleteGlobalTheme;
+    window.editGlobalGroup = editGlobalGroup;
+    window.deleteGlobalGroup = deleteGlobalGroup;
+    window.saveGlobalGroupMembers = saveGlobalGroupMembers;
+    window.editProjectRole = editProjectRole;
+    window.deleteProjectRole = deleteProjectRole;
+    window.editSoftwareVersionEntry = editSoftwareVersionEntry;
+    window.deleteSoftwareVersionEntry = deleteSoftwareVersionEntry;
+
+    async function createUserGroup() {
+      if (!currentProjectId || !currentProjectState) return;
+      if (!canManageProjectCollaboration(currentProjectState)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const nameInput = document.getElementById('user-group-name-input');
+      const membersSelect = document.getElementById('user-group-members-input');
+      const name = (nameInput?.value || '').trim();
+      if (!name) {
+        showToast('Nom de groupe utilisateurs requis');
+        return;
+      }
+      const exists = (currentProjectState.userGroups || []).some(g => normalizeSearch(g.name) === normalizeSearch(name));
+      if (exists) {
+        showToast('Ce groupe utilisateurs existe deja');
+        return;
+      }
+      const selectedIds = Array.from(membersSelect?.selectedOptions || []).map(o => o.value).filter(Boolean);
+      const event = createEvent(
+        EventTypes.CREATE_USER_GROUP,
+        currentProjectId,
+        currentUser.userId,
+        { groupId: uuidv4(), name, memberUserIds: selectedIds }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+      if (nameInput) nameInput.value = '';
+      showToast('Groupe utilisateurs cree');
+      await showProjectDetail(currentProjectId);
+    }
+
+    async function updateUserGroupSelection() {
+      if (!currentProjectId || !currentProjectState || !selectedUserGroupId) return;
+      if (!canManageProjectCollaboration(currentProjectState)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const exists = (currentProjectState.userGroups || []).some(g => g.groupId === selectedUserGroupId);
+      if (!exists) {
+        showToast('Selectionnez un groupe utilisateurs');
+        return;
+      }
+      const membersSelect = document.getElementById('user-group-members-input');
+      const selectedIds = Array.from(membersSelect?.selectedOptions || []).map(o => o.value).filter(Boolean);
+      const event = createEvent(
+        EventTypes.UPDATE_USER_GROUP,
+        currentProjectId,
+        currentUser.userId,
+        { groupId: selectedUserGroupId, changes: { memberUserIds: [...new Set(selectedIds)] } }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+      showToast('Groupe utilisateurs mis a jour');
+      await showProjectDetail(currentProjectId);
+    }
+
+    async function deleteUserGroup(groupId) {
+      if (!currentProjectId || !currentProjectState || !groupId) return;
+      if (!canManageProjectCollaboration(currentProjectState)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const group = (currentProjectState.userGroups || []).find(g => g.groupId === groupId);
+      if (!group) return;
+      if (!confirm(`Supprimer le groupe utilisateurs "${group.name}" ?`)) return;
+      const event = createEvent(
+        EventTypes.DELETE_USER_GROUP,
+        currentProjectId,
+        currentUser.userId,
+        { groupId }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+      if (selectedUserGroupId === groupId) selectedUserGroupId = null;
+      showToast('Groupe utilisateurs supprime');
+      await showProjectDetail(currentProjectId);
+    }
+
+    function selectUserGroup(groupId) {
+      selectedUserGroupId = groupId || null;
+      renderProjectUserGroups(currentProjectState);
+    }
+
+    window.selectUserGroup = selectUserGroup;
+    window.deleteUserGroup = deleteUserGroup;
+
+    function parseSubtasks(textValue) {
+      if (window.TaskMDATasks?.parseSubtasks) {
+        return window.TaskMDATasks.parseSubtasks(textValue, uuidv4);
+      }
+      if (!textValue) return [];
+      return textValue
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean)
+        .map(label => ({ id: uuidv4(), label, done: false }));
+    }
+
+    function openTaskModal(task = null) {
+      const modal = document.getElementById('modal-new-task');
+      modal.classList.remove('hidden');
+      updateEditLockBadges();
+      const titleEl = modal.querySelector('h3');
+      const standaloneModeWrap = document.getElementById('task-standalone-mode-wrap');
+      const standaloneModeInput = document.getElementById('task-standalone-mode');
+      const metadataWrap = document.getElementById('task-project-metadata-wrap');
+      const groupAssignWrap = document.getElementById('task-group-assignment-wrap');
+      const groupPendingBox = document.getElementById('task-group-pending-members');
+      const taskThemeInput = document.getElementById('task-theme');
+      const taskGroupInput = document.getElementById('task-group');
+      if (standaloneModeWrap) {
+        standaloneModeWrap.classList.toggle('hidden', !standaloneTaskMode);
+      }
+      if (metadataWrap) {
+        metadataWrap.classList.toggle('hidden', standaloneTaskMode);
+      }
+      if (groupAssignWrap) {
+        groupAssignWrap.classList.toggle('hidden', standaloneTaskMode);
+      }
+      if (groupPendingBox) {
+        groupPendingBox.classList.add('hidden');
+        groupPendingBox.innerHTML = '';
+      }
+      taskPendingGroupMemberUserIds = [];
+      if (!standaloneTaskMode) {
+        refreshTaskMetadataOptions(currentProjectState);
+      }
+      const currentAssignees = getTaskAssigneeEntries(task, standaloneTaskMode ? null : currentProjectState);
+      refreshTaskAssigneeOptionsMulti(
+        standaloneTaskMode ? null : currentProjectState,
+        currentAssignees.map(a => a.userId).filter(Boolean)
+      );
+      refreshTaskQuickAssigneeSuggestions(standaloneTaskMode ? null : currentProjectState);
+      if (titleEl) {
+        titleEl.textContent = standaloneTaskMode ? 'Nouvelle tâche hors projet' : 'Nouvelle tâche';
+      }
+
+      if (task) {
+        editingTaskId = task.taskId;
+        editingStandaloneTaskId = standaloneTaskMode ? (task.id || editingStandaloneTaskId || null) : null;
+        document.getElementById('task-title').value = task.title || '';
+        setProjectDescriptionEditorContent(
+          'task-description-editor',
+          'task-description',
+          task.descriptionHtml || task.description || ''
+        );
+        const manualAssignees = currentAssignees
+          .filter(a => !a.userId && a.name)
+          .map(a => (a.email && normalizeSearch(a.email) !== normalizeSearch(a.name || '')) ? `${a.name} <${a.email}>` : a.name);
+        document.getElementById('task-assignee-manual').value = manualAssignees.join('\n');
+        document.getElementById('task-request-date').value = task.requestDate || (task.createdAt ? toYmd(new Date(task.createdAt)) : '');
+        document.getElementById('task-due-date').value = task.dueDate || '';
+        document.getElementById('task-status').value = task.status || 'todo';
+        document.getElementById('task-urgency').value = task.urgency || 'medium';
+        document.getElementById('task-subtasks').value = (task.subtasks || []).map(st => st.label).join('\n');
+        document.getElementById('task-files').value = '';
+        const taskEditorImageInput = document.getElementById('task-description-image-input');
+        if (taskEditorImageInput) taskEditorImageInput.value = '';
+        document.getElementById('task-share-docs').checked = true;
+        document.getElementById('btn-save-task').textContent = 'Mettre à jour';
+        if (standaloneModeInput) standaloneModeInput.value = normalizeSharingMode(task.sharingMode, 'private');
+        if (taskThemeInput) taskThemeInput.value = task.theme || '';
+        if (taskGroupInput) {
+          if (task.groupId) {
+            taskGroupInput.value = task.groupId;
+          } else if (task.groupName) {
+            const wanted = normalizeCatalogKey(task.groupName);
+            const option = Array.from(taskGroupInput.options || [])
+              .find(opt => String(opt.value || '').startsWith('global:') && normalizeCatalogKey(opt.dataset.groupName || '') === wanted);
+            if (option) {
+              taskGroupInput.value = option.value;
+            } else {
+              taskGroupInput.value = '';
+            }
+          } else {
+            taskGroupInput.value = '';
+          }
+        }
+        if (!standaloneTaskMode) {
+          refreshTaskGroupSelectionPreview(
+            currentProjectState,
+            currentAssignees.map(a => a.userId).filter(Boolean)
+          );
+        }
+      } else {
+        editingTaskId = null;
+        editingStandaloneTaskId = null;
+        document.getElementById('task-title').value = '';
+        setProjectDescriptionEditorContent('task-description-editor', 'task-description', '');
+        document.getElementById('task-assignee-manual').value = '';
+        document.getElementById('task-request-date').value = toYmd(new Date());
+        document.getElementById('task-due-date').value = '';
+        document.getElementById('task-status').value = 'todo';
+        document.getElementById('task-urgency').value = 'medium';
+        document.getElementById('task-subtasks').value = '';
+        document.getElementById('task-files').value = '';
+        const taskEditorImageInput = document.getElementById('task-description-image-input');
+        if (taskEditorImageInput) taskEditorImageInput.value = '';
+        document.getElementById('task-share-docs').checked = true;
+        document.getElementById('btn-save-task').textContent = 'Créer';
+        if (standaloneModeInput) standaloneModeInput.value = 'private';
+        if (taskThemeInput) taskThemeInput.value = (currentProjectState?.themes || [])[0] || '';
+        if (taskGroupInput) taskGroupInput.value = '';
+        if (!standaloneTaskMode) {
+          refreshTaskGroupSelectionPreview(currentProjectState, []);
+        }
+      }
+    }
+
+    async function renderProjectSequentialNav(currentId) {
+      const navWrap = document.getElementById('project-sequential-nav');
+      const prevBtn = document.getElementById('btn-project-prev');
+      const nextBtn = document.getElementById('btn-project-next');
+      const prevLabel = document.getElementById('project-prev-label');
+      const nextLabel = document.getElementById('project-next-label');
+      if (!navWrap || !prevBtn || !nextBtn || !prevLabel || !nextLabel) return;
+
+      const projects = await getAllProjects();
+      const list = (projects || []).filter(p => p && p.projectId);
+      const idx = list.findIndex(p => p.projectId === currentId);
+      if (idx < 0 || list.length <= 1) {
+        navWrap.classList.add('hidden');
+        return;
+      }
+
+      const prev = idx > 0 ? list[idx - 1] : null;
+      const next = idx < list.length - 1 ? list[idx + 1] : null;
+
+      prevLabel.textContent = prev ? `Précédent: ${prev.name || 'Projet'}` : 'Aucun projet précédent';
+      nextLabel.textContent = next ? `Suivant: ${next.name || 'Projet'}` : 'Aucun projet suivant';
+      prevBtn.disabled = !prev;
+      nextBtn.disabled = !next;
+      prevBtn.onclick = prev ? (() => showProjectDetail(prev.projectId)) : null;
+      nextBtn.onclick = next ? (() => showProjectDetail(next.projectId)) : null;
+      navWrap.classList.remove('hidden');
+    }
+
+    function renderProjectDescription(descriptionText = '') {
+      const descEl = document.getElementById('project-description-display');
+      const toggleBtn = document.getElementById('btn-toggle-project-description');
+      if (!descEl || !toggleBtn) return;
+
+      const html = sanitizeProjectDescriptionHtml(descriptionText || '');
+      const fallback = 'Aucune description';
+      descEl.innerHTML = html || `<p>${fallback}</p>`;
+
+      const plain = (descEl.textContent || '').trim();
+      const imagesCount = descEl.querySelectorAll('img').length;
+      const shouldCollapse = plain.length > 360 || imagesCount > 1 || plain.split('\n').length >= 5;
+      descEl.classList.toggle('is-collapsed', shouldCollapse && !projectDescriptionExpanded);
+      toggleBtn.classList.toggle('hidden', !shouldCollapse);
+      if (shouldCollapse) {
+        toggleBtn.textContent = projectDescriptionExpanded ? 'Voir moins' : 'Afficher tout';
+      }
+    }
+
+    async function showProjectDetail(projectId, options = {}) {
+      const isSameProjectContext = workspaceMode === 'project' && currentProjectId === projectId;
+      const shouldResetScroll = options.resetScroll === true
+        || (!isSameProjectContext && options.resetScroll !== false);
+      if (shouldResetScroll) {
+        resetWorkspaceScrollTop();
+      }
+      workspaceMode = 'project';
+      const previousProjectId = currentProjectId;
+      currentProjectId = projectId;
+      if (previousProjectId !== projectId) {
+        projectDetailMode = 'work';
+        projectDescriptionExpanded = false;
+        projectSettingsTab = 'members';
+      }
+      tasksPage = 1;
+      const state = await getProjectState(projectId);
+      closeMobileSidebar();
+
+      if (!state || !state.project) {
+        showToast('Acces refuse ou projet introuvable');
+        showDashboard();
+        return;
+      }
+      if (state.project.deletedAt) {
+        showToast('❌ Ce projet a été supprimé');
+        showDashboard();
+        return;
+      }
+      await refreshKnownUsersCache();
+
+      // Hide dashboard, show detail
+      document.getElementById('global-hub')?.classList.add('hidden');
+      document.getElementById('projects-list').classList.add('hidden');
+      document.getElementById('dashboard-head')?.classList.add('hidden');
+      document.getElementById('dashboard-title')?.classList.add('hidden');
+      document.getElementById('dashboard-stats')?.classList.add('hidden');
+      document.getElementById('dashboard-quick-actions')?.classList.add('hidden');
+      document.getElementById('project-detail').classList.remove('hidden');
+
+      // Update project info
+      document.getElementById('project-title').textContent = state.project.name;
+      renderProjectDescription(state.project.description || '');
+      document.getElementById('project-date').textContent = new Date(state.project.createdAt).toLocaleDateString('fr-FR');
+      document.getElementById('project-members-count').textContent = `${state.members.length} membre${state.members.length > 1 ? 's' : ''}`;
+      const visibleTasks = (state.tasks || []).filter(t => !t.archivedAt);
+      document.getElementById('project-kpi-tasks').textContent = String(visibleTasks.length);
+      document.getElementById('project-kpi-done').textContent = String(visibleTasks.filter(t => t.status === 'termine').length);
+      document.getElementById('project-kpi-messages').textContent = String((state.messages || []).length);
+      bindProjectKpiActions();
+      await renderProjectSequentialNav(projectId);
+      await renderProjectMembers(state);
+      await renderProjectUserGroups(state);
+      renderProjectPermissionMatrix(state);
+      renderProjectInvitations(state);
+      await renderProjectGroups(state);
+      renderProjectThemes(state);
+      await syncProjectTaxonomyToGlobal(state);
+      refreshTaskMetadataOptions(state);
+      syncProjectThemeFilterAssist(state);
+      refreshProjectDocumentTaskOptions(state);
+      await refreshTaskAssigneeOptionsMulti(state);
+      const btnEditProject = document.getElementById('btn-edit-project');
+      const btnDeleteProject = document.getElementById('btn-delete-project');
+      if (btnEditProject) {
+        const allowed = canEditProjectMeta(state);
+        btnEditProject.disabled = !allowed;
+        btnEditProject.classList.toggle('opacity-50', !allowed);
+        btnEditProject.title = allowed ? '' : 'Reserve aux Proprietaires/Managers';
+      }
+      if (btnDeleteProject) {
+        const allowed = canDeleteProjectMeta(state);
+        btnDeleteProject.disabled = !allowed;
+        btnDeleteProject.classList.toggle('opacity-50', !allowed);
+        btnDeleteProject.title = allowed ? '' : 'Reserve au Proprietaire';
+      }
+      const projectLockWarning = document.getElementById('project-lock-warning');
+      if (projectLockWarning) {
+        const lock = getProjectResourceLock(state, LOCK_SCOPE_PROJECT, projectId);
+        if (lock && String(lock.ownerUserId || '') !== String(currentUser?.userId || '')) {
+          projectLockWarning.textContent = `${formatLockOwner(lock)} modifie les informations du projet en ce moment. Les actions destructives sont temporairement bloquees.`;
+          projectLockWarning.classList.remove('hidden');
+        } else {
+          projectLockWarning.textContent = '';
+          projectLockWarning.classList.add('hidden');
+        }
+      }
+
+      currentProjectState = state;
+      const canSendChat = canSendProjectMessage(state);
+      const btnSendMessage = document.getElementById('btn-send-message');
+      const messageInput = document.getElementById('message-input');
+      const messageFiles = document.getElementById('message-files');
+      const btnAddProjectDocs = document.getElementById('btn-add-project-documents');
+      const projectDocFilesInput = document.getElementById('project-doc-files');
+      const projectDocTaskLinks = document.getElementById('project-doc-task-links');
+      if (btnSendMessage) {
+        btnSendMessage.disabled = !canSendChat;
+        btnSendMessage.classList.toggle('opacity-50', !canSendChat);
+        btnSendMessage.title = canSendChat ? '' : 'Reserve aux membres du projet';
+      }
+      if (messageInput) {
+        messageInput.disabled = !canSendChat;
+        messageInput.placeholder = canSendChat ? 'Tapez votre message...' : 'Lecture seule (droits insuffisants)';
+      }
+      if (messageFiles) {
+        messageFiles.disabled = !canSendChat;
+      }
+      if (btnAddProjectDocs) {
+        btnAddProjectDocs.disabled = !canSendChat;
+        btnAddProjectDocs.classList.toggle('opacity-50', !canSendChat);
+        btnAddProjectDocs.title = canSendChat ? '' : 'Reserve aux membres du projet';
+      }
+      if (projectDocFilesInput) projectDocFilesInput.disabled = !canSendChat;
+      if (projectDocTaskLinks) projectDocTaskLinks.disabled = !canSendChat || (projectDocTaskLinks.options?.length || 0) === 0;
+      renderTasks(visibleTasks);
+      renderArchivedTasks(state.tasks || []);
+      renderKanban(visibleTasks);
+      renderGantt(visibleTasks);
+      renderTimeline(visibleTasks);
+      renderCalendar(visibleTasks);
+      renderDocuments(state);
+      renderMessages(state.messages);
+      const events = await getProjectEvents(projectId);
+      currentProjectEvents = events;
+      await renderActivity(events);
+      applyProjectSubnavLayout();
+      syncProjectWorkFocusButton();
+      setProjectDetailMode(projectDetailMode);
+      setProjectView(activeProjectView);
+      applyLiveSearchFilter();
+    }
+
+    function resolveProjectIdInput(projectId, fallbackId = currentProjectId) {
+      if (isValidIdbKey(projectId)) return projectId;
+      if (projectId && typeof projectId === 'object' && 'preventDefault' in projectId) {
+        return fallbackId;
+      }
+      return fallbackId;
+    }
+
+    async function openEditProjectModal(projectId = currentProjectId, fromDashboard = false) {
+      projectId = resolveProjectIdInput(projectId, currentProjectId);
+      if (!projectId) return;
+      const state = await getProjectState(projectId);
+      if (!state?.project || state.project.deletedAt) return;
+      if (!canEditProjectMeta(state)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const lockResult = await acquireProjectResourceLock(projectId, LOCK_SCOPE_PROJECT, projectId, { scope: 'project-meta' });
+      if (!lockResult.ok) {
+        showToast(buildLockBlockedMessage(lockResult.lock, "Projet en cours d'edition"));
+        return;
+      }
+      activeProjectEditLock = {
+        projectId,
+        resourceType: LOCK_SCOPE_PROJECT,
+        resourceId: projectId,
+        lockId: lockResult.lockId
+      };
+      updateEditLockBadges();
+      currentProjectId = projectId;
+      currentProjectState = state;
+      editProjectFromDashboard = fromDashboard === true;
+      document.getElementById('edit-project-name').value = state.project.name || '';
+      setProjectDescriptionEditorContent('edit-project-description-editor', 'edit-project-description', state.project.description || '');
+      const editImageInput = document.getElementById('edit-project-description-image-input');
+      if (editImageInput) editImageInput.value = '';
+      const editProjectDocInput = document.getElementById('edit-project-doc-files');
+      if (editProjectDocInput) editProjectDocInput.value = '';
+      updateEditProjectDocFilesSummary();
+      document.getElementById('edit-project-status').value = state.project.status || 'en-cours';
+      document.getElementById('edit-project-read-access').value = normalizeProjectReadAccess(
+        state.project.readAccess,
+        normalizeSharingMode(state.project.sharingMode, 'private') === 'private' ? 'private' : 'members'
+      ) === 'public' ? 'public' : 'private';
+      await populateProjectGroupPresetOptions('edit-project-group-presets', (state.groups || []).map(g => g.name));
+      document.getElementById('modal-edit-project').classList.remove('hidden');
+      document.getElementById('edit-project-name').focus();
+    }
+
+    async function openEditProjectModalFromDashboard(projectId) {
+      await openEditProjectModal(projectId, true);
+    }
+
+    async function saveProjectEdits() {
+      if (!currentProjectId) return;
+      try {
+      const state = await getProjectState(currentProjectId);
+      if (!state?.project || !canEditProjectMeta(state)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const name = (document.getElementById('edit-project-name').value || '').trim();
+      if (!name) {
+        showToast('Le nom du projet est requis');
+        return;
+      }
+      const changes = {
+        name,
+        description: getProjectDescriptionHtmlForStorage('edit-project-description-editor', 'edit-project-description'),
+        status: document.getElementById('edit-project-status').value || 'en-cours',
+        readAccess: (document.getElementById('edit-project-read-access')?.value || 'private') === 'public' ? 'public' : 'private'
+      };
+      const selectedGlobalGroups = readSelectedGlobalGroups('edit-project-group-presets');
+      const editProjectDocuments = await readEditProjectDocumentFiles();
+      const existingGroupKeys = new Set((state.groups || []).map(g => normalizeCatalogKey(g.name)));
+
+      const event = createEvent(
+        EventTypes.UPDATE_PROJECT,
+        currentProjectId,
+        currentUser.userId,
+        { changes }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) {
+        await writeEventToSharedFolder(currentProjectId, event);
+      }
+      const refreshedState = await getProjectState(currentProjectId, { ignoreAccessCheck: true });
+      await syncDescriptionImagesAsProjectDocs(currentProjectId, refreshedState, changes.description);
+      let addedGroupsCount = 0;
+      let addedDocsCount = 0;
+      for (const group of selectedGlobalGroups) {
+        const groupKey = normalizeCatalogKey(group.name);
+        if (!groupKey || existingGroupKeys.has(groupKey)) continue;
+        existingGroupKeys.add(groupKey);
+        const addGroupEvent = createEvent(
+          EventTypes.CREATE_GROUP,
+          currentProjectId,
+          currentUser.userId,
+          { groupId: uuidv4(), name: group.name, description: group.description || '' }
+        );
+        await publishEvent(addGroupEvent);
+        if (sharedFolderHandle) {
+          await writeEventToSharedFolder(currentProjectId, addGroupEvent);
+        }
+        addedGroupsCount += 1;
+      }
+      for (const file of editProjectDocuments) {
+        const addDocEvent = createEvent(
+          EventTypes.CREATE_DOCUMENT,
+          currentProjectId,
+          currentUser.userId,
+          {
+            ...file,
+            linkedTaskIds: [],
+            notes: 'Document ajoute lors de la modification du projet',
+            origin: 'project-edit-upload'
+          }
+        );
+        await publishEvent(addDocEvent);
+        if (sharedFolderHandle) {
+          await writeEventToSharedFolder(currentProjectId, addDocEvent);
+        }
+        addedDocsCount += 1;
+      }
+      await releaseActiveProjectEditLock();
+      document.getElementById('modal-edit-project').classList.add('hidden');
+      const editProjectDocInput = document.getElementById('edit-project-doc-files');
+      if (editProjectDocInput) editProjectDocInput.value = '';
+      updateEditProjectDocFilesSummary();
+      showToast('Projet mis à jour');
+      if (addedGroupsCount > 0) {
+        addNotification('Groupe', `${addedGroupsCount} groupe(s) global(aux) associe(s) au projet`, currentProjectId);
+      }
+      if (addedDocsCount > 0) {
+        addNotification('Document', `${addedDocsCount} document(s) ajoute(s) au projet`, currentProjectId);
+      }
+      addNotification('Projet', 'Informations projet mises à jour', currentProjectId);
+      if (editProjectFromDashboard) {
+        editProjectFromDashboard = false;
+        await refreshStats();
+        await renderProjects();
+        applyLiveSearchFilter();
+        return;
+      }
+      editProjectFromDashboard = false;
+      await showProjectDetail(currentProjectId);
+      await refreshStats();
+      await renderProjects();
+      } catch (error) {
+        console.error('Error saving project edits:', error);
+        showToast('Erreur lors de la mise a jour du projet');
+      }
+    }
+
+    async function deleteCurrentProject(projectId = currentProjectId, fromDashboard = false) {
+      projectId = resolveProjectIdInput(projectId, currentProjectId);
+      if (!projectId) return;
+      const state = await getProjectState(projectId);
+      if (!state?.project || !canDeleteProjectMeta(state)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      if (!ensureProjectResourceUnlockedForAction(state, LOCK_SCOPE_PROJECT, projectId, 'Suppression du projet').ok) {
+        return;
+      }
+      currentProjectId = projectId;
+      currentProjectState = state;
+      const pname = state?.project?.name || 'ce projet';
+      if (!confirm(`Supprimer définitivement ${pname} ?`)) return;
+
+      const event = createEvent(
+        EventTypes.DELETE_PROJECT,
+        currentProjectId,
+        currentUser.userId,
+        { reason: 'manual_delete' }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) {
+        await writeEventToSharedFolder(currentProjectId, event);
+      }
+      addNotification('Projet', 'Projet supprimé', projectId);
+      showToast('Projet supprimé');
+      if (fromDashboard || workspaceMode === 'dashboard') {
+        currentProjectId = null;
+        currentProjectState = null;
+        await refreshStats();
+        await renderProjects();
+        applyLiveSearchFilter();
+        return;
+      }
+      showDashboard();
+      await refreshStats();
+      await renderProjects();
+    }
+
+    async function deleteProjectFromDashboard(projectId) {
+      await deleteCurrentProject(projectId, true);
+    }
+
+    async function sendProjectStatusEmail(doneOnly = false) {
+      if (!currentProjectId) return;
+      const state = await getProjectState(currentProjectId);
+      if (!state?.project) return;
+      const tasks = state.tasks || [];
+      const done = tasks.filter(t => t.status === 'termine').length;
+      const inProgress = tasks.filter(t => t.status === 'en-cours').length;
+      const todo = tasks.filter(t => (t.status || 'todo') === 'todo').length;
+      const recipients = await collectProjectRecipientEmails(state, { includeProjectAssignees: true });
+      const subject = doneOnly
+        ? `[NEXUS MDA] Projet achevé: ${state.project.name}`
+        : `[NEXUS MDA] Point statut projet: ${state.project.name}`;
+      const body = doneOnly
+        ? [
+            `Bonjour,`,
+            '',
+            `Le projet "${state.project.name}" est déclaré achevé.`,
+            '',
+            `Synthèse finale:`,
+            `- Tâches totales: ${tasks.length}`,
+            `- Terminées: ${done}`,
+            '',
+            `Date de clôture: ${new Date().toLocaleDateString('fr-FR')}`,
+            `Responsable: ${currentUser?.name || 'N/A'}`
+          ].join('\n')
+        : [
+            `Bonjour,`,
+            '',
+            `Point de situation pour le projet "${state.project.name}":`,
+            '',
+            `- Tâches à faire: ${todo}`,
+            `- Tâches en cours: ${inProgress}`,
+            `- Tâches terminées: ${done}`,
+            '',
+            `Statut projet: ${state.project.status || 'en-cours'}`,
+            `Date du point: ${new Date().toLocaleDateString('fr-FR')}`,
+            '',
+            `Cordialement,`,
+            `${currentUser?.name || 'Equipe projet'}`
+          ].join('\n');
+      openMailto({ to: recipients, subject, body });
+    }
+
+    async function sendTaskStatusEmail(taskId, doneOnly = false) {
+      if (!currentProjectId || !taskId) return;
+      const state = await getProjectState(currentProjectId);
+      if (!state?.project) return;
+      const task = (state.tasks || []).find(t => t.taskId === taskId);
+      if (!task) return;
+      const recipients = await collectProjectRecipientEmails(state, { task });
+      const groupName = getTaskGroupName(task, state) || 'Aucun groupe';
+      const subject = doneOnly
+        ? `[NEXUS MDA] Tâche achevée: ${task.title}`
+        : `[NEXUS MDA] Statut tâche: ${task.title}`;
+      const body = doneOnly
+        ? [
+            `Bonjour,`,
+            '',
+            `La tâche "${task.title}" est achevée.`,
+            '',
+            `Projet: ${state.project.name}`,
+            `Thématique: ${task.theme || 'Non renseignée'}`,
+            `Groupe: ${groupName}`,
+            `Assigné à: ${getTaskAssigneeName(task, state) || 'Non assigné'}`,
+            `Date de clôture: ${new Date().toLocaleDateString('fr-FR')}`,
+            '',
+            `Commentaire: ${task.description || 'N/A'}`
+          ].join('\n')
+        : [
+            `Bonjour,`,
+            '',
+            `Point sur la tâche "${task.title}":`,
+            '',
+            `Projet: ${state.project.name}`,
+            `Statut: ${task.status || 'todo'}`,
+            `Urgence: ${task.urgency || 'medium'}`,
+            `Thématique: ${task.theme || 'Non renseignée'}`,
+            `Groupe: ${groupName}`,
+            `Assigné à: ${getTaskAssigneeName(task, state) || 'Non assigné'}`,
+            `Échéance: ${formatDate(task.dueDate)}`,
+            '',
+            `Description: ${task.description || 'N/A'}`
+          ].join('\n');
+      openMailto({ to: recipients, subject, body });
+    }
+
+    function showDashboard() {
+      resetWorkspaceScrollTop();
+      closeMobileSidebar();
+      clearProjectWorkFocusState();
+      workspaceMode = 'dashboard';
+      projectsPage = 1;
+      document.getElementById('project-detail').classList.add('hidden');
+      document.getElementById('global-hub')?.classList.add('hidden');
+      document.getElementById('projects-list').classList.remove('hidden');
+      document.getElementById('dashboard-head')?.classList.remove('hidden');
+      document.getElementById('dashboard-title')?.classList.add('hidden');
+      if (document.getElementById('dashboard-title')) {
+        document.getElementById('dashboard-title').textContent = 'Tableau de bord';
+      }
+      document.getElementById('dashboard-stats')?.classList.remove('hidden');
+      document.getElementById('dashboard-quick-actions')?.classList.remove('hidden');
+      currentProjectId = null;
+      currentProjectState = null;
+      editingMessageId = null;
+      editingMessageDraft = '';
+      setActiveSidebarNav('dashboard');
+      refreshStats();
+      renderProjects();
+      applyLiveSearchFilter();
+    }
+
+    async function showProjectsWorkspace() {
+      resetWorkspaceScrollTop();
+      closeMobileSidebar();
+      clearProjectWorkFocusState();
+      workspaceMode = 'dashboard';
+      projectsPage = 1;
+      document.getElementById('project-detail').classList.add('hidden');
+      document.getElementById('global-hub')?.classList.add('hidden');
+      document.getElementById('projects-list').classList.remove('hidden');
+      document.getElementById('dashboard-head')?.classList.remove('hidden');
+      document.getElementById('dashboard-title')?.classList.remove('hidden');
+      if (document.getElementById('dashboard-title')) {
+        document.getElementById('dashboard-title').textContent = 'Vue Projets';
+      }
+      document.getElementById('dashboard-stats')?.classList.add('hidden');
+      document.getElementById('dashboard-quick-actions')?.classList.add('hidden');
+      currentProjectId = null;
+      currentProjectState = null;
+      editingMessageId = null;
+      editingMessageDraft = '';
+      setActiveSidebarNav('projects');
+      await renderProjects();
+      applyLiveSearchFilter();
+    }
+
+    async function getAllProjectStates() {
+      const states = await getAllDecrypted('localState', 'projectId');
+      return (states || [])
+        .filter(s => s && s.project && !s.project.deletedAt)
+        .filter(s => hasProjectAccess(s));
+    }
+
+    async function getGlobalTasksList() {
+      const states = await getAllProjectStates();
+      const fromProjects = [];
+      states.forEach(state => {
+        (state.tasks || []).forEach(task => {
+          fromProjects.push({
+            ...task,
+            sourceType: 'project',
+            sourceProjectId: state.project.projectId,
+            sourceProjectName: state.project.name,
+            theme: task.theme || state.project.name,
+            sharingMode: state.project.sharingMode || 'shared'
+          });
+        });
+      });
+
+      const standalone = await getAllDecrypted('globalTasks', 'id');
+      const fromStandalone = (standalone || []).map(item => ({
+        ...item,
+        sourceType: 'standalone',
+        sourceProjectId: null,
+        sourceProjectName: 'Hors projet',
+        theme: item.theme || 'Général',
+        sharingMode: item.sharingMode || 'private'
+      }));
+
+      return [...fromProjects, ...fromStandalone].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    }
+
+    async function getGlobalDocumentsList() {
+      const states = await getAllProjectStates();
+      const docs = [];
+      states.forEach(state => {
+        const isPublicProject = normalizeProjectReadAccess(
+          state?.project?.readAccess,
+          normalizeSharingMode(state?.project?.sharingMode, 'private') === 'private' ? 'private' : 'members'
+        ) === 'public';
+        if (!isPublicProject) return;
+
+        (state.tasks || []).forEach(task => {
+          (task.attachments || []).forEach((file, attachmentIndex) => {
+            if (file.shareToDocs !== false) {
+              docs.push({
+                id: `${state.project.projectId}:${task.taskId}:${attachmentIndex}`,
+                name: file.name,
+                type: file.type,
+                size: file.size,
+                data: file.data,
+                theme: task.theme || state.project.name || 'Projet',
+                sourceProjectName: state.project.name,
+                sourceProjectId: state.project.projectId,
+                taskId: task.taskId,
+                attachmentIndex,
+                sourceType: 'project',
+                sharingMode: state.project.sharingMode || 'shared',
+                createdAt: task.updatedAt || task.createdAt || state.project.createdAt || 0
+              });
+            }
+          });
+        });
+
+        (state.documents || []).forEach((doc) => {
+          docs.push({
+            id: `${state.project.projectId}:project-doc:${doc.docId}`,
+            name: doc.name,
+            type: doc.type,
+            size: doc.size,
+            data: doc.data,
+            theme: doc.theme || state.project.name || 'Projet',
+            sourceProjectName: state.project.name,
+            sourceProjectId: state.project.projectId,
+            docId: doc.docId,
+            linkedTaskIds: Array.isArray(doc.linkedTaskIds) ? [...doc.linkedTaskIds] : [],
+            sourceType: 'project-doc',
+            sharingMode: normalizeSharingMode(doc.sharingMode, normalizeSharingMode(state.project.sharingMode, 'shared')),
+            notes: doc.notes || '',
+            createdAt: doc.uploadedAt || doc.createdAt || state.project.createdAt || 0,
+            origin: doc.origin || ''
+          });
+        });
+      });
+
+      const standaloneDocs = await getAllDecrypted('globalDocs', 'id');
+      (standaloneDocs || []).forEach(doc => {
+        docs.push({
+          ...doc,
+          sourceProjectName: 'Hors projet',
+          sharingMode: doc.sharingMode || 'private',
+          sourceType: 'standalone'
+        });
+      });
+
+      return docs.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    }
+
+    async function renderGlobalTasks() {
+      const container = document.getElementById('global-tasks-container');
+      const paginationContainer = document.getElementById('global-tasks-pagination');
+      if (!container) return;
+      if (paginationContainer) paginationContainer.innerHTML = '';
+      updateGlobalTasksViewButtons();
+      const all = await getGlobalTasksList();
+      syncGlobalThemeFilterAssist(all);
+      const allProjectStates = await getAllProjectStates();
+      const stateByProjectId = new Map(allProjectStates.map(s => [s.project?.projectId, s]));
+
+      const query = `${globalSearchQuery} ${document.getElementById('global-task-search')?.value || ''}`.trim();
+      const status = document.getElementById('global-task-status')?.value || 'all';
+      const theme = document.getElementById('global-task-theme')?.value || '';
+
+      let filtered = all.filter(task => matchesQuery([
+        task.title,
+        task.description,
+        task.sourceProjectName,
+        task.theme,
+        getTaskAssigneeName(task, stateByProjectId.get(task.sourceProjectId)),
+        sharingModeLabel(task.sharingMode)
+      ], query));
+      if (status !== 'all') filtered = filtered.filter(task => (task.status || 'todo') === status);
+      if (theme.trim()) filtered = filtered.filter(task => matchesQuery([task.theme], theme));
+      const mode = ['cards', 'list', 'kanban', 'timeline', 'calendar', 'archives'].includes(globalTasksViewMode) ? globalTasksViewMode : 'cards';
+      if (mode !== 'kanban') detachGlobalKanbanInfiniteScroll();
+      if (mode === 'calendar') {
+        toggleGlobalTasksInlineCalendar(true);
+        await renderGlobalCalendar();
+        updateGlobalTasksViewButtons();
+        if (paginationContainer) paginationContainer.classList.add('hidden');
+        return;
+      }
+      if (mode === 'archives') {
+        toggleGlobalTasksInlineCalendar(false);
+        if (paginationContainer) paginationContainer.classList.add('hidden');
+        renderGlobalArchivedTasks(all, stateByProjectId, container);
+        return;
+      }
+
+      filtered = filtered.filter(task => !task.archivedAt);
+      toggleGlobalTasksInlineCalendar(false);
+      if (paginationContainer) paginationContainer.classList.toggle('hidden', mode === 'kanban' || mode === 'timeline');
+
+      if (filtered.length === 0) {
+        detachGlobalKanbanInfiniteScroll();
+        container.innerHTML = '<p class="text-slate-500 text-center py-8">Aucune tâche trouvée</p>';
+        return;
+      }
+
+      if (mode !== 'cards') {
+        const prepared = filtered.map(task => {
+          const taskRef = buildGlobalTaskRef(task);
+          let canEdit = task.sourceType === 'standalone';
+          let canDelete = task.sourceType === 'standalone';
+          let canArchive = task.sourceType === 'standalone';
+          if (task.sourceType === 'project') {
+            const projectState = stateByProjectId.get(task.sourceProjectId);
+            canEdit = canEditTaskInProject(task, projectState);
+            canDelete = canDeleteTaskInProject(task, projectState);
+            canArchive = canEditTaskInProject(task, projectState);
+          }
+          const dueTs = task.dueDate ? new Date(task.dueDate).getTime() : Number.POSITIVE_INFINITY;
+          return {
+            ...task,
+            _taskRef: taskRef,
+            _canEdit: canEdit,
+            _canDelete: canDelete,
+            _canArchive: canArchive,
+            _statusKey: task.status || 'todo',
+            _assigneeName: getTaskAssigneeName(task, stateByProjectId.get(task.sourceProjectId)) || 'Non assigne',
+            _dueTs: Number.isFinite(dueTs) ? dueTs : Number.POSITIVE_INFINITY
+          };
+        });
+        const taskActions = (task) => `
+          ${task._canEdit ? `<button onclick="event.stopPropagation(); editGlobalTask('${task._taskRef}')" class="task-action-btn task-action-btn-subtle">Modifier</button>` : ''}
+          ${task._canEdit ? `<button onclick="event.stopPropagation(); convertTaskToProject('${task._taskRef}')" class="task-action-btn task-action-btn-subtle">Convertir</button>` : ''}
+          ${task._canArchive ? `<button onclick="event.stopPropagation(); archiveGlobalTask('${task._taskRef}')" class="task-action-btn task-action-btn-subtle task-action-btn-warn">Archiver</button>` : ''}
+          ${task._canDelete ? `<button onclick="event.stopPropagation(); deleteGlobalTask('${task._taskRef}')" class="task-action-btn task-action-btn-subtle task-action-btn-danger">Supprimer</button>` : ''}
+        `;
+        const taskCard = (task) => `
+          <div class="global-task-card global-task-card-modern ${getTaskUrgencyMeta(task.urgency).accentClass} rounded-xl border border-slate-200 bg-white p-4 cursor-grab active:cursor-grabbing" draggable="true" ondragstart="startGlobalKanbanDrag(event, '${task._taskRef}')" onclick="openGlobalTaskDetails('${task._taskRef}')" role="button" tabindex="0">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="flex flex-wrap items-center gap-2 mb-1">
+                  <span class="${getTaskUrgencyMeta(task.urgency).chipClass}">${getTaskUrgencyMeta(task.urgency).label}</span>
+                </div>
+                <h4 class="font-bold text-slate-800">${escapeHtml(task.title || 'Tache')}</h4>
+                <p class="text-xs text-slate-500 mt-1">${escapeHtml(task.sourceProjectName || 'Hors projet')} - ${escapeHtml(task.theme || 'General')}</p>
+              </div>
+              <div class="flex flex-wrap items-center justify-end gap-1">
+                ${sharingModeBadge(task.sharingMode)}
+                <span class="${getTaskStatusMeta(task._statusKey).chipClass}">${getTaskStatusMeta(task._statusKey).label}</span>
+              </div>
+            </div>
+            <p class="text-sm text-slate-600 mt-2">${escapeHtml(task.description || '')}</p>
+            ${buildSubtaskProgressHtml(task, true)}
+            <div class="mt-2 text-xs text-slate-500 flex flex-wrap gap-3">
+              <span>Demande: ${formatDate(task.requestDate)}</span>
+              <span>Echeance: ${formatDate(task.dueDate)}</span>
+              <span>Assigne: ${escapeHtml(task._assigneeName)}</span>
+            </div>
+            <div class="mt-3 flex flex-wrap gap-2 text-xs">${taskActions(task)}</div>
+          </div>
+        `;
+        if (mode === 'list') {
+          const pagination = paginateItems(prepared, globalTasksPage, paginationConfig.globalTasksPerPage);
+          globalTasksPage = pagination.currentPage;
+          container.className = 'space-y-3';
+          container.innerHTML = `
+            <div class="rounded-xl border border-slate-200 bg-white overflow-x-auto">
+              <table class="min-w-full text-sm">
+                <thead>
+                  <tr class="text-left text-slate-500 border-b border-slate-200">
+                    <th class="px-3 py-2 font-semibold">Tache</th>
+                    <th class="px-3 py-2 font-semibold">Projet</th>
+                    <th class="px-3 py-2 font-semibold">Statut</th>
+                    <th class="px-3 py-2 font-semibold">Echeance</th>
+                    <th class="px-3 py-2 font-semibold">Assigne</th>
+                    <th class="px-3 py-2 font-semibold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${pagination.pageItems.map(task => `
+                    <tr class="border-b border-slate-100 align-top cursor-pointer hover:bg-slate-50" onclick="openGlobalTaskDetails('${task._taskRef}')">
+                      <td class="px-3 py-2">
+                        <p class="font-semibold text-slate-800">${escapeHtml(task.title || 'Tache')}</p>
+                        <p class="text-xs text-slate-500">${escapeHtml(task.theme || 'General')}</p>
+                        ${buildSubtaskProgressHtml(task, true)}
+                      </td>
+                      <td class="px-3 py-2 text-slate-600">${escapeHtml(task.sourceProjectName || 'Hors projet')}</td>
+                      <td class="px-3 py-2 text-slate-600"><span class="${getTaskStatusMeta(task._statusKey).chipClass}">${getTaskStatusMeta(task._statusKey).label}</span></td>
+                      <td class="px-3 py-2 text-slate-600">${formatDate(task.dueDate)}</td>
+                      <td class="px-3 py-2 text-slate-600">${escapeHtml(task._assigneeName)}</td>
+                      <td class="px-3 py-2" onclick="event.stopPropagation()"><div class="flex flex-wrap gap-1 text-xs">${taskActions(task)}</div></td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          `;
+          renderPagination('global-tasks-pagination', pagination, 'setGlobalTasksPage', 'taches');
+          return;
+        }
+        if (mode === 'kanban') {
+          container.className = 'global-kanban-board grid grid-cols-1 lg:grid-cols-4 gap-4';
+          const cols = [
+            { key: 'todo', label: 'A faire' },
+            { key: 'en-cours', label: 'En cours' },
+            { key: 'suspendu', label: 'Suspendu' },
+            { key: 'termine', label: 'Termine' }
+          ];
+          const itemsByCol = {};
+          const taskCardKanban = (task) => `
+            <div class="global-task-card global-task-card-modern global-kanban-card kanban-card ${getTaskUrgencyMeta(task.urgency).accentClass} rounded-xl border border-slate-200 bg-white p-3 cursor-grab active:cursor-grabbing" draggable="true" ondragstart="startGlobalKanbanDrag(event, '${task._taskRef}')" onclick="openGlobalTaskDetails('${task._taskRef}')" role="button" tabindex="0">
+              <div class="mb-2 flex items-center justify-between gap-2">
+                <span class="${getTaskUrgencyMeta(task.urgency).chipClass}">${getTaskUrgencyMeta(task.urgency).label}</span>
+                <span class="${getTaskStatusMeta(task._statusKey).chipClass}">${getTaskStatusMeta(task._statusKey).label}</span>
+              </div>
+              <h4 class="font-semibold text-slate-900 text-[1.04rem] leading-tight mb-1">${escapeHtml(task.title || 'Tache')}</h4>
+              <p class="text-xs text-slate-500 mb-2">${escapeHtml(task.sourceProjectName || 'Hors projet')} • ${escapeHtml(task.theme || 'General')}</p>
+              <p class="text-sm text-slate-700 global-kanban-desc mb-2">${escapeHtml(task.description || '')}</p>
+              ${buildSubtaskProgressHtml(task, true)}
+              <div class="mt-2 text-xs text-slate-600 flex items-center justify-between gap-2">
+                <span class="truncate">${escapeHtml(task._assigneeName)}</span>
+                <span class="whitespace-nowrap">${formatDate(task.dueDate)}</span>
+              </div>
+              <div class="mt-2 flex flex-wrap gap-1 text-xs">${taskActions(task)}</div>
+            </div>
+          `;
+          container.innerHTML = cols.map(col => {
+            const items = prepared.filter(task => task._statusKey === col.key);
+            itemsByCol[col.key] = items;
+            const initialCount = Math.min(items.length, GLOBAL_KANBAN_INITIAL_BATCH);
+            return `
+              <div class="global-kanban-col rounded-xl border border-slate-200 bg-slate-50 p-3" data-col="${col.key}" ondragover="allowKanbanDrop(event)" ondrop="dropGlobalKanbanTask(event, '${col.key}')">
+                <div class="global-kanban-col-head flex items-center justify-between mb-2">
+                  <h4 class="text-sm font-bold text-slate-800">${col.label}</h4>
+                  <span class="global-kanban-col-count text-xs">${items.length}</span>
+                </div>
+                <div id="global-kanban-items-${col.key}" class="global-kanban-items space-y-2 pr-1" data-col-key="${col.key}" data-rendered="${initialCount}">
+                  ${initialCount > 0 ? items.slice(0, initialCount).map(taskCardKanban).join('') : '<p class="text-xs text-slate-400 py-2">Aucune tache</p>'}
+                </div>
+                <div class="mt-2 flex items-center justify-between gap-2">
+                  <p class="text-[11px] text-slate-500">
+                    <span id="global-kanban-count-${col.key}">${initialCount}</span> / ${items.length}
+                  </p>
+                  <span class="text-[11px] text-slate-400 ${initialCount >= items.length ? 'hidden' : ''}" id="global-kanban-hint-${col.key}">Défilez la page pour charger plus</span>
+                </div>
+              </div>
+            `;
+          }).join('');
+
+          detachGlobalKanbanInfiniteScroll();
+          const columnLoaders = cols.map((col) => {
+            const listEl = document.getElementById(`global-kanban-items-${col.key}`);
+            const countEl = document.getElementById(`global-kanban-count-${col.key}`);
+            const hintEl = document.getElementById(`global-kanban-hint-${col.key}`);
+            const items = itemsByCol[col.key] || [];
+            if (!listEl) {
+              return { hasMore: () => false, loadNext: () => false };
+            }
+            const updateCounters = (rendered) => {
+              if (countEl) countEl.textContent = String(rendered);
+              if (hintEl) hintEl.classList.toggle('hidden', rendered >= items.length);
+            };
+            const loadNext = () => {
+              const rendered = Number.parseInt(listEl.dataset.rendered || '0', 10) || 0;
+              if (rendered >= items.length) {
+                updateCounters(items.length);
+                return false;
+              }
+              const next = Math.min(items.length, rendered + GLOBAL_KANBAN_BATCH_SIZE);
+              const chunk = items.slice(rendered, next);
+              listEl.insertAdjacentHTML('beforeend', chunk.map(taskCardKanban).join(''));
+              listEl.dataset.rendered = String(next);
+              updateCounters(next);
+              return next > rendered;
+            };
+            const hasMore = () => {
+              const rendered = Number.parseInt(listEl.dataset.rendered || '0', 10) || 0;
+              return rendered < items.length;
+            };
+            return { hasMore, loadNext };
+          });
+
+          const loadNextKanbanBatchAllColumns = () => {
+            let changed = false;
+            columnLoaders.forEach((loader) => {
+              if (loader.hasMore()) {
+                changed = loader.loadNext() || changed;
+              }
+            });
+            return changed;
+          };
+
+          const hasMoreKanbanRows = () => columnLoaders.some((loader) => loader.hasMore());
+          const scrollHandler = () => {
+            if (!hasMoreKanbanRows()) return;
+            const scroller = document.scrollingElement || document.documentElement;
+            const remaining = (scroller.scrollHeight - (window.scrollY + window.innerHeight));
+            if (remaining <= GLOBAL_KANBAN_SCROLL_THRESHOLD_PX) {
+              loadNextKanbanBatchAllColumns();
+            }
+          };
+          globalKanbanInfiniteScrollState = { handler: scrollHandler };
+          window.addEventListener('scroll', scrollHandler, { passive: true });
+
+          let safety = 0;
+          while (hasMoreKanbanRows() && safety < 6) {
+            const scroller = document.scrollingElement || document.documentElement;
+            const needsFill = scroller.scrollHeight <= (window.innerHeight + GLOBAL_KANBAN_SCROLL_THRESHOLD_PX);
+            if (!needsFill) break;
+            const changed = loadNextKanbanBatchAllColumns();
+            if (!changed) break;
+            safety += 1;
+          }
+          return;
+        }
+        container.className = 'space-y-4';
+        const withDate = prepared.filter(task => Number.isFinite(task._dueTs)).sort((a, b) => a._dueTs - b._dueTs);
+        const withoutDate = prepared.filter(task => !Number.isFinite(task._dueTs));
+        const now = new Date();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+        const todayEnd = todayStart + (24 * 60 * 60 * 1000) - 1;
+        const groups = [
+          { key: 'overdue', label: 'En retard', items: withDate.filter(task => task._dueTs < todayStart) },
+          { key: 'today', label: 'Aujourd hui', items: withDate.filter(task => task._dueTs >= todayStart && task._dueTs <= todayEnd) },
+          { key: 'upcoming', label: 'A venir', items: withDate.filter(task => task._dueTs > todayEnd) },
+          { key: 'nodue', label: 'Sans echeance', items: withoutDate }
+        ];
+        const displayMode = globalTimelineDisplayMode === 'list' ? 'list' : 'columns';
+        const modeBtnClass = (target) => `px-3 py-1.5 rounded-lg text-xs font-semibold ${displayMode === target ? 'bg-primary text-white' : 'bg-slate-100 text-slate-700'}`;
+
+        if (displayMode === 'columns') {
+          container.innerHTML = `
+            <div class="flex items-center justify-between gap-2">
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Timeline</p>
+              <div class="inline-flex items-center gap-2">
+                <button id="global-timeline-mode-columns" type="button" class="${modeBtnClass('columns')}">Vue 4 colonnes</button>
+                <button id="global-timeline-mode-list" type="button" class="${modeBtnClass('list')}">Vue liste</button>
+              </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+              ${groups.map((group) => {
+                const initial = Math.min(group.items.length, GLOBAL_TIMELINE_INITIAL_BATCH);
+                return `
+                  <div class="rounded-xl border border-slate-200 bg-white p-3">
+                    <div class="flex items-center justify-between mb-2">
+                      <h4 class="font-bold text-slate-800 text-sm">${group.label}</h4>
+                      <span class="text-xs text-slate-500">${group.items.length}</span>
+                    </div>
+                    <div id="global-timeline-col-items-${group.key}" class="space-y-2 pr-1" data-rendered="${initial}">
+                      ${initial > 0 ? group.items.slice(0, initial).map(taskCard).join('') : '<p class="text-xs text-slate-400 py-2">Aucune tache</p>'}
+                    </div>
+                    <div class="mt-2 flex items-center justify-between gap-2">
+                      <p class="text-[11px] text-slate-500"><span id="global-timeline-col-count-${group.key}">${initial}</span> / ${group.items.length}</p>
+                      <button id="global-timeline-col-more-${group.key}" type="button" class="px-2 py-1 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-semibold ${initial >= group.items.length ? 'hidden' : ''}">Charger plus</button>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          `;
+
+          const bindLazyColumn = (group) => {
+            const listEl = document.getElementById(`global-timeline-col-items-${group.key}`);
+            const btnMore = document.getElementById(`global-timeline-col-more-${group.key}`);
+            const countEl = document.getElementById(`global-timeline-col-count-${group.key}`);
+            if (!listEl) return;
+            const items = group.items || [];
+            const update = (rendered) => {
+              if (countEl) countEl.textContent = String(rendered);
+              if (btnMore) btnMore.classList.toggle('hidden', rendered >= items.length);
+            };
+            const loadNext = () => {
+              const rendered = Number.parseInt(listEl.dataset.rendered || '0', 10) || 0;
+              if (rendered >= items.length) {
+                update(items.length);
+                return;
+              }
+              const next = Math.min(items.length, rendered + GLOBAL_TIMELINE_BATCH_SIZE);
+              const chunk = items.slice(rendered, next);
+              listEl.insertAdjacentHTML('beforeend', chunk.map(taskCard).join(''));
+              listEl.dataset.rendered = String(next);
+              update(next);
+            };
+            btnMore?.addEventListener('click', loadNext);
+          };
+          groups.forEach(bindLazyColumn);
+        } else {
+          container.innerHTML = `
+            <div class="flex items-center justify-between gap-2">
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Timeline</p>
+              <div class="inline-flex items-center gap-2">
+                <button id="global-timeline-mode-columns" type="button" class="${modeBtnClass('columns')}">Vue 4 colonnes</button>
+                <button id="global-timeline-mode-list" type="button" class="${modeBtnClass('list')}">Vue liste</button>
+              </div>
+            </div>
+            <div class="space-y-3">
+              ${groups.map((group) => {
+                const expanded = Boolean(globalTimelineExpandedGroups[group.key]);
+                const initial = expanded ? Math.min(group.items.length, GLOBAL_TIMELINE_INITIAL_BATCH) : 0;
+                return `
+                  <div class="rounded-xl border border-slate-200 bg-white p-3">
+                    <button id="global-timeline-list-toggle-${group.key}" type="button" class="w-full flex items-center justify-between text-left">
+                      <span class="font-bold text-slate-800">${group.label}</span>
+                      <span class="inline-flex items-center gap-2 text-xs text-slate-500"><span>${group.items.length}</span><span id="global-timeline-toggle-symbol-${group.key}" class="text-base leading-none">${expanded ? '-' : '+'}</span></span>
+                    </button>
+                    <div id="global-timeline-list-body-${group.key}" class="${expanded ? 'mt-2' : 'hidden mt-2'}">
+                      <div id="global-timeline-list-items-${group.key}" class="space-y-2 pr-1" data-rendered="${initial}">
+                        ${expanded ? (initial > 0 ? group.items.slice(0, initial).map(taskCard).join('') : '<p class="text-xs text-slate-400 py-2">Aucune tache</p>') : ''}
+                      </div>
+                      <div class="mt-2 flex items-center justify-between gap-2">
+                        <p class="text-[11px] text-slate-500"><span id="global-timeline-list-count-${group.key}">${initial}</span> / ${group.items.length}</p>
+                        <button id="global-timeline-list-more-${group.key}" type="button" class="px-2 py-1 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-semibold ${(expanded && initial < group.items.length) ? '' : 'hidden'}">Charger plus</button>
+                      </div>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          `;
+
+          const bindLazyList = (group) => {
+            const bodyEl = document.getElementById(`global-timeline-list-body-${group.key}`);
+            const listEl = document.getElementById(`global-timeline-list-items-${group.key}`);
+            const countEl = document.getElementById(`global-timeline-list-count-${group.key}`);
+            const btnMore = document.getElementById(`global-timeline-list-more-${group.key}`);
+            const btnToggle = document.getElementById(`global-timeline-list-toggle-${group.key}`);
+            const symbolEl = document.getElementById(`global-timeline-toggle-symbol-${group.key}`);
+            if (!bodyEl || !listEl || !btnToggle) return;
+            const items = group.items || [];
+            const update = (rendered) => {
+              if (countEl) countEl.textContent = String(rendered);
+              if (btnMore) btnMore.classList.toggle('hidden', rendered >= items.length || bodyEl.classList.contains('hidden'));
+            };
+            const renderIfNeeded = () => {
+              const rendered = Number.parseInt(listEl.dataset.rendered || '0', 10) || 0;
+              if (rendered > 0 || items.length === 0) return;
+              const initial = Math.min(items.length, GLOBAL_TIMELINE_INITIAL_BATCH);
+              listEl.innerHTML = items.slice(0, initial).map(taskCard).join('');
+              listEl.dataset.rendered = String(initial);
+              update(initial);
+            };
+            const loadNext = () => {
+              const rendered = Number.parseInt(listEl.dataset.rendered || '0', 10) || 0;
+              if (rendered >= items.length) {
+                update(items.length);
+                return;
+              }
+              const next = Math.min(items.length, rendered + GLOBAL_TIMELINE_BATCH_SIZE);
+              listEl.insertAdjacentHTML('beforeend', items.slice(rendered, next).map(taskCard).join(''));
+              listEl.dataset.rendered = String(next);
+              update(next);
+            };
+            btnToggle.addEventListener('click', () => {
+              const willExpand = bodyEl.classList.contains('hidden');
+              bodyEl.classList.toggle('hidden', !willExpand);
+              globalTimelineExpandedGroups[group.key] = willExpand;
+              if (symbolEl) symbolEl.textContent = willExpand ? '-' : '+';
+              if (willExpand) {
+                renderIfNeeded();
+                update(Number.parseInt(listEl.dataset.rendered || '0', 10) || 0);
+              } else {
+                update(Number.parseInt(listEl.dataset.rendered || '0', 10) || 0);
+              }
+            });
+            btnMore?.addEventListener('click', loadNext);
+            if (!bodyEl.classList.contains('hidden')) {
+              renderIfNeeded();
+              update(Number.parseInt(listEl.dataset.rendered || '0', 10) || 0);
+            }
+          };
+          groups.forEach(bindLazyList);
+        }
+
+        document.getElementById('global-timeline-mode-columns')?.addEventListener('click', () => {
+          if (globalTimelineDisplayMode === 'columns') return;
+          globalTimelineDisplayMode = 'columns';
+          localStorage.setItem('taskmda_global_timeline_mode', globalTimelineDisplayMode);
+          renderGlobalTasks();
+        });
+        document.getElementById('global-timeline-mode-list')?.addEventListener('click', () => {
+          if (globalTimelineDisplayMode === 'list') return;
+          globalTimelineDisplayMode = 'list';
+          localStorage.setItem('taskmda_global_timeline_mode', globalTimelineDisplayMode);
+          renderGlobalTasks();
+        });
+        return;
+      }
+
+      const pagination = paginateItems(filtered, globalTasksPage, paginationConfig.globalTasksPerPage);
+      globalTasksPage = pagination.currentPage;
+      container.className = `global-task-grid cols-${globalTaskCardsColumns}`;
+      container.innerHTML = pagination.pageItems.map(task => {
+        const taskRef = buildGlobalTaskRef(task);
+        let canEdit = task.sourceType === 'standalone';
+        let canDelete = task.sourceType === 'standalone';
+        let canArchive = task.sourceType === 'standalone';
+        if (task.sourceType === 'project') {
+          const projectState = stateByProjectId.get(task.sourceProjectId);
+          canEdit = canEditTaskInProject(task, projectState);
+          canDelete = canDeleteTaskInProject(task, projectState);
+          canArchive = canEditTaskInProject(task, projectState);
+        }
+        return `
+        <div class="global-task-card global-task-card-modern ${getTaskUrgencyMeta(task.urgency).accentClass} rounded-xl border border-slate-200 bg-white p-4 cursor-pointer" onclick="openGlobalTaskDetails('${taskRef}')" role="button" tabindex="0">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <div class="flex flex-wrap items-center gap-2 mb-1">
+                <span class="${getTaskUrgencyMeta(task.urgency).chipClass}">${getTaskUrgencyMeta(task.urgency).label}</span>
+              </div>
+              <h4 class="font-bold text-slate-800">${escapeHtml(task.title || 'Tâche')}</h4>
+              <p class="text-xs text-slate-500 mt-1">${escapeHtml(task.sourceProjectName || 'Hors projet')} • ${escapeHtml(task.theme || 'Général')}</p>
+            </div>
+            <div class="flex flex-wrap items-center justify-end gap-1">
+              ${sharingModeBadge(task.sharingMode)}
+              <span class="${getTaskStatusMeta(task.status).chipClass}">${getTaskStatusMeta(task.status).label}</span>
+            </div>
+          </div>
+          <p class="text-sm text-slate-600 mt-2">${escapeHtml(task.description || '')}</p>
+          ${buildSubtaskProgressHtml(task, true)}
+          <div class="mt-2 text-xs text-slate-500 flex flex-wrap gap-3">
+            <span>Demande: ${formatDate(task.requestDate)}</span>
+            <span>Échéance: ${formatDate(task.dueDate)}</span>
+            <span>Assigné: ${escapeHtml(getTaskAssigneeName(task, stateByProjectId.get(task.sourceProjectId)) || 'Non assigné')}</span>
+          </div>
+          <div class="mt-3 flex flex-wrap gap-2 text-xs">
+            ${canEdit ? `<button onclick="event.stopPropagation(); editGlobalTask('${taskRef}')" class="task-action-btn task-action-btn-subtle">Modifier</button>` : ''}
+            ${canEdit ? `<button onclick="event.stopPropagation(); convertTaskToProject('${taskRef}')" class="task-action-btn task-action-btn-subtle">Convertir</button>` : ''}
+            ${canArchive ? `<button onclick="event.stopPropagation(); archiveGlobalTask('${taskRef}')" class="task-action-btn task-action-btn-subtle task-action-btn-warn">Archiver</button>` : ''}
+            ${canDelete ? `<button onclick="event.stopPropagation(); deleteGlobalTask('${taskRef}')" class="task-action-btn task-action-btn-subtle task-action-btn-danger">Supprimer</button>` : ''}
+          </div>
+        </div>
+      `;
+      }).join('');
+      renderPagination('global-tasks-pagination', pagination, 'setGlobalTasksPage', 'taches');
+    }
+
+    function renderGlobalArchivedTasks(allTasks, stateByProjectId, targetContainer) {
+      const container = targetContainer || document.getElementById('global-tasks-container');
+      if (!container) return;
+
+      const query = `${globalSearchQuery} ${document.getElementById('global-task-search')?.value || ''}`.trim();
+      const status = String(document.getElementById('global-task-status')?.value || 'all').trim();
+      const theme = String(document.getElementById('global-task-theme')?.value || '').trim();
+      let archived = (allTasks || []).filter(task => task?.archivedAt);
+      archived = archived.filter(task => matchesQuery([
+        task.title,
+        task.description,
+        task.sourceProjectName,
+        task.theme,
+        getTaskAssigneeName(task, stateByProjectId?.get(task.sourceProjectId)),
+        sharingModeLabel(task.sharingMode)
+      ], query));
+      if (status !== 'all') archived = archived.filter(task => (task.status || 'todo') === status);
+      if (theme) archived = archived.filter(task => matchesQuery([task.theme], theme));
+      archived.sort((a, b) => (b.archivedAt || 0) - (a.archivedAt || 0));
+
+      if (archived.length === 0) {
+        container.className = 'space-y-3';
+        container.innerHTML = '<p class="text-slate-500 text-center py-8">Aucune tache archivee</p>';
+        return;
+      }
+
+      container.className = 'space-y-2';
+      container.innerHTML = archived.map((task) => {
+        const taskRef = buildGlobalTaskRef(task);
+        let canEdit = task.sourceType === 'standalone';
+        let canDelete = task.sourceType === 'standalone';
+        if (task.sourceType === 'project') {
+          const projectState = stateByProjectId?.get(task.sourceProjectId);
+          canEdit = canEditTaskInProject(task, projectState);
+          canDelete = canDeleteTaskInProject(task, projectState);
+        }
+        return `
+          <div class="rounded-lg border border-slate-200 bg-white p-3">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <p class="text-sm font-semibold text-slate-800">${escapeHtml(task.title || 'Tache')}</p>
+                <p class="text-xs text-slate-500 mt-1">${escapeHtml(task.sourceProjectName || 'Hors projet')} - ${escapeHtml(task.theme || 'General')}</p>
+                <p class="text-xs text-slate-500 mt-1">Archivee le ${task.archivedAt ? new Date(task.archivedAt).toLocaleString('fr-FR') : '-'}</p>
+              </div>
+              <div class="flex items-center gap-2 text-xs">
+                ${canEdit ? `<button onclick="restoreGlobalTask('${taskRef}')" class="px-2 py-1 rounded bg-emerald-100 text-emerald-700">Restaurer</button>` : ''}
+                ${canDelete ? `<button onclick="deleteGlobalTask('${taskRef}')" class="px-2 py-1 rounded bg-rose-100 text-rose-700">Supprimer</button>` : ''}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    const renderGlobalTasksBase = renderGlobalTasks;
+    renderGlobalTasks = async function renderGlobalTasksWithEmptyState() {
+      await renderGlobalTasksBase();
+      const container = document.getElementById('global-tasks-container');
+      if (!container) return;
+      if (globalTasksViewMode === 'calendar' || globalTasksViewMode === 'archives') return;
+      const paginationContainer = document.getElementById('global-tasks-pagination');
+
+      const all = await getGlobalTasksList();
+      const query = `${globalSearchQuery} ${document.getElementById('global-task-search')?.value || ''}`.trim();
+      const status = document.getElementById('global-task-status')?.value || 'all';
+      const theme = document.getElementById('global-task-theme')?.value || '';
+
+      let filtered = all.filter(task => matchesQuery([
+        task.title,
+        task.description,
+        task.sourceProjectName,
+        task.theme,
+        sharingModeLabel(task.sharingMode)
+      ], query));
+      if (status !== 'all') filtered = filtered.filter(task => (task.status || 'todo') === status);
+      if (theme.trim()) filtered = filtered.filter(task => matchesQuery([task.theme], theme));
+      filtered = filtered.filter(task => !task.archivedAt);
+
+      if (all.length === 0 && filtered.length === 0) {
+        container.className = 'space-y-3';
+        container.innerHTML = `
+          <button
+            type="button"
+            class="tasks-empty-state"
+            onclick="document.getElementById('btn-global-add-task')?.click()"
+            aria-label="Créer une nouvelle tâche hors projet"
+          >
+            <span class="tasks-empty-icon material-symbols-outlined">add</span>
+            <span class="tasks-empty-title">Créer une première tâche</span>
+            <span class="tasks-empty-subtitle">Ajoutez une tâche solo ou collaborative pour démarrer votre pilotage transverse.</span>
+          </button>
+        `;
+        if (paginationContainer) paginationContainer.innerHTML = '';
+      }
+    };
+
+    async function renderGlobalCalendar() {
+      const container = document.getElementById('global-calendar-container');
+      const monthInput = document.getElementById('global-calendar-month');
+      const monthLabel = document.getElementById('global-calendar-month-label');
+      const listWrap = document.getElementById('global-calendar-list-wrap');
+      const gridWrap = document.getElementById('global-calendar-grid-wrap');
+      const grid = document.getElementById('global-calendar-grid');
+      const dayDetails = document.getElementById('global-calendar-day-details');
+      const btnViewList = document.getElementById('global-calendar-view-list');
+      const btnViewGrid = document.getElementById('global-calendar-view-grid');
+      if (!container || !monthInput || !listWrap || !gridWrap || !grid || !dayDetails) return;
+
+      if (monthInput.options.length === 0) {
+        const base = new Date();
+        const options = [];
+        for (let offset = -12; offset <= 12; offset++) {
+          const d = new Date(base.getFullYear(), base.getMonth() + offset, 1);
+          const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+          const label = d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+          options.push(`<option value="${value}">${label}</option>`);
+        }
+        monthInput.innerHTML = options.join('');
+        monthInput.value = `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, '0')}`;
+      }
+
+      const all = await getGlobalTasksList();
+      const q = `${globalSearchQuery} ${document.getElementById('global-calendar-search')?.value || ''}`.trim();
+      let month = monthInput.value || toYmd(new Date()).slice(0, 7);
+      if (!/^\d{4}-\d{2}$/.test(String(month))) {
+        const now = new Date();
+        month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        monthInput.value = month;
+      }
+      if (monthLabel) {
+        const [yy, mm] = String(month).split('-');
+        const d = new Date(Number(yy), Number(mm) - 1, 1);
+        monthLabel.textContent = d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+      }
+
+      const standaloneItems = await getAllDecrypted('globalCalendarItems', 'id');
+      const taskEntries = all
+        .filter(task => task.dueDate && !task.archivedAt)
+        .map(task => ({
+          entryType: 'task',
+          taskRef: buildGlobalTaskRef(task),
+          date: taskDueDateKey(task),
+          title: task.title || 'Tache',
+          description: task.description || '',
+          theme: task.theme || 'General',
+          source: task.sourceProjectName || 'Hors projet',
+          sharingMode: task.sharingMode || (task.sourceType === 'standalone' ? 'private' : 'shared'),
+          sortDate: new Date(task.dueDate).getTime()
+        }));
+      const infoEntries = (standaloneItems || []).map(item => ({
+        entryType: 'info',
+        id: item.id,
+        date: item.date,
+        title: item.title || 'Information',
+        description: item.notes || '',
+        theme: item.theme || 'General',
+        source: 'Hors projet',
+        sharingMode: item.sharingMode || 'private',
+        archivedAt: item.archivedAt || null,
+        sortDate: item.date ? new Date(item.date).getTime() : 0
+      }));
+      const mixed = [...taskEntries, ...infoEntries]
+        .filter(entry => !entry.archivedAt)
+        .filter(entry => String(entry.date || '').startsWith(month))
+        .filter(entry => matchesQuery([entry.title, entry.description, entry.theme, entry.source, sharingModeLabel(entry.sharingMode)], q))
+        .sort((a, b) => a.sortDate - b.sortDate);
+      const isSharedEntry = (entry) => normalizeSharingMode(entry?.sharingMode, 'private') === 'shared';
+      const getEntryOpenAction = (entry) => {
+        if (entry?.entryType === 'task' && entry?.taskRef) {
+          return `openGlobalTaskDetails('${entry.taskRef}')`;
+        }
+        if (entry?.entryType === 'info' && entry?.id) {
+          return `openStandaloneCalendarDetails('${entry.id}')`;
+        }
+        return '';
+      };
+
+      const isGrid = globalCalendarViewMode === 'grid';
+      listWrap.classList.toggle('hidden', isGrid);
+      gridWrap.classList.toggle('hidden', !isGrid);
+      if (btnViewList && btnViewGrid) {
+        btnViewList.classList.toggle('view-tab-active', !isGrid);
+        btnViewGrid.classList.toggle('view-tab-active', isGrid);
+      }
+
+      if (!isGrid && mixed.length === 0) {
+        container.innerHTML = '<p class="text-slate-500 text-center py-8">Aucune echeance pour ces criteres</p>';
+        return;
+      }
+
+      if (isGrid) {
+        const [yearStr, monthStr] = month.split('-');
+        let year = Number(yearStr);
+        let monthIndex = Number(monthStr) - 1;
+        if (!Number.isFinite(year) || !Number.isFinite(monthIndex) || monthIndex < 0 || monthIndex > 11) {
+          const fallback = new Date();
+          year = fallback.getFullYear();
+          monthIndex = fallback.getMonth();
+          month = `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
+          monthInput.value = month;
+        }
+        const firstDay = new Date(year, monthIndex, 1);
+        const startOffset = (firstDay.getDay() + 6) % 7;
+        const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+        if (!Number.isFinite(daysInMonth) || daysInMonth <= 0) {
+          grid.innerHTML = '<div class="col-span-7 text-center text-sm text-slate-500 py-4">Mois invalide, reinitialisation appliquee.</div>';
+          dayDetails.innerHTML = '';
+          return;
+        }
+        const todayKey = toYmd(new Date());
+        const monthPrefix = `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
+
+        const entriesByDay = new Map();
+        mixed.forEach(entry => {
+          const key = String(entry.date || '');
+          if (!entriesByDay.has(key)) entriesByDay.set(key, []);
+          entriesByDay.get(key).push(entry);
+        });
+
+        if (!globalCalendarSelectedDay || !String(globalCalendarSelectedDay).startsWith(monthPrefix)) {
+          globalCalendarSelectedDay = todayKey.startsWith(monthPrefix)
+            ? todayKey
+            : `${monthPrefix}-01`;
+        }
+
+        const dayHeaders = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
+          .map(label => `<div class="calendar-day-header">${label}</div>`)
+          .join('');
+        const blanks = Array.from({ length: startOffset }).map(() => '<div></div>').join('');
+        const dayCells = Array.from({ length: daysInMonth }).map((_, idx) => {
+          const day = idx + 1;
+          const dayKey = `${monthPrefix}-${String(day).padStart(2, '0')}`;
+          const dayEntries = entriesByDay.get(dayKey) || [];
+          const sharedCount = dayEntries.filter(isSharedEntry).length;
+          const privateCount = Math.max(0, dayEntries.length - sharedCount);
+          const modeClass = sharedCount > 0 && privateCount === 0
+            ? 'global-cal-day-mode-shared'
+            : privateCount > 0 && sharedCount === 0
+              ? 'global-cal-day-mode-private'
+              : (sharedCount > 0 && privateCount > 0 ? 'global-cal-day-mode-mixed' : '');
+          const isToday = dayKey === todayKey;
+          const isSelected = dayKey === globalCalendarSelectedDay;
+          return `
+            <button class="global-cal-day min-h-[72px] rounded-lg border p-1 text-left ${modeClass} ${isSelected ? 'global-cal-day-selected' : ''} ${isToday ? 'global-cal-day-today' : ''}" data-day="${dayKey}">
+              <div class="global-cal-day-number ${isToday ? 'global-cal-day-number-today' : ''}">${day}</div>
+              <div class="mt-1 space-y-1">
+                ${(dayEntries || []).slice(0, 2).map(item => `<div class="calendar-day-item ${isSharedEntry(item) ? 'calendar-day-item-shared' : 'calendar-day-item-private'}">${escapeHtml(item.title || '')}</div>`).join('')}
+                ${dayEntries.length > 2 ? `<div class="calendar-day-more">+${dayEntries.length - 2}</div>` : ''}
+              </div>
+              ${(sharedCount + privateCount) > 0 ? `
+                <div class="mt-1 flex items-center gap-1 text-[9px]">
+                  ${sharedCount > 0 ? `<span class="calendar-mini-chip calendar-mini-chip-shared">Collab ${sharedCount}</span>` : ''}
+                  ${privateCount > 0 ? `<span class="calendar-mini-chip calendar-mini-chip-private">Solo ${privateCount}</span>` : ''}
+                </div>
+              ` : ''}
+            </button>
+          `;
+        }).join('');
+        grid.innerHTML = `${dayHeaders}${blanks}${dayCells}`;
+        grid.querySelectorAll('.global-cal-day').forEach(btn => {
+          btn.addEventListener('click', () => {
+            globalCalendarSelectedDay = btn.getAttribute('data-day');
+            renderGlobalCalendar();
+          });
+        });
+
+        const selectedEntries = entriesByDay.get(globalCalendarSelectedDay) || [];
+        if (selectedEntries.length === 0) {
+          dayDetails.innerHTML = `
+            <div class="calendar-detail-card text-sm text-slate-500">
+              Aucun element le ${formatDate(globalCalendarSelectedDay)}.
+            </div>
+          `;
+          return;
+        }
+        dayDetails.innerHTML = selectedEntries.map(entry => `
+          <div class="calendar-detail-card ${isSharedEntry(entry) ? 'calendar-detail-card-shared' : 'calendar-detail-card-private'} ${getEntryOpenAction(entry) ? 'cursor-pointer' : ''}" ${getEntryOpenAction(entry) ? `onclick="${getEntryOpenAction(entry)}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();${getEntryOpenAction(entry)};}"` : ''}>
+            <div class="flex items-center justify-between gap-2">
+              <p class="font-semibold text-slate-800">${escapeHtml(entry.title || 'Element')}</p>
+              <span class="inline-flex text-[10px] px-2 py-1 rounded-full font-semibold ${isSharedEntry(entry) ? 'calendar-chip-shared' : 'calendar-chip-private'}">${isSharedEntry(entry) ? 'Collaboratif' : 'Solo'}</span>
+            </div>
+            <p class="text-xs text-slate-500 mt-1">${escapeHtml(entry.source || 'Hors projet')} - ${escapeHtml(entry.theme || 'General')}</p>
+            <p class="text-sm text-slate-600 mt-1">${escapeHtml(entry.description || '')}</p>
+            ${entry.entryType === 'info' && entry.id ? `
+              <div class="mt-2 flex flex-wrap gap-2 text-xs">
+                <button onclick="event.stopPropagation(); editStandaloneCalendarItem('${entry.id}')" class="px-2 py-1 rounded bg-slate-100 text-slate-700">Modifier</button>
+                <button onclick="event.stopPropagation(); archiveStandaloneCalendarItem('${entry.id}')" class="px-2 py-1 rounded bg-amber-100 text-amber-700">Archiver</button>
+                <button onclick="event.stopPropagation(); deleteStandaloneCalendarItem('${entry.id}')" class="px-2 py-1 rounded bg-rose-100 text-rose-700">Supprimer</button>
+              </div>
+            ` : ''}
+          </div>
+        `).join('');
+        return;
+      }
+
+      container.innerHTML = mixed.map(entry => `
+        <div class="calendar-entry-card ${isSharedEntry(entry) ? 'calendar-entry-card-shared' : 'calendar-entry-card-private'} ${getEntryOpenAction(entry) ? 'cursor-pointer' : ''}" ${getEntryOpenAction(entry) ? `onclick="${getEntryOpenAction(entry)}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();${getEntryOpenAction(entry)};}"` : ''}>
+          <div class="flex items-center justify-between gap-2">
+            <h4 class="font-semibold text-slate-800">${escapeHtml(entry.title || 'Element')}</h4>
+            <span class="text-xs text-slate-500">${formatDate(entry.date)}</span>
+          </div>
+          <p class="text-xs text-slate-500 mt-1">${escapeHtml(entry.source || 'Hors projet')} • ${escapeHtml(entry.theme || 'General')}</p>
+          <p class="text-sm text-slate-600 mt-1">${escapeHtml(entry.description || '')}</p>
+          <div class="mt-2 flex flex-wrap gap-1">
+            <span class="inline-flex text-[10px] px-2 py-1 rounded-full ${entry.entryType === 'task' ? 'calendar-chip-task' : 'calendar-chip-info'} font-semibold">
+              ${entry.entryType === 'task' ? 'Echeance tache' : 'Info hors projet'}
+            </span>
+            <span class="inline-flex text-[10px] px-2 py-1 rounded-full font-semibold ${isSharedEntry(entry) ? 'calendar-chip-shared' : 'calendar-chip-private'}">${isSharedEntry(entry) ? 'Collaboratif' : 'Solo'}</span>
+          </div>
+          ${entry.entryType === 'info' && entry.id ? `
+            <div class="mt-2 flex flex-wrap gap-2 text-xs">
+              <button onclick="event.stopPropagation(); editStandaloneCalendarItem('${entry.id}')" class="px-2 py-1 rounded bg-slate-100 text-slate-700">Modifier</button>
+              <button onclick="event.stopPropagation(); archiveStandaloneCalendarItem('${entry.id}')" class="px-2 py-1 rounded bg-amber-100 text-amber-700">Archiver</button>
+              <button onclick="event.stopPropagation(); deleteStandaloneCalendarItem('${entry.id}')" class="px-2 py-1 rounded bg-rose-100 text-rose-700">Supprimer</button>
+            </div>
+          ` : ''}
+        </div>
+      `).join('');
+      return;
+
+    }
+
+    function ensureGlobalCalendarMonthOption(monthInput, year, monthIndex) {
+      const value = `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
+      if (!monthInput.querySelector(`option[value="${value}"]`)) {
+        const opt = document.createElement('option');
+        opt.value = value;
+        opt.textContent = new Date(year, monthIndex, 1).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+        monthInput.appendChild(opt);
+      }
+      monthInput.value = value;
+    }
+
+    function shiftGlobalCalendarMonth(offset) {
+      const monthInput = document.getElementById('global-calendar-month');
+      if (!monthInput) return;
+      const current = monthInput.value && /^\d{4}-\d{2}$/.test(monthInput.value)
+        ? monthInput.value
+        : toYmd(new Date()).slice(0, 7);
+      const [y, m] = current.split('-');
+      const d = new Date(Number(y), Number(m) - 1 + Number(offset || 0), 1);
+      ensureGlobalCalendarMonthOption(monthInput, d.getFullYear(), d.getMonth());
+      globalCalendarSelectedDay = null;
+      renderGlobalCalendar();
+    }
+
+    async function editGlobalTask(taskRef) {
+      const resolved = await resolveGlobalTaskFromRef(taskRef);
+      if (!resolved?.task) return;
+      if (resolved.sourceType === 'standalone') {
+        standaloneTaskMode = true;
+        openTaskModal({ ...resolved.task, taskId: null });
+        editingStandaloneTaskId = resolved.task.id;
+        return;
+      }
+      if (!canEditTaskInProject(resolved.task, resolved.state)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      await showProjectDetail(resolved.projectId);
+      await editTask(resolved.task.taskId);
+    }
+
+    async function archiveGlobalTask(taskRef) {
+      const resolved = await resolveGlobalTaskFromRef(taskRef);
+      if (!resolved?.task) return;
+      if (resolved.sourceType === 'standalone') {
+        await putEncrypted('globalTasks', {
+          ...resolved.task,
+          status: 'termine',
+          archivedAt: Date.now(),
+          updatedAt: Date.now()
+        }, 'id');
+        showToast('Tache archivee');
+        await renderGlobalTasks();
+        await refreshStats();
+        return;
+      }
+      if (!canEditTaskInProject(resolved.task, resolved.state)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      if (!ensureProjectResourceUnlockedForAction(resolved.state, LOCK_SCOPE_TASK, resolved.task.taskId, 'Archivage').ok) {
+        return;
+      }
+      const event = createEvent(
+        EventTypes.UPDATE_TASK,
+        resolved.projectId,
+        currentUser.userId,
+        { taskId: resolved.task.taskId, changes: { status: 'termine', archivedAt: Date.now() } }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) await writeEventToSharedFolder(resolved.projectId, event);
+      showToast('Tache archivee');
+      if (workspaceMode === 'global') {
+        await renderGlobalTasks();
+        await refreshStats();
+      } else {
+        await showProjectDetail(resolved.projectId);
+      }
+    }
+
+    async function restoreGlobalTask(taskRef) {
+      const resolved = await resolveGlobalTaskFromRef(taskRef);
+      if (!resolved?.task) return;
+      if (resolved.sourceType === 'standalone') {
+        await putEncrypted('globalTasks', {
+          ...resolved.task,
+          archivedAt: null,
+          updatedAt: Date.now()
+        }, 'id');
+        showToast('Tache restauree');
+        await renderGlobalTasks();
+        await refreshStats();
+        return;
+      }
+      if (!canEditTaskInProject(resolved.task, resolved.state)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const event = createEvent(
+        EventTypes.UPDATE_TASK,
+        resolved.projectId,
+        currentUser.userId,
+        { taskId: resolved.task.taskId, changes: { archivedAt: null } }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) await writeEventToSharedFolder(resolved.projectId, event);
+      showToast('Tache restauree');
+      if (workspaceMode === 'global') {
+        await renderGlobalTasks();
+        await refreshStats();
+      } else {
+        await showProjectDetail(resolved.projectId);
+      }
+    }
+
+    async function deleteGlobalTask(taskRef) {
+      const resolved = await resolveGlobalTaskFromRef(taskRef);
+      if (!resolved?.task) return;
+      if (resolved.sourceType === 'standalone') {
+        if (!confirm('Supprimer cette tache hors projet ?')) return;
+        const db = getDatabase();
+        await deleteFromStore('globalTasks', resolved.task.id);
+        showToast('Tache supprimee');
+        await renderGlobalTasks();
+        await refreshStats();
+        return;
+      }
+      if (!canDeleteTaskInProject(resolved.task, resolved.state)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      if (!ensureProjectResourceUnlockedForAction(resolved.state, LOCK_SCOPE_TASK, resolved.task.taskId, 'Suppression').ok) {
+        return;
+      }
+      if (!confirm('Supprimer cette tache ?')) return;
+      const event = createEvent(
+        EventTypes.DELETE_TASK,
+        resolved.projectId,
+        currentUser.userId,
+        { taskId: resolved.task.taskId }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) await writeEventToSharedFolder(resolved.projectId, event);
+      showToast('Tache supprimee');
+      if (workspaceMode === 'global') {
+        await renderGlobalTasks();
+        await refreshStats();
+      } else {
+        await showProjectDetail(resolved.projectId);
+      }
+    }
+
+    window.editGlobalTask = editGlobalTask;
+    window.archiveGlobalTask = archiveGlobalTask;
+    window.restoreGlobalTask = restoreGlobalTask;
+    window.deleteGlobalTask = deleteGlobalTask;
+    window.convertTaskToProject = convertTaskToProject;
+    window.openGlobalTaskDetails = openGlobalTaskDetails;
+    window.openProjectTaskDetails = openProjectTaskDetails;
+    window.closeGlobalTaskDetails = closeGlobalTaskDetails;
+    window.deleteGlobalDocument = deleteGlobalDocument;
+    window.openDocumentBindingModal = openDocumentBindingModal;
+
+    async function openStandaloneCalendarDetails(itemId) {
+      const id = String(itemId || '').trim();
+      if (!id) return;
+      const item = await getDecrypted('globalCalendarItems', id, 'id');
+      if (!item || item.archivedAt) {
+        showToast('Information introuvable');
+        return;
+      }
+
+      currentCalendarInfoDetailId = id;
+      const modal = document.getElementById('modal-calendar-info-details');
+      const titleEl = document.getElementById('calendar-info-detail-title');
+      const subtitleEl = document.getElementById('calendar-info-detail-subtitle');
+      const badgesEl = document.getElementById('calendar-info-detail-badges');
+      const descriptionEl = document.getElementById('calendar-info-detail-description');
+      const dateEl = document.getElementById('calendar-info-detail-date');
+      const themeEl = document.getElementById('calendar-info-detail-theme');
+      if (!modal || !titleEl || !subtitleEl || !badgesEl || !descriptionEl || !dateEl || !themeEl) return;
+
+      titleEl.textContent = item.title || 'Information';
+      subtitleEl.textContent = `Hors projet • ${item.theme || 'General'}`;
+      descriptionEl.textContent = item.notes || 'Aucune description.';
+      dateEl.textContent = formatDate(item.date);
+      themeEl.textContent = item.theme || 'General';
+      badgesEl.innerHTML = `
+        <span class="inline-flex text-[10px] px-2 py-1 rounded-full calendar-chip-info font-semibold">Info hors projet</span>
+        <span class="inline-flex text-[10px] px-2 py-1 rounded-full font-semibold ${normalizeSharingMode(item.sharingMode, 'private') === 'shared' ? 'calendar-chip-shared' : 'calendar-chip-private'}">${normalizeSharingMode(item.sharingMode, 'private') === 'shared' ? 'Collaboratif' : 'Solo'}</span>
+      `;
+
+      modal.classList.remove('hidden');
+    }
+
+    function closeStandaloneCalendarDetails() {
+      currentCalendarInfoDetailId = null;
+      document.getElementById('modal-calendar-info-details')?.classList.add('hidden');
+    }
+
+    window.openStandaloneCalendarDetails = openStandaloneCalendarDetails;
+    window.editStandaloneCalendarItem = editStandaloneCalendarItem;
+    window.archiveStandaloneCalendarItem = archiveStandaloneCalendarItem;
+    window.deleteStandaloneCalendarItem = deleteStandaloneCalendarItem;
+
+    function setGlobalCalendarItemFormEditing(isEditing) {
+      const form = document.getElementById('global-calendar-item-form');
+      if (!form) return;
+      form.classList.toggle('is-editing', !!isEditing);
+    }
+
+    function resetStandaloneCalendarForm() {
+      if (activeCalendarEditLock?.itemId) {
+        releaseCalendarItemLock(activeCalendarEditLock.itemId, activeCalendarEditLock.lockId || '');
+        activeCalendarEditLock = null;
+      }
+      const titleInput = document.getElementById('global-calendar-item-title');
+      const dateInput = document.getElementById('global-calendar-item-date');
+      const themeInput = document.getElementById('global-calendar-item-theme');
+      const notesInput = document.getElementById('global-calendar-item-notes');
+      const modeInput = document.getElementById('global-calendar-item-mode');
+      const submitBtn = document.getElementById('btn-global-calendar-add');
+      if (titleInput) titleInput.value = '';
+      if (dateInput) dateInput.value = '';
+      if (themeInput) themeInput.value = '';
+      if (notesInput) notesInput.value = '';
+      if (modeInput) modeInput.value = 'private';
+      editingGlobalCalendarItemId = null;
+      if (submitBtn) submitBtn.textContent = 'Ajouter info hors projet';
+      setGlobalCalendarItemFormEditing(false);
+    }
+
+    async function editStandaloneCalendarItem(itemId) {
+      const id = String(itemId || '').trim();
+      if (!id) return;
+      if (activeCalendarEditLock?.itemId && activeCalendarEditLock.itemId !== id) {
+        await releaseCalendarItemLock(activeCalendarEditLock.itemId, activeCalendarEditLock.lockId || '');
+        activeCalendarEditLock = null;
+      }
+      const lockResult = await acquireCalendarItemLock(id);
+      if (!lockResult.ok) {
+        showToast(buildLockBlockedMessage(lockResult.lock, 'Information calendrier en cours de modification'));
+        return;
+      }
+      const item = await getDecrypted('globalCalendarItems', id, 'id');
+      if (!item) {
+        await releaseCalendarItemLock(id, lockResult.lockId || '');
+        showToast('Information introuvable');
+        return;
+      }
+      activeCalendarEditLock = { itemId: id, lockId: lockResult.lockId || '' };
+      document.getElementById('global-calendar-item-title').value = item.title || '';
+      document.getElementById('global-calendar-item-date').value = item.date || '';
+      document.getElementById('global-calendar-item-theme').value = item.theme || '';
+      document.getElementById('global-calendar-item-notes').value = item.notes || '';
+      document.getElementById('global-calendar-item-mode').value = normalizeSharingMode(item.sharingMode, 'private');
+      editingGlobalCalendarItemId = id;
+      const submitBtn = document.getElementById('btn-global-calendar-add');
+      if (submitBtn) submitBtn.textContent = 'Enregistrer info';
+      setGlobalCalendarItemFormEditing(true);
+      document.getElementById('global-calendar-item-title')?.focus();
+    }
+
+    async function archiveStandaloneCalendarItem(itemId) {
+      const id = String(itemId || '').trim();
+      if (!id) return;
+      if (!(await ensureCalendarItemUnlockedForAction(id, 'Archivage')).ok) return;
+      const item = await getDecrypted('globalCalendarItems', id, 'id');
+      if (!item) return;
+      await putEncrypted('globalCalendarItems', {
+        ...item,
+        archivedAt: Date.now(),
+        updatedAt: Date.now()
+      }, 'id');
+      if (editingGlobalCalendarItemId === id) {
+        resetStandaloneCalendarForm();
+      }
+      showToast('Information archivee');
+      addNotification('Calendrier', 'Information hors projet archivee', null);
+      await renderGlobalCalendar();
+    }
+
+    async function deleteStandaloneCalendarItem(itemId) {
+      const id = String(itemId || '').trim();
+      if (!id) return;
+      if (!(await ensureCalendarItemUnlockedForAction(id, 'Suppression')).ok) return;
+      if (!confirm('Supprimer cette information hors projet ?')) return;
+      const db = getDatabase();
+      await deleteFromStore('globalCalendarItems', id);
+      if (editingGlobalCalendarItemId === id) {
+        resetStandaloneCalendarForm();
+      }
+      showToast('Information supprimee');
+      addNotification('Calendrier', 'Information hors projet supprimee', null);
+      await renderGlobalCalendar();
+    }
+
+    async function addStandaloneCalendarItem() {
+      const title = (document.getElementById('global-calendar-item-title')?.value || '').trim();
+      const date = document.getElementById('global-calendar-item-date')?.value || '';
+      const theme = (document.getElementById('global-calendar-item-theme')?.value || '').trim() || 'General';
+      const notes = (document.getElementById('global-calendar-item-notes')?.value || '').trim();
+      const sharingMode = document.getElementById('global-calendar-item-mode')?.value || 'private';
+      if (!title || !date) {
+        showToast('Sujet et date sont requis');
+        return;
+      }
+      const editId = String(editingGlobalCalendarItemId || '').trim();
+      const existing = editId ? await getDecrypted('globalCalendarItems', editId, 'id') : null;
+      await putEncrypted('globalCalendarItems', {
+        id: existing?.id || uuidv4(),
+        title,
+        date,
+        theme,
+        notes,
+        sharingMode: normalizeSharingMode(sharingMode, 'private'),
+        createdAt: existing?.createdAt || Date.now(),
+        updatedAt: Date.now(),
+        archivedAt: null
+      }, 'id');
+
+      resetStandaloneCalendarForm();
+      if (existing?.id) {
+        await releaseCalendarItemLock(existing.id, activeCalendarEditLock?.lockId || '');
+      }
+      activeCalendarEditLock = null;
+      showToast(existing ? 'Information calendrier mise a jour' : 'Information calendrier ajoutee');
+      addNotification('Calendrier', existing ? 'Information hors projet mise a jour' : 'Information hors projet ajoutee', null);
+      await renderGlobalCalendar();
+    }
+
+    async function renderGlobalDocs() {
+      const container = document.getElementById('global-docs-container');
+      if (!container) return;
+      const all = await getGlobalDocumentsList();
+      const states = await getAllProjectStates();
+      const stateByProjectId = new Map(states.map(s => [s?.project?.projectId, s]));
+
+      const q = `${globalSearchQuery} ${document.getElementById('global-doc-search')?.value || ''}`.trim();
+      const themeFilter = document.getElementById('global-doc-theme')?.value || '';
+      const filtered = all.filter(doc => matchesQuery([doc.name, doc.sourceProjectName, doc.theme, doc.type, sharingModeLabel(doc.sharingMode)], q))
+        .filter(doc => !themeFilter.trim() || matchesQuery([doc.theme], themeFilter));
+
+      if (filtered.length === 0) {
+        container.innerHTML = '<p class="text-slate-500 text-center py-8 col-span-full">Aucun document trouvé</p>';
+        return;
+      }
+
+      container.innerHTML = filtered.map(doc => `
+        <div class="doc-card bg-surface-container-low rounded-xl p-4">
+          <div class="flex items-center justify-between mb-2">
+            <span class="material-symbols-outlined text-primary">description</span>
+            <div class="flex items-center gap-1">
+              ${sharingModeBadge(doc.sharingMode)}
+              <span class="text-[10px] font-semibold uppercase px-2 py-1 rounded bg-white">${escapeHtml(getDocumentCategory(doc))}</span>
+            </div>
+          </div>
+          <h4 class="font-semibold text-sm truncate">${escapeHtml(doc.name || 'document')}</h4>
+          <p class="text-xs text-slate-500 mt-1">${escapeHtml(doc.sourceProjectName || 'Hors projet')} • ${escapeHtml(doc.theme || 'Général')}</p>
+          <div class="mt-3 flex items-center justify-between text-xs">
+            <span class="text-slate-500">${formatFileSize(doc.size || 0)}</span>
+            <div class="flex items-center gap-3">
+              ${(() => {
+                const safeHref = sanitizeDownloadHref(doc.data || '', String(doc.type || ''));
+                if (!safeHref) {
+                  return '<span class="text-slate-400">Téléchargement indisponible</span>';
+                }
+                return `<a class="text-primary font-semibold hover:underline" href="${safeHref.replace(/"/g, '&quot;')}" download="${escapeHtml(doc.name || 'document')}">Télécharger</a>`;
+              })()}
+              ${(() => {
+                const canManageDocBinding = doc.sourceType === 'standalone'
+                  || (doc.sourceType === 'project-doc' && (() => {
+                    const state = stateByProjectId.get(doc.sourceProjectId);
+                    return !!(state && canEditProjectMeta(state));
+                  })());
+                if (doc.sourceType === 'standalone') {
+                  return `
+                    ${isDocumentEditable(doc) ? `<button onclick="openGlobalDocumentEditor('${escapeHtml(doc.id)}')" class="text-slate-700 font-semibold hover:underline">Modifier</button>` : ''}
+                    ${canManageDocBinding ? `<button onclick="openDocumentBindingModal('${escapeHtml(doc.id)}')" class="text-slate-700 font-semibold hover:underline">Gérer</button>` : ''}
+                    <button onclick="deleteGlobalDocument('${escapeHtml(doc.id)}')" class="text-rose-700 font-semibold hover:underline">Supprimer</button>
+                  `;
+                }
+                if (doc.sourceType === 'project-doc') {
+                  const state = stateByProjectId.get(doc.sourceProjectId);
+                  if (state && canEditProjectMeta(state)) {
+                    return `
+                      ${isDocumentEditable(doc) ? `<button onclick="openGlobalDocumentEditor('${escapeHtml(doc.id)}')" class="text-slate-700 font-semibold hover:underline">Modifier</button>` : ''}
+                      ${canManageDocBinding ? `<button onclick="openDocumentBindingModal('${escapeHtml(doc.id)}')" class="text-slate-700 font-semibold hover:underline">Gérer</button>` : ''}
+                      <button onclick="deleteGlobalDocument('${escapeHtml(doc.id)}')" class="text-rose-700 font-semibold hover:underline">Supprimer</button>
+                    `;
+                  }
+                  return '';
+                }
+                const state = stateByProjectId.get(doc.sourceProjectId);
+                const task = (state?.tasks || []).find(t => t.taskId === doc.taskId);
+                if (state && task && canEditTaskInProject(task, state)) {
+                  return `
+                    ${isDocumentEditable(doc) ? `<button onclick="openGlobalDocumentEditor('${escapeHtml(doc.id)}')" class="text-slate-700 font-semibold hover:underline">Modifier</button>` : ''}
+                    <button onclick="deleteGlobalDocument('${escapeHtml(doc.id)}')" class="text-rose-700 font-semibold hover:underline">Supprimer</button>
+                  `;
+                }
+                return '';
+              })()}
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function populateDocBindingTaskOptions(projectId, selectedTaskId = '') {
+      const taskSelect = document.getElementById('doc-binding-task');
+      if (!taskSelect) return;
+      const pid = String(projectId || '').trim();
+      if (!pid) {
+        taskSelect.innerHTML = '<option value="">Aucune (hors projet)</option>';
+        taskSelect.disabled = true;
+        return;
+      }
+      const state = await getProjectState(pid);
+      const tasks = (state?.tasks || []).filter(task => !task.archivedAt);
+      taskSelect.disabled = false;
+      if (tasks.length === 0) {
+        taskSelect.innerHTML = '<option value="">Aucune tâche active</option>';
+        return;
+      }
+      const selected = String(selectedTaskId || '').trim();
+      taskSelect.innerHTML = [
+        '<option value="">Aucune (document projet)</option>',
+        ...tasks.map(task => `<option value="${escapeHtml(task.taskId)}" ${selected === String(task.taskId) ? 'selected' : ''}>${escapeHtml(task.title || 'Tâche')}</option>`)
+      ].join('');
+    }
+
+    async function resolveDocumentForBinding(docId) {
+      const id = String(docId || '').trim();
+      if (!id) return null;
+      const all = await getGlobalDocumentsList();
+      const fromGlobal = all.find(item => String(item.id || '') === id);
+      if (fromGlobal) return fromGlobal;
+
+      const marker = ':project-doc:';
+      const markerIndex = id.indexOf(marker);
+      if (markerIndex <= 0) return null;
+      const sourceProjectId = id.slice(0, markerIndex);
+      const sourceDocId = id.slice(markerIndex + marker.length);
+      if (!sourceProjectId || !sourceDocId) return null;
+
+      const sourceState = await getProjectState(sourceProjectId);
+      if (!sourceState?.project) return null;
+      const sourceDoc = (sourceState.documents || []).find(item => String(item.docId || '') === sourceDocId);
+      if (!sourceDoc) return null;
+
+      return {
+        id,
+        name: sourceDoc.name,
+        type: sourceDoc.type,
+        size: sourceDoc.size,
+        data: sourceDoc.data,
+        theme: sourceDoc.theme || sourceState.project.name || 'Projet',
+        sourceProjectName: sourceState.project.name,
+        sourceProjectId,
+        docId: sourceDoc.docId,
+        linkedTaskIds: Array.isArray(sourceDoc.linkedTaskIds) ? [...sourceDoc.linkedTaskIds] : [],
+        sourceType: 'project-doc',
+        sharingMode: normalizeSharingMode(sourceDoc.sharingMode, normalizeSharingMode(sourceState.project.sharingMode, 'shared')),
+        notes: sourceDoc.notes || '',
+        createdAt: sourceDoc.uploadedAt || sourceDoc.createdAt || sourceState.project.createdAt || 0
+      };
+    }
+
+    async function openDocumentBindingModal(docId) {
+      const id = String(docId || '').trim();
+      if (!id) return;
+      const doc = await resolveDocumentForBinding(id);
+      if (!doc) {
+        showToast('Document introuvable');
+        return;
+      }
+      if (doc.sourceType === 'project') {
+        showToast('Ce document est une pièce jointe de tâche: modifiez la tâche pour le déplacer.');
+        return;
+      }
+      if (!['standalone', 'project-doc'].includes(doc.sourceType)) {
+        showToast('Gestion indisponible pour ce type de document.');
+        return;
+      }
+      if (doc.sourceType === 'project-doc') {
+        const sourceState = await getProjectState(doc.sourceProjectId);
+        if (!sourceState?.project || !canEditProjectMeta(sourceState)) {
+          showToast('Action non autorisée');
+          return;
+        }
+      }
+
+      const projectSelect = document.getElementById('doc-binding-project');
+      const modeSelect = document.getElementById('doc-binding-mode');
+      const nameEl = document.getElementById('doc-binding-name');
+      const sourceEl = document.getElementById('doc-binding-current-source');
+      const modal = document.getElementById('modal-doc-binding');
+      if (!projectSelect || !modeSelect || !nameEl || !sourceEl || !modal) return;
+
+      const states = await getAllProjectStates();
+      const editableProjects = (states || []).filter(state => state?.project && canEditProjectMeta(state));
+      const sourceProjectId = String(doc.sourceProjectId || '').trim();
+      projectSelect.innerHTML = [
+        '<option value="">Hors projet</option>',
+        ...editableProjects.map(state => `<option value="${escapeHtml(state.project.projectId)}" ${String(state.project.projectId) === sourceProjectId ? 'selected' : ''}>${escapeHtml(state.project.name || 'Projet')}</option>`)
+      ].join('');
+      modeSelect.value = normalizeSharingMode(doc.sharingMode, 'private');
+      nameEl.textContent = doc.name || 'Document';
+      sourceEl.textContent = `Source: ${doc.sourceProjectName || 'Hors projet'}`;
+
+      currentDocBindingContext = {
+        doc
+      };
+      await populateDocBindingTaskOptions(sourceProjectId, Array.isArray(doc.linkedTaskIds) ? (doc.linkedTaskIds[0] || '') : '');
+      modal.classList.remove('hidden');
+    }
+
+    function closeDocumentBindingModal() {
+      currentDocBindingContext = null;
+      document.getElementById('modal-doc-binding')?.classList.add('hidden');
+    }
+
+    async function saveDocumentBindingChanges() {
+      const ctx = currentDocBindingContext;
+      if (!ctx?.doc) return;
+      const doc = ctx.doc;
+      const projectSelect = document.getElementById('doc-binding-project');
+      const taskSelect = document.getElementById('doc-binding-task');
+      const modeSelect = document.getElementById('doc-binding-mode');
+      if (!projectSelect || !taskSelect || !modeSelect) return;
+
+      const targetProjectId = String(projectSelect.value || '').trim();
+      const selectedTaskId = String(taskSelect.value || '').trim();
+      const nextSharingMode = normalizeSharingMode(modeSelect.value, 'private');
+      let changed = false;
+
+      await runWithLoading(async () => {
+        if (doc.sourceType === 'standalone') {
+          if (!targetProjectId) {
+            const current = await getDecrypted('globalDocs', doc.id, 'id');
+            if (!current) {
+              showToast('Document introuvable');
+              return;
+            }
+            await putEncrypted('globalDocs', {
+              ...current,
+              sharingMode: nextSharingMode,
+              updatedAt: Date.now()
+            }, 'id');
+            showToast('Document mis à jour');
+            changed = true;
+            return;
+          }
+          const targetState = await getProjectState(targetProjectId);
+          if (!targetState?.project || !canEditProjectMeta(targetState)) {
+            showToast('Action non autorisée sur le projet cible');
+            return;
+          }
+          const createEventDoc = createEvent(
+            EventTypes.CREATE_DOCUMENT,
+            targetProjectId,
+            currentUser.userId,
+            {
+              docId: uuidv4(),
+              name: doc.name,
+              type: doc.type,
+              size: doc.size,
+              data: doc.data,
+              theme: doc.theme || 'General',
+              notes: doc.notes || '',
+              sharingMode: nextSharingMode,
+              linkedTaskIds: selectedTaskId ? [selectedTaskId] : []
+            }
+          );
+          await publishEvent(createEventDoc);
+          if (sharedFolderHandle) await writeEventToSharedFolder(targetProjectId, createEventDoc);
+          await deleteFromStore('globalDocs', doc.id);
+          showToast('Document rattaché au projet');
+          changed = true;
+          return;
+        }
+
+        if (doc.sourceType === 'project-doc') {
+          const sourceState = await getProjectState(doc.sourceProjectId);
+          if (!sourceState?.project || !canEditProjectMeta(sourceState)) {
+            showToast('Action non autorisée');
+            return;
+          }
+          if (!targetProjectId) {
+            await putEncrypted('globalDocs', {
+              id: uuidv4(),
+              name: doc.name,
+              type: doc.type,
+              size: doc.size,
+              data: doc.data,
+              theme: doc.theme || 'General',
+              notes: doc.notes || '',
+              sharingMode: nextSharingMode,
+              createdAt: Date.now(),
+              updatedAt: Date.now()
+            }, 'id');
+          } else {
+            const targetState = await getProjectState(targetProjectId);
+            if (!targetState?.project || !canEditProjectMeta(targetState)) {
+              showToast('Action non autorisée sur le projet cible');
+              return;
+            }
+            const createEventDoc = createEvent(
+              EventTypes.CREATE_DOCUMENT,
+              targetProjectId,
+              currentUser.userId,
+              {
+                docId: uuidv4(),
+                name: doc.name,
+                type: doc.type,
+                size: doc.size,
+                data: doc.data,
+                theme: doc.theme || 'General',
+                notes: doc.notes || '',
+                sharingMode: nextSharingMode,
+                linkedTaskIds: selectedTaskId ? [selectedTaskId] : []
+              }
+            );
+            await publishEvent(createEventDoc);
+            if (sharedFolderHandle) await writeEventToSharedFolder(targetProjectId, createEventDoc);
+          }
+
+          const deleteEventDoc = createEvent(
+            EventTypes.DELETE_DOCUMENT,
+            doc.sourceProjectId,
+            currentUser.userId,
+            { docId: doc.docId }
+          );
+          await publishEvent(deleteEventDoc);
+          if (sharedFolderHandle) await writeEventToSharedFolder(doc.sourceProjectId, deleteEventDoc);
+          showToast(targetProjectId ? 'Document déplacé / mis à jour' : 'Document détaché hors projet');
+          changed = true;
+        }
+      });
+
+      if (!changed) return;
+      closeDocumentBindingModal();
+      await renderGlobalDocs();
+    }
+
+    async function deleteGlobalDocument(docId) {
+      const id = String(docId || '').trim();
+      if (!id) return;
+      const docs = await getGlobalDocumentsList();
+      const doc = docs.find(d => String(d.id || '') === id);
+      if (!doc) {
+        showToast('Document introuvable');
+        return;
+      }
+
+      if (doc.sourceType === 'standalone') {
+        if (!confirm('Supprimer ce document hors projet ?')) return;
+        const db = getDatabase();
+        await deleteFromStore('globalDocs', doc.id);
+        showToast('Document supprimé');
+        addNotification('Documents', 'Document hors projet supprimé', null);
+        await renderGlobalDocs();
+        return;
+      }
+
+      if (doc.sourceType === 'project-doc') {
+        const state = await getProjectState(doc.sourceProjectId);
+        if (!state?.project) {
+          showToast('Projet source introuvable');
+          return;
+        }
+        if (!canEditProjectMeta(state)) {
+          showToast('Action non autorisee');
+          return;
+        }
+        if (!confirm('Supprimer ce document du projet ?')) return;
+        const event = createEvent(
+          EventTypes.DELETE_DOCUMENT,
+          doc.sourceProjectId,
+          currentUser.userId,
+          { docId: doc.docId }
+        );
+        await publishEvent(event);
+        if (sharedFolderHandle) await writeEventToSharedFolder(doc.sourceProjectId, event);
+        showToast('Document projet supprimé');
+        addNotification('Documents', 'Document de projet supprimé', doc.sourceProjectId);
+        await renderGlobalDocs();
+        return;
+      }
+
+      const state = await getProjectState(doc.sourceProjectId);
+      const task = (state?.tasks || []).find(t => t.taskId === doc.taskId);
+      if (!state || !task) {
+        showToast('Tâche source introuvable');
+        return;
+      }
+      if (!canEditTaskInProject(task, state)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      if (!confirm('Supprimer cette pièce jointe du projet ?')) return;
+
+      const attachments = (task.attachments || []).filter((_, idx) => idx !== Number(doc.attachmentIndex));
+      const event = createEvent(
+        EventTypes.UPDATE_TASK,
+        doc.sourceProjectId,
+        currentUser.userId,
+        { taskId: doc.taskId, changes: { attachments } }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) await writeEventToSharedFolder(doc.sourceProjectId, event);
+      showToast('Pièce jointe supprimée');
+      addNotification('Documents', 'Pièce jointe de projet supprimée', doc.sourceProjectId);
+      await renderGlobalDocs();
+    }
+
+    async function addStandaloneDocuments() {
+      const filesInput = document.getElementById('global-doc-files');
+      const themeInput = document.getElementById('global-doc-theme');
+      const modeInput = document.getElementById('global-doc-mode');
+      const files = Array.from(filesInput?.files || []);
+      const theme = themeInput?.value?.trim() || 'General';
+      const sharingMode = modeInput?.value || 'private';
+      if (files.length === 0) {
+        showToast('Sélectionnez au moins un document');
+        return;
+      }
+
+      const maxFileSize = 8 * 1024 * 1024;
+      await runWithLoading(async () => {
+      for (const file of files) {
+        if (file.size > maxFileSize) {
+          showToast(`Le fichier ${file.name} dépasse 8 Mo`);
+          return;
+        }
+      }
+
+      for (const file of files) {
+        const data = await fileToDataUrl(file);
+        await putEncrypted('globalDocs', {
+          id: uuidv4(),
+          name: file.name,
+          type: file.type || 'application/octet-stream',
+          size: file.size,
+          data,
+          theme,
+          sharingMode: normalizeSharingMode(sharingMode, 'private'),
+          createdAt: Date.now()
+        }, 'id');
+      }
+
+      if (filesInput) filesInput.value = '';
+      if (modeInput) modeInput.value = 'private';
+      });
+      showToast('Documents hors projet ajoutés');
+      addNotification('Documents', `${files.length} document(s) hors projet ajouté(s)`, null);
+      await renderGlobalDocs();
+    }
+
+    function loadGlobalMessageReadMap() {
+      try {
+        const raw = localStorage.getItem(GLOBAL_MESSAGE_READ_STORAGE_KEY);
+        const parsed = raw ? JSON.parse(raw) : {};
+        if (!parsed || typeof parsed !== 'object') return {};
+        const cleaned = {};
+        Object.entries(parsed).forEach(([key, value]) => {
+          const ts = Number(value || 0);
+          if (key && Number.isFinite(ts) && ts > 0) cleaned[String(key)] = ts;
+        });
+        return cleaned;
+      } catch {
+        return {};
+      }
+    }
+
+    function saveGlobalMessageReadMap() {
+      try {
+        localStorage.setItem(GLOBAL_MESSAGE_READ_STORAGE_KEY, JSON.stringify(globalMessageReadMap || {}));
+      } catch {
+        // ignore quota/storage errors
+      }
+    }
+
+    function getGlobalMessageHiddenGroupsStorageKey() {
+      const uid = String(currentUser?.userId || '').trim() || 'anonymous';
+      return `${GLOBAL_MESSAGE_HIDDEN_GROUPS_STORAGE_KEY}:${uid}`;
+    }
+
+    function loadGlobalMessageHiddenGroupChannels() {
+      try {
+        const raw = localStorage.getItem(getGlobalMessageHiddenGroupsStorageKey());
+        const parsed = raw ? JSON.parse(raw) : [];
+        if (!Array.isArray(parsed)) return new Set();
+        return new Set(parsed.map((id) => String(id || '').trim()).filter(Boolean));
+      } catch {
+        return new Set();
+      }
+    }
+
+    function saveGlobalMessageHiddenGroupChannels() {
+      try {
+        localStorage.setItem(
+          getGlobalMessageHiddenGroupsStorageKey(),
+          JSON.stringify(Array.from(globalMessageHiddenGroupChannels || []))
+        );
+      } catch {
+        // ignore quota/storage errors
+      }
+    }
+
+    function refreshGlobalMessageHiddenGroupsForCurrentUser() {
+      globalMessageHiddenGroupChannels = loadGlobalMessageHiddenGroupChannels();
+    }
+
+    function getGlobalConversationLastRead(conversationId) {
+      const key = String(conversationId || '').trim();
+      if (!key) return 0;
+      const value = Number(globalMessageReadMap?.[key] || 0);
+      return Number.isFinite(value) && value > 0 ? value : 0;
+    }
+
+    function markGlobalConversationRead(conversationId, items = []) {
+      const key = String(conversationId || '').trim();
+      if (!key) return false;
+      const maxTs = (items || []).reduce((acc, msg) => {
+        const ts = Number(msg?.createdAt || 0);
+        return ts > acc ? ts : acc;
+      }, 0);
+      if (!maxTs) return false;
+      if (getGlobalConversationLastRead(key) >= maxTs) return false;
+      globalMessageReadMap[key] = maxTs;
+      saveGlobalMessageReadMap();
+      return true;
+    }
+
+    function getDirectConversationId(userA, userB) {
+      const a = String(userA || '').trim();
+      const b = String(userB || '').trim();
+      if (!a || !b) return '';
+      return [a, b].sort().join('__');
+    }
+
+    function getGlobalBroadcastConversationId() {
+      return 'global__all';
+    }
+
+    function isGlobalBroadcastTarget(userId) {
+      const target = String(userId || '').trim();
+      return target === GLOBAL_MESSAGE_BROADCAST_TARGET || target === GLOBAL_MESSAGE_BROADCAST_USER_ID;
+    }
+
+    function isGlobalGroupTarget(userId) {
+      return String(userId || '').trim().startsWith(GLOBAL_MESSAGE_GROUP_TARGET_PREFIX);
+    }
+
+    function isGlobalGroupConversationId(conversationId) {
+      return String(conversationId || '').trim().startsWith(GLOBAL_MESSAGE_GROUP_CONVERSATION_PREFIX);
+    }
+
+    function normalizeGlobalMessageUserIds(userIds = []) {
+      return Array.from(new Set((userIds || [])
+        .map((id) => String(id || '').trim())
+        .filter(Boolean)))
+        .sort((a, b) => a.localeCompare(b, 'fr'));
+    }
+
+    function getGroupConversationId(userIds = []) {
+      const normalized = normalizeGlobalMessageUserIds(userIds);
+      if (normalized.length < 2) return '';
+      return `${GLOBAL_MESSAGE_GROUP_CONVERSATION_PREFIX}${normalized.join('__')}`;
+    }
+
+    function parseGroupConversationMemberIds(conversationId) {
+      const raw = String(conversationId || '').trim();
+      if (!isGlobalGroupConversationId(raw)) return [];
+      const payload = raw.slice(GLOBAL_MESSAGE_GROUP_CONVERSATION_PREFIX.length);
+      return normalizeGlobalMessageUserIds(payload.split('__'));
+    }
+
+    function buildGlobalGroupTargetUserId(conversationId) {
+      const cid = String(conversationId || '').trim();
+      if (!cid) return '';
+      return `${GLOBAL_MESSAGE_GROUP_TARGET_PREFIX}${cid}`;
+    }
+
+    function getGlobalMessageRecipientIds(msg) {
+      const fromField = Array.isArray(msg?.toUserIds) ? msg.toUserIds : [];
+      const normalizedField = normalizeGlobalMessageUserIds(fromField);
+      if (normalizedField.length > 0) return normalizedField;
+      const toUserId = String(msg?.toUserId || '').trim();
+      if (isGlobalGroupTarget(toUserId)) {
+        const fromConversation = parseGroupConversationMemberIds(String(msg?.conversationId || ''));
+        if (fromConversation.length > 0) return fromConversation;
+      }
+      if (toUserId && !isGlobalBroadcastTarget(toUserId)) {
+        const sender = String(msg?.fromUserId || '').trim();
+        return normalizeGlobalMessageUserIds([sender, toUserId]);
+      }
+      return [];
+    }
+
+    function isGlobalMessageVisibleForUser(msg, userId) {
+      const me = String(userId || '').trim();
+      if (!me || !msg) return false;
+      const fromId = String(msg.fromUserId || '').trim();
+      const toId = String(msg.toUserId || '').trim();
+      if (fromId === me) return true;
+      if (toId === me) return true;
+      if (isGlobalBroadcastTarget(toId)) return true;
+      if (!isGlobalGroupTarget(toId)) return false;
+      return getGlobalMessageRecipientIds(msg).includes(me);
+    }
+
+    function formatGlobalMessageGroupChannelLabel(memberIds = [], includeSelf = false) {
+      const me = String(currentUser?.userId || '').trim();
+      const filtered = (memberIds || []).filter((id) => includeSelf ? true : String(id || '') !== me);
+      const recipientsLabel = formatGlobalMessageRecipientLabel(filtered);
+      return recipientsLabel ? `Groupe: ${recipientsLabel}` : 'Canal de groupe';
+    }
+
+    function findGlobalGroupNameByMembers(memberIds = []) {
+      const me = String(currentUser?.userId || '').trim();
+      const normalized = Array.from(new Set((memberIds || [])
+        .map((id) => String(id || '').trim())
+        .filter((id) => id && id !== me)))
+        .sort();
+      if (normalized.length === 0) return '';
+      for (const group of (globalGroupCatalog || [])) {
+        const groupMembers = Array.from(new Set(((group?.memberUserIds || [])
+          .map((id) => String(id || '').trim())
+          .filter((id) => id && id !== me))))
+          .sort();
+        if (groupMembers.length !== normalized.length) continue;
+        if (groupMembers.every((id, idx) => id === normalized[idx])) {
+          return String(group?.name || '').trim();
+        }
+      }
+      return '';
+    }
+
+    function formatGlobalMessageNamedGroupLabel(memberIds = [], fallbackLabel = '') {
+      const groupName = findGlobalGroupNameByMembers(memberIds);
+      if (groupName) return `Groupe: ${groupName}`;
+      const fallback = String(fallbackLabel || '').trim();
+      if (fallback) return fallback;
+      return formatGlobalMessageGroupChannelLabel(memberIds);
+    }
+
+    async function ensureKnownGlobalMessageIdsLoaded() {
+      if (knownGlobalMessageIds.size > 0) return;
+      const rows = await getAllDecrypted('globalMessages', 'messageId');
+      (rows || []).forEach((row) => {
+        if (row?.messageId) knownGlobalMessageIds.add(String(row.messageId));
+      });
+    }
+
+    async function writeGlobalMessageToSharedFolder(message) {
+      if (!sharedFolderHandle || !message?.messageId) return false;
+      try {
+        const globalDir = await sharedFolderHandle.getDirectoryHandle('global', { create: true });
+        const messagesDir = await globalDir.getDirectoryHandle('messages', { create: true });
+        const eventsDir = await messagesDir.getDirectoryHandle('events', { create: true });
+        const fileName = `${Number(message.createdAt || Date.now())}_${message.messageId}.json`;
+        const fileHandle = await eventsDir.getFileHandle(fileName, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(JSON.stringify({
+          type: 'taskmda_global_message',
+          version: 1,
+          payload: message
+        }));
+        await writable.close();
+        return true;
+      } catch (error) {
+        console.warn('Global message shared write failed:', error);
+        return false;
+      }
+    }
+
+    async function syncGlobalMessagesFromSharedFolder(options = {}) {
+      if (!sharedFolderHandle) return { loaded: 0 };
+      await ensureKnownGlobalMessageIdsLoaded();
+      let loaded = 0;
+      try {
+        const globalDir = await sharedFolderHandle.getDirectoryHandle('global', { create: true });
+        const messagesDir = await globalDir.getDirectoryHandle('messages', { create: true });
+        const eventsDir = await messagesDir.getDirectoryHandle('events', { create: true });
+        for await (const entry of eventsDir.values()) {
+          if (entry.kind !== 'file' || !entry.name.endsWith('.json')) continue;
+          const file = await entry.getFile();
+          const content = await file.text();
+          let parsed = null;
+          try {
+            parsed = JSON.parse(content);
+          } catch {
+            continue;
+          }
+          if (!parsed || parsed.type !== 'taskmda_global_message' || !parsed.payload) continue;
+          const msg = parsed.payload;
+          const messageId = String(msg.messageId || '').trim();
+          if (!messageId) continue;
+          if (!msg.fromUserId || !msg.toUserId || !msg.conversationId) continue;
+          const existing = await getDecrypted('globalMessages', messageId, 'messageId');
+          const incomingCreatedAt = Number(msg.createdAt || Date.now());
+          const incomingUpdatedAt = Number(msg.updatedAt || msg.editedAt || msg.deletedAt || incomingCreatedAt);
+          const existingUpdatedAt = Number(existing?.updatedAt || existing?.editedAt || existing?.deletedAt || existing?.createdAt || 0);
+          if (existing && existingUpdatedAt >= incomingUpdatedAt) {
+            knownGlobalMessageIds.add(messageId);
+            continue;
+          }
+          const normalizedRecipientIds = getGlobalMessageRecipientIds(msg);
+          await putEncrypted('globalMessages', {
+            messageId,
+            conversationId: String(msg.conversationId || ''),
+            fromUserId: String(msg.fromUserId || ''),
+            fromName: String(msg.fromName || ''),
+            toUserId: String(msg.toUserId || ''),
+            toUserIds: normalizedRecipientIds,
+            toName: String(msg.toName || ''),
+            content: String(msg.content || ''),
+            attachments: Array.isArray(msg.attachments) ? msg.attachments : [],
+            createdAt: incomingCreatedAt,
+            editedAt: Number(msg.editedAt || 0) || undefined,
+            deletedAt: Number(msg.deletedAt || 0) || undefined,
+            updatedAt: incomingUpdatedAt,
+            source: 'shared'
+          }, 'messageId');
+          knownGlobalMessageIds.add(messageId);
+          loaded += 1;
+          if (existing) continue;
+          const me = String(currentUser?.userId || '');
+          const toUserId = String(msg.toUserId || '');
+          const isBroadcast = isGlobalBroadcastTarget(toUserId);
+          const isGroup = isGlobalGroupTarget(toUserId) || isGlobalGroupConversationId(String(msg.conversationId || ''));
+          const isForMe = toUserId === me || isBroadcast || (isGroup && normalizedRecipientIds.includes(me));
+          if (isForMe && String(msg.fromUserId || '') !== me) {
+            const hintValue = isBroadcast
+              ? GLOBAL_MESSAGE_BROADCAST_TARGET
+              : (isGroup
+                ? `${GLOBAL_MESSAGE_GROUP_SELECTION_PREFIX}${String(msg.conversationId || '').trim()}`
+                : '');
+            addNotification(
+              isBroadcast ? 'Canal general' : (isGroup ? 'Canal groupe' : 'Message hors projet'),
+              isBroadcast
+                ? `${msg.fromName || fallbackDirectoryName(msg.fromUserId)} a publie dans le canal general`
+                : (isGroup
+                  ? `${msg.fromName || fallbackDirectoryName(msg.fromUserId)} a ecrit dans ${String(msg.toName || 'un canal de groupe')}`
+                  : `${msg.fromName || fallbackDirectoryName(msg.fromUserId)} vous a ecrit`),
+              null,
+              {
+                targetView: 'messages',
+                actorUserId: msg.fromUserId,
+                actorName: msg.fromName || '',
+                targetType: 'global-message',
+                targetId: messageId,
+                hint: hintValue,
+                dedupeKey: `global-message:${messageId}`,
+                linkLabel: isBroadcast || isGroup ? 'Ouvrir le canal' : 'Ouvrir la messagerie'
+              }
+            );
+          }
+        }
+      } catch (error) {
+        if (error?.name !== 'NotFoundError') {
+          console.warn('Global message shared sync failed:', error);
+        }
+      }
+      if (loaded > 0 && workspaceMode === 'global' && globalWorkspaceView === 'messages') {
+        await renderGlobalMessages();
+      }
+      return { loaded };
+    }
+
+    async function getGlobalMessageContacts(query = '') {
+      const users = await getKnownUsersForGlobalGroups();
+      const me = String(currentUser?.userId || '');
+      const allMessages = await getAllDecrypted('globalMessages', 'messageId');
+      const scoped = (allMessages || [])
+        .filter((msg) => !msg?.deletedAt)
+        .filter((msg) => isGlobalMessageVisibleForUser(msg, me));
+      const lastByUser = new Map();
+      scoped.forEach((msg) => {
+        const other = String(msg.fromUserId || '') === me ? String(msg.toUserId || '') : String(msg.fromUserId || '');
+        if (!other) return;
+        const current = lastByUser.get(other);
+        if (!current || Number(msg.createdAt || 0) > Number(current.createdAt || 0)) {
+          lastByUser.set(other, msg);
+        }
+      });
+      const allContacts = users
+        .filter(u => String(u.userId || '') && String(u.userId) !== me)
+        .sort((a, b) => {
+          const aTs = Number(lastByUser.get(a.userId)?.createdAt || 0);
+          const bTs = Number(lastByUser.get(b.userId)?.createdAt || 0);
+          if (aTs !== bTs) return bTs - aTs;
+          return String(a.name || '').localeCompare(String(b.name || ''), 'fr');
+        });
+      const filteredUsers = allContacts.filter(u => matchesQuery([u.name, u.email], query));
+      return { contacts: filteredUsers, allContacts, messages: scoped };
+    }
+
+    // Rend la messagerie hors projet.
+    // La couche de templates HTML est deleguee a taskmda-social.js
+    // pour limiter la complexite visuelle de ce fichier central.
+    function formatGlobalMessageRecipientLabel(recipientIds = [], contacts = []) {
+      const labels = recipientIds
+        .map((id) => {
+          const row = contacts.find(c => String(c.userId || '') === String(id || ''))
+            || knownUsersCache.get(String(id || '').trim())
+            || null;
+          const identity = resolveKnownUserIdentity(id, row?.name || '');
+          return identity.name || fallbackDirectoryName(id);
+        })
+        .filter(Boolean);
+      if (labels.length === 0) return '';
+      if (labels.length === 1) return labels[0];
+      if (labels.length === 2) return `${labels[0]} et ${labels[1]}`;
+      return `${labels[0]}, ${labels[1]} +${labels.length - 2}`;
+    }
+
+    function resetGlobalMessageRenderLimits() {
+      globalMessageContactsRenderLimit = GLOBAL_MESSAGE_CONTACTS_INITIAL_BATCH;
+      globalMessageThreadRenderLimit = GLOBAL_MESSAGE_THREAD_INITIAL_BATCH;
+    }
+
+    async function renderGlobalMessages(options = {}) {
+      const keepThreadAnchor = Boolean(options?.keepThreadAnchor);
+      const forceScrollBottom = Boolean(options?.forceScrollBottom);
+      const contactsList = document.getElementById('global-message-contacts-list');
+      const contactSearch = document.getElementById('global-message-contact-search');
+      const thread = document.getElementById('global-message-thread');
+      const empty = document.getElementById('global-message-thread-empty');
+      const input = document.getElementById('global-message-input');
+      const targetLabel = document.getElementById('global-message-target-label');
+      const groupBadge = document.getElementById('global-message-group-badge');
+      const groupChannelSelect = document.getElementById('global-message-group-channel-select');
+      if (!contactsList || !thread || !empty || !input) return;
+      const query = String(contactSearch?.value || '').trim();
+      const { contacts, allContacts, messages } = await getGlobalMessageContacts(query);
+      const me = String(currentUser?.userId || '');
+
+      // Rafraîchir le sélecteur de canaux de groupe
+      await populateGlobalMessageGroupChannelSelect();
+      if (!globalMessagePeerUserId) {
+        globalMessagePeerUserId = GLOBAL_MESSAGE_BROADCAST_TARGET;
+      }
+      const hasSelectedContact = allContacts.some(c => c.userId === globalMessagePeerUserId);
+      if (globalMessagePeerUserId !== GLOBAL_MESSAGE_BROADCAST_TARGET && !hasSelectedContact) {
+        globalMessagePeerUserId = GLOBAL_MESSAGE_BROADCAST_TARGET;
+      }
+      const validRecipientIds = new Set(allContacts.map(c => String(c.userId || '')));
+      globalMessageRecipientUserIds = new Set(
+        Array.from(globalMessageRecipientUserIds || []).filter((id) => validRecipientIds.has(String(id || '')))
+      );
+
+      const visibleMessages = (messages || []).filter((msg) => isGlobalMessageVisibleForUser(msg, me));
+      const groupChannelMap = new Map();
+      visibleMessages.forEach((msg) => {
+        const conversationId = String(msg.conversationId || '').trim();
+        if (!isGlobalGroupConversationId(conversationId)) return;
+        if (globalMessageHiddenGroupChannels?.has(conversationId)) return;
+        const memberIds = getGlobalMessageRecipientIds(msg);
+        if (!memberIds.includes(me)) return;
+        const previous = groupChannelMap.get(conversationId);
+        const createdAt = Number(msg.createdAt || 0);
+        const label = String(msg.toName || '').trim() || formatGlobalMessageGroupChannelLabel(memberIds);
+        if (!previous || createdAt > Number(previous.lastCreatedAt || 0)) {
+          groupChannelMap.set(conversationId, {
+            conversationId,
+            memberIds,
+            label,
+            lastCreatedAt: createdAt
+          });
+        }
+      });
+      if (globalMessageActiveGroupConversationId && !groupChannelMap.has(globalMessageActiveGroupConversationId)) {
+        globalMessageActiveGroupConversationId = '';
+      }
+
+      const isGroupView = Boolean(globalMessageActiveGroupConversationId);
+      const isBroadcastView = !isGroupView && globalMessagePeerUserId === GLOBAL_MESSAGE_BROADCAST_TARGET;
+      const activeConversationId = isGroupView
+        ? globalMessageActiveGroupConversationId
+        : (isBroadcastView
+          ? getGlobalBroadcastConversationId()
+          : getDirectConversationId(currentUser?.userId, globalMessagePeerUserId));
+
+      const activeItems = visibleMessages
+        .filter((msg) => String(msg.conversationId || '') === activeConversationId)
+        .sort((a, b) => Number(a.createdAt || 0) - Number(b.createdAt || 0));
+      if (activeConversationId && activeItems.length > 0) {
+        markGlobalConversationRead(activeConversationId, activeItems);
+      }
+
+      const unreadByUser = new Map();
+      const unreadByGroup = new Map();
+      let unreadBroadcast = 0;
+      (visibleMessages || []).forEach((msg) => {
+        const fromId = String(msg.fromUserId || '');
+        const toId = String(msg.toUserId || '');
+        const conversationId = String(msg.conversationId || '').trim();
+        if (fromId === me || !conversationId) return;
+        if (!isGlobalMessageVisibleForUser(msg, me)) return;
+        if (!conversationId) return;
+        const lastRead = getGlobalConversationLastRead(conversationId);
+        const createdAt = Number(msg.createdAt || 0);
+        if (!createdAt || createdAt <= lastRead) return;
+        if (isGlobalBroadcastTarget(toId)) {
+          unreadBroadcast += 1;
+          return;
+        }
+        if (isGlobalGroupConversationId(conversationId) || isGlobalGroupTarget(toId)) {
+          unreadByGroup.set(conversationId, Number(unreadByGroup.get(conversationId) || 0) + 1);
+          return;
+        }
+        unreadByUser.set(fromId, Number(unreadByUser.get(fromId) || 0) + 1);
+      });
+
+      const contactItems = [
+        {
+          id: GLOBAL_MESSAGE_BROADCAST_TARGET,
+          isBroadcast: true,
+          clickHandler: 'selectGlobalMessageChannel',
+          isActive: isBroadcastView && !isGroupView,
+          name: 'Canal general',
+          status: 'Tous les agents connus',
+          unreadCount: unreadBroadcast,
+          avatarDataUrl: '',
+          initials: 'ALL',
+          avatarColor: 'linear-gradient(135deg,#1f4b92,#3b82f6)'
+        },
+        ...Array.from(groupChannelMap.values())
+          .sort((a, b) => Number(b.lastCreatedAt || 0) - Number(a.lastCreatedAt || 0))
+          .map((channel) => {
+            const membersWithoutMe = (channel.memberIds || []).filter((id) => id !== me);
+            return {
+              id: `${GLOBAL_MESSAGE_GROUP_SELECTION_PREFIX}${channel.conversationId}`,
+              isBroadcast: false,
+              isGroup: true,
+              groupRemovable: true,
+              conversationId: channel.conversationId,
+              clickHandler: 'selectGlobalMessageChannel',
+              isActive: channel.conversationId === globalMessageActiveGroupConversationId,
+              name: channel.label || formatGlobalMessageGroupChannelLabel(channel.memberIds),
+              status: `${membersWithoutMe.length} agent(s)`,
+              subtitle: formatGlobalMessageRecipientLabel(membersWithoutMe, allContacts),
+              unreadCount: Number(unreadByGroup.get(channel.conversationId) || 0),
+              avatarDataUrl: '',
+              initials: 'GRP',
+              avatarColor: 'linear-gradient(135deg,#0f766e,#22c55e)'
+            };
+          }),
+        ...contacts.map((user) => {
+          const identity = resolveKnownUserIdentity(user.userId, user.name || '');
+          return {
+            id: String(user.userId || ''),
+            isBroadcast: false,
+            clickHandler: 'selectGlobalMessageChannel',
+            isActive: !isGroupView && user.userId === globalMessagePeerUserId,
+            name: identity.name || fallbackDirectoryName(user.userId),
+            status: user.email || 'Agent connu',
+            unreadCount: Number(unreadByUser.get(user.userId) || 0),
+            avatarDataUrl: identity.avatarDataUrl || '',
+            initials: getInitials(identity.name || 'U'),
+            avatarColor: stringToColor(identity.userId || identity.name || '')
+          };
+        })
+      ];
+      const limitedContactItems = contactItems.slice(0, Math.max(1, globalMessageContactsRenderLimit));
+      const hasMoreContacts = contactItems.length > limitedContactItems.length;
+      contactsList.dataset.hasMore = hasMoreContacts ? '1' : '0';
+      contactsList.innerHTML = window.TaskMDASocial?.renderContactsList
+        ? window.TaskMDASocial.renderContactsList({
+            items: limitedContactItems,
+            broadcastTarget: GLOBAL_MESSAGE_BROADCAST_TARGET,
+            multiSelectedIds: globalMessageRecipientUserIds,
+            escapeHtml
+          })
+        : '<p class="text-sm text-slate-500">Aucun agent connu.</p>';
+      if (hasMoreContacts) {
+        contactsList.insertAdjacentHTML('beforeend', '<p class="text-[11px] text-slate-500 text-center py-1">Faites défiler pour charger plus de canaux…</p>');
+      }
+
+      // Le sélecteur de groupes est déjà rempli par populateGlobalMessageGroupChannelSelect() appelé plus haut
+
+      input.disabled = false;
+      const maxThreadItems = Math.max(1, globalMessageThreadRenderLimit);
+      const hasMoreThreadItems = activeItems.length > maxThreadItems;
+      const items = hasMoreThreadItems ? activeItems.slice(activeItems.length - maxThreadItems) : activeItems;
+      thread.dataset.hasMore = hasMoreThreadItems ? '1' : '0';
+      if (targetLabel) {
+        if (isGroupView) {
+          const activeChannel = groupChannelMap.get(globalMessageActiveGroupConversationId);
+          const members = (activeChannel?.memberIds?.length
+            ? activeChannel.memberIds
+            : parseGroupConversationMemberIds(globalMessageActiveGroupConversationId));
+          const groupLabel = formatGlobalMessageNamedGroupLabel(members, activeChannel?.label || '');
+          targetLabel.textContent = `Destinataire: ${groupLabel}`;
+          input.placeholder = `Ecrire dans ${groupLabel}...`;
+          if (groupBadge) {
+            groupBadge.textContent = groupLabel;
+            groupBadge.classList.remove('hidden');
+          }
+        } else if (globalMessageRecipientUserIds.size > 0) {
+          const selectedIds = Array.from(globalMessageRecipientUserIds);
+          const label = formatGlobalMessageRecipientLabel(selectedIds, allContacts);
+          if (selectedIds.length > 1) {
+            const groupLabel = formatGlobalMessageNamedGroupLabel(selectedIds);
+            targetLabel.textContent = `Destinataire: ${groupLabel}`;
+            input.placeholder = `Ecrire dans ${groupLabel}...`;
+            if (groupBadge) {
+              groupBadge.textContent = groupLabel;
+              groupBadge.classList.remove('hidden');
+            }
+          } else {
+            targetLabel.textContent = `Destinataire: ${label}`;
+            input.placeholder = `Ecrire un message prive a ${label}...`;
+            groupBadge?.classList.add('hidden');
+          }
+        } else if (isBroadcastView) {
+          targetLabel.textContent = 'Destinataire: Canal general (tous les agents connus)';
+          input.placeholder = 'Ecrire un message pour tous les agents connus...';
+          groupBadge?.classList.add('hidden');
+        } else {
+          const targetIdentity = resolveKnownUserIdentity(globalMessagePeerUserId, allContacts.find(c => c.userId === globalMessagePeerUserId)?.name || '');
+          targetLabel.textContent = `Destinataire: ${targetIdentity.name}`;
+          input.placeholder = `Ecrire un message prive a ${targetIdentity.name}...`;
+          groupBadge?.classList.add('hidden');
+        }
+      }
+
+      if (items.length === 0) {
+        empty.classList.remove('hidden');
+        thread.classList.add('hidden');
+        thread.innerHTML = isBroadcastView
+          ? '<p class="text-slate-500 text-center py-8">Aucun message dans le canal general.</p>'
+          : (isGroupView
+            ? '<p class="text-slate-500 text-center py-8">Aucun message dans ce canal de groupe.</p>'
+            : '<p class="text-slate-500 text-center py-8">Aucun message pour cette discussion.</p>');
+        return;
+      }
+
+      empty.classList.add('hidden');
+      thread.classList.remove('hidden');
+
+      const threadItems = items.map((msg) => {
+        const mine = String(msg.fromUserId || '') === String(currentUser?.userId || '');
+        const identity = resolveKnownUserIdentity(msg.fromUserId, msg.fromName || '');
+        const identityName = mine ? (currentUser?.name || identity.name || 'Vous') : (identity.name || fallbackDirectoryName(msg.fromUserId));
+        const timeLabel = new Date(Number(msg.createdAt || Date.now())).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        const isEditing = mine && editingGlobalMessageId === String(msg.messageId || '');
+        const editorHtml = isEditing
+          ? `
+            <div class="space-y-2">
+              <textarea id="global-message-edit-input-${escapeHtml(String(msg.messageId || ''))}" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">${escapeHtml(editingGlobalMessageDraft)}</textarea>
+              <div class="flex items-center gap-3 text-xs">
+                <button onclick="saveEditedGlobalMessage('${escapeHtml(String(msg.messageId || ''))}')" class="text-primary hover:underline">Enregistrer</button>
+                <button onclick="cancelEditGlobalMessage()" class="text-slate-600 hover:underline">Annuler</button>
+              </div>
+            </div>
+          `
+          : '';
+        const footerActionsHtml = mine && !isEditing
+          ? `
+            <div class="mt-2 flex items-center gap-3 text-xs">
+              <button onclick="startEditGlobalMessage('${escapeHtml(String(msg.messageId || ''))}')" class="text-primary hover:underline">Editer</button>
+              <button onclick="deleteGlobalMessage('${escapeHtml(String(msg.messageId || ''))}')" class="text-rose-600 hover:underline">Supprimer</button>
+            </div>
+          `
+          : '';
+        return {
+          mine,
+          author: identityName,
+          timeLabel,
+          content: msg.content || '',
+          attachmentsHtml: renderMessageAttachments(msg.attachments),
+          editedLabel: msg.editedAt ? '(modifié)' : '',
+          editorHtml,
+          footerActionsHtml,
+          avatarDataUrl: (mine ? currentUser?.avatarDataUrl : identity.avatarDataUrl) || '',
+          avatarInitials: getInitials(identityName),
+          avatarColor: stringToColor(msg.fromUserId || identityName || '')
+        };
+      });
+      const prevScrollHeight = thread.scrollHeight;
+      const prevScrollTop = thread.scrollTop;
+      thread.innerHTML = window.TaskMDASocial?.renderThread
+        ? window.TaskMDASocial.renderThread({
+            items: threadItems,
+            escapeHtml,
+            renderMarkdown: (text) => renderSafeMarkdown(text)
+          })
+        : '';
+      if (hasMoreThreadItems) {
+        thread.insertAdjacentHTML('afterbegin', '<p class="text-[11px] text-slate-500 text-center pb-2">Faites défiler vers le haut pour charger les messages précédents…</p>');
+      }
+      if (keepThreadAnchor) {
+        const nextHeight = thread.scrollHeight;
+        thread.scrollTop = Math.max(0, nextHeight - prevScrollHeight + prevScrollTop);
+      } else if (forceScrollBottom || !hasMoreThreadItems) {
+        thread.scrollTop = thread.scrollHeight;
+      }
+    }
+
+    async function selectGlobalMessageChannel(channelId) {
+      const next = String(channelId || '').trim();
+      resetGlobalMessageRenderLimits();
+      if (!next || next === GLOBAL_MESSAGE_BROADCAST_TARGET) {
+        globalMessageActiveGroupConversationId = '';
+        globalMessagePeerUserId = GLOBAL_MESSAGE_BROADCAST_TARGET;
+      } else if (next.startsWith(GLOBAL_MESSAGE_GROUP_SELECTION_PREFIX)) {
+        const conversationId = next.slice(GLOBAL_MESSAGE_GROUP_SELECTION_PREFIX.length);
+        if (conversationId) {
+          globalMessageHiddenGroupChannels.delete(conversationId);
+          saveGlobalMessageHiddenGroupChannels();
+        }
+        globalMessageActiveGroupConversationId = conversationId;
+        globalMessagePeerUserId = GLOBAL_MESSAGE_BROADCAST_TARGET;
+      } else {
+        globalMessageActiveGroupConversationId = '';
+        globalMessagePeerUserId = next;
+      }
+      globalMessageRecipientUserIds = new Set();
+      await renderGlobalMessages();
+    }
+
+    function selectGlobalMessagePeer(userId) {
+      selectGlobalMessageChannel(userId);
+    }
+
+    async function toggleGlobalMessageRecipient(userId) {
+      const id = String(userId || '').trim();
+      if (!id || id === GLOBAL_MESSAGE_BROADCAST_TARGET) return;
+      if (globalMessageRecipientUserIds.has(id)) {
+        globalMessageRecipientUserIds.delete(id);
+      } else {
+        globalMessageRecipientUserIds.add(id);
+      }
+      await renderGlobalMessages();
+    }
+
+    async function selectAllGlobalMessageRecipients() {
+      const users = await getKnownUsersForGlobalGroups();
+      const me = String(currentUser?.userId || '');
+      globalMessageRecipientUserIds = new Set(
+        (users || [])
+          .map(u => String(u?.userId || '').trim())
+          .filter(id => id && id !== me)
+      );
+      await renderGlobalMessages();
+    }
+
+    async function clearGlobalMessageRecipients() {
+      globalMessageRecipientUserIds = new Set();
+      await renderGlobalMessages();
+    }
+
+    async function handleGlobalMessageContactsScroll(event) {
+      const el = event?.currentTarget;
+      if (!(el instanceof HTMLElement)) return;
+      if (el.dataset.hasMore !== '1') return;
+      const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 56;
+      if (!nearBottom) return;
+      globalMessageContactsRenderLimit += GLOBAL_MESSAGE_CONTACTS_BATCH_SIZE;
+      await renderGlobalMessages();
+    }
+
+    async function handleGlobalMessageThreadScroll(event) {
+      const el = event?.currentTarget;
+      if (!(el instanceof HTMLElement)) return;
+      if (el.dataset.hasMore !== '1') return;
+      if (el.scrollTop > 28) return;
+      globalMessageThreadRenderLimit += GLOBAL_MESSAGE_THREAD_BATCH_SIZE;
+      await renderGlobalMessages({ keepThreadAnchor: true });
+    }
+
+    async function openGlobalMessageGroupChannelFromCatalog(groupKey) {
+      const key = String(groupKey || '').trim();
+      if (!key) return;
+      resetGlobalMessageRenderLimits();
+      await refreshGlobalTaxonomyCache();
+      const me = String(currentUser?.userId || '').trim();
+      const group = (globalGroupCatalog || []).find((item) => String(item.groupKey || '').trim() === key);
+      if (!group) return;
+      const memberIds = normalizeGlobalMessageUserIds([
+        me,
+        ...((group.memberUserIds || []).map((id) => String(id || '').trim()))
+      ]);
+      if (memberIds.length < 2) {
+        showToast('Ce groupe ne contient aucun autre agent.');
+        return;
+      }
+      const conversationId = getGroupConversationId(memberIds);
+      if (!conversationId) return;
+      globalMessageHiddenGroupChannels.delete(conversationId);
+      saveGlobalMessageHiddenGroupChannels();
+      globalMessageActiveGroupConversationId = conversationId;
+      globalMessagePeerUserId = GLOBAL_MESSAGE_BROADCAST_TARGET;
+      globalMessageRecipientUserIds = new Set(memberIds.filter((id) => id !== me));
+      await renderGlobalMessages();
+    }
+
+    async function hideGlobalMessageGroupChannel(conversationId) {
+      const id = String(conversationId || '').trim();
+      if (!id || !isGlobalGroupConversationId(id)) return;
+      globalMessageHiddenGroupChannels.add(id);
+      saveGlobalMessageHiddenGroupChannels();
+      if (globalMessageActiveGroupConversationId === id) {
+        globalMessageActiveGroupConversationId = '';
+        globalMessagePeerUserId = GLOBAL_MESSAGE_BROADCAST_TARGET;
+      }
+      globalMessageRecipientUserIds = new Set();
+      await renderGlobalMessages();
+      showToast('Canal de groupe masqué pour votre session locale.');
+    }
+
+    function normalizeMentionHandle(value) {
+      const raw = String(value || '').toLowerCase();
+      const noAccent = raw.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      return noAccent.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24) || 'agent';
+    }
+
+    async function buildGlobalMentionCatalog() {
+      const users = await getKnownUsersForGlobalGroups();
+      const byHandle = new Map();
+      const byDisplayName = new Map();
+      const byUserId = new Map();
+      const used = new Set();
+      users.forEach((user) => {
+        const userId = String(user?.userId || '').trim();
+        if (!userId) return;
+        const displayName = String(user?.name || fallbackDirectoryName(userId)).trim();
+        if (!displayName) return;
+        let handle = normalizeMentionHandle(displayName);
+        if (!handle) handle = `agent-${userId.slice(0, 6)}`;
+        let suffix = 2;
+        let unique = handle;
+        while (used.has(unique)) {
+          unique = `${handle}-${suffix++}`;
+        }
+        used.add(unique);
+        const row = { userId, name: displayName, email: String(user?.email || ''), handle: unique };
+        byHandle.set(unique, row);
+        byDisplayName.set(normalizeSearch(displayName), row);
+        byUserId.set(userId, row);
+      });
+      return { byHandle, byDisplayName, byUserId, users: Array.from(byUserId.values()) };
+    }
+
+    function extractMentionedUserIdsFromText(content, catalog) {
+      const text = String(content || '');
+      const ids = new Set();
+      if (!catalog) return ids;
+
+      const handleRegex = /@([a-z0-9][a-z0-9._-]{1,30})/gi;
+      let match = null;
+      while ((match = handleRegex.exec(text)) !== null) {
+        const handle = normalizeMentionHandle(match[1]);
+        const user = catalog.byHandle.get(handle);
+        if (user?.userId) ids.add(user.userId);
+      }
+
+      const bracketRegex = /@\[([^\]]{2,80})\]/g;
+      while ((match = bracketRegex.exec(text)) !== null) {
+        const key = normalizeSearch(match[1]);
+        const user = catalog.byDisplayName.get(key);
+        if (user?.userId) ids.add(user.userId);
+      }
+      return ids;
+    }
+
+    async function updateGlobalFeedMentionCounter() {
+      const counter = document.getElementById('global-feed-mention-counter');
+      const input = document.getElementById('global-feed-input');
+      if (!counter) return;
+      const quill = projectDescriptionQuillEditors.get('global-feed-editor');
+      let catalog = globalFeedMentionCatalogCache;
+      if (!catalog) {
+        catalog = await buildGlobalMentionCatalog();
+        globalFeedMentionCatalogCache = catalog;
+      }
+      const textToScan = quill ? (quill.getText() || '') : String(input?.value || '');
+      const mentionsCount = extractMentionedUserIdsFromText(textToScan, catalog).size;
+      const label = mentionsCount > 1 ? `${mentionsCount} mentions detectees` : `${mentionsCount} mention detectee`;
+      counter.textContent = label;
+      counter.classList.toggle('is-active', mentionsCount > 0);
+      counter.setAttribute('title', mentionsCount > 0
+        ? `${mentionsCount} agent(s) sera/seront notifie(s) a la publication`
+        : 'Ajoutez des @mentions pour notifier des agents');
+    }
+
+    function renderGlobalFeedContentHtml(content, catalog) {
+      const text = String(content || '');
+      const tokens = [];
+      const tokenPrefix = '__MENTION_TOKEN_';
+      let tokenized = text.replace(/@\[(.+?)\]/g, (_full, name) => {
+        const user = catalog?.byDisplayName?.get(normalizeSearch(name));
+        const label = user ? `${user.name} (@${user.handle})` : String(name || '');
+        const html = `<span class="feed-mention">@${escapeHtml(label)}</span>`;
+        const key = `${tokenPrefix}${tokens.length}__`;
+        tokens.push({ key, html });
+        return key;
+      });
+      tokenized = tokenized.replace(/@([a-z0-9][a-z0-9._-]{1,30})/gi, (_full, handle) => {
+        const user = catalog?.byHandle?.get(normalizeMentionHandle(handle));
+        const label = user ? `${user.name} (@${user.handle})` : `@${handle}`;
+        const html = `<span class="feed-mention">${escapeHtml(label)}</span>`;
+        const key = `${tokenPrefix}${tokens.length}__`;
+        tokens.push({ key, html });
+        return key;
+      });
+      let html = sanitizeProjectDescriptionHtml(tokenized);
+      tokens.forEach((token) => {
+        html = html.replace(token.key, token.html);
+      });
+      return html;
+    }
+
+    async function ensureKnownGlobalPostIdsLoaded() {
+      if (knownGlobalPostIds.size > 0) return;
+      const rows = await getAllDecrypted('globalPosts', 'postId');
+      (rows || []).forEach((row) => {
+        if (row?.postId) knownGlobalPostIds.add(String(row.postId));
+      });
+    }
+
+    async function writeGlobalFeedPostToSharedFolder(post) {
+      if (!sharedFolderHandle || !post?.postId) return false;
+      try {
+        const globalDir = await sharedFolderHandle.getDirectoryHandle('global', { create: true });
+        const feedDir = await globalDir.getDirectoryHandle('feed', { create: true });
+        const eventsDir = await feedDir.getDirectoryHandle('events', { create: true });
+        const fileName = `${Number(post.createdAt || Date.now())}_${post.postId}.json`;
+        const fileHandle = await eventsDir.getFileHandle(fileName, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(JSON.stringify({
+          type: 'taskmda_global_post',
+          version: 1,
+          payload: post
+        }));
+        await writable.close();
+        return true;
+      } catch (error) {
+        console.warn('Global feed post shared write failed:', error);
+        return false;
+      }
+    }
+
+    async function syncGlobalFeedFromSharedFolder() {
+      if (!sharedFolderHandle) return { loaded: 0 };
+      await ensureKnownGlobalPostIdsLoaded();
+      let loaded = 0;
+      try {
+        const globalDir = await sharedFolderHandle.getDirectoryHandle('global', { create: true });
+        const feedDir = await globalDir.getDirectoryHandle('feed', { create: true });
+        const eventsDir = await feedDir.getDirectoryHandle('events', { create: true });
+        for await (const entry of eventsDir.values()) {
+          if (entry.kind !== 'file' || !entry.name.endsWith('.json')) continue;
+          const file = await entry.getFile();
+          const content = await file.text();
+          let parsed = null;
+          try {
+            parsed = JSON.parse(content);
+          } catch {
+            continue;
+          }
+          if (!parsed || parsed.type !== 'taskmda_global_post' || !parsed.payload) continue;
+          const post = parsed.payload;
+          const postId = String(post.postId || '').trim();
+          if (!postId || knownGlobalPostIds.has(postId)) continue;
+          await putEncrypted('globalPosts', {
+            postId,
+            authorUserId: String(post.authorUserId || ''),
+            authorName: String(post.authorName || ''),
+            content: String(post.content || ''),
+            mentions: Array.isArray(post.mentions) ? post.mentions.map((id) => String(id || '').trim()).filter(Boolean) : [],
+            refs: Array.isArray(post.refs) ? post.refs : [],
+            createdAt: Number(post.createdAt || Date.now()),
+            source: 'shared',
+            isAuto: Boolean(post.isAuto),
+            autoKind: String(post.autoKind || '').trim(),
+            sourceEventId: String(post.sourceEventId || '').trim()
+          }, 'postId');
+          knownGlobalPostIds.add(postId);
+          loaded += 1;
+
+          const me = String(currentUser?.userId || '');
+          const isMentioned = Array.isArray(post.mentions) && post.mentions.map((id) => String(id || '')).includes(me);
+          if (me && isMentioned && String(post.authorUserId || '') !== me) {
+            addNotification('Mention', `${post.authorName || fallbackDirectoryName(post.authorUserId)} vous a mentionne`, null, {
+              targetView: 'feed',
+              targetType: 'global-post',
+              targetId: postId,
+              actorUserId: post.authorUserId || '',
+              actorName: post.authorName || '',
+              dedupeKey: `global-post-mention:${postId}:${me}`,
+              linkLabel: "Ouvrir le post"
+            });
+          }
+        }
+      } catch (error) {
+        if (error?.name !== 'NotFoundError') {
+          console.warn('Global feed shared sync failed:', error);
+        }
+      }
+      if (loaded > 0 && workspaceMode === 'global' && globalWorkspaceView === 'feed') {
+        await renderGlobalFeed();
+      }
+      return { loaded };
+    }
+
+    async function populateGlobalFeedComposerContext() {
+      const mentionSelect = document.getElementById('global-feed-mention-select');
+      const projectSelect = document.getElementById('global-feed-project-ref');
+      const taskSelect = document.getElementById('global-feed-task-ref');
+      const calendarSelect = document.getElementById('global-feed-calendar-ref');
+      if (!mentionSelect || !projectSelect || !taskSelect || !calendarSelect) return null;
+
+      const mentionCatalog = await buildGlobalMentionCatalog();
+      globalFeedMentionCatalogCache = mentionCatalog;
+      const mentionOptions = mentionCatalog.users
+        .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'fr'))
+        .map((u) => `<option value="${escapeHtml(u.userId)}">${escapeHtml(`${u.name} (@${u.handle})`)}</option>`)
+        .join('');
+      mentionSelect.innerHTML = `<option value="">Choisir un agent à mentionner...</option>${mentionOptions}`;
+
+      const projects = await getAllProjects();
+      projectSelect.innerHTML = `<option value="">Reference projet (optionnel)</option>${(projects || [])
+        .filter((p) => p && p.projectId)
+        .map((p) => `<option value="${escapeHtml(p.projectId)}">${escapeHtml(p.name || 'Projet')}</option>`).join('')}`;
+
+      const allTasks = await getGlobalTasksList();
+      taskSelect.innerHTML = `<option value="">Reference tache (optionnel)</option>${(allTasks || [])
+        .filter((t) => !t.archivedAt)
+        .map((t) => `<option value="${escapeHtml(buildGlobalTaskRef(t))}">${escapeHtml(`${t.title || 'Tache'} • ${t.sourceProjectName || 'Hors projet'}`)}</option>`).join('')}`;
+
+      const infos = await getAllDecrypted('globalCalendarItems', 'id');
+      calendarSelect.innerHTML = `<option value="">Reference info calendrier (optionnel)</option>${(infos || [])
+        .filter((i) => !i.archivedAt)
+        .map((i) => `<option value="${escapeHtml(i.id)}">${escapeHtml(`${i.title || 'Info'} • ${formatDate(i.date)}`)}</option>`).join('')}`;
+
+      await updateGlobalFeedMentionCounter();
+      return mentionCatalog;
+    }
+
+    let editingGlobalFeedPostId = null;
+
+    function toggleGlobalFeedComposerFullscreen() {
+      const panel = document.querySelector('.feed-composer-panel');
+      const icon = document.getElementById('global-feed-fullscreen-icon');
+      if (!panel || !icon) return;
+      
+      const isFullscreen = panel.classList.toggle('composer-fullscreen');
+      document.body.classList.toggle('overflow-hidden', isFullscreen);
+      
+      if (isFullscreen) {
+        icon.textContent = 'close_fullscreen';
+        icon.parentElement.title = "Réduire";
+      } else {
+        icon.textContent = 'open_in_full';
+        icon.parentElement.title = "Plein écran";
+      }
+    }
+
+    function cancelEditGlobalFeedPost() {
+      editingGlobalFeedPostId = null;
+      document.getElementById('global-feed-composer-title').textContent = "Nouveau post d'information";
+      document.getElementById('global-feed-post-btn-label').textContent = "Publier";
+      document.getElementById('global-feed-post-btn-icon').textContent = "send";
+      const cancelBtn = document.getElementById('btn-global-feed-cancel');
+      if (cancelBtn) cancelBtn.classList.add('hidden');
+      
+      const panel = document.querySelector('.feed-composer-panel');
+      if (panel && panel.classList.contains('composer-fullscreen')) {
+        toggleGlobalFeedComposerFullscreen();
+      }
+
+      const quill = projectDescriptionQuillEditors.get('global-feed-editor');
+      if (quill) quill.root.innerHTML = '';
+      
+      const input = document.getElementById('global-feed-input');
+      const projectSelect = document.getElementById('global-feed-project-ref');
+      const taskSelect = document.getElementById('global-feed-task-ref');
+      const calendarSelect = document.getElementById('global-feed-calendar-ref');
+      const mentionSelect = document.getElementById('global-feed-mention-select');
+      
+      if (input) input.value = '';
+      if (projectSelect) projectSelect.value = '';
+      if (taskSelect) taskSelect.value = '';
+      if (calendarSelect) calendarSelect.value = '';
+      if (mentionSelect) mentionSelect.value = '';
+      
+      updateGlobalFeedMentionCounter();
+    }
+
+    async function startEditGlobalFeedPost(postId) {
+      const existing = await getDecrypted('globalPosts', postId, 'postId');
+      if (!existing || existing.deletedAt || existing.isAuto) return;
+      if (String(existing.authorUserId || '') !== String(currentUser?.userId || '')) {
+        showToast('Action non autorisée');
+        return;
+      }
+      editingGlobalFeedPostId = postId;
+      document.getElementById('global-feed-composer-title').textContent = "Édition du post";
+      document.getElementById('global-feed-post-btn-label').textContent = "Mettre à jour";
+      document.getElementById('global-feed-post-btn-icon').textContent = "save";
+      const cancelBtn = document.getElementById('btn-global-feed-cancel');
+      if (cancelBtn) cancelBtn.classList.remove('hidden');
+
+      const quill = projectDescriptionQuillEditors.get('global-feed-editor');
+      const input = document.getElementById('global-feed-input');
+      if (quill) {
+        quill.clipboard.dangerouslyPasteHTML(existing.content || '');
+      } else if (input) {
+        input.value = existing.content || '';
+      }
+      
+      const projectSelect = document.getElementById('global-feed-project-ref');
+      const taskSelect = document.getElementById('global-feed-task-ref');
+      const calendarSelect = document.getElementById('global-feed-calendar-ref');
+      
+      if (projectSelect) projectSelect.value = '';
+      if (taskSelect) taskSelect.value = '';
+      if (calendarSelect) calendarSelect.value = '';
+      
+      if (Array.isArray(existing.refs)) {
+        existing.refs.forEach(ref => {
+          if (ref.type === 'project' && projectSelect) projectSelect.value = ref.id;
+          if (ref.type === 'task' && taskSelect) taskSelect.value = ref.id;
+          if (ref.type === 'calendar-info' && calendarSelect) calendarSelect.value = ref.id;
+        });
+      }
+      updateGlobalFeedMentionCounter();
+      document.querySelector('.feed-composer-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    async function deleteGlobalFeedPost(postId) {
+      if (!confirm('Supprimer ce post ?')) return;
+      const existing = await getDecrypted('globalPosts', postId, 'postId');
+      if (!existing || existing.deletedAt) return;
+      if (String(existing.authorUserId || '') !== String(currentUser?.userId || '')) {
+        showToast('Action non autorisée');
+        return;
+      }
+      existing.deletedAt = Date.now();
+      await putEncrypted('globalPosts', existing, 'postId');
+      if (sharedFolderHandle) {
+        writeGlobalFeedPostToSharedFolder(existing);
+      }
+      if (editingGlobalFeedPostId === postId) {
+        cancelEditGlobalFeedPost();
+      }
+      showToast('Post supprimé');
+      await renderGlobalFeed();
+    }
+
+    async function publishGlobalFeedPost() {
+      const input = document.getElementById('global-feed-input');
+      const projectSelect = document.getElementById('global-feed-project-ref');
+      const taskSelect = document.getElementById('global-feed-task-ref');
+      const calendarSelect = document.getElementById('global-feed-calendar-ref');
+      if (!input || !projectSelect || !taskSelect || !calendarSelect) return;
+      const quill = projectDescriptionQuillEditors.get('global-feed-editor');
+      let content = '';
+      if (quill) {
+        content = String(quill.root.innerHTML || '').trim();
+        if (content === '<p><br></p>') content = '';
+      } else {
+        content = String(input.value || '').trim();
+      }
+      if (!content) {
+        showToast('Le post est vide');
+        return;
+      }
+
+      const mentionCatalog = await buildGlobalMentionCatalog();
+      const textToScan = quill ? (quill.getText() || '') : content;
+      const mentions = Array.from(extractMentionedUserIdsFromText(textToScan, mentionCatalog));
+      const refs = [];
+      if (projectSelect.value) {
+        const opt = projectSelect.options[projectSelect.selectedIndex];
+        refs.push({ type: 'project', id: projectSelect.value, label: opt?.textContent || 'Projet' });
+      }
+      if (taskSelect.value) {
+        const opt = taskSelect.options[taskSelect.selectedIndex];
+        refs.push({ type: 'task', id: taskSelect.value, label: opt?.textContent || 'Tache' });
+      }
+      if (calendarSelect.value) {
+        const opt = calendarSelect.options[calendarSelect.selectedIndex];
+        refs.push({ type: 'calendar-info', id: calendarSelect.value, label: opt?.textContent || 'Info calendrier' });
+      }
+
+      if (typeof editingGlobalFeedPostId !== 'undefined' && editingGlobalFeedPostId) {
+        const existing = await getDecrypted('globalPosts', editingGlobalFeedPostId, 'postId');
+        if (existing) {
+          existing.content = content;
+          existing.mentions = mentions;
+          existing.refs = refs;
+          existing.updatedAt = Date.now();
+          await putEncrypted('globalPosts', existing, 'postId');
+          knownGlobalPostIds.add(existing.postId);
+          
+          if (typeof quill !== 'undefined' && quill) quill.root.innerHTML = '';
+          input.value = '';
+          projectSelect.value = '';
+          taskSelect.value = '';
+          calendarSelect.value = '';
+          await updateGlobalFeedMentionCounter();
+          await renderGlobalFeed();
+          if (sharedFolderHandle) {
+            writeGlobalFeedPostToSharedFolder(existing);
+          }
+          showToast('Post mis à jour');
+          cancelEditGlobalFeedPost();
+          return;
+        }
+      }
+
+      const post = {
+        postId: uuidv4(),
+        authorUserId: String(currentUser?.userId || ''),
+        authorName: String(currentUser?.name || fallbackDirectoryName(currentUser?.userId || '')),
+        content,
+        mentions,
+        refs,
+        createdAt: Date.now(),
+        source: sharedFolderHandle ? 'shared' : 'local'
+      };
+      await putEncrypted('globalPosts', post, 'postId');
+      knownGlobalPostIds.add(post.postId);
+      input.value = '';
+      if (typeof quill !== 'undefined' && quill) quill.root.innerHTML = '';
+      projectSelect.value = '';
+      taskSelect.value = '';
+      calendarSelect.value = '';
+      await updateGlobalFeedMentionCounter();
+      await renderGlobalFeed();
+      if (sharedFolderHandle) {
+        writeGlobalFeedPostToSharedFolder(post);
+      }
+      showToast('Post publie');
+    }
+
+    async function openGlobalFeedReference(type, refId) {
+      const t = String(type || '').trim();
+      const id = decodeURIComponent(String(refId || '').trim());
+      if (!t || !id) return;
+      if (t === 'project') {
+        await showProjectDetail(id, { resetScroll: true });
+        return;
+      }
+      if (t === 'task') {
+        await showGlobalWorkspace('tasks');
+        await openGlobalTaskDetails(id);
+        return;
+      }
+      if (t === 'calendar-info') {
+        await showGlobalWorkspace('calendar');
+        await openStandaloneCalendarDetails(id);
+      }
+    }
+
+    async function openGlobalFeedPost(postId) {
+      globalFeedFocusPostId = String(postId || '').trim();
+      await showGlobalWorkspace('feed');
+      await renderGlobalFeed();
+    }
+
+    function refreshGlobalFeedFilterButtons() {
+      const map = {
+        all: document.getElementById('global-feed-filter-all'),
+        auto: document.getElementById('global-feed-filter-auto'),
+        manual: document.getElementById('global-feed-filter-manual'),
+        mentions: document.getElementById('global-feed-filter-mentions'),
+        'project-refs': document.getElementById('global-feed-filter-project-refs'),
+        'task-refs': document.getElementById('global-feed-filter-task-refs')
+      };
+      Object.entries(map).forEach(([key, btn]) => {
+        if (!btn) return;
+        const active = key === globalFeedFilterMode;
+        btn.classList.toggle('view-tab-active', active);
+        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+      });
+      const sortSelect = document.getElementById('global-feed-sort');
+      if (sortSelect) sortSelect.value = globalFeedSortMode;
+    }
+
+    function renderGlobalFeedSummary(posts, mentionCatalog) {
+      const summary = document.getElementById('global-feed-summary');
+      if (!summary) return;
+      const me = String(currentUser?.userId || '');
+      const total = posts.length;
+      const autoCount = posts.filter((p) => Boolean(p.isAuto || p.sourceEventId)).length;
+      const manualCount = total - autoCount;
+      const mentionCount = posts.filter((p) => Array.isArray(p.mentions) && p.mentions.map((id) => String(id || '')).includes(me)).length;
+      const projectRefsCount = posts.filter((p) => Array.isArray(p.refs) && p.refs.some((r) => String(r?.type || '') === 'project')).length;
+      const taskRefsCount = posts.filter((p) => Array.isArray(p.refs) && p.refs.some((r) => String(r?.type || '') === 'task')).length;
+      const knownMentions = (mentionCatalog?.users || []).length;
+      summary.innerHTML = `
+        <span class="feed-summary-chip"><span class="material-symbols-outlined text-[14px]">feed</span>${total} éléments</span>
+        <span class="feed-summary-chip"><span class="material-symbols-outlined text-[14px]">bolt</span>${autoCount} activités auto</span>
+        <span class="feed-summary-chip"><span class="material-symbols-outlined text-[14px]">edit_square</span>${manualCount} posts manuels</span>
+        <span class="feed-summary-chip"><span class="material-symbols-outlined text-[14px]">alternate_email</span>${mentionCount} mentions</span>
+        <span class="feed-summary-chip"><span class="material-symbols-outlined text-[14px]">folder</span>${projectRefsCount} refs projet</span>
+        <span class="feed-summary-chip"><span class="material-symbols-outlined text-[14px]">assignment</span>${taskRefsCount} refs tache</span>
+        <span class="feed-summary-chip"><span class="material-symbols-outlined text-[14px]">group</span>${knownMentions} agents connus</span>
+      `;
+    }
+
+    async function renderGlobalFeed() {
+      const list = document.getElementById('global-feed-list');
+      const searchInput = document.getElementById('global-feed-search');
+      if (!list) return;
+      const mentionCatalog = await populateGlobalFeedComposerContext();
+      if (mentionCatalog) globalFeedMentionCatalogCache = mentionCatalog;
+      const query = String(searchInput?.value || '').trim();
+      const postsAll = (await getAllDecrypted('globalPosts', 'postId') || [])
+        .filter((p) => !p.deletedAt)
+        .filter((p) => matchesQuery([
+          p.content,
+          p.authorName,
+          ...(Array.isArray(p.refs) ? p.refs.map((r) => r?.label) : []),
+          ...(Array.isArray(p.mentions) ? p.mentions.map((id) => mentionCatalog?.byUserId?.get(id)?.name || '') : [])
+        ], query));
+      const me = String(currentUser?.userId || '');
+      renderGlobalFeedSummary(postsAll, mentionCatalog);
+      refreshGlobalFeedFilterButtons();
+
+      const postsFilteredByType = postsAll.filter((post) => {
+        const isAuto = Boolean(post.isAuto || post.sourceEventId);
+        const isMention = Array.isArray(post.mentions) && post.mentions.map((id) => String(id || '')).includes(me);
+        const refs = Array.isArray(post.refs) ? post.refs : [];
+        const hasProjectRef = refs.some((ref) => String(ref?.type || '') === 'project');
+        const hasTaskRef = refs.some((ref) => String(ref?.type || '') === 'task');
+        if (globalFeedFilterMode === 'auto') return isAuto;
+        if (globalFeedFilterMode === 'manual') return !isAuto;
+        if (globalFeedFilterMode === 'mentions') return isMention;
+        if (globalFeedFilterMode === 'project-refs') return hasProjectRef;
+        if (globalFeedFilterMode === 'task-refs') return hasTaskRef;
+        return true;
+      });
+      const posts = postsFilteredByType.sort((a, b) => (
+        globalFeedSortMode === 'asc'
+          ? Number(a.createdAt || 0) - Number(b.createdAt || 0)
+          : Number(b.createdAt || 0) - Number(a.createdAt || 0)
+      ));
+
+      if (posts.length === 0) {
+        list.innerHTML = '<p class="text-slate-500 text-center py-8">Aucun élément pour ces critères.</p>';
+        return;
+      }
+
+      list.innerHTML = posts.map((post) => {
+        const postId = String(post.postId || '');
+        const mentions = (post.mentions || [])
+          .map((id) => mentionCatalog?.byUserId?.get(String(id || '')))
+          .filter(Boolean);
+        const refs = Array.isArray(post.refs) ? post.refs : [];
+        const isFocused = globalFeedFocusPostId && globalFeedFocusPostId === postId;
+        const isAuto = Boolean(post.isAuto || post.sourceEventId);
+        const typeLabel = isAuto ? 'Activité auto' : 'Post manuel';
+        const typeClass = isAuto ? 'feed-item-type-auto' : 'feed-item-type-manual';
+        const identity = resolveKnownUserIdentity(post.authorUserId || '', post.authorName || fallbackDirectoryName(post.authorUserId || ''));
+        const avatarStyle = safeAvatarInlineStyle(identity.avatarDataUrl, stringToColor(post.authorUserId || post.authorName || ''));
+        return `
+          <article id="global-feed-post-${postId}" class="feed-item ${isFocused ? 'border-blue-400 shadow-[0_0_0_2px_rgba(59,130,246,0.15)]' : ''}">
+            <div class="feed-item-head">
+              <div class="feed-item-meta">
+                <span class="discussion-avatar" style="${avatarStyle}">${escapeHtml(getInitials(post.authorName || 'U'))}</span>
+                <div>
+                  <p class="text-sm font-semibold text-slate-800">${escapeHtml(post.authorName || fallbackDirectoryName(post.authorUserId || ''))}</p>
+                  <p class="text-xs text-slate-500">${new Date(Number(post.createdAt || Date.now())).toLocaleString('fr-FR')}</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                ${!isAuto && String(post.authorUserId || '') === String(currentUser?.userId || '') ? `
+                  <button onclick="startEditGlobalFeedPost('${postId}')" class="text-xs text-slate-500 hover:text-blue-600 font-semibold transition-colors" title="Éditer">Éditer</button>
+                  <button onclick="deleteGlobalFeedPost('${postId}')" class="text-xs text-slate-500 hover:text-rose-600 font-semibold transition-colors" title="Supprimer">Supprimer</button>
+                  <span class="text-slate-300">|</span>
+                ` : ''}
+                <span class="feed-item-type ${typeClass}">${typeLabel}</span>
+              </div>
+            </div>
+            <div class="feed-item-body">${renderGlobalFeedContentHtml(post.content || '', mentionCatalog)}</div>
+            ${mentions.length > 0 ? `
+              <div class="feed-item-mentions">
+                ${mentions.map((u) => `<span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-blue-100 text-blue-700 font-semibold">@${escapeHtml(u.name)}</span>`).join('')}
+              </div>
+            ` : ''}
+            ${refs.length > 0 ? `
+              <div class="feed-item-refs">
+                ${refs.map((ref) => `<button onclick="openGlobalFeedReference('${escapeHtml(ref.type || '')}','${encodeURIComponent(String(ref.id || ''))}')" class="feed-ref-btn">${escapeHtml(ref.label || 'Référence')}</button>`).join('')}
+              </div>
+            ` : ''}
+          </article>
+        `;
+      }).join('');
+
+      if (globalFeedFocusPostId) {
+        const target = document.getElementById(`global-feed-post-${globalFeedFocusPostId}`);
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }
+    }
+
+    function insertMentionTokenInGlobalFeed() {
+      const input = document.getElementById('global-feed-input');
+      const select = document.getElementById('global-feed-mention-select');
+      const quill = projectDescriptionQuillEditors.get('global-feed-editor');
+      if (!select) return;
+      const selectedUserId = String(select.value || '').trim();
+      if (!selectedUserId) return;
+      const name = knownUsersCache.get(selectedUserId)?.name || fallbackDirectoryName(selectedUserId);
+      const token = `@[${name}] `;
+      if (quill) {
+        const sel = quill.getSelection(true) || { index: quill.getLength(), length: 0 };
+        quill.insertText(sel.index, token, 'user');
+        quill.setSelection(sel.index + token.length, 0, 'user');
+      } else if (input) {
+        insertTextAtCursor(input, token);
+        input.focus();
+      }
+      updateGlobalFeedMentionCounter();
+    }
+
+    window.openGlobalFeedReference = openGlobalFeedReference;
+    window.openGlobalFeedPost = openGlobalFeedPost;
+    window.toggleGlobalFeedComposerFullscreen = toggleGlobalFeedComposerFullscreen;
+    window.startEditGlobalFeedPost = startEditGlobalFeedPost;
+    window.cancelEditGlobalFeedPost = cancelEditGlobalFeedPost;
+    window.deleteGlobalFeedPost = deleteGlobalFeedPost;
+
+    async function sendGlobalMessage() {
+      const input = document.getElementById('global-message-input');
+      const filesInput = document.getElementById('global-message-files');
+      const filesList = document.getElementById('global-message-files-list');
+      const selectedTarget = String(globalMessagePeerUserId || '').trim();
+      const isBroadcast = !selectedTarget || selectedTarget === GLOBAL_MESSAGE_BROADCAST_TARGET;
+      if (!input) return;
+      const content = String(input.value || '').trim();
+      let attachments = [];
+      try {
+        attachments = await runWithLoading(async () => readMessageFiles('global-message-files'));
+      } catch (error) {
+        showToast(`❌ ${error.message}`);
+        return;
+      }
+      if (!content && attachments.length === 0) return;
+      const senderUserId = String(currentUser?.userId || '');
+      const senderName = String(currentUser?.name || fallbackDirectoryName(currentUser?.userId || ''));
+      const selectedRecipients = Array.from(globalMessageRecipientUserIds || [])
+        .map(id => String(id || '').trim())
+        .filter(id => id && id !== senderUserId && id !== GLOBAL_MESSAGE_BROADCAST_TARGET);
+      const sendTargets = [];
+      if (globalMessageActiveGroupConversationId) {
+        const fromConversation = parseGroupConversationMemberIds(globalMessageActiveGroupConversationId);
+        const groupMemberIds = normalizeGlobalMessageUserIds([
+          senderUserId,
+          ...fromConversation
+        ]);
+        sendTargets.push({
+          mode: 'group',
+          toUserId: buildGlobalGroupTargetUserId(globalMessageActiveGroupConversationId),
+          toUserIds: groupMemberIds,
+          toName: formatGlobalMessageNamedGroupLabel(groupMemberIds),
+          conversationId: globalMessageActiveGroupConversationId
+        });
+      } else if (selectedRecipients.length > 1) {
+        const groupMemberIds = normalizeGlobalMessageUserIds([senderUserId, ...selectedRecipients]);
+        const conversationId = getGroupConversationId(groupMemberIds);
+        if (!conversationId) return;
+        globalMessageActiveGroupConversationId = conversationId;
+        globalMessagePeerUserId = GLOBAL_MESSAGE_BROADCAST_TARGET;
+        sendTargets.push({
+          mode: 'group',
+          toUserId: buildGlobalGroupTargetUserId(conversationId),
+          toUserIds: groupMemberIds,
+          toName: formatGlobalMessageNamedGroupLabel(groupMemberIds),
+          conversationId
+        });
+      } else if (selectedRecipients.length === 1) {
+        const id = selectedRecipients[0];
+        globalMessageActiveGroupConversationId = '';
+        globalMessagePeerUserId = id;
+        sendTargets.push({
+          mode: 'direct',
+          toUserId: id,
+          toUserIds: normalizeGlobalMessageUserIds([senderUserId, id]),
+          toName: knownUsersCache.get(id)?.name || fallbackDirectoryName(id),
+          conversationId: getDirectConversationId(currentUser?.userId, id)
+        });
+      } else {
+        sendTargets.push({
+          mode: isBroadcast ? 'broadcast' : 'direct',
+          toUserId: isBroadcast ? GLOBAL_MESSAGE_BROADCAST_USER_ID : selectedTarget,
+          toUserIds: isBroadcast
+            ? []
+            : normalizeGlobalMessageUserIds([senderUserId, selectedTarget]),
+          toName: isBroadcast
+            ? GLOBAL_MESSAGE_BROADCAST_LABEL
+            : (knownUsersCache.get(selectedTarget)?.name || fallbackDirectoryName(selectedTarget)),
+          conversationId: isBroadcast
+            ? getGlobalBroadcastConversationId()
+            : getDirectConversationId(currentUser?.userId, selectedTarget)
+        });
+      }
+
+      for (const target of sendTargets) {
+        const nowTs = Date.now();
+        const message = {
+          messageId: uuidv4(),
+          conversationId: target.conversationId,
+          fromUserId: senderUserId,
+          fromName: senderName,
+          toUserId: target.toUserId,
+          toUserIds: target.toUserIds,
+          toName: target.toName,
+          content,
+          attachments,
+          createdAt: nowTs,
+          updatedAt: nowTs,
+          source: sharedFolderHandle ? 'shared' : 'local'
+        };
+        await putEncrypted('globalMessages', message, 'messageId');
+        knownGlobalMessageIds.add(message.messageId);
+        if (sharedFolderHandle) {
+          writeGlobalMessageToSharedFolder(message);
+        }
+      }
+      input.value = '';
+      toggleGlobalEmojiPicker(false);
+      if (filesInput) filesInput.value = '';
+      if (filesList) filesList.textContent = 'Aucun fichier sélectionné';
+      if (selectedRecipients.length > 0) {
+        globalMessageRecipientUserIds = new Set();
+      }
+      await renderGlobalMessages({ forceScrollBottom: true });
+    }
+
+    function cancelEditGlobalMessage() {
+      editingGlobalMessageId = null;
+      editingGlobalMessageDraft = '';
+      renderGlobalMessages({ keepThreadAnchor: true });
+    }
+
+    async function startEditGlobalMessage(messageId) {
+      const id = String(messageId || '').trim();
+      if (!id) return;
+      const msg = await getDecrypted('globalMessages', id, 'messageId');
+      if (!msg || msg.deletedAt) return;
+      if (String(msg.fromUserId || '') !== String(currentUser?.userId || '')) {
+        showToast('Action non autorisée');
+        return;
+      }
+      editingGlobalMessageId = id;
+      editingGlobalMessageDraft = String(msg.content || '');
+      await renderGlobalMessages({ keepThreadAnchor: true });
+      requestAnimationFrame(() => {
+        const input = document.getElementById(`global-message-edit-input-${id}`);
+        if (input) {
+          input.focus();
+          input.setSelectionRange(input.value.length, input.value.length);
+        }
+      });
+    }
+
+    async function saveEditedGlobalMessage(messageId) {
+      const id = String(messageId || '').trim();
+      if (!id || editingGlobalMessageId !== id) return;
+      const existing = await getDecrypted('globalMessages', id, 'messageId');
+      if (!existing || existing.deletedAt) return;
+      if (String(existing.fromUserId || '') !== String(currentUser?.userId || '')) {
+        showToast('Action non autorisée');
+        return;
+      }
+      const input = document.getElementById(`global-message-edit-input-${id}`);
+      const content = String(input?.value || '').trim();
+      if (!content) {
+        showToast('Le message ne peut pas être vide');
+        return;
+      }
+      const nowTs = Date.now();
+      const updated = {
+        ...existing,
+        content,
+        editedAt: nowTs,
+        updatedAt: nowTs
+      };
+      await putEncrypted('globalMessages', updated, 'messageId');
+      if (sharedFolderHandle) {
+        await writeGlobalMessageToSharedFolder(updated);
+      }
+      editingGlobalMessageId = null;
+      editingGlobalMessageDraft = '';
+      showToast('Message modifié');
+      await renderGlobalMessages({ keepThreadAnchor: true });
+    }
+
+    async function deleteGlobalMessage(messageId) {
+      const id = String(messageId || '').trim();
+      if (!id) return;
+      const existing = await getDecrypted('globalMessages', id, 'messageId');
+      if (!existing || existing.deletedAt) return;
+      if (String(existing.fromUserId || '') !== String(currentUser?.userId || '')) {
+        showToast('Action non autorisée');
+        return;
+      }
+      if (!confirm('Supprimer ce message ?')) return;
+      const nowTs = Date.now();
+      const updated = {
+        ...existing,
+        deletedAt: nowTs,
+        updatedAt: nowTs
+      };
+      await putEncrypted('globalMessages', updated, 'messageId');
+      if (sharedFolderHandle) {
+        await writeGlobalMessageToSharedFolder(updated);
+      }
+      if (editingGlobalMessageId === id) {
+        editingGlobalMessageId = null;
+        editingGlobalMessageDraft = '';
+      }
+      showToast('Message supprimé');
+      await renderGlobalMessages({ keepThreadAnchor: true });
+    }
+
+    window.selectGlobalMessagePeer = selectGlobalMessagePeer;
+    window.selectGlobalMessageChannel = selectGlobalMessageChannel;
+    window.toggleGlobalMessageRecipient = toggleGlobalMessageRecipient;
+    window.hideGlobalMessageGroupChannel = hideGlobalMessageGroupChannel;
+    window.selectAllGlobalMessageRecipients = selectAllGlobalMessageRecipients;
+    window.clearGlobalMessageRecipients = clearGlobalMessageRecipients;
+    window.startEditGlobalMessage = startEditGlobalMessage;
+    window.saveEditedGlobalMessage = saveEditedGlobalMessage;
+    window.cancelEditGlobalMessage = cancelEditGlobalMessage;
+    window.deleteGlobalMessage = deleteGlobalMessage;
+
+    function setGlobalHubView(view) {
+      globalWorkspaceView = view;
+      const mapping = {
+        tasks: ['Vue Tâches (Tous projets)', 'Pilotage transversal des tâches, y compris hors projet.'],
+        calendar: ['Vue Calendrier (Tous projets)', 'Échéances consolidées avec recherche thématique/sujet.'],
+        docs: ['Vue Documents (Tous projets)', 'Référentiel documentaire projet + thématique hors projet.'],
+        messages: ['Messagerie hors projet', 'Canal general (tous) ou discussion privee entre agents connus du dossier collaboratif.'],
+        feed: ["Fil d'information transverse", 'Activités automatiques (créations projet/tâche) + posts manuels, mentions et références croisées.'],
+        settings: ['Référentiels globaux', 'Gestion transverse des groupes et thématiques réutilisables.']
+      };
+      const [title, subtitle] = mapping[view] || mapping.tasks;
+      document.getElementById('global-hub-title').textContent = title;
+      document.getElementById('global-hub-subtitle').textContent = subtitle;
+      document.getElementById('global-tasks-section')?.classList.toggle('hidden', view !== 'tasks');
+      document.getElementById('global-calendar-section')?.classList.toggle('hidden', view !== 'calendar');
+      document.getElementById('global-docs-section')?.classList.toggle('hidden', view !== 'docs');
+      document.getElementById('global-messages-section')?.classList.toggle('hidden', view !== 'messages');
+      document.getElementById('global-feed-section')?.classList.toggle('hidden', view !== 'feed');
+      document.getElementById('global-settings-section')?.classList.toggle('hidden', view !== 'settings');
+      updateGlobalTasksViewButtons();
+    }
+
+    async function showGlobalWorkspace(view) {
+      resetWorkspaceScrollTop();
+      if (view !== 'tasks') {
+        detachGlobalKanbanInfiniteScroll();
+      }
+      workspaceMode = 'global';
+      globalTasksPage = 1;
+      currentProjectId = null;
+      currentProjectState = null;
+      document.getElementById('project-detail').classList.add('hidden');
+      document.getElementById('projects-list').classList.add('hidden');
+      document.getElementById('global-hub').classList.remove('hidden');
+      document.getElementById('dashboard-head')?.classList.add('hidden');
+      document.getElementById('dashboard-title')?.classList.remove('hidden');
+      if (document.getElementById('dashboard-title')) {
+        document.getElementById('dashboard-title').textContent = 'Vue transverse';
+      }
+      document.getElementById('dashboard-stats')?.classList.add('hidden');
+      document.getElementById('dashboard-quick-actions')?.classList.add('hidden');
+      setGlobalHubView(view);
+      setActiveSidebarNav(view === 'tasks'
+        ? 'tasks'
+        : view === 'calendar'
+          ? 'calendar'
+          : view === 'docs'
+            ? 'docs'
+            : view === 'messages'
+              ? 'messages'
+              : view === 'feed'
+                ? 'feed'
+            : 'settings');
+
+      if (view === 'tasks') await renderGlobalTasks();
+      if (view === 'calendar') await renderGlobalCalendar();
+      if (view === 'docs') await renderGlobalDocs();
+      if (view === 'messages') {
+        resetGlobalMessageRenderLimits();
+        await renderGlobalMessages();
+      }
+      if (view === 'feed') await renderGlobalFeed();
+      if (view === 'settings') await renderGlobalSettings();
+      closeMobileSidebar();
+    }
+
+    function getSubtaskProgress(task) {
+      if (window.TaskMDATasks?.getSubtaskProgress) {
+        return window.TaskMDATasks.getSubtaskProgress(task);
+      }
+      const subtasks = Array.isArray(task?.subtasks) ? task.subtasks : [];
+      const total = subtasks.length;
+      const done = subtasks.filter(st => Boolean(st?.done)).length;
+      const percent = total > 0 ? Math.round((done / total) * 100) : 0;
+      return { total, done, percent };
+    }
+
+    function buildSubtaskProgressHtml(task, compact = false) {
+      if (window.TaskMDATasks?.buildSubtaskProgressHtml) {
+        return window.TaskMDATasks.buildSubtaskProgressHtml(task, compact);
+      }
+      const { total, done, percent } = getSubtaskProgress(task);
+      if (!total) return '';
+      const wrapperClass = compact ? 'subtask-progress subtask-progress-compact' : 'subtask-progress';
+      return `
+        <div class="${wrapperClass}">
+          <div class="subtask-progress-head">
+            <span class="subtask-progress-title">Sous-taches (${done}/${total})</span>
+            <span class="subtask-progress-percent">${percent}%</span>
+          </div>
+          <div class="subtask-progress-track">
+            <div class="subtask-progress-fill" style="width:${percent}%"></div>
+          </div>
+        </div>
+      `;
+    }
+
+    function mergeSubtasksWithExisting(existingSubtasks, subtasksParsed) {
+      if (window.TaskMDATasks?.mergeSubtasksWithExisting) {
+        return window.TaskMDATasks.mergeSubtasksWithExisting(existingSubtasks, subtasksParsed, normalizeSearch, uuidv4);
+      }
+      if (!Array.isArray(subtasksParsed)) return [];
+      const existing = Array.isArray(existingSubtasks) ? existingSubtasks : [];
+      const used = new Set();
+      return subtasksParsed.map((nextSt) => {
+        const matchIndex = existing.findIndex((oldSt, idx) => !used.has(idx) && normalizeSearch(oldSt?.label || '') === normalizeSearch(nextSt?.label || ''));
+        if (matchIndex >= 0) {
+          used.add(matchIndex);
+          const matched = existing[matchIndex];
+          return {
+            id: matched?.id || nextSt.id || uuidv4(),
+            label: nextSt.label || '',
+            done: Boolean(matched?.done)
+          };
+        }
+        return {
+          id: nextSt.id || uuidv4(),
+          label: nextSt.label || '',
+          done: false
+        };
+      });
+    }
+
+    function getTaskStatusMeta(status) {
+      const normalized = status || 'todo';
+      if (normalized === 'termine') {
+        return { key: normalized, label: 'Terminé', chipClass: 'task-status-chip task-status-termine' };
+      }
+      if (normalized === 'suspendu') {
+        return { key: normalized, label: 'Suspendu', chipClass: 'task-status-chip task-status-suspendu' };
+      }
+      if (normalized === 'en-cours') {
+        return { key: normalized, label: 'En cours', chipClass: 'task-status-chip task-status-en-cours' };
+      }
+      return { key: 'todo', label: 'À faire', chipClass: 'task-status-chip task-status-todo' };
+    }
+
+    function getTaskUrgencyMeta(urgency) {
+      const normalized = urgency || 'medium';
+      if (normalized === 'high') {
+        return { key: normalized, label: 'Urgente', chipClass: 'task-urgency-chip task-urgency-high', accentClass: 'task-accent-high' };
+      }
+      if (normalized === 'low') {
+        return { key: normalized, label: 'Basse', chipClass: 'task-urgency-chip task-urgency-low', accentClass: 'task-accent-low' };
+      }
+      return { key: 'medium', label: 'Normale', chipClass: 'task-urgency-chip task-urgency-medium', accentClass: 'task-accent-medium' };
+    }
+
+    function updateProjectTaskLayoutButtons() {
+      [1, 2, 3, 4].forEach((value) => {
+        const btn = document.getElementById(`project-task-view-${value}`);
+        if (!btn) return;
+        btn.classList.toggle('view-tab-active', projectTaskCardsColumns === value);
+        btn.setAttribute('aria-pressed', projectTaskCardsColumns === value ? 'true' : 'false');
+      });
+    }
+
+    function updateGlobalTaskLayoutButtons() {
+      [1, 2, 3, 4].forEach((value) => {
+        const btn = document.getElementById(`global-task-view-${value}`);
+        if (!btn) return;
+        btn.classList.toggle('view-tab-active', globalTaskCardsColumns === value);
+        btn.setAttribute('aria-pressed', globalTaskCardsColumns === value ? 'true' : 'false');
+      });
+      const toolbar = document.getElementById('global-task-layout-toolbar');
+      if (toolbar) {
+        toolbar.classList.toggle('hidden', globalTasksViewMode !== 'cards');
+      }
+    }
+
+    function applyProjectTaskCardsLayoutClass() {
+      const container = document.getElementById('tasks-container');
+      if (!container) return;
+      const cols = projectTaskPresentationMode === 'list' ? 1 : projectTaskCardsColumns;
+      container.className = `project-task-grid cols-${cols}`;
+      container.classList.toggle('project-task-list-mode', projectTaskPresentationMode === 'list');
+    }
+
+    function setProjectTaskCardsColumns(value) {
+      const next = Math.min(4, Math.max(1, Number(value) || 1));
+      projectTaskCardsColumns = next;
+      localStorage.setItem('taskmda_project_task_cards_cols', String(next));
+      updateProjectTaskLayoutButtons();
+      applyProjectTaskCardsLayoutClass();
+      if (workspaceMode === 'project' && activeProjectView === 'list' && currentProjectState) {
+        renderTasks(currentProjectState.tasks || []);
+      }
+    }
+
+    function setGlobalTaskCardsColumns(value) {
+      const next = Math.min(4, Math.max(1, Number(value) || 1));
+      globalTaskCardsColumns = next;
+      localStorage.setItem('taskmda_global_task_cards_cols', String(next));
+      updateGlobalTaskLayoutButtons();
+      if (workspaceMode === 'global' && globalWorkspaceView === 'tasks' && globalTasksViewMode === 'cards') {
+        renderGlobalTasks();
+      }
+    }
+
+    function getProjectTaskFilters() {
+      return {
+        query: String(document.getElementById('project-task-search')?.value || '').trim(),
+        status: String(document.getElementById('project-task-status')?.value || 'all').trim(),
+        theme: String(document.getElementById('project-task-theme-filter')?.value || '').trim()
+      };
+    }
+
+    function filterProjectTasksByControls(tasks) {
+      const filters = getProjectTaskFilters();
+      let filtered = (tasks || []).filter(task => matchesQuery([
+        task.title,
+        task.description,
+        getTaskAssigneeName(task, currentProjectState),
+        task.theme,
+        getTaskGroupName(task, currentProjectState)
+      ], `${globalSearchQuery} ${filters.query}`.trim()));
+      if (filters.status && filters.status !== 'all') {
+        filtered = filtered.filter(task => (task.status || 'todo') === filters.status);
+      }
+      if (filters.theme) {
+        filtered = filtered.filter(task => matchesQuery([task.theme], filters.theme));
+      }
+      return filtered;
+    }
+
+    function renderTasks(tasks) {
+      const container = document.getElementById('tasks-container');
+      const paginationContainer = document.getElementById('tasks-pagination');
+      const layoutToolbar = document.querySelector('#task-list-section .project-task-layout-toolbar');
+      if (layoutToolbar) {
+        layoutToolbar.classList.toggle('hidden', projectTaskPresentationMode !== 'cards');
+      }
+      if (paginationContainer) paginationContainer.innerHTML = '';
+      applyProjectTaskCardsLayoutClass();
+      updateProjectTaskLayoutButtons();
+      const filteredTasks = filterProjectTasksByControls(tasks);
+
+      if (filteredTasks.length === 0) {
+        container.innerHTML = '<p class="text-gray-500 text-center py-8">Aucune tâche pour le moment</p>';
+        return;
+      }
+
+      const canCreate = canCreateTaskInProject(currentProjectState);
+      const addTaskBtn = document.getElementById('btn-add-task');
+      if (addTaskBtn) {
+        addTaskBtn.disabled = !canCreate;
+        addTaskBtn.classList.toggle('opacity-50', !canCreate);
+      }
+
+      const pagination = paginateItems(filteredTasks, tasksPage, paginationConfig.tasksPerPage);
+      tasksPage = pagination.currentPage;
+      const compactLevel = projectTaskCardsColumns >= 4 ? 3 : projectTaskCardsColumns >= 3 ? 2 : projectTaskCardsColumns >= 2 ? 1 : 0;
+      const renderAsList = projectTaskPresentationMode === 'list';
+      container.innerHTML = pagination.pageItems.map(task => {
+        const statusMeta = getTaskStatusMeta(task.status);
+        const urgencyMeta = getTaskUrgencyMeta(task.urgency);
+        const lockHint = buildProjectLockHintHtml(currentProjectState, LOCK_SCOPE_TASK, task.taskId, compactLevel > 1);
+        const participants = getTaskAssigneeEntries(task, currentProjectState).map((a) => ({
+          userId: a.userId || '',
+          name: a.name || fallbackDirectoryName(a.userId)
+        }));
+        if (task.createdBy) {
+          participants.push({ userId: task.createdBy, name: '' });
+        }
+        const participantsHtml = renderParticipantsStack(participants, 2);
+        if (renderAsList) {
+          return `
+        <div id="task-card-${task.taskId}" class="task-list-row rounded-lg bg-white border border-slate-200 p-3 cursor-pointer" onclick="openProjectTaskDetails('${task.taskId}')" role="button" tabindex="0">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0 flex-1">
+              <div class="flex flex-wrap items-center gap-2 mb-1">
+                <span class="${urgencyMeta.chipClass}">${urgencyMeta.label}</span>
+                ${task.theme ? `<span class="task-theme-chip">${escapeHtml(task.theme)}</span>` : ''}
+                <span class="${statusMeta.chipClass}">${statusMeta.label}</span>
+              </div>
+              <h4 class="text-base font-bold truncate">${escapeHtml(task.title)}</h4>
+              <p class="text-sm text-slate-500 truncate">${escapeHtml(task.description || '')}</p>
+            </div>
+            <div class="task-list-row-right text-xs text-slate-600">
+              <div>${escapeHtml(getTaskAssigneeName(task, currentProjectState) || 'Non assigné')}</div>
+              <div>${formatDate(task.dueDate)}</div>
+            </div>
+          </div>
+          <div class="mt-2 flex items-center justify-between gap-2 flex-wrap">
+            <div class="task-card-participants">${participantsHtml}</div>
+            <div class="flex items-center gap-2">
+              ${canEditTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); editTask('${task.taskId}')" class="task-action-btn-subtle text-xs">Modifier</button>` : ''}
+              ${canEditTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); convertTaskToProject('${buildGlobalTaskRef({ sourceType: 'project', sourceProjectId: currentProjectId, taskId: task.taskId })}')" class="task-action-btn-subtle text-xs">Convertir</button>` : ''}
+              ${canDeleteTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); deleteTask('${task.taskId}')" class="task-action-btn-subtle text-xs text-red-600">Supprimer</button>` : ''}
+            </div>
+          </div>
+          ${lockHint}
+        </div>
+      `;
+        }
+        return `
+        <div id="task-card-${task.taskId}" class="task-list-card task-list-card-modern task-density-${compactLevel} ${urgencyMeta.accentClass} rounded-lg p-4 bg-white cursor-pointer" onclick="openProjectTaskDetails('${task.taskId}')" role="button" tabindex="0">
+          <div class="flex justify-between items-start mb-2">
+            <div>
+              <div class="flex flex-wrap items-center gap-2 mb-1">
+                <span class="${urgencyMeta.chipClass}">${urgencyMeta.label}</span>
+                ${task.theme ? `<span class="task-theme-chip">${escapeHtml(task.theme)}</span>` : ''}
+                ${getTaskGroupName(task, currentProjectState) ? `<span class="task-group-chip">${escapeHtml(getTaskGroupName(task, currentProjectState) || 'Groupe')}</span>` : ''}
+              </div>
+              <h4 class="text-lg font-bold">${escapeHtml(task.title)}</h4>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="${statusMeta.chipClass}">
+                ${statusMeta.label}
+              </span>
+              ${canEditTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); editTask('${task.taskId}')" class="text-slate-500 hover:text-primary" title="Éditer">
+                <span class="material-symbols-outlined text-base">edit</span>
+              </button>` : ''}
+              ${canDeleteTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); deleteTask('${task.taskId}')" class="text-slate-500 hover:text-red-600" title="Supprimer">
+                <span class="material-symbols-outlined text-base">delete</span>
+              </button>` : ''}
+            </div>
+          </div>
+          <p class="task-card-description text-gray-600 text-sm mb-3">${escapeHtml(task.description || '')}</p>
+          <div class="hidden text-xs text-slate-500 flex flex-wrap gap-2 mb-3">
+            ${task.theme ? `<span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700">Thème: ${escapeHtml(task.theme)}</span>` : ''}
+            ${getTaskGroupName(task, currentProjectState) ? `<span class="px-2 py-1 rounded-full bg-blue-100 text-blue-700">Groupe: ${escapeHtml(getTaskGroupName(task, currentProjectState) || 'N/A')}</span>` : ''}
+          </div>
+          <div class="task-card-meta text-xs text-gray-500 flex flex-wrap items-center gap-3 mb-3">
+            <span class="flex items-center gap-1">
+              <span class="material-symbols-outlined text-base">event_note</span>
+              Demande: ${formatDate(task.requestDate)}
+            </span>
+            <span class="flex items-center gap-1">
+              <span class="material-symbols-outlined text-base">event</span>
+              ${formatDate(task.dueDate)}
+            </span>
+            <span class="flex items-center gap-1">
+              <span class="material-symbols-outlined text-base">person</span>
+              ${escapeHtml(getTaskAssigneeName(task, currentProjectState) || 'Non assigné')}
+            </span>
+            <span class="flex items-center gap-1">
+              <span class="material-symbols-outlined text-base">attach_file</span>
+              ${(task.attachments || []).length} fichier(s)
+            </span>
+          </div>
+          <div class="task-card-bottom flex items-center justify-between text-sm gap-3 flex-wrap">
+            <div class="task-card-participants">${participantsHtml}</div>
+            <div class="task-card-actions flex items-center gap-3">
+              ${canEditTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); convertTaskToProject('${buildGlobalTaskRef({ sourceType: 'project', sourceProjectId: currentProjectId, taskId: task.taskId })}')" class="text-slate-600 hover:underline">Convertir en projet</button>` : ''}
+              <button onclick="event.stopPropagation(); sendTaskStatusEmail('${task.taskId}', false)" class="text-slate-600 hover:underline">Email statut</button>
+              ${task.status === 'termine' ? `<button onclick="event.stopPropagation(); sendTaskStatusEmail('${task.taskId}', true)" class="text-emerald-700 hover:underline">Email achevée</button>` : ''}
+              ${canChangeTaskStatus(task, currentProjectState) ? `<button onclick="event.stopPropagation(); toggleTaskStatus('${task.taskId}')" class="text-primary hover:underline">Changer statut</button>` : ''}
+            </div>
+          </div>
+          ${lockHint}
+          ${(task.subtasks && task.subtasks.length > 0) ? `
+            <div class="task-card-subtasks mt-3 border-t border-gray-100 pt-3">
+              ${buildSubtaskProgressHtml(task, false)}
+              <div class="mt-2 space-y-1.5">
+              ${task.subtasks.map(st => `
+                <label class="subtask-item">
+                  <input class="subtask-checkbox" type="checkbox" ${st.done ? 'checked' : ''} ${canEditTaskInProject(task, currentProjectState) ? '' : 'disabled'} onclick="event.stopPropagation()" onchange="toggleSubtask('${task.taskId}','${st.id}', this.checked)">
+                  <span class="subtask-label ${st.done ? 'subtask-label-done' : ''}">${escapeHtml(st.label)}</span>
+                </label>
+              `).join('')}
+              </div>
+            </div>
+          ` : ''}
+        </div>
+      `;
+      }).join('');
+      renderPagination('tasks-pagination', pagination, 'setTasksPage', 'taches');
+    }
+
+    function renderArchivedTasks(tasks) {
+      const countEl = document.getElementById('archived-tasks-count');
+      const container = document.getElementById('archived-tasks-container');
+      const archived = (tasks || []).filter(task => task?.archivedAt);
+      if (countEl) {
+        countEl.textContent = `(${archived.length})`;
+      }
+      if (!container) return;
+      container.classList.remove('hidden');
+
+      if (archived.length === 0) {
+        container.innerHTML = '<p class="text-sm text-slate-500">Aucune tache archivee.</p>';
+        return;
+      }
+
+      container.innerHTML = archived
+        .sort((a, b) => (b.archivedAt || 0) - (a.archivedAt || 0))
+        .map(task => {
+          const canEdit = canEditTaskInProject(task, currentProjectState);
+          const canDelete = canDeleteTaskInProject(task, currentProjectState);
+          return `
+            <div class="rounded-lg border border-slate-200 bg-white p-3">
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <p class="text-sm font-semibold text-slate-800">${escapeHtml(task.title || 'Tache')}</p>
+                  <p class="text-xs text-slate-500 mt-1">Archivee le ${task.archivedAt ? new Date(task.archivedAt).toLocaleString('fr-FR') : '-'}</p>
+                </div>
+                <div class="flex items-center gap-2 text-xs">
+                  ${canEdit ? `<button onclick="restoreArchivedTask('${task.taskId}')" class="px-2 py-1 rounded bg-emerald-100 text-emerald-700">Restaurer</button>` : ''}
+                  ${canDelete ? `<button onclick="deleteTask('${task.taskId}')" class="px-2 py-1 rounded bg-rose-100 text-rose-700">Supprimer</button>` : ''}
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+    }
+
+    async function restoreArchivedTask(taskId) {
+      if (!currentProjectId || !taskId) return;
+      const state = await getProjectState(currentProjectId);
+      const task = (state?.tasks || []).find(t => t.taskId === taskId);
+      if (!task) return;
+      if (!canEditTaskInProject(task, state)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const event = createEvent(
+        EventTypes.UPDATE_TASK,
+        currentProjectId,
+        currentUser.userId,
+        {
+          taskId,
+          changes: {
+            archivedAt: null
+          }
+        }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) {
+        await writeEventToSharedFolder(currentProjectId, event);
+      }
+      showToast('Tache restauree');
+      await showProjectDetail(currentProjectId);
+    }
+
+    function renderKanban(tasks) {
+      const board = document.getElementById('kanban-board');
+      if (!board) return;
+      const scopedTasks = filterProjectTasksByControls(tasks);
+
+      const columns = [
+        { key: 'todo', label: 'À faire' },
+        { key: 'en-cours', label: 'En cours' },
+        { key: 'suspendu', label: 'Suspendu' },
+        { key: 'termine', label: 'Terminé' }
+      ];
+
+      board.innerHTML = columns.map(col => {
+        const items = scopedTasks.filter(t => (t.status || 'todo') === col.key);
+        const cards = items.length === 0
+          ? '<p class="text-sm text-gray-500 text-center py-4">Aucune tâche</p>'
+          : items.map(task => `
+            <div class="kanban-card kanban-card-modern ${getTaskUrgencyMeta(task.urgency).accentClass} bg-white rounded-lg p-3 cursor-grab active:cursor-grabbing" draggable="true" ondragstart="startKanbanDrag(event, '${task.taskId}')" onclick="openProjectTaskDetails('${task.taskId}')" role="button" tabindex="0">
+              <div class="mb-2 flex items-center justify-between gap-2">
+                <span class="${getTaskUrgencyMeta(task.urgency).chipClass}">${getTaskUrgencyMeta(task.urgency).label}</span>
+                <span class="${getTaskStatusMeta(task.status).chipClass}">${getTaskStatusMeta(task.status).label}</span>
+              </div>
+              <h4 class="font-semibold text-sm mb-1">${escapeHtml(task.title)}</h4>
+              <p class="text-xs text-gray-500 mb-2">${escapeHtml(task.description || '')}</p>
+              ${buildSubtaskProgressHtml(task, true)}
+              <div class="mb-2 flex flex-wrap gap-1">
+                ${task.theme ? `<span class="task-theme-chip">${escapeHtml(task.theme)}</span>` : ''}
+                ${getTaskGroupName(task, currentProjectState) ? `<span class="task-group-chip">${escapeHtml(getTaskGroupName(task, currentProjectState) || 'Groupe')}</span>` : ''}
+              </div>
+              <div class="text-xs text-gray-500 flex items-center justify-between">
+                <span>${escapeHtml(getTaskAssigneeName(task, currentProjectState) || 'Non assigné')}</span>
+                <span>${formatDate(task.dueDate)}</span>
+              </div>
+              ${buildProjectLockHintHtml(currentProjectState, LOCK_SCOPE_TASK, task.taskId, true)}
+              <div class="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                ${canEditTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); editTask('${task.taskId}')" class="task-action-btn">Modifier</button>` : ''}
+                ${canEditTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); convertTaskToProject('${buildGlobalTaskRef({ sourceType: 'project', sourceProjectId: currentProjectId, taskId: task.taskId })}')" class="task-action-btn">Convertir</button>` : ''}
+                ${canEditTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); archiveTask('${task.taskId}')" class="task-action-btn task-action-btn-warn">Archiver</button>` : ''}
+                ${canDeleteTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); deleteTask('${task.taskId}')" class="task-action-btn task-action-btn-danger">Supprimer</button>` : ''}
+              </div>
+            </div>
+          `).join('');
+
+        return `
+          <div class="kanban-col rounded-xl p-3" data-col="${col.key}" ondragover="allowKanbanDrop(event)" ondrop="dropKanbanTask(event, '${col.key}')">
+            <div class="flex items-center justify-between mb-3">
+              <h4 class="font-bold text-sm">${col.label}</h4>
+              <span class="text-xs px-2 py-1 rounded-full bg-white">${items.length}</span>
+            </div>
+            <div class="space-y-3">${cards}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function parseTaskDateOrNull(rawDate) {
+      if (!rawDate) return null;
+      const d = new Date(rawDate);
+      return Number.isNaN(d.getTime()) ? null : d;
+    }
+
+    function startOfDay(date) {
+      const d = new Date(date);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    }
+
+    function addDays(date, delta) {
+      const d = new Date(date);
+      d.setDate(d.getDate() + delta);
+      return d;
+    }
+
+    function diffDaysInclusive(fromDate, toDate) {
+      const ms = startOfDay(toDate).getTime() - startOfDay(fromDate).getTime();
+      return Math.max(0, Math.round(ms / 86400000));
+    }
+
+    function getTaskProgressPercent(task) {
+      const subtasks = Array.isArray(task?.subtasks) ? task.subtasks : [];
+      if (subtasks.length > 0) {
+        const done = subtasks.filter((st) => Boolean(st?.done)).length;
+        return Math.round((done / subtasks.length) * 100);
+      }
+      if (task?.status === 'termine') return 100;
+      if (task?.status === 'en-cours') return 55;
+      if (task?.status === 'suspendu') return 30;
+      return 10;
+    }
+
+    function renderGantt(tasks) {
+      const container = document.getElementById('gantt-container');
+      if (!container) return;
+
+      const scopedTasks = filterProjectTasksByControls(tasks);
+      if (scopedTasks.length === 0) {
+        container.innerHTML = '<p class="text-gray-500 text-center py-8">Aucune tâche planifiée pour la vue Gantt</p>';
+        return;
+      }
+
+      const today = startOfDay(new Date());
+      const normalized = scopedTasks.map((task) => {
+        const startCandidate = parseTaskDateOrNull(task.requestDate) || parseTaskDateOrNull(task.createdAt) || today;
+        const endCandidate = parseTaskDateOrNull(task.dueDate) || addDays(startCandidate, 10);
+        const start = startOfDay(startCandidate);
+        const end = startOfDay(endCandidate < start ? start : endCandidate);
+        return {
+          task,
+          start,
+          end,
+          progress: getTaskProgressPercent(task)
+        };
+      }).sort((a, b) => a.start.getTime() - b.start.getTime());
+
+      let minDate = normalized.reduce((acc, item) => item.start < acc ? item.start : acc, normalized[0].start);
+      let maxDate = normalized.reduce((acc, item) => item.end > acc ? item.end : acc, normalized[0].end);
+      if (today < minDate) minDate = today;
+      if (today > maxDate) maxDate = today;
+      minDate = addDays(minDate, -2);
+      maxDate = addDays(maxDate, 2);
+
+      const dayWidth = 34;
+      const totalDays = diffDaysInclusive(minDate, maxDate) + 1;
+      const trackWidth = totalDays * dayWidth;
+      const rowHeight = 58;
+
+      const months = [];
+      let monthCursor = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+      while (monthCursor <= maxDate) {
+        const monthStart = monthCursor < minDate ? minDate : monthCursor;
+        const monthEnd = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 0);
+        const clampedEnd = monthEnd > maxDate ? maxDate : monthEnd;
+        const monthDays = diffDaysInclusive(monthStart, clampedEnd) + 1;
+        months.push({
+          label: monthCursor.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }),
+          width: monthDays * dayWidth
+        });
+        monthCursor = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 1);
+      }
+
+      const getIsoWeek = (date) => {
+        const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+        const dayNum = d.getUTCDay() || 7;
+        d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+        const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+        const week = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+        return { week, year: d.getUTCFullYear() };
+      };
+
+      const weeks = [];
+      let weekCursor = startOfDay(minDate);
+      while (weekCursor <= maxDate) {
+        const dayIndex = (weekCursor.getDay() + 6) % 7; // 0=lundi ... 6=dimanche
+        const weekEnd = addDays(weekCursor, 6 - dayIndex);
+        const clampedEnd = weekEnd > maxDate ? maxDate : weekEnd;
+        const weekDays = diffDaysInclusive(weekCursor, clampedEnd) + 1;
+        const iso = getIsoWeek(weekCursor);
+        weeks.push({
+          label: `S${String(iso.week).padStart(2, '0')}`,
+          year: iso.year,
+          width: weekDays * dayWidth
+        });
+        weekCursor = addDays(clampedEnd, 1);
+      }
+
+      const leftRows = normalized.map(({ task, start, end, progress }) => `
+        <div class="gantt-left-row">
+          <div class="gantt-left-title">${escapeHtml(task.title || 'Tâche')}</div>
+          <div class="gantt-left-meta">
+            <span>${escapeHtml(getTaskAssigneeName(task, currentProjectState) || 'Non assigné')}</span>
+            <span>${formatDate(start.toISOString().slice(0, 10))} → ${formatDate(end.toISOString().slice(0, 10))}</span>
+            <span class="gantt-left-progress">${progress}%</span>
+          </div>
+        </div>
+      `).join('');
+
+      const bars = normalized.map(({ task, start, end, progress }, index) => {
+        const urgencyKey = String(task?.urgency || 'medium').toLowerCase();
+        const urgencyClass = urgencyKey === 'high'
+          ? 'gantt-urg-high'
+          : urgencyKey === 'low'
+            ? 'gantt-urg-low'
+            : 'gantt-urg-medium';
+        const left = diffDaysInclusive(minDate, start) * dayWidth + 4;
+        const width = Math.max(14, (diffDaysInclusive(start, end) + 1) * dayWidth - 8);
+        const top = index * rowHeight + 12;
+        return `
+          <div class="gantt-row-line" style="top:${index * rowHeight}px"></div>
+          <div class="gantt-bar ${urgencyClass}" style="left:${left}px;top:${top}px;width:${width}px" onclick="openProjectTaskDetails('${task.taskId}')" title="${escapeHtml(task.title || 'Tâche')}">
+            <div class="gantt-bar-fill" style="width:${Math.max(6, Math.min(100, progress))}%"></div>
+            <span class="gantt-bar-label">${progress}%</span>
+          </div>
+        `;
+      }).join('');
+
+      const todayLeft = diffDaysInclusive(minDate, today) * dayWidth;
+      const bodyHeight = normalized.length * rowHeight;
+
+      container.innerHTML = `
+        <div class="gantt-shell">
+          <div class="gantt-grid">
+            <div class="gantt-head-left">Structure des tâches</div>
+            <div class="gantt-right-head">
+              <div class="gantt-timescale" style="width:${trackWidth}px">
+                <div class="gantt-months">
+                  ${months.map((m) => `<div class="gantt-month" style="width:${m.width}px">${escapeHtml(m.label)}</div>`).join('')}
+                </div>
+                <div class="gantt-weeks">
+                  ${weeks.map((w) => `<div class="gantt-week" style="width:${w.width}px" title="Semaine ${escapeHtml(w.label)} / ${escapeHtml(String(w.year))}">${escapeHtml(w.label)}</div>`).join('')}
+                </div>
+              </div>
+            </div>
+            <div class="gantt-left-body">${leftRows}</div>
+            <div class="gantt-right-scroll">
+              <div class="gantt-timescale-spacer" style="width:${trackWidth}px"></div>
+              <div class="gantt-track" style="width:${trackWidth}px;height:${bodyHeight}px">
+                <div class="gantt-today-line" style="left:${todayLeft}px"></div>
+                ${bars}
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const headerPane = container.querySelector('.gantt-right-head');
+      const bodyPane = container.querySelector('.gantt-right-scroll');
+      if (headerPane && bodyPane) {
+        bodyPane.addEventListener('scroll', () => {
+          headerPane.scrollLeft = bodyPane.scrollLeft;
+        }, { passive: true });
+      }
+    }
+
+    function renderTimeline(tasks) {
+      const container = document.getElementById('timeline-container');
+      if (!container) return;
+
+      const now = Date.now();
+      let items = [...filterProjectTasksByControls(tasks)].sort((a, b) => {
+        const ad = a.dueDate ? new Date(a.dueDate).getTime() : Number.MAX_SAFE_INTEGER;
+        const bd = b.dueDate ? new Date(b.dueDate).getTime() : Number.MAX_SAFE_INTEGER;
+        return ad - bd;
+      });
+
+      if (timelineFilter === 'milestone') {
+        items = items.filter(task => task.status === 'termine' || task.urgency === 'high');
+      } else if (timelineFilter === 'urgent') {
+        items = items.filter(task => task.urgency === 'high');
+      } else if (timelineFilter === 'overdue') {
+        items = items.filter(task => task.dueDate && new Date(task.dueDate).getTime() < now && task.status !== 'termine' && task.status !== 'suspendu');
+      }
+
+      if (calendarDayFilterEnabled && selectedCalendarDayKey) {
+        items = items.filter(task => taskDueDateKey(task) === selectedCalendarDayKey);
+      }
+
+      const filters = [
+        ['timeline-filter-all', 'all'],
+        ['timeline-filter-milestone', 'milestone'],
+        ['timeline-filter-urgent', 'urgent'],
+        ['timeline-filter-overdue', 'overdue']
+      ];
+      filters.forEach(([id, key]) => {
+        const btn = document.getElementById(id);
+        if (!btn) return;
+        btn.classList.toggle('view-tab-active', timelineFilter === key);
+      });
+
+      if (items.length === 0) {
+        container.innerHTML = '<p class="text-gray-500 text-center py-8">Aucune tâche planifiée</p>';
+        return;
+      }
+
+      container.innerHTML = items.map(task => {
+        const progress = task.status === 'termine' ? 100 : task.status === 'en-cours' ? 55 : task.status === 'suspendu' ? 30 : 10;
+        const isMilestone = task.status === 'termine' || task.urgency === 'high';
+        return `
+          <div class="bg-surface-container-low rounded-lg p-4">
+            <div class="flex items-center justify-between mb-2">
+              <h4 class="font-semibold">${escapeHtml(task.title)}</h4>
+              <div class="flex items-center gap-2">
+                ${isMilestone ? '<span class="text-[10px] px-2 py-1 rounded-full bg-orange-100 text-orange-700 font-semibold">Jalon</span>' : ''}
+                <span class="text-xs text-gray-600">${formatDate(task.dueDate)}</span>
+              </div>
+            </div>
+            <div class="h-2 bg-white rounded-full overflow-hidden">
+              <div class="h-full bg-primary rounded-full" style="width: ${progress}%"></div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderCalendar(tasks) {
+      const grid = document.getElementById('calendar-grid');
+      const monthLabel = document.getElementById('calendar-month-label');
+      const agenda = document.getElementById('calendar-day-agenda');
+      if (!grid || !monthLabel || !agenda) return;
+
+      const year = calendarCursor.getFullYear();
+      const month = calendarCursor.getMonth();
+      const firstDay = new Date(year, month, 1);
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const leading = (firstDay.getDay() + 6) % 7;
+      const todayKey = toYmd(new Date());
+
+      monthLabel.textContent = firstDay.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+
+      const tasksByDay = new Map();
+      (tasks || []).forEach(task => {
+        const key = taskDueDateKey(task);
+        if (!key) return;
+        if (!tasksByDay.has(key)) tasksByDay.set(key, []);
+        tasksByDay.get(key).push(task);
+      });
+
+      const headers = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
+        .map(day => `<div class="text-center font-semibold text-slate-500 py-1">${day}</div>`)
+        .join('');
+
+      const cells = [];
+      for (let i = 0; i < leading; i++) {
+        cells.push('<div class="min-h-[70px] rounded-lg bg-slate-100/70 border border-slate-100"></div>');
+      }
+      for (let day = 1; day <= daysInMonth; day++) {
+        const key = toYmd(new Date(year, month, day));
+        const count = (tasksByDay.get(key) || []).length;
+        const isToday = key === todayKey;
+        const isSelected = key === selectedCalendarDayKey;
+        const badge = count > 0
+          ? `<span class="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-semibold">${count}</span>`
+          : '';
+        cells.push(`
+          <button onclick="selectCalendarDay('${key}')" class="min-h-[70px] text-left rounded-lg border p-2 transition ${
+            isSelected ? 'border-primary bg-blue-50' : 'border-slate-200 bg-white hover:bg-slate-50'
+          }">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold ${isToday ? 'text-primary' : 'text-slate-700'}">${day}</span>
+              ${badge}
+            </div>
+          </button>
+        `);
+      }
+
+      grid.innerHTML = `${headers}${cells.join('')}`;
+
+      if (!selectedCalendarDayKey || !selectedCalendarDayKey.startsWith(`${year}-${String(month + 1).padStart(2, '0')}`)) {
+        selectedCalendarDayKey = todayKey.startsWith(`${year}-${String(month + 1).padStart(2, '0')}`)
+          ? todayKey
+          : toYmd(new Date(year, month, 1));
+      }
+
+      const selectedTasks = tasksByDay.get(selectedCalendarDayKey) || [];
+      const selectedDate = new Date(selectedCalendarDayKey);
+      agenda.innerHTML = `
+        <div class="rounded-xl border border-slate-200 bg-white p-3">
+          <div class="flex items-center justify-between gap-2 mb-2">
+            <p class="text-sm font-bold text-slate-800">Agenda du ${selectedDate.toLocaleDateString('fr-FR')}</p>
+            <div class="flex items-center gap-2">
+              ${calendarDayFilterEnabled ? '<span class="text-[10px] px-2 py-1 rounded-full bg-blue-100 text-blue-700 font-semibold">Filtre jour actif</span>' : ''}
+              <button onclick="clearCalendarDayFilter()" class="px-2 py-1 text-[10px] rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">Voir tout le mois</button>
+            </div>
+          </div>
+          ${
+            selectedTasks.length === 0
+              ? '<p class="text-sm text-slate-500">Aucune tâche planifiée ce jour.</p>'
+              : `<div class="space-y-2">${selectedTasks.map(task => `
+                  <div class="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+                    <p class="text-sm font-semibold text-slate-800">${escapeHtml(task.title)}</p>
+                    <p class="text-xs text-slate-500">${escapeHtml(getTaskAssigneeName(task, currentProjectState) || 'Non assigné')}</p>
+                  </div>
+                `).join('')}</div>`
+          }
+        </div>
+      `;
+    }
+
+    function selectCalendarDay(dayKey) {
+      selectedCalendarDayKey = dayKey;
+      calendarDayFilterEnabled = true;
+      renderCalendar(currentProjectState?.tasks || []);
+      renderTimeline(currentProjectState?.tasks || []);
+    }
+
+    function clearCalendarDayFilter() {
+      calendarDayFilterEnabled = false;
+      renderCalendar(currentProjectState?.tasks || []);
+      renderTimeline(currentProjectState?.tasks || []);
+    }
+
+    window.selectCalendarDay = selectCalendarDay;
+    window.clearCalendarDayFilter = clearCalendarDayFilter;
+    window.openNotification = openNotification;
+
+    function startGlobalKanbanDrag(event, taskRef) {
+      draggedGlobalTaskRef = taskRef;
+      try {
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', taskRef);
+      } catch {
+        // Ignore dataTransfer failures on some browsers
+      }
+    }
+
+    async function updateGlobalTaskStatusFromRef(taskRef, targetStatus) {
+      const resolved = await resolveGlobalTaskFromRef(taskRef);
+      if (!resolved?.task) return false;
+      if ((resolved.task.status || 'todo') === targetStatus) return false;
+
+      if (resolved.sourceType === 'standalone') {
+        await putEncrypted('globalTasks', {
+          ...resolved.task,
+          status: targetStatus,
+          updatedAt: Date.now()
+        }, 'id');
+        return true;
+      }
+
+      if (!canChangeTaskStatus(resolved.task, resolved.state)) {
+        showToast('Action non autorisee');
+        return false;
+      }
+      if (!ensureProjectResourceUnlockedForAction(resolved.state, LOCK_SCOPE_TASK, resolved.task.taskId, 'Changement de statut').ok) {
+        return false;
+      }
+      const eventUpdate = createEvent(
+        EventTypes.UPDATE_TASK,
+        resolved.projectId,
+        currentUser.userId,
+        { taskId: resolved.task.taskId, changes: { status: targetStatus } }
+      );
+      await publishEvent(eventUpdate);
+      if (sharedFolderHandle) {
+        await writeEventToSharedFolder(resolved.projectId, eventUpdate);
+      }
+      return true;
+    }
+
+    async function dropGlobalKanbanTask(event, targetStatus) {
+      event.preventDefault();
+      const taskRef = draggedGlobalTaskRef || event.dataTransfer?.getData('text/plain');
+      draggedGlobalTaskRef = null;
+      if (!taskRef) return;
+      const updated = await updateGlobalTaskStatusFromRef(taskRef, targetStatus);
+      if (!updated) return;
+      showToast('✅ Tâche déplacée');
+      if (workspaceMode === 'global') {
+        await renderGlobalTasks();
+        await refreshStats();
+      }
+    }
+
+    window.startGlobalKanbanDrag = startGlobalKanbanDrag;
+    window.dropGlobalKanbanTask = dropGlobalKanbanTask;
+
+    function startKanbanDrag(event, taskId) {
+      draggedTaskId = taskId;
+      try {
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', taskId);
+      } catch {
+        // Ignore dataTransfer failures on some browsers
+      }
+    }
+
+    function allowKanbanDrop(event) {
+      event.preventDefault();
+      if (event.dataTransfer) {
+        event.dataTransfer.dropEffect = 'move';
+      }
+    }
+
+    async function dropKanbanTask(event, targetStatus) {
+      event.preventDefault();
+      if (!currentProjectId) return;
+
+      const taskId = draggedTaskId || event.dataTransfer?.getData('text/plain');
+      draggedTaskId = null;
+      if (!taskId) return;
+
+      const state = await getProjectState(currentProjectId);
+      const task = (state.tasks || []).find(t => t.taskId === taskId);
+      if (!task || task.status === targetStatus) return;
+      if (!canChangeTaskStatus(task, state)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      if (!ensureProjectResourceUnlockedForAction(state, LOCK_SCOPE_TASK, task.taskId, 'Changement de statut').ok) {
+        return;
+      }
+
+      const eventUpdate = createEvent(
+        EventTypes.UPDATE_TASK,
+        currentProjectId,
+        currentUser.userId,
+        { taskId, changes: { status: targetStatus } }
+      );
+
+      await publishEvent(eventUpdate);
+      if (sharedFolderHandle) {
+        await writeEventToSharedFolder(currentProjectId, eventUpdate);
+      }
+      showToast('✅ Tâche déplacée');
+      await showProjectDetail(currentProjectId);
+    }
+
+    function getDocumentCategory(doc) {
+      const type = (doc.type || '').toLowerCase();
+      const name = (doc.name || '').toLowerCase();
+      if (type.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg)$/.test(name)) return 'image';
+      if (type.includes('pdf') || name.endsWith('.pdf')) return 'pdf';
+      if (
+        type.includes('spreadsheet') ||
+        type.includes('word') ||
+        type.includes('presentation') ||
+        /\.(docx?|xlsx?|pptx?|odt|ods|odp)$/.test(name)
+      ) return 'office';
+      return 'other';
+    }
+
+    function isDocumentPreviewable(doc) {
+      const category = getDocumentCategory(doc);
+      return category === 'image' || category === 'pdf' || (doc.type || '').startsWith('text/');
+    }
+
+    function getDocumentFileExtension(doc) {
+      const name = String(doc?.name || '').trim().toLowerCase();
+      const idx = name.lastIndexOf('.');
+      return idx >= 0 ? name.slice(idx + 1) : '';
+    }
+
+    function isDirectTextDocumentEditable(doc) {
+      const type = String(doc?.type || '').toLowerCase();
+      const ext = getDocumentFileExtension(doc);
+      if (['md', 'markdown', 'txt'].includes(ext)) return true;
+      if (type.startsWith('text/')) return true;
+      return false;
+    }
+
+    function isMarkdownDocument(doc) {
+      const type = String(doc?.type || '').toLowerCase();
+      const ext = getDocumentFileExtension(doc);
+      return ext === 'md'
+        || ext === 'markdown'
+        || type.includes('markdown')
+        || type === 'text/x-markdown';
+    }
+
+    function isCssDocument(doc) {
+      const type = String(doc?.type || '').toLowerCase();
+      const ext = getDocumentFileExtension(doc);
+      return ext === 'css' || type === 'text/css' || type.includes('/css');
+    }
+
+    function isXlsxDocument(doc) {
+      const type = String(doc?.type || '').toLowerCase();
+      const ext = getDocumentFileExtension(doc);
+      return ext === 'xlsx' || ext === 'csv'
+        || type.includes('spreadsheetml')
+        || type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        || type === 'text/csv';
+    }
+
+    function isWordDocumentEditable(doc) {
+      const type = String(doc?.type || '').toLowerCase();
+      const ext = getDocumentFileExtension(doc);
+      if (['doc', 'docx', 'odt', 'rtf'].includes(ext)) return true;
+      return type.includes('msword')
+        || type.includes('wordprocessingml')
+        || type.includes('opendocument.text')
+        || type.includes('rtf')
+        || type.includes('word');
+    }
+
+    function isDocumentEditable(doc) {
+      return isDirectTextDocumentEditable(doc) || isWordDocumentEditable(doc) || isCssDocument(doc) || isXlsxDocument(doc);
+    }
+
+    function decodeDataUrlToText(dataUrl) {
+      const value = String(dataUrl || '');
+      const commaIdx = value.indexOf(',');
+      if (commaIdx < 0) return '';
+      const meta = value.slice(0, commaIdx).toLowerCase();
+      const payload = value.slice(commaIdx + 1);
+      try {
+        if (meta.includes(';base64')) {
+          const binary = atob(payload);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+          return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+        }
+        return decodeURIComponent(payload);
+      } catch {
+        return '';
+      }
+    }
+
+    function encodeTextToDataUrl(text, mimeType = 'text/plain;charset=utf-8') {
+      const raw = String(text || '');
+      const bytes = new TextEncoder().encode(raw);
+      let binary = '';
+      bytes.forEach((b) => {
+        binary += String.fromCharCode(b);
+      });
+      return `data:${mimeType};base64,${btoa(binary)}`;
+    }
+
+    function resolveDocumentEditMode(doc) {
+      if (isXlsxDocument(doc)) return 'spreadsheet-xlsx';
+      if (isCssDocument(doc)) return 'spreadsheet-css';
+      if (isDirectTextDocumentEditable(doc)) return 'text';
+      if (isWordDocumentEditable(doc)) return 'word-replace';
+      return 'none';
+    }
+
+    function openDocumentPreview(dataEncoded, nameEncoded, typeEncoded) {
+      const modal = document.getElementById('modal-doc-preview');
+      const title = document.getElementById('doc-preview-title');
+      const content = document.getElementById('doc-preview-content');
+      if (!modal || !title || !content) return;
+
+      const data = decodeURIComponent(dataEncoded || '');
+      const name = decodeURIComponent(nameEncoded || '');
+      const type = decodeURIComponent(typeEncoded || '');
+      title.textContent = `Aperçu: ${name || 'document'}`;
+      content.innerHTML = '';
+
+      if (!data) {
+        const p = document.createElement('p');
+        p.className = 'text-sm text-slate-500';
+        p.textContent = 'Aucun contenu disponible pour ce document.';
+        content.appendChild(p);
+      } else if ((type || '').startsWith('image/')) {
+        const safeSrc = sanitizeUrlForDom(data, {
+          allowHttp: true,
+          allowBlob: true,
+          allowData: true,
+          allowDataMimePrefixes: ['image/']
+        });
+        if (!safeSrc) {
+          const p = document.createElement('p');
+          p.className = 'text-sm text-slate-500';
+          p.textContent = 'Prévisualisation bloquée (source non sûre).';
+          content.appendChild(p);
+        } else {
+          const img = document.createElement('img');
+          img.src = safeSrc;
+          img.alt = String(name || 'image');
+          img.className = 'max-w-full h-auto rounded-lg mx-auto';
+          content.appendChild(img);
+        }
+      } else if ((type || '').includes('pdf') || String(name || '').toLowerCase().endsWith('.pdf')) {
+        const safeSrc = sanitizeUrlForDom(data, {
+          allowHttp: true,
+          allowBlob: true,
+          allowData: true,
+          allowDataMimePrefixes: ['application/pdf']
+        });
+        if (!safeSrc) {
+          const p = document.createElement('p');
+          p.className = 'text-sm text-slate-500';
+          p.textContent = 'Prévisualisation bloquée (source non sûre).';
+          content.appendChild(p);
+        } else {
+          const frame = document.createElement('iframe');
+          frame.src = safeSrc;
+          frame.className = 'w-full h-[70vh] rounded-lg border border-slate-200';
+          frame.title = String(name || 'PDF');
+          content.appendChild(frame);
+        }
+      } else if ((type || '').startsWith('text/')) {
+        const safeSrc = sanitizeUrlForDom(data, {
+          allowHttp: false,
+          allowBlob: true,
+          allowData: true,
+          allowDataMimePrefixes: ['text/']
+        });
+        if (!safeSrc) {
+          const p = document.createElement('p');
+          p.className = 'text-sm text-slate-500';
+          p.textContent = 'Prévisualisation bloquée (source non sûre).';
+          content.appendChild(p);
+        } else {
+          const frame = document.createElement('iframe');
+          frame.src = safeSrc;
+          frame.className = 'w-full h-[70vh] rounded-lg border border-slate-200 bg-white';
+          frame.title = String(name || 'Texte');
+          content.appendChild(frame);
+        }
+      } else {
+        const p = document.createElement('p');
+        p.className = 'text-sm text-slate-500';
+        p.textContent = 'Prévisualisation non disponible. Utilisez Télécharger.';
+        content.appendChild(p);
+      }
+
+      modal.classList.remove('hidden');
+    }
+
+    function closeDocumentPreview() {
+      const modal = document.getElementById('modal-doc-preview');
+      const content = document.getElementById('doc-preview-content');
+      if (content) content.innerHTML = '';
+      modal?.classList.add('hidden');
+    }
+
+    window.openDocumentPreview = openDocumentPreview;
+
+    function closeDocumentEditorModal() {
+      currentDocEditorContext = null;
+      const modal = document.getElementById('modal-doc-editor');
+      const textarea = document.getElementById('doc-editor-textarea');
+      const input = document.getElementById('doc-editor-file-input');
+      const summary = document.getElementById('doc-editor-file-summary');
+      const tools = document.getElementById('doc-editor-markdown-tools');
+      const spreadsheetWrap = document.getElementById('doc-editor-spreadsheet-mode');
+      const sheetSelect = document.getElementById('doc-editor-xlsx-sheet-select');
+      const formatHint = document.getElementById('doc-editor-format-hint');
+      if (textarea) textarea.value = '';
+      if (input) input.value = '';
+      if (summary) summary.textContent = 'Aucun fichier sélectionné.';
+      tools?.classList.add('hidden');
+      spreadsheetWrap?.classList.add('hidden');
+      if (sheetSelect) sheetSelect.innerHTML = '';
+      if (formatHint) formatHint.textContent = 'Edition directe du contenu (markdown/texte).';
+      destroySpreadsheetEditorTable();
+      docSpreadsheetEditorState = {
+        table: null,
+        activeTab: 'css',
+        workbook: null,
+        sheetName: '',
+        xlsxColumns: 8,
+        cssRows: []
+      };
+      modal?.classList.add('hidden');
+    }
+
+    function replaceTextareaSelection(input, replacement, selectionStart = null, selectionEnd = null) {
+      if (!input) return;
+      const start = typeof input.selectionStart === 'number' ? input.selectionStart : 0;
+      const end = typeof input.selectionEnd === 'number' ? input.selectionEnd : start;
+      const before = input.value.slice(0, start);
+      const after = input.value.slice(end);
+      input.value = `${before}${replacement}${after}`;
+      const nextStart = selectionStart == null ? start + replacement.length : start + Math.max(0, selectionStart);
+      const nextEnd = selectionEnd == null ? nextStart : start + Math.max(0, selectionEnd);
+      input.selectionStart = nextStart;
+      input.selectionEnd = nextEnd;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.focus();
+    }
+
+    function wrapTextareaSelection(input, prefix, suffix, fallback = '') {
+      if (!input) return;
+      const start = typeof input.selectionStart === 'number' ? input.selectionStart : 0;
+      const end = typeof input.selectionEnd === 'number' ? input.selectionEnd : start;
+      const selected = input.value.slice(start, end);
+      const core = selected || fallback;
+      const replacement = `${prefix}${core}${suffix}`;
+      const cursorStart = prefix.length;
+      const cursorEnd = prefix.length + core.length;
+      replaceTextareaSelection(input, replacement, cursorStart, cursorEnd);
+    }
+
+    function prefixTextareaLines(input, prefix) {
+      if (!input) return;
+      const start = typeof input.selectionStart === 'number' ? input.selectionStart : 0;
+      const end = typeof input.selectionEnd === 'number' ? input.selectionEnd : start;
+      const text = input.value;
+      const lineStart = text.lastIndexOf('\n', Math.max(0, start - 1)) + 1;
+      const lineEndIndex = text.indexOf('\n', end);
+      const lineEnd = lineEndIndex === -1 ? text.length : lineEndIndex;
+      const block = text.slice(lineStart, lineEnd);
+      const lines = block.split('\n');
+      const prefixed = lines.map((line) => {
+        if (!line.trim()) return line;
+        return line.startsWith(prefix) ? line : `${prefix}${line}`;
+      });
+      const replacement = prefixed.join('\n');
+      const nonEmptyCount = Math.max(1, lines.filter((line) => line.trim()).length);
+      replaceTextareaSelection(
+        input,
+        replacement,
+        (start - lineStart) + prefix.length,
+        (end - lineStart) + (prefix.length * nonEmptyCount)
+      );
+    }
+
+    function applyMarkdownEditorAction(action) {
+      if (!currentDocEditorContext?.isMarkdown) return;
+      const input = document.getElementById('doc-editor-textarea');
+      if (!input) return;
+      const safeAction = String(action || '').trim().toLowerCase();
+      switch (safeAction) {
+        case 'h1':
+          prefixTextareaLines(input, '# ');
+          break;
+        case 'h2':
+          prefixTextareaLines(input, '## ');
+          break;
+        case 'h3':
+          prefixTextareaLines(input, '### ');
+          break;
+        case 'bold':
+          wrapTextareaSelection(input, '**', '**', 'texte');
+          break;
+        case 'italic':
+          wrapTextareaSelection(input, '*', '*', 'texte');
+          break;
+        case 'link':
+          wrapTextareaSelection(input, '[', '](https://)', 'texte du lien');
+          break;
+        case 'ul':
+          prefixTextareaLines(input, '- ');
+          break;
+        case 'quote':
+          prefixTextareaLines(input, '> ');
+          break;
+        case 'code':
+          wrapTextareaSelection(input, '`', '`', 'code');
+          break;
+        case 'codeblock': {
+          const start = typeof input.selectionStart === 'number' ? input.selectionStart : 0;
+          const end = typeof input.selectionEnd === 'number' ? input.selectionEnd : start;
+          const selected = input.value.slice(start, end) || 'code';
+          const replacement = `\`\`\`\n${selected}\n\`\`\``;
+          replaceTextareaSelection(input, replacement, 4, 4 + selected.length);
+          break;
+        }
+        case 'image':
+          {
+            const start = typeof input.selectionStart === 'number' ? input.selectionStart : 0;
+            const end = typeof input.selectionEnd === 'number' ? input.selectionEnd : start;
+            const selected = input.value.slice(start, end).trim() || 'description image';
+            const replacement = `![${selected}](https://)`;
+            replaceTextareaSelection(input, replacement, selected.length + 4, selected.length + 12);
+          }
+          break;
+        default:
+          break;
+      }
+    }
+
+    function updateDocumentEditorFileSummary() {
+      const input = document.getElementById('doc-editor-file-input');
+      const summary = document.getElementById('doc-editor-file-summary');
+      if (!summary) return;
+      const file = input?.files?.[0];
+      summary.textContent = file
+        ? `${file.name} (${formatFileSize(file.size || 0)})`
+        : 'Aucun fichier sélectionné.';
+    }
+
+    function parseCssToTableRows(cssText) {
+      const rows = [];
+      const source = String(cssText || '');
+      const blockRegex = /([^{}]+)\{([^}]*)\}/gms;
+      let match;
+      while ((match = blockRegex.exec(source)) !== null) {
+        const selector = String(match[1] || '').trim().replace(/\s+/g, ' ');
+        const block = String(match[2] || '');
+        if (!selector) continue;
+        block.split(';').forEach((rawLine) => {
+          const line = String(rawLine || '').trim();
+          if (!line) return;
+          const sep = line.indexOf(':');
+          if (sep <= 0) return;
+          const property = line.slice(0, sep).trim();
+          const value = line.slice(sep + 1).trim();
+          if (!property || !value) return;
+          rows.push({ selector, property, value });
+        });
+      }
+      return rows;
+    }
+
+    function canUseSpreadsheetEditor() {
+      return typeof window.Tabulator === 'function' && !!window.XLSX;
+    }
+
+    function destroySpreadsheetEditorTable() {
+      if (docSpreadsheetEditorState.table && typeof docSpreadsheetEditorState.table.destroy === 'function') {
+        docSpreadsheetEditorState.table.destroy();
+      }
+      docSpreadsheetEditorState.table = null;
+    }
+
+    function decodeDataUrlToBytes(dataUrl) {
+      const value = String(dataUrl || '');
+      const commaIdx = value.indexOf(',');
+      if (commaIdx < 0) return new Uint8Array(0);
+      const meta = value.slice(0, commaIdx).toLowerCase();
+      const payload = value.slice(commaIdx + 1);
+      try {
+        if (meta.includes(';base64')) {
+          const binary = atob(payload);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+          return bytes;
+        }
+        return new TextEncoder().encode(decodeURIComponent(payload));
+      } catch {
+        return new Uint8Array(0);
+      }
+    }
+
+    function encodeBytesToDataUrl(bytes, mimeType = 'application/octet-stream') {
+      const safeBytes = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
+      let binary = '';
+      safeBytes.forEach((b) => {
+        binary += String.fromCharCode(b);
+      });
+      return `data:${mimeType};base64,${btoa(binary)}`;
+    }
+
+    function getA1ColumnLabel(index) {
+      let n = Number(index) + 1;
+      let label = '';
+      while (n > 0) {
+        const rem = (n - 1) % 26;
+        label = String.fromCharCode(65 + rem) + label;
+        n = Math.floor((n - 1) / 26);
+      }
+      return label || 'A';
+    }
+
+    function normalizeSpreadsheetRows(rows, minRows = 1, minCols = 1) {
+      const matrix = Array.isArray(rows) ? rows.map((row) => (Array.isArray(row) ? [...row] : [])) : [];
+      const maxCols = Math.max(
+        Number(minCols) || 1,
+        1,
+        ...matrix.map((row) => (Array.isArray(row) ? row.length : 0))
+      );
+      const rowCount = Math.max(Number(minRows) || 1, matrix.length || 0, 1);
+      const normalized = [];
+      for (let r = 0; r < rowCount; r += 1) {
+        const source = Array.isArray(matrix[r]) ? matrix[r] : [];
+        const target = [];
+        for (let c = 0; c < maxCols; c += 1) {
+          target.push(source[c] == null ? '' : source[c]);
+        }
+        normalized.push(target);
+      }
+      return { matrix: normalized, colCount: maxCols };
+    }
+
+    function buildSpreadsheetTableFromXlsxRows(rows, colCountHint = 8) {
+      const { matrix, colCount } = normalizeSpreadsheetRows(rows, Math.max(20, (rows || []).length || 0), Math.max(1, colCountHint || 8));
+      docSpreadsheetEditorState.xlsxColumns = colCount;
+      const columns = [
+        {
+          title: '#',
+          field: '__row',
+          width: 54,
+          hozAlign: 'center',
+          headerSort: false,
+          editor: false,
+          cssClass: 'doc-sheet-row-number'
+        }
+      ];
+      for (let col = 0; col < colCount; col += 1) {
+        columns.push({
+          title: getA1ColumnLabel(col),
+          field: `c${col}`,
+          headerSort: false,
+          editor: 'input',
+          editable: true
+        });
+      }
+      const data = matrix.map((row, rowIndex) => {
+        const item = { __row: rowIndex + 1 };
+        for (let col = 0; col < colCount; col += 1) item[`c${col}`] = row[col];
+        return item;
+      });
+      return { columns, data };
+    }
+
+    function buildSpreadsheetTableFromCssRows(rows) {
+      const safeRows = Array.isArray(rows) && rows.length > 0
+        ? rows
+        : [{ selector: '.selector', property: 'color', value: '#1f2937' }];
+      const columns = [
+        { title: 'Sélecteur', field: 'selector', editor: 'input', headerSort: false, widthGrow: 2 },
+        { title: 'Propriété', field: 'property', editor: 'input', headerSort: false, widthGrow: 1.4 },
+        { title: 'Valeur', field: 'value', editor: 'input', headerSort: false, widthGrow: 1.6 }
+      ];
+      const data = safeRows.map((row, idx) => ({
+        __row: idx + 1,
+        selector: String(row.selector || ''),
+        property: String(row.property || ''),
+        value: String(row.value || '')
+      }));
+      return { columns, data };
+    }
+
+    function renderSpreadsheetEditorTable(columns, data) {
+      const host = document.getElementById('doc-editor-table-container');
+      if (!host) return;
+      destroySpreadsheetEditorTable();
+      docSpreadsheetEditorState.table = new window.Tabulator(host, {
+        layout: 'fitColumns',
+        reactiveData: false,
+        height: '420px',
+        clipboard: true,
+        history: true,
+        cellEdited: () => {},
+        columns: columns || [],
+        data: data || []
+      });
+    }
+
+    function setSpreadsheetEditorTab(tabKey) {
+      const ctxMode = String(currentDocEditorContext?.mode || '');
+      if (ctxMode === 'spreadsheet-css' && tabKey === 'xlsx') return;
+      if (ctxMode === 'spreadsheet-xlsx' && tabKey === 'css') return;
+      persistCurrentSpreadsheetXlsxSheet();
+      const normalized = tabKey === 'xlsx' ? 'xlsx' : 'css';
+      docSpreadsheetEditorState.activeTab = normalized;
+      const tabXlsx = document.getElementById('doc-editor-tab-xlsx');
+      const tabCss = document.getElementById('doc-editor-tab-css');
+      const sheetWrap = document.getElementById('doc-editor-sheet-select-wrap');
+      const hint = document.getElementById('doc-editor-sheet-hint');
+      [tabXlsx, tabCss].forEach((btn) => {
+        if (!btn) return;
+        const isActive = btn.id === (normalized === 'xlsx' ? 'doc-editor-tab-xlsx' : 'doc-editor-tab-css');
+        btn.classList.toggle('is-active', isActive);
+        btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+      });
+      sheetWrap?.classList.toggle('hidden', normalized !== 'xlsx');
+      const addColBtn = document.getElementById('btn-doc-editor-sheet-add-col');
+      if (addColBtn) addColBtn.disabled = normalized !== 'xlsx';
+      if (hint) {
+        hint.textContent = normalized === 'xlsx'
+          ? 'Mode tableur XLSX: double-cliquez une cellule pour modifier.'
+          : 'Mode tableur CSS: une ligne = sélecteur + propriété + valeur.';
+      }
+
+      if (normalized === 'xlsx') {
+        const wb = docSpreadsheetEditorState.workbook;
+        const sheetName = docSpreadsheetEditorState.sheetName || wb?.SheetNames?.[0] || 'Feuille1';
+        docSpreadsheetEditorState.sheetName = sheetName;
+        const ws = wb?.Sheets?.[sheetName];
+        const rows = ws ? window.XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) : [];
+        const { columns, data } = buildSpreadsheetTableFromXlsxRows(rows, docSpreadsheetEditorState.xlsxColumns);
+        renderSpreadsheetEditorTable(columns, data);
+      } else {
+        const cssRows = Array.isArray(docSpreadsheetEditorState.cssRows) ? docSpreadsheetEditorState.cssRows : [];
+        const { columns, data } = buildSpreadsheetTableFromCssRows(cssRows);
+        renderSpreadsheetEditorTable(columns, data);
+      }
+    }
+
+    function collectSpreadsheetCssRows() {
+      const table = docSpreadsheetEditorState.table;
+      if (!table || docSpreadsheetEditorState.activeTab !== 'css') return [];
+      return table.getData()
+        .map((row) => ({
+          selector: String(row?.selector || '').trim(),
+          property: String(row?.property || '').trim(),
+          value: String(row?.value || '').trim()
+        }))
+        .filter((row) => row.selector && row.property && row.value);
+    }
+
+    function collectSpreadsheetXlsxDataUrl(doc) {
+      const table = docSpreadsheetEditorState.table;
+      const wb = docSpreadsheetEditorState.workbook;
+      const sheetName = docSpreadsheetEditorState.sheetName || wb?.SheetNames?.[0];
+      if (!table || !wb || !sheetName) return null;
+      const rows = table.getData() || [];
+      const colCount = Math.max(1, docSpreadsheetEditorState.xlsxColumns || 1);
+      const aoa = rows.map((row) => {
+        const current = [];
+        for (let c = 0; c < colCount; c += 1) {
+          current.push(row?.[`c${c}`] ?? '');
+        }
+        return current;
+      });
+      while (aoa.length > 1 && aoa[aoa.length - 1].every((value) => String(value ?? '').trim() === '')) aoa.pop();
+      const trimmed = aoa.map((line) => {
+        const next = [...line];
+        while (next.length > 1 && String(next[next.length - 1] ?? '').trim() === '') next.pop();
+        return next;
+      });
+      wb.Sheets[sheetName] = window.XLSX.utils.aoa_to_sheet(trimmed);
+      if (!wb.SheetNames.includes(sheetName)) wb.SheetNames.push(sheetName);
+      const isCsv = String(doc?.name || '').toLowerCase().endsWith('.csv');
+      const out = window.XLSX.write(wb, { bookType: isCsv ? 'csv' : 'xlsx', type: 'array' });
+      const docType = String(doc?.type || (isCsv ? 'text/csv' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')) || (isCsv ? 'text/csv' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      return encodeBytesToDataUrl(new Uint8Array(out), docType);
+    }
+
+    function persistCurrentSpreadsheetXlsxSheet() {
+      if (docSpreadsheetEditorState.activeTab !== 'xlsx') return;
+      const table = docSpreadsheetEditorState.table;
+      const wb = docSpreadsheetEditorState.workbook;
+      const sheetName = docSpreadsheetEditorState.sheetName || wb?.SheetNames?.[0];
+      if (!table || !wb || !sheetName || !window.XLSX) return;
+      const rows = table.getData() || [];
+      const colCount = Math.max(1, docSpreadsheetEditorState.xlsxColumns || 1);
+      const aoa = rows.map((row) => {
+        const current = [];
+        for (let c = 0; c < colCount; c += 1) current.push(row?.[`c${c}`] ?? '');
+        return current;
+      });
+      while (aoa.length > 1 && aoa[aoa.length - 1].every((value) => String(value ?? '').trim() === '')) aoa.pop();
+      const trimmed = aoa.map((line) => {
+        const next = [...line];
+        while (next.length > 1 && String(next[next.length - 1] ?? '').trim() === '') next.pop();
+        return next;
+      });
+      wb.Sheets[sheetName] = window.XLSX.utils.aoa_to_sheet(trimmed);
+      if (!wb.SheetNames.includes(sheetName)) wb.SheetNames.push(sheetName);
+    }
+
+    function buildCssFromRows(rows = []) {
+      const grouped = new Map();
+      (rows || []).forEach((row) => {
+        const selector = String(row.selector || '').trim();
+        const property = String(row.property || '').trim();
+        const value = String(row.value || '').trim();
+        if (!selector || !property || !value) return;
+        if (!grouped.has(selector)) grouped.set(selector, []);
+        grouped.get(selector).push(`${property}: ${value};`);
+      });
+      return Array.from(grouped.entries())
+        .map(([selector, declarations]) => `${selector} {\n  ${declarations.join('\n  ')}\n}`)
+        .join('\n\n');
+    }
+
+    function getDocumentEditorTextByMode(mode, textarea, doc = null) {
+      if (mode === 'spreadsheet-css') {
+        return buildCssFromRows(collectSpreadsheetCssRows());
+      }
+      if (mode === 'spreadsheet-xlsx') {
+        return collectSpreadsheetXlsxDataUrl(doc);
+      }
+      return String(textarea?.value || '');
+    }
+
+    async function readSingleDocumentFileFromInput(inputId) {
+      const input = document.getElementById(inputId);
+      const file = input?.files?.[0];
+      if (!file) return null;
+      return await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve({
+          name: file.name,
+          type: file.type || 'application/octet-stream',
+          size: file.size || 0,
+          data: reader.result
+        });
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function openDocumentEditorModal(context) {
+      const modal = document.getElementById('modal-doc-editor');
+      const title = document.getElementById('doc-editor-title');
+      const subtitle = document.getElementById('doc-editor-subtitle');
+      const textWrap = document.getElementById('doc-editor-text-mode');
+      const spreadsheetWrap = document.getElementById('doc-editor-spreadsheet-mode');
+      const wordWrap = document.getElementById('doc-editor-word-mode');
+      const textarea = document.getElementById('doc-editor-textarea');
+      const fileInput = document.getElementById('doc-editor-file-input');
+      const markdownTools = document.getElementById('doc-editor-markdown-tools');
+      const formatHint = document.getElementById('doc-editor-format-hint');
+      const sheetSelect = document.getElementById('doc-editor-xlsx-sheet-select');
+      if (!modal || !title || !subtitle || !textWrap || !spreadsheetWrap || !wordWrap || !textarea || !fileInput || !markdownTools || !formatHint || !sheetSelect) return;
+
+      let mode = resolveDocumentEditMode(context?.doc);
+      if (mode === 'none') {
+        showToast('Edition non disponible pour ce format');
+        return;
+      }
+      if ((mode === 'spreadsheet-css' || mode === 'spreadsheet-xlsx') && !canUseSpreadsheetEditor()) {
+        if (mode === 'spreadsheet-css') {
+          mode = 'text';
+          showToast("Mode tableur indisponible localement, bascule en édition texte");
+        } else {
+          showToast('Mode XLSX indisponible: vérifiez le chargement des librairies tableur');
+          return;
+        }
+      }
+
+      currentDocEditorContext = { ...context, mode, isMarkdown: isMarkdownDocument(context?.doc) };
+      const xlsxTabBtn = document.getElementById('doc-editor-tab-xlsx');
+      const cssTabBtn = document.getElementById('doc-editor-tab-css');
+      if (xlsxTabBtn) xlsxTabBtn.disabled = mode !== 'spreadsheet-xlsx';
+      if (cssTabBtn) cssTabBtn.disabled = mode !== 'spreadsheet-css';
+      title.textContent = `Modifier: ${context.doc?.name || 'document'}`;
+      subtitle.textContent = mode === 'text'
+        ? 'Edition directe du contenu'
+        : mode === 'spreadsheet-css'
+          ? 'Editeur tableur CSS (Tabulator)'
+          : mode === 'spreadsheet-xlsx'
+            ? 'Editeur tableur XLSX (Tabulator + SheetJS)'
+        : 'Format Word: remplacement du fichier';
+      textWrap.classList.toggle('hidden', mode !== 'text');
+      spreadsheetWrap.classList.toggle('hidden', !(mode === 'spreadsheet-css' || mode === 'spreadsheet-xlsx'));
+      wordWrap.classList.toggle('hidden', mode !== 'word-replace');
+      markdownTools.classList.toggle('hidden', !(mode === 'text' && currentDocEditorContext.isMarkdown));
+      formatHint.textContent = currentDocEditorContext.isMarkdown
+        ? 'Editeur Markdown assisté: utilisez la barre ci-dessous pour insérer le balisage.'
+        : mode === 'spreadsheet-css' || mode === 'spreadsheet-xlsx'
+          ? 'Edition en mode tableur.'
+        : 'Edition directe du contenu (texte brut).';
+      fileInput.accept = mode === 'word-replace' ? '.doc,.docx,.odt,.rtf' : '';
+      fileInput.value = '';
+      updateDocumentEditorFileSummary();
+
+      if (mode === 'text') {
+        textarea.value = decodeDataUrlToText(context.doc?.data || '');
+        textarea.focus();
+      } else if (mode === 'spreadsheet-css' || mode === 'spreadsheet-xlsx') {
+        textarea.value = '';
+        destroySpreadsheetEditorTable();
+        docSpreadsheetEditorState.cssRows = [];
+        docSpreadsheetEditorState.workbook = null;
+        docSpreadsheetEditorState.sheetName = '';
+        docSpreadsheetEditorState.xlsxColumns = 8;
+        if (mode === 'spreadsheet-css') {
+          const cssText = decodeDataUrlToText(context.doc?.data || '');
+          docSpreadsheetEditorState.cssRows = parseCssToTableRows(cssText);
+          setSpreadsheetEditorTab('css');
+        } else {
+          const bytes = decodeDataUrlToBytes(context.doc?.data || '');
+          let workbook = null;
+          try {
+            workbook = bytes?.length ? window.XLSX.read(bytes, { type: 'array' }) : window.XLSX.utils.book_new();
+          } catch {
+            workbook = window.XLSX.utils.book_new();
+          }
+          if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
+            const ws = window.XLSX.utils.aoa_to_sheet([[]]);
+            window.XLSX.utils.book_append_sheet(workbook, ws, 'Feuille1');
+          }
+          docSpreadsheetEditorState.workbook = workbook;
+          docSpreadsheetEditorState.sheetName = workbook.SheetNames[0] || 'Feuille1';
+          sheetSelect.innerHTML = workbook.SheetNames
+            .map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`)
+            .join('');
+          sheetSelect.value = docSpreadsheetEditorState.sheetName;
+          setSpreadsheetEditorTab('xlsx');
+        }
+      } else {
+        textarea.value = '';
+      }
+
+      modal.classList.remove('hidden');
+    }
+
+    async function saveDocumentEditorChanges() {
+      const ctx = currentDocEditorContext;
+      if (!ctx?.doc || !ctx.mode) return;
+      const textarea = document.getElementById('doc-editor-textarea');
+      const nextContent = getDocumentEditorTextByMode(ctx.mode, textarea, ctx.doc);
+      const replacement = ctx.mode === 'word-replace'
+        ? await readSingleDocumentFileFromInput('doc-editor-file-input')
+        : ctx.mode === 'spreadsheet-xlsx'
+          ? {
+              name: ctx.doc?.name,
+              type: ctx.doc?.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+              data: String(nextContent || ''),
+              size: Math.max(0, decodeDataUrlToBytes(String(nextContent || '')).byteLength || 0)
+            }
+        : null;
+      if (ctx.mode === 'word-replace' && !replacement) {
+        showToast('Sélectionnez un fichier Word');
+        return;
+      }
+      if (ctx.mode === 'spreadsheet-xlsx' && !replacement?.data) {
+        showToast('Aucune donnée XLSX à enregistrer');
+        return;
+      }
+
+      await runWithLoading(async () => {
+        if (ctx.sourceType === 'standalone') {
+          const row = await getDecrypted('globalDocs', ctx.id, 'id');
+          if (!row) {
+            showToast('Document introuvable');
+            return;
+          }
+          const next = ctx.mode === 'text'
+            ? {
+                ...row,
+                data: encodeTextToDataUrl(nextContent, row.type || 'text/plain;charset=utf-8'),
+                size: new TextEncoder().encode(String(nextContent)).length,
+                updatedAt: Date.now()
+              }
+            : ctx.mode === 'spreadsheet-css'
+              ? {
+                  ...row,
+                  data: encodeTextToDataUrl(nextContent, row.type || 'text/css;charset=utf-8'),
+                  size: new TextEncoder().encode(String(nextContent)).length,
+                  updatedAt: Date.now()
+                }
+            : ctx.mode === 'spreadsheet-xlsx'
+              ? {
+                  ...row,
+                  name: replacement.name || row.name,
+                  type: replacement.type || row.type,
+                  size: replacement.size || row.size,
+                  data: replacement.data || row.data,
+                  updatedAt: Date.now()
+                }
+            : {
+                ...row,
+                name: replacement.name || row.name,
+                type: replacement.type || row.type,
+                size: replacement.size || row.size,
+                data: replacement.data || row.data,
+                updatedAt: Date.now()
+              };
+          await putEncrypted('globalDocs', next, 'id');
+          showToast('Document mis à jour');
+          closeDocumentEditorModal();
+          await renderGlobalDocs();
+          return;
+        }
+
+        if (ctx.sourceType === 'project-doc') {
+          const state = await getProjectState(ctx.projectId, { ignoreAccessCheck: true });
+          if (!state?.project || !canEditProjectMeta(state)) {
+            showToast('Action non autorisée');
+            return;
+          }
+          const existing = (state.documents || []).find((d) => d.docId === ctx.docId);
+          if (!existing) {
+            showToast('Document introuvable');
+            return;
+          }
+          const updated = ctx.mode === 'text'
+            ? {
+                ...existing,
+                data: encodeTextToDataUrl(nextContent, existing.type || 'text/plain;charset=utf-8'),
+                size: new TextEncoder().encode(String(nextContent)).length,
+                uploadedAt: Date.now()
+              }
+            : ctx.mode === 'spreadsheet-css'
+              ? {
+                  ...existing,
+                  data: encodeTextToDataUrl(nextContent, existing.type || 'text/css;charset=utf-8'),
+                  size: new TextEncoder().encode(String(nextContent)).length,
+                  uploadedAt: Date.now()
+                }
+            : ctx.mode === 'spreadsheet-xlsx'
+              ? {
+                  ...existing,
+                  name: replacement.name || existing.name,
+                  type: replacement.type || existing.type,
+                  size: replacement.size || existing.size,
+                  data: replacement.data || existing.data,
+                  uploadedAt: Date.now()
+                }
+            : {
+                ...existing,
+                name: replacement.name || existing.name,
+                type: replacement.type || existing.type,
+                size: replacement.size || existing.size,
+                data: replacement.data || existing.data,
+                uploadedAt: Date.now()
+              };
+
+          const delEvent = createEvent(EventTypes.DELETE_DOCUMENT, ctx.projectId, currentUser.userId, { docId: existing.docId });
+          await publishEvent(delEvent);
+          if (sharedFolderHandle) await writeEventToSharedFolder(ctx.projectId, delEvent);
+          const createEventDoc = createEvent(EventTypes.CREATE_DOCUMENT, ctx.projectId, currentUser.userId, {
+            docId: updated.docId,
+            name: updated.name,
+            type: updated.type,
+            size: updated.size,
+            data: updated.data,
+            notes: updated.notes || '',
+            theme: updated.theme || 'General',
+            sharingMode: normalizeSharingMode(updated.sharingMode, normalizeSharingMode(state.project.sharingMode, 'shared')),
+            linkedTaskIds: Array.isArray(updated.linkedTaskIds) ? [...updated.linkedTaskIds] : []
+          });
+          await publishEvent(createEventDoc);
+          if (sharedFolderHandle) await writeEventToSharedFolder(ctx.projectId, createEventDoc);
+
+          showToast('Document projet mis à jour');
+          closeDocumentEditorModal();
+          if (workspaceMode === 'project' && currentProjectId === ctx.projectId) {
+            await showProjectDetail(ctx.projectId, { resetScroll: false });
+          } else {
+            await renderGlobalDocs();
+          }
+          return;
+        }
+
+        if (ctx.sourceType === 'task-attachment') {
+          const state = await getProjectState(ctx.projectId, { ignoreAccessCheck: true });
+          const task = (state?.tasks || []).find((t) => t.taskId === ctx.taskId);
+          if (!state?.project || !task || !canEditTaskInProject(task, state)) {
+            showToast('Action non autorisée');
+            return;
+          }
+          const idx = Number(ctx.attachmentIndex);
+          const attachments = [...(task.attachments || [])];
+          if (!attachments[idx]) {
+            showToast('Pièce jointe introuvable');
+            return;
+          }
+          attachments[idx] = ctx.mode === 'text'
+            ? {
+                ...attachments[idx],
+                data: encodeTextToDataUrl(nextContent, attachments[idx].type || 'text/plain;charset=utf-8'),
+                size: new TextEncoder().encode(String(nextContent)).length
+              }
+            : ctx.mode === 'spreadsheet-css'
+              ? {
+                  ...attachments[idx],
+                  data: encodeTextToDataUrl(nextContent, attachments[idx].type || 'text/css;charset=utf-8'),
+                  size: new TextEncoder().encode(String(nextContent)).length
+                }
+            : ctx.mode === 'spreadsheet-xlsx'
+              ? {
+                  ...attachments[idx],
+                  name: replacement.name || attachments[idx].name,
+                  type: replacement.type || attachments[idx].type,
+                  size: replacement.size || attachments[idx].size,
+                  data: replacement.data || attachments[idx].data
+                }
+            : {
+                ...attachments[idx],
+                name: replacement.name || attachments[idx].name,
+                type: replacement.type || attachments[idx].type,
+                size: replacement.size || attachments[idx].size,
+                data: replacement.data || attachments[idx].data
+              };
+
+          const event = createEvent(EventTypes.UPDATE_TASK, ctx.projectId, currentUser.userId, {
+            taskId: task.taskId,
+            changes: { attachments }
+          });
+          await publishEvent(event);
+          if (sharedFolderHandle) await writeEventToSharedFolder(ctx.projectId, event);
+
+          showToast('Pièce jointe mise à jour');
+          closeDocumentEditorModal();
+          if (workspaceMode === 'project' && currentProjectId === ctx.projectId) {
+            await showProjectDetail(ctx.projectId, { resetScroll: false });
+          } else {
+            await renderGlobalDocs();
+          }
+        }
+      });
+    }
+
+    async function openProjectDocumentEditor(sourceType, sourceId, attachmentIndex = -1) {
+      const state = currentProjectState || (currentProjectId ? await getProjectState(currentProjectId, { ignoreAccessCheck: true }) : null);
+      if (!state?.project) return;
+      const kind = String(sourceType || '').trim();
+      if (kind === 'project-doc') {
+        const doc = (state.documents || []).find((d) => d.docId === sourceId);
+        if (!doc || !canEditProjectMeta(state)) return;
+        await openDocumentEditorModal({
+          sourceType: 'project-doc',
+          projectId: state.project.projectId,
+          docId: doc.docId,
+          id: `${state.project.projectId}:project-doc:${doc.docId}`,
+          doc
+        });
+        return;
+      }
+      if (kind === 'task-attachment') {
+        const task = (state.tasks || []).find((t) => t.taskId === sourceId);
+        const idx = Number(attachmentIndex);
+        const doc = task?.attachments?.[idx];
+        if (!task || !doc || !canEditTaskInProject(task, state)) return;
+        await openDocumentEditorModal({
+          sourceType: 'task-attachment',
+          projectId: state.project.projectId,
+          taskId: task.taskId,
+          attachmentIndex: idx,
+          id: `${state.project.projectId}:${task.taskId}:${idx}`,
+          doc
+        });
+      }
+    }
+
+    async function openGlobalDocumentEditor(docId) {
+      const id = String(docId || '').trim();
+      if (!id) return;
+      const doc = await resolveDocumentForBinding(id);
+      if (!doc) {
+        showToast('Document introuvable');
+        return;
+      }
+      if (doc.sourceType === 'standalone') {
+        await openDocumentEditorModal({ sourceType: 'standalone', id: doc.id, doc });
+        return;
+      }
+      if (doc.sourceType === 'project-doc') {
+        const state = await getProjectState(doc.sourceProjectId, { ignoreAccessCheck: true });
+        if (!state?.project || !canEditProjectMeta(state)) {
+          showToast('Action non autorisée');
+          return;
+        }
+        await openDocumentEditorModal({
+          sourceType: 'project-doc',
+          projectId: doc.sourceProjectId,
+          docId: doc.docId,
+          id: doc.id,
+          doc
+        });
+        return;
+      }
+
+      const parts = id.split(':');
+      if (parts.length >= 3) {
+        const projectId = parts[0];
+        const taskId = parts[1];
+        const idx = Number(parts[2]);
+        const state = await getProjectState(projectId, { ignoreAccessCheck: true });
+        const task = (state?.tasks || []).find((t) => t.taskId === taskId);
+        const attachment = task?.attachments?.[idx];
+        if (!state?.project || !task || !attachment || !canEditTaskInProject(task, state)) {
+          showToast('Action non autorisée');
+          return;
+        }
+        await openDocumentEditorModal({
+          sourceType: 'task-attachment',
+          projectId,
+          taskId,
+          attachmentIndex: idx,
+          id,
+          doc: attachment
+        });
+      }
+    }
+
+    window.openProjectDocumentEditor = openProjectDocumentEditor;
+    window.openGlobalDocumentEditor = openGlobalDocumentEditor;
+
+    function renderDocuments(stateOrTasks) {
+      const container = document.getElementById('documents-container');
+      if (!container) return;
+
+      const state = Array.isArray(stateOrTasks)
+        ? { tasks: stateOrTasks, documents: (currentProjectState?.documents || []) }
+        : (stateOrTasks || currentProjectState || { tasks: [], documents: [] });
+      const tasks = Array.isArray(state.tasks) ? state.tasks : [];
+      const projectDocs = Array.isArray(state.documents) ? state.documents : [];
+      const taskTitleById = new Map(tasks.map(t => [t.taskId, t.title || 'Tâche']));
+
+      const docs = [];
+      tasks.forEach(task => {
+        (task.attachments || []).forEach((file, attachmentIndex) => {
+          if (file.shareToDocs !== false) {
+            docs.push({
+              sourceType: 'task-attachment',
+              taskTitle: task.title,
+              taskId: task.taskId,
+              linkedTaskIds: [task.taskId],
+              attachmentIndex,
+              uploadedAt: task.updatedAt || task.createdAt || 0,
+              createdBy: task.createdBy || null,
+              ...file
+            });
+          }
+        });
+      });
+
+      projectDocs.forEach(doc => {
+        docs.push({
+          sourceType: 'project-doc',
+          docId: doc.docId,
+          taskTitle: (doc.linkedTaskIds || []).length > 0 ? 'Document projet lié' : 'Document indépendant',
+          linkedTaskIds: Array.isArray(doc.linkedTaskIds) ? [...doc.linkedTaskIds] : [],
+          uploadedAt: doc.uploadedAt || doc.createdAt || 0,
+          createdBy: doc.createdBy || null,
+          name: doc.name,
+          type: doc.type,
+          size: doc.size,
+          data: doc.data,
+          notes: doc.notes || ''
+        });
+      });
+
+      let filtered = [...docs];
+      if (docsFilters.query.trim()) {
+        const q = docsFilters.query.trim().toLowerCase();
+        filtered = filtered.filter(doc => {
+          const linkedTitles = (doc.linkedTaskIds || []).map(id => taskTitleById.get(id) || '').join(' ');
+          return [doc.name, doc.taskTitle, doc.type, doc.notes, linkedTitles]
+            .some(v => String(v || '').toLowerCase().includes(q));
+        });
+      }
+      if (docsFilters.type !== 'all') {
+        filtered = filtered.filter(doc => getDocumentCategory(doc) === docsFilters.type);
+      }
+
+      filtered.sort((a, b) => {
+        if (docsFilters.sort === 'oldest') return (a.uploadedAt || 0) - (b.uploadedAt || 0);
+        if (docsFilters.sort === 'name') return String(a.name || '').localeCompare(String(b.name || ''), 'fr');
+        if (docsFilters.sort === 'size-asc') return (a.size || 0) - (b.size || 0);
+        if (docsFilters.sort === 'size-desc') return (b.size || 0) - (a.size || 0);
+        return (b.uploadedAt || 0) - (a.uploadedAt || 0);
+      });
+
+      if (filtered.length === 0) {
+        const empty = docs.length === 0 ? 'Aucun document partagé' : 'Aucun document ne correspond aux filtres';
+        container.innerHTML = `<p class="text-gray-500 text-center py-8 col-span-full">${empty}</p>`;
+        return;
+      }
+
+      container.innerHTML = filtered.map((doc, idx) => {
+        const linkedTitles = (doc.linkedTaskIds || [])
+          .map(id => taskTitleById.get(id))
+          .filter(Boolean);
+        const linkedLabel = linkedTitles.length > 0
+          ? `Lié à: ${linkedTitles.join(', ')}`
+          : 'Aucune tâche associée';
+        const canDeleteTaskDoc = doc.sourceType === 'task-attachment'
+          && canEditTaskInProject((currentProjectState?.tasks || []).find(t => t.taskId === doc.taskId), currentProjectState);
+        const canDeleteProjectDoc = doc.sourceType === 'project-doc'
+          && (canEditProjectMeta(currentProjectState) || (doc.createdBy && doc.createdBy === currentUser?.userId));
+        const canEditTaskDoc = doc.sourceType === 'task-attachment'
+          && canEditTaskInProject((currentProjectState?.tasks || []).find(t => t.taskId === doc.taskId), currentProjectState);
+        const canEditProjectDoc = doc.sourceType === 'project-doc'
+          && (canEditProjectMeta(currentProjectState) || (doc.createdBy && doc.createdBy === currentUser?.userId));
+        const canManageProjectDocBinding = doc.sourceType === 'project-doc' && canEditProjectMeta(currentProjectState);
+        return `
+        <div class="doc-card bg-surface-container-low rounded-xl p-4">
+          <div class="flex items-center justify-between mb-3">
+            <span class="material-symbols-outlined text-primary">description</span>
+            <span class="text-[10px] font-semibold uppercase px-2 py-1 rounded bg-white">${escapeHtml(getDocumentCategory(doc))}</span>
+          </div>
+          <h4 class="font-semibold text-sm truncate mb-1">${escapeHtml(doc.name || `document-${idx + 1}`)}</h4>
+          <p class="text-xs text-gray-500 mb-2">Source: ${escapeHtml(doc.taskTitle || 'Tâche')}</p>
+          <p class="text-[11px] text-slate-500 mb-2 truncate" title="${escapeHtml(linkedLabel)}">${escapeHtml(linkedLabel)}</p>
+          <div class="text-[11px] text-slate-500 mb-3">${doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString('fr-FR') : ''}</div>
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-gray-500">${formatFileSize(doc.size || 0)}</span>
+            <div class="flex items-center gap-2">
+              ${isDocumentPreviewable(doc) ? `<button onclick="openDocumentPreview('${encodeURIComponent(doc.data || '')}','${encodeURIComponent(doc.name || '')}','${encodeURIComponent(doc.type || '')}')" class="text-slate-700 hover:underline">Aperçu</button>` : ''}
+              ${isDocumentEditable(doc) && (canEditTaskDoc || canEditProjectDoc) ? `<button onclick="openProjectDocumentEditor('${doc.sourceType}','${escapeHtml(doc.sourceType === 'project-doc' ? doc.docId : doc.taskId)}',${Number(doc.attachmentIndex ?? -1)})" class="text-slate-700 hover:underline">Modifier</button>` : ''}
+              ${(() => {
+                const safeHref = sanitizeDownloadHref(doc.data || '', String(doc.type || ''));
+                if (!safeHref) return '<span class="text-slate-400">Téléchargement indisponible</span>';
+                return `<a class="text-primary font-semibold hover:underline" href="${safeHref.replace(/"/g, '&quot;')}" download="${escapeHtml(doc.name || 'document')}">Télécharger</a>`;
+              })()}
+              ${canManageProjectDocBinding ? `<button onclick="openDocumentBindingModal('${escapeHtml(`${currentProjectId}:project-doc:${doc.docId}`)}')" class="text-slate-700 font-semibold hover:underline">Gerer</button>` : ''}
+              ${canDeleteTaskDoc ? `<button onclick="removeAttachment('${doc.taskId}', ${doc.attachmentIndex})" class="text-red-600 hover:underline">Suppr.</button>` : ''}
+              ${canDeleteProjectDoc ? `<button onclick="deleteProjectDocument('${doc.docId}')" class="text-red-600 hover:underline">Suppr.</button>` : ''}
+            </div>
+          </div>
+        </div>
+      `;
+      }).join('');
+    }
+
+    async function renderActivity(events) {
+      const container = document.getElementById('activity-container');
+      if (!container) return;
+      if (!canReadProjectActivity(currentProjectState)) {
+        container.innerHTML = '<p class="text-gray-500 text-center py-8">Acces reserve aux Managers/Proprietaires.</p>';
+        return;
+      }
+
+      if (!events || events.length === 0) {
+        container.innerHTML = '<p class="text-gray-500 text-center py-8">Aucune activité</p>';
+        return;
+      }
+
+      const users = await getAllDecrypted('users', 'userId');
+      const usersById = new Map(users.map(u => [u.userId, u.name]));
+
+      const labels = {
+        CREATE_PROJECT: 'Création de projet',
+        UPDATE_PROJECT: 'Mise à jour du projet',
+        DELETE_PROJECT: 'Suppression de projet',
+        CREATE_TASK: 'Création de tâche',
+        UPDATE_TASK: 'Mise à jour de tâche',
+        DELETE_TASK: 'Suppression de tâche',
+        SEND_MESSAGE: 'Nouveau message',
+        UPDATE_MESSAGE: 'Message modifié',
+        DELETE_MESSAGE: 'Message supprimé',
+        ADD_MEMBER: 'Ajout membre',
+        REMOVE_MEMBER: 'Retrait membre',
+        CREATE_INVITE: 'Invitation creee',
+        UPDATE_INVITE: 'Mise a jour invitation',
+        CREATE_GROUP: 'Creation groupe',
+        DELETE_GROUP: 'Suppression groupe',
+        CREATE_USER_GROUP: 'Creation groupe utilisateurs',
+        UPDATE_USER_GROUP: 'Maj groupe utilisateurs',
+        DELETE_USER_GROUP: 'Suppression groupe utilisateurs',
+        ADD_THEME: 'Ajout thematique',
+        REMOVE_THEME: 'Retrait thematique',
+        CREATE_DOCUMENT: 'Ajout document',
+        DELETE_DOCUMENT: 'Suppression document'
+      };
+
+      const now = Date.now();
+      let filtered = [...events];
+
+      if (activityFilters.type !== 'all') {
+        filtered = filtered.filter(evt => evt.type === activityFilters.type);
+      }
+      if (activityFilters.author.trim()) {
+        const q = activityFilters.author.trim().toLowerCase();
+        filtered = filtered.filter(evt => {
+          const authorName = (usersById.get(evt.author) || evt.payload?.authorName || evt.author || '').toLowerCase();
+          return authorName.includes(q);
+        });
+      }
+      if (activityFilters.period !== 'all') {
+        const delta = activityFilters.period === '24h'
+          ? 24 * 60 * 60 * 1000
+          : activityFilters.period === '7d'
+            ? 7 * 24 * 60 * 60 * 1000
+            : 30 * 24 * 60 * 60 * 1000;
+        filtered = filtered.filter(evt => now - evt.timestamp <= delta);
+      }
+
+      if (filtered.length === 0) {
+        container.innerHTML = '<p class="text-gray-500 text-center py-8">Aucun événement pour ces filtres</p>';
+        return;
+      }
+
+      container.innerHTML = filtered.slice(0, 120).map(evt => `
+        <div class="activity-card bg-surface-container-low rounded-lg p-3 border border-slate-100">
+          <div class="flex items-center justify-between gap-3">
+            <span class="text-sm font-semibold text-slate-800">${labels[evt.type] || evt.type}</span>
+            <span class="text-xs text-slate-500">${new Date(evt.timestamp).toLocaleString('fr-FR')}</span>
+          </div>
+          <div class="text-xs text-slate-500 mt-1">auteur: ${escapeHtml(usersById.get(evt.author) || evt.payload?.authorName || evt.author || 'inconnu')}</div>
+          <div class="text-xs text-slate-500 mt-1 break-all">eventId: ${escapeHtml(evt.eventId || '')}</div>
+        </div>
+      `).join('');
+    }
+
+    function renderMessageAttachments(attachments) {
+      if (!attachments || attachments.length === 0) return '';
+      return `
+        <div class="message-attachments">
+          ${attachments.map((att, idx) => {
+            const isImage = String(att.type || '').startsWith('image/');
+            const label = escapeHtml(att.name || `fichier-${idx + 1}`);
+            const rawName = String(att.name || `fichier-${idx + 1}`);
+            const safeHref = sanitizeDownloadHref(att.data || '', String(att.type || ''));
+            const href = safeHref ? safeHref.replace(/"/g, '&quot;') : '#';
+            const sizeLabel = formatFileSize(Number(att.size || 0));
+            const isDownloadable = Boolean(safeHref);
+            return `
+              <a href="${href}" ${isDownloadable ? `download="${escapeHtml(rawName)}"` : ''} class="message-attachment-chip ${isImage ? 'is-image' : 'is-file'} ${isDownloadable ? '' : 'opacity-60 pointer-events-none'}">
+                ${isImage ? `
+                  <span class="message-attachment-thumb">
+                    <img src="${href}" alt="${label}" loading="lazy">
+                  </span>
+                ` : `
+                  <span class="material-symbols-outlined text-base">attach_file</span>
+                `}
+                <span class="message-attachment-meta">
+                  <span class="message-attachment-name">${label}</span>
+                  <span class="message-attachment-size">${escapeHtml(sizeLabel)}</span>
+                </span>
+              </a>
+            `;
+          }).join('')}
+        </div>
+      `;
+    }
+
+    function renderDiscussionMembersPanel(messages) {
+      const listEl = document.getElementById('discussion-members-list');
+      const countEl = document.getElementById('discussion-members-count');
+      if (!listEl || !countEl) return;
+
+      const members = Array.isArray(currentProjectState?.members) ? currentProjectState.members : [];
+      const latestByUser = new Map();
+      (messages || []).forEach(msg => {
+        const key = String(msg?.author || '').trim();
+        if (!key) return;
+        const ts = Number(msg.timestamp || 0);
+        if (!latestByUser.has(key) || latestByUser.get(key) < ts) latestByUser.set(key, ts);
+      });
+
+      const now = Date.now();
+      const rows = members.map(member => {
+        const identity = resolveKnownUserIdentity(member.userId, member.displayName || '');
+        const lastTs = latestByUser.get(member.userId) || 0;
+        const isOnline = (now - lastTs) < (2 * 60 * 60 * 1000);
+        return {
+          userId: member.userId,
+          name: identity.name || fallbackDirectoryName(member.userId),
+          avatarDataUrl: identity.avatarDataUrl || '',
+          isOnline
+        };
+      });
+
+      if (currentUser?.userId && !rows.some(r => r.userId === currentUser.userId)) {
+        rows.push({
+          userId: currentUser.userId,
+          name: currentUser.name || fallbackDirectoryName(currentUser.userId),
+          avatarDataUrl: currentUser.avatarDataUrl || '',
+          isOnline: true
+        });
+      }
+
+      countEl.textContent = String(rows.length);
+      if (rows.length === 0) {
+        listEl.innerHTML = '<p class="text-xs text-slate-500">Aucun membre</p>';
+        return;
+      }
+
+      listEl.innerHTML = rows.map((row, idx) => {
+        const avatar = `<span class="discussion-member-avatar" style="${
+          safeAvatarInlineStyle(row.avatarDataUrl, stringToColor(row.userId || row.name || String(idx)))
+        }">${escapeHtml(getInitials(row.name))}</span>`;
+        return `
+          <div class="discussion-member-item">
+            <div class="discussion-member-avatar-wrap">
+              ${avatar}
+              <span class="discussion-member-dot ${row.isOnline ? 'is-online' : 'is-away'}"></span>
+            </div>
+            <div class="discussion-member-meta">
+              <p class="discussion-member-name">${escapeHtml(row.name)}</p>
+              <p class="discussion-member-status ${row.isOnline ? 'is-online' : 'is-away'}">${row.isOnline ? 'En ligne' : 'Absent'}</p>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderMessagesLegacy(messages) {
+      const container = document.getElementById('messages-container');
+      if (!container) return;
+
+      const allMessages = [...(messages || [])];
+      let filtered = [...allMessages];
+      if (messageFilters.query.trim()) {
+        const q = messageFilters.query.trim().toLowerCase();
+        filtered = filtered.filter(msg => {
+          return [msg.content, msg.authorName].some(v => String(v || '').toLowerCase().includes(q));
+        });
+      }
+      if (messageFilters.onlyMine && currentUser?.userId) {
+        filtered = filtered.filter(msg => msg.author === currentUser.userId);
+      }
+
+      renderDiscussionMembersPanel(allMessages);
+
+      if (filtered.length === 0) {
+        const emptyLabel = allMessages.length === 0
+          ? 'Aucun message'
+          : 'Aucun message ne correspond aux filtres';
+        container.innerHTML = `<p class="text-gray-500 text-center py-8">${emptyLabel}</p>`;
+        return;
+      }
+
+      container.innerHTML = filtered.map(msg => `
+        <div id="message-item-${msg.messageId}" class="border-l-4 border-primary pl-4 py-2">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="font-semibold text-sm">${escapeHtml(msg.authorName || 'Utilisateur')}</span>
+            <span class="text-xs text-gray-500">${new Date(msg.timestamp).toLocaleString('fr-FR')}</span>
+            ${msg.editedAt ? '<span class="text-[10px] text-gray-400">(modifié)</span>' : ''}
+          </div>
+          ${editingMessageId === msg.messageId ? `
+            <div class="space-y-2">
+              <textarea id="message-edit-input-${msg.messageId}" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">${escapeHtml(editingMessageDraft)}</textarea>
+              <div class="flex items-center gap-3 text-xs">
+                <button onclick="saveEditedMessage('${msg.messageId}')" class="text-primary hover:underline">Enregistrer</button>
+                <button onclick="cancelEditMessage()" class="text-slate-600 hover:underline">Annuler</button>
+              </div>
+            </div>
+          ` : `
+            <div class="markdown-content text-gray-700">${renderSafeMarkdown(msg.content)}</div>
+            ${renderMessageAttachments(msg.attachments)}
+            <div class="mt-1 flex items-center gap-3 text-xs">
+              ${canEditProjectMessage(msg, currentProjectState) ? `<button onclick="startEditMessage('${msg.messageId}')" class="text-primary hover:underline">Éditer</button>` : ''}
+              ${canDeleteProjectMessage(msg, currentProjectState) ? `<button onclick="deleteMessage('${msg.messageId}')" class="text-red-600 hover:underline">Supprimer</button>` : ''}
+            </div>
+          `}
+        </div>
+      `).join('');
+
+      // Scroll to bottom
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function renderMessages(messages) {
+      const container = document.getElementById('messages-container');
+      if (!container) return;
+
+      const allMessages = [...(messages || [])];
+      let filtered = [...allMessages];
+      if (messageFilters.query.trim()) {
+        const q = messageFilters.query.trim().toLowerCase();
+        filtered = filtered.filter(msg => [msg.content, msg.authorName].some(v => String(v || '').toLowerCase().includes(q)));
+      }
+      if (messageFilters.onlyMine && currentUser?.userId) {
+        filtered = filtered.filter(msg => msg.author === currentUser.userId);
+      }
+
+      renderDiscussionMembersPanel(allMessages);
+
+      if (filtered.length === 0) {
+        const emptyLabel = allMessages.length === 0 ? 'Aucun message' : 'Aucun message ne correspond aux filtres';
+        container.innerHTML = `<p class="text-gray-500 text-center py-8">${emptyLabel}</p>`;
+        return;
+      }
+
+      container.innerHTML = filtered.map((msg, idx) => {
+        const mine = msg.author === currentUser?.userId;
+        const identity = resolveKnownUserIdentity(msg.author, msg.authorName || 'Utilisateur');
+        const avatarHtml = `<span class="discussion-avatar" style="${
+          safeAvatarInlineStyle(identity.avatarDataUrl, stringToColor(identity.userId || identity.name || String(idx)))
+        }">${escapeHtml(getInitials(identity.name))}</span>`;
+        const timeLabel = new Date(msg.timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+
+        return `
+          <div id="message-item-${msg.messageId}" class="discussion-message-row ${mine ? 'is-mine' : 'is-other'}">
+            ${avatarHtml}
+            <div class="discussion-message-wrap">
+              <div class="discussion-message-meta">
+                <span class="discussion-author">${escapeHtml(identity.name || 'Utilisateur')}</span>
+                <span class="discussion-time">${timeLabel}</span>
+                ${msg.editedAt ? '<span class="discussion-edited">(modifie)</span>' : ''}
+              </div>
+              <div class="discussion-bubble ${mine ? 'is-mine' : 'is-other'}">
+                ${editingMessageId === msg.messageId ? `
+                  <div class="space-y-2">
+                    <textarea id="message-edit-input-${msg.messageId}" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">${escapeHtml(editingMessageDraft)}</textarea>
+                    <div class="flex items-center gap-3 text-xs">
+                      <button onclick="saveEditedMessage('${msg.messageId}')" class="text-primary hover:underline">Enregistrer</button>
+                      <button onclick="cancelEditMessage()" class="text-slate-600 hover:underline">Annuler</button>
+                    </div>
+                  </div>
+                ` : `
+                  <div class="markdown-content">${renderSafeMarkdown(msg.content)}</div>
+                  ${renderMessageAttachments(msg.attachments)}
+                  <div class="mt-2 flex items-center gap-3 text-xs">
+                    ${canEditProjectMessage(msg, currentProjectState) ? `<button onclick="startEditMessage('${msg.messageId}')" class="text-primary hover:underline">Editer</button>` : ''}
+                    ${canDeleteProjectMessage(msg, currentProjectState) ? `<button onclick="deleteMessage('${msg.messageId}')" class="text-rose-600 hover:underline">Supprimer</button>` : ''}
+                  </div>
+                `}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      container.scrollTop = container.scrollHeight;
+    }
+
+    async function toggleTaskStatus(taskId) {
+      if (!currentProjectId) return;
+
+      const state = await getProjectState(currentProjectId);
+      const task = state.tasks.find(t => t.taskId === taskId);
+
+      if (!task) return;
+      if (!canChangeTaskStatus(task, state)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      if (!ensureProjectResourceUnlockedForAction(state, LOCK_SCOPE_TASK, task.taskId, 'Changement de statut').ok) {
+        return;
+      }
+
+      // Cycle through statuses
+      const statuses = ['todo', 'en-cours', 'suspendu', 'termine'];
+      const currentIndex = statuses.indexOf(task.status);
+      const newStatus = statuses[(currentIndex + 1) % statuses.length];
+
+      const event = createEvent(
+        EventTypes.UPDATE_TASK,
+        currentProjectId,
+        currentUser.userId,
+        {
+          taskId: taskId,
+          changes: { status: newStatus }
+        }
+      );
+
+      await runWithLoading(async () => {
+        await publishEvent(event);
+        if (sharedFolderHandle) {
+          await writeEventToSharedFolder(currentProjectId, event);
+        }
+      });
+
+      showToast('✅ Statut mis à jour');
+      await showProjectDetail(currentProjectId);
+    }
+
+    async function editTask(taskId) {
+      if (!currentProjectId) return;
+      const state = await getProjectState(currentProjectId);
+      const task = state.tasks.find(t => t.taskId === taskId);
+      if (!task) return;
+      if (!canEditTaskInProject(task, state)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const lockResult = await acquireProjectResourceLock(currentProjectId, LOCK_SCOPE_TASK, task.taskId, { scope: 'task-edit' });
+      if (!lockResult.ok) {
+        showToast(buildLockBlockedMessage(lockResult.lock, 'Tache en cours de modification'));
+        return;
+      }
+      activeTaskEditLock = {
+        projectId: currentProjectId,
+        resourceType: LOCK_SCOPE_TASK,
+        resourceId: task.taskId,
+        lockId: lockResult.lockId
+      };
+      openTaskModal(task);
+    }
+
+    async function deleteTask(taskId) {
+      if (!currentProjectId) return;
+      const state = await getProjectState(currentProjectId);
+      const task = state.tasks.find(t => t.taskId === taskId);
+      if (!task) return;
+      if (!canDeleteTaskInProject(task, state)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      if (!ensureProjectResourceUnlockedForAction(state, LOCK_SCOPE_TASK, task.taskId, 'Suppression').ok) {
+        return;
+      }
+      if (!confirm('Supprimer cette tâche ?')) return;
+
+      const event = createEvent(
+        EventTypes.DELETE_TASK,
+        currentProjectId,
+        currentUser.userId,
+        { taskId }
+      );
+
+      await publishEvent(event);
+      if (sharedFolderHandle) {
+        await writeEventToSharedFolder(currentProjectId, event);
+      }
+      showToast('✅ Tâche supprimée');
+      addNotification('Tache', 'Une tache a ete supprimee', currentProjectId, {
+        targetView: 'list',
+        linkLabel: 'Ouvrir le projet'
+      });
+      await showProjectDetail(currentProjectId);
+    }
+
+    async function archiveTask(taskId) {
+      if (!currentProjectId) return;
+      const state = await getProjectState(currentProjectId);
+      const task = state.tasks.find(t => t.taskId === taskId);
+      if (!task) return;
+      if (!canEditTaskInProject(task, state)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      if (!ensureProjectResourceUnlockedForAction(state, LOCK_SCOPE_TASK, task.taskId, 'Archivage').ok) {
+        return;
+      }
+      if (!confirm('Archiver cette tâche ?')) return;
+
+      const event = createEvent(
+        EventTypes.UPDATE_TASK,
+        currentProjectId,
+        currentUser.userId,
+        {
+          taskId,
+          changes: {
+            status: 'termine',
+            archivedAt: Date.now()
+          }
+        }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) {
+        await writeEventToSharedFolder(currentProjectId, event);
+      }
+      showToast('✅ Tâche archivée');
+      await showProjectDetail(currentProjectId);
+    }
+
+    async function toggleSubtask(taskId, subtaskId, done) {
+      if (!currentProjectId) return;
+      const state = await getProjectState(currentProjectId);
+      const task = state.tasks.find(t => t.taskId === taskId);
+      if (!task) return;
+      if (!canEditTaskInProject(task, state)) {
+        showToast('Action non autorisee');
+        return;
+      }
+
+      const subtasks = (task.subtasks || []).map(st => st.id === subtaskId ? { ...st, done } : st);
+      const event = createEvent(
+        EventTypes.UPDATE_TASK,
+        currentProjectId,
+        currentUser.userId,
+        { taskId, changes: { subtasks } }
+      );
+
+      await publishEvent(event);
+      if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+      await showProjectDetail(currentProjectId);
+    }
+
+    async function removeAttachment(taskId, attachmentIndex) {
+      if (!currentProjectId) return;
+      const state = await getProjectState(currentProjectId);
+      const task = state.tasks.find(t => t.taskId === taskId);
+      if (!task) return;
+      if (!canEditTaskInProject(task, state)) {
+        showToast('Action non autorisee');
+        return;
+      }
+
+      const attachments = [...(task.attachments || [])];
+      attachments.splice(attachmentIndex, 1);
+
+      const event = createEvent(
+        EventTypes.UPDATE_TASK,
+        currentProjectId,
+        currentUser.userId,
+        { taskId, changes: { attachments } }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+      showToast('✅ Document supprimé');
+      await showProjectDetail(currentProjectId);
+    }
+
+    async function readDocumentFilesFromInput(inputId) {
+      const input = document.getElementById(inputId);
+      const files = Array.from(input?.files || []);
+      if (!files.length) return [];
+      const docs = await Promise.all(
+        files.map(file => new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            resolve({
+              docId: uuidv4(),
+              name: file.name,
+              type: file.type || 'application/octet-stream',
+              size: file.size,
+              data: reader.result,
+              uploadedAt: Date.now()
+            });
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        }))
+      );
+      return docs;
+    }
+
+    async function readProjectDocumentFiles() {
+      return readDocumentFilesFromInput('project-doc-files');
+    }
+
+    async function readCreateProjectDocumentFiles() {
+      return readDocumentFilesFromInput('project-create-doc-files');
+    }
+
+    async function readEditProjectDocumentFiles() {
+      return readDocumentFilesFromInput('edit-project-doc-files');
+    }
+
+    function estimateDataUrlBytes(dataUrl) {
+      const base64 = String(dataUrl || '').split(',')[1] || '';
+      const len = base64.length;
+      if (!len) return 0;
+      const padding = (base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0);
+      return Math.max(0, Math.floor((len * 3) / 4) - padding);
+    }
+
+    function extractDescriptionImageDocs(descriptionHtml = '') {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(`<div>${sanitizeProjectDescriptionHtml(descriptionHtml)}</div>`, 'text/html');
+      const root = doc.body.firstElementChild;
+      if (!root) return [];
+      const images = Array.from(root.querySelectorAll('img[src^="data:image/"]'));
+      return images.map((img, index) => {
+        const src = String(img.getAttribute('src') || '');
+        const mime = (src.match(/^data:([^;]+);base64,/i)?.[1] || 'image/png').toLowerCase();
+        const ext = mime.split('/')[1] || 'png';
+        const imageId = String(img.getAttribute('data-desc-image-id') || '').trim() || uuidv4();
+        const alt = String(img.getAttribute('alt') || '').trim();
+        const baseName = alt || `description-image-${index + 1}`;
+        const safeBaseName = baseName.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-').trim() || `description-image-${index + 1}`;
+        const fileName = /\.[a-z0-9]{2,5}$/i.test(safeBaseName) ? safeBaseName : `${safeBaseName}.${ext}`;
+        return {
+          imageId,
+          name: fileName,
+          type: mime,
+          size: estimateDataUrlBytes(src),
+          data: src
+        };
+      });
+    }
+
+    async function syncDescriptionImagesAsProjectDocs(projectId, state, descriptionHtml) {
+      if (!projectId || !state?.project) return;
+      if (sharedFolderHandle && !projectFolders.get(projectId)) {
+        await registerProject(projectId);
+      }
+      const extracted = extractDescriptionImageDocs(descriptionHtml);
+      const extractedById = new Map(extracted.map(item => [item.imageId, item]));
+      const existing = (state.documents || []).filter(d => d.origin === 'project-description-image');
+      const existingByImageId = new Map(existing.map(d => [String(d.descriptionImageId || ''), d]));
+
+      for (const item of extracted) {
+        const matched = existingByImageId.get(item.imageId);
+        if (matched && matched.data === item.data) continue;
+
+        if (matched && matched.data !== item.data) {
+          const deleteEvent = createEvent(
+            EventTypes.DELETE_DOCUMENT,
+            projectId,
+            currentUser.userId,
+            { docId: matched.docId }
+          );
+          await publishEvent(deleteEvent);
+          if (sharedFolderHandle) await writeEventToSharedFolder(projectId, deleteEvent);
+        }
+
+        const createEventDoc = createEvent(
+          EventTypes.CREATE_DOCUMENT,
+          projectId,
+          currentUser.userId,
+          {
+            docId: uuidv4(),
+            name: item.name,
+            type: item.type,
+            size: item.size,
+            data: item.data,
+            uploadedAt: Date.now(),
+            linkedTaskIds: [],
+            notes: 'Image intégrée dans la description du projet',
+            origin: 'project-description-image',
+            descriptionImageId: item.imageId
+          }
+        );
+        await publishEvent(createEventDoc);
+        if (sharedFolderHandle) await writeEventToSharedFolder(projectId, createEventDoc);
+      }
+
+      for (const previous of existing) {
+        const imageId = String(previous.descriptionImageId || '');
+        if (!imageId || extractedById.has(imageId)) continue;
+        const deleteEvent = createEvent(
+          EventTypes.DELETE_DOCUMENT,
+          projectId,
+          currentUser.userId,
+          { docId: previous.docId }
+        );
+        await publishEvent(deleteEvent);
+        if (sharedFolderHandle) await writeEventToSharedFolder(projectId, deleteEvent);
+      }
+    }
+
+    async function addProjectDocuments() {
+      if (!currentProjectId) return;
+      const state = await getProjectState(currentProjectId);
+      if (!state?.project) return;
+      if (!canSendProjectMessage(state)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const files = await readProjectDocumentFiles();
+      if (!files.length) {
+        showToast('Selectionnez au moins un document');
+        return;
+      }
+      const taskLinksSelect = document.getElementById('project-doc-task-links');
+      const linkedTaskIds = Array.from(taskLinksSelect?.selectedOptions || [])
+        .map(opt => opt.value)
+        .filter(Boolean);
+      const validTaskIds = new Set((state.tasks || []).map(t => t.taskId));
+      const safeLinkedTaskIds = [...new Set(linkedTaskIds.filter(id => validTaskIds.has(id)))];
+
+      await runWithLoading(async () => {
+      for (const file of files) {
+        const event = createEvent(
+          EventTypes.CREATE_DOCUMENT,
+          currentProjectId,
+          currentUser.userId,
+          {
+            ...file,
+            linkedTaskIds: safeLinkedTaskIds
+          }
+        );
+        await publishEvent(event);
+        if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+      }
+      const input = document.getElementById('project-doc-files');
+      if (input) input.value = '';
+      updateProjectDocFilesSummary();
+      if (taskLinksSelect) taskLinksSelect.selectedIndex = -1;
+      });
+      addNotification('Document', `${files.length} document(s) ajoute(s)`, currentProjectId);
+      showToast('Document(s) ajoute(s)');
+      await showProjectDetail(currentProjectId);
+    }
+
+    async function deleteProjectDocument(docId) {
+      if (!currentProjectId || !docId) return;
+      const state = await getProjectState(currentProjectId);
+      if (!state?.project) return;
+      const doc = (state.documents || []).find(d => d.docId === docId);
+      if (!doc) return;
+      const canDelete = canEditProjectMeta(state) || (doc.createdBy && doc.createdBy === currentUser?.userId);
+      if (!canDelete) {
+        showToast('Action non autorisee');
+        return;
+      }
+      if (!confirm('Supprimer ce document du projet ?')) return;
+      const event = createEvent(
+        EventTypes.DELETE_DOCUMENT,
+        currentProjectId,
+        currentUser.userId,
+        { docId }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+      showToast('Document supprime');
+      await showProjectDetail(currentProjectId);
+    }
+
+    function startEditMessage(messageId) {
+      if (!currentProjectState) return;
+      const msg = (currentProjectState.messages || []).find(m => m.messageId === messageId);
+      if (!msg) return;
+      if (!canEditProjectMessage(msg, currentProjectState)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      editingMessageId = messageId;
+      editingMessageDraft = msg.content || '';
+      renderMessages(currentProjectState.messages || []);
+      setTimeout(() => {
+        const input = document.getElementById(`message-edit-input-${messageId}`);
+        if (input) input.focus();
+      }, 0);
+    }
+
+    function cancelEditMessage() {
+      editingMessageId = null;
+      editingMessageDraft = '';
+      if (currentProjectState) {
+        renderMessages(currentProjectState.messages || []);
+      }
+    }
+
+    async function saveEditedMessage(messageId) {
+      if (!currentProjectId) return;
+      const state = await getProjectState(currentProjectId);
+      const msg = (state?.messages || []).find(m => m.messageId === messageId);
+      if (!msg || !canEditProjectMessage(msg, state)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const input = document.getElementById(`message-edit-input-${messageId}`);
+      const trimmed = (input?.value || '').trim();
+      if (!trimmed) {
+        showToast('❌ Le message ne peut pas être vide');
+        return;
+      }
+
+      const event = createEvent(
+        EventTypes.UPDATE_MESSAGE,
+        currentProjectId,
+        currentUser.userId,
+        { messageId, content: trimmed }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+      editingMessageId = null;
+      editingMessageDraft = '';
+      showToast('✅ Message modifié');
+      addNotification('Message', 'Un message a ete modifie', currentProjectId, {
+        targetType: 'message',
+        targetId: messageId,
+        targetView: 'chat',
+        linkLabel: 'Ouvrir le message'
+      });
+      await showProjectDetail(currentProjectId);
+    }
+
+    async function deleteMessage(messageId) {
+      if (!currentProjectId) return;
+      const state = await getProjectState(currentProjectId);
+      const msg = (state?.messages || []).find(m => m.messageId === messageId);
+      if (!msg || !canDeleteProjectMessage(msg, state)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      if (!confirm('Supprimer ce message ?')) return;
+
+      const event = createEvent(
+        EventTypes.DELETE_MESSAGE,
+        currentProjectId,
+        currentUser.userId,
+        { messageId }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+      if (editingMessageId === messageId) {
+        editingMessageId = null;
+        editingMessageDraft = '';
+      }
+      showToast('✅ Message supprimé');
+      addNotification('Message', 'Un message a ete supprime', currentProjectId, {
+        targetView: 'chat',
+        linkLabel: 'Ouvrir la discussion'
+      });
+      await showProjectDetail(currentProjectId);
+    }
+
+    // ============================================================================
+    // MODULE 6.5: ENCRYPTED DATA PERSISTENCE
+    // ============================================================================
+
+    async function saveEncryptedConfig() {
+      if (!window.TaskMDACrypto || !window.TaskMDACrypto.isUnlocked()) {
+        return; // Crypto not available or not unlocked
+      }
+
+      const dataToEncrypt = {
+        config: {
+          userId: getCurrentUserId(),
+          clientId: getCurrentClientId(),
+          userName: currentUser ? currentUser.name : ''
+        },
+        version: '1.0-encrypted',
+        lastSaved: Date.now()
+      };
+
+      await window.TaskMDACrypto.saveEncryptedData(dataToEncrypt);
+    }
+
+    // ============================================================================
+    // MODULE 7: APPLICATION LIFECYCLE
+    // ============================================================================
+
+    async function initApp() {
+      debugLog('Initializing NEXUS MDA...');
+
+      try {
+        showLoading(true);
+
+        // Load encrypted config if exists
+        if (window.TaskMDACrypto && window.TaskMDACrypto.isUnlocked()) {
+          const encryptedData = await window.TaskMDACrypto.loadEncryptedData();
+          if (encryptedData && encryptedData.config) {
+            // Restore user config
+            if (encryptedData.config.userId) {
+              localStorage.setItem('userId', encryptedData.config.userId);
+            }
+            if (encryptedData.config.clientId) {
+              localStorage.setItem('clientId', encryptedData.config.clientId);
+            }
+          }
+        }
+
+        // Init database
+        await initDatabase();
+        await refreshGlobalTaxonomyCache();
+
+        // Init user
+        currentUser = await initializeCurrentUser();
+        refreshGlobalMessageHiddenGroupsForCurrentUser();
+        await upsertDirectoryUser({
+          userId: currentUser.userId,
+          name: currentUser.name,
+          source: 'current_user',
+          lastSeenAt: Date.now()
+        });
+        await refreshDirectoryFromKnownSources();
+        if (window.TaskMDACrypto && window.TaskMDACrypto.isUnlocked()) {
+          const encryptedData = await window.TaskMDACrypto.loadEncryptedData();
+          if (encryptedData && encryptedData.config && encryptedData.config.userName) {
+            currentUser.name = encryptedData.config.userName;
+          }
+        }
+        await loadAppBrandingConfig({ ensureRemote: false });
+        updateUserInfo();
+        loadNotifications();
+        notifiedCollaboratorEventIds = loadNotifiedEventIds();
+        dueReminderMemory = loadReminderMemory();
+        renderNotifications();
+
+        // Save encrypted config after initialization
+        await saveEncryptedConfig();
+        showMainContent();
+        showDashboard();
+        updateSyncStatus('disconnected');
+        await tryConnectSavedFolder();
+        if (!isFileSystemSupported()) {
+          showToast('File System Access API non supporte: mode solo uniquement');
+        }
+        showLoading(false);
+        debugLog('App initialized');
+        return;
+
+        // Check File System API support
+        if (!isFileSystemSupported()) {
+          showSetupError('❌ File System Access API non supporté. Utilisez Chrome 86+ ou Edge 86+.');
+          showLoading(false);
+          return;
+        }
+
+        showMainContent();
+        showDashboard();
+        updateSyncStatus('disconnected');
+        await tryConnectSavedFolder();
+        if (!isFileSystemSupported()) {
+          showToast('File System Access API non supporte: mode solo uniquement');
+        }
+        showLoading(false);
+
+        debugLog('App initialized');
+      } catch (error) {
+        console.error('❌ Init error:', error);
+        showSetupError(`Erreur: ${error.message}`);
+        showLoading(false);
+      }
+    }
+
+    async function handleSelectFolder() {
+      try {
+        showLoading(true);
+
+        const handle = await selectSharedFolder();
+        const shouldReload = askCollaborativeReload('liaison manuelle');
+        await connectSharedFolderHandle(handle, true, { rebuildLocal: shouldReload });
+        showLoading(false);
+        return;
+        sharedFolderHandle = handle;
+
+        // Découvrir et charger tous les projets existants
+        await discoverAndLoadExistingProjects();
+
+        // Démarrer le polling pour les nouveaux événements
+        if (!isPolling) {
+          startPolling();
+        }
+
+        updateSyncStatus('connected');
+        showMainContent();
+        await refreshStats();
+        await renderProjects();
+
+        showToast('✅ Connecté au dossier partagé');
+        addNotification('Connexion', 'Dossier partage connecte', null);
+        showLoading(false);
+      } catch (error) {
+        // L'utilisateur a fermé le sélecteur: ce n'est pas une erreur applicative.
+        if (error?.name === 'AbortError') {
+          console.info('Sélection de dossier annulée par l’utilisateur.');
+          showToast('Sélection du dossier annulée');
+          showLoading(false);
+          return;
+        }
+
+        console.error('Error:', error);
+        showToast(`Erreur dossier partage: ${error.message}`);
+        showLoading(false);
+      }
+    }
+
+    async function handleContinueWithoutFolder() {
+      try {
+        await disconnectSharedFolder();
+        return;
+        sharedFolderHandle = null;
+        stopPolling();
+        updateSyncStatus('disconnected');
+        showMainContent();
+        await refreshStats();
+        await renderProjects();
+        showToast('Mode solo activé (sans dossier partagé)');
+      } catch (error) {
+        console.error('Error:', error);
+        showToast(`Erreur deconnexion dossier: ${error.message}`);
+      }
+    }
+
+    async function handleLogout() {
+      if (!confirm('Se déconnecter de l’application maintenant ?')) return;
+      try {
+        closeMobileSidebar();
+        toggleNotificationsPanel(false);
+        stopPolling();
+        stopDueReminders();
+        stopBackupReminders();
+        currentProjectId = null;
+        currentProjectState = null;
+        currentProjectEvents = [];
+        editingTaskId = null;
+        editingStandaloneTaskId = null;
+        editingMessageId = null;
+        projectDetailMode = 'work';
+        activeProjectView = 'list';
+
+        if (window.TaskMDACrypto) {
+          if (typeof window.TaskMDACrypto.lock === 'function') {
+            window.TaskMDACrypto.lock();
+          }
+          window.TaskMDACrypto.showLockScreen('unlock');
+          const lockBtn = document.getElementById('lockBtn');
+          if (lockBtn) {
+            lockBtn.onclick = () => {
+              window.TaskMDACrypto.submitPassword(async () => {
+                await initApp();
+              });
+            };
+          }
+        }
+
+        document.getElementById('setup-screen')?.classList.add('hidden');
+        document.getElementById('main-content')?.classList.add('hidden');
+      } catch (error) {
+        console.error('Logout error:', error);
+        showToast(`Erreur déconnexion: ${error.message}`);
+      }
+    }
+
+    // ============================================================================
+    // EVENT LISTENERS
+    // ============================================================================
+
+    document.getElementById('btn-select-folder').addEventListener('click', handleSelectFolder);
+    document.getElementById('btn-continue-local')?.addEventListener('click', handleContinueWithoutFolder);
+    document.getElementById('btn-theme-toggle')?.addEventListener('click', toggleTheme);
+    document.getElementById('btn-open-app-help')?.addEventListener('click', () => {
+      document.getElementById('modal-app-help')?.classList.remove('hidden');
+    });
+    document.getElementById('btn-close-app-help')?.addEventListener('click', () => {
+      document.getElementById('modal-app-help')?.classList.add('hidden');
+    });
+    document.getElementById('btn-sidebar-collapse')?.addEventListener('click', toggleSidebarCollapsed);
+    document.getElementById('btn-link-folder')?.addEventListener('click', handleSelectFolder);
+    document.getElementById('btn-unlink-folder')?.addEventListener('click', handleContinueWithoutFolder);
+    document.getElementById('sidebar-link-folder')?.addEventListener('click', handleSelectFolder);
+    document.getElementById('sidebar-logout')?.addEventListener('click', handleLogout);
+    document.getElementById('btn-back-to-dashboard').addEventListener('click', async () => {
+      await showProjectsWorkspace();
+    });
+    document.getElementById('btn-edit-project')?.addEventListener('click', () => openEditProjectModal());
+    document.getElementById('btn-delete-project')?.addEventListener('click', () => deleteCurrentProject());
+    document.getElementById('btn-toggle-project-description')?.addEventListener('click', () => {
+      const wasExpanded = projectDescriptionExpanded;
+      projectDescriptionExpanded = !projectDescriptionExpanded;
+      renderProjectDescription(currentProjectState?.project?.description || '');
+      if (wasExpanded && !projectDescriptionExpanded) {
+        requestAnimationFrame(() => {
+          scrollProjectTitleIntoView('smooth');
+          requestAnimationFrame(() => scrollProjectTitleIntoView('auto'));
+        });
+      }
+    });
+    document.getElementById('mobile-menu-btn')?.addEventListener('click', openMobileSidebar);
+    document.getElementById('mobile-overlay')?.addEventListener('click', closeMobileSidebar);
+    updateTopbarHeightVar();
+    requestAnimationFrame(updateTopbarHeightVar);
+    window.addEventListener('resize', () => {
+      updateTopbarHeightVar();
+      const collapsed = localStorage.getItem(SIDEBAR_COMPACT_STORAGE_KEY) === '1';
+      applySidebarCollapsedState(collapsed, false);
+      syncProjectWorkFocusButton();
+    });
+    applyProjectSubnavLayout();
+    syncProjectWorkFocusButton();
+    document.getElementById('btn-notifications')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleNotificationsPanel();
+    });
+    document.getElementById('btn-notif-mark-read')?.addEventListener('click', markAllNotificationsRead);
+    document.getElementById('btn-notif-clear')?.addEventListener('click', clearNotifications);
+    document.addEventListener('click', (e) => {
+      const panel = document.getElementById('notifications-panel');
+      const btn = document.getElementById('btn-notifications');
+      if (!panel || panel.classList.contains('hidden')) return;
+      if (panel.contains(e.target) || btn?.contains(e.target)) return;
+      toggleNotificationsPanel(false);
+    });
+    document.getElementById('sidebar-create-project')?.addEventListener('click', () => {
+      document.getElementById('btn-create-project').click();
+      closeMobileSidebar();
+    });
+    document.getElementById('nav-dashboard')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      showDashboard();
+      closeMobileSidebar();
+    });
+    document.getElementById('nav-projects')?.addEventListener('click', async (e) => {
+      e.preventDefault();
+      await showProjectsWorkspace();
+      closeMobileSidebar();
+    });
+    document.getElementById('projects-view-grid')?.addEventListener('click', async () => {
+      await setProjectsViewMode('grid');
+    });
+    document.getElementById('projects-view-list')?.addEventListener('click', async () => {
+      await setProjectsViewMode('list');
+    });
+    document.getElementById('btn-open-feed-from-dashboard-news')?.addEventListener('click', async () => {
+      await showGlobalWorkspace('feed');
+      closeMobileSidebar();
+    });
+    document.getElementById('nav-tasks')?.addEventListener('click', async (e) => {
+      e.preventDefault();
+      await showGlobalWorkspace('tasks');
+      closeMobileSidebar();
+    });
+    document.getElementById('nav-calendar')?.addEventListener('click', async (e) => {
+      e.preventDefault();
+      await showGlobalWorkspace('calendar');
+      closeMobileSidebar();
+    });
+    document.getElementById('nav-docs')?.addEventListener('click', async (e) => {
+      e.preventDefault();
+      await showGlobalWorkspace('docs');
+      closeMobileSidebar();
+    });
+    document.getElementById('nav-messages')?.addEventListener('click', async (e) => {
+      e.preventDefault();
+      await showGlobalWorkspace('messages');
+      closeMobileSidebar();
+    });
+    document.getElementById('nav-feed')?.addEventListener('click', async (e) => {
+      e.preventDefault();
+      await showGlobalWorkspace('feed');
+      closeMobileSidebar();
+    });
+    document.getElementById('nav-settings')?.addEventListener('click', async (e) => {
+      e.preventDefault();
+      await showGlobalWorkspace('settings');
+      closeMobileSidebar();
+    });
+    document.getElementById('btn-global-feed-post')?.addEventListener('click', async () => {
+      await publishGlobalFeedPost();
+    });
+    document.getElementById('btn-global-feed-insert-mention')?.addEventListener('click', () => {
+      insertMentionTokenInGlobalFeed();
+    });
+    document.getElementById('global-feed-search')?.addEventListener('input', () => {
+      renderGlobalFeed();
+    });
+    document.getElementById('global-feed-sort')?.addEventListener('change', (e) => {
+      globalFeedSortMode = String(e?.target?.value || 'desc') === 'asc' ? 'asc' : 'desc';
+      renderGlobalFeed();
+    });
+    document.getElementById('global-feed-filter-all')?.addEventListener('click', () => {
+      globalFeedFilterMode = 'all';
+      renderGlobalFeed();
+    });
+    document.getElementById('global-feed-filter-auto')?.addEventListener('click', () => {
+      globalFeedFilterMode = 'auto';
+      renderGlobalFeed();
+    });
+    document.getElementById('global-feed-filter-manual')?.addEventListener('click', () => {
+      globalFeedFilterMode = 'manual';
+      renderGlobalFeed();
+    });
+    document.getElementById('global-feed-filter-mentions')?.addEventListener('click', () => {
+      globalFeedFilterMode = 'mentions';
+      renderGlobalFeed();
+    });
+    document.getElementById('global-feed-filter-project-refs')?.addEventListener('click', () => {
+      globalFeedFilterMode = 'project-refs';
+      renderGlobalFeed();
+    });
+    document.getElementById('global-feed-filter-task-refs')?.addEventListener('click', () => {
+      globalFeedFilterMode = 'task-refs';
+      renderGlobalFeed();
+    });
+    document.getElementById('global-feed-input')?.addEventListener('input', () => {
+      updateGlobalFeedMentionCounter();
+    });
+    document.getElementById('global-feed-input')?.addEventListener('keydown', async (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        await publishGlobalFeedPost();
+      }
+    });
+
+    document.getElementById('search-input')?.addEventListener('input', async (e) => {
+      globalSearchQuery = (e.target.value || '').trim();
+      if (workspaceMode === 'global') {
+        if (globalWorkspaceView === 'tasks') {
+          globalTasksPage = 1;
+          await renderGlobalTasks();
+        }
+        if (globalWorkspaceView === 'calendar') await renderGlobalCalendar();
+        if (globalWorkspaceView === 'docs') await renderGlobalDocs();
+        if (globalWorkspaceView === 'messages') await renderGlobalMessages();
+        if (globalWorkspaceView === 'settings') await renderGlobalSettings();
+      } else {
+        if (workspaceMode === 'dashboard') projectsPage = 1;
+        if (workspaceMode === 'project') tasksPage = 1;
+        await rerenderCurrentContext();
+      }
+
+      if (headerSearchDebounceTimer) clearTimeout(headerSearchDebounceTimer);
+      const query = globalSearchQuery;
+      const token = ++headerSearchRequestToken;
+      if (!query || query.length < 2) {
+        headerSearchResults = [];
+        hideHeaderSearchResults();
+        return;
+      }
+      headerSearchDebounceTimer = setTimeout(async () => {
+        const results = await buildHeaderSearchResults(query);
+        if (token !== headerSearchRequestToken) return;
+        headerSearchResults = results;
+        headerSearchActiveIndex = results.length > 0 ? 0 : -1;
+        renderHeaderSearchResults();
+      }, 170);
+    });
+    document.getElementById('search-input')?.addEventListener('focus', () => {
+      const query = (document.getElementById('search-input')?.value || '').trim();
+      if (query.length >= 2) {
+        if (headerSearchResults.length > 0) renderHeaderSearchResults();
+      }
+    });
+    document.getElementById('search-input')?.addEventListener('keydown', async (e) => {
+      if (e.key === 'Escape') {
+        hideHeaderSearchResults();
+        return;
+      }
+      if (!headerSearchResults.length) return;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        headerSearchActiveIndex = Math.min(headerSearchResults.length - 1, headerSearchActiveIndex + 1);
+        renderHeaderSearchResults();
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        headerSearchActiveIndex = Math.max(0, headerSearchActiveIndex - 1);
+        renderHeaderSearchResults();
+        return;
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const idx = headerSearchActiveIndex >= 0 ? headerSearchActiveIndex : 0;
+        const item = headerSearchResults[idx];
+        await executeHeaderSearchResult(item);
+      }
+    });
+    document.getElementById('header-search-results')?.addEventListener('click', async (e) => {
+      const row = e.target?.closest?.('[data-search-result-index]');
+      if (!row) return;
+      const idx = Number(row.dataset.searchResultIndex);
+      if (!Number.isFinite(idx) || idx < 0 || idx >= headerSearchResults.length) return;
+      await executeHeaderSearchResult(headerSearchResults[idx]);
+    });
+    document.addEventListener('click', (e) => {
+      const wrap = document.getElementById('header-search-wrap');
+      if (!wrap) return;
+      if (wrap.contains(e.target)) return;
+      hideHeaderSearchResults();
+    });
+    document.getElementById('global-task-search')?.addEventListener('input', () => {
+      globalTasksPage = 1;
+      renderGlobalTasks();
+    });
+    document.getElementById('global-task-status')?.addEventListener('change', () => {
+      globalTasksPage = 1;
+      renderGlobalTasks();
+    });
+    document.getElementById('global-task-theme')?.addEventListener('input', () => {
+      syncThemePickerSelectionFromInput('global-task-theme-known', 'global-task-theme');
+      globalTasksPage = 1;
+      renderGlobalTasks();
+    });
+    document.getElementById('global-task-theme-known')?.addEventListener('change', () => {
+      const value = String(document.getElementById('global-task-theme-known')?.value || '');
+      const input = document.getElementById('global-task-theme');
+      if (input) input.value = value;
+      globalTasksPage = 1;
+      renderGlobalTasks();
+    });
+    const rerenderProjectTasksFromFilters = () => {
+      if (workspaceMode !== 'project' || !currentProjectState) return;
+      tasksPage = 1;
+      const visibleTasks = (currentProjectState.tasks || []).filter(t => !t.archivedAt);
+      renderTasks(visibleTasks);
+      renderKanban(visibleTasks);
+      renderGantt(visibleTasks);
+      renderTimeline(visibleTasks);
+    };
+    document.getElementById('project-task-search')?.addEventListener('input', rerenderProjectTasksFromFilters);
+    document.getElementById('project-task-status')?.addEventListener('change', rerenderProjectTasksFromFilters);
+    document.getElementById('project-task-theme-filter')?.addEventListener('input', () => {
+      syncThemePickerSelectionFromInput('project-task-theme-known', 'project-task-theme-filter');
+      rerenderProjectTasksFromFilters();
+    });
+    document.getElementById('project-task-theme-known')?.addEventListener('change', () => {
+      const value = String(document.getElementById('project-task-theme-known')?.value || '');
+      const input = document.getElementById('project-task-theme-filter');
+      if (input) input.value = value;
+      rerenderProjectTasksFromFilters();
+    });
+    document.getElementById('global-tasks-view-cards')?.addEventListener('click', () => {
+      globalTasksViewMode = 'cards';
+      localStorage.setItem('taskmda_global_tasks_view', globalTasksViewMode);
+      toggleGlobalTasksInlineCalendar(false);
+      globalTasksPage = 1;
+      renderGlobalTasks();
+    });
+    document.getElementById('global-tasks-view-list')?.addEventListener('click', () => {
+      globalTasksViewMode = 'list';
+      localStorage.setItem('taskmda_global_tasks_view', globalTasksViewMode);
+      toggleGlobalTasksInlineCalendar(false);
+      globalTasksPage = 1;
+      renderGlobalTasks();
+    });
+    document.getElementById('global-tasks-view-kanban')?.addEventListener('click', () => {
+      globalTasksViewMode = 'kanban';
+      localStorage.setItem('taskmda_global_tasks_view', globalTasksViewMode);
+      toggleGlobalTasksInlineCalendar(false);
+      renderGlobalTasks();
+    });
+    document.getElementById('global-tasks-view-timeline')?.addEventListener('click', () => {
+      globalTasksViewMode = 'timeline';
+      localStorage.setItem('taskmda_global_tasks_view', globalTasksViewMode);
+      toggleGlobalTasksInlineCalendar(false);
+      renderGlobalTasks();
+    });
+    document.getElementById('global-tasks-view-calendar')?.addEventListener('click', async () => {
+      globalTasksViewMode = 'calendar';
+      localStorage.setItem('taskmda_global_tasks_view', globalTasksViewMode);
+      toggleGlobalTasksInlineCalendar(true);
+      await renderGlobalTasks();
+      updateGlobalTasksViewButtons();
+    });
+    document.getElementById('global-tasks-view-archives')?.addEventListener('click', async () => {
+      globalTasksViewMode = 'archives';
+      localStorage.setItem('taskmda_global_tasks_view', globalTasksViewMode);
+      toggleGlobalTasksInlineCalendar(false);
+      await renderGlobalTasks();
+      updateGlobalTasksViewButtons();
+    });
+    document.getElementById('global-calendar-search')?.addEventListener('input', () => renderGlobalCalendar());
+    document.getElementById('global-calendar-month')?.addEventListener('change', () => {
+      globalCalendarSelectedDay = null;
+      renderGlobalCalendar();
+    });
+    document.getElementById('global-calendar-view-list')?.addEventListener('click', () => {
+      globalCalendarViewMode = 'list';
+      renderGlobalCalendar();
+    });
+    document.getElementById('global-calendar-view-grid')?.addEventListener('click', () => {
+      globalCalendarViewMode = 'grid';
+      renderGlobalCalendar();
+    });
+    document.getElementById('global-calendar-prev-month')?.addEventListener('click', () => {
+      shiftGlobalCalendarMonth(-1);
+    });
+    document.getElementById('global-calendar-next-month')?.addEventListener('click', () => {
+      shiftGlobalCalendarMonth(1);
+    });
+    document.getElementById('global-calendar-today')?.addEventListener('click', () => {
+      const monthInput = document.getElementById('global-calendar-month');
+      if (!monthInput) return;
+      const now = new Date();
+      ensureGlobalCalendarMonthOption(monthInput, now.getFullYear(), now.getMonth());
+      globalCalendarSelectedDay = toYmd(now);
+      renderGlobalCalendar();
+    });
+    document.getElementById('btn-global-calendar-add')?.addEventListener('click', addStandaloneCalendarItem);
+    document.getElementById('global-calendar-reset')?.addEventListener('click', () => {
+      document.getElementById('global-calendar-search').value = '';
+      const base = new Date();
+      const month = `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, '0')}`;
+      document.getElementById('global-calendar-month').value = month;
+      resetStandaloneCalendarForm();
+      globalCalendarSelectedDay = null;
+      renderGlobalCalendar();
+    });
+    document.getElementById('global-doc-search')?.addEventListener('input', () => renderGlobalDocs());
+    document.getElementById('global-doc-theme')?.addEventListener('input', () => renderGlobalDocs());
+    document.getElementById('global-doc-reset')?.addEventListener('click', () => {
+      document.getElementById('global-doc-search').value = '';
+      document.getElementById('global-doc-theme').value = '';
+      document.getElementById('global-doc-files').value = '';
+      document.getElementById('global-doc-mode').value = 'private';
+      renderGlobalDocs();
+    });
+    document.getElementById('btn-global-doc-add')?.addEventListener('click', addStandaloneDocuments);
+    document.getElementById('global-message-contact-search')?.addEventListener('input', async () => {
+      globalMessageContactsRenderLimit = GLOBAL_MESSAGE_CONTACTS_INITIAL_BATCH;
+      await renderGlobalMessages();
+    });
+    document.getElementById('global-message-contacts-list')?.addEventListener('scroll', async (event) => {
+      await handleGlobalMessageContactsScroll(event);
+    });
+    document.getElementById('global-message-thread')?.addEventListener('scroll', async (event) => {
+      await handleGlobalMessageThreadScroll(event);
+    });
+    document.getElementById('btn-global-message-select-all')?.addEventListener('click', async () => {
+      await selectAllGlobalMessageRecipients();
+    });
+    document.getElementById('btn-global-message-clear-selection')?.addEventListener('click', async () => {
+      await clearGlobalMessageRecipients();
+    });
+    document.getElementById('btn-global-message-open-group-channel')?.addEventListener('click', async () => {
+      const select = document.getElementById('global-message-group-channel-select');
+      const groupKey = String(select?.value || '').trim();
+      if (!groupKey) return;
+      await openGlobalMessageGroupChannelFromCatalog(groupKey);
+    });
+    document.getElementById('btn-global-send-message')?.addEventListener('click', async () => {
+      await sendGlobalMessage();
+    });
+    document.getElementById('global-message-input')?.addEventListener('keydown', async (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        await sendGlobalMessage();
+      }
+    });
+    document.getElementById('btn-close-doc-binding')?.addEventListener('click', () => {
+      closeDocumentBindingModal();
+    });
+    document.getElementById('doc-binding-project')?.addEventListener('change', async (e) => {
+      await populateDocBindingTaskOptions(e.target?.value || '', '');
+    });
+    document.getElementById('btn-save-doc-binding')?.addEventListener('click', saveDocumentBindingChanges);
+    document.getElementById('btn-close-doc-editor')?.addEventListener('click', () => {
+      closeDocumentEditorModal();
+    });
+    document.getElementById('btn-save-doc-editor')?.addEventListener('click', async () => {
+      await saveDocumentEditorChanges();
+    });
+    document.getElementById('doc-editor-file-input')?.addEventListener('change', () => {
+      updateDocumentEditorFileSummary();
+    });
+    document.getElementById('doc-editor-markdown-tools')?.addEventListener('click', (e) => {
+      const button = e.target instanceof Element ? e.target.closest('[data-md-action]') : null;
+      if (!button) return;
+      const action = button.getAttribute('data-md-action') || '';
+      applyMarkdownEditorAction(action);
+    });
+    document.getElementById('doc-editor-tab-xlsx')?.addEventListener('click', () => {
+      if (!currentDocEditorContext || !currentDocEditorContext.mode.startsWith('spreadsheet')) return;
+      setSpreadsheetEditorTab('xlsx');
+    });
+    document.getElementById('doc-editor-tab-css')?.addEventListener('click', () => {
+      if (!currentDocEditorContext || !currentDocEditorContext.mode.startsWith('spreadsheet')) return;
+      setSpreadsheetEditorTab('css');
+    });
+    document.getElementById('doc-editor-xlsx-sheet-select')?.addEventListener('change', (e) => {
+      const nextSheet = String(e?.target?.value || '').trim();
+      if (!nextSheet) return;
+      persistCurrentSpreadsheetXlsxSheet();
+      docSpreadsheetEditorState.sheetName = nextSheet;
+      if (docSpreadsheetEditorState.activeTab === 'xlsx') {
+        setSpreadsheetEditorTab('xlsx');
+      }
+    });
+    document.getElementById('btn-doc-editor-sheet-add-row')?.addEventListener('click', () => {
+      const table = docSpreadsheetEditorState.table;
+      if (!table) return;
+      if (docSpreadsheetEditorState.activeTab === 'css') {
+        table.addData([{ selector: '', property: '', value: '' }], false);
+        return;
+      }
+      const row = { __row: table.getDataCount() + 1 };
+      const cols = Math.max(1, docSpreadsheetEditorState.xlsxColumns || 1);
+      for (let c = 0; c < cols; c += 1) row[`c${c}`] = '';
+      table.addData([row], false);
+      const all = table.getData();
+      all.forEach((item, idx) => { item.__row = idx + 1; });
+      table.replaceData(all);
+    });
+    document.getElementById('btn-doc-editor-sheet-add-col')?.addEventListener('click', () => {
+      if (docSpreadsheetEditorState.activeTab !== 'xlsx') return;
+      const table = docSpreadsheetEditorState.table;
+      if (!table) return;
+      const nextCol = Math.max(1, docSpreadsheetEditorState.xlsxColumns || 1);
+      table.addColumn({
+        title: getA1ColumnLabel(nextCol),
+        field: `c${nextCol}`,
+        headerSort: false,
+        editor: 'input'
+      }, false);
+      docSpreadsheetEditorState.xlsxColumns = nextCol + 1;
+      const data = table.getData();
+      data.forEach((row) => { row[`c${nextCol}`] = row[`c${nextCol}`] ?? ''; });
+      table.replaceData(data);
+    });
+    document.getElementById('doc-editor-textarea')?.addEventListener('keydown', (e) => {
+      if (!currentDocEditorContext?.isMarkdown) return;
+      if (e.ctrlKey || e.metaKey) {
+        const key = String(e.key || '').toLowerCase();
+        if (key === 'b') {
+          e.preventDefault();
+          applyMarkdownEditorAction('bold');
+        } else if (key === 'i') {
+          e.preventDefault();
+          applyMarkdownEditorAction('italic');
+        } else if (key === 'k') {
+          e.preventDefault();
+          applyMarkdownEditorAction('link');
+        }
+      }
+    });
+    document.getElementById('btn-save-app-branding')?.addEventListener('click', async () => {
+      await saveAppBrandingFromSettings(false);
+    });
+    document.getElementById('btn-reset-app-branding')?.addEventListener('click', async () => {
+      await saveAppBrandingFromSettings(true);
+    });
+    document.getElementById('btn-assign-app-admin')?.addEventListener('click', assignAppAdminFromSettings);
+    document.getElementById('global-settings-tab-branding')?.addEventListener('click', () => setGlobalSettingsTab('branding'));
+    document.getElementById('global-settings-tab-themes')?.addEventListener('click', () => setGlobalSettingsTab('themes'));
+    document.getElementById('global-settings-tab-groups')?.addEventListener('click', () => setGlobalSettingsTab('groups'));
+    document.getElementById('global-settings-tab-roles')?.addEventListener('click', () => setGlobalSettingsTab('roles'));
+    document.getElementById('global-settings-tab-software')?.addEventListener('click', () => setGlobalSettingsTab('software'));
+    document.getElementById('btn-global-settings-help')?.addEventListener('click', () => {
+      globalSettingsHelpOpen = !globalSettingsHelpOpen;
+      renderGlobalSettingsHelpBox();
+    });
+    document.getElementById('btn-global-theme-add')?.addEventListener('click', createGlobalThemeFromSettings);
+    document.getElementById('btn-global-group-add')?.addEventListener('click', createGlobalGroupFromSettings);
+    document.getElementById('btn-global-role-add')?.addEventListener('click', createProjectRoleFromSettings);
+    document.getElementById('btn-software-add')?.addEventListener('click', createSoftwareVersionEntry);
+    document.getElementById('global-theme-name-input')?.addEventListener('keydown', async (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        await createGlobalThemeFromSettings();
+      }
+    });
+    document.getElementById('global-group-name-input')?.addEventListener('keydown', async (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        await createGlobalGroupFromSettings();
+      }
+    });
+    document.getElementById('global-role-name-input')?.addEventListener('keydown', async (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        await createProjectRoleFromSettings();
+      }
+    });
+    document.getElementById('software-name-input')?.addEventListener('keydown', async (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        await createSoftwareVersionEntry();
+      }
+    });
+    document.getElementById('software-version-input')?.addEventListener('keydown', async (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        await createSoftwareVersionEntry();
+      }
+    });
+    document.getElementById('btn-add-member')?.addEventListener('click', addProjectMember);
+    document.getElementById('member-name-input')?.addEventListener('keydown', async (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        await addProjectMember();
+      }
+    });
+    document.getElementById('btn-send-invite')?.addEventListener('click', addProjectInvite);
+    document.getElementById('btn-create-user-group')?.addEventListener('click', createUserGroup);
+    document.getElementById('btn-update-user-group')?.addEventListener('click', updateUserGroupSelection);
+    document.getElementById('user-group-name-input')?.addEventListener('keydown', async (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        await createUserGroup();
+      }
+    });
+    document.getElementById('invite-email-input')?.addEventListener('keydown', async (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        await addProjectInvite();
+      }
+    });
+    document.getElementById('btn-create-group')?.addEventListener('click', createProjectGroup);
+    document.getElementById('group-name-input')?.addEventListener('keydown', async (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        await createProjectGroup();
+      }
+    });
+    document.getElementById('btn-add-theme')?.addEventListener('click', addProjectTheme);
+    document.getElementById('theme-name-input')?.addEventListener('keydown', async (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        await addProjectTheme();
+      }
+    });
+    document.getElementById('btn-email-project-status')?.addEventListener('click', () => sendProjectStatusEmail(false));
+    document.getElementById('btn-email-project-complete')?.addEventListener('click', () => sendProjectStatusEmail(true));
+    document.getElementById('project-mode-work')?.addEventListener('click', () => setProjectDetailMode('work'));
+    document.getElementById('project-mode-settings')?.addEventListener('click', () => setProjectDetailMode('settings'));
+    document.getElementById('project-settings-tab-overview')?.addEventListener('click', () => setProjectSettingsTab('overview'));
+    document.getElementById('project-settings-tab-members')?.addEventListener('click', () => setProjectSettingsTab('members'));
+    document.getElementById('project-settings-tab-collab')?.addEventListener('click', () => setProjectSettingsTab('collab'));
+    document.getElementById('project-settings-tab-themes')?.addEventListener('click', () => setProjectSettingsTab('themes'));
+    document.getElementById('project-settings-tab-permissions')?.addEventListener('click', () => setProjectSettingsTab('permissions'));
+    document.getElementById('btn-toggle-permissions-details')?.addEventListener('click', () => {
+      projectPermissionDetailsOpen = !projectPermissionDetailsOpen;
+      renderProjectPermissionMatrix(currentProjectState);
+    });
+
+    // Project creation
+    document.getElementById('btn-create-project').addEventListener('click', async () => {
+      document.getElementById('modal-new-project').classList.remove('hidden');
+      document.getElementById('project-name').value = '';
+      setProjectDescriptionEditorContent('project-description-editor', 'project-description-input', '');
+      const createImageInput = document.getElementById('project-description-image-input');
+      if (createImageInput) createImageInput.value = '';
+      const createProjectDocInput = document.getElementById('project-create-doc-files');
+      if (createProjectDocInput) createProjectDocInput.value = '';
+      updateCreateProjectDocFilesSummary();
+      document.getElementById('project-status').value = 'en-cours';
+      document.getElementById('project-read-access').value = 'private';
+      await populateProjectGroupPresetOptions('project-group-presets');
+      document.getElementById('project-name').focus();
+    });
+
+    document.getElementById('btn-cancel-project').addEventListener('click', () => {
+      document.getElementById('modal-new-project').classList.add('hidden');
+      const createProjectDocInput = document.getElementById('project-create-doc-files');
+      if (createProjectDocInput) createProjectDocInput.value = '';
+      updateCreateProjectDocFilesSummary();
+    });
+
+    // Toggle passphrase section based on sharing mode
+    document.querySelectorAll('input[name="sharing-mode"]').forEach(radio => {
+      radio.addEventListener('change', (e) => {
+        const passphraseSection = document.getElementById('passphrase-section');
+        if (e.target.value === 'shared') {
+          passphraseSection.classList.remove('hidden');
+        } else {
+          passphraseSection.classList.add('hidden');
+        }
+      });
+    });
+
+    // Edit user profile
+    document.getElementById('btn-edit-user-name').addEventListener('click', () => {
+      const modal = document.getElementById('modal-edit-user-name');
+      const nameInput = document.getElementById('edit-user-name-input');
+      const emailInput = document.getElementById('edit-user-email-input');
+      const photoInput = document.getElementById('profile-photo-input');
+      const importInput = document.getElementById('import-user-json-input');
+      modal.classList.remove('hidden');
+      nameInput.value = currentUser.name;
+      if (emailInput) emailInput.value = String(currentUser.email || '').trim();
+      nameInput.focus();
+      pendingProfilePhotoDataUrl = currentUser.avatarDataUrl || '';
+      pendingProfilePhotoDirty = false;
+      if (photoInput) photoInput.value = '';
+      if (importInput) importInput.value = '';
+      const currentPwdInput = document.getElementById('profile-current-password');
+      const newPwdInput = document.getElementById('profile-new-password');
+      const confirmPwdInput = document.getElementById('profile-confirm-password');
+      if (currentPwdInput) currentPwdInput.value = '';
+      if (newPwdInput) newPwdInput.value = '';
+      if (confirmPwdInput) confirmPwdInput.value = '';
+    });
+
+    document.getElementById('edit-user-name-input').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        document.getElementById('btn-save-user-name').click();
+      }
+    });
+
+    document.getElementById('profile-photo-input')?.addEventListener('change', async (e) => {
+      const file = e?.target?.files?.[0];
+      if (!file) return;
+      if (file.size > 2 * 1024 * 1024) {
+        showToast('Image trop lourde (max 2 Mo)');
+        e.target.value = '';
+        return;
+      }
+      try {
+        pendingProfilePhotoDataUrl = await fileToDataUrl(file);
+        pendingProfilePhotoDirty = true;
+        showToast('Photo de profil prete a etre enregistree');
+      } catch (error) {
+        console.error('Error reading profile photo:', error);
+        showToast('Impossible de lire la photo');
+      }
+    });
+
+    document.getElementById('btn-remove-profile-photo')?.addEventListener('click', () => {
+      pendingProfilePhotoDataUrl = '';
+      pendingProfilePhotoDirty = true;
+      const photoInput = document.getElementById('profile-photo-input');
+      if (photoInput) photoInput.value = '';
+      showToast('La photo sera retiree a l enregistrement');
+    });
+
+    document.getElementById('btn-export-user-json')?.addEventListener('click', async () => {
+      try {
+        await exportUserDataJson();
+      } catch (error) {
+        console.error('Error exporting user JSON:', error);
+        showToast('Erreur export JSON');
+      }
+    });
+
+    document.getElementById('btn-import-user-json')?.addEventListener('click', () => {
+      document.getElementById('import-user-json-input')?.click();
+    });
+
+    document.getElementById('import-user-json-input')?.addEventListener('change', async (e) => {
+      const file = e?.target?.files?.[0];
+      if (!file) return;
+      const confirmed = window.confirm('Importer cette sauvegarde remplacera les donnees locales actuelles. Continuer ?');
+      if (!confirmed) {
+        e.target.value = '';
+        return;
+      }
+      try {
+        showLoading(true);
+        await importUserDataJsonFromFile(file);
+        document.getElementById('modal-edit-user-name').classList.add('hidden');
+        showDashboard();
+      } catch (error) {
+        console.error('Error importing user JSON:', error);
+        showToast(error?.message || 'Erreur import JSON');
+      } finally {
+        e.target.value = '';
+        showLoading(false);
+      }
+    });
+
+    document.getElementById('btn-export-excel')?.addEventListener('click', async () => {
+      try {
+        await exportProjectsAndTasksCsv();
+      } catch (error) {
+        console.error('Error exporting Excel CSV:', error);
+        showToast('Erreur export Excel');
+      }
+    });
+
+    document.getElementById('btn-show-recovery-key')?.addEventListener('click', async () => {
+      if (!window.TaskMDACrypto?.isUnlocked?.()) {
+        showToast('Session verrouillée');
+        return;
+      }
+      try {
+        const hasRecovery = window.TaskMDACrypto?.hasRecoveryKey?.();
+        if (!hasRecovery) {
+          const generated = await window.TaskMDACrypto.setupRecoveryForCurrentKey();
+          showRecoveryKeyInstructions(generated, 'Nouvelle clé de récupération');
+          showToast('Clé de récupération générée');
+          return;
+        }
+        if (!window.confirm('Afficher la clé actuelle nécessite d en générer une nouvelle. Continuer ?')) return;
+        const rotated = await window.TaskMDACrypto.setupRecoveryForCurrentKey();
+        showRecoveryKeyInstructions(rotated, 'Nouvelle clé de récupération');
+        showToast('Clé de récupération régénérée');
+      } catch (error) {
+        console.error('Recovery key error:', error);
+        showToast('Impossible de gérer la clé de récupération');
+      }
+    });
+
+    document.getElementById('btn-regenerate-recovery-key')?.addEventListener('click', async () => {
+      if (!window.TaskMDACrypto?.isUnlocked?.()) {
+        showToast('Session verrouillée');
+        return;
+      }
+      if (!window.confirm('Regénérer la clé invalidera l ancienne. Continuer ?')) return;
+      try {
+        const generated = await window.TaskMDACrypto.setupRecoveryForCurrentKey();
+        showRecoveryKeyInstructions(generated, 'Nouvelle clé de récupération');
+        showToast('Clé de récupération régénérée');
+      } catch (error) {
+        console.error('Recovery key regenerate error:', error);
+        showToast('Impossible de régénérer la clé');
+      }
+    });
+
+    document.getElementById('btn-change-password')?.addEventListener('click', async () => {
+      if (!window.TaskMDACrypto?.isUnlocked?.()) {
+        showToast('Session verrouillée');
+        return;
+      }
+      const currentPwd = String(document.getElementById('profile-current-password')?.value || '');
+      const newPwd = String(document.getElementById('profile-new-password')?.value || '');
+      const confirmPwd = String(document.getElementById('profile-confirm-password')?.value || '');
+      if (newPwd.length < 4) {
+        showToast('Nouveau mot de passe trop court (min 4)');
+        return;
+      }
+      if (newPwd !== confirmPwd) {
+        showToast('La confirmation ne correspond pas');
+        return;
+      }
+      try {
+        showLoading(true);
+        const ok = await window.TaskMDACrypto.verifyPassword(currentPwd);
+        if (!ok) {
+          showToast('Mot de passe actuel incorrect');
+          showLoading(false);
+          return;
+        }
+        const snapshot = await buildUserDataSnapshot(1);
+        const rotateResult = await window.TaskMDACrypto.rotatePassword(newPwd);
+        await restoreUserDataSnapshot(snapshot);
+        await saveEncryptedConfig();
+        showRecoveryKeyInstructions(rotateResult?.recoveryCode || '', 'Mot de passe modifié - nouvelle clé de récupération');
+        document.getElementById('profile-current-password').value = '';
+        document.getElementById('profile-new-password').value = '';
+        document.getElementById('profile-confirm-password').value = '';
+        showToast('Mot de passe mis à jour');
+      } catch (error) {
+        console.error('Change password failed:', error);
+        showToast('Échec du changement de mot de passe');
+      } finally {
+        showLoading(false);
+      }
+    });
+
+    document.getElementById('btn-cancel-user-name').addEventListener('click', () => {
+      pendingProfilePhotoDirty = false;
+      document.getElementById('modal-edit-user-name').classList.add('hidden');
+    });
+    document.getElementById('btn-cancel-edit-project')?.addEventListener('click', async () => {
+      editProjectFromDashboard = false;
+      await releaseActiveProjectEditLock();
+      document.getElementById('modal-edit-project').classList.add('hidden');
+      const editProjectDocInput = document.getElementById('edit-project-doc-files');
+      if (editProjectDocInput) editProjectDocInput.value = '';
+      updateEditProjectDocFilesSummary();
+    });
+    document.getElementById('btn-save-edit-project')?.addEventListener('click', saveProjectEdits);
+
+    document.getElementById('btn-save-user-name').addEventListener('click', async () => {
+      const newName = document.getElementById('edit-user-name-input').value.trim();
+      const emailInput = document.getElementById('edit-user-email-input');
+      const newEmail = String(emailInput?.value || '').trim().toLowerCase();
+      if (!newName) {
+        showToast('❌ Le nom est requis');
+        document.getElementById('edit-user-name-input').focus();
+        return;
+      }
+      if (newEmail && !isValidEmailAddress(newEmail)) {
+        showToast('Email professionnel invalide');
+        emailInput?.focus();
+        return;
+      }
+
+      try {
+        showLoading(true);
+
+        // Mettre à jour le nom dans currentUser
+        currentUser.name = newName;
+        currentUser.email = newEmail;
+        if (pendingProfilePhotoDirty) {
+          currentUser.avatarDataUrl = pendingProfilePhotoDataUrl || '';
+        }
+
+        // Sauvegarder dans IndexedDB (chiffré)
+        await putEncrypted('users', currentUser, 'userId');
+        await upsertDirectoryUser({
+          userId: currentUser.userId,
+          name: currentUser.name,
+          email: currentUser.email || '',
+          source: 'user_rename',
+          lastSeenAt: Date.now()
+        });
+
+        // Sauvegarder dans la config chiffrée
+        await saveEncryptedConfig();
+
+        // Mettre à jour l'affichage
+        updateUserInfo();
+
+        document.getElementById('modal-edit-user-name').classList.add('hidden');
+        pendingProfilePhotoDirty = false;
+        showToast('✅ Nom mis à jour');
+        showLoading(false);
+      } catch (error) {
+        console.error('Error updating name:', error);
+        showToast('❌ Erreur lors de la mise à jour');
+        showLoading(false);
+      }
+    });
+
+    document.getElementById('btn-save-project').addEventListener('click', async () => {
+      const name = document.getElementById('project-name').value.trim();
+      if (!name) {
+        showToast('❌ Le nom du projet est requis');
+        document.getElementById('project-name').focus();
+        return;
+      }
+      const selectedGlobalGroups = readSelectedGlobalGroups('project-group-presets');
+
+      try {
+        showLoading(true);
+
+        const projectId = `project-${Date.now()}`;
+        const sharingMode = document.querySelector('input[name="sharing-mode"]:checked').value;
+        const passphrase = document.getElementById('project-passphrase').value.trim();
+
+        let sharedKey = null;
+        let sharedKeyHex = null;
+
+        // Générer/dériver la clé partagée si projet partagé
+        if (sharingMode === 'shared') {
+          if (passphrase) {
+            // Dériver depuis passphrase
+            sharedKey = await window.TaskMDACrypto.deriveSharedKeyFromPassphrase(passphrase, projectId);
+          } else {
+            // Générer aléatoirement
+            sharedKey = await window.TaskMDACrypto.generateSharedKey();
+          }
+
+          sharedKeyHex = await window.TaskMDACrypto.exportSharedKey(sharedKey);
+
+          // Stocker la clé partagée dans IndexedDB (chiffrée)
+          await putEncrypted('sharedKeys', {
+            projectId: projectId,
+            sharedKey: sharedKeyHex,
+            passphrase: passphrase || null,
+            createdAt: Date.now()
+          }, 'projectId');
+
+          debugLog('Shared key generated for project:', projectId);
+        }
+
+        // Create project event
+        const createProjectEvent = createEvent(
+          EventTypes.CREATE_PROJECT,
+          projectId,
+          currentUser.userId,
+          {
+            name: name,
+            description: getProjectDescriptionHtmlForStorage('project-description-editor', 'project-description-input'),
+            status: document.getElementById('project-status').value,
+            readAccess: (document.getElementById('project-read-access')?.value || 'private') === 'public' ? 'public' : 'private',
+            sharingMode: sharingMode,
+            joinPassphrase: passphrase || null
+          }
+        );
+
+        await publishEvent(createProjectEvent);
+
+        // Add current user as member
+        const addMemberEvent = createEvent(
+          EventTypes.ADD_MEMBER,
+          projectId,
+          currentUser.userId,
+          { userId: currentUser.userId, role: 'owner' }
+        );
+
+        await publishEvent(addMemberEvent);
+        const createGroupEvents = selectedGlobalGroups.map(group => createEvent(
+          EventTypes.CREATE_GROUP,
+          projectId,
+          currentUser.userId,
+          { groupId: uuidv4(), name: group.name, description: group.description || '' }
+        ));
+        for (const event of createGroupEvents) {
+          await publishEvent(event);
+        }
+        const stateAfterCreate = await getProjectState(projectId, { ignoreAccessCheck: true });
+        await syncDescriptionImagesAsProjectDocs(projectId, stateAfterCreate, createProjectEvent.payload.description || '');
+        const createProjectDocuments = await readCreateProjectDocumentFiles();
+        const createProjectDocumentEvents = createProjectDocuments.map(file => createEvent(
+          EventTypes.CREATE_DOCUMENT,
+          projectId,
+          currentUser.userId,
+          {
+            ...file,
+            linkedTaskIds: [],
+            notes: 'Document ajoute lors de la creation du projet',
+            origin: 'project-create-upload'
+          }
+        ));
+        for (const event of createProjectDocumentEvents) {
+          await publishEvent(event);
+        }
+
+        // Register for sync ET write to shared folder uniquement si partagé
+        if (sharingMode === 'shared') {
+          await registerProject(projectId);
+          if (sharedKeyHex) {
+            await writeProjectSharedKeyToFolder(projectId, sharedKeyHex);
+          }
+
+          if (sharedFolderHandle) {
+            await writeEventToSharedFolder(projectId, createProjectEvent);
+            await writeEventToSharedFolder(projectId, addMemberEvent);
+            for (const event of createGroupEvents) {
+              await writeEventToSharedFolder(projectId, event);
+            }
+            for (const event of createProjectDocumentEvents) {
+              await writeEventToSharedFolder(projectId, event);
+            }
+
+            // Start polling if not already started
+            if (!isPolling) {
+              startPolling();
+            }
+          }
+        }
+
+        await refreshStats();
+        await renderProjects();
+
+        document.getElementById('modal-new-project').classList.add('hidden');
+        const createProjectDocInput = document.getElementById('project-create-doc-files');
+        if (createProjectDocInput) createProjectDocInput.value = '';
+        updateCreateProjectDocFilesSummary();
+        const modeText = sharingMode === 'private' ? 'privé' : 'partagé et chiffré E2E';
+        showToast(`✅ Projet ${modeText} créé !`);
+        addNotification('Projet', `Projet ${name} cree (${sharingMode})`, projectId);
+        showLoading(false);
+
+        // Ouvrir automatiquement le projet créé
+        await showProjectDetail(projectId);
+      } catch (error) {
+        console.error('Error:', error);
+        showToast('❌ Erreur lors de la création du projet');
+        showLoading(false);
+      }
+    });
+
+    // Task modal
+    document.getElementById('btn-add-task').addEventListener('click', () => {
+      standaloneTaskMode = false;
+      openTaskModal();
+    });
+    document.getElementById('btn-global-add-task')?.addEventListener('click', () => {
+      standaloneTaskMode = true;
+      openTaskModal();
+    });
+
+    document.getElementById('btn-cancel-task').addEventListener('click', async () => {
+      await releaseActiveTaskEditLock();
+      document.getElementById('modal-new-task').classList.add('hidden');
+      editingTaskId = null;
+      editingStandaloneTaskId = null;
+      standaloneTaskMode = false;
+      const standaloneModeInput = document.getElementById('task-standalone-mode');
+      if (standaloneModeInput) standaloneModeInput.value = 'private';
+      const taskThemeInput = document.getElementById('task-theme');
+      const taskGroupInput = document.getElementById('task-group');
+      const taskGroupPendingBox = document.getElementById('task-group-pending-members');
+      const taskAssigneeManualInput = document.getElementById('task-assignee-manual');
+      const taskAssigneeQuickInput = document.getElementById('task-assignee-quick-input');
+      if (taskThemeInput) taskThemeInput.value = '';
+      if (taskGroupInput) taskGroupInput.value = '';
+      if (taskGroupPendingBox) {
+        taskGroupPendingBox.classList.add('hidden');
+        taskGroupPendingBox.innerHTML = '';
+      }
+      taskPendingGroupMemberUserIds = [];
+      if (taskAssigneeManualInput) taskAssigneeManualInput.value = '';
+      if (taskAssigneeQuickInput) taskAssigneeQuickInput.value = '';
+    });
+    document.getElementById('btn-task-assignee-quick-add')?.addEventListener('click', () => {
+      const value = document.getElementById('task-assignee-quick-input')?.value || '';
+      addQuickTaskAssignee(value);
+    });
+    document.getElementById('task-assignee-quick-input')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        addQuickTaskAssignee(e.target?.value || '');
+      }
+    });
+    document.getElementById('task-group')?.addEventListener('change', async () => {
+      if (standaloneTaskMode || !currentProjectState?.project) return;
+      await refreshTaskGroupSelectionPreview(currentProjectState);
+    });
+
+    document.getElementById('btn-save-task').addEventListener('click', async () => {
+      if (!currentProjectId && !standaloneTaskMode) return;
+
+      const title = document.getElementById('task-title').value.trim();
+      if (!title) {
+        showToast('❌ Le titre est requis');
+        return;
+      }
+
+      let attachments = [];
+      try {
+        attachments = await runWithLoading(async () => readTaskFiles());
+      } catch (error) {
+        showToast(`❌ ${error.message}`);
+        return;
+      }
+
+      const subtasksText = document.getElementById('task-subtasks').value;
+      const subtasksParsed = parseSubtasks(subtasksText);
+      const state = standaloneTaskMode ? null : await getProjectState(currentProjectId);
+      if (!standaloneTaskMode && !state?.project) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const existingTask = (!standaloneTaskMode && editingTaskId)
+        ? (state.tasks || []).find(t => t.taskId === editingTaskId)
+        : null;
+      if (!standaloneTaskMode) {
+        if (existingTask) {
+          if (!canEditTaskInProject(existingTask, state)) {
+            showToast('Action non autorisee');
+            return;
+          }
+        } else if (!canCreateTaskInProject(state)) {
+          showToast('Action non autorisee');
+          return;
+        }
+      }
+
+      const groupSelectEl = document.getElementById('task-group');
+      const selectedGroupOption = groupSelectEl?.options?.[groupSelectEl.selectedIndex] || null;
+      const selectedGroupScope = String(selectedGroupOption?.dataset?.groupScope || '');
+      const selectedGroupName = String(selectedGroupOption?.dataset?.groupName || '').trim();
+      const rawGroupValue = String(groupSelectEl?.value || '');
+      let effectiveState = state;
+      let resolvedGroupId = selectedGroupScope === 'project' ? rawGroupValue || null : null;
+      let resolvedGroupName = rawGroupValue ? (selectedGroupName || null) : null;
+      let autoAddedMembersCount = 0;
+      if (!standaloneTaskMode && rawGroupValue) {
+        const groupContext = await resolveTaskSelectedGroupContext(state, rawGroupValue);
+        if (!groupContext) {
+          showToast('Groupe selectionne introuvable. Rechargez et reessayez.');
+          return;
+        }
+        try {
+          const ensured = await runWithLoading(async () => ensureTaskGroupAssociationInProject(state, groupContext));
+          effectiveState = ensured.state || state;
+          resolvedGroupId = ensured.groupId || null;
+          resolvedGroupName = ensured.groupName || groupContext.groupName || resolvedGroupName;
+          autoAddedMembersCount = Number(ensured.addedMembersCount || 0);
+        } catch (error) {
+          showToast(error?.message || 'Association du groupe impossible');
+          return;
+        }
+      }
+      const assigneeSelectEl = document.getElementById('task-assignee');
+      const manualAssigneeInput = document.getElementById('task-assignee-manual');
+      const selectedAssigneeUserIds = Array.from(assigneeSelectEl?.selectedOptions || [])
+        .map(opt => String(opt.value || '').trim())
+        .filter(Boolean);
+      const selectedAssigneesFromMembers = selectedAssigneeUserIds.map((userId) => {
+        let name = '';
+        if (!standaloneTaskMode) {
+          const member = (effectiveState?.members || []).find(m => m.userId === userId);
+          name = member?.displayName || '';
+        } else if (userId === currentUser?.userId) {
+          name = currentUser?.name || '';
+        }
+        if (!name) {
+          const option = Array.from(assigneeSelectEl?.options || []).find(opt => opt.value === userId);
+          name = String(option?.dataset?.assigneeName || option?.textContent || '').trim();
+        }
+        return { userId, name };
+      });
+      const manualAssigneeEntries = parseManualAssigneeEntries(manualAssigneeInput?.value || '');
+      const seenAssignees = new Set();
+      const assignees = [...selectedAssigneesFromMembers, ...manualAssigneeEntries.map(entry => ({
+        userId: null,
+        name: entry.name,
+        email: entry.email || ''
+      }))]
+        .filter((entry) => entry.userId || entry.name)
+        .filter((entry) => {
+          const key = `${entry.userId || ''}|${normalizeSearch(entry.name || '')}|${String(entry.email || '').toLowerCase()}`;
+          if (seenAssignees.has(key)) return false;
+          seenAssignees.add(key);
+          return true;
+        });
+      const primaryAssignee = assignees[0] || { userId: null, name: '' };
+
+      const taskDescriptionHtml = getProjectDescriptionHtmlForStorage('task-description-editor', 'task-description');
+      const taskDescriptionText = getProjectDescriptionPlainText(taskDescriptionHtml).trim();
+
+      const payload = {
+        title: title,
+        assignee: primaryAssignee.name || '',
+        assigneeUserId: primaryAssignee.userId || null,
+        assignees,
+        description: taskDescriptionText,
+        descriptionHtml: taskDescriptionHtml || '',
+        requestDate: document.getElementById('task-request-date').value || null,
+        dueDate: document.getElementById('task-due-date').value || null,
+        status: document.getElementById('task-status').value,
+        urgency: document.getElementById('task-urgency').value,
+        theme: (document.getElementById('task-theme')?.value || '').trim(),
+        groupId: resolvedGroupId || null,
+        groupName: resolvedGroupName || null,
+        subtasks: existingTask
+          ? mergeSubtasksWithExisting(existingTask.subtasks || [], subtasksParsed)
+          : subtasksParsed
+      };
+
+      if (existingTask) {
+        payload.subtasks = mergeSubtasksWithExisting(existingTask.subtasks || [], subtasksParsed);
+        if (attachments.length > 0) {
+          payload.attachments = [...(existingTask.attachments || []), ...attachments];
+        }
+      } else {
+        payload.attachments = attachments;
+      }
+
+      if (standaloneTaskMode) {
+        const standaloneSharingMode = normalizeSharingMode(
+          document.getElementById('task-standalone-mode')?.value || 'private',
+          'private'
+        );
+        const isEditStandalone = Boolean(editingStandaloneTaskId);
+        const existingStandalone = isEditStandalone
+          ? await getDecrypted('globalTasks', editingStandaloneTaskId, 'id')
+          : null;
+        const mergedStandaloneSubtasks = isEditStandalone
+          ? mergeSubtasksWithExisting(existingStandalone?.subtasks || [], subtasksParsed)
+          : subtasksParsed;
+        const standaloneTask = {
+          id: isEditStandalone ? editingStandaloneTaskId : uuidv4(),
+          title: payload.title,
+          assignee: payload.assignee,
+          assigneeUserId: payload.assigneeUserId,
+          assignees: payload.assignees || [],
+          description: payload.description,
+          descriptionHtml: payload.descriptionHtml || '',
+          requestDate: payload.requestDate,
+          dueDate: payload.dueDate,
+          status: payload.status,
+          urgency: payload.urgency,
+          subtasks: mergedStandaloneSubtasks,
+          attachments: attachments.length > 0
+            ? ([...(existingStandalone?.attachments || []), ...attachments])
+            : (existingStandalone?.attachments || payload.attachments || []),
+          theme: payload.theme || document.getElementById('global-task-theme')?.value?.trim() || 'General',
+          groupId: payload.groupId || null,
+          groupName: payload.groupName || null,
+          sharingMode: standaloneSharingMode,
+          createdAt: existingStandalone?.createdAt || Date.now(),
+          updatedAt: Date.now(),
+          archivedAt: existingStandalone?.archivedAt || null
+        };
+        await runWithLoading(async () => {
+          await putEncrypted('globalTasks', standaloneTask, 'id');
+        });
+        if (!isEditStandalone) {
+          const standaloneFeedPostId = `auto-standalone-task-${standaloneTask.id}`;
+          const existingStandalonePost = await getDecrypted('globalPosts', standaloneFeedPostId, 'postId');
+          if (!existingStandalonePost) {
+            const standaloneTaskRef = buildGlobalTaskRef({
+              sourceType: 'standalone',
+              sourceProjectId: null,
+              taskId: null,
+              id: standaloneTask.id
+            });
+            const standaloneAutoPost = {
+              postId: standaloneFeedPostId,
+              authorUserId: String(currentUser?.userId || ''),
+              authorName: String(currentUser?.name || fallbackDirectoryName(currentUser?.userId || '')),
+              content: `Nouvelle tâche créée: ${standaloneTask.title || 'Tâche'}\nProjet: Hors projet`,
+              mentions: [],
+              refs: [{ type: 'task', id: standaloneTaskRef, label: `${standaloneTask.title || 'Tâche'} • Hors projet` }],
+              createdAt: Number(standaloneTask.createdAt || Date.now()),
+              source: sharedFolderHandle ? 'shared' : 'local',
+              isAuto: true,
+              autoKind: 'task-created',
+              sourceEventId: `standalone:${standaloneTask.id}`
+            };
+            await putEncrypted('globalPosts', standaloneAutoPost, 'postId');
+            knownGlobalPostIds.add(standaloneAutoPost.postId);
+            if (sharedFolderHandle) {
+              await writeGlobalFeedPostToSharedFolder(standaloneAutoPost);
+            }
+            if (workspaceMode === 'global' && globalWorkspaceView === 'feed') {
+              await renderGlobalFeed();
+            }
+          }
+        }
+        document.getElementById('modal-new-task').classList.add('hidden');
+        if (standaloneSharingMode === 'shared' && !sharedFolderHandle) {
+          showToast('Mode collaboratif actif: connectez un dossier partagé pour synchroniser.');
+        }
+        showToast(isEditStandalone ? '✅ Tâche hors projet mise à jour' : '✅ Tâche hors projet créée');
+        addNotification('Tache', isEditStandalone ? 'Tache hors projet mise a jour' : 'Nouvelle tache hors projet creee', null, {
+          targetType: 'task',
+          targetId: standaloneTask.id,
+          targetView: 'global-tasks',
+          linkLabel: 'Ouvrir les tâches'
+        });
+        standaloneTaskMode = false;
+        editingStandaloneTaskId = null;
+        await renderGlobalTasks();
+        await refreshStats();
+        return;
+      }
+
+      const event = editingTaskId
+        ? createEvent(
+            EventTypes.UPDATE_TASK,
+            currentProjectId,
+            currentUser.userId,
+            { taskId: editingTaskId, changes: payload }
+          )
+        : createEvent(
+            EventTypes.CREATE_TASK,
+            currentProjectId,
+            currentUser.userId,
+            { taskId: uuidv4(), createdBy: currentUser.userId, ...payload }
+          );
+
+      await runWithLoading(async () => {
+        await publishEvent(event);
+        if (sharedFolderHandle) {
+          await writeEventToSharedFolder(currentProjectId, event);
+        }
+      });
+
+      await releaseActiveTaskEditLock();
+      document.getElementById('modal-new-task').classList.add('hidden');
+      showToast(editingTaskId ? '✅ Tâche mise à jour' : '✅ Tâche créée');
+      if (autoAddedMembersCount > 0) {
+        showToast(`✅ ${autoAddedMembersCount} membre(s) du groupe ajouté(s) au projet`);
+      }
+      editingTaskId = null;
+      addNotification('Tache', event.type === EventTypes.UPDATE_TASK ? 'Tache mise a jour' : 'Nouvelle tache creee', currentProjectId, {
+        targetType: 'task',
+        targetId: event.payload?.taskId || null,
+        targetView: 'list',
+        linkLabel: 'Ouvrir la tâche'
+      });
+      await showProjectDetail(currentProjectId);
+    });
+
+    // Send message
+    document.getElementById('btn-send-message').addEventListener('click', async () => {
+      await sendMessage();
+    });
+    document.getElementById('btn-close-global-task-details')?.addEventListener('click', () => {
+      closeGlobalTaskDetails();
+    });
+    document.getElementById('btn-close-task-convert-modal')?.addEventListener('click', () => {
+      closeTaskConvertModal();
+    });
+    document.getElementById('btn-task-convert-cancel')?.addEventListener('click', () => {
+      closeTaskConvertModal();
+    });
+    document.getElementById('btn-task-convert-confirm')?.addEventListener('click', async () => {
+      const taskRef = pendingTaskConvertRef;
+      if (!taskRef) {
+        closeTaskConvertModal();
+        return;
+      }
+      const projectName = String(document.getElementById('task-convert-project-name')?.value || '').trim();
+      const sharingMode = normalizeSharingMode(
+        document.getElementById('task-convert-mode')?.value || 'private',
+        'private'
+      );
+      const archiveSource = !!document.getElementById('task-convert-archive-source')?.checked;
+      const openProjectAfterConvert = !!document.getElementById('task-convert-open-project')?.checked;
+      const errorEl = document.getElementById('task-convert-error');
+      if (!projectName) {
+        if (errorEl) errorEl.classList.remove('hidden');
+        document.getElementById('task-convert-project-name')?.focus();
+        return;
+      }
+      if (errorEl) errorEl.classList.add('hidden');
+      closeTaskConvertModal();
+      await convertTaskToProject(taskRef, {
+        __fromModal: true,
+        projectName,
+        sharingMode,
+        archiveSource,
+        openProjectAfterConvert
+      });
+    });
+    document.getElementById('task-convert-project-name')?.addEventListener('keydown', async (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      document.getElementById('btn-task-convert-confirm')?.click();
+    });
+    document.getElementById('btn-close-calendar-info-details')?.addEventListener('click', () => {
+      closeStandaloneCalendarDetails();
+    });
+    document.getElementById('btn-calendar-info-detail-edit')?.addEventListener('click', async () => {
+      if (!currentCalendarInfoDetailId) return;
+      const targetId = currentCalendarInfoDetailId;
+      closeStandaloneCalendarDetails();
+      await editStandaloneCalendarItem(targetId);
+    });
+    document.getElementById('btn-calendar-info-detail-archive')?.addEventListener('click', async () => {
+      if (!currentCalendarInfoDetailId) return;
+      const targetId = currentCalendarInfoDetailId;
+      closeStandaloneCalendarDetails();
+      await archiveStandaloneCalendarItem(targetId);
+    });
+    document.getElementById('btn-calendar-info-detail-delete')?.addEventListener('click', async () => {
+      if (!currentCalendarInfoDetailId) return;
+      const targetId = currentCalendarInfoDetailId;
+      closeStandaloneCalendarDetails();
+      await deleteStandaloneCalendarItem(targetId);
+    });
+
+    document.getElementById('message-input').addEventListener('keypress', async (e) => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        await sendMessage();
+      }
+    });
+    document.getElementById('message-input')?.setAttribute('placeholder', "Ecrire un message a l'equipe...");
+
+    let lastPasteTs = 0;
+    const modalBackdropPointerState = new Map();
+
+    document.addEventListener('paste', () => {
+      lastPasteTs = Date.now();
+    }, true);
+
+    function hasActiveTextSelection() {
+      try {
+        const selection = window.getSelection?.();
+        if (!selection) return false;
+        return String(selection.type || '').toLowerCase() === 'range' && !selection.isCollapsed;
+      } catch {
+        return false;
+      }
+    }
+
+    function registerSafeBackdropClose(modalId, closeHandler) {
+      const modal = document.getElementById(modalId);
+      if (!modal) return;
+      modal.addEventListener('pointerdown', (e) => {
+        const onBackdrop = e.target === modal;
+        modalBackdropPointerState.set(modalId, {
+          onBackdrop,
+          x: Number(e.clientX || 0),
+          y: Number(e.clientY || 0),
+          ts: Date.now()
+        });
+      });
+      modal.addEventListener('click', async (e) => {
+        if (e.target !== modal) return;
+        const state = modalBackdropPointerState.get(modalId);
+        const now = Date.now();
+        modalBackdropPointerState.delete(modalId);
+        if (!state?.onBackdrop) return;
+        const dx = Math.abs(Number(e.clientX || 0) - Number(state.x || 0));
+        const dy = Math.abs(Number(e.clientY || 0) - Number(state.y || 0));
+        const moved = dx > 6 || dy > 6;
+        const tooCloseToPaste = (now - lastPasteTs) < 450;
+        if (moved || tooCloseToPaste || hasActiveTextSelection()) return;
+        if (typeof closeHandler === 'function') {
+          await closeHandler();
+        }
+      });
+    }
+
+    // Close modals on escape key
+    document.addEventListener('keydown', async (e) => {
+      if (e.key === 'Escape') {
+        await releaseActiveTaskEditLock();
+        await releaseActiveProjectEditLock();
+        if (activeCalendarEditLock?.itemId) {
+          await releaseCalendarItemLock(activeCalendarEditLock.itemId, activeCalendarEditLock.lockId || '');
+          activeCalendarEditLock = null;
+        }
+        document.getElementById('modal-new-project').classList.add('hidden');
+        document.getElementById('modal-new-task').classList.add('hidden');
+        document.getElementById('modal-edit-user-name').classList.add('hidden');
+        pendingProfilePhotoDirty = false;
+        document.getElementById('modal-edit-project').classList.add('hidden');
+        editProjectFromDashboard = false;
+        document.getElementById('modal-doc-preview').classList.add('hidden');
+        closeDocumentBindingModal();
+        closeDocumentEditorModal();
+        closeTaskConvertModal();
+        document.getElementById('modal-app-help')?.classList.add('hidden');
+        closeGlobalTaskDetails();
+        toggleNotificationsPanel(false);
+        toggleEmojiPicker(false);
+        editingTaskId = null;
+        editingStandaloneTaskId = null;
+        closeMobileSidebar();
+      }
+    });
+
+    // Close modals on overlay click
+    registerSafeBackdropClose('modal-new-project', () => {
+      document.getElementById('modal-new-project')?.classList.add('hidden');
+    });
+
+    registerSafeBackdropClose('modal-new-task', async () => {
+        await releaseActiveTaskEditLock();
+        document.getElementById('modal-new-task')?.classList.add('hidden');
+        editingTaskId = null;
+        editingStandaloneTaskId = null;
+    });
+    registerSafeBackdropClose('modal-global-task-details', () => {
+      closeGlobalTaskDetails();
+    });
+    registerSafeBackdropClose('modal-task-convert', () => {
+      closeTaskConvertModal();
+    });
+    registerSafeBackdropClose('modal-calendar-info-details', () => {
+      closeStandaloneCalendarDetails();
+    });
+    registerSafeBackdropClose('modal-doc-binding', () => {
+      closeDocumentBindingModal();
+    });
+    registerSafeBackdropClose('modal-doc-editor', () => {
+      closeDocumentEditorModal();
+    });
+    registerSafeBackdropClose('modal-app-help', () => {
+      document.getElementById('modal-app-help')?.classList.add('hidden');
+    });
+
+    registerSafeBackdropClose('modal-edit-user-name', () => {
+      document.getElementById('modal-edit-user-name')?.classList.add('hidden');
+      pendingProfilePhotoDirty = false;
+    });
+    registerSafeBackdropClose('modal-edit-project', async () => {
+      editProjectFromDashboard = false;
+      await releaseActiveProjectEditLock();
+      document.getElementById('modal-edit-project')?.classList.add('hidden');
+      const editProjectDocInput = document.getElementById('edit-project-doc-files');
+      if (editProjectDocInput) editProjectDocInput.value = '';
+      updateEditProjectDocFilesSummary();
+    });
+
+    // Project views
+    document.getElementById('view-overview')?.addEventListener('click', () => setProjectView('overview'));
+    document.getElementById('view-cards')?.addEventListener('click', () => setProjectTaskPresentationMode('cards'));
+    document.getElementById('view-list').addEventListener('click', () => setProjectTaskPresentationMode('list'));
+    document.getElementById('view-kanban').addEventListener('click', () => setProjectView('kanban'));
+    document.getElementById('view-gantt')?.addEventListener('click', () => setProjectView('gantt'));
+    document.getElementById('view-timeline').addEventListener('click', () => setProjectView('timeline'));
+    document.getElementById('view-docs').addEventListener('click', () => setProjectView('docs'));
+    document.getElementById('view-chat').addEventListener('click', () => setProjectView('chat'));
+    document.getElementById('view-archives')?.addEventListener('click', () => setProjectView('archives'));
+    document.getElementById('project-task-view-1')?.addEventListener('click', () => setProjectTaskCardsColumns(1));
+    document.getElementById('project-task-view-2')?.addEventListener('click', () => setProjectTaskCardsColumns(2));
+    document.getElementById('project-task-view-3')?.addEventListener('click', () => setProjectTaskCardsColumns(3));
+    document.getElementById('project-task-view-4')?.addEventListener('click', () => setProjectTaskCardsColumns(4));
+    // Fonction pour remplir le select de sélection de groupe en messagerie
+    async function populateGlobalMessageGroupChannelSelect() {
+      console.log('🔍 [populateGlobalMessageGroupChannelSelect] START');
+      const select = document.getElementById('global-message-group-channel-select');
+      if (!select) {
+        console.error('❌ Select element not found!');
+        return;
+      }
+      console.log('✅ Select element found');
+
+      const me = String(currentUser?.userId || '').trim();
+      console.log('👤 Current user ID:', me);
+      if (!me) {
+        select.innerHTML = '<option value="">-- Sélectionner un groupe --</option>';
+        console.log('⚠️ No current user, aborting');
+        return;
+      }
+
+      console.log('📚 globalGroupCatalog length:', (globalGroupCatalog || []).length);
+      console.log('📚 globalGroupCatalog:', globalGroupCatalog);
+
+      // Récupérer tous les projets accessibles pour vérifier lesquels sont publics
+      const allProjects = await getAllProjects();
+      console.log('📁 All projects count:', allProjects.length);
+      const publicProjectIds = new Set(
+        allProjects
+          .filter(p => normalizeProjectReadAccess(p?.readAccess) === 'public')
+          .map(p => p.projectId)
+      );
+      console.log('🌍 Public project IDs:', Array.from(publicProjectIds));
+
+      // Filtrer les groupes selon la logique :
+      // 1. Groupes dont l'utilisateur est membre
+      // 2. Groupes créés dans "Référentiels" (sans projectId) - toujours publics
+      // 3. Groupes de projets publics
+      const visibleGroups = (globalGroupCatalog || [])
+        .filter((group) => {
+          const memberIds = Array.isArray(group?.memberUserIds) ? group.memberUserIds : [];
+          const isMember = memberIds.includes(me);
+          const isFromReferentiels = !group.projectId;  // Créé dans Référentiels
+          const isFromPublicProject = group.projectId && publicProjectIds.has(group.projectId);
+
+          const willShow = isMember || isFromReferentiels || isFromPublicProject;
+          console.log(`  Group "${group.name}": isMember=${isMember}, isFromRef=${isFromReferentiels}, isFromPub=${isFromPublicProject} → ${willShow ? '✅ SHOW' : '❌ HIDE'}`);
+
+          // Accepter si : membre OU groupe référentiel OU projet public
+          return willShow;
+        })
+        .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'fr'));
+
+      console.log(`✨ Visible groups: ${visibleGroups.length}`, visibleGroups.map(g => g.name));
+
+      const memberGroups = visibleGroups;  // Pour compatibilité avec le code existant
+
+      // Créer un mapping projectId -> nom du projet pour affichage
+      const projectMap = new Map(allProjects.map(p => [p.projectId, p.name]));
+
+      const htmlOptions = memberGroups.map((group) => {
+        // Ajouter une indication de l'origine du groupe
+        let label = escapeHtml(group.name);
+        if (group.projectId && projectMap.has(group.projectId)) {
+          label += ` (projet: ${escapeHtml(projectMap.get(group.projectId))})`;
+        } else if (!group.projectId) {
+          label += ' (global)';
+        }
+        const option = `<option value="${escapeHtml(group.groupKey)}">${label}</option>`;
+        console.log(`  📝 HTML: ${option}`);
+        return option;
+      });
+
+      const finalHTML = [
+        '<option value="">-- Sélectionner un groupe --</option>',
+        ...htmlOptions
+      ].join('\n');
+
+      console.log('📄 Final HTML to insert:');
+      console.log(finalHTML);
+
+      select.innerHTML = finalHTML;
+
+      console.log('✅ Select updated. Options count:', select.options.length);
+      console.log('🔍 [populateGlobalMessageGroupChannelSelect] END');
+    }
+
+    document.getElementById('btn-project-subnav-horizontal')?.addEventListener('click', () => setProjectSubnavLayout('horizontal'));
+    document.getElementById('btn-project-subnav-vertical')?.addEventListener('click', () => setProjectSubnavLayout('vertical'));
+    document.getElementById('btn-project-settings-subnav-horizontal')?.addEventListener('click', () => setProjectSubnavLayout('horizontal'));
+    document.getElementById('btn-project-settings-subnav-vertical')?.addEventListener('click', () => setProjectSubnavLayout('vertical'));
+    document.getElementById('btn-project-work-focus')?.addEventListener('click', toggleProjectWorkFocus);
+    document.getElementById('btn-project-settings-work-focus')?.addEventListener('click', toggleProjectSettingsFocus);
+    document.getElementById('global-task-view-1')?.addEventListener('click', () => setGlobalTaskCardsColumns(1));
+    document.getElementById('global-task-view-2')?.addEventListener('click', () => setGlobalTaskCardsColumns(2));
+    document.getElementById('global-task-view-3')?.addEventListener('click', () => setGlobalTaskCardsColumns(3));
+    document.getElementById('global-task-view-4')?.addEventListener('click', () => setGlobalTaskCardsColumns(4));
+    document.getElementById('view-activity').addEventListener('click', async () => {
+      if (!canReadProjectActivity(currentProjectState)) {
+        showToast('Action non autorisee');
+        setProjectView('list');
+        return;
+      }
+      setProjectView('activity');
+      if (!currentProjectId) return;
+      currentProjectEvents = await getProjectEvents(currentProjectId);
+      await renderActivity(currentProjectEvents);
+    });
+
+    const orderedViews = ['overview', 'cards', 'list', 'kanban', 'gantt', 'timeline', 'docs', 'chat', 'activity', 'archives'];
+    orderedViews.forEach((viewKey, idx) => {
+      const btn = document.getElementById(`view-${viewKey === 'docs' ? 'docs' : viewKey}`);
+      if (!btn) return;
+      btn.addEventListener('keydown', (e) => {
+        const isVertical = projectSubnavLayout === 'vertical';
+        const prevKeyPressed = e.key === 'ArrowLeft' || (isVertical && e.key === 'ArrowUp');
+        const nextKeyPressed = e.key === 'ArrowRight' || (isVertical && e.key === 'ArrowDown');
+        if (!prevKeyPressed && !nextKeyPressed) return;
+        e.preventDefault();
+        const nextIdx = nextKeyPressed
+          ? (idx + 1) % orderedViews.length
+          : (idx - 1 + orderedViews.length) % orderedViews.length;
+        let nextKey = orderedViews[nextIdx];
+        if (nextKey === 'activity' && !canReadProjectActivity(currentProjectState)) {
+          nextKey = 'cards';
+        }
+        const nextBtn = document.getElementById(`view-${nextKey === 'docs' ? 'docs' : nextKey}`);
+        if (nextBtn) {
+          nextBtn.focus();
+          if (nextKey === 'cards' || nextKey === 'list') {
+            setProjectTaskPresentationMode(nextKey);
+          } else {
+            setProjectView(nextKey);
+          }
+        }
+      });
+    });
+
+    document.getElementById('timeline-filter-all')?.addEventListener('click', () => {
+      timelineFilter = 'all';
+      renderTimeline(currentProjectState?.tasks || []);
+    });
+    document.getElementById('timeline-filter-milestone')?.addEventListener('click', () => {
+      timelineFilter = 'milestone';
+      renderTimeline(currentProjectState?.tasks || []);
+    });
+    document.getElementById('timeline-filter-urgent')?.addEventListener('click', () => {
+      timelineFilter = 'urgent';
+      renderTimeline(currentProjectState?.tasks || []);
+    });
+    document.getElementById('timeline-filter-overdue')?.addEventListener('click', () => {
+      timelineFilter = 'overdue';
+      renderTimeline(currentProjectState?.tasks || []);
+    });
+    document.getElementById('calendar-prev-month')?.addEventListener('click', () => {
+      calendarCursor = new Date(calendarCursor.getFullYear(), calendarCursor.getMonth() - 1, 1);
+      calendarDayFilterEnabled = false;
+      renderCalendar(currentProjectState?.tasks || []);
+      renderTimeline(currentProjectState?.tasks || []);
+    });
+    document.getElementById('calendar-next-month')?.addEventListener('click', () => {
+      calendarCursor = new Date(calendarCursor.getFullYear(), calendarCursor.getMonth() + 1, 1);
+      calendarDayFilterEnabled = false;
+      renderCalendar(currentProjectState?.tasks || []);
+      renderTimeline(currentProjectState?.tasks || []);
+    });
+    document.getElementById('calendar-today')?.addEventListener('click', () => {
+      calendarCursor = new Date();
+      selectedCalendarDayKey = toYmd(new Date());
+      calendarDayFilterEnabled = false;
+      renderCalendar(currentProjectState?.tasks || []);
+      renderTimeline(currentProjectState?.tasks || []);
+    });
+
+    document.getElementById('message-input')?.addEventListener('input', () => {
+      if (messageMarkdownDebounceTimer) {
+        clearTimeout(messageMarkdownDebounceTimer);
+      }
+      messageMarkdownDebounceTimer = setTimeout(() => {
+        const current = document.getElementById('message-input')?.value || '';
+        // Conversion markdown "a chaud" (sans zone de preview visible)
+        messageRenderedDraftHtml = renderSafeMarkdown(current);
+      }, 280);
+    });
+    document.getElementById('btn-toggle-emoji-picker')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleEmojiPicker();
+    });
+    document.getElementById('emoji-picker-panel')?.addEventListener('click', (e) => {
+      const button = e.target.closest('[data-emoji]');
+      if (!button) return;
+      const input = document.getElementById('message-input');
+      insertTextAtCursor(input, button.dataset.emoji || '');
+    });
+
+    document.addEventListener('fullscreenchange', () => {
+      syncProjectWorkFocusButton();
+    });
+    document.getElementById('btn-global-toggle-emoji-picker')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleGlobalEmojiPicker();
+    });
+    document.getElementById('global-emoji-picker-panel')?.addEventListener('click', (e) => {
+      const button = e.target.closest('[data-emoji]');
+      if (!button) return;
+      const input = document.getElementById('global-message-input');
+      insertTextAtCursor(input, button.dataset.emoji || '');
+    });
+    document.addEventListener('click', (e) => {
+      const target = e.target;
+      if (projectEditorEmojiPickerOpen) {
+        const projectPanel = document.getElementById('project-editor-emoji-panel');
+        const anchor = projectEditorEmojiAnchorId ? document.getElementById(projectEditorEmojiAnchorId) : null;
+        if (!projectPanel?.contains(target) && !anchor?.contains(target)) {
+          toggleProjectEditorEmojiPicker(null, null, false);
+        }
+      }
+      if (!emojiPickerOpen) return;
+      const panel = document.getElementById('emoji-picker-panel');
+      const trigger = document.getElementById('btn-toggle-emoji-picker');
+      if (panel?.contains(target) || trigger?.contains(target)) return;
+      toggleEmojiPicker(false);
+    });
+    document.addEventListener('click', (e) => {
+      if (!globalEmojiPickerOpen) return;
+      const target = e.target;
+      const panel = document.getElementById('global-emoji-picker-panel');
+      const trigger = document.getElementById('btn-global-toggle-emoji-picker');
+      if (panel?.contains(target) || trigger?.contains(target)) return;
+      toggleGlobalEmojiPicker(false);
+    });
+    document.addEventListener('click', (e) => {
+      const button = e.target.closest('#project-editor-emoji-panel [data-emoji]');
+      if (!button || !projectEditorEmojiTarget) return;
+      const editor = document.getElementById(projectEditorEmojiTarget);
+      if (!editor) return;
+      editor.focus();
+      document.execCommand('insertText', false, button.dataset.emoji || '');
+      toggleProjectEditorEmojiPicker(null, null, false);
+    });
+    document.addEventListener('click', (e) => {
+      const target = e.target;
+      if (!activeProjectEditorImage || !activeProjectEditorId) return;
+      const editor = document.getElementById(activeProjectEditorId);
+      if (!editor) {
+        clearProjectEditorImageSelection();
+        return;
+      }
+      const overlay = editor.querySelector('.project-editor-image-overlay');
+      if (editor.contains(target) || overlay?.contains(target)) return;
+      clearProjectEditorImageSelection();
+    });
+    window.addEventListener('resize', () => {
+      if (!activeProjectEditorImage || !activeProjectEditorId) return;
+      const editor = document.getElementById(activeProjectEditorId);
+      if (!editor || !editor.contains(activeProjectEditorImage)) {
+        clearProjectEditorImageSelection();
+        return;
+      }
+      updateProjectEditorImageOverlayPosition(editor);
+    });
+    document.getElementById('chat-search-input')?.addEventListener('input', () => {
+      messageFilters.query = document.getElementById('chat-search-input').value || '';
+      renderMessages(currentProjectState?.messages || []);
+    });
+    document.getElementById('chat-filter-mine')?.addEventListener('change', () => {
+      messageFilters.onlyMine = !!document.getElementById('chat-filter-mine').checked;
+      renderMessages(currentProjectState?.messages || []);
+    });
+    document.getElementById('chat-filter-reset')?.addEventListener('click', () => {
+      messageFilters = { query: '', onlyMine: false };
+      document.getElementById('chat-search-input').value = '';
+      document.getElementById('chat-filter-mine').checked = false;
+      renderMessages(currentProjectState?.messages || []);
+    });
+    function assignFilesToInput(input, files) {
+      if (!input || !files) return;
+      const dt = new DataTransfer();
+      Array.from(files || []).forEach(file => {
+        if (file) dt.items.add(file);
+      });
+      input.files = dt.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    function initFileDropInputs() {
+      const inputs = Array.from(document.querySelectorAll('.js-file-drop-input'));
+      inputs.forEach((input) => {
+        if (input.dataset.dropBound) return;
+        const decorateDropHost = input.dataset.dropDecor !== 'false';
+        const customHostSelector = String(input.dataset.dropHost || '').trim();
+        const host = (customHostSelector && input.closest(customHostSelector))
+          || input.closest('.space-y-1')
+          || input.parentElement;
+        if (!host) return;
+        if (decorateDropHost) {
+          host.classList.add('file-drop-host');
+          const title = document.createElement('div');
+          title.className = 'file-drop-title';
+          title.innerHTML = '<span class="material-symbols-outlined">upload_file</span><span>Zone de depot</span>';
+          host.insertBefore(title, input);
+          const hint = document.createElement('p');
+          hint.className = 'file-drop-hint';
+          hint.textContent = input.dataset.dropLabel || 'Glissez-deposez des fichiers ici ou cliquez pour selectionner.';
+          host.appendChild(hint);
+        }
+
+        const toggleHover = (on) => host.classList.toggle('is-drag-over', !!on);
+        ['dragenter', 'dragover'].forEach(evtName => {
+          host.addEventListener(evtName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleHover(true);
+          });
+        });
+        ['dragleave', 'dragend', 'drop'].forEach(evtName => {
+          host.addEventListener(evtName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleHover(false);
+          });
+        });
+        host.addEventListener('drop', (e) => {
+          const files = Array.from(e.dataTransfer?.files || []);
+          if (!files.length) return;
+          assignFilesToInput(input, files);
+          showToast(`${files.length} fichier(s) ajoute(s)`);
+        });
+        input.dataset.dropBound = '1';
+      });
+    }
+
+    document.getElementById('message-files')?.addEventListener('change', () => {
+      const input = document.getElementById('message-files');
+      const list = document.getElementById('message-files-list');
+      if (!input || !list) return;
+      const files = Array.from(input.files || []);
+      if (files.length === 0) {
+        list.textContent = 'Aucun fichier sélectionné';
+        return;
+      }
+      list.textContent = files.map(f => `${f.name} (${formatFileSize(f.size)})`).join(' • ');
+    });
+
+    document.getElementById('global-message-files')?.addEventListener('change', () => {
+      const input = document.getElementById('global-message-files');
+      const list = document.getElementById('global-message-files-list');
+      if (!input || !list) return;
+      const files = Array.from(input.files || []);
+      if (files.length === 0) {
+        list.textContent = 'Aucun fichier sélectionné';
+        return;
+      }
+      list.textContent = files.map(f => `${f.name} (${formatFileSize(f.size)})`).join(' • ');
+    });
+
+    function updateProjectDocFilesSummary() {
+      const input = document.getElementById('project-doc-files');
+      const summary = document.getElementById('project-doc-selected-files');
+      if (!summary) return;
+      const files = Array.from(input?.files || []);
+      if (files.length === 0) {
+        summary.textContent = 'Aucun fichier selectionne';
+        return;
+      }
+      summary.textContent = files.map(f => `${f.name} (${formatFileSize(f.size)})`).join(' • ');
+    }
+
+    function updateCreateProjectDocFilesSummary() {
+      const input = document.getElementById('project-create-doc-files');
+      const summary = document.getElementById('project-create-doc-files-summary');
+      if (!summary) return;
+      const files = Array.from(input?.files || []);
+      if (files.length === 0) {
+        summary.textContent = 'Aucun fichier sélectionné';
+        return;
+      }
+      summary.textContent = files.map(f => `${f.name} (${formatFileSize(f.size)})`).join(' • ');
+    }
+
+    function updateEditProjectDocFilesSummary() {
+      const input = document.getElementById('edit-project-doc-files');
+      const summary = document.getElementById('edit-project-doc-files-summary');
+      if (!summary) return;
+      const files = Array.from(input?.files || []);
+      if (files.length === 0) {
+        summary.textContent = 'Aucun fichier sélectionné';
+        return;
+      }
+      summary.textContent = files.map(f => `${f.name} (${formatFileSize(f.size)})`).join(' • ');
+    }
+
+    document.getElementById('project-doc-files')?.addEventListener('change', updateProjectDocFilesSummary);
+    document.getElementById('project-create-doc-files')?.addEventListener('change', updateCreateProjectDocFilesSummary);
+    document.getElementById('edit-project-doc-files')?.addEventListener('change', updateEditProjectDocFilesSummary);
+
+    initFileDropInputs();
+    initProjectDescriptionEditors();
+
+    document.getElementById('activity-filter-type')?.addEventListener('change', async (e) => {
+      activityFilters.type = e.target.value;
+      await renderActivity(currentProjectEvents);
+    });
+    document.getElementById('activity-filter-author')?.addEventListener('input', async (e) => {
+      activityFilters.author = e.target.value;
+      await renderActivity(currentProjectEvents);
+    });
+    document.getElementById('activity-filter-period')?.addEventListener('change', async (e) => {
+      activityFilters.period = e.target.value;
+      await renderActivity(currentProjectEvents);
+    });
+    document.getElementById('activity-filter-reset')?.addEventListener('click', async () => {
+      activityFilters = { type: 'all', author: '', period: 'all' };
+      document.getElementById('activity-filter-type').value = 'all';
+      document.getElementById('activity-filter-author').value = '';
+      document.getElementById('activity-filter-period').value = 'all';
+      await renderActivity(currentProjectEvents);
+    });
+
+    document.getElementById('docs-search-input')?.addEventListener('input', () => {
+      docsFilters.query = document.getElementById('docs-search-input').value || '';
+      renderDocuments(currentProjectState);
+    });
+    document.getElementById('docs-type-filter')?.addEventListener('change', () => {
+      docsFilters.type = document.getElementById('docs-type-filter').value || 'all';
+      renderDocuments(currentProjectState);
+    });
+    document.getElementById('docs-sort')?.addEventListener('change', () => {
+      docsFilters.sort = document.getElementById('docs-sort').value || 'recent';
+      renderDocuments(currentProjectState);
+    });
+    document.getElementById('docs-filter-reset')?.addEventListener('click', () => {
+      docsFilters = { query: '', type: 'all', sort: 'recent' };
+      document.getElementById('docs-search-input').value = '';
+      document.getElementById('docs-type-filter').value = 'all';
+      document.getElementById('docs-sort').value = 'recent';
+      renderDocuments(currentProjectState);
+    });
+    document.getElementById('btn-add-project-documents')?.addEventListener('click', addProjectDocuments);
+    document.getElementById('btn-close-doc-preview')?.addEventListener('click', closeDocumentPreview);
+    registerSafeBackdropClose('modal-doc-preview', () => {
+      closeDocumentPreview();
+    });
+
+    async function readTaskFiles() {
+      const input = document.getElementById('task-files');
+      const shareToDocs = document.getElementById('task-share-docs').checked;
+      const files = Array.from(input.files || []);
+      const maxFileSize = 5 * 1024 * 1024;
+
+      const attachments = [];
+      for (const file of files) {
+        if (file.size > maxFileSize) {
+          throw new Error(`Le fichier "${file.name}" dépasse 5 Mo`);
+        }
+        const data = await fileToDataUrl(file);
+        attachments.push({
+          name: file.name,
+          size: file.size,
+          type: file.type || 'application/octet-stream',
+          shareToDocs,
+          data
+        });
+      }
+      return attachments;
+    }
+
+    async function readMessageFiles(inputId = 'message-files') {
+      const input = document.getElementById(inputId);
+      const files = Array.from(input?.files || []);
+      const maxFileSize = 3 * 1024 * 1024;
+
+      const attachments = [];
+      for (const file of files) {
+        if (file.size > maxFileSize) {
+          throw new Error(`Le fichier "${file.name}" dépasse 3 Mo`);
+        }
+        const data = await fileToDataUrl(file);
+        attachments.push({
+          name: file.name,
+          size: file.size,
+          type: file.type || 'application/octet-stream',
+          data
+        });
+      }
+      return attachments;
+    }
+
+    function fileToDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error(`Impossible de lire le fichier "${file.name}"`));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function insertTextAtCursor(input, text) {
+      if (!input) return;
+      const start = typeof input.selectionStart === 'number' ? input.selectionStart : input.value.length;
+      const end = typeof input.selectionEnd === 'number' ? input.selectionEnd : input.value.length;
+      const before = input.value.slice(0, start);
+      const after = input.value.slice(end);
+      input.value = `${before}${text}${after}`;
+      const nextPos = start + text.length;
+      input.selectionStart = nextPos;
+      input.selectionEnd = nextPos;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.focus();
+    }
+
+    // Project editor / Quill module moved to taskmda-editor.js
+    function renderEmojiPicker() {
+      const panel = document.getElementById('emoji-picker-panel');
+      if (!panel || panel.dataset.ready === '1') return;
+      panel.innerHTML = extendedEmojiPalette
+        .map((emoji) => `<button type="button" class="emoji-picker-btn" data-emoji="${emoji}" aria-label="Insérer ${emoji}">${emoji}</button>`)
+        .join('');
+      panel.dataset.ready = '1';
+    }
+
+    function toggleEmojiPicker(forceOpen) {
+      const panel = document.getElementById('emoji-picker-panel');
+      const toggle = document.getElementById('btn-toggle-emoji-picker');
+      if (!panel) return;
+      const nextOpen = typeof forceOpen === 'boolean' ? forceOpen : !emojiPickerOpen;
+      emojiPickerOpen = nextOpen;
+      panel.classList.toggle('hidden', !nextOpen);
+      if (toggle) {
+        toggle.classList.toggle('bg-primary', nextOpen);
+        toggle.classList.toggle('text-white', nextOpen);
+        toggle.classList.toggle('bg-slate-100', !nextOpen);
+        toggle.classList.toggle('text-slate-700', !nextOpen);
+      }
+      if (nextOpen) {
+        renderEmojiPicker();
+      }
+    }
+
+    function renderGlobalEmojiPicker() {
+      const panel = document.getElementById('global-emoji-picker-panel');
+      if (!panel || panel.dataset.ready === '1') return;
+      panel.innerHTML = extendedEmojiPalette
+        .map((emoji) => `<button type="button" class="emoji-picker-btn" data-emoji="${emoji}" aria-label="Insérer ${emoji}">${emoji}</button>`)
+        .join('');
+      panel.dataset.ready = '1';
+    }
+
+    function toggleGlobalEmojiPicker(forceOpen) {
+      const panel = document.getElementById('global-emoji-picker-panel');
+      const toggle = document.getElementById('btn-global-toggle-emoji-picker');
+      if (!panel) return;
+      const nextOpen = typeof forceOpen === 'boolean' ? forceOpen : !globalEmojiPickerOpen;
+      globalEmojiPickerOpen = nextOpen;
+      panel.classList.toggle('hidden', !nextOpen);
+      if (toggle) {
+        toggle.classList.toggle('bg-primary', nextOpen);
+        toggle.classList.toggle('text-white', nextOpen);
+        toggle.classList.toggle('bg-slate-100', !nextOpen);
+        toggle.classList.toggle('text-slate-700', !nextOpen);
+      }
+      if (nextOpen) {
+        renderGlobalEmojiPicker();
+      }
+    }
+
+    async function sendMessage() {
+      if (!currentProjectId) return;
+      const state = await getProjectState(currentProjectId);
+      if (!state?.project || !canSendProjectMessage(state)) {
+        showToast('Action non autorisee');
+        return;
+      }
+
+      const input = document.getElementById('message-input');
+      const filesInput = document.getElementById('message-files');
+      const filesList = document.getElementById('message-files-list');
+      const content = input.value.trim();
+      messageRenderedDraftHtml = renderSafeMarkdown(content);
+      let attachments = [];
+
+      try {
+        attachments = await runWithLoading(async () => readMessageFiles());
+      } catch (error) {
+        showToast(`❌ ${error.message}`);
+        return;
+      }
+
+      if (!content && attachments.length === 0) return;
+
+      const event = createEvent(
+        EventTypes.SEND_MESSAGE,
+        currentProjectId,
+        currentUser.userId,
+        {
+          content: content,
+          authorName: currentUser.name,
+          attachments
+        }
+      );
+
+      await runWithLoading(async () => {
+        await publishEvent(event);
+        if (sharedFolderHandle) {
+          await writeEventToSharedFolder(currentProjectId, event);
+        }
+      });
+      addNotification('Message', attachments.length > 0 ? 'Message envoye avec pieces jointes' : 'Nouveau message envoye', currentProjectId, {
+        targetType: 'message',
+        targetId: event.eventId,
+        targetView: 'chat',
+        linkLabel: 'Ouvrir le message'
+      });
+
+      input.value = '';
+      toggleEmojiPicker(false);
+      if (filesInput) filesInput.value = '';
+      if (filesList) filesList.textContent = 'Aucun fichier sélectionné';
+      messageRenderedDraftHtml = '';
+      if (messageMarkdownDebounceTimer) {
+        clearTimeout(messageMarkdownDebounceTimer);
+        messageMarkdownDebounceTimer = null;
+      }
+      await showProjectDetail(currentProjectId);
+    }
+
+    // ============================================================================
+    // STARTUP
+    // ============================================================================
+
+    function startApp() {
+      initTheme();
+      if (!checkDependencies()) {
+        return;
+      }
+
+      // Initialize crypto UI
+      if (window.TaskMDACrypto) {
+        window.TaskMDACrypto.initCryptoUI();
+        window.addEventListener('taskmda-crypto-recovered', async () => {
+          await initApp();
+        });
+
+        // Check if encrypted data exists
+        const hasSalt = window.TaskMDACrypto.hasSalt();
+
+        if (hasSalt) {
+          // User has already set a password - show unlock screen
+          window.TaskMDACrypto.showLockScreen('unlock');
+
+          // Setup unlock button
+          const lockBtn = document.getElementById('lockBtn');
+          if (lockBtn) {
+            lockBtn.onclick = () => {
+              window.TaskMDACrypto.submitPassword(async (result) => {
+                // Password verified, initialize app
+                await initApp();
+              });
+            };
+          }
+        } else {
+          // First time - create password
+          window.TaskMDACrypto.showLockScreen('create');
+
+          // Setup create button
+          const lockBtn = document.getElementById('lockBtn');
+          if (lockBtn) {
+            lockBtn.onclick = () => {
+              window.TaskMDACrypto.submitPassword(async (result) => {
+                if (result.isNewUser) {
+                  showRecoveryKeyInstructions(result.recoveryCode || '', 'Clé de récupération initiale');
+                  // New password created, initialize app
+                  await initApp();
+                }
+              });
+            };
+          }
+        }
+      } else {
+        // Crypto module not available, start without encryption
+        console.warn('⚠️ Crypto module not loaded, starting without encryption');
+        initApp();
+      }
+    }
+
+    // Démarrer l'application
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', startApp);
+    } else {
+      startApp();
+    }
+
+    debugLog('NEXUS MDA loaded');
+
