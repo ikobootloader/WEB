@@ -2327,7 +2327,7 @@ function openProjectDetailModal(projectId, isArchive = false) {
   const statusBadge = document.getElementById('projectDetailStatus');
   const statusColors = { active: 'bg-green-600 text-white', archived: 'bg-gray-600 text-white' };
   statusBadge.className = `px-3 py-1 rounded-full text-xs font-bold ${statusColors[project.status] || 'bg-surface-container text-on-surface-variant'}`;
-  statusBadge.textContent = project.status === 'active' ? 'Actif' : 'Archivé';
+  statusBadge.textContent = project.status === 'archived' ? 'Archivé' : 'Actif';
 
   // Update requesters
   const requesters = project.requesters && project.requesters.length > 0
@@ -2444,8 +2444,8 @@ async function deleteProjectFromDetail() {
 function canSendEmailForProject(project) {
   if (!project || !project.requesters || project.requesters.length === 0) return false;
 
-  // Check if at least one requester has an email configured
-  return project.requesters.some(requesterName => {
+  // Check if ALL requesters have an email configured
+  return project.requesters.every(requesterName => {
     const requester = config.requesters.find(r => r.name === requesterName);
     return requester && requester.email && requester.email.trim().length > 0;
   });
@@ -2475,8 +2475,8 @@ function sendProjectInquiryEmail(projectId) {
   const subject = replaceTemplateVariablesForProject(template.subject, project);
   const body = replaceTemplateVariablesForProject(template.body, project);
 
-  // Prepare email addresses (multiple recipients)
-  const emailAddresses = requestersWithEmail.map(r => r.email).join(',');
+  // Prepare email addresses (multiple recipients separated by semicolons)
+  const emailAddresses = requestersWithEmail.map(r => r.email).join(';');
 
   // URL encode for mailto
   const encodedSubject = encodeURIComponent(subject);
@@ -2856,12 +2856,17 @@ async function markAsCompleted(id) {
     await saveToStorage();
     updateSidebarCounts();
 
-    // Propose d'envoyer un email au demandeur si un email est configuré
-    if (task.requester) {
-      const requester = config.requesters.find(r => r.name === task.requester);
-      if (requester && requester.email) {
+    // Propose d'envoyer un email aux demandeurs si des emails sont configurés
+    if (task.requester && canSendEmailForTask(task)) {
+      // Get all requesters with emails
+      const requesterNames = task.requester.split(',').map(r => r.trim()).filter(Boolean);
+      const requestersWithEmail = requesterNames
+        .map(name => config.requesters.find(r => r.name === name))
+        .filter(requester => requester && requester.email && requester.email.trim().length > 0);
+
+      if (requestersWithEmail.length > 0) {
         // Show confirmation modal for email sending
-        showEmailConfirmation(task, requester.email);
+        showEmailConfirmation(task, requestersWithEmail);
       }
     }
 
@@ -2877,12 +2882,16 @@ async function markAsCompleted(id) {
   }
 }
 
-function showEmailConfirmation(task, email) {
+function showEmailConfirmation(task, requestersWithEmail) {
+  // Format requester list with emails
+  const requesterList = requestersWithEmail
+    .map(r => `<strong class="text-on-surface">${escHtml(r.name)}</strong> (<a href="mailto:${escHtml(r.email)}" class="text-primary hover:underline">${escHtml(r.email)}</a>)`)
+    .join(', ');
+
   const content = `
     <div class="space-y-4">
       <p class="text-on-surface-variant">
-        Souhaitez-vous notifier <strong class="text-on-surface">${escHtml(task.requester)}</strong>
-        (<a href="mailto:${escHtml(email)}" class="text-primary hover:underline">${escHtml(email)}</a>)
+        Souhaitez-vous notifier ${requesterList}
         que la tâche <strong class="text-on-surface">"${escHtml(task.title)}"</strong> a été réalisée ?
       </p>
       <div class="flex gap-3">
@@ -2899,22 +2908,37 @@ function showEmailConfirmation(task, email) {
     </div>
   `;
 
-  showModal('📧 Notification au demandeur', content);
+  const title = requestersWithEmail.length > 1 ? '📧 Notification aux demandeurs' : '📧 Notification au demandeur';
+  showModal(title, content);
 }
 
 function canSendEmailForTask(task) {
   if (!task || !task.requester) return false;
-  const requester = config.requesters.find(r => r.name === task.requester);
-  return requester && requester.email && requester.email.trim().length > 0;
+
+  // Split multiple requesters (comma-separated)
+  const requesterNames = task.requester.split(',').map(r => r.trim()).filter(Boolean);
+
+  // Check if ALL requesters have an email configured
+  return requesterNames.every(requesterName => {
+    const requester = config.requesters.find(r => r.name === requesterName);
+    return requester && requester.email && requester.email.trim().length > 0;
+  });
 }
 
 function sendTaskCompletionEmail(taskId) {
   const task = tasks.find(t => t.id === taskId);
   if (!task) return;
 
-  const requester = config.requesters.find(r => r.name === task.requester);
-  if (!requester || !requester.email) {
-    showToast(`⚠️ Aucun email configuré pour le demandeur "${task.requester}"`);
+  // Split multiple requesters (comma-separated)
+  const requesterNames = task.requester.split(',').map(r => r.trim()).filter(Boolean);
+
+  // Get all requesters with emails
+  const requestersWithEmail = requesterNames
+    .map(name => config.requesters.find(r => r.name === name))
+    .filter(requester => requester && requester.email && requester.email.trim().length > 0);
+
+  if (requestersWithEmail.length === 0) {
+    showToast(`⚠️ Aucun email configuré pour les demandeurs`);
     return;
   }
 
@@ -2923,12 +2947,15 @@ function sendTaskCompletionEmail(taskId) {
   const subject = replaceTemplateVariables(template.subject, task);
   const body = replaceTemplateVariables(template.body, task);
 
+  // Prepare email addresses (multiple recipients separated by semicolons)
+  const emailAddresses = requestersWithEmail.map(r => r.email).join(';');
+
   // URL encode for mailto
   const encodedSubject = encodeURIComponent(subject);
   const encodedBody = encodeURIComponent(body).replace(/%0A/g, '%0D%0A');
 
   // Open email client
-  window.location.href = `mailto:${requester.email}?subject=${encodedSubject}&body=${encodedBody}`;
+  window.location.href = `mailto:${emailAddresses}?subject=${encodedSubject}&body=${encodedBody}`;
 
   showToast(`Email de notification prêt pour la tâche "${task.title}"`);
 }
@@ -2937,9 +2964,16 @@ function sendTaskInquiryEmail(taskId) {
   const task = tasks.find(t => t.id === taskId);
   if (!task) return;
 
-  const requester = config.requesters.find(r => r.name === task.requester);
-  if (!requester || !requester.email) {
-    showToast(`⚠️ Aucun email configuré pour le demandeur "${task.requester}"`);
+  // Split multiple requesters (comma-separated)
+  const requesterNames = task.requester.split(',').map(r => r.trim()).filter(Boolean);
+
+  // Get all requesters with emails
+  const requestersWithEmail = requesterNames
+    .map(name => config.requesters.find(r => r.name === name))
+    .filter(requester => requester && requester.email && requester.email.trim().length > 0);
+
+  if (requestersWithEmail.length === 0) {
+    showToast(`⚠️ Aucun email configuré pour les demandeurs`);
     return;
   }
 
@@ -2948,12 +2982,15 @@ function sendTaskInquiryEmail(taskId) {
   const subject = replaceTemplateVariables(template.subject, task);
   const body = replaceTemplateVariables(template.body, task);
 
+  // Prepare email addresses (multiple recipients separated by semicolons)
+  const emailAddresses = requestersWithEmail.map(r => r.email).join(';');
+
   // URL encode for mailto
   const encodedSubject = encodeURIComponent(subject);
   const encodedBody = encodeURIComponent(body).replace(/%0A/g, '%0D%0A');
 
   // Open email client
-  window.location.href = `mailto:${requester.email}?subject=${encodedSubject}&body=${encodedBody}`;
+  window.location.href = `mailto:${emailAddresses}?subject=${encodedSubject}&body=${encodedBody}`;
 
   showToast(`Email de demande d'informations prêt pour la tâche "${task.title}"`);
 }
@@ -3211,6 +3248,29 @@ function applyAppearanceSettings() {
   } else {
     document.body.classList.remove('high-contrast');
     if (highContrastToggle) highContrastToggle.checked = false;
+  }
+}
+
+// ............................................................
+//  ACCORDÉON PARAMÈTRES
+// ............................................................
+
+function toggleSettingsSection(sectionName) {
+  const content = document.getElementById(`${sectionName}Content`);
+  const chevron = document.getElementById(`${sectionName}Chevron`);
+
+  if (!content || !chevron) return;
+
+  const isHidden = content.classList.contains('hidden');
+
+  if (isHidden) {
+    // Ouvrir la section
+    content.classList.remove('hidden');
+    chevron.style.transform = 'rotate(180deg)';
+  } else {
+    // Fermer la section
+    content.classList.add('hidden');
+    chevron.style.transform = 'rotate(0deg)';
   }
 }
 
@@ -3676,9 +3736,10 @@ function renderArchivedProjects() {
 
   if (archivedProjects.length === 0) {
     container.innerHTML = `
-      <div class="col-span-full text-center py-8">
-        <span class="material-symbols-outlined text-5xl text-on-surface-variant mb-2 block opacity-40">folder_open</span>
-        <p class="text-on-surface-variant text-sm">Aucun projet archivé</p>
+      <div class="col-span-full empty-state">
+        <div class="big-icon">📁</div>
+        <strong>Aucun projet archivé</strong>
+        <p>Les projets archivés apparaîtront ici.</p>
       </div>
     `;
     return;
@@ -3962,7 +4023,7 @@ function buildCard(task, idx, isArchive) {
         </div>` : ''}
       </div>
       ${task.deadline && !isArchive && taskViewMode !== 4 ? getDeadlineProgress(task) : ''}
-      ${task.deadline && !isArchive && taskViewMode === 4 ? getDeadlineProgressCompact(task) : ''}
+      ${task.deadline && !isArchive && taskViewMode === 4 ? getDeadlineProgressCompact(task, task.urgency) : ''}
     </div>
   `;
   return card;
@@ -4050,7 +4111,7 @@ function getDeadlineProgress(task) {
   `;
 }
 
-function getDeadlineProgressCompact(task) {
+function getDeadlineProgressCompact(task, urgency = 'low') {
   if (!task.deadline) return '';
 
   const now = new Date();
@@ -4059,27 +4120,21 @@ function getDeadlineProgressCompact(task) {
   // Calculer les jours restants
   const daysRemaining = Math.ceil((deadline - now) / (1000 * 60 * 60 * 24));
 
-  // Déterminer la couleur selon l'urgence
-  let colorClass = 'text-primary';
-  let bgClass = 'bg-primary-fixed';
+  // Utiliser la même couleur que le badge d'urgence
+  const urgencyColors = {
+    low: 'bg-[#0891b2]',      // Cyan (Faible)
+    medium: 'bg-[#f59e0b]',   // Orange (Moyenne)
+    high: 'bg-[#dc2626]'      // Rouge (Urgente)
+  };
 
-  if (daysRemaining < 0) {
-    colorClass = 'text-white';
-    bgClass = 'bg-error';
-  } else if (daysRemaining <= 2) {
-    colorClass = 'text-white';
-    bgClass = 'bg-tertiary';
-  } else if (daysRemaining <= 7) {
-    colorClass = 'text-white';
-    bgClass = 'bg-[#f59e0b]'; // Orange warning
-  }
+  const bgClass = urgencyColors[urgency || 'low'];
 
   const deadlineFormatted = new Date(task.deadline).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
   const daysLabel = Math.abs(daysRemaining) > 1 ? 'j' : 'j';
 
   return `
     <div class="flex items-center gap-1">
-      <div class="${bgClass} ${colorClass} px-1.5 py-0.5 rounded text-[9px] font-bold" title="Échéance : ${deadlineFormatted}">
+      <div class="${bgClass} text-white px-2 py-1 rounded-md text-[10px] font-bold shadow-sm" title="Échéance : ${deadlineFormatted}">
         ${Math.abs(daysRemaining)}${daysLabel}
       </div>
     </div>
@@ -5192,11 +5247,8 @@ function buildEmailSignature() {
     signature = config.emailSignature.text;
   }
 
-  // Note: Image is stored as base64 but can't be embedded in mailto: links
-  // We'll include a note about the image for reference
-  if (config.emailSignature.image) {
-    signature += '\n\n[Logo de signature attaché]';
-  }
+  // Note: Les images ne peuvent pas être intégrées dans les liens mailto:
+  // L'utilisateur devra ajouter l'image manuellement dans son client email
 
   return signature;
 }
@@ -5214,85 +5266,12 @@ async function saveEmailSignature() {
   showToast('Signature email enregistrée avec succès');
 }
 
-function removeSignatureImage() {
-  if (!config.emailSignature) return;
-
-  config.emailSignature.image = null;
-
-  document.getElementById('signatureImagePreview').classList.add('hidden');
-  document.getElementById('signatureImageInput').value = '';
-
-  saveToStorage();
-  showToast('Image de signature supprimée');
-}
-
-// Handle signature image upload
-document.addEventListener('DOMContentLoaded', () => {
-  const imageInput = document.getElementById('signatureImageInput');
-  if (imageInput) {
-    imageInput.addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-
-      // Check file size (max 500 KB)
-      if (file.size > 500 * 1024) {
-        showToast('image ne doit pas dépasser 500 Ko');
-        e.target.value = '';
-        return;
-      }
-
-      // Check file type
-      if (!file.type.match(/^image\/(png|jpeg|jpg|svg\+xml)$/)) {
-        showToast('Format d\'image non supporté (PNG, JPG, SVG uniquement)');
-        e.target.value = '';
-        return;
-      }
-
-      // Read file as base64
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-        const base64 = event.target.result;
-
-        if (!config.emailSignature) {
-          config.emailSignature = {};
-        }
-
-        config.emailSignature.image = {
-          data: base64,
-          type: file.type,
-          name: file.name
-        };
-
-        // Show preview
-        const preview = document.getElementById('signatureImagePreview');
-        const previewImg = document.getElementById('signatureImagePreviewImg');
-        previewImg.src = base64;
-        preview.classList.remove('hidden');
-
-        await saveToStorage();
-        showToast('Image de signature ajoutée');
-      };
-
-      reader.readAsDataURL(file);
-    });
-  }
-});
-
 // Load signature on settings view
 function loadEmailSignature() {
   const textArea = document.getElementById('emailSignatureText');
-  const preview = document.getElementById('signatureImagePreview');
-  const previewImg = document.getElementById('signatureImagePreviewImg');
 
   if (textArea && config.emailSignature?.text) {
     textArea.value = config.emailSignature.text;
-  }
-
-  if (preview && config.emailSignature?.image) {
-    previewImg.src = config.emailSignature.image.data;
-    preview.classList.remove('hidden');
-  } else if (preview) {
-    preview.classList.add('hidden');
   }
 }
 
@@ -5837,15 +5816,14 @@ function renderGanttChart() {
 
   // Pour les semaines, utiliser une largeur fixe pour forcer le scroll
   // Pour mois/trimestres, utiliser 1fr pour s'adapter
-  const columnWidth = ganttViewMode === 'week' ? '80px' : '1fr';
+  const columnWidth = ganttViewMode === 'week' ? '100px' : '1fr';
 
-  // Calculer la largeur minimale du contenu pour le mode semaines
-  const minContentWidth = ganttViewMode === 'week'
-    ? `${256 + (totalColumns * 80)}px` // 256px pour la colonne nom + 80px par semaine
-    : 'auto';
+  // Calculer la largeur totale en mode semaines
+  const totalWidth = ganttViewMode === 'week' ? `${(totalColumns * 100) + 256}px` : '100%';
+  const wrapperDisplay = ganttViewMode === 'week' ? 'inline-block' : 'block';
 
-  // Wrapper avec largeur minimale pour contenir le scroll
-  let html = `<div style="min-width: ${minContentWidth}; width: ${ganttViewMode === 'week' ? minContentWidth : '100%'};">`;
+  // Wrapper - en mode semaines, on force une largeur fixe avec inline-block pour ne pas forcer le parent
+  let html = `<div style="width: ${totalWidth}; display: ${wrapperDisplay};">`;
 
   // Header row with time labels
   if (ganttViewMode === 'month' || ganttViewMode === 'quarter') {
@@ -5862,9 +5840,9 @@ function renderGanttChart() {
   } else {
     // Mode SEMAINES : affichage sur deux lignes (mois + semaines)
     // Ligne 1 : Les mois (avec fusion des colonnes pour chaque mois)
-    html += '<div class="flex border-b border-surface-container/50 min-w-0">';
+    html += '<div class="flex border-b border-surface-container/50">';
     html += '<div class="w-48 lg:w-64 font-label text-[10px] font-bold text-on-surface-variant uppercase tracking-widest border-r border-surface-container shrink-0"></div>';
-    html += '<div class="flex-1 flex border-l border-surface-container/30 min-w-0">';
+    html += '<div class="flex border-l border-surface-container/30">';
 
     // Grouper par mois
     let currentMonthLabel = null;
@@ -5874,7 +5852,7 @@ function renderGanttChart() {
       if (weekData.monthLabel !== currentMonthLabel) {
         // Afficher le mois précédent si nécessaire
         if (currentMonthLabel !== null) {
-          html += `<div class="p-2 lg:p-3 font-label text-[9px] lg:text-[10px] font-bold text-on-surface-variant text-center border-r border-surface-container/30 bg-surface-container/30" style="flex: 0 0 ${(100 / totalColumns) * currentMonthSpan}%;">${currentMonthLabel}</div>`;
+          html += `<div class="p-2 lg:p-3 font-label text-[9px] lg:text-[10px] font-bold text-on-surface-variant text-center border-r border-surface-container/30 bg-surface-container/30" style="width: ${currentMonthSpan * 100}px;">${currentMonthLabel}</div>`;
         }
         // Commencer un nouveau mois
         currentMonthLabel = weekData.monthLabel;
@@ -5885,7 +5863,7 @@ function renderGanttChart() {
 
       // Dernier élément : afficher le mois en cours
       if (index === timeLabels.length - 1) {
-        html += `<div class="p-2 lg:p-3 font-label text-[9px] lg:text-[10px] font-bold text-on-surface-variant text-center border-r-0 bg-surface-container/30" style="flex: 0 0 ${(100 / totalColumns) * currentMonthSpan}%;">${currentMonthLabel}</div>`;
+        html += `<div class="p-2 lg:p-3 font-label text-[9px] lg:text-[10px] font-bold text-on-surface-variant text-center border-r-0 bg-surface-container/30" style="width: ${currentMonthSpan * 100}px;">${currentMonthLabel}</div>`;
       }
     });
 
@@ -5893,9 +5871,9 @@ function renderGanttChart() {
     html += '</div>';
 
     // Ligne 2 : Les numéros de semaines
-    html += '<div class="flex border-b border-surface-container min-w-0">';
+    html += '<div class="flex border-b border-surface-container">';
     html += '<div class="w-48 lg:w-64 p-3 lg:p-4 font-label text-[10px] font-bold text-on-surface-variant uppercase tracking-widest border-r border-surface-container shrink-0">Nom du projet</div>';
-    html += `<div class="flex-1 grid border-l border-surface-container/30 min-w-0" style="grid-template-columns: repeat(${totalColumns}, ${columnWidth});">`;
+    html += `<div class="grid border-l border-surface-container/30" style="grid-template-columns: repeat(${totalColumns}, ${columnWidth});">`;
     timeLabels.forEach(weekData => {
       html += `<div class="p-2 lg:p-4 font-label text-[9px] lg:text-[10px] font-bold text-on-surface-variant text-center border-r border-surface-container/30 last:border-r-0">S${weekData.weekNumber}</div>`;
     });
@@ -5951,15 +5929,35 @@ function renderGanttChart() {
     `;
 
     // Timeline column with responsive grid
-    html += `<div class="flex-1 relative h-20 lg:h-24 py-6 lg:py-8 grid min-w-0" style="grid-template-columns: repeat(${totalColumns}, ${columnWidth});">`;
-    const bar = calculateBarPosition(project, minDate, maxDate, timeLabels.length);
+    const timelineClass = ganttViewMode === 'week' ? '' : 'flex-1';
+    html += `<div class="${timelineClass} relative h-20 lg:h-24 py-6 lg:py-8 grid" style="grid-template-columns: repeat(${totalColumns}, ${columnWidth});">`;
+
+    // Calculate bar position
+    let barPositionStyle;
+    if (ganttViewMode === 'week') {
+      // En mode SEMAINES : utiliser des positions en pixels
+      const totalWidth = totalColumns * 100; // 100px par colonne
+      const projectStart = new Date(project.startDate);
+      const projectEnd = new Date(project.endDate);
+      const totalDays = (maxDate - minDate) / (1000 * 60 * 60 * 24);
+      const startDays = (projectStart - minDate) / (1000 * 60 * 60 * 24);
+      const durationDays = (projectEnd - projectStart) / (1000 * 60 * 60 * 24);
+      const leftPx = (startDays / totalDays) * totalWidth;
+      const widthPx = (durationDays / totalDays) * totalWidth;
+      barPositionStyle = `left: ${Math.max(0, leftPx)}px; width: ${Math.max(20, widthPx)}px;`;
+    } else {
+      // En mode MOIS/TRIMESTRES : utiliser des pourcentages
+      const bar = calculateBarPosition(project, minDate, maxDate, timeLabels.length);
+      barPositionStyle = `left: ${bar.left}%; width: ${bar.width}%;`;
+    }
+
     const barStyle = project.status === 'en-cours'
       ? `background: ${color.bgGradient}`
       : `background-color: ${color.bg}`;
 
     html += `
       <div class="absolute h-6 lg:h-8 rounded-full flex items-center justify-center px-2 lg:px-4 shadow-sm cursor-pointer transition-all hover:shadow-md col-span-full"
-           style="left: ${bar.left}%; width: ${bar.width}%; ${barStyle}; color: ${color.text}; top: 50%; transform: translateY(-50%);"
+           style="${barPositionStyle} ${barStyle}; color: ${color.text}; top: 50%; transform: translateY(-50%);"
            onclick="openProjectDetailModal(${project.id}, false)"
            title="${escHtml(project.name)} - ${project.progress}%">
         <span class="text-[10px] lg:text-[11px] font-bold">${project.progress}%</span>

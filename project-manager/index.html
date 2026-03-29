@@ -264,6 +264,10 @@
   }
 
   /* Gantt scroll styling */
+  #ganttChart {
+    overscroll-behavior-x: contain;
+  }
+
   #ganttChart::-webkit-scrollbar {
     height: 8px;
     width: 8px;
@@ -281,11 +285,6 @@
 
   #ganttChart::-webkit-scrollbar-thumb:hover {
     background: var(--primary-dark);
-  }
-
-  /* Force le Gantt à ne pas déborder */
-  #ganttChart > div {
-    min-width: fit-content;
   }
 
   /* View mode buttons */
@@ -833,19 +832,6 @@
         </div>
       </div>
 
-      <!-- Versions Section -->
-      <div class="bg-surface-container-low p-6 rounded-xl mb-6">
-        <h3 class="text-lg font-bold mb-2 flex items-center gap-2">
-          <span class="material-symbols-outlined text-primary">package_2</span>
-          Versions des logiciels
-        </h3>
-        <p class="text-sm text-on-surface-variant mb-4">Gérez les versions de vos logiciels (SOLIS, MULTIGEST, etc.)</p>
-        <button onclick="openVersionsModal()" class="w-full px-4 py-3 bg-primary-gradient text-white rounded-xl font-semibold flex items-center justify-center gap-2">
-          <span class="material-symbols-outlined">package_2</span>
-          <span>Gérer les versions</span>
-        </button>
-      </div>
-
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <!-- Export Section -->
         <div class="bg-surface-container-low p-6 rounded-xl">
@@ -892,7 +878,7 @@
         <p class="text-on-surface-variant mt-1">Configuration de l'application</p>
       </div>
 
-      <!-- Storage Info -->
+      <!-- Storage Info (always visible) -->
       <div class="bg-surface-container-low p-6 rounded-xl mb-6">
         <h3 class="text-lg font-bold mb-2 flex items-center gap-2">
           <span class="material-symbols-outlined text-primary">database</span>
@@ -915,203 +901,248 @@
         </div>
       </div>
 
-      <!-- Custom Lists Management -->
-      <div class="bg-surface-container-low p-6 rounded-xl mb-6">
-        <h3 class="text-lg font-bold mb-2 flex items-center gap-2">
-          <span class="material-symbols-outlined text-primary">list</span>
-          Listes personnalisées
-        </h3>
-        <p class="text-sm text-on-surface-variant mb-4">Personnalisez les demandeurs et sujets de demandes</p>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <button onclick="openRequestersModal()" class="px-4 py-3 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold flex items-center justify-center gap-2">
-            <span class="material-symbols-outlined">group</span>
-            <span>Gérer les demandeurs</span>
-          </button>
-          <button onclick="openTypesModal()" class="px-4 py-3 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold flex items-center justify-center gap-2">
-            <span class="material-symbols-outlined">category</span>
-            <span>Gérer les sujets</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- Email Templates Management -->
-      <div class="bg-surface-container-low p-6 rounded-xl mb-6">
-        <h3 class="text-lg font-bold mb-2 flex items-center gap-2">
-          <span class="material-symbols-outlined text-primary">mail</span>
-          Templates d'emails & Signature
-        </h3>
-        <p class="text-sm text-on-surface-variant mb-4">Personnalisez les modèles d'emails et votre signature</p>
-
-        <!-- Email Templates Buttons -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          <button onclick="openEmailTemplateModal('completion')" class="px-4 py-3 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold flex items-center justify-center gap-2">
-            <span class="material-symbols-outlined">check_circle</span>
-            <span>Email de réalisation</span>
-          </button>
-          <button onclick="openEmailTemplateModal('inquiry')" class="px-4 py-3 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold flex items-center justify-center gap-2">
-            <span class="material-symbols-outlined">help</span>
-            <span>Email de demande d'infos</span>
-          </button>
-        </div>
-
-        <!-- Email Signature Section -->
-        <div class="border-t border-surface-container pt-6">
-          <h4 class="text-md font-bold mb-3 flex items-center gap-2">
-            <span class="material-symbols-outlined text-primary text-lg">signature</span>
-            Signature email
-          </h4>
-
-          <div class="space-y-4">
-            <div>
-              <label class="block text-sm font-semibold mb-2">Texte de la signature</label>
-              <textarea id="emailSignatureText" rows="4" class="w-full px-4 py-3 bg-surface-container border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none text-sm" placeholder="Ex: Cordialement,&#10;Prénom NOM&#10;Service XYZ&#10;Administration"></textarea>
+      <!-- Accordion Section: Custom Lists Management -->
+      <div class="bg-surface-container-low rounded-xl mb-4 overflow-hidden">
+        <button onclick="toggleSettingsSection('customLists')" class="w-full px-6 py-4 flex items-center justify-between hover:bg-surface-container transition-colors">
+          <div class="flex items-center gap-3">
+            <span class="material-symbols-outlined text-primary">list</span>
+            <div class="text-left">
+              <h3 class="text-lg font-bold">Listes personnalisées</h3>
+              <p class="text-xs text-on-surface-variant">Personnalisez les demandeurs et sujets de demandes</p>
             </div>
-
-            <div>
-              <label class="block text-sm font-semibold mb-2">Logo / Image de signature (optionnel)</label>
-              <p class="text-xs text-on-surface-variant mb-2">Ajoutez le logo de votre administration (max 500 Ko, formats: PNG, JPG, SVG)</p>
-              <input type="file" id="signatureImageInput" accept="image/png,image/jpeg,image/jpg,image/svg+xml" class="hidden">
-              <div class="flex gap-3">
-                <button onclick="document.getElementById('signatureImageInput').click()" class="px-4 py-2 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold flex items-center gap-2">
-                  <span class="material-symbols-outlined">upload</span>
-                  Choisir une image
-                </button>
-                <button onclick="removeSignatureImage()" class="px-4 py-2 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold flex items-center gap-2 text-error">
-                  <span class="material-symbols-outlined">delete</span>
-                  Supprimer l'image
-                </button>
-              </div>
-              <div id="signatureImagePreview" class="mt-3 hidden">
-                <p class="text-xs text-on-surface-variant mb-2">Aperçu :</p>
-                <img id="signatureImagePreviewImg" src="" alt="Signature" class="max-w-xs max-h-32 border border-surface-container rounded-xl">
-              </div>
-            </div>
-
-            <button onclick="saveEmailSignature()" class="w-full px-4 py-3 bg-primary-gradient text-white rounded-xl font-semibold flex items-center justify-center gap-2">
-              <span class="material-symbols-outlined">save</span>
-              Enregistrer la signature
+          </div>
+          <span id="customListsChevron" class="material-symbols-outlined text-on-surface-variant transition-transform">expand_more</span>
+        </button>
+        <div id="customListsContent" class="hidden px-6 pt-4 pb-6">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <button onclick="openRequestersModal()" class="px-4 py-3 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold flex items-center justify-center gap-2">
+              <span class="material-symbols-outlined">group</span>
+              <span>Gérer les demandeurs</span>
+            </button>
+            <button onclick="openTypesModal()" class="px-4 py-3 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold flex items-center justify-center gap-2">
+              <span class="material-symbols-outlined">category</span>
+              <span>Gérer les sujets</span>
             </button>
           </div>
         </div>
       </div>
 
-      <!-- App Branding Settings -->
-      <div class="bg-surface-container-low p-6 rounded-xl mb-6">
-        <h3 class="text-lg font-bold mb-2 flex items-center gap-2">
-          <span class="material-symbols-outlined text-primary">badge</span>
-          Identité de l'application
-        </h3>
-        <p class="text-sm text-on-surface-variant mb-4">Personnalisez le nom et le descriptif affichés en haut à gauche</p>
-
-        <div class="space-y-4">
-          <div>
-            <label class="block text-sm font-semibold mb-2">Nom de l'application</label>
-            <input id="appNameInput" type="text" placeholder="Ex: TaskMDA" class="w-full px-4 py-3 bg-surface-container border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none">
-          </div>
-
-          <div>
-            <label class="block text-sm font-semibold mb-2">Descriptif / Tagline</label>
-            <input id="appTaglineInput" type="text" placeholder="Ex: Gestion de Projets" class="w-full px-4 py-3 bg-surface-container border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none">
-          </div>
-
-          <button onclick="saveAppBranding()" class="w-full px-4 py-3 bg-primary-gradient text-white rounded-xl font-semibold flex items-center justify-center gap-2">
-            <span class="material-symbols-outlined">save</span>
-            Enregistrer l'identité
-          </button>
-        </div>
-      </div>
-
-      <!-- Appearance Settings -->
-      <div class="bg-surface-container-low p-6 rounded-xl mb-6">
-        <h3 class="text-lg font-bold mb-2 flex items-center gap-2">
-          <span class="material-symbols-outlined text-primary">palette</span>
-          Apparence
-        </h3>
-        <p class="text-sm text-on-surface-variant mb-4">Personnalisez l'affichage de l'application</p>
-
-        <div class="space-y-4">
-          <!-- Dark Mode Toggle -->
-          <div class="flex items-center justify-between p-4 bg-surface-container rounded-xl">
-            <div class="flex-1">
-              <h4 class="font-semibold text-on-surface mb-1">Mode sombre</h4>
-              <p class="text-xs text-on-surface-variant">Interface avec fond sombre pour réduire la fatigue oculaire</p>
+      <!-- Accordion Section: Email Templates & Signature -->
+      <div class="bg-surface-container-low rounded-xl mb-4 overflow-hidden">
+        <button onclick="toggleSettingsSection('emailTemplates')" class="w-full px-6 py-4 flex items-center justify-between hover:bg-surface-container transition-colors">
+          <div class="flex items-center gap-3">
+            <span class="material-symbols-outlined text-primary">mail</span>
+            <div class="text-left">
+              <h3 class="text-lg font-bold">Templates d'emails & Signature</h3>
+              <p class="text-xs text-on-surface-variant">Personnalisez les modèles d'emails et votre signature</p>
             </div>
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" id="darkModeToggle" class="sr-only peer">
-              <div class="w-11 h-6 bg-surface-container-high peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-            </label>
+          </div>
+          <span id="emailTemplatesChevron" class="material-symbols-outlined text-on-surface-variant transition-transform">expand_more</span>
+        </button>
+        <div id="emailTemplatesContent" class="hidden px-6 pt-4 pb-6">
+          <!-- Email Templates Buttons -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <button onclick="openEmailTemplateModal('completion')" class="px-4 py-3 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold flex items-center justify-center gap-2">
+              <span class="material-symbols-outlined">check_circle</span>
+              <span>Email de réalisation</span>
+            </button>
+            <button onclick="openEmailTemplateModal('inquiry')" class="px-4 py-3 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold flex items-center justify-center gap-2">
+              <span class="material-symbols-outlined">help</span>
+              <span>Email de demande d'infos</span>
+            </button>
           </div>
 
-          <!-- High Contrast Toggle -->
-          <div class="flex items-center justify-between p-4 bg-surface-container rounded-xl">
-            <div class="flex-1">
-              <h4 class="font-semibold text-on-surface mb-1">Contraste renforcé</h4>
-              <p class="text-xs text-on-surface-variant">Bordures et séparations plus visibles entre les éléments</p>
+          <!-- Email Signature Section -->
+          <div class="border-t border-surface-container pt-6">
+            <h4 class="text-md font-bold mb-3 flex items-center gap-2">
+              <span class="material-symbols-outlined text-primary text-lg">signature</span>
+              Signature email
+            </h4>
+
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm font-semibold mb-2">Texte de la signature</label>
+                <textarea id="emailSignatureText" rows="4" class="w-full px-4 py-3 bg-surface-container border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none text-sm" placeholder="Ex: Cordialement,&#10;Prénom NOM&#10;Service XYZ&#10;Administration"></textarea>
+                <p class="text-xs text-on-surface-variant mt-2">
+                  <span class="material-symbols-outlined text-xs align-middle">info</span>
+                  Note : Les images de signature doivent être configurées directement dans votre client email (Gmail, Outlook, etc.). Les liens mailto ne supportent que du texte brut.
+                </p>
+              </div>
+
+              <button onclick="saveEmailSignature()" class="w-full px-4 py-3 bg-primary-gradient text-white rounded-xl font-semibold flex items-center justify-center gap-2">
+                <span class="material-symbols-outlined">save</span>
+                Enregistrer la signature
+              </button>
             </div>
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" id="highContrastToggle" class="sr-only peer">
-              <div class="w-11 h-6 bg-surface-container-high peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-            </label>
           </div>
         </div>
       </div>
 
-      <!-- File System Access - Automatic Backup -->
-      <div class="bg-surface-container-low p-6 rounded-xl mb-6">
-        <h3 class="text-lg font-bold mb-2 flex items-center gap-2">
-          <span class="material-symbols-outlined text-primary">folder_open</span>
-          Sauvegarde automatique sur disque
-        </h3>
-        <p class="text-sm text-on-surface-variant mb-4">Liez un dossier local pour sauvegarder automatiquement vos données</p>
+      <!-- Accordion Section: App Branding -->
+      <div class="bg-surface-container-low rounded-xl mb-4 overflow-hidden">
+        <button onclick="toggleSettingsSection('appBranding')" class="w-full px-6 py-4 flex items-center justify-between hover:bg-surface-container transition-colors">
+          <div class="flex items-center gap-3">
+            <span class="material-symbols-outlined text-primary">badge</span>
+            <div class="text-left">
+              <h3 class="text-lg font-bold">Identité de l'application</h3>
+              <p class="text-xs text-on-surface-variant">Personnalisez le nom et le descriptif affichés</p>
+            </div>
+          </div>
+          <span id="appBrandingChevron" class="material-symbols-outlined text-on-surface-variant transition-transform">expand_more</span>
+        </button>
+        <div id="appBrandingContent" class="hidden px-6 pt-4 pb-6">
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-semibold mb-2">Nom de l'application</label>
+              <input id="appNameInput" type="text" placeholder="Ex: TaskMDA" class="w-full px-4 py-3 bg-surface-container border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none">
+            </div>
 
-        <!-- FSA Actions -->
-        <div class="space-y-3">
-          <button onclick="linkBackupFolder()" class="w-full px-4 py-3 bg-primary-gradient text-white rounded-xl font-semibold flex items-center justify-center gap-2">
-            <span class="material-symbols-outlined">link</span>
-            Lier un dossier de sauvegarde
-          </button>
+            <div>
+              <label class="block text-sm font-semibold mb-2">Descriptif / Tagline</label>
+              <input id="appTaglineInput" type="text" placeholder="Ex: Gestion de Projets" class="w-full px-4 py-3 bg-surface-container border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none">
+            </div>
 
-          <button id="btnRestoreFromFolder" onclick="restoreFromLinkedFolder()" class="hidden w-full px-4 py-3 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold flex items-center justify-center gap-2">
-            <span class="material-symbols-outlined">restore</span>
-            Restaurer depuis le dossier
-          </button>
-
-          <button id="btnUnlinkFolder" onclick="unlinkBackupFolder()" class="hidden w-full px-4 py-3 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold flex items-center justify-center gap-2 text-error">
-            <span class="material-symbols-outlined">link_off</span>
-            Délier le dossier
-          </button>
-        </div>
-
-        <!-- Info Box -->
-        <div class="mt-4 p-3 bg-primary/10 rounded-xl">
-          <p class="text-xs text-on-surface-variant leading-relaxed">
-            <span class="material-symbols-outlined text-xs align-middle">info</span>
-            Une fois lié, le dossier conservera automatiquement une copie de toutes vos données (tâches, projets, configuration) même si votre navigateur efface le cache.
-          </p>
+            <button onclick="saveAppBranding()" class="w-full px-4 py-3 bg-primary-gradient text-white rounded-xl font-semibold flex items-center justify-center gap-2">
+              <span class="material-symbols-outlined">save</span>
+              Enregistrer l'identité
+            </button>
+          </div>
         </div>
       </div>
 
-      <!-- Security & Encryption -->
-      <div class="bg-surface-container-low p-6 rounded-xl">
-        <h3 class="text-lg font-bold mb-4">Sécurité & Chiffrement</h3>
-        <div class="space-y-4">
-          <button id="btnSetPassword" class="w-full px-4 py-3 bg-primary-gradient text-white rounded-xl font-semibold flex items-center justify-center gap-2">
-            <span class="material-symbols-outlined">lock</span>
-            <span>Définir le mot de passe de chiffrement</span>
+      <!-- Accordion Section: Software Versions (moved from separate section) -->
+      <div class="bg-surface-container-low rounded-xl mb-4 overflow-hidden">
+        <button onclick="toggleSettingsSection('softwareVersions')" class="w-full px-6 py-4 flex items-center justify-between hover:bg-surface-container transition-colors">
+          <div class="flex items-center gap-3">
+            <span class="material-symbols-outlined text-primary">package_2</span>
+            <div class="text-left">
+              <h3 class="text-lg font-bold">Versions des logiciels</h3>
+              <p class="text-xs text-on-surface-variant">Gérez les versions de vos logiciels (SOLIS, MULTIGEST, etc.)</p>
+            </div>
+          </div>
+          <span id="softwareVersionsChevron" class="material-symbols-outlined text-on-surface-variant transition-transform">expand_more</span>
+        </button>
+        <div id="softwareVersionsContent" class="hidden px-6 pt-4 pb-6">
+          <button onclick="openVersionsModal()" class="w-full px-4 py-3 bg-primary-gradient text-white rounded-xl font-semibold flex items-center justify-center gap-2">
+            <span class="material-symbols-outlined">package_2</span>
+            <span>Gérer les versions</span>
           </button>
-          <button id="btnChangePassword" class="w-full px-4 py-3 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold flex items-center justify-center gap-2">
-            <span class="material-symbols-outlined">key</span>
-            <span>Changer le mot de passe</span>
-          </button>
-          <button id="btnLockApp" class="w-full px-4 py-3 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold flex items-center justify-center gap-2">
-            <span class="material-symbols-outlined">lock</span>
-            <span>Verrouiller l'application</span>
-          </button>
-          <button id="btnClearAll" class="w-full px-4 py-3 bg-error-container text-on-error-container rounded-xl font-semibold flex items-center justify-center gap-2">
-            <span class="material-symbols-outlined">delete_forever</span>
-            <span>Effacer toutes les données</span>
-          </button>
+        </div>
+      </div>
+
+      <!-- Accordion Section: Appearance -->
+      <div class="bg-surface-container-low rounded-xl mb-4 overflow-hidden">
+        <button onclick="toggleSettingsSection('appearance')" class="w-full px-6 py-4 flex items-center justify-between hover:bg-surface-container transition-colors">
+          <div class="flex items-center gap-3">
+            <span class="material-symbols-outlined text-primary">palette</span>
+            <div class="text-left">
+              <h3 class="text-lg font-bold">Apparence</h3>
+              <p class="text-xs text-on-surface-variant">Personnalisez l'affichage de l'application</p>
+            </div>
+          </div>
+          <span id="appearanceChevron" class="material-symbols-outlined text-on-surface-variant transition-transform">expand_more</span>
+        </button>
+        <div id="appearanceContent" class="hidden px-6 pt-4 pb-6">
+          <div class="space-y-4">
+            <!-- Dark Mode Toggle -->
+            <div class="flex items-center justify-between p-4 bg-surface-container rounded-xl">
+              <div class="flex-1">
+                <h4 class="font-semibold text-on-surface mb-1">Mode sombre</h4>
+                <p class="text-xs text-on-surface-variant">Interface avec fond sombre pour réduire la fatigue oculaire</p>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="darkModeToggle" class="sr-only peer">
+                <div class="w-11 h-6 bg-surface-container-high peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+              </label>
+            </div>
+
+            <!-- High Contrast Toggle -->
+            <div class="flex items-center justify-between p-4 bg-surface-container rounded-xl">
+              <div class="flex-1">
+                <h4 class="font-semibold text-on-surface mb-1">Contraste renforcé</h4>
+                <p class="text-xs text-on-surface-variant">Bordures et séparations plus visibles entre les éléments</p>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="highContrastToggle" class="sr-only peer">
+                <div class="w-11 h-6 bg-surface-container-high peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Accordion Section: Automatic Backup -->
+      <div class="bg-surface-container-low rounded-xl mb-4 overflow-hidden">
+        <button onclick="toggleSettingsSection('automaticBackup')" class="w-full px-6 py-4 flex items-center justify-between hover:bg-surface-container transition-colors">
+          <div class="flex items-center gap-3">
+            <span class="material-symbols-outlined text-primary">folder_open</span>
+            <div class="text-left">
+              <h3 class="text-lg font-bold">Sauvegarde automatique sur disque</h3>
+              <p class="text-xs text-on-surface-variant">Liez un dossier local pour sauvegarder automatiquement</p>
+            </div>
+          </div>
+          <span id="automaticBackupChevron" class="material-symbols-outlined text-on-surface-variant transition-transform">expand_more</span>
+        </button>
+        <div id="automaticBackupContent" class="hidden px-6 pt-4 pb-6">
+          <!-- FSA Actions -->
+          <div class="space-y-3">
+            <button onclick="linkBackupFolder()" class="w-full px-4 py-3 bg-primary-gradient text-white rounded-xl font-semibold flex items-center justify-center gap-2">
+              <span class="material-symbols-outlined">link</span>
+              Lier un dossier de sauvegarde
+            </button>
+
+            <button id="btnRestoreFromFolder" onclick="restoreFromLinkedFolder()" class="hidden w-full px-4 py-3 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold flex items-center justify-center gap-2">
+              <span class="material-symbols-outlined">restore</span>
+              Restaurer depuis le dossier
+            </button>
+
+            <button id="btnUnlinkFolder" onclick="unlinkBackupFolder()" class="hidden w-full px-4 py-3 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold flex items-center justify-center gap-2 text-error">
+              <span class="material-symbols-outlined">link_off</span>
+              Délier le dossier
+            </button>
+          </div>
+
+          <!-- Info Box -->
+          <div class="mt-4 p-3 bg-primary/10 rounded-xl">
+            <p class="text-xs text-on-surface-variant leading-relaxed">
+              <span class="material-symbols-outlined text-xs align-middle">info</span>
+              Une fois lié, le dossier conservera automatiquement une copie de toutes vos données (tâches, projets, configuration) même si votre navigateur efface le cache.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Accordion Section: Security & Encryption -->
+      <div class="bg-surface-container-low rounded-xl mb-6 overflow-hidden">
+        <button onclick="toggleSettingsSection('security')" class="w-full px-6 py-4 flex items-center justify-between hover:bg-surface-container transition-colors">
+          <div class="flex items-center gap-3">
+            <span class="material-symbols-outlined text-primary">shield</span>
+            <div class="text-left">
+              <h3 class="text-lg font-bold">Sécurité & Chiffrement</h3>
+              <p class="text-xs text-on-surface-variant">Gérez vos paramètres de sécurité et mot de passe</p>
+            </div>
+          </div>
+          <span id="securityChevron" class="material-symbols-outlined text-on-surface-variant transition-transform">expand_more</span>
+        </button>
+        <div id="securityContent" class="hidden px-6 pt-4 pb-6">
+          <div class="space-y-4">
+            <button id="btnSetPassword" class="w-full px-4 py-3 bg-primary-gradient text-white rounded-xl font-semibold flex items-center justify-center gap-2">
+              <span class="material-symbols-outlined">lock</span>
+              <span>Définir le mot de passe de chiffrement</span>
+            </button>
+            <button id="btnChangePassword" class="w-full px-4 py-3 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold flex items-center justify-center gap-2">
+              <span class="material-symbols-outlined">key</span>
+              <span>Changer le mot de passe</span>
+            </button>
+            <button id="btnLockApp" class="w-full px-4 py-3 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold flex items-center justify-center gap-2">
+              <span class="material-symbols-outlined">lock</span>
+              <span>Verrouiller l'application</span>
+            </button>
+            <button id="btnClearAll" class="w-full px-4 py-3 bg-error-container text-on-error-container rounded-xl font-semibold flex items-center justify-center gap-2">
+              <span class="material-symbols-outlined">delete_forever</span>
+              <span>Effacer toutes les données</span>
+            </button>
+          </div>
         </div>
       </div>
     </section>
@@ -2108,7 +2139,7 @@
     </p>
 
     <!-- Password Input -->
-    <div class="mb-4">
+    <div class="mb-2">
       <div class="relative">
         <input
           type="password"
@@ -2129,7 +2160,7 @@
     </div>
 
     <!-- Confirm Password (hidden by default) -->
-    <div id="lockConfirmWrap" class="mb-4 hidden">
+    <div id="lockConfirmWrap" class="mb-2 hidden">
       <div class="relative">
         <input
           type="password"
@@ -2183,7 +2214,7 @@
     </div>
 
     <!-- Error Message -->
-    <div id="lockError" class="text-error text-sm text-center mb-2 min-h-[20px]"></div>
+    <div id="lockError" class="text-error text-sm text-center mb-1 min-h-[20px]"></div>
 
     <!-- Submit Button -->
     <button
