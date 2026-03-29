@@ -104,7 +104,7 @@ let itemsPerPage = 12;
 let isSubmitting = false; // Protection contre les doubles soumissions
 let isMarkingCompleted = false; // Protection contre les doubles clics sur "Marquer réalisé"
 let isSaving = false; // Protection contre les sauvegardes simultanées
-let ganttViewMode = 'month'; // 'month' | 'weeks'
+let ganttViewMode = 'month'; // 'week' | 'month' | 'quarter'
 
 // ............................................................
 //  D?MARRAGE
@@ -113,12 +113,6 @@ let ganttViewMode = 'month'; // 'month' | 'weeks'
 window.addEventListener('DOMContentLoaded', async () => {
   initUI();
   initEventListeners();
-
-  // Hide main content initially
-  const sidebar = document.getElementById('sidebar');
-  const mainContent = document.getElementById('mainContent');
-  if (sidebar) sidebar.style.display = 'none';
-  if (mainContent) mainContent.style.display = 'none';
 
   // Initialize IndexedDB
   await initDB();
@@ -131,6 +125,10 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   // Check if data exists in IndexedDB
   const hasSavedData = !!(await idbGet('salt'));
+
+  // Marquer l'app comme chargée pour masquer le loader et afficher le lock screen
+  document.body.classList.add('app-loaded');
+
   if (hasSavedData) {
     showLockScreen('unlock');
   } else {
@@ -253,6 +251,7 @@ function initEventListeners() {
   document.getElementById('btnNewProject')?.addEventListener('click', () => openProjectModal());
   document.getElementById('btnSaveProject')?.addEventListener('click', submitProjectForm);
   document.getElementById('btnArchiveProject')?.addEventListener('click', archiveProject);
+  document.getElementById('viewQuarter')?.addEventListener('click', () => setGanttViewMode('quarter'));
   document.getElementById('viewMonth')?.addEventListener('click', () => setGanttViewMode('month'));
   document.getElementById('viewWeeks')?.addEventListener('click', () => setGanttViewMode('weeks'));
   document.getElementById('projectProgress')?.addEventListener('input', updateProjectProgressBar);
@@ -815,19 +814,15 @@ async function submitPassword() {
       await loadFromStorage();
     }
 
-    // Hide lock screen
+    // Hide lock screen and show main content
+    const screen = document.getElementById('lockScreen');
     screen.classList.add('hidden');
     screen.classList.remove('flex');
-
-    // Show main content
-    const sidebar = document.getElementById('sidebar');
-    const mainContent = document.getElementById('mainContent');
-    if (sidebar) sidebar.style.display = 'flex';
+    document.body.classList.add('auth-verified');
 
     // Initialize custom lists in forms
     updateRequesterSelects();
     updateTypeSelects();
-    if (mainContent) mainContent.style.display = 'block';
 
     // Update sidebar counts and notification badge
     updateSidebarCounts();
@@ -2358,11 +2353,11 @@ function openProjectDetailModal(projectId, isArchive = false) {
 
   // Update start date
   document.getElementById('projectDetailStart').querySelector('span:last-child').textContent =
-    project.start ? formatDate(project.start) : 'Non définie';
+    project.startDate ? formatDate(project.startDate) : 'Non définie';
 
   // Update end date
   document.getElementById('projectDetailEnd').querySelector('span:last-child').textContent =
-    project.end ? formatDate(project.end) : 'Non définie';
+    project.endDate ? formatDate(project.endDate) : 'Non définie';
 
   // Update created date
   const createdDate = project.createdAt ? formatDate(project.createdAt) :
@@ -2387,13 +2382,22 @@ function openProjectDetailModal(projectId, isArchive = false) {
   // Update action buttons based on context
   const btnArchive = document.getElementById('projectDetailBtnArchive');
   const btnRestore = document.getElementById('projectDetailBtnRestore');
+  const btnEmailInquiry = document.getElementById('projectDetailBtnEmailInquiry');
 
   if (isArchive) {
     btnArchive.classList.add('hidden');
     btnRestore.classList.remove('hidden');
+    btnEmailInquiry.classList.add('hidden');
   } else {
     btnArchive.classList.remove('hidden');
     btnRestore.classList.add('hidden');
+
+    // Show email button if project has requesters with email configured
+    if (canSendEmailForProject(project)) {
+      btnEmailInquiry.classList.remove('hidden');
+    } else {
+      btnEmailInquiry.classList.add('hidden');
+    }
   }
 
   overlay.classList.remove('hidden');
@@ -2435,6 +2439,79 @@ async function deleteProjectFromDetail() {
   const projectId = currentDetailProjectId;
   closeProjectDetailModal();
   await deleteProject(projectId);
+}
+
+function canSendEmailForProject(project) {
+  if (!project || !project.requesters || project.requesters.length === 0) return false;
+
+  // Check if at least one requester has an email configured
+  return project.requesters.some(requesterName => {
+    const requester = config.requesters.find(r => r.name === requesterName);
+    return requester && requester.email && requester.email.trim().length > 0;
+  });
+}
+
+function sendProjectInquiryEmailFromDetail() {
+  if (!currentDetailProjectId) return;
+  sendProjectInquiryEmail(currentDetailProjectId);
+}
+
+function sendProjectInquiryEmail(projectId) {
+  const project = projects.find(p => p.id === projectId);
+  if (!project) return;
+
+  // Get all requesters with emails
+  const requestersWithEmail = (project.requesters || [])
+    .map(requesterName => config.requesters.find(r => r.name === requesterName))
+    .filter(requester => requester && requester.email && requester.email.trim().length > 0);
+
+  if (requestersWithEmail.length === 0) {
+    showToast('⚠️ Aucun email configuré pour les demandeurs de ce projet');
+    return;
+  }
+
+  // Get template and replace variables
+  const template = config.emailTemplates.inquiry;
+  const subject = replaceTemplateVariablesForProject(template.subject, project);
+  const body = replaceTemplateVariablesForProject(template.body, project);
+
+  // Prepare email addresses (multiple recipients)
+  const emailAddresses = requestersWithEmail.map(r => r.email).join(',');
+
+  // URL encode for mailto
+  const encodedSubject = encodeURIComponent(subject);
+  const encodedBody = encodeURIComponent(body).replace(/%0A/g, '%0D%0A');
+
+  // Open email client
+  window.location.href = `mailto:${emailAddresses}?subject=${encodedSubject}&body=${encodedBody}`;
+
+  showToast(`Email prêt pour le projet "${project.name}"`);
+}
+
+function replaceTemplateVariablesForProject(text, project) {
+  if (!text) return '';
+
+  const requesters = (project.requesters || []).join(', ');
+  const startDate = project.startDate ? new Date(project.startDate).toLocaleDateString('fr-FR') : 'Non définie';
+  const endDate = project.endDate ? new Date(project.endDate).toLocaleDateString('fr-FR') : 'Non définie';
+
+  text = text.replace(/\{nom_projet\}/g, project.name || '');
+  text = text.replace(/\{demandeurs\}/g, requesters);
+  text = text.replace(/\{date_debut\}/g, startDate);
+  text = text.replace(/\{date_fin\}/g, endDate);
+  text = text.replace(/\{progression\}/g, (project.progress || 0) + '%');
+  text = text.replace(/\{statut\}/g, project.status || '');
+  text = text.replace(/\{description\}/g, project.description || '');
+
+  // Add signature if configured
+  if (config.emailSignature) {
+    const signature = buildEmailSignature();
+    if (signature) {
+      text += '\n\n' + signature;
+    }
+  }
+
+  return text;
 }
 
 // ............................................................
@@ -5643,22 +5720,26 @@ function updateProjectCount() {
 }
 
 function setGanttViewMode(mode) {
-  ganttViewMode = mode;
+  ganttViewMode = mode === 'weeks' ? 'week' : mode;
 
   // Update button states
+  const quarterBtn = document.getElementById('viewQuarter');
   const monthBtn = document.getElementById('viewMonth');
   const weeksBtn = document.getElementById('viewWeeks');
 
-  if (mode === 'month') {
-    monthBtn.classList.add('bg-primary', 'text-white');
-    monthBtn.classList.remove('text-on-surface-variant', 'hover:bg-surface-container');
-    weeksBtn.classList.remove('bg-primary', 'text-white');
-    weeksBtn.classList.add('text-on-surface-variant', 'hover:bg-surface-container');
-  } else {
-    weeksBtn.classList.add('bg-primary', 'text-white');
-    weeksBtn.classList.remove('text-on-surface-variant', 'hover:bg-surface-container');
-    monthBtn.classList.remove('bg-primary', 'text-white');
-    monthBtn.classList.add('text-on-surface-variant', 'hover:bg-surface-container');
+  // Reset all buttons
+  [quarterBtn, monthBtn, weeksBtn].forEach(btn => {
+    if (btn) {
+      btn.classList.remove('bg-primary', 'text-white');
+      btn.classList.add('text-on-surface-variant', 'hover:bg-surface-container');
+    }
+  });
+
+  // Activate current button
+  const activeBtn = mode === 'quarter' ? quarterBtn : mode === 'month' ? monthBtn : weeksBtn;
+  if (activeBtn) {
+    activeBtn.classList.add('bg-primary', 'text-white');
+    activeBtn.classList.remove('text-on-surface-variant', 'hover:bg-surface-container');
   }
 
   renderGanttChart();
@@ -5717,42 +5798,75 @@ function renderGanttChart() {
   const minDate = new Date(Math.min(...allDates));
   const maxDate = new Date(Math.max(...allDates));
 
-  // Extend range to show full context
-  if (ganttViewMode === 'month') {
+  // Extend range to show full context based on zoom level
+  if (ganttViewMode === 'quarter') {
+    minDate.setMonth(minDate.getMonth() - 3);
+    maxDate.setMonth(maxDate.getMonth() + 3);
+  } else if (ganttViewMode === 'month') {
     minDate.setMonth(minDate.getMonth() - 1);
     maxDate.setMonth(maxDate.getMonth() + 1);
   } else {
-    minDate.setDate(minDate.getDate() - 14); // 2 weeks before
-    maxDate.setDate(maxDate.getDate() + 14); // 2 weeks after
+    // weeks
+    minDate.setDate(minDate.getDate() - 14);
+    maxDate.setDate(maxDate.getDate() + 14);
   }
 
-  const timeLabels = ganttViewMode === 'month'
-    ? getMonthsBetween(minDate, maxDate)
-    : getWeeksBetween(minDate, maxDate);
+  // Get appropriate time labels
+  let timeLabels;
+  if (ganttViewMode === 'quarter') {
+    timeLabels = getQuartersBetween(minDate, maxDate);
+  } else if (ganttViewMode === 'month') {
+    timeLabels = getMonthsBetween(minDate, maxDate);
+  } else {
+    // SEMAINES : ajuster minDate au lundi AVANT de générer les semaines
+    const day = minDate.getDay();
+    const diff = minDate.getDate() - day + (day === 0 ? -6 : 1);
+    minDate.setDate(diff);
+    minDate.setHours(0, 0, 0, 0);
+
+    timeLabels = getWeeksBetween(minDate, maxDate);
+
+    // Ajuster maxDate pour être à la fin de la dernière semaine
+    const lastWeekEnd = new Date(minDate);
+    lastWeekEnd.setDate(lastWeekEnd.getDate() + (timeLabels.length * 7));
+    maxDate.setTime(lastWeekEnd.getTime());
+  }
 
   // Build HTML with responsive grid
   const totalColumns = timeLabels.length;
-  let html = '';
 
-  // Header row with time labels (months or weeks)
-  if (ganttViewMode === 'month') {
-    // Mode MOIS : affichage simple sur une ligne
-    html += '<div class="flex border-b border-surface-container overflow-hidden">';
+  // Pour les semaines, utiliser une largeur fixe pour forcer le scroll
+  // Pour mois/trimestres, utiliser 1fr pour s'adapter
+  const columnWidth = ganttViewMode === 'week' ? '80px' : '1fr';
+
+  // Calculer la largeur minimale du contenu pour le mode semaines
+  const minContentWidth = ganttViewMode === 'week'
+    ? `${256 + (totalColumns * 80)}px` // 256px pour la colonne nom + 80px par semaine
+    : 'auto';
+
+  // Wrapper avec largeur minimale pour contenir le scroll
+  let html = `<div style="min-width: ${minContentWidth}; width: ${ganttViewMode === 'week' ? minContentWidth : '100%'};">`;
+
+  // Header row with time labels
+  if (ganttViewMode === 'month' || ganttViewMode === 'quarter') {
+    // Mode MOIS/TRIMESTRES : affichage simple sur une ligne
+    html += '<div class="flex border-b border-surface-container min-w-0">';
     html += '<div class="w-48 lg:w-64 p-3 lg:p-4 font-label text-[10px] font-bold text-on-surface-variant uppercase tracking-widest border-r border-surface-container shrink-0">Nom du projet</div>';
-    html += '<div class="flex-1 grid border-l border-surface-container/30" style="grid-template-columns: repeat(' + totalColumns + ', minmax(0, 1fr));">';
+    html += `<div class="flex-1 grid border-l border-surface-container/30 min-w-0" style="grid-template-columns: repeat(${totalColumns}, ${columnWidth});">`;
     timeLabels.forEach(label => {
-      html += `<div class="p-2 lg:p-4 font-label text-[9px] lg:text-[10px] font-bold text-on-surface-variant text-center border-r border-surface-container/30 last:border-r-0">${label}</div>`;
+      const displayLabel = typeof label === 'string' ? label : label.day;
+      html += `<div class="p-2 lg:p-4 font-label text-[9px] lg:text-[10px] font-bold text-on-surface-variant text-center border-r border-surface-container/30 last:border-r-0">${displayLabel}</div>`;
     });
     html += '</div>';
     html += '</div>';
   } else {
     // Mode SEMAINES : affichage sur deux lignes (mois + semaines)
     // Ligne 1 : Les mois (avec fusion des colonnes pour chaque mois)
-    html += '<div class="flex border-b border-surface-container/50 overflow-hidden">';
+    html += '<div class="flex border-b border-surface-container/50 min-w-0">';
     html += '<div class="w-48 lg:w-64 font-label text-[10px] font-bold text-on-surface-variant uppercase tracking-widest border-r border-surface-container shrink-0"></div>';
-    html += '<div class="flex-1 flex border-l border-surface-container/30">';
+    html += '<div class="flex-1 flex border-l border-surface-container/30 min-w-0">';
 
-    // Grouper les semaines par mois
+    // Grouper par mois
     let currentMonthLabel = null;
     let currentMonthSpan = 0;
 
@@ -5779,9 +5893,9 @@ function renderGanttChart() {
     html += '</div>';
 
     // Ligne 2 : Les numéros de semaines
-    html += '<div class="flex border-b border-surface-container overflow-hidden">';
+    html += '<div class="flex border-b border-surface-container min-w-0">';
     html += '<div class="w-48 lg:w-64 p-3 lg:p-4 font-label text-[10px] font-bold text-on-surface-variant uppercase tracking-widest border-r border-surface-container shrink-0">Nom du projet</div>';
-    html += '<div class="flex-1 grid border-l border-surface-container/30" style="grid-template-columns: repeat(' + totalColumns + ', minmax(0, 1fr));">';
+    html += `<div class="flex-1 grid border-l border-surface-container/30 min-w-0" style="grid-template-columns: repeat(${totalColumns}, ${columnWidth});">`;
     timeLabels.forEach(weekData => {
       html += `<div class="p-2 lg:p-4 font-label text-[9px] lg:text-[10px] font-bold text-on-surface-variant text-center border-r border-surface-container/30 last:border-r-0">S${weekData.weekNumber}</div>`;
     });
@@ -5837,7 +5951,7 @@ function renderGanttChart() {
     `;
 
     // Timeline column with responsive grid
-    html += '<div class="flex-1 relative h-20 lg:h-24 py-6 lg:py-8 grid" style="grid-template-columns: repeat(' + totalColumns + ', minmax(0, 1fr));">';
+    html += `<div class="flex-1 relative h-20 lg:h-24 py-6 lg:py-8 grid min-w-0" style="grid-template-columns: repeat(${totalColumns}, ${columnWidth});">`;
     const bar = calculateBarPosition(project, minDate, maxDate, timeLabels.length);
     const barStyle = project.status === 'en-cours'
       ? `background: ${color.bgGradient}`
@@ -5856,7 +5970,8 @@ function renderGanttChart() {
     html += '</div>';
   });
 
-  html += '</div>';
+  html += '</div>'; // Ferme le div des projets
+  html += '</div>'; // Ferme le wrapper
   container.innerHTML = html;
 
   // Render mobile card view
@@ -6058,6 +6173,68 @@ function getWeeksBetween(start, end) {
   }
 
   return weeks;
+}
+
+function getDaysBetween(start, end) {
+  const days = [];
+  const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
+  const current = new Date(start);
+  const currentYear = new Date().getFullYear();
+  const spansMultipleYears = start.getFullYear() !== end.getFullYear();
+
+  let lastMonth = -1;
+  let lastYear = -1;
+
+  while (current <= end) {
+    const currentMonth = current.getMonth();
+    const month = monthNames[currentMonth];
+    const year = current.getFullYear();
+    const day = current.getDate();
+
+    const dayData = {
+      month: currentMonth,
+      year: year,
+      monthLabel: (spansMultipleYears || year !== currentYear) ? `${month} ${year}` : month,
+      day: day,
+      isNewMonth: currentMonth !== lastMonth || year !== lastYear
+    };
+
+    days.push(dayData);
+
+    lastMonth = currentMonth;
+    lastYear = year;
+    current.setDate(current.getDate() + 1);
+  }
+
+  return days;
+}
+
+function getQuartersBetween(start, end) {
+  const quarters = [];
+  const current = new Date(start);
+  const currentYear = new Date().getFullYear();
+  const spansMultipleYears = start.getFullYear() !== end.getFullYear();
+
+  // Move to start of quarter
+  const startQuarter = Math.floor(current.getMonth() / 3);
+  current.setMonth(startQuarter * 3);
+  current.setDate(1);
+
+  while (current <= end) {
+    const year = current.getFullYear();
+    const quarter = Math.floor(current.getMonth() / 3) + 1;
+    const label = `Q${quarter}`;
+
+    if (spansMultipleYears || year !== currentYear) {
+      quarters.push(`${label} ${year}`);
+    } else {
+      quarters.push(label);
+    }
+
+    current.setMonth(current.getMonth() + 3);
+  }
+
+  return quarters;
 }
 
 function calculateBarPosition(project, minDate, maxDate, totalMonths) {

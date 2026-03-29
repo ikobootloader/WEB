@@ -18,6 +18,54 @@
 <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
 
+<!-- Anti-FOUC: Hide content until authenticated -->
+<style>
+  /* Loader initial pendant le chargement de l'app */
+  #appLoader {
+    position: fixed;
+    inset: 0;
+    background: linear-gradient(135deg, #006c4a 0%, #3fb687 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+  }
+
+  #appLoader .spinner {
+    width: 50px;
+    height: 50px;
+    border: 4px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* Masquer le contenu principal par défaut */
+  body:not(.auth-verified) #sidebar,
+  body:not(.auth-verified) #mainContent {
+    display: none !important;
+  }
+
+  /* Masquer le loader quand chargé ou authentifié */
+  body.app-loaded #appLoader,
+  body.auth-verified #appLoader {
+    display: none !important;
+  }
+
+  /* Afficher sidebar et mainContent après auth */
+  body.auth-verified #sidebar {
+    display: flex !important;
+  }
+
+  body.auth-verified #mainContent {
+    display: block !important;
+  }
+</style>
+
 <!-- Tailwind CSS -->
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <script id="tailwind-config">
@@ -152,6 +200,94 @@
     animation: fadeIn 0.3s ease both;
   }
 
+  /* Gantt Zoom Slider */
+  .slider-thumb {
+    position: relative;
+  }
+
+  .slider-thumb::-webkit-slider-thumb {
+    appearance: none;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #006c4a 0%, #3fb687 100%);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    border: 3px solid white;
+  }
+
+  .slider-thumb::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
+    box-shadow: 0 4px 8px rgba(0, 108, 74, 0.3), 0 0 0 8px rgba(0, 108, 74, 0.1);
+  }
+
+  .slider-thumb::-webkit-slider-thumb:active {
+    transform: scale(1.05);
+  }
+
+  .slider-thumb::-moz-range-thumb {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #006c4a 0%, #3fb687 100%);
+    cursor: pointer;
+    border: 3px solid white;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  }
+
+  .slider-thumb::-moz-range-thumb:hover {
+    transform: scale(1.15);
+    box-shadow: 0 4px 8px rgba(0, 108, 74, 0.3), 0 0 0 8px rgba(0, 108, 74, 0.1);
+  }
+
+  .slider-thumb::-moz-range-thumb:active {
+    transform: scale(1.05);
+  }
+
+  .slider-thumb::-webkit-slider-runnable-track {
+    background: linear-gradient(to right, #006c4a 0%, #3fb687 25%, #f59e0b 50%, #ef4444 100%);
+    height: 6px;
+    border-radius: 3px;
+  }
+
+  .slider-thumb::-moz-range-track {
+    background: linear-gradient(to right, #006c4a 0%, #3fb687 25%, #f59e0b 50%, #ef4444 100%);
+    height: 6px;
+    border-radius: 3px;
+  }
+
+  /* Zoom label transition */
+  #ganttZoomLabel {
+    transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+
+  /* Gantt scroll styling */
+  #ganttChart::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+  }
+
+  #ganttChart::-webkit-scrollbar-track {
+    background: var(--surface-container);
+    border-radius: 4px;
+  }
+
+  #ganttChart::-webkit-scrollbar-thumb {
+    background: var(--primary);
+    border-radius: 4px;
+  }
+
+  #ganttChart::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-dark);
+  }
+
+  /* Force le Gantt à ne pas déborder */
+  #ganttChart > div {
+    min-width: fit-content;
+  }
+
   /* View mode buttons */
   .view-btn {
     color: var(--color-on-surface-variant);
@@ -246,6 +382,11 @@
 </head>
 
 <body class="bg-background font-body text-on-surface flex min-h-screen">
+
+<!-- App Loader (initial) -->
+<div id="appLoader">
+  <div class="spinner"></div>
+</div>
 
 <!-- Mobile Menu Button -->
 <button id="mobileMenuBtn" class="fixed top-4 left-4 z-[60] lg:hidden w-10 h-10 flex items-center justify-center bg-primary-gradient text-white rounded-xl shadow-lg">
@@ -618,22 +759,16 @@
     </section>
 
     <!-- Projects View -->
-    <section id="viewProjects" class="view-section hidden">
+    <section id="viewProjects" class="view-section hidden overflow-x-hidden">
       <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-6 gap-4">
         <div>
           <h2 class="text-2xl md:text-3xl font-extrabold font-headline tracking-tight text-on-surface">Projets en cours</h2>
           <p class="text-on-surface-variant mt-1">Visualisez l'avancement et les échéances de vos initiatives stratégiques.</p>
         </div>
-        <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-          <button id="btnNewProject" class="px-4 py-2 bg-primary-gradient text-white rounded-xl font-semibold flex items-center justify-center gap-2 shadow-sm hover:shadow-md transition-all">
-            <span class="material-symbols-outlined text-lg">add</span>
-            <span>Nouveau projet</span>
-          </button>
-          <div class="hidden lg:flex bg-surface-container-low rounded-xl p-1">
-            <button id="viewMonth" class="px-3 py-1.5 rounded-lg text-sm font-semibold transition-all bg-primary text-white">MOIS</button>
-            <button id="viewWeeks" class="px-3 py-1.5 rounded-lg text-sm font-semibold transition-all text-on-surface-variant hover:bg-surface-container">SEMAINES</button>
-          </div>
-        </div>
+        <button id="btnNewProject" class="px-4 py-2 bg-primary-gradient text-white rounded-xl font-semibold flex items-center justify-center gap-2 shadow-sm hover:shadow-md transition-all">
+          <span class="material-symbols-outlined text-lg">add</span>
+          <span>Nouveau projet</span>
+        </button>
       </div>
 
       <!-- Mobile Card View -->
@@ -642,8 +777,22 @@
       </div>
 
       <!-- Desktop Gantt Chart -->
-      <div class="hidden lg:block bg-surface-container-low rounded-2xl shadow-sm">
-        <div id="ganttChart" class="overflow-x-auto overflow-y-hidden">
+      <div class="hidden lg:block bg-surface-container-low rounded-2xl shadow-sm overflow-hidden">
+        <!-- Zoom controls bar -->
+        <div class="flex items-center justify-between px-4 py-3 border-b border-surface-container bg-surface-container-lowest">
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary text-sm">timeline</span>
+            <span class="text-sm font-semibold text-on-surface">Frise chronologique</span>
+          </div>
+          <div class="flex bg-surface-container rounded-lg p-1">
+            <button id="viewQuarter" class="px-3 py-1.5 rounded-md text-xs font-bold transition-all text-on-surface-variant hover:bg-surface-container-high">TRIMESTRES</button>
+            <button id="viewMonth" class="px-3 py-1.5 rounded-md text-xs font-bold transition-all bg-primary text-white">MOIS</button>
+            <button id="viewWeeks" class="px-3 py-1.5 rounded-md text-xs font-bold transition-all text-on-surface-variant hover:bg-surface-container-high">SEMAINES</button>
+          </div>
+        </div>
+
+        <!-- Gantt container with max height and internal scroll -->
+        <div id="ganttChart" class="overflow-x-auto overflow-y-auto max-h-[calc(100vh-300px)]">
           <!-- Gantt chart will be rendered here on desktop -->
         </div>
       </div>
@@ -2255,23 +2404,31 @@
 
     <!-- Footer with action buttons -->
     <div class="border-t border-surface-container p-6 shrink-0">
-      <div class="flex justify-end gap-3">
-        <button id="projectDetailBtnEdit" onclick="editProjectFromDetail()" class="px-4 py-2 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold flex items-center gap-2">
-          <span class="material-symbols-outlined text-sm">edit</span>
-          Modifier
-        </button>
-        <button id="projectDetailBtnArchive" onclick="archiveProjectFromDetail()" class="px-4 py-2 bg-primary-gradient text-white rounded-xl font-semibold flex items-center gap-2 hidden">
-          <span class="material-symbols-outlined text-sm">inventory_2</span>
-          Archiver
-        </button>
-        <button id="projectDetailBtnRestore" onclick="restoreProjectFromDetail()" class="px-4 py-2 bg-primary-gradient text-white rounded-xl font-semibold flex items-center gap-2 hidden">
-          <span class="material-symbols-outlined text-sm">restore</span>
-          Restaurer
-        </button>
-        <button id="projectDetailBtnDelete" onclick="deleteProjectFromDetail()" class="px-4 py-2 bg-error text-white rounded-xl font-semibold flex items-center gap-2">
-          <span class="material-symbols-outlined text-sm">delete</span>
-          Supprimer
-        </button>
+      <div class="flex justify-between gap-3">
+        <div class="flex gap-3">
+          <button id="projectDetailBtnEmailInquiry" onclick="sendProjectInquiryEmailFromDetail()" class="px-4 py-2 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold flex items-center gap-2 hidden">
+            <span class="material-symbols-outlined text-sm">help</span>
+            Demander infos
+          </button>
+        </div>
+        <div class="flex gap-3">
+          <button id="projectDetailBtnEdit" onclick="editProjectFromDetail()" class="px-4 py-2 bg-surface-container hover:bg-surface-container-high rounded-xl font-semibold flex items-center gap-2">
+            <span class="material-symbols-outlined text-sm">edit</span>
+            Modifier
+          </button>
+          <button id="projectDetailBtnArchive" onclick="archiveProjectFromDetail()" class="px-4 py-2 bg-primary-gradient text-white rounded-xl font-semibold flex items-center gap-2 hidden">
+            <span class="material-symbols-outlined text-sm">inventory_2</span>
+            Archiver
+          </button>
+          <button id="projectDetailBtnRestore" onclick="restoreProjectFromDetail()" class="px-4 py-2 bg-primary-gradient text-white rounded-xl font-semibold flex items-center gap-2 hidden">
+            <span class="material-symbols-outlined text-sm">restore</span>
+            Restaurer
+          </button>
+          <button id="projectDetailBtnDelete" onclick="deleteProjectFromDetail()" class="px-4 py-2 bg-error text-white rounded-xl font-semibold flex items-center gap-2">
+            <span class="material-symbols-outlined text-sm">delete</span>
+            Supprimer
+          </button>
+        </div>
       </div>
     </div>
   </div>
