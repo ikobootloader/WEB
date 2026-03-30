@@ -1,0 +1,337 @@
+/**
+ * Vanguard Print Styles
+ * Optimisé pour l'impression et export PDF
+ */
+
+@media print {
+  /* ============================================
+     RESET PRINT
+     ============================================ */
+  * {
+    background: transparent !important;
+    color: #000 !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  /* ============================================
+     HIDE NAVIGATION & CONTROLS
+     ============================================ */
+  .sidenav,
+  .topbar,
+  .topbar-left,
+  .topbar-right,
+  .sidenav-footer,
+  .btn,
+  button,
+  .topbar-actions,
+  .page-actions,
+  .banner,
+  .sidenav-cta,
+  input[type="file"] {
+    display: none !important;
+  }
+
+  /* ============================================
+     PAGE LAYOUT
+     ============================================ */
+  body {
+    margin: 0;
+    padding: 0;
+    background: white !important;
+  }
+
+  .main-content {
+    margin: 0;
+    padding: 10mm;
+    width: 100%;
+  }
+
+  .page-header {
+    margin-bottom: 8mm;
+  }
+
+  .page-title {
+    font-size: 24pt;
+    margin-bottom: 4mm;
+    color: #001a42 !important;
+  }
+
+  .page-subtitle {
+    font-size: 12pt;
+    color: #44474f !important;
+  }
+
+  /* ============================================
+     CARDS & SURFACES
+     ============================================ */
+  .card,
+  .card-elevated {
+    border: 1px solid #d0d0d0 !important;
+    border-radius: 4mm !important;
+    padding: 5mm !important;
+    margin-bottom: 5mm !important;
+    page-break-inside: avoid;
+  }
+
+  .stat-card {
+    border-left: 2mm solid #00204f !important;
+  }
+
+  /* ============================================
+     TYPOGRAPHY
+     ============================================ */
+  h1, h2, h3, h4, h5, h6 {
+    page-break-after: avoid;
+    page-break-inside: avoid;
+    orphans: 3;
+    widows: 3;
+  }
+
+  h1 {
+    font-size: 20pt;
+    margin-bottom: 4mm;
+  }
+
+  h2 {
+    font-size: 16pt;
+    margin-top: 6mm;
+    margin-bottom: 3mm;
+  }
+
+  h3 {
+    font-size: 14pt;
+    margin-top: 4mm;
+    margin-bottom: 2mm;
+  }
+
+  p, li {
+    font-size: 10pt;
+    line-height: 1.4;
+    orphans: 3;
+    widows: 3;
+  }
+
+  /* ============================================
+     TABLES
+     ============================================ */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    page-break-inside: avoid;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tr {
+    page-break-inside: avoid;
+  }
+
+  th, td {
+    padding: 2mm 3mm;
+    border: 1px solid #d0d0d0;
+    text-align: left;
+    font-size: 9pt;
+  }
+
+  th {
+    background: #f0f0f0 !important;
+    font-weight: 700;
+  }
+
+  /* ============================================
+     LISTS
+     ============================================ */
+  ul, ol {
+    margin-left: 6mm;
+    page-break-inside: avoid;
+  }
+
+  li {
+    margin-bottom: 1mm;
+  }
+
+  /* ============================================
+     FIELDSETS & FORMS
+     ============================================ */
+  fieldset {
+    border: 1px solid #d0d0d0 !important;
+    border-radius: 2mm !important;
+    padding: 4mm !important;
+    margin-bottom: 4mm !important;
+    page-break-inside: avoid;
+  }
+
+  legend {
+    font-size: 10pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 0 2mm;
+  }
+
+  .label {
+    font-size: 8pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #5c655f !important;
+    margin-bottom: 1mm;
+  }
+
+  .input,
+  .textarea,
+  .select {
+    border: 1px solid #d0d0d0 !important;
+    padding: 2mm !important;
+    font-size: 9pt !important;
+  }
+
+  /* ============================================
+     BADGES & CHIPS
+     ============================================ */
+  .badge {
+    border: 1px solid #d0d0d0 !important;
+    padding: 1mm 2mm !important;
+    font-size: 8pt !important;
+  }
+
+  .badge-error {
+    background: #ffdad6 !important;
+    color: #93000a !important;
+  }
+
+  .badge-warning {
+    background: #ffdcbd !important;
+    color: #693c00 !important;
+  }
+
+  /* ============================================
+     PAGE BREAKS
+     ============================================ */
+  .page-break-before {
+    page-break-before: always;
+  }
+
+  .page-break-after {
+    page-break-after: always;
+  }
+
+  .page-break-avoid {
+    page-break-inside: avoid;
+  }
+
+  /* ============================================
+     PLAN PRINTING
+     ============================================ */
+  .plan-print-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 6mm;
+    padding-bottom: 4mm;
+    border-bottom: 2px solid #00204f;
+  }
+
+  .plan-print-meta {
+    font-size: 8pt;
+    color: #44474f !important;
+    margin-top: 2mm;
+  }
+
+  .plan-section {
+    margin-bottom: 6mm;
+    page-break-inside: avoid;
+  }
+
+  .plan-section-title {
+    font-size: 12pt;
+    font-weight: 700;
+    color: #00204f !important;
+    margin-bottom: 2mm;
+    border-bottom: 1px solid #d0d0d0;
+    padding-bottom: 1mm;
+  }
+
+  .plan-checklist {
+    margin-left: 0;
+    list-style: none;
+  }
+
+  .plan-checklist li {
+    padding-left: 6mm;
+    position: relative;
+  }
+
+  .plan-checklist li::before {
+    content: "□";
+    position: absolute;
+    left: 0;
+    font-size: 12pt;
+  }
+
+  /* ============================================
+     FOOTER
+     ============================================ */
+  @page {
+    margin: 15mm;
+    @bottom-center {
+      content: "Page " counter(page) " of " counter(pages);
+      font-size: 8pt;
+      color: #747780;
+    }
+  }
+
+  /* ============================================
+     LINKS
+     ============================================ */
+  a {
+    text-decoration: underline;
+    color: #00204f !important;
+  }
+
+  a[href^="http"]:after {
+    content: " (" attr(href) ")";
+    font-size: 8pt;
+    color: #747780 !important;
+  }
+
+  /* ============================================
+     IMAGES
+     ============================================ */
+  img {
+    max-width: 100% !important;
+    height: auto !important;
+    page-break-inside: avoid;
+  }
+
+  /* ============================================
+     SPECIFIC URGENCY VIEW
+     ============================================ */
+  .urgency-card {
+    border: 2px solid #f39200 !important;
+    background: #fffef8 !important;
+    padding: 4mm !important;
+    margin-bottom: 4mm !important;
+    page-break-inside: avoid;
+  }
+
+  .urgency-card h3 {
+    color: #00204f !important;
+    font-size: 14pt;
+    margin-bottom: 2mm;
+  }
+
+  .urgency-card .meta {
+    font-size: 9pt;
+    color: #44474f !important;
+    margin-bottom: 3mm;
+  }
+
+  .urgency-card h4 {
+    font-size: 11pt;
+    color: #693c00 !important;
+    margin-top: 3mm;
+    margin-bottom: 2mm;
+  }
+}

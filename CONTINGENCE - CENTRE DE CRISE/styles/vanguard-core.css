@@ -1,0 +1,431 @@
+/**
+ * Vanguard Core Components
+ * Composants réutilisables basés sur le design system
+ */
+
+/* ============================================
+   RESET & BASE
+   ============================================ */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-body-lg);
+  font-weight: var(--font-weight-body);
+  line-height: var(--line-height-body);
+  color: var(--on-surface);
+  background: var(--background);
+  min-height: 100vh;
+}
+
+/* ============================================
+   TYPOGRAPHY UTILITIES
+   ============================================ */
+.display-lg {
+  font-size: var(--font-size-display-lg);
+  font-weight: var(--font-weight-display);
+  line-height: var(--line-height-display);
+  letter-spacing: var(--letter-spacing-display);
+}
+
+.display-md {
+  font-size: var(--font-size-display-md);
+  font-weight: var(--font-weight-display);
+  line-height: var(--line-height-display);
+  letter-spacing: var(--letter-spacing-display);
+}
+
+.headline-lg {
+  font-size: var(--font-size-headline-lg);
+  font-weight: var(--font-weight-headline);
+  line-height: var(--line-height-headline);
+  letter-spacing: var(--letter-spacing-headline);
+}
+
+.headline-md {
+  font-size: var(--font-size-headline-md);
+  font-weight: var(--font-weight-headline);
+  line-height: var(--line-height-headline);
+}
+
+.title-lg {
+  font-size: var(--font-size-title-lg);
+  font-weight: var(--font-weight-title);
+  line-height: var(--line-height-title);
+}
+
+.body-lg {
+  font-size: var(--font-size-body-lg);
+  font-weight: var(--font-weight-body);
+  line-height: var(--line-height-body);
+}
+
+.label-md {
+  font-size: var(--font-size-label-md);
+  font-weight: var(--font-weight-label);
+  letter-spacing: var(--letter-spacing-label);
+  text-transform: var(--text-transform-label);
+}
+
+.label-sm {
+  font-size: var(--font-size-label-sm);
+  font-weight: var(--font-weight-label);
+  letter-spacing: var(--letter-spacing-label);
+  text-transform: var(--text-transform-label);
+}
+
+/* ============================================
+   BUTTONS
+   ============================================ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-2);
+  padding: var(--spacing-3) var(--spacing-4);
+  border: none;
+  border-radius: var(--radius-lg);
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-body-md);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-decoration: none;
+}
+
+.btn:focus-visible {
+  outline: 3px solid rgba(0, 95, 204, 0.35);
+  outline-offset: 2px;
+}
+
+.btn:active {
+  transform: scale(0.98);
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--primary), var(--primary-container));
+  color: var(--on-primary);
+  box-shadow: var(--shadow-card);
+}
+
+.btn-primary:hover {
+  filter: brightness(1.05);
+}
+
+.btn-tertiary {
+  background: var(--tertiary-fixed-dim);
+  color: var(--tertiary);
+  font-weight: 700;
+}
+
+.btn-tertiary:hover {
+  background: var(--on-tertiary-container);
+  color: var(--on-tertiary);
+}
+
+.btn-secondary {
+  background: var(--surface-container-highest);
+  color: var(--primary);
+  border: 1px solid var(--outline-variant);
+}
+
+.btn-secondary:hover {
+  background: var(--surface-container-high);
+}
+
+.btn-danger {
+  background: var(--error-container);
+  color: var(--on-error-container);
+}
+
+.btn-danger:hover {
+  background: var(--error);
+  color: var(--on-error);
+}
+
+.btn-sm {
+  padding: var(--spacing-2) var(--spacing-3);
+  font-size: var(--font-size-body-sm);
+}
+
+.btn-lg {
+  padding: var(--spacing-4) var(--spacing-6);
+  font-size: var(--font-size-body-lg);
+}
+
+/* ============================================
+   CARDS & SURFACES
+   ============================================ */
+.card {
+  background: var(--surface-container-low);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+}
+
+.card-elevated {
+  background: var(--surface-container-lowest);
+  box-shadow: var(--shadow-card);
+}
+
+.card-bordered-left {
+  border-left: 4px solid var(--primary);
+}
+
+.card-bordered-error {
+  border-left: 4px solid var(--error);
+}
+
+.card-bordered-tertiary {
+  border-left: 4px solid: var(--tertiary-fixed-dim);
+}
+
+/* ============================================
+   INPUTS & FORMS
+   ============================================ */
+.input,
+.textarea,
+.select {
+  width: 100%;
+  padding: var(--spacing-3) var(--spacing-4);
+  background: var(--surface-container-low);
+  border: none;
+  border-radius: var(--radius-lg);
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-body-md);
+  color: var(--on-surface);
+  transition: background var(--transition-fast);
+}
+
+.input:focus,
+.textarea:focus,
+.select:focus {
+  outline: none;
+  background: var(--surface-container-highest);
+  box-shadow: 0 0 0 2px var(--primary-fixed-dim);
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.label {
+  display: block;
+  margin-bottom: var(--spacing-2);
+  font-size: var(--font-size-label-sm);
+  font-weight: var(--font-weight-label);
+  letter-spacing: var(--letter-spacing-label);
+  text-transform: var(--text-transform-label);
+  color: var(--outline);
+}
+
+fieldset {
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-4);
+  margin-bottom: var(--spacing-4);
+}
+
+legend {
+  padding: 0 var(--spacing-2);
+  color: var(--on-surface-variant);
+  font-size: var(--font-size-label-md);
+  font-weight: var(--font-weight-label);
+  text-transform: var(--text-transform-label);
+}
+
+/* ============================================
+   BADGES & CHIPS
+   ============================================ */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--spacing-1) var(--spacing-3);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-label-sm);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.badge-primary {
+  background: var(--primary-fixed);
+  color: var(--on-primary-fixed);
+}
+
+.badge-error {
+  background: var(--error-container);
+  color: var(--on-error-container);
+}
+
+.badge-warning {
+  background: var(--tertiary-fixed);
+  color: var(--on-tertiary-fixed-variant);
+}
+
+.badge-neutral {
+  background: var(--surface-container-highest);
+  color: var(--on-surface-variant);
+}
+
+/* ============================================
+   BANNERS & ALERTS
+   ============================================ */
+.banner {
+  padding: var(--spacing-4);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-4);
+  font-size: var(--font-size-body-md);
+}
+
+.banner-info {
+  background: var(--secondary-container);
+  color: var(--on-secondary-container);
+}
+
+.banner-warning {
+  background: var(--tertiary-fixed);
+  color: var(--tertiary);
+}
+
+.banner-error {
+  background: var(--error-container);
+  color: var(--on-error-container);
+}
+
+/* ============================================
+   UTILITIES
+   ============================================ */
+.hidden {
+  display: none !important;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.text-primary {
+  color: var(--primary);
+}
+
+.text-secondary {
+  color: var(--secondary);
+}
+
+.text-tertiary {
+  color: var(--tertiary-fixed-dim);
+}
+
+.text-error {
+  color: var(--error);
+}
+
+.text-muted {
+  color: var(--on-surface-variant);
+}
+
+.bg-surface {
+  background: var(--surface);
+}
+
+.bg-surface-low {
+  background: var(--surface-container-low);
+}
+
+.bg-surface-high {
+  background: var(--surface-container-high);
+}
+
+/* ============================================
+   MATERIAL ICONS
+   ============================================ */
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  vertical-align: middle;
+  user-select: none;
+}
+
+.material-symbols-outlined.filled {
+  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+/* ============================================
+   GLASSMORPHISM
+   ============================================ */
+.glass {
+  background: rgba(250, 248, 254, 0.8);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.glass-dark {
+  background: rgba(0, 32, 79, 0.8);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* ============================================
+   ANIMATIONS
+   ============================================ */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.05);
+  }
+}
+
+@keyframes marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-pulse {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.animate-marquee {
+  display: flex;
+  width: fit-content;
+  animation: marquee 30s linear infinite;
+}
+
+/* ============================================
+   RESPONSIVE HELPERS
+   ============================================ */
+@media (max-width: 768px) {
+  .hide-mobile {
+    display: none !important;
+  }
+}
+
+@media (min-width: 769px) {
+  .hide-desktop {
+    display: none !important;
+  }
+}
