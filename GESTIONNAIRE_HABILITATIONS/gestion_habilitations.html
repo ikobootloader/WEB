@@ -1,0 +1,1661 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Registre des Habilitations — Administration</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');
+
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2330;
+    --border: #30363d;
+    --accent: #2f81f7;
+    --accent2: #388bfd;
+    --green: #3fb950;
+    --orange: #d29922;
+    --red: #f85149;
+    --purple: #bc8cff;
+    --text: #e6edf3;
+    --text2: #8b949e;
+    --text3: #6e7681;
+    --shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 14px;
+  }
+
+  /* ── SPLASH / LOADER ── */
+  #splash {
+    position: fixed; inset: 0; z-index: 1000;
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 32px;
+    transition: opacity 0.4s;
+  }
+  #splash.hidden { opacity:0; pointer-events:none; }
+
+  .splash-logo {
+    font-family: 'Syne', sans-serif;
+    font-size: 13px; font-weight: 700;
+    letter-spacing: 4px; text-transform: uppercase;
+    color: var(--text3);
+  }
+  .splash-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 32px; font-weight: 800;
+    color: var(--text);
+    text-align: center;
+    line-height: 1.2;
+  }
+  .splash-title span { color: var(--accent); }
+
+  .splash-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 32px;
+    width: 440px;
+    display: flex; flex-direction: column; gap: 20px;
+    box-shadow: var(--shadow);
+  }
+
+  .splash-card h3 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700; font-size: 16px;
+    color: var(--text2);
+    letter-spacing: 1px;
+  }
+
+  .file-drop {
+    border: 2px dashed var(--border);
+    border-radius: 8px; padding: 28px;
+    text-align: center; cursor: pointer;
+    transition: all 0.2s;
+    background: var(--bg);
+  }
+  .file-drop:hover, .file-drop.drag { border-color: var(--accent); background: rgba(47,129,247,0.05); }
+  .file-drop input { display:none; }
+  .file-drop-icon { font-size: 28px; margin-bottom: 8px; }
+  .file-drop p { color: var(--text2); font-size: 13px; line-height: 1.6; }
+  .file-drop strong { color: var(--text); }
+
+  .encrypt-toggle {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 16px; border-radius: 8px;
+    background: var(--surface2); border: 1px solid var(--border);
+    cursor: pointer; user-select: none;
+  }
+  .encrypt-toggle input[type=checkbox] { display:none; }
+  .toggle-pill {
+    width: 36px; height: 20px; border-radius: 10px;
+    background: var(--border); position: relative;
+    transition: background 0.2s; flex-shrink: 0;
+  }
+  .toggle-pill::after {
+    content: ''; position: absolute;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: #fff; top: 3px; left: 3px;
+    transition: left 0.2s;
+  }
+  .encrypt-toggle.on .toggle-pill { background: var(--accent); }
+  .encrypt-toggle.on .toggle-pill::after { left: 19px; }
+  .toggle-text { font-size: 13px; color: var(--text2); }
+  .toggle-text strong { color: var(--text); font-weight: 500; }
+
+  .pwd-field {
+    display: none; flex-direction: column; gap: 8px;
+  }
+  .pwd-field.show { display: flex; }
+  .pwd-field label { font-size: 12px; color: var(--text2); letter-spacing: 0.5px; }
+  .pwd-field input {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 14px;
+    color: var(--text); font-family: inherit; font-size: 14px;
+    outline: none; transition: border-color 0.2s;
+  }
+  .pwd-field input:focus { border-color: var(--accent); }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer;
+    font-family: inherit; font-size: 14px; font-weight: 500;
+    transition: all 0.15s; text-decoration: none;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent2); }
+  .btn-ghost { background: transparent; color: var(--text2); border: 1px solid var(--border); }
+  .btn-ghost:hover { border-color: var(--text2); color: var(--text); }
+  .btn-danger { background: rgba(248,81,73,0.15); color: var(--red); border: 1px solid rgba(248,81,73,0.3); }
+  .btn-danger:hover { background: rgba(248,81,73,0.25); }
+  .btn-success { background: rgba(63,185,80,0.15); color: var(--green); border: 1px solid rgba(63,185,80,0.3); }
+  .btn-success:hover { background: rgba(63,185,80,0.25); }
+  .btn-sm { padding: 6px 12px; font-size: 12px; }
+  .btn-full { width: 100%; }
+
+  .splash-error {
+    background: rgba(248,81,73,0.1); border: 1px solid rgba(248,81,73,0.3);
+    border-radius: 8px; padding: 10px 14px;
+    color: var(--red); font-size: 13px;
+    display: none;
+  }
+  .splash-error.show { display: block; }
+
+  .new-file-row {
+    display: flex; gap: 8px;
+  }
+
+  /* ── APP SHELL ── */
+  #app { display: none; min-height: 100vh; }
+  #app.show { display: flex; flex-direction: column; }
+
+  /* Header */
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    display: flex; align-items: center; gap: 0;
+    height: 56px; flex-shrink: 0;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .header-logo {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800; font-size: 16px;
+    color: var(--text); letter-spacing: -0.3px;
+    margin-right: 32px;
+    white-space: nowrap;
+  }
+  .header-logo span { color: var(--accent); }
+
+  .nav-tabs {
+    display: flex; gap: 0; height: 100%;
+    flex: 1;
+  }
+  .nav-tab {
+    display: flex; align-items: center; gap: 7px;
+    padding: 0 16px; height: 100%;
+    color: var(--text2); font-size: 13px; font-weight: 500;
+    border-bottom: 2px solid transparent;
+    cursor: pointer; transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .nav-tab:hover { color: var(--text); }
+  .nav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .nav-tab .tab-icon { font-size: 14px; }
+
+  .header-actions {
+    display: flex; gap: 8px; align-items: center; margin-left: auto;
+  }
+  .save-indicator {
+    font-size: 11px; color: var(--text3); padding: 4px 8px;
+    border-radius: 4px; background: var(--surface2);
+  }
+  .save-indicator.saved { color: var(--green); background: rgba(63,185,80,0.1); }
+
+  /* ── MAIN CONTENT ── */
+  .main { flex: 1; padding: 24px; overflow-y: auto; }
+
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* Page header */
+  .page-header {
+    display: flex; align-items: flex-start;
+    justify-content: space-between; margin-bottom: 24px;
+    gap: 16px;
+  }
+  .page-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 22px; font-weight: 800; color: var(--text);
+  }
+  .page-subtitle { color: var(--text2); font-size: 13px; margin-top: 4px; }
+
+  /* Stats cards */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 16px; margin-bottom: 24px;
+  }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 18px 20px;
+    transition: border-color 0.2s;
+  }
+  .stat-card:hover { border-color: var(--accent); }
+  .stat-label {
+    font-size: 11px; color: var(--text3);
+    text-transform: uppercase; letter-spacing: 1px;
+    margin-bottom: 8px;
+  }
+  .stat-value {
+    font-family: 'Syne', sans-serif;
+    font-size: 28px; font-weight: 800; color: var(--text);
+    line-height: 1;
+  }
+  .stat-value.green { color: var(--green); }
+  .stat-value.orange { color: var(--orange); }
+  .stat-value.red { color: var(--red); }
+  .stat-value.purple { color: var(--purple); }
+  .stat-sub {
+    font-size: 11px; color: var(--text3); margin-top: 4px;
+  }
+
+  /* Table */
+  .table-container {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; overflow: hidden;
+  }
+  .table-toolbar {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 16px; border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  .search-box {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 7px 12px;
+    flex: 1; min-width: 200px; max-width: 340px;
+    transition: border-color 0.2s;
+  }
+  .search-box:focus-within { border-color: var(--accent); }
+  .search-box input {
+    background: transparent; border: none; outline: none;
+    color: var(--text); font-family: inherit; font-size: 13px;
+    flex: 1;
+  }
+  .search-box input::placeholder { color: var(--text3); }
+  .search-icon { color: var(--text3); font-size: 13px; }
+
+  .filter-select {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 7px 12px;
+    color: var(--text); font-family: inherit; font-size: 13px;
+    outline: none; cursor: pointer;
+    transition: border-color 0.2s;
+  }
+  .filter-select:focus { border-color: var(--accent); }
+
+  .table-wrap { overflow-x: auto; }
+  table {
+    width: 100%; border-collapse: collapse;
+    font-size: 13px;
+  }
+  thead th {
+    background: var(--surface2);
+    padding: 10px 14px;
+    text-align: left;
+    font-size: 11px; font-weight: 600;
+    color: var(--text2); text-transform: uppercase; letter-spacing: 0.8px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap; cursor: pointer;
+    user-select: none;
+  }
+  thead th:hover { color: var(--text); }
+  thead th .sort-icon { margin-left: 4px; opacity: 0.4; }
+  thead th.sorted .sort-icon { opacity: 1; color: var(--accent); }
+
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.1s;
+  }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--surface2); }
+  tbody td {
+    padding: 10px 14px; color: var(--text);
+    vertical-align: middle;
+  }
+  tbody td.muted { color: var(--text2); font-size: 12px; }
+
+  .badge {
+    display: inline-flex; align-items: center;
+    padding: 3px 8px; border-radius: 99px;
+    font-size: 11px; font-weight: 600;
+    letter-spacing: 0.3px; white-space: nowrap;
+  }
+  .badge-actif { background: rgba(63,185,80,0.15); color: var(--green); }
+  .badge-inactif { background: rgba(139,148,158,0.15); color: var(--text2); }
+  .badge-suspendu { background: rgba(248,81,73,0.15); color: var(--red); }
+  .badge-attente { background: rgba(210,153,34,0.15); color: var(--orange); }
+
+  .row-actions {
+    display: flex; gap: 6px; align-items: center;
+    opacity: 0; transition: opacity 0.15s;
+  }
+  tbody tr:hover .row-actions { opacity: 1; }
+
+  .action-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border-radius: 6px; border: none;
+    cursor: pointer; font-size: 13px; transition: all 0.15s;
+    background: var(--surface); color: var(--text2);
+  }
+  .action-btn:hover { background: var(--border); color: var(--text); }
+  .action-btn.del:hover { background: rgba(248,81,73,0.2); color: var(--red); }
+
+  .alert-row td { position: relative; }
+  .alert-row { background: rgba(210,153,34,0.05) !important; }
+  .alert-row:hover { background: rgba(210,153,34,0.1) !important; }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed; inset: 0; z-index: 500;
+    background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+    display: none; align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; width: 100%; max-width: 680px;
+    max-height: 90vh; overflow-y: auto;
+    box-shadow: var(--shadow);
+    animation: modalIn 0.2s ease;
+  }
+  @keyframes modalIn {
+    from { opacity:0; transform: scale(0.96) translateY(8px); }
+    to   { opacity:1; transform: scale(1)    translateY(0); }
+  }
+  .modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 24px; border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; background: var(--surface);
+  }
+  .modal-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 18px; font-weight: 700; color: var(--text);
+  }
+  .modal-close {
+    background: transparent; border: none; color: var(--text2);
+    font-size: 20px; cursor: pointer; padding: 4px 8px; border-radius: 6px;
+    transition: all 0.15s;
+  }
+  .modal-close:hover { background: var(--surface2); color: var(--text); }
+  .modal-body { padding: 24px; }
+  .modal-footer {
+    display: flex; gap: 10px; justify-content: flex-end;
+    padding: 16px 24px; border-top: 1px solid var(--border);
+    position: sticky; bottom: 0; background: var(--surface);
+  }
+
+  /* Form */
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .form-group {
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .form-group.full { grid-column: 1 / -1; }
+  .form-label {
+    font-size: 12px; font-weight: 600;
+    color: var(--text2); letter-spacing: 0.5px;
+  }
+  .form-label .required { color: var(--red); margin-left: 2px; }
+  .form-control {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 9px 12px;
+    color: var(--text); font-family: inherit; font-size: 13px;
+    outline: none; transition: border-color 0.2s;
+    width: 100%;
+  }
+  .form-control:focus { border-color: var(--accent); }
+  .form-control::placeholder { color: var(--text3); }
+  select.form-control { cursor: pointer; }
+  textarea.form-control { resize: vertical; min-height: 80px; }
+
+  .form-section {
+    margin-bottom: 20px;
+  }
+  .form-section-title {
+    font-size: 11px; font-weight: 700;
+    color: var(--text3); text-transform: uppercase; letter-spacing: 1.5px;
+    margin-bottom: 12px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* Toast */
+  #toast-container {
+    position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .toast {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 18px;
+    display: flex; align-items: center; gap: 10px;
+    box-shadow: var(--shadow); min-width: 280px;
+    animation: toastIn 0.25s ease;
+    font-size: 13px;
+  }
+  @keyframes toastIn {
+    from { opacity:0; transform: translateX(20px); }
+    to   { opacity:1; transform: translateX(0); }
+  }
+  .toast.success { border-color: rgba(63,185,80,0.4); }
+  .toast.error   { border-color: rgba(248,81,73,0.4); }
+  .toast.info    { border-color: rgba(47,129,247,0.4); }
+  .toast-icon { font-size: 16px; }
+
+  /* Settings page */
+  .settings-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+  }
+  .settings-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 20px;
+  }
+  .settings-card h3 {
+    font-family: 'Syne', sans-serif;
+    font-size: 14px; font-weight: 700;
+    margin-bottom: 16px; color: var(--text);
+  }
+  .list-editor { display: flex; flex-direction: column; gap: 6px; }
+  .list-item {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 7px 10px; font-size: 13px;
+    animation: fadeIn 0.15s;
+  }
+  @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+  .list-item span { flex: 1; }
+  .list-item button {
+    background: transparent; border: none; color: var(--text3);
+    cursor: pointer; padding: 2px 5px; border-radius: 4px; font-size: 12px;
+    transition: all 0.15s;
+  }
+  .list-item button:hover { color: var(--red); background: rgba(248,81,73,0.1); }
+  .add-item-row { display: flex; gap: 6px; margin-top: 8px; }
+  .add-item-row input {
+    flex: 1; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 7px 10px; color: var(--text);
+    font-family: inherit; font-size: 13px; outline: none;
+    transition: border-color 0.2s;
+  }
+  .add-item-row input:focus { border-color: var(--accent); }
+
+  /* Revisions page */
+  .revision-alert {
+    background: rgba(210,153,34,0.08); border: 1px solid rgba(210,153,34,0.3);
+    border-radius: 10px; padding: 12px 16px; margin-bottom: 16px;
+    display: flex; align-items: center; gap: 12px; font-size: 13px;
+  }
+  .revision-alert .alert-icon { font-size: 18px; }
+  .revision-alert .alert-text strong { color: var(--orange); }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center; padding: 60px 20px; color: var(--text2);
+  }
+  .empty-state .empty-icon { font-size: 40px; margin-bottom: 12px; }
+  .empty-state p { font-size: 14px; }
+
+  .divider { height: 1px; background: var(--border); margin: 16px 0; }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .form-grid { grid-template-columns: 1fr; }
+    .settings-grid { grid-template-columns: 1fr; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .header-logo { font-size: 13px; }
+    .nav-tab { padding: 0 10px; font-size: 12px; }
+    .main { padding: 16px; }
+  }
+
+  /* Confirm dialog */
+  .confirm-overlay {
+    position: fixed; inset: 0; z-index: 600;
+    background: rgba(0,0,0,0.7); display: none;
+    align-items: center; justify-content: center;
+  }
+  .confirm-overlay.show { display: flex; }
+  .confirm-box {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 24px;
+    max-width: 380px; width: 90%; text-align: center;
+    box-shadow: var(--shadow);
+  }
+  .confirm-box h3 { font-family: 'Syne', sans-serif; font-size: 17px; margin-bottom: 10px; }
+  .confirm-box p { color: var(--text2); font-size: 13px; line-height: 1.6; margin-bottom: 20px; }
+  .confirm-btns { display: flex; gap: 10px; justify-content: center; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════ SPLASH ═══════════════════════════════════ -->
+<div id="splash">
+  <div class="splash-logo">Administration Publique</div>
+  <div class="splash-title">Registre des<br><span>Habilitations</span></div>
+
+  <div class="splash-card">
+    <h3>📂 Charger un fichier de données</h3>
+
+    <div class="file-drop" id="fileDrop" onclick="document.getElementById('fileInput').click()">
+      <input type="file" id="fileInput" accept=".xlsx,.habil">
+      <div class="file-drop-icon">📋</div>
+      <p><strong>Glissez-déposez</strong> votre fichier ici<br>
+      ou cliquez pour parcourir<br>
+      <small style="color:var(--text3)">Formats acceptés : .xlsx · .habil (chiffré)</small></p>
+    </div>
+
+    <label class="encrypt-toggle" id="encryptToggle" title="Activer le chiffrement AES-256">
+      <input type="checkbox" id="encryptCheck">
+      <div class="toggle-pill"></div>
+      <div class="toggle-text"><strong>Chiffrement AES-256</strong><br>
+      <span style="font-size:11px">Le fichier sera illisible sans cette application et le mot de passe</span></div>
+    </label>
+
+    <div class="pwd-field" id="pwdField">
+      <label>MOT DE PASSE DE CHIFFREMENT</label>
+      <input type="password" id="splashPwd" placeholder="Entrez votre mot de passe…" autocomplete="off">
+    </div>
+
+    <div class="splash-error" id="splashError"></div>
+
+    <div class="new-file-row">
+      <button class="btn btn-ghost btn-full" onclick="createNewFile()">✦ Nouveau registre vierge</button>
+      <button class="btn btn-primary" onclick="loadFile()" style="flex-shrink:0">Ouvrir →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════ APP ═══════════════════════════════════ -->
+<div id="app">
+  <header class="header">
+    <div class="header-logo">Habilitations <span>·</span> Admin</div>
+    <nav class="nav-tabs">
+      <div class="nav-tab active" data-tab="dashboard" onclick="switchTab('dashboard')">
+        <span class="tab-icon">◈</span> Tableau de bord
+      </div>
+      <div class="nav-tab" data-tab="registre" onclick="switchTab('registre')">
+        <span class="tab-icon">☰</span> Registre
+      </div>
+      <div class="nav-tab" data-tab="revisions" onclick="switchTab('revisions')">
+        <span class="tab-icon">⏱</span> Révisions
+        <span id="revBadge" style="display:none; background:var(--orange); color:#fff; font-size:10px; padding:1px 6px; border-radius:99px; margin-left:2px;"></span>
+      </div>
+      <div class="nav-tab" data-tab="settings" onclick="switchTab('settings')">
+        <span class="tab-icon">⚙</span> Paramètres
+      </div>
+    </nav>
+    <div class="header-actions">
+      <span class="save-indicator" id="saveIndicator">Non sauvegardé</span>
+      <button class="btn btn-ghost btn-sm" onclick="exportFile()">⬇ Exporter</button>
+      <button class="btn btn-primary btn-sm" onclick="saveFile()">💾 Sauvegarder</button>
+    </div>
+  </header>
+
+  <main class="main">
+    <!-- ── DASHBOARD ── -->
+    <div class="page active" id="page-dashboard">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Tableau de bord</div>
+          <div class="page-subtitle" id="dbSubtitle"></div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="openModal()">＋ Nouvel utilisateur</button>
+      </div>
+      <div class="stats-grid" id="statsGrid"></div>
+      <div class="table-container">
+        <div class="table-toolbar">
+          <span style="font-size:12px; color:var(--text2); font-weight:600;">5 DERNIERS AJOUTS</span>
+        </div>
+        <div class="table-wrap">
+          <table id="recentTable">
+            <thead><tr>
+              <th>ID</th><th>Nom / Prénom</th><th>Service</th><th>Rôle</th><th>Statut</th><th>Révision</th>
+            </tr></thead>
+            <tbody id="recentBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── REGISTRE ── -->
+    <div class="page" id="page-registre">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Registre des habilitations</div>
+          <div class="page-subtitle">Ensemble des accès accordés aux logiciels métiers</div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="openModal()">＋ Ajouter</button>
+      </div>
+      <div class="table-container">
+        <div class="table-toolbar">
+          <div class="search-box">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="searchInput" placeholder="Rechercher par nom, email, service…" oninput="renderTable()">
+          </div>
+          <select class="filter-select" id="filterStatut" onchange="renderTable()">
+            <option value="">Tous les statuts</option>
+            <option value="Actif">Actif</option>
+            <option value="Inactif">Inactif</option>
+            <option value="Suspendu">Suspendu</option>
+            <option value="En attente">En attente</option>
+          </select>
+          <select class="filter-select" id="filterService" onchange="renderTable()">
+            <option value="">Tous les services</option>
+          </select>
+          <span id="rowCount" style="margin-left:auto; font-size:12px; color:var(--text3);"></span>
+        </div>
+        <div class="table-wrap">
+          <table id="mainTable">
+            <thead><tr>
+              <th onclick="sortBy('ID Utilisateur')">ID <span class="sort-icon">↕</span></th>
+              <th onclick="sortBy('Nom')">Nom <span class="sort-icon">↕</span></th>
+              <th onclick="sortBy('Service / Departement')">Service <span class="sort-icon">↕</span></th>
+              <th onclick="sortBy('Poste')">Poste <span class="sort-icon">↕</span></th>
+              <th onclick="sortBy('Role attribue')">Rôle <span class="sort-icon">↕</span></th>
+              <th onclick="sortBy('Permissions associees')">Permissions <span class="sort-icon">↕</span></th>
+              <th onclick="sortBy('Statut du compte')">Statut <span class="sort-icon">↕</span></th>
+              <th onclick="sortBy('Date de prochaine revision')">Proch. révision <span class="sort-icon">↕</span></th>
+              <th style="cursor:default">Actions</th>
+            </tr></thead>
+            <tbody id="mainBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── REVISIONS ── -->
+    <div class="page" id="page-revisions">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Suivi des révisions</div>
+          <div class="page-subtitle">Habilitations nécessitant une vérification ou un renouvellement</div>
+        </div>
+      </div>
+      <div id="revisionAlerts"></div>
+      <div class="table-container">
+        <div class="table-toolbar">
+          <span style="font-size:12px; color:var(--text2); font-weight:600;">HABILITATIONS À RÉVISER</span>
+          <span id="revCount" style="margin-left:auto; font-size:12px; color:var(--text3);"></span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>ID</th><th>Nom</th><th>Service</th><th>Rôle</th>
+              <th>Date révision</th><th>Jours restants</th><th>Responsable</th><th>Actions</th>
+            </tr></thead>
+            <tbody id="revisionBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SETTINGS ── -->
+    <div class="page" id="page-settings">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Paramètres</div>
+          <div class="page-subtitle">Configuration des listes de référence et options de sécurité</div>
+        </div>
+      </div>
+      <div class="settings-grid">
+        <div class="settings-card">
+          <h3>🏢 Services / Départements</h3>
+          <div class="list-editor" id="servicesEditor"></div>
+          <div class="add-item-row">
+            <input type="text" id="newService" placeholder="Nouveau service…">
+            <button class="btn btn-primary btn-sm" onclick="addParam('services','newService')">＋</button>
+          </div>
+        </div>
+        <div class="settings-card">
+          <h3>🎭 Rôles disponibles</h3>
+          <div class="list-editor" id="rolesEditor"></div>
+          <div class="add-item-row">
+            <input type="text" id="newRole" placeholder="Nouveau rôle…">
+            <button class="btn btn-primary btn-sm" onclick="addParam('roles','newRole')">＋</button>
+          </div>
+        </div>
+        <div class="settings-card">
+          <h3>🔐 Niveaux de permissions</h3>
+          <div class="list-editor" id="permissionsEditor"></div>
+          <div class="add-item-row">
+            <input type="text" id="newPermission" placeholder="Nouveau niveau…">
+            <button class="btn btn-primary btn-sm" onclick="addParam('permissions','newPermission')">＋</button>
+          </div>
+        </div>
+        <div class="settings-card">
+          <h3>🔒 Sécurité du fichier</h3>
+          <div style="display:flex; flex-direction:column; gap:12px;">
+            <div class="form-group">
+              <div class="form-label">MOT DE PASSE ACTUEL</div>
+              <input type="password" class="form-control" id="currentPwd" placeholder="Laisser vide si non chiffré">
+            </div>
+            <div class="form-group">
+              <div class="form-label">NOUVEAU MOT DE PASSE (vide = désactiver)</div>
+              <input type="password" class="form-control" id="newPwd" placeholder="Nouveau mot de passe…">
+            </div>
+            <div class="form-group">
+              <div class="form-label">CONFIRMER</div>
+              <input type="password" class="form-control" id="confirmPwd" placeholder="Répéter…">
+            </div>
+            <button class="btn btn-primary" onclick="changePassword()">Changer le mot de passe</button>
+            <div class="divider"></div>
+            <div style="font-size:12px; color:var(--text3); line-height:1.6;">
+              Le chiffrement utilise <strong>AES-256-GCM</strong> via la Web Crypto API.<br>
+              Extension <code>.habil</code> pour les fichiers chiffrés, <code>.xlsx</code> pour les fichiers non chiffrés.
+            </div>
+            <div class="form-group" style="margin-top:4px;">
+              <div class="form-label">PÉRIODICITÉ DE RÉVISION (mois)</div>
+              <input type="number" class="form-control" id="revisionPeriod" value="12" min="1" max="60"
+                onchange="params.revisionPeriod=parseInt(this.value)||12">
+            </div>
+            <div class="form-group">
+              <div class="form-label">ALERTE AVANT EXPIRATION (jours)</div>
+              <input type="number" class="form-control" id="alertDays" value="30" min="1" max="180"
+                onchange="params.alertDays=parseInt(this.value)||30">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ═══════════════════ MODAL UTILISATEUR ═══════════════════ -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modalTitle">Nouvel utilisateur</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-section">
+        <div class="form-section-title">Identité</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">IDENTIFIANT <span class="required">*</span></label>
+            <input class="form-control" id="fId" placeholder="USR001">
+          </div>
+          <div class="form-group">
+            <label class="form-label">EMAIL <span class="required">*</span></label>
+            <input class="form-control" id="fEmail" type="email" placeholder="prenom.nom@…">
+          </div>
+          <div class="form-group">
+            <label class="form-label">NOM <span class="required">*</span></label>
+            <input class="form-control" id="fNom" placeholder="Nom de famille">
+          </div>
+          <div class="form-group">
+            <label class="form-label">PRÉNOM <span class="required">*</span></label>
+            <input class="form-control" id="fPrenom" placeholder="Prénom">
+          </div>
+          <div class="form-group">
+            <label class="form-label">SERVICE / DÉPARTEMENT <span class="required">*</span></label>
+            <select class="form-control" id="fService"></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">POSTE</label>
+            <input class="form-control" id="fPoste" placeholder="Intitulé du poste">
+          </div>
+        </div>
+      </div>
+      <div class="form-section">
+        <div class="form-section-title">Habilitations</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">RÔLE ATTRIBUÉ <span class="required">*</span></label>
+            <select class="form-control" id="fRole"></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">PERMISSIONS ASSOCIÉES <span class="required">*</span></label>
+            <select class="form-control" id="fPermissions"></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">STATUT DU COMPTE</label>
+            <select class="form-control" id="fStatut">
+              <option>Actif</option><option>Inactif</option>
+              <option>Suspendu</option><option>En attente</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">RESPONSABLE VALIDEUR</label>
+            <input class="form-control" id="fValideur" placeholder="Nom du responsable">
+          </div>
+          <div class="form-group">
+            <label class="form-label">DATE DE PROCHAINE RÉVISION</label>
+            <input class="form-control" id="fRevision" type="date">
+          </div>
+          <div class="form-group">
+            <label class="form-label">DATE DERNIÈRE VALIDATION</label>
+            <input class="form-control" id="fDerniereValidation" type="date">
+          </div>
+          <div class="form-group full">
+            <label class="form-label">COMMENTAIRES</label>
+            <textarea class="form-control" id="fCommentaires" placeholder="Notes, restrictions, contexte…"></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="saveUser()">💾 Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm dialog -->
+<div class="confirm-overlay" id="confirmOverlay">
+  <div class="confirm-box">
+    <h3 id="confirmTitle">Confirmer la suppression</h3>
+    <p id="confirmMsg"></p>
+    <div class="confirm-btns">
+      <button class="btn btn-ghost" onclick="closeConfirm()">Annuler</button>
+      <button class="btn btn-danger" id="confirmBtn">Supprimer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div id="toast-container"></div>
+
+<script>
+// ═══════════════════════════════════
+// STATE
+// ═══════════════════════════════════
+let data = [];  // Array of row objects
+let params = {
+  services: [], roles: [], permissions: [],
+  statuts: ['Actif','Inactif','Suspendu','En attente'],
+  revisionPeriod: 12, alertDays: 30
+};
+let currentFile = null;  // { name, encrypted, password }
+let editingIdx = null;
+let sortCol = null, sortAsc = true;
+let unsaved = false;
+
+// ═══════════════════════════════════
+// CRYPTO (AES-256-GCM via WebCrypto)
+// ═══════════════════════════════════
+async function deriveKey(password, salt) {
+  const enc = new TextEncoder();
+  const keyMat = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name:'PBKDF2', salt, iterations:200000, hash:'SHA-256' },
+    keyMat, { name:'AES-GCM', length:256 }, false, ['encrypt','decrypt']
+  );
+}
+
+async function encryptBytes(bytes, password) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv   = crypto.getRandomValues(new Uint8Array(12));
+  const key  = await deriveKey(password, salt);
+  const ct   = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, key, bytes);
+  // Format: magic(4) + salt(16) + iv(12) + ciphertext
+  const magic = new TextEncoder().encode('HAB1');
+  const result = new Uint8Array(4 + 16 + 12 + ct.byteLength);
+  result.set(magic, 0);
+  result.set(salt,  4);
+  result.set(iv,    20);
+  result.set(new Uint8Array(ct), 32);
+  return result;
+}
+
+async function decryptBytes(bytes, password) {
+  const magic = new TextDecoder().decode(bytes.slice(0,4));
+  if (magic !== 'HAB1') throw new Error('Format de fichier invalide ou non chiffré');
+  const salt = bytes.slice(4, 20);
+  const iv   = bytes.slice(20, 32);
+  const ct   = bytes.slice(32);
+  const key  = await deriveKey(password, salt);
+  const pt   = await crypto.subtle.decrypt({ name:'AES-GCM', iv }, key, ct);
+  return new Uint8Array(pt);
+}
+
+// ═══════════════════════════════════
+// SPLASH / LOAD
+// ═══════════════════════════════════
+const encryptToggle = document.getElementById('encryptToggle');
+const encryptCheck  = document.getElementById('encryptCheck');
+const pwdField      = document.getElementById('pwdField');
+
+encryptToggle.addEventListener('click', () => {
+  encryptCheck.checked = !encryptCheck.checked;
+  encryptToggle.classList.toggle('on', encryptCheck.checked);
+  pwdField.classList.toggle('show', encryptCheck.checked);
+});
+
+// Drag & drop
+const fileDrop = document.getElementById('fileDrop');
+fileDrop.addEventListener('dragover', e => { e.preventDefault(); fileDrop.classList.add('drag'); });
+fileDrop.addEventListener('dragleave', () => fileDrop.classList.remove('drag'));
+fileDrop.addEventListener('drop', e => {
+  e.preventDefault(); fileDrop.classList.remove('drag');
+  const file = e.dataTransfer.files[0];
+  if (file) processFile(file);
+});
+document.getElementById('fileInput').addEventListener('change', e => {
+  if (e.target.files[0]) processFile(e.target.files[0]);
+});
+
+async function loadFile() {
+  const fi = document.getElementById('fileInput');
+  if (!fi.files[0]) { showSplashError('Veuillez sélectionner un fichier.'); return; }
+  await processFile(fi.files[0]);
+}
+
+async function processFile(file) {
+  hideSplashError();
+  const isEncrypted = file.name.endsWith('.habil');
+  const pwd = document.getElementById('splashPwd').value;
+
+  if (isEncrypted && !pwd) {
+    showSplashError('Ce fichier est chiffré. Veuillez entrer le mot de passe.');
+    pwdField.classList.add('show'); return;
+  }
+
+  try {
+    const ab = await file.arrayBuffer();
+    let xlsxBytes;
+
+    if (isEncrypted) {
+      xlsxBytes = await decryptBytes(new Uint8Array(ab), pwd);
+    } else {
+      xlsxBytes = new Uint8Array(ab);
+    }
+
+    const wb = XLSX.read(xlsxBytes, { type:'array', cellDates:true });
+    parseWorkbook(wb);
+    currentFile = { name: file.name, encrypted: isEncrypted || encryptCheck.checked, password: pwd };
+    launchApp();
+  } catch(e) {
+    console.error(e);
+    showSplashError('Erreur : ' + (e.message || 'Impossible de lire le fichier. Mot de passe incorrect ?'));
+  }
+}
+
+function parseWorkbook(wb) {
+  // Parse Parametres
+  if (wb.SheetNames.includes('Parametres')) {
+    const ws = wb.Sheets['Parametres'];
+    const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
+    const services=[], roles=[], permissions=[], statuts=[];
+    for (let i=2; i<rows.length; i++) {
+      const r = rows[i];
+      if (r[0] && r[0].toString().trim()) services.push(r[0].toString().trim());
+      if (r[2] && r[2].toString().trim()) roles.push(r[2].toString().trim());
+      if (r[4] && r[4].toString().trim()) permissions.push(r[4].toString().trim());
+      if (r[6] && r[6].toString().trim()) statuts.push(r[6].toString().trim());
+      // Revision params
+      const label = r[0] ? r[0].toString() : '';
+      if (label.includes('Periodicite')) params.revisionPeriod = parseInt(r[1])||12;
+      if (label.includes('Alerte')) params.alertDays = parseInt(r[1])||30;
+    }
+    params.services    = [...new Set(services)];
+    params.roles       = [...new Set(roles)];
+    params.permissions = [...new Set(permissions)];
+    if (statuts.length) params.statuts = [...new Set(statuts)];
+  }
+
+  // Parse Registre
+  if (wb.SheetNames.includes('Registre_Habilitations')) {
+    const ws = wb.Sheets['Registre_Habilitations'];
+    data = XLSX.utils.sheet_to_json(ws, { defval:'' });
+    // Normalize dates to strings
+    data = data.map(row => {
+      const r = {...row};
+      ['Date de creation','Date de derniere modification','Date de prochaine revision','Date derniere validation'].forEach(k => {
+        if (r[k] instanceof Date) {
+          r[k] = r[k].toISOString().split('T')[0];
+        } else if (r[k]) {
+          const d = new Date(r[k]);
+          if (!isNaN(d)) r[k] = d.toISOString().split('T')[0];
+        }
+      });
+      return r;
+    });
+  }
+}
+
+function createNewFile() {
+  // Default params
+  params = {
+    services: ['Direction Générale','Direction Informatique','Direction Financière',
+               'Direction des Ressources Humaines','Direction Commerciale'],
+    roles: ['Administrateur Système','Administrateur Fonctionnel','Superviseur',
+            'Gestionnaire','Utilisateur Avancé','Utilisateur Standard','Auditeur'],
+    permissions: ['Lecture seule','Lecture + Écriture','Lecture + Écriture + Modification',
+                  'Accès complet (Admin)','Accès restreint'],
+    statuts: ['Actif','Inactif','Suspendu','En attente'],
+    revisionPeriod: 12, alertDays: 30
+  };
+  data = [];
+  const pwd = document.getElementById('splashPwd').value;
+  currentFile = {
+    name: 'registre_habilitations.xlsx',
+    encrypted: encryptCheck.checked,
+    password: pwd
+  };
+  launchApp();
+}
+
+function launchApp() {
+  document.getElementById('splash').classList.add('hidden');
+  const app = document.getElementById('app');
+  app.classList.add('show');
+  renderAll();
+  markSaved();
+}
+
+// ═══════════════════════════════════
+// SAVE / EXPORT
+// ═══════════════════════════════════
+function buildWorkbook() {
+  const wb = XLSX.utils.book_new();
+
+  // Registre sheet
+  const regData = data.length ? data : [{'ID Utilisateur':'','Nom':'','Prenom':'','Service / Departement':'',
+    'Poste':'','Email':'','Role attribue':'','Permissions associees':'','Date de creation':'',
+    'Date de derniere modification':'','Date de prochaine revision':'','Jours avant revision':'',
+    'Statut du compte':'','Responsable valideur':'','Date derniere validation':'','Commentaires':''}];
+  const wsReg = XLSX.utils.json_to_sheet(regData);
+  XLSX.utils.book_append_sheet(wb, wsReg, 'Registre_Habilitations');
+
+  // Params sheet
+  const maxLen = Math.max(params.services.length, params.roles.length, params.permissions.length, params.statuts.length);
+  const paramRows = [
+    ['PARAMETRES DU REGISTRE DES HABILITATIONS','','','','','',''],
+    ['','','','','','',''],
+    ['SERVICES / DEPARTEMENTS','','ROLES DISPONIBLES','','NIVEAUX DE PERMISSIONS','','STATUTS'],
+  ];
+  for (let i=0; i<maxLen; i++) {
+    paramRows.push([
+      params.services[i]||'','',params.roles[i]||'','',params.permissions[i]||'','',params.statuts[i]||''
+    ]);
+  }
+  paramRows.push(['','','','','','','']);
+  paramRows.push(['PARAMETRES DE REVISION','','','','','','']);
+  paramRows.push(['Periodicite de revision (mois):', params.revisionPeriod,'','','','','']);
+  paramRows.push(['Alerte avant expiration (jours):', params.alertDays,'','','','','']);
+
+  const wsParam = XLSX.utils.aoa_to_sheet(paramRows);
+  XLSX.utils.book_append_sheet(wb, wsParam, 'Parametres');
+
+  // Dashboard
+  const today = new Date().toISOString().split('T')[0];
+  const actif = data.filter(r=>r['Statut du compte']==='Actif').length;
+  const inactif = data.filter(r=>r['Statut du compte']==='Inactif').length;
+  const suspendu = data.filter(r=>r['Statut du compte']==='Suspendu').length;
+  const now = new Date();
+  const soon = data.filter(r=>daysUntil(r['Date de prochaine revision'])<=30).length;
+  const urgent = data.filter(r=>daysUntil(r['Date de prochaine revision'])<=7).length;
+  const wsDash = XLSX.utils.aoa_to_sheet([
+    ['TABLEAU DE BORD - REGISTRE DES HABILITATIONS',''],
+    ['Date de mise a jour:', today],['',''],
+    ['STATISTIQUES GENERALES',''],
+    ['Total utilisateurs:', data.length],
+    ['Comptes actifs:', actif],['Comptes inactifs:', inactif],['Comptes suspendus:', suspendu],
+    ['Revisions a effectuer (< 30j):', soon],['Revisions urgentes (< 7j):', urgent],
+  ]);
+  XLSX.utils.book_append_sheet(wb, wsDash, 'Tableau_de_Bord');
+
+  return wb;
+}
+
+async function saveFile() {
+  try {
+    const wb = buildWorkbook();
+    const xlsxBytes = XLSX.write(wb, { bookType:'xlsx', type:'array' });
+    let blob, filename;
+
+    if (currentFile.encrypted && currentFile.password) {
+      const encrypted = await encryptBytes(new Uint8Array(xlsxBytes), currentFile.password);
+      blob = new Blob([encrypted], { type:'application/octet-stream' });
+      filename = currentFile.name.replace(/\.[^.]+$/, '') + '.habil';
+    } else {
+      blob = new Blob([xlsxBytes], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      filename = currentFile.name.replace(/\.habil$/, '.xlsx');
+    }
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+    markSaved();
+    toast('Fichier sauvegardé avec succès', 'success');
+  } catch(e) {
+    toast('Erreur lors de la sauvegarde : ' + e.message, 'error');
+  }
+}
+
+function exportFile() {
+  // Export always as plain xlsx
+  const wb = buildWorkbook();
+  XLSX.writeFile(wb, 'export_habilitations_' + new Date().toISOString().split('T')[0] + '.xlsx');
+  toast('Export Excel téléchargé', 'success');
+}
+
+function markSaved() {
+  unsaved = false;
+  const ind = document.getElementById('saveIndicator');
+  ind.textContent = 'Sauvegardé ✓';
+  ind.classList.add('saved');
+}
+function markUnsaved() {
+  unsaved = true;
+  const ind = document.getElementById('saveIndicator');
+  ind.textContent = '● Non sauvegardé';
+  ind.classList.remove('saved');
+}
+
+// ═══════════════════════════════════
+// NAV
+// ═══════════════════════════════════
+function switchTab(tab) {
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.toggle('active', t.dataset.tab===tab));
+  document.querySelectorAll('.page').forEach(p => p.classList.toggle('active', p.id==='page-'+tab));
+  if (tab==='registre') renderTable();
+  if (tab==='revisions') renderRevisions();
+  if (tab==='settings') renderSettings();
+}
+
+// ═══════════════════════════════════
+// RENDER ALL
+// ═══════════════════════════════════
+function renderAll() {
+  renderStats();
+  renderRecentTable();
+  renderTable();
+  renderRevisions();
+  renderSettings();
+  populateFormSelects();
+  populateFilterService();
+  updateRevBadge();
+}
+
+function daysUntil(dateStr) {
+  if (!dateStr) return 9999;
+  const d = new Date(dateStr);
+  if (isNaN(d)) return 9999;
+  return Math.ceil((d - new Date()) / 86400000);
+}
+
+function fmtDate(s) {
+  if (!s) return '—';
+  const d = new Date(s);
+  if (isNaN(d)) return s;
+  return d.toLocaleDateString('fr-FR');
+}
+
+function statusBadge(s) {
+  const map = { 'Actif':'actif','Inactif':'inactif','Suspendu':'suspendu','En attente':'attente' };
+  const cls = map[s] || 'inactif';
+  return `<span class="badge badge-${cls}">${s||'—'}</span>`;
+}
+
+function renderStats() {
+  const actif  = data.filter(r=>r['Statut du compte']==='Actif').length;
+  const soon   = data.filter(r=>daysUntil(r['Date de prochaine revision'])<=params.alertDays).length;
+  const urgent = data.filter(r=>daysUntil(r['Date de prochaine revision'])<=7).length;
+  const inactif= data.filter(r=>r['Statut du compte']==='Inactif').length;
+
+  document.getElementById('statsGrid').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-label">Total utilisateurs</div>
+      <div class="stat-value">${data.length}</div>
+      <div class="stat-sub">habilitations enregistrées</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Comptes actifs</div>
+      <div class="stat-value green">${actif}</div>
+      <div class="stat-sub">${data.length ? Math.round(actif/data.length*100) : 0}% du total</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Révisions à venir</div>
+      <div class="stat-value ${soon>0?'orange':''}">${soon}</div>
+      <div class="stat-sub">dans les ${params.alertDays} prochains jours</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Révisions urgentes</div>
+      <div class="stat-value ${urgent>0?'red':''}">${urgent}</div>
+      <div class="stat-sub">dans les 7 prochains jours</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Comptes inactifs</div>
+      <div class="stat-value purple">${inactif}</div>
+      <div class="stat-sub">à réviser ou supprimer</div>
+    </div>
+  `;
+
+  document.getElementById('dbSubtitle').textContent =
+    `Mis à jour le ${new Date().toLocaleDateString('fr-FR')} · ${data.length} enregistrement(s)`;
+}
+
+function renderRecentTable() {
+  const recent = [...data].sort((a,b) =>
+    new Date(b['Date de creation']||0) - new Date(a['Date de creation']||0)
+  ).slice(0,5);
+
+  const body = document.getElementById('recentBody');
+  if (!recent.length) { body.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--text3)">Aucune donnée</td></tr>`; return; }
+  body.innerHTML = recent.map(r => `
+    <tr>
+      <td class="muted">${r['ID Utilisateur']||'—'}</td>
+      <td><strong>${r['Nom']||''}</strong> ${r['Prenom']||''}</td>
+      <td class="muted">${r['Service / Departement']||'—'}</td>
+      <td class="muted">${r['Role attribue']||'—'}</td>
+      <td>${statusBadge(r['Statut du compte'])}</td>
+      <td class="muted">${fmtDate(r['Date de prochaine revision'])}</td>
+    </tr>
+  `).join('');
+}
+
+function updateRevBadge() {
+  const n = data.filter(r=>daysUntil(r['Date de prochaine revision'])<=params.alertDays).length;
+  const b = document.getElementById('revBadge');
+  b.style.display = n>0 ? 'inline-flex' : 'none';
+  b.textContent = n;
+}
+
+// Table
+let filteredData = [];
+
+function renderTable() {
+  const search = (document.getElementById('searchInput').value||'').toLowerCase();
+  const statut  = document.getElementById('filterStatut').value;
+  const service = document.getElementById('filterService').value;
+
+  filteredData = data.filter(r => {
+    const text = Object.values(r).join(' ').toLowerCase();
+    return (
+      (!search  || text.includes(search)) &&
+      (!statut  || r['Statut du compte']===statut) &&
+      (!service || r['Service / Departement']===service)
+    );
+  });
+
+  if (sortCol) {
+    filteredData.sort((a,b) => {
+      const va = (a[sortCol]||'').toString().toLowerCase();
+      const vb = (b[sortCol]||'').toString().toLowerCase();
+      return sortAsc ? va.localeCompare(vb,'fr') : vb.localeCompare(va,'fr');
+    });
+  }
+
+  document.getElementById('rowCount').textContent = `${filteredData.length} résultat(s)`;
+
+  const body = document.getElementById('mainBody');
+  if (!filteredData.length) {
+    body.innerHTML = `<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">🔍</div><p>Aucun résultat</p></div></td></tr>`;
+    return;
+  }
+
+  body.innerHTML = filteredData.map((r,i) => {
+    const realIdx = data.indexOf(r);
+    const days = daysUntil(r['Date de prochaine revision']);
+    const isAlert = days <= params.alertDays;
+    const daysStr = days===9999 ? '—' : days<=0
+      ? `<span style="color:var(--red);font-weight:600">Expiré</span>`
+      : days<=7
+        ? `<span style="color:var(--red)">J-${days}</span>`
+        : days<=params.alertDays
+          ? `<span style="color:var(--orange)">J-${days}</span>`
+          : `<span class="muted">J-${days}</span>`;
+    return `
+      <tr class="${isAlert?'alert-row':''}">
+        <td class="muted">${r['ID Utilisateur']||'—'}</td>
+        <td><strong>${r['Nom']||''}</strong> ${r['Prenom']||''}<br>
+            <span style="font-size:11px;color:var(--text3)">${r['Email']||''}</span></td>
+        <td class="muted">${r['Service / Departement']||'—'}</td>
+        <td class="muted">${r['Poste']||'—'}</td>
+        <td class="muted">${r['Role attribue']||'—'}</td>
+        <td class="muted" style="font-size:12px">${r['Permissions associees']||'—'}</td>
+        <td>${statusBadge(r['Statut du compte'])}</td>
+        <td>${daysStr}</td>
+        <td>
+          <div class="row-actions">
+            <button class="action-btn" onclick="openModal(${realIdx})" title="Modifier">✏</button>
+            <button class="action-btn del" onclick="confirmDelete(${realIdx})" title="Supprimer">🗑</button>
+          </div>
+        </td>
+      </tr>`;
+  }).join('');
+}
+
+function sortBy(col) {
+  if (sortCol===col) sortAsc = !sortAsc;
+  else { sortCol=col; sortAsc=true; }
+  // Update headers
+  document.querySelectorAll('#mainTable thead th').forEach(th => {
+    const thCol = th.getAttribute('onclick')?.match(/'([^']+)'/)?.[1];
+    th.classList.toggle('sorted', thCol===col);
+    const icon = th.querySelector('.sort-icon');
+    if (icon && thCol===col) icon.textContent = sortAsc ? '↑' : '↓';
+  });
+  renderTable();
+}
+
+// ═══════════════════════════════════
+// REVISIONS
+// ═══════════════════════════════════
+function renderRevisions() {
+  const toRevise = data
+    .map((r,i)=>({...r, _idx:i, _days:daysUntil(r['Date de prochaine revision'])}))
+    .filter(r=>r._days<=params.alertDays)
+    .sort((a,b)=>a._days-b._days);
+
+  const urgent  = toRevise.filter(r=>r._days<=7).length;
+  const soon    = toRevise.filter(r=>r._days<=30 && r._days>7).length;
+  const alerts  = document.getElementById('revisionAlerts');
+
+  alerts.innerHTML = (urgent>0 ? `
+    <div class="revision-alert">
+      <span class="alert-icon">🚨</span>
+      <div class="alert-text"><strong>${urgent} révision(s) urgente(s)</strong> (dans les 7 prochains jours)</div>
+    </div>` : '') +
+    (soon>0 ? `
+    <div class="revision-alert">
+      <span class="alert-icon">⚠️</span>
+      <div class="alert-text"><strong>${soon} révision(s) à planifier</strong> (dans les 30 prochains jours)</div>
+    </div>` : '');
+
+  document.getElementById('revCount').textContent = `${toRevise.length} habilitation(s)`;
+
+  const body = document.getElementById('revisionBody');
+  if (!toRevise.length) {
+    body.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">✅</div><p>Aucune révision à planifier — tout est à jour !</p></div></td></tr>`;
+    return;
+  }
+  body.innerHTML = toRevise.map(r => {
+    const dStr = r._days<=0
+      ? `<span style="color:var(--red);font-weight:700">Expiré (${Math.abs(r._days)}j)</span>`
+      : r._days<=7
+        ? `<span style="color:var(--red);font-weight:600">J-${r._days}</span>`
+        : `<span style="color:var(--orange)">J-${r._days}</span>`;
+    return `<tr>
+      <td class="muted">${r['ID Utilisateur']||'—'}</td>
+      <td><strong>${r['Nom']||''}</strong> ${r['Prenom']||''}</td>
+      <td class="muted">${r['Service / Departement']||'—'}</td>
+      <td class="muted">${r['Role attribue']||'—'}</td>
+      <td class="muted">${fmtDate(r['Date de prochaine revision'])}</td>
+      <td>${dStr}</td>
+      <td class="muted">${r['Responsable valideur']||'—'}</td>
+      <td>
+        <div class="row-actions" style="opacity:1">
+          <button class="btn btn-success btn-sm" onclick="validateRevision(${r._idx})">✔ Valider</button>
+          <button class="btn btn-ghost btn-sm" onclick="openModal(${r._idx})">✏</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function validateRevision(idx) {
+  const r = data[idx];
+  const now = new Date().toISOString().split('T')[0];
+  const next = new Date();
+  next.setMonth(next.getMonth() + params.revisionPeriod);
+  r['Date derniere validation'] = now;
+  r['Date de derniere modification'] = now;
+  r['Date de prochaine revision'] = next.toISOString().split('T')[0];
+  r['Jours avant revision'] = params.revisionPeriod * 30;
+  markUnsaved();
+  renderRevisions();
+  renderStats();
+  updateRevBadge();
+  toast('Révision validée — prochaine révision dans ' + params.revisionPeriod + ' mois', 'success');
+}
+
+// ═══════════════════════════════════
+// SETTINGS
+// ═══════════════════════════════════
+function renderSettings() {
+  renderListEditor('servicesEditor', 'services');
+  renderListEditor('rolesEditor', 'roles');
+  renderListEditor('permissionsEditor', 'permissions');
+  document.getElementById('revisionPeriod').value = params.revisionPeriod;
+  document.getElementById('alertDays').value = params.alertDays;
+}
+
+function renderListEditor(containerId, key) {
+  const c = document.getElementById(containerId);
+  c.innerHTML = params[key].map((item,i) => `
+    <div class="list-item">
+      <span>${item}</span>
+      <button onclick="removeParam('${key}',${i})" title="Supprimer">✕</button>
+    </div>
+  `).join('');
+}
+
+function addParam(key, inputId) {
+  const inp = document.getElementById(inputId);
+  const val = inp.value.trim();
+  if (!val || params[key].includes(val)) { inp.focus(); return; }
+  params[key].push(val);
+  inp.value = '';
+  renderSettings();
+  populateFormSelects();
+  populateFilterService();
+  markUnsaved();
+}
+
+function removeParam(key, idx) {
+  params[key].splice(idx, 1);
+  renderSettings();
+  populateFormSelects();
+  populateFilterService();
+  markUnsaved();
+}
+
+async function changePassword() {
+  const cur = document.getElementById('currentPwd').value;
+  const np  = document.getElementById('newPwd').value;
+  const cp  = document.getElementById('confirmPwd').value;
+
+  if (currentFile.encrypted && currentFile.password !== cur) {
+    toast('Mot de passe actuel incorrect', 'error'); return;
+  }
+  if (np !== cp) { toast('Les mots de passe ne correspondent pas', 'error'); return; }
+  currentFile.password = np;
+  currentFile.encrypted = !!np;
+  document.getElementById('currentPwd').value = '';
+  document.getElementById('newPwd').value = '';
+  document.getElementById('confirmPwd').value = '';
+  toast(np ? 'Mot de passe mis à jour — sauvegardez pour appliquer' : 'Chiffrement désactivé — sauvegardez', 'info');
+  markUnsaved();
+}
+
+// ═══════════════════════════════════
+// MODAL
+// ═══════════════════════════════════
+function populateFormSelects() {
+  const selService = document.getElementById('fService');
+  const selRole = document.getElementById('fRole');
+  const selPerm = document.getElementById('fPermissions');
+  selService.innerHTML = params.services.map(s=>`<option>${s}</option>`).join('');
+  selRole.innerHTML    = params.roles.map(r=>`<option>${r}</option>`).join('');
+  selPerm.innerHTML    = params.permissions.map(p=>`<option>${p}</option>`).join('');
+}
+
+function populateFilterService() {
+  const sel = document.getElementById('filterService');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">Tous les services</option>' +
+    params.services.map(s=>`<option>${s}</option>`).join('');
+  sel.value = current;
+}
+
+function openModal(idx=null) {
+  editingIdx = idx;
+  populateFormSelects();
+  const isNew = idx===null;
+  document.getElementById('modalTitle').textContent = isNew ? 'Nouvel utilisateur' : 'Modifier l\'utilisateur';
+
+  if (isNew) {
+    document.getElementById('fId').value = generateId();
+    document.getElementById('fNom').value = '';
+    document.getElementById('fPrenom').value = '';
+    document.getElementById('fEmail').value = '';
+    document.getElementById('fPoste').value = '';
+    document.getElementById('fValideur').value = '';
+    document.getElementById('fCommentaires').value = '';
+    document.getElementById('fStatut').value = 'Actif';
+    const next = new Date(); next.setMonth(next.getMonth()+params.revisionPeriod);
+    document.getElementById('fRevision').value = next.toISOString().split('T')[0];
+    document.getElementById('fDerniereValidation').value = new Date().toISOString().split('T')[0];
+  } else {
+    const r = data[idx];
+    document.getElementById('fId').value          = r['ID Utilisateur']||'';
+    document.getElementById('fNom').value         = r['Nom']||'';
+    document.getElementById('fPrenom').value      = r['Prenom']||'';
+    document.getElementById('fEmail').value       = r['Email']||'';
+    document.getElementById('fPoste').value       = r['Poste']||'';
+    document.getElementById('fValideur').value    = r['Responsable valideur']||'';
+    document.getElementById('fCommentaires').value= r['Commentaires']||'';
+    document.getElementById('fStatut').value      = r['Statut du compte']||'Actif';
+    document.getElementById('fRevision').value    = r['Date de prochaine revision']||'';
+    document.getElementById('fDerniereValidation').value = r['Date derniere validation']||'';
+    // Set selects
+    setSelectVal('fService', r['Service / Departement']);
+    setSelectVal('fRole', r['Role attribue']);
+    setSelectVal('fPermissions', r['Permissions associees']);
+  }
+  document.getElementById('modalOverlay').classList.add('show');
+}
+
+function setSelectVal(id, val) {
+  const s = document.getElementById(id);
+  for (let i=0; i<s.options.length; i++) {
+    if (s.options[i].value===val) { s.selectedIndex=i; return; }
+  }
+}
+
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('show');
+  editingIdx = null;
+}
+
+function saveUser() {
+  const id   = document.getElementById('fId').value.trim();
+  const nom  = document.getElementById('fNom').value.trim();
+  const pren = document.getElementById('fPrenom').value.trim();
+  const mail = document.getElementById('fEmail').value.trim();
+  const svc  = document.getElementById('fService').value;
+  const role = document.getElementById('fRole').value;
+  const perm = document.getElementById('fPermissions').value;
+
+  if (!id||!nom||!pren||!mail||!svc||!role||!perm) {
+    toast('Veuillez remplir tous les champs obligatoires (*)', 'error'); return;
+  }
+
+  const now = new Date().toISOString().split('T')[0];
+  const revDate = document.getElementById('fRevision').value;
+  const validDate = document.getElementById('fDerniereValidation').value;
+  const days = daysUntil(revDate);
+
+  const row = {
+    'ID Utilisateur': id,
+    'Nom': nom,
+    'Prenom': pren,
+    'Service / Departement': svc,
+    'Poste': document.getElementById('fPoste').value.trim(),
+    'Email': mail,
+    'Role attribue': role,
+    'Permissions associees': perm,
+    'Date de creation': editingIdx!==null ? (data[editingIdx]['Date de creation']||now) : now,
+    'Date de derniere modification': now,
+    'Date de prochaine revision': revDate,
+    'Jours avant revision': days===9999 ? '' : days,
+    'Statut du compte': document.getElementById('fStatut').value,
+    'Responsable valideur': document.getElementById('fValideur').value.trim(),
+    'Date derniere validation': validDate,
+    'Commentaires': document.getElementById('fCommentaires').value.trim()
+  };
+
+  if (editingIdx!==null) {
+    data[editingIdx] = row;
+    toast('Utilisateur mis à jour', 'success');
+  } else {
+    data.push(row);
+    toast('Utilisateur ajouté', 'success');
+  }
+
+  closeModal();
+  markUnsaved();
+  renderAll();
+}
+
+function generateId() {
+  const max = data.reduce((m,r) => {
+    const n = parseInt((r['ID Utilisateur']||'').replace(/\D/g,''));
+    return isNaN(n) ? m : Math.max(m,n);
+  }, 0);
+  return 'USR' + String(max+1).padStart(3,'0');
+}
+
+// ═══════════════════════════════════
+// DELETE
+// ═══════════════════════════════════
+let confirmCallback = null;
+
+function confirmDelete(idx) {
+  const r = data[idx];
+  document.getElementById('confirmMsg').textContent =
+    `Supprimer l'utilisateur ${r['Prenom']||''} ${r['Nom']||''} (${r['ID Utilisateur']||''}) ? Cette action est irréversible.`;
+  confirmCallback = () => { deleteUser(idx); closeConfirm(); };
+  document.getElementById('confirmOverlay').classList.add('show');
+}
+
+function closeConfirm() {
+  document.getElementById('confirmOverlay').classList.remove('show');
+  confirmCallback = null;
+}
+
+document.getElementById('confirmBtn').addEventListener('click', () => {
+  if (confirmCallback) confirmCallback();
+});
+
+function deleteUser(idx) {
+  data.splice(idx,1);
+  markUnsaved();
+  renderAll();
+  toast('Utilisateur supprimé', 'info');
+}
+
+// ═══════════════════════════════════
+// TOAST
+// ═══════════════════════════════════
+function toast(msg, type='info') {
+  const icons = { success:'✅', error:'❌', info:'ℹ️' };
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.innerHTML = `<span class="toast-icon">${icons[type]||'ℹ️'}</span><span>${msg}</span>`;
+  document.getElementById('toast-container').appendChild(t);
+  setTimeout(() => { t.style.opacity='0'; t.style.transition='opacity 0.3s'; setTimeout(()=>t.remove(),300); }, 3000);
+}
+
+function showSplashError(msg) {
+  const el = document.getElementById('splashError');
+  el.textContent = msg; el.classList.add('show');
+}
+function hideSplashError() {
+  document.getElementById('splashError').classList.remove('show');
+}
+
+// Close modals on overlay click
+document.getElementById('modalOverlay').addEventListener('click', function(e) {
+  if (e.target===this) closeModal();
+});
+document.getElementById('confirmOverlay').addEventListener('click', function(e) {
+  if (e.target===this) closeConfirm();
+});
+
+// Keyboard
+document.addEventListener('keydown', e => {
+  if (e.key==='Escape') { closeModal(); closeConfirm(); }
+  if ((e.ctrlKey||e.metaKey) && e.key==='s') { e.preventDefault(); if(document.getElementById('app').classList.contains('show')) saveFile(); }
+});
+</script>
+</body>
+</html>
