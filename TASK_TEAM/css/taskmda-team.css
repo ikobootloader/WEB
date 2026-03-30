@@ -4695,6 +4695,7 @@ html.dark .doc-editor-tabulator-wrap .tabulator .tabulator-header {
   border-radius: 12px;
   border: 1px solid transparent;
   background: transparent;
+  cursor: pointer;
   transition: transform 160ms ease, background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
 }
 
@@ -4767,43 +4768,40 @@ html.dark .doc-editor-tabulator-wrap .tabulator .tabulator-header {
 
 .discussion-group-dismiss-btn {
   position: absolute;
-  right: 50px;
-  top: 50%;
-  margin-top: -11px;
-  width: 22px;
-  height: 22px;
-  border-radius: 999px;
-  border: 1px solid #cdd9ee;
-  background: #f8fbff;
+  right: 6px;
+  top: 6px;
+  width: 18px;
+  height: 18px;
   color: #5e7498;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
   opacity: 0;
-  pointer-events: none;
-  transform: translateX(0);
-  transition: opacity 140ms ease, transform 140ms ease, background-color 140ms ease, border-color 140ms ease;
+  visibility: hidden;
+  transform: scale(0.8);
+  transition: opacity 140ms ease, visibility 0ms linear 140ms, transform 140ms ease, background-color 140ms ease, border-color 140ms ease, border-radius 140ms ease;
   z-index: 10;
 }
 
 .discussion-group-dismiss-btn .material-symbols-outlined {
-  font-size: 15px;
+  font-size: 13px;
   line-height: 1;
 }
 
 .discussion-member-item:hover .discussion-group-dismiss-btn,
 .discussion-member-item:focus-visible .discussion-group-dismiss-btn,
 .discussion-member-item.is-active .discussion-group-dismiss-btn {
-  opacity: 1 !important;
-  pointer-events: auto !important;
-  transform: translateX(0) !important;
-  background: red !important;  /* DEBUG: forcer en rouge pour voir */
+  opacity: 1;
+  visibility: visible;
+  transform: scale(1);
+  transition-delay: 0ms;
 }
 
 .discussion-group-dismiss-btn:hover {
   background: #fee2e2;
-  border-color: #fda4af;
+  border: 1px solid #fda4af;
+  border-radius: 999px;
   color: #b91c1c;
 }
 
