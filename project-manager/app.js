@@ -548,14 +548,23 @@ function renderDashboard() {
     }
   }
 
-  // Render recent tasks (last 6 active tasks)
+  // Render recent tasks (count varies by view mode)
   const container = document.getElementById('dashboardTasks');
   if (!container) return;
+
+  // Déterminer le nombre de tâches à afficher selon le mode de vue
+  const tasksCountByView = {
+    1: 5,  // 1 colonne : 5 tâches
+    2: 6,  // 2 colonnes : 6 tâches (3 lignes x 2)
+    3: 9,  // 3 colonnes : 9 tâches (3 lignes x 3)
+    4: 8   // 4 colonnes : 8 tâches (2 lignes x 4)
+  };
+  const tasksToDisplay = tasksCountByView[taskViewMode] || 6;
 
   // Sort by creation date (most recent first) or by last modified date
   const recentTasks = active
     .sort((a, b) => (b.id || 0) - (a.id || 0))
-    .slice(0, 6);
+    .slice(0, tasksToDisplay);
 
   container.innerHTML = '';
   if (recentTasks.length === 0) {
