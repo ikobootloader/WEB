@@ -79,7 +79,13 @@
         escapeHtml
       });
       return `
-        <button type="button" class="discussion-member-item w-full text-left ${item?.isActive ? 'is-active' : ''}" onclick="${escapeHtml(clickHandler)}('${escapeHtml(clickValue)}')">
+        <div
+          role="button"
+          tabindex="0"
+          class="discussion-member-item w-full text-left ${item?.isActive ? 'is-active' : ''}"
+          onclick="${escapeHtml(clickHandler)}('${escapeHtml(clickValue)}')"
+          onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();${escapeHtml(clickHandler)}('${escapeHtml(clickValue)}')}"
+        >
           <div class="discussion-member-avatar-wrap">
             ${avatar}
             <span class="discussion-member-dot is-online"></span>
@@ -104,7 +110,7 @@
             </span>
           ` : ''}
           ${renderUnreadBadge(item?.unreadCount || 0)}
-        </button>
+        </div>
       `;
     }).join('');
   }
