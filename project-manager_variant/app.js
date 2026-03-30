@@ -635,6 +635,16 @@ async function restoreTask(id) {
   showToast('↩️ Tâche restaurée en cours');
 }
 
+async function markAsRealise(id) {
+  tasks = tasks.map(t => t.id === id
+    ? { ...t, status: 'realise', archivedAt: t.archivedAt || new Date().toISOString() }
+    : t
+  );
+  await saveToStorage();
+  renderTasks(); renderArchives(); renderStats(); updateTabCounts();
+  showToast("✅ Tâche réalisée — consultez l'onglet Archives");
+}
+
 function confirmDelete(id) {
   const task = tasks.find(t => t.id === id);
   if (!task) return;
@@ -801,7 +811,7 @@ function buildCard(task, idx, isArchive) {
       </div>` : ''}
     <div class="card-actions">
       <button class="btn btn-ghost btn-sm" onclick="openModal(${task.id})">✏️ Modifier</button>
-      ${isArchive ? `<button class="btn btn-info btn-sm" onclick="restoreTask(${task.id})">↩️ Restaurer</button>` : ''}
+      ${isArchive ? `<button class="btn btn-info btn-sm" onclick="restoreTask(${task.id})">↩️ Restaurer</button>` : `<button class="btn btn-success btn-sm" onclick="event.stopPropagation();markAsRealise(${task.id})">✅ Réalisé</button>`}
       <button class="btn btn-danger btn-sm" onclick="confirmDelete(${task.id})">🗑 Supprimer</button>
     </div>
   `;
@@ -891,7 +901,7 @@ function openDetail(id) {
   document.getElementById('detailFooter').innerHTML = `
     ${isArchive
       ? `<button class="btn btn-info btn-sm" onclick="restoreTask(${task.id});closeDetail()">↩️ Restaurer</button>`
-      : ''}
+      : `<button class="btn btn-success btn-sm" onclick="markAsRealise(${task.id});closeDetail()">✅ Marquer réalisé</button>`}
     <button class="btn btn-danger btn-sm" onclick="confirmDelete(${task.id});closeDetail()">🗑 Supprimer</button>
     <button class="btn btn-primary btn-sm" onclick="closeDetail();openModal(${task.id})">✏️ Modifier</button>
   `;
