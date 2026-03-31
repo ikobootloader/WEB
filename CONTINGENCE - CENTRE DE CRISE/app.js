@@ -2686,6 +2686,12 @@ function updateBranding(appName, appSubtitle) {
     sidenavSubtitle.textContent = appSubtitle;
   }
 
+  // Update all breadcrumbs
+  const breadcrumbSiteNames = document.querySelectorAll(".breadcrumb-site-name");
+  breadcrumbSiteNames.forEach(breadcrumb => {
+    breadcrumb.textContent = appName;
+  });
+
   // Update page title
   document.title = `${appName} ${appSubtitle}`;
 }
