@@ -1,4 +1,4 @@
-    // ============================================================================
+﻿    // ============================================================================
     // TASKMDA TEAM - STANDALONE VERSION
     // Toutes les fonctionnalités event-sourcing dans un seul fichier HTML
     // ============================================================================
@@ -43,7 +43,7 @@
     // ============================================================================
 
     const DB_NAME = 'taskmda-team-standalone';
-    const DB_VERSION = 11; // + fil d'information transverse (posts + mentions)
+    const DB_VERSION = 13; // + historique workflow (versions/restauration)
     const DATA_EXPORT_STORES = {
       events: 'eventId',
       processedEvents: 'eventId',
@@ -60,7 +60,17 @@
       globalGroups: 'groupKey',
       softwareVersions: 'softwareId',
       directoryUsers: 'userId',
-      appSettings: 'key'
+      appSettings: 'key',
+      workflowCommunities: 'id',
+      workflowServices: 'id',
+      workflowGroups: 'id',
+      workflowAgents: 'id',
+      workflowTasks: 'id',
+      workflowProcedures: 'id',
+      workflowSoftware: 'id',
+      workflowLayout: 'id',
+      workflowAudit: 'id',
+      workflowHistory: 'id'
     };
     let dbInstance = null;
 
@@ -175,6 +185,58 @@
               db.createObjectStore('appSettings', { keyPath: 'key' });
             }
 
+            // Workflow: communities/services/groups/agents/tasks/procedures/software/layout/audit
+            if (!db.objectStoreNames.contains('workflowCommunities')) {
+              const store = db.createObjectStore('workflowCommunities', { keyPath: 'id' });
+              store.createIndex('name', 'name');
+              store.createIndex('order', 'order');
+            }
+            if (!db.objectStoreNames.contains('workflowServices')) {
+              const store = db.createObjectStore('workflowServices', { keyPath: 'id' });
+              store.createIndex('communityId', 'communityId');
+              store.createIndex('name', 'name');
+            }
+            if (!db.objectStoreNames.contains('workflowGroups')) {
+              const store = db.createObjectStore('workflowGroups', { keyPath: 'id' });
+              store.createIndex('serviceId', 'serviceId');
+              store.createIndex('name', 'name');
+            }
+            if (!db.objectStoreNames.contains('workflowAgents')) {
+              const store = db.createObjectStore('workflowAgents', { keyPath: 'id' });
+              store.createIndex('serviceId', 'serviceId');
+              store.createIndex('displayName', 'displayName');
+            }
+            if (!db.objectStoreNames.contains('workflowTasks')) {
+              const store = db.createObjectStore('workflowTasks', { keyPath: 'id' });
+              store.createIndex('serviceId', 'serviceId');
+              store.createIndex('ownerAgentId', 'ownerAgentId');
+              store.createIndex('status', 'status');
+            }
+            if (!db.objectStoreNames.contains('workflowProcedures')) {
+              const store = db.createObjectStore('workflowProcedures', { keyPath: 'id' });
+              store.createIndex('title', 'title');
+              store.createIndex('updatedAt', 'updatedAt');
+            }
+            if (!db.objectStoreNames.contains('workflowSoftware')) {
+              const store = db.createObjectStore('workflowSoftware', { keyPath: 'id' });
+              store.createIndex('name', 'name');
+              store.createIndex('category', 'category');
+            }
+            if (!db.objectStoreNames.contains('workflowLayout')) {
+              db.createObjectStore('workflowLayout', { keyPath: 'id' });
+            }
+            if (!db.objectStoreNames.contains('workflowAudit')) {
+              const store = db.createObjectStore('workflowAudit', { keyPath: 'id' });
+              store.createIndex('createdAt', 'createdAt');
+              store.createIndex('entityType', 'entityType');
+            }
+            if (!db.objectStoreNames.contains('workflowHistory')) {
+              const store = db.createObjectStore('workflowHistory', { keyPath: 'id' });
+              store.createIndex('createdAt', 'createdAt');
+              store.createIndex('entityType_entityId', ['entityType', 'entityId']);
+              store.createIndex('action', 'action');
+            }
+
             debugLog('Database initialized');
           }
         });
@@ -224,6 +286,21 @@
     async function deleteFromStore(storeName, key) {
       const db = getDatabase();
       return await runWithLoading(async () => db.delete(storeName, key));
+    }
+
+    async function deleteManyFromStoreFast(storeName, keys = []) {
+      const ids = Array.from(new Set((keys || [])
+        .map((key) => String(key || '').trim())
+        .filter(Boolean)));
+      if (ids.length === 0) return 0;
+      const db = getDatabase();
+      const tx = db.transaction(storeName, 'readwrite');
+      const store = tx.objectStore(storeName);
+      for (const id of ids) {
+        store.delete(id);
+      }
+      await tx.done;
+      return ids.length;
     }
 
     async function getDecrypted(storeName, id, idField) {
@@ -1377,6 +1454,7 @@
       const loadStats = await discoverAndLoadExistingProjects(options);
       await syncGlobalMessagesFromSharedFolder();
       await syncGlobalFeedFromSharedFolder();
+      await syncWorkflowFromSharedFolder();
       if (!isPolling) startPolling();
       updateSyncStatus('connected');
       await refreshStats();
@@ -1530,6 +1608,69 @@
 
       applyAppBrandingToHeader();
       return appBranding;
+    }
+
+    const DEFAULT_VIEW_OPTIONS = {
+      globalTasksList: true,
+      projectTasksList: true,
+      calendarList: true
+    };
+
+    let viewOptions = DEFAULT_VIEW_OPTIONS;
+
+    function normalizeViewOptions(raw = {}) {
+      return {
+        globalTasksList: Boolean(raw?.globalTasksList !== false),
+        projectTasksList: Boolean(raw?.projectTasksList !== false),
+        calendarList: Boolean(raw?.calendarList !== false)
+      };
+    }
+
+    async function getViewOptions() {
+      const row = await getDecrypted('appSettings', 'viewOptions', 'key');
+      return row ? normalizeViewOptions(row.value) : normalizeViewOptions(DEFAULT_VIEW_OPTIONS);
+    }
+
+    async function saveViewOptions(options) {
+      const normalized = normalizeViewOptions(options);
+      await putEncrypted('appSettings', {
+        key: 'viewOptions',
+        value: normalized,
+        updatedAt: Date.now()
+      }, 'key');
+      viewOptions = normalized;
+      applyViewOptionsToUI();
+      showToast('Options de vues enregistrées');
+      return normalized;
+    }
+
+    async function loadViewOptions() {
+      viewOptions = await getViewOptions();
+      applyViewOptionsToUI();
+      return viewOptions;
+    }
+
+    function applyViewOptionsToUI() {
+      // Afficher/masquer les onglets Liste selon les options
+      const globalTasksListBtn = document.getElementById('global-tasks-view-list');
+      const projectListBtn = document.getElementById('view-list');
+      const calendarListBtn = document.getElementById('global-calendar-view-list');
+
+      if (globalTasksListBtn) {
+        globalTasksListBtn.classList.toggle('hidden', !viewOptions.globalTasksList);
+      }
+      if (projectListBtn) {
+        projectListBtn.classList.toggle('hidden', !viewOptions.projectTasksList);
+      }
+      if (calendarListBtn) {
+        calendarListBtn.classList.toggle('hidden', !viewOptions.calendarList);
+      }
+
+      // Afficher le bouton "Nouvelle Tâche" en inline quand la Liste est désactivée
+      const btnAddTask = document.getElementById('btn-add-task');
+      if (btnAddTask) {
+        btnAddTask.classList.toggle('inline', !viewOptions.projectTasksList);
+      }
     }
 
     async function writeEventToSharedFolderNow(projectId, event) {
@@ -1698,6 +1839,7 @@
         }
         await syncGlobalMessagesFromSharedFolder();
         await syncGlobalFeedFromSharedFolder();
+        await syncWorkflowFromSharedFolder();
       }, 5000); // 5 secondes
 
       debugLog('Polling started');
@@ -3052,6 +3194,30 @@
           `).join('');
       bindGlobalGroupMemberSearchInputs();
       bindGlobalGroupMemberSelectsToggle();
+      
+      // Mettre à jour les checkboxes des options de vues
+      const globalTasksListCheckbox = document.getElementById('view-option-global-tasks-list');
+      const projectTasksListCheckbox = document.getElementById('view-option-project-tasks-list');
+      const calendarListCheckbox = document.getElementById('view-option-calendar-list');
+      const profanityModeSelect = document.getElementById('profanity-filter-mode-select');
+      const profanityModeCurrent = document.getElementById('profanity-filter-mode-current');
+      
+      if (globalTasksListCheckbox) {
+        globalTasksListCheckbox.checked = viewOptions.globalTasksList !== false;
+      }
+      if (projectTasksListCheckbox) {
+        projectTasksListCheckbox.checked = viewOptions.projectTasksList !== false;
+      }
+      if (calendarListCheckbox) {
+        calendarListCheckbox.checked = viewOptions.calendarList !== false;
+      }
+      if (profanityModeSelect) {
+        profanityModeSelect.value = getProfanityFilterMode();
+      }
+      if (profanityModeCurrent) {
+        profanityModeCurrent.textContent = `Mode actuel: ${getProfanityFilterMode()}`;
+      }
+      
       applyGlobalSettingsTabView();
     }
 
@@ -3116,6 +3282,7 @@
         docs: document.getElementById('nav-docs'),
         messages: document.getElementById('nav-messages'),
         feed: document.getElementById('nav-feed'),
+        workflow: document.getElementById('nav-workflow'),
         settings: document.getElementById('nav-settings')
       };
       Object.entries(links).forEach(([key, link]) => {
@@ -4033,6 +4200,8 @@
 
         scopedTasks.forEach(({ task, scope, scopeId }) => {
           if (!task || task.status === 'termine' || task.status === 'suspendu') return;
+          // Les tâches récurrentes ne devraient pas déclencher de rappel "en retard" basé sur la date d'échéance originale
+          if (task?.recurring?.enabled) return;
           const dueKey = taskDueDateKey(task);
           if (!dueKey) return;
           const dueDate = new Date(`${dueKey}T00:00:00`);
@@ -4464,7 +4633,8 @@
     let currentProjectState = null;
     let currentProjectEvents = [];
     let workspaceMode = 'dashboard'; // dashboard | project | global
-    let globalWorkspaceView = 'tasks'; // tasks | calendar | docs | messages | feed | settings
+    let globalWorkspaceView = 'tasks'; // tasks | workflow | calendar | docs | messages | feed | settings
+    let workflowRuntime = null;
     let globalSettingsTab = localStorage.getItem('taskmda_global_settings_tab') || 'branding'; // branding | themes | groups | roles | software
     let globalSettingsHelpOpen = false;
     let projectDetailMode = 'work'; // work | settings
@@ -4555,7 +4725,28 @@
     const GLOBAL_MESSAGE_THREAD_INITIAL_BATCH = 40;
     const GLOBAL_MESSAGE_THREAD_BATCH_SIZE = 32;
     const GLOBAL_MESSAGE_BROADCAST_LABEL = 'Canal général (tous les agents connus)';
+    const PROFANITY_FILTER_MODE_STORAGE_KEY = 'taskmda_profanity_mode_v1';
+    const PROFANITY_FILTER_DEFAULT_MODE = 'convert';
+    const PROFANITY_FILTER_MODES = new Set(['off', 'remove', 'convert', 'encrypt']);
+    const PROFANITY_RULES = [
+      { regex: /\bputain\b/giu, replacement: 'zut' },
+      { regex: /\bmerde\b/giu, replacement: 'mince' },
+      { regex: /\bconnard(?:e)?s?\b/giu, replacement: 'personne malpolie' },
+      { regex: /\bconnasse?s?\b/giu, replacement: 'personne malpolie' },
+      { regex: /\bcon(?:ne)?s?\b/giu, replacement: 'personne' },
+      { regex: /\bencul(?:e|er|ee|ees|es)?\b/giu, replacement: 'injure' },
+      { regex: /\bnique(?:r|e|es|z)?\b/giu, replacement: 'abime' },
+      { regex: /\bp(?:e|é)d(?:e|é|eraste)?s?\b/giu, replacement: 'insulte' },
+      { regex: /\bbatard(?:e)?s?\b/giu, replacement: 'personne malveillante' },
+      { regex: /\bsalo(?:pe|p(?:e|es))s?\b/giu, replacement: 'personne malveillante' },
+      { regex: /\bfdp\b/giu, replacement: 'insulte' },
+      { regex: /\bfuck(?:ing|er|ed|s)?\b/giu, replacement: 'darn' },
+      { regex: /\bshit(?:ty|s)?\b/giu, replacement: 'mess' },
+      { regex: /\bbitch(?:es)?\b/giu, replacement: 'person' },
+      { regex: /\bassholes?\b/giu, replacement: 'person' }
+    ];
     const GLOBAL_MESSAGE_HIDDEN_GROUPS_STORAGE_KEY = 'taskmda_global_hidden_group_channels_v1';
+    const GLOBAL_MESSAGE_HIDDEN_PEERS_STORAGE_KEY = 'taskmda_global_hidden_peer_conversations_v1';
     let globalMessagePeerUserId = GLOBAL_MESSAGE_BROADCAST_TARGET;
     let globalMessageActiveGroupConversationId = '';
     let globalMessageRecipientUserIds = new Set();
@@ -4563,8 +4754,12 @@
     let globalMessageThreadRenderLimit = GLOBAL_MESSAGE_THREAD_INITIAL_BATCH;
     let editingGlobalMessageId = null;
     let editingGlobalMessageDraft = '';
+    let pendingGlobalConversationDelete = null;
     let knownGlobalMessageIds = new Set();
     let knownGlobalPostIds = new Set();
+    let knownWorkflowChangeIds = new Set();
+    let globalMessageSharedDeleteQueue = Promise.resolve();
+    let workflowSharedWriteQueue = Promise.resolve();
     let globalFeedFocusPostId = '';
     let globalFeedFilterMode = 'all'; // all | auto | manual | mentions | project-refs | task-refs
     let globalFeedSortMode = 'desc'; // desc | asc
@@ -4572,6 +4767,7 @@
     const GLOBAL_MESSAGE_READ_STORAGE_KEY = 'taskmda_global_message_reads_v1';
     let globalMessageReadMap = loadGlobalMessageReadMap();
     let globalMessageHiddenGroupChannels = loadGlobalMessageHiddenGroupChannels();
+    let globalMessageHiddenPeerConversations = loadGlobalMessageHiddenPeerConversations();
     let projectTaskCardsColumns = Math.min(4, Math.max(1, Number.parseInt(localStorage.getItem('taskmda_project_task_cards_cols') || '1', 10) || 1));
     let globalTaskCardsColumns = Math.min(4, Math.max(1, Number.parseInt(localStorage.getItem('taskmda_global_task_cards_cols') || '1', 10) || 1));
     const GLOBAL_KANBAN_INITIAL_BATCH = 18;
@@ -4612,6 +4808,102 @@
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
     }
+
+    function getProfanityFilterMode() {
+      const raw = String(localStorage.getItem(PROFANITY_FILTER_MODE_STORAGE_KEY) || '').trim().toLowerCase();
+      return PROFANITY_FILTER_MODES.has(raw) ? raw : PROFANITY_FILTER_DEFAULT_MODE;
+    }
+
+    function toBase64Utf8(value) {
+      try {
+        const utf8 = encodeURIComponent(String(value || '')).replace(/%([0-9A-F]{2})/g, (_m, h) => String.fromCharCode(parseInt(h, 16)));
+        return btoa(utf8);
+      } catch {
+        return '';
+      }
+    }
+
+    function applyProfanityAction(match, replacement, mode) {
+      if (!match) return '';
+      if (mode === 'remove') return '';
+      if (mode === 'encrypt') {
+        const encoded = toBase64Utf8(match);
+        return encoded ? `[crypte:${encoded}]` : '[crypte]';
+      }
+      return replacement;
+    }
+
+    function applyProfanityFilterToText(value, modeOverride = '') {
+      const mode = String(modeOverride || getProfanityFilterMode()).trim().toLowerCase();
+      let output = String(value || '');
+      if (!output || mode === 'off') return output;
+      PROFANITY_RULES.forEach((rule) => {
+        if (!(rule?.regex instanceof RegExp)) return;
+        output = output.replace(rule.regex, (match) => applyProfanityAction(match, String(rule.replacement || ''), mode));
+      });
+      return output
+        .replace(/[ \t]{2,}/g, ' ')
+        .replace(/\s+([,.;:!?])/g, '$1')
+        .trim();
+    }
+
+    function applyProfanityFilterToHtml(htmlInput, modeOverride = '') {
+      const rawHtml = String(htmlInput || '');
+      if (!rawHtml) return '';
+      const mode = String(modeOverride || getProfanityFilterMode()).trim().toLowerCase();
+      if (mode === 'off') return rawHtml;
+      const doc = new DOMParser().parseFromString(`<div>${rawHtml}</div>`, 'text/html');
+      const root = doc.body.firstElementChild;
+      if (!root) return '';
+      const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      const toPatch = [];
+      while (walker.nextNode()) {
+        const node = walker.currentNode;
+        const parentTag = String(node?.parentElement?.tagName || '').toLowerCase();
+        if (parentTag === 'code' || parentTag === 'pre') continue;
+        const before = String(node?.textContent || '');
+        const after = applyProfanityFilterToText(before, mode);
+        if (after !== before) {
+          toPatch.push({ node, text: after });
+        }
+      }
+      toPatch.forEach((entry) => {
+        entry.node.textContent = entry.text;
+      });
+      return root.innerHTML;
+    }
+
+    async function rerenderAfterProfanityModeChange() {
+      if (workspaceMode === 'global') {
+        if (globalWorkspaceView === 'messages') await renderGlobalMessages({ keepThreadAnchor: true });
+        if (globalWorkspaceView === 'feed') await renderGlobalFeed();
+        if (globalWorkspaceView === 'settings') await renderGlobalSettings();
+      }
+      if (workspaceMode === 'project' && currentProjectState?.project) {
+        renderProjectDescription(currentProjectState.project.description || '');
+        renderMessages(currentProjectState.messages || []);
+        if (activeProjectView === 'list') {
+          renderTasks(currentProjectState.tasks || []);
+        }
+      }
+    }
+
+    function setProfanityFilterMode(mode) {
+      const next = String(mode || '').trim().toLowerCase();
+      if (!PROFANITY_FILTER_MODES.has(next)) {
+        showToast('Mode de filtre inconnu. Utilisez: off, remove, convert, encrypt.');
+        return;
+      }
+      localStorage.setItem(PROFANITY_FILTER_MODE_STORAGE_KEY, next);
+      const selectEl = document.getElementById('profanity-filter-mode-select');
+      const currentEl = document.getElementById('profanity-filter-mode-current');
+      if (selectEl) selectEl.value = next;
+      if (currentEl) currentEl.textContent = `Mode actuel: ${next}`;
+      showToast(`Filtre de vulgarites: ${next}`);
+      rerenderAfterProfanityModeChange();
+    }
+    window.setProfanityFilterMode = setProfanityFilterMode;
+    window.getProfanityFilterMode = getProfanityFilterMode;
 
     function extractDataUrlMimeType(url) {
       const raw = String(url || '').trim();
@@ -4895,6 +5187,26 @@
       return date.toLocaleDateString('fr-FR');
     }
 
+    function getTaskDueStatus(task) {
+      if (!task?.dueDate) return { isDueToday: false, isOverdue: false, daysUntilDue: null };
+      
+      // Les tâches récurrentes ne doivent pas être marquées comme "en retard" basé sur la date d'échéance originale
+      // Chaque occurrence devrait avoir sa propre date d'échéance calculée (à développer pour les occurrences individuelles)
+      if (task?.recurring?.enabled) return { isDueToday: false, isOverdue: false, daysUntilDue: null };
+      
+      const dueDate = new Date(task.dueDate);
+      const today = new Date();
+      const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const dueStart = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
+      const diffTime = dueStart.getTime() - todayStart.getTime();
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+      return {
+        isDueToday: diffDays === 0 && task.status !== 'termine',
+        isOverdue: diffDays < 0 && task.status !== 'termine',
+        daysUntilDue: diffDays
+      };
+    }
+
     function resetWorkspaceScrollTop() {
       if (typeof window.scrollTo === 'function') {
         window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
@@ -5121,6 +5433,10 @@
         software: {
           title: 'Aide: Versions logicielles',
           text: "Maintenez ici un registre des versions de vos logiciels metier. Mettez a jour apres chaque changement pour garder un suivi fiable."
+        },
+        views: {
+          title: 'Aide: Options de vues',
+          text: "Choisissez les vues a rendre disponibles dans l'application. Activez ou desactivez l'onglet Liste et reglez la moderation des vulgarites selon vos besoins."
         }
       };
       return helpByTab[tabKey] || helpByTab.branding;
@@ -5144,7 +5460,7 @@
     }
 
     function applyGlobalSettingsTabView() {
-      const allowed = new Set(['branding', 'themes', 'groups', 'roles', 'software']);
+      const allowed = new Set(['branding', 'themes', 'groups', 'roles', 'software', 'views']);
       if (!allowed.has(String(globalSettingsTab || ''))) {
         globalSettingsTab = 'branding';
       }
@@ -5153,7 +5469,8 @@
         themes: document.getElementById('global-settings-tab-themes'),
         groups: document.getElementById('global-settings-tab-groups'),
         roles: document.getElementById('global-settings-tab-roles'),
-        software: document.getElementById('global-settings-tab-software')
+        software: document.getElementById('global-settings-tab-software'),
+        views: document.getElementById('global-settings-tab-views')
       };
       Object.entries(tabButtons).forEach(([key, btn]) => {
         if (!btn) return;
@@ -5167,6 +5484,7 @@
       const groupsCard = document.querySelector('#global-settings-section .global-settings-card-groups');
       const rolesCard = document.querySelector('#global-settings-section .global-settings-card-roles');
       const softwareCard = document.querySelector('#global-settings-section .global-settings-card-software');
+      const viewsCard = document.querySelector('#global-settings-section .global-settings-card-views');
       const softwareTipsCard = document.querySelector('#global-settings-section .global-settings-card-software-tips');
       const globalSettingsSection = document.getElementById('global-settings-section');
 
@@ -5175,13 +5493,14 @@
       if (groupsCard) groupsCard.classList.toggle('hidden', globalSettingsTab !== 'groups');
       if (rolesCard) rolesCard.classList.toggle('hidden', globalSettingsTab !== 'roles');
       if (softwareCard) softwareCard.classList.toggle('hidden', globalSettingsTab !== 'software');
+      if (viewsCard) viewsCard.classList.toggle('hidden', globalSettingsTab !== 'views');
       if (softwareTipsCard) softwareTipsCard.classList.toggle('hidden', globalSettingsTab !== 'software');
       globalSettingsSection?.classList.toggle('software-tab-active', globalSettingsTab === 'software');
       renderGlobalSettingsHelpBox();
     }
 
     function setGlobalSettingsTab(tabKey) {
-      const allowed = new Set(['branding', 'themes', 'groups', 'roles', 'software']);
+      const allowed = new Set(['branding', 'themes', 'groups', 'roles', 'software', 'views']);
       const next = allowed.has(String(tabKey || '')) ? String(tabKey) : 'branding';
       globalSettingsTab = next;
       localStorage.setItem('taskmda_global_settings_tab', next);
@@ -5272,7 +5591,7 @@
     }
 
     function renderSafeMarkdown(text) {
-      let html = escapeHtml(text || '');
+      let html = escapeHtml(applyProfanityFilterToText(text || ''));
       html = html.replace(/^### (.*)$/gm, '<h4>$1</h4>');
       html = html.replace(/^## (.*)$/gm, '<h3>$1</h3>');
       html = html.replace(/^# (.*)$/gm, '<h2>$1</h2>');
@@ -5448,7 +5767,7 @@
         const clean = sanitizeNode(child);
         if (clean) sanitized.appendChild(clean);
       });
-      return sanitized.innerHTML.trim();
+      return applyProfanityFilterToHtml(sanitized.innerHTML.trim());
     }
 
     function getProjectDescriptionHtmlForStorage(editorId, fallbackInputId) {
@@ -6737,7 +7056,7 @@
         targetEl.innerHTML = html;
         return;
       }
-      targetEl.textContent = String(task.description || '').trim() || 'Aucune description.';
+      targetEl.textContent = applyProfanityFilterToText(String(task.description || '').trim()) || 'Aucune description.';
     }
 
     function mapTaskStatusToProjectStatus(taskStatus = '') {
@@ -7018,6 +7337,8 @@
       const dueDateEl = document.getElementById('global-task-detail-due-date');
       const assigneesEl = document.getElementById('global-task-detail-assignees');
       const groupEl = document.getElementById('global-task-detail-group');
+      const recurrenceWrapEl = document.getElementById('global-task-detail-recurrence-wrap');
+      const recurrenceEl = document.getElementById('global-task-detail-recurrence');
       const subtasksEl = document.getElementById('global-task-detail-subtasks');
       const attachmentsEl = document.getElementById('global-task-detail-attachments');
       const btnConvert = document.getElementById('btn-global-task-detail-convert');
@@ -7050,6 +7371,15 @@
       if (dueDateEl) dueDateEl.textContent = formatDate(task.dueDate);
       if (assigneesEl) assigneesEl.textContent = assigneeNames;
       if (groupEl) groupEl.textContent = groupName;
+      if (recurrenceWrapEl && recurrenceEl) {
+        if (task?.recurring?.enabled) {
+          const recurrenceLabel = window.TaskMDARecurrence?.formatRecurrenceLabel?.(task.recurring) || 'Récurrence configurable';
+          recurrenceEl.textContent = recurrenceLabel;
+          recurrenceWrapEl.classList.remove('hidden');
+        } else {
+          recurrenceWrapEl.classList.add('hidden');
+        }
+      }
       if (subtasksEl) {
         if (subtasks.length === 0) {
           subtasksEl.innerHTML = '<p class="text-slate-500">Aucune sous-tache.</p>';
@@ -7134,6 +7464,8 @@
       const dueDateEl = document.getElementById('global-task-detail-due-date');
       const assigneesEl = document.getElementById('global-task-detail-assignees');
       const groupEl = document.getElementById('global-task-detail-group');
+      const recurrenceWrapEl = document.getElementById('global-task-detail-recurrence-wrap');
+      const recurrenceEl = document.getElementById('global-task-detail-recurrence');
       const subtasksEl = document.getElementById('global-task-detail-subtasks');
       const attachmentsEl = document.getElementById('global-task-detail-attachments');
       const btnConvert = document.getElementById('btn-global-task-detail-convert');
@@ -7166,6 +7498,15 @@
       if (dueDateEl) dueDateEl.textContent = formatDate(task.dueDate);
       if (assigneesEl) assigneesEl.textContent = assigneeNames;
       if (groupEl) groupEl.textContent = groupName;
+      if (recurrenceWrapEl && recurrenceEl) {
+        if (task?.recurring?.enabled) {
+          const recurrenceLabel = window.TaskMDARecurrence?.formatRecurrenceLabel?.(task.recurring) || 'Récurrence configurable';
+          recurrenceEl.textContent = recurrenceLabel;
+          recurrenceWrapEl.classList.remove('hidden');
+        } else {
+          recurrenceWrapEl.classList.add('hidden');
+        }
+      }
       if (subtasksEl) {
         if (subtasks.length === 0) {
           subtasksEl.innerHTML = '<p class="text-slate-500">Aucune sous-tache.</p>';
@@ -8471,6 +8812,10 @@
             taskGroupInput.value = '';
           }
         }
+        // Charger la configuration de récurrence si elle existe
+        if (window.TaskMDARecurrenceUI?.populateRecurrenceForm) {
+          window.TaskMDARecurrenceUI.populateRecurrenceForm(task.recurring);
+        }
         if (!standaloneTaskMode) {
           refreshTaskGroupSelectionPreview(
             currentProjectState,
@@ -8496,6 +8841,10 @@
         if (standaloneModeInput) standaloneModeInput.value = 'private';
         if (taskThemeInput) taskThemeInput.value = (currentProjectState?.themes || [])[0] || '';
         if (taskGroupInput) taskGroupInput.value = '';
+        // Réinitialiser la configuration de récurrence
+        if (window.TaskMDARecurrenceUI?.resetRecurrenceForm) {
+          window.TaskMDARecurrenceUI.resetRecurrenceForm();
+        }
         if (!standaloneTaskMode) {
           refreshTaskGroupSelectionPreview(currentProjectState, []);
         }
@@ -9207,6 +9556,7 @@
               <div>
                 <div class="flex flex-wrap items-center gap-2 mb-1">
                   <span class="${getTaskUrgencyMeta(task.urgency).chipClass}">${getTaskUrgencyMeta(task.urgency).label}</span>
+                  ${buildTaskRecurrenceBadgeHtml(task)}
                 </div>
                 <h4 class="font-bold text-slate-800">${escapeHtml(task.title || 'Tache')}</h4>
                 <p class="text-xs text-slate-500 mt-1">${escapeHtml(task.sourceProjectName || 'Hors projet')} - ${escapeHtml(task.theme || 'General')}</p>
@@ -9248,6 +9598,7 @@
                     <tr class="border-b border-slate-100 align-top cursor-pointer hover:bg-slate-50" onclick="openGlobalTaskDetails('${task._taskRef}')">
                       <td class="px-3 py-2">
                         <p class="font-semibold text-slate-800">${escapeHtml(task.title || 'Tache')}</p>
+                        <div class="flex flex-wrap items-center gap-1 mt-1">${buildTaskRecurrenceBadgeHtml(task)}</div>
                         <p class="text-xs text-slate-500">${escapeHtml(task.theme || 'General')}</p>
                         ${buildSubtaskProgressHtml(task, true)}
                       </td>
@@ -9280,6 +9631,7 @@
                 <span class="${getTaskUrgencyMeta(task.urgency).chipClass}">${getTaskUrgencyMeta(task.urgency).label}</span>
                 <span class="${getTaskStatusMeta(task._statusKey).chipClass}">${getTaskStatusMeta(task._statusKey).label}</span>
               </div>
+              ${buildTaskRecurrenceBadgeHtml(task)}
               <h4 class="font-semibold text-slate-900 text-[1.04rem] leading-tight mb-1">${escapeHtml(task.title || 'Tache')}</h4>
               <p class="text-xs text-slate-500 mb-2">${escapeHtml(task.sourceProjectName || 'Hors projet')} • ${escapeHtml(task.theme || 'General')}</p>
               <p class="text-sm text-slate-700 global-kanban-desc mb-2">${escapeHtml(task.description || '')}</p>
@@ -9555,8 +9907,24 @@
 
       const pagination = paginateItems(filtered, globalTasksPage, paginationConfig.globalTasksPerPage);
       globalTasksPage = pagination.currentPage;
+      
+      // Trier les tâches: celles à l'échéance/en retard en premier, puis les autres
+      const itemsWithStatus = pagination.pageItems.map(task => ({
+        task,
+        dueStatus: getTaskDueStatus(task)
+      }));
+      
+      const sortedItems = itemsWithStatus.sort((a, b) => {
+        const aIsUrgent = a.dueStatus.isOverdue || a.dueStatus.isDueToday ? 1 : 0;
+        const bIsUrgent = b.dueStatus.isOverdue || b.dueStatus.isDueToday ? 1 : 0;
+        if (aIsUrgent !== bIsUrgent) return bIsUrgent - aIsUrgent; // Urgent d'abord
+        if (a.dueStatus.isOverdue && !b.dueStatus.isOverdue) return -1; // En retard d'abord
+        if (b.dueStatus.isOverdue && !a.dueStatus.isOverdue) return 1;
+        return 0;
+      });
+      
       container.className = `global-task-grid cols-${globalTaskCardsColumns}`;
-      container.innerHTML = pagination.pageItems.map(task => {
+      container.innerHTML = sortedItems.map(({ task, dueStatus }) => {
         const taskRef = buildGlobalTaskRef(task);
         let canEdit = task.sourceType === 'standalone';
         let canDelete = task.sourceType === 'standalone';
@@ -9567,12 +9935,48 @@
           canDelete = canDeleteTaskInProject(task, projectState);
           canArchive = canEditTaskInProject(task, projectState);
         }
+        
+        // Déterminer la classe CSS pour mettre en évidence
+        let cardBgClass = 'bg-white';
+        let cardAccentClass = getTaskUrgencyMeta(task.urgency).accentClass;
+        let ringClass = '';
+        
+        if (dueStatus.isOverdue) {
+          cardBgClass = 'bg-red-50';
+          cardAccentClass = 'border-l-4 border-l-red-600';
+          ringClass = 'ring-2 ring-offset-1 ring-red-400';
+        } else if (dueStatus.isDueToday) {
+          cardBgClass = 'bg-yellow-50';
+          cardAccentClass = 'border-l-4 border-l-yellow-500';
+          ringClass = 'ring-2 ring-offset-1 ring-yellow-400';
+        }
+        
+        // Déclencher une notification pour les tâches à l'échéance aujourd'hui
+        if (dueStatus.isDueToday && !task._notifiedToday) {
+          const assigneeName = getTaskAssigneeName(task, stateByProjectId.get(task.sourceProjectId)) || 'Non assigné';
+          addNotification(
+            '📌 Tâche à l\'échéance',
+            `${task.title} - Assisté par ${assigneeName}`,
+            task.sourceProjectId,
+            {
+              targetType: 'task',
+              targetId: taskRef,
+              targetView: 'cards',
+              linkLabel: 'Ouvrir la tâche'
+            }
+          );
+          task._notifiedToday = true; // Marquer pour éviter les doublons
+        }
+        
         return `
-        <div class="global-task-card global-task-card-modern ${getTaskUrgencyMeta(task.urgency).accentClass} rounded-xl border border-slate-200 bg-white p-4 cursor-pointer" onclick="openGlobalTaskDetails('${taskRef}')" role="button" tabindex="0">
+        <div class="global-task-card global-task-card-modern ${cardAccentClass} rounded-xl border border-slate-200 ${cardBgClass} p-4 cursor-pointer ${ringClass}" onclick="openGlobalTaskDetails('${taskRef}')" role="button" tabindex="0">
           <div class="flex items-start justify-between gap-3">
             <div>
               <div class="flex flex-wrap items-center gap-2 mb-1">
+                ${dueStatus.isOverdue ? '<span class="px-2 py-1 rounded-lg bg-red-200 text-red-800 text-xs font-bold">⚠️ EN RETARD</span>' : ''}
+                ${dueStatus.isDueToday ? '<span class="px-2 py-1 rounded-lg bg-yellow-200 text-yellow-800 text-xs font-bold">📌 AUJOURD\'HUI</span>' : ''}
                 <span class="${getTaskUrgencyMeta(task.urgency).chipClass}">${getTaskUrgencyMeta(task.urgency).label}</span>
+                ${buildTaskRecurrenceBadgeHtml(task)}
               </div>
               <h4 class="font-bold text-slate-800">${escapeHtml(task.title || 'Tâche')}</h4>
               <p class="text-xs text-slate-500 mt-1">${escapeHtml(task.sourceProjectName || 'Hors projet')} • ${escapeHtml(task.theme || 'Général')}</p>
@@ -10285,6 +10689,7 @@
           <div class="mt-3 flex items-center justify-between text-xs">
             <span class="text-slate-500">${formatFileSize(doc.size || 0)}</span>
             <div class="flex items-center gap-3">
+              ${isDocumentPreviewable(doc) ? `<button onclick="openDocumentPreview('${encodeURIComponent(doc.data || '')}','${encodeURIComponent(doc.name || '')}','${encodeURIComponent(doc.type || '')}')" class="text-slate-700 hover:underline">Aperçu</button>` : ''}
               ${(() => {
                 const safeHref = sanitizeDownloadHref(doc.data || '', String(doc.type || ''));
                 if (!safeHref) {
@@ -10738,6 +11143,38 @@
       globalMessageHiddenGroupChannels = loadGlobalMessageHiddenGroupChannels();
     }
 
+    // Fonctions pour masquer les conversations peer-to-peer
+    function getGlobalMessageHiddenPeersStorageKey() {
+      const uid = String(currentUser?.userId || '').trim() || 'anonymous';
+      return `${GLOBAL_MESSAGE_HIDDEN_PEERS_STORAGE_KEY}:${uid}`;
+    }
+
+    function loadGlobalMessageHiddenPeerConversations() {
+      try {
+        const raw = localStorage.getItem(getGlobalMessageHiddenPeersStorageKey());
+        const parsed = raw ? JSON.parse(raw) : [];
+        if (!Array.isArray(parsed)) return new Set();
+        return new Set(parsed.map((id) => String(id || '').trim()).filter(Boolean));
+      } catch {
+        return new Set();
+      }
+    }
+
+    function saveGlobalMessageHiddenPeerConversations() {
+      try {
+        localStorage.setItem(
+          getGlobalMessageHiddenPeersStorageKey(),
+          JSON.stringify(Array.from(globalMessageHiddenPeerConversations || []))
+        );
+      } catch {
+        // ignore quota/storage errors
+      }
+    }
+
+    function refreshGlobalMessageHiddenPeersForCurrentUser() {
+      globalMessageHiddenPeerConversations = loadGlobalMessageHiddenPeerConversations();
+    }
+
     function getGlobalConversationLastRead(conversationId) {
       const key = String(conversationId || '').trim();
       if (!key) return 0;
@@ -10902,6 +11339,21 @@
       }
     }
 
+    function enqueueGlobalMessageSharedDeletes(messages = []) {
+      if (!sharedFolderHandle) return;
+      const rows = Array.isArray(messages) ? messages.filter((row) => row?.messageId) : [];
+      if (rows.length === 0) return;
+      globalMessageSharedDeleteQueue = globalMessageSharedDeleteQueue
+        .then(async () => {
+          for (const row of rows) {
+            await writeGlobalMessageToSharedFolder(row);
+          }
+        })
+        .catch((error) => {
+          console.warn('Global message shared delete queue failed:', error);
+        });
+    }
+
     async function syncGlobalMessagesFromSharedFolder(options = {}) {
       if (!sharedFolderHandle) return { loaded: 0 };
       await ensureKnownGlobalMessageIdsLoaded();
@@ -10996,6 +11448,19 @@
       return { loaded };
     }
 
+    async function getConversationMessagesForDeletion(conversationId) {
+      const cid = String(conversationId || '').trim();
+      if (!cid) return [];
+      // Fast path: indexed lookup (works when index fields are available as plain values).
+      const fromIndex = await getAllFromIndexDecrypted('globalMessages', 'conversationId', cid, 'messageId');
+      if (Array.isArray(fromIndex) && fromIndex.length > 0) {
+        return fromIndex;
+      }
+      // Safe fallback: full scan (needed when encrypted rows don't expose indexed fields directly).
+      const allMessages = await getAllDecrypted('globalMessages', 'messageId');
+      return (allMessages || []).filter((msg) => String(msg?.conversationId || '').trim() === cid);
+    }
+
     async function getGlobalMessageContacts(query = '') {
       const users = await getKnownUsersForGlobalGroups();
       const me = String(currentUser?.userId || '');
@@ -11013,7 +11478,13 @@
         }
       });
       const allContacts = users
-        .filter(u => String(u.userId || '') && String(u.userId) !== me)
+        .filter(u => {
+          const userId = String(u.userId || '');
+          if (!userId || userId === me) return false;
+          // Filtrer les conversations peer masquées
+          if (globalMessageHiddenPeerConversations?.has(userId)) return false;
+          return true;
+        })
         .sort((a, b) => {
           const aTs = Number(lastByUser.get(a.userId)?.createdAt || 0);
           const bTs = Number(lastByUser.get(b.userId)?.createdAt || 0);
@@ -11046,6 +11517,28 @@
     function resetGlobalMessageRenderLimits() {
       globalMessageContactsRenderLimit = GLOBAL_MESSAGE_CONTACTS_INITIAL_BATCH;
       globalMessageThreadRenderLimit = GLOBAL_MESSAGE_THREAD_INITIAL_BATCH;
+    }
+
+    function getActiveGlobalMessageConversationId() {
+      const isGroupView = Boolean(globalMessageActiveGroupConversationId);
+      if (isGroupView) return String(globalMessageActiveGroupConversationId || '').trim();
+      const isBroadcastView = globalMessagePeerUserId === GLOBAL_MESSAGE_BROADCAST_TARGET;
+      if (isBroadcastView) return getGlobalBroadcastConversationId();
+      return getDirectConversationId(currentUser?.userId, globalMessagePeerUserId);
+    }
+
+    function getActiveGlobalConversationDisplayLabel() {
+      const isGroupView = Boolean(globalMessageActiveGroupConversationId);
+      if (isGroupView) {
+        const members = parseGroupConversationMemberIds(globalMessageActiveGroupConversationId);
+        return formatGlobalMessageNamedGroupLabel(members);
+      }
+      if (globalMessagePeerUserId === GLOBAL_MESSAGE_BROADCAST_TARGET) {
+        return GLOBAL_MESSAGE_BROADCAST_LABEL;
+      }
+      const peerId = String(globalMessagePeerUserId || '').trim();
+      if (!peerId) return 'Discussion';
+      return knownUsersCache.get(peerId)?.name || fallbackDirectoryName(peerId);
     }
 
     async function renderGlobalMessages(options = {}) {
@@ -11104,11 +11597,7 @@
 
       const isGroupView = Boolean(globalMessageActiveGroupConversationId);
       const isBroadcastView = !isGroupView && globalMessagePeerUserId === GLOBAL_MESSAGE_BROADCAST_TARGET;
-      const activeConversationId = isGroupView
-        ? globalMessageActiveGroupConversationId
-        : (isBroadcastView
-          ? getGlobalBroadcastConversationId()
-          : getDirectConversationId(currentUser?.userId, globalMessagePeerUserId));
+      const activeConversationId = getActiveGlobalMessageConversationId();
 
       const activeItems = visibleMessages
         .filter((msg) => String(msg.conversationId || '') === activeConversationId)
@@ -11439,6 +11928,20 @@
       showToast('Canal de groupe masqué pour votre session locale.');
     }
 
+    async function hideGlobalMessagePeerConversation(userId) {
+      const id = String(userId || '').trim();
+      if (!id || id === GLOBAL_MESSAGE_BROADCAST_TARGET) return;
+      globalMessageHiddenPeerConversations.add(id);
+      saveGlobalMessageHiddenPeerConversations();
+      if (globalMessagePeerUserId === id) {
+        globalMessageActiveGroupConversationId = '';
+        globalMessagePeerUserId = GLOBAL_MESSAGE_BROADCAST_TARGET;
+      }
+      globalMessageRecipientUserIds = new Set();
+      await renderGlobalMessages();
+      showToast('Conversation masquée pour votre session locale.');
+    }
+
     function normalizeMentionHandle(value) {
       const raw = String(value || '').toLowerCase();
       const noAccent = raw.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -11634,6 +12137,133 @@
       return { loaded };
     }
 
+    function resolveWorkflowStoreByEntityType(entityType) {
+      const key = String(entityType || '').trim();
+      const mapping = {
+        community: 'workflowCommunities',
+        service: 'workflowServices',
+        group: 'workflowGroups',
+        agent: 'workflowAgents',
+        task: 'workflowTasks',
+        procedure: 'workflowProcedures',
+        software: 'workflowSoftware',
+        layout: 'workflowLayout',
+        audit: 'workflowAudit',
+        history: 'workflowHistory'
+      };
+      return mapping[key] || null;
+    }
+
+    function resolveWorkflowEntityTypeByStoreName(storeName) {
+      const key = String(storeName || '').trim();
+      const mapping = {
+        workflowCommunities: 'community',
+        workflowServices: 'service',
+        workflowGroups: 'group',
+        workflowAgents: 'agent',
+        workflowTasks: 'task',
+        workflowProcedures: 'procedure',
+        workflowSoftware: 'software',
+        workflowLayout: 'layout',
+        workflowAudit: 'audit',
+        workflowHistory: 'history'
+      };
+      return mapping[key] || '';
+    }
+
+    async function writeWorkflowChangeToSharedFolder(change) {
+      if (!sharedFolderHandle || !change?.changeId) return false;
+      try {
+        const globalDir = await sharedFolderHandle.getDirectoryHandle('global', { create: true });
+        const workflowDir = await globalDir.getDirectoryHandle('workflow', { create: true });
+        const eventsDir = await workflowDir.getDirectoryHandle('events', { create: true });
+        const fileName = `${Number(change.createdAt || Date.now())}_${change.changeId}.json`;
+        const fileHandle = await eventsDir.getFileHandle(fileName, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(JSON.stringify({
+          type: 'taskmda_workflow_change',
+          version: 1,
+          payload: change
+        }));
+        await writable.close();
+        return true;
+      } catch (error) {
+        console.warn('Workflow shared write failed:', error);
+        return false;
+      }
+    }
+
+    function enqueueWorkflowSharedFolderWrite(change) {
+      if (!sharedFolderHandle || !change?.changeId) return;
+      workflowSharedWriteQueue = workflowSharedWriteQueue
+        .then(() => writeWorkflowChangeToSharedFolder(change))
+        .catch((error) => {
+          console.warn('Workflow shared async queue failed:', error);
+          return false;
+        });
+    }
+
+    async function syncWorkflowFromSharedFolder() {
+      if (!sharedFolderHandle) return { loaded: 0 };
+      let loaded = 0;
+      try {
+        const globalDir = await sharedFolderHandle.getDirectoryHandle('global', { create: true });
+        const workflowDir = await globalDir.getDirectoryHandle('workflow', { create: true });
+        const eventsDir = await workflowDir.getDirectoryHandle('events', { create: true });
+        for await (const entry of eventsDir.values()) {
+          if (entry.kind !== 'file' || !entry.name.endsWith('.json')) continue;
+          const file = await entry.getFile();
+          const content = await file.text();
+          let parsed = null;
+          try {
+            parsed = JSON.parse(content);
+          } catch {
+            continue;
+          }
+          if (!parsed || parsed.type !== 'taskmda_workflow_change' || !parsed.payload) continue;
+          const payload = parsed.payload;
+          const changeId = String(payload.changeId || '').trim();
+          if (!changeId || knownWorkflowChangeIds.has(changeId)) continue;
+          const entityType = String(payload.entityType || '').trim();
+          const storeName = resolveWorkflowStoreByEntityType(entityType);
+          const action = String(payload.action || '').trim();
+          const entity = payload.entity || null;
+          const entityId = String(payload.entityId || entity?.id || '').trim();
+          if (!storeName || !entityId) continue;
+
+          if (action === 'delete') {
+            await deleteFromStore(storeName, entityId);
+            knownWorkflowChangeIds.add(changeId);
+            loaded += 1;
+            continue;
+          }
+
+          if (!entity || String(entity.id || '') !== entityId) continue;
+          const existing = await getDecrypted(storeName, entityId, 'id');
+          const incomingUpdatedAt = Number(entity.updatedAt || entity.createdAt || Date.now());
+          const existingUpdatedAt = Number(existing?.updatedAt || existing?.createdAt || 0);
+          if (existing && existingUpdatedAt >= incomingUpdatedAt) {
+            knownWorkflowChangeIds.add(changeId);
+            continue;
+          }
+          await putEncrypted(storeName, {
+            ...entity,
+            source: 'shared'
+          }, 'id');
+          knownWorkflowChangeIds.add(changeId);
+          loaded += 1;
+        }
+      } catch (error) {
+        if (error?.name !== 'NotFoundError') {
+          console.warn('Workflow shared sync failed:', error);
+        }
+      }
+      if (loaded > 0 && workspaceMode === 'global' && globalWorkspaceView === 'workflow') {
+        await renderWorkflowWorkspace();
+      }
+      return { loaded };
+    }
+
     async function populateGlobalFeedComposerContext() {
       const mentionSelect = document.getElementById('global-feed-mention-select');
       const projectSelect = document.getElementById('global-feed-project-ref');
@@ -11779,6 +12409,282 @@
       await renderGlobalFeed();
     }
 
+    function getFeedDigestFileExtension(fileName) {
+      const name = String(fileName || '').toLowerCase().trim();
+      const idx = name.lastIndexOf('.');
+      return idx >= 0 ? name.slice(idx + 1) : '';
+    }
+
+    function stripHtmlTagsForDigest(html) {
+      const source = String(html || '');
+      if (!source) return '';
+      const tmp = document.createElement('div');
+      tmp.innerHTML = source;
+      return String(tmp.textContent || tmp.innerText || '').trim();
+    }
+
+    function normalizeDigestText(value) {
+      return String(value || '')
+        .replace(/\r/g, '\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .replace(/[ \t]{2,}/g, ' ')
+        .trim();
+    }
+
+    function extractPrintableStringsFromBinary(buffer, minLen = 6) {
+      const bytes = new Uint8Array(buffer || new ArrayBuffer(0));
+      const out = [];
+      let chunk = '';
+      for (let i = 0; i < bytes.length; i += 1) {
+        const code = bytes[i];
+        const printable = (code >= 32 && code <= 126) || code === 9 || code === 10 || code === 13;
+        if (printable) {
+          chunk += String.fromCharCode(code);
+        } else {
+          if (chunk.length >= minLen) out.push(chunk);
+          chunk = '';
+        }
+      }
+      if (chunk.length >= minLen) out.push(chunk);
+      return normalizeDigestText(out.join('\n'));
+    }
+
+    function sanitizeBinaryDigestText(rawText) {
+      const source = normalizeDigestText(rawText);
+      if (!source) return '';
+      const forbidden = [
+        /\/FlateDecode/i,
+        /^<<.*>>$/i,
+        /\bobj\b/i,
+        /\bendobj\b/i,
+        /\bstream\b/i,
+        /\bendstream\b/i,
+        /^\s*xref\s*$/i,
+        /^\s*trailer\s*$/i,
+        /\/Length\s+\d+/i
+      ];
+      const cleanedLines = source
+        .split(/\n+/)
+        .map((line) => line.trim())
+        .filter((line) => line.length >= 12)
+        .filter((line) => !forbidden.some((re) => re.test(line)));
+      const merged = normalizeDigestText(cleanedLines.join('\n'));
+      if (!merged) return '';
+      const letters = (merged.match(/[a-zA-ZÀ-ÿ]/g) || []).length;
+      const ratio = letters / Math.max(merged.length, 1);
+      if (ratio < 0.35) return '';
+      return merged;
+    }
+
+    function parseEmlDigest(raw) {
+      const source = String(raw || '');
+      const lines = source.split(/\r?\n/);
+      const headers = new Map();
+      let idx = 0;
+      for (; idx < lines.length; idx += 1) {
+        const line = lines[idx];
+        if (!line.trim()) {
+          idx += 1;
+          break;
+        }
+        const m = line.match(/^([^:]+):\s*(.*)$/);
+        if (m) headers.set(String(m[1] || '').toLowerCase().trim(), String(m[2] || '').trim());
+      }
+      const body = lines.slice(idx).join('\n');
+      let text = body;
+      if (/content-type:\s*text\/html/i.test(source)) {
+        text = stripHtmlTagsForDigest(body);
+      }
+      return {
+        title: headers.get('subject') || '',
+        author: headers.get('from') || '',
+        date: headers.get('date') || '',
+        text: normalizeDigestText(text)
+      };
+    }
+
+    function ensurePdfJsDigestReady() {
+      const lib = globalThis.pdfjsLib;
+      if (!lib || typeof lib.getDocument !== 'function') return false;
+      if (lib.GlobalWorkerOptions && !lib.GlobalWorkerOptions.workerSrc) {
+        lib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/build/pdf.worker.min.js';
+      }
+      return true;
+    }
+
+    async function extractFeedDigestFromFile(file) {
+      const name = String(file?.name || 'document');
+      const ext = getFeedDigestFileExtension(name);
+      const type = String(file?.type || '').toLowerCase();
+
+      if (ext === 'eml' || type === 'message/rfc822') {
+        const raw = await file.text();
+        const parsed = parseEmlDigest(raw);
+        return {
+          kind: 'email',
+          title: parsed.title || name,
+          sourceAuthor: parsed.author || '',
+          sourceDate: parsed.date || '',
+          text: parsed.text
+        };
+      }
+
+      if (ext === 'html' || ext === 'htm' || type === 'text/html') {
+        const html = await file.text();
+        return {
+          kind: 'html',
+          title: name,
+          text: normalizeDigestText(stripHtmlTagsForDigest(html))
+        };
+      }
+
+      if (type.startsWith('text/') || ['txt', 'md', 'rtf'].includes(ext)) {
+        const raw = await file.text();
+        const text = ext === 'rtf'
+          ? normalizeDigestText(raw.replace(/\\par[d]?/gi, '\n').replace(/\\'[0-9a-fA-F]{2}/g, '').replace(/[{}\\]/g, ' '))
+          : normalizeDigestText(raw);
+        return { kind: 'text', title: name, text };
+      }
+
+      if ((type.includes('pdf') || ext === 'pdf') && ensurePdfJsDigestReady()) {
+        const buffer = await file.arrayBuffer();
+        const pdf = await globalThis.pdfjsLib.getDocument({ data: buffer }).promise;
+        const pages = [];
+        let extractedChars = 0;
+        for (let pageNo = 1; pageNo <= pdf.numPages; pageNo += 1) {
+          const page = await pdf.getPage(pageNo);
+          const content = await page.getTextContent();
+          const pageText = (content.items || []).map((item) => String(item.str || '')).join(' ');
+          const cleanPageText = pageText.trim();
+          if (cleanPageText) {
+            pages.push(cleanPageText);
+            extractedChars += cleanPageText.length;
+          }
+          if (extractedChars > FEED_DIGEST_PDF_MAX_CHARS) break;
+        }
+        return { kind: 'pdf', title: name, text: normalizeDigestText(pages.join('\n\n')) };
+      }
+
+      if (type.includes('pdf') || ext === 'pdf') {
+        return {
+          kind: 'pdf',
+          title: name,
+          text: '',
+          degraded: true,
+          unavailableReason: 'PDF.js indisponible'
+        };
+      }
+
+      if ((ext === 'docx' || ext === 'doc' || ext === 'odt') && globalThis.mammoth?.extractRawText) {
+        const buffer = await file.arrayBuffer();
+        const res = await globalThis.mammoth.extractRawText({ arrayBuffer: buffer });
+        return { kind: 'office', title: name, text: normalizeDigestText(res?.value || '') };
+      }
+
+      if (ext === 'docx' || ext === 'doc' || ext === 'odt') {
+        return {
+          kind: 'office',
+          title: name,
+          text: '',
+          degraded: true,
+          unavailableReason: 'Mammoth indisponible'
+        };
+      }
+
+      const buffer = await file.arrayBuffer();
+      const fallbackText = sanitizeBinaryDigestText(extractPrintableStringsFromBinary(buffer));
+      return {
+        kind: ext || 'binary',
+        title: name,
+        text: fallbackText,
+        degraded: true
+      };
+    }
+
+    const FEED_DIGEST_PDF_MAX_CHARS = 120000;
+    const FEED_DIGEST_BULLET_MAX_CHARS = 900;
+    const FEED_DIGEST_EXCERPT_MAX_CHARS = 50000;
+
+    function summarizeDigestText(text, maxBullets = 12) {
+      const source = normalizeDigestText(text);
+      if (!source) return { bullets: [], excerpt: '' };
+      const lines = source
+        .split(/\n+/)
+        .map((line) => line.replace(/^[\s\-•*]+/, '').trim())
+        .filter((line) => line.length >= 20);
+      const sentences = source
+        .split(/(?<=[.!?])\s+/)
+        .map((line) => line.trim())
+        .filter((line) => line.length >= 30);
+      const candidates = lines.length >= maxBullets ? lines : lines.concat(sentences);
+      const unique = [];
+      const seen = new Set();
+      candidates.forEach((item) => {
+        const key = normalizeSearch(item).slice(0, 120);
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        unique.push(item);
+      });
+      const bullets = unique
+        .slice(0, maxBullets)
+        .map((item) => item.length > FEED_DIGEST_BULLET_MAX_CHARS ? `${item.slice(0, FEED_DIGEST_BULLET_MAX_CHARS)}...` : item);
+      return { bullets, excerpt: source.slice(0, FEED_DIGEST_EXCERPT_MAX_CHARS) };
+    }
+
+    async function publishGlobalFeedDigestFromFiles(fileList) {
+      const files = Array.from(fileList || []).filter(Boolean);
+      if (files.length === 0) return;
+      const published = [];
+      for (const file of files) {
+        try {
+          const digest = await extractFeedDigestFromFile(file);
+          const summary = summarizeDigestText(digest.text || '');
+          const sourceLabel = digest.kind === 'email'
+            ? 'Email'
+            : (digest.kind === 'pdf' ? 'PDF' : (digest.kind === 'office' ? 'DOCX/Office' : 'Document'));
+          const createdLabel = new Date().toLocaleString('fr-FR');
+          const title = String(digest.title || file.name || 'Document').trim();
+          const details = [];
+          if (digest.sourceAuthor) details.push(`Expediteur: ${digest.sourceAuthor}`);
+          if (digest.sourceDate) details.push(`Date source: ${digest.sourceDate}`);
+          if (digest.degraded && !digest.unavailableReason) details.push('Extraction partielle (fallback binaire)');
+          if (digest.unavailableReason) details.push(`Parser manquant: ${digest.unavailableReason}`);
+          const contentHtml = applyProfanityFilterToHtml(`
+            <h3>Actualite extraite - ${escapeHtml(title)}</h3>
+            <p><strong>Source:</strong> ${escapeHtml(sourceLabel)} • <strong>Digest:</strong> ${escapeHtml(createdLabel)}</p>
+            ${details.length ? `<p>${details.map((item) => escapeHtml(item)).join(' • ')}</p>` : ''}
+            ${summary.bullets.length ? `<ul>${summary.bullets.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>` : ''}${summary.excerpt ? `<details><summary>Extrait etendu du document</summary><pre class="feed-digest-excerpt">${escapeHtml(summary.excerpt)}</pre></details>` : `<p>Aucun contenu exploitable detecte.</p>`}
+          `);
+          const post = {
+            postId: uuidv4(),
+            authorUserId: String(currentUser?.userId || ''),
+            authorName: String(currentUser?.name || fallbackDirectoryName(currentUser?.userId || '')),
+            content: contentHtml,
+            mentions: [],
+            refs: [],
+            createdAt: Date.now(),
+            source: sharedFolderHandle ? 'shared' : 'local',
+            digestSource: {
+              fileName: String(file.name || ''),
+              fileType: String(file.type || ''),
+              size: Number(file.size || 0),
+              parserKind: String(digest.kind || ''),
+              degraded: !!digest.degraded
+            }
+          };
+          await putEncrypted('globalPosts', post, 'postId');
+          knownGlobalPostIds.add(post.postId);
+          published.push(post);
+          if (sharedFolderHandle) writeGlobalFeedPostToSharedFolder(post);
+        } catch (error) {
+          console.warn('Digest feed import failed:', error);
+          showToast(`Digest impossible pour ${file?.name || 'fichier'}`);
+        }
+      }
+      await renderGlobalFeed();
+      if (published.length > 0) showToast(`${published.length} actualite(s) generee(s)`);
+    }
+
     async function publishGlobalFeedPost() {
       const input = document.getElementById('global-feed-input');
       const projectSelect = document.getElementById('global-feed-project-ref');
@@ -11793,6 +12699,7 @@
       } else {
         content = String(input.value || '').trim();
       }
+      content = applyProfanityFilterToHtml(content);
       if (!content) {
         showToast('Le post est vide');
         return;
@@ -11818,7 +12725,7 @@
       if (typeof editingGlobalFeedPostId !== 'undefined' && editingGlobalFeedPostId) {
         const existing = await getDecrypted('globalPosts', editingGlobalFeedPostId, 'postId');
         if (existing) {
-          existing.content = content;
+          existing.content = applyProfanityFilterToHtml(content);
           existing.mentions = mentions;
           existing.refs = refs;
           existing.updatedAt = Date.now();
@@ -12063,7 +12970,8 @@
       const selectedTarget = String(globalMessagePeerUserId || '').trim();
       const isBroadcast = !selectedTarget || selectedTarget === GLOBAL_MESSAGE_BROADCAST_TARGET;
       if (!input) return;
-      const content = String(input.value || '').trim();
+      const rawContent = String(input.value || '').trim();
+      const content = applyProfanityFilterToText(rawContent);
       let attachments = [];
       try {
         attachments = await runWithLoading(async () => readMessageFiles('global-message-files'));
@@ -12200,7 +13108,7 @@
         return;
       }
       const input = document.getElementById(`global-message-edit-input-${id}`);
-      const content = String(input?.value || '').trim();
+      const content = applyProfanityFilterToText(String(input?.value || '').trim());
       if (!content) {
         showToast('Le message ne peut pas être vide');
         return;
@@ -12250,21 +13158,155 @@
       await renderGlobalMessages({ keepThreadAnchor: true });
     }
 
+    async function deleteGlobalConversation() {
+      const conversationId = String(getActiveGlobalMessageConversationId() || '').trim();
+      if (!conversationId) return;
+      const me = String(currentUser?.userId || '').trim();
+      const conversationMessages = await getConversationMessagesForDeletion(conversationId);
+      const targets = (conversationMessages || []).filter((msg) => {
+        if (!msg || msg.deletedAt) return false;
+        return isGlobalMessageVisibleForUser(msg, me);
+      });
+      if (targets.length === 0) {
+        showToast('Aucun message a supprimer dans cette conversation.');
+        return;
+      }
+      pendingGlobalConversationDelete = {
+        conversationId,
+        count: targets.length,
+        label: getActiveGlobalConversationDisplayLabel()
+      };
+      const modal = document.getElementById('modal-global-conversation-delete');
+      const labelEl = document.getElementById('global-conversation-delete-label');
+      const countEl = document.getElementById('global-conversation-delete-count');
+      if (labelEl) labelEl.textContent = pendingGlobalConversationDelete.label || 'Discussion';
+      if (countEl) {
+        const c = Number(pendingGlobalConversationDelete.count || 0);
+        countEl.textContent = `${c} message${c > 1 ? 's' : ''}`;
+      }
+      modal?.classList.remove('hidden');
+    }
+
+    function closeGlobalConversationDeleteModal() {
+      pendingGlobalConversationDelete = null;
+      document.getElementById('modal-global-conversation-delete')?.classList.add('hidden');
+    }
+
+    async function confirmDeleteGlobalConversation() {
+      const ctx = pendingGlobalConversationDelete;
+      if (!ctx?.conversationId) {
+        closeGlobalConversationDeleteModal();
+        return;
+      }
+      const conversationId = String(ctx.conversationId || '').trim();
+      closeGlobalConversationDeleteModal();
+      if (!conversationId) return;
+      const me = String(currentUser?.userId || '').trim();
+      const conversationMessages = await getConversationMessagesForDeletion(conversationId);
+      const targets = (conversationMessages || []).filter((msg) => {
+        if (!msg || msg.deletedAt) return false;
+        return isGlobalMessageVisibleForUser(msg, me);
+      });
+      if (targets.length === 0) {
+        showToast('Aucun message a supprimer dans cette conversation.');
+        return;
+      }
+      const nowTs = Date.now();
+      const messageIds = targets.map((row) => String(row.messageId || '').trim()).filter(Boolean);
+      const sharedDeleteRows = targets.map((row) => ({
+        ...row,
+        deletedAt: nowTs,
+        updatedAt: nowTs
+      }));
+      await deleteManyFromStoreFast('globalMessages', messageIds);
+      messageIds.forEach((id) => knownGlobalMessageIds.delete(id));
+      enqueueGlobalMessageSharedDeletes(sharedDeleteRows);
+      if (editingGlobalMessageId) {
+        editingGlobalMessageId = null;
+        editingGlobalMessageDraft = '';
+      }
+      showToast(sharedFolderHandle
+        ? 'Conversation supprimee localement. Synchronisation collective en arriere-plan.'
+        : 'Conversation supprimee.');
+      await renderGlobalMessages({ keepThreadAnchor: true });
+    }
+
     window.selectGlobalMessagePeer = selectGlobalMessagePeer;
     window.selectGlobalMessageChannel = selectGlobalMessageChannel;
     window.toggleGlobalMessageRecipient = toggleGlobalMessageRecipient;
     window.hideGlobalMessageGroupChannel = hideGlobalMessageGroupChannel;
+    window.hideGlobalMessagePeerConversation = hideGlobalMessagePeerConversation;
     window.selectAllGlobalMessageRecipients = selectAllGlobalMessageRecipients;
     window.clearGlobalMessageRecipients = clearGlobalMessageRecipients;
     window.startEditGlobalMessage = startEditGlobalMessage;
     window.saveEditedGlobalMessage = saveEditedGlobalMessage;
     window.cancelEditGlobalMessage = cancelEditGlobalMessage;
     window.deleteGlobalMessage = deleteGlobalMessage;
+    window.deleteGlobalConversation = deleteGlobalConversation;
+
+    async function renderWorkflowWorkspace() {
+      if (!window.TaskMDAWorkflow?.createModule) {
+        showToast('Module Workflow indisponible');
+        return;
+      }
+      if (!workflowRuntime) {
+        workflowRuntime = window.TaskMDAWorkflow.createModule({
+          api: {
+            getAll: async (storeName, idField) => getAllDecrypted(storeName, idField),
+            put: async (storeName, row, idField) => {
+              await putEncrypted(storeName, row, idField);
+              if (sharedFolderHandle) {
+                const entityType = resolveWorkflowEntityTypeByStoreName(storeName);
+                if (entityType) {
+                  enqueueWorkflowSharedFolderWrite({
+                    changeId: `wf-change-${uuidv4()}`,
+                    action: 'upsert',
+                    entityType,
+                    entityId: String(row?.id || ''),
+                    entity: row,
+                    updatedAt: Number(row?.updatedAt || Date.now()),
+                    byUserId: currentUser?.userId || null,
+                    createdAt: Date.now()
+                  });
+                }
+              }
+            },
+            remove: async (storeName, key) => {
+              await deleteFromStore(storeName, key);
+              if (sharedFolderHandle) {
+                const entityType = resolveWorkflowEntityTypeByStoreName(storeName);
+                if (entityType) {
+                  enqueueWorkflowSharedFolderWrite({
+                    changeId: `wf-change-${uuidv4()}`,
+                    action: 'delete',
+                    entityType,
+                    entityId: String(key || ''),
+                    entity: null,
+                    updatedAt: Date.now(),
+                    byUserId: currentUser?.userId || null,
+                    createdAt: Date.now()
+                  });
+                }
+              }
+            },
+            uuid: () => uuidv4(),
+            now: () => Date.now(),
+            currentUserId: () => currentUser?.userId || null,
+            currentUserName: () => currentUser?.name || '',
+            showToast: (message) => showToast(message),
+            canEditWorkflow: () => isAppAdmin(currentUser?.userId)
+          }
+        });
+      }
+      await workflowRuntime.init();
+      await workflowRuntime.render();
+    }
 
     function setGlobalHubView(view) {
       globalWorkspaceView = view;
       const mapping = {
         tasks: ['Vue Tâches (Tous projets)', 'Pilotage transversal des tâches, y compris hors projet.'],
+        workflow: ['Workflow', 'Organisation metier: carte, agents, taches, procedures et logiciels.'],
         calendar: ['Vue Calendrier (Tous projets)', 'Échéances consolidées avec recherche thématique/sujet.'],
         docs: ['Vue Documents (Tous projets)', 'Référentiel documentaire projet + thématique hors projet.'],
         messages: ['Messagerie hors projet', 'Canal general (tous) ou discussion privee entre agents connus du dossier collaboratif.'],
@@ -12275,6 +13317,7 @@
       document.getElementById('global-hub-title').textContent = title;
       document.getElementById('global-hub-subtitle').textContent = subtitle;
       document.getElementById('global-tasks-section')?.classList.toggle('hidden', view !== 'tasks');
+      document.getElementById('global-workflow-section')?.classList.toggle('hidden', view !== 'workflow');
       document.getElementById('global-calendar-section')?.classList.toggle('hidden', view !== 'calendar');
       document.getElementById('global-docs-section')?.classList.toggle('hidden', view !== 'docs');
       document.getElementById('global-messages-section')?.classList.toggle('hidden', view !== 'messages');
@@ -12305,17 +13348,20 @@
       setGlobalHubView(view);
       setActiveSidebarNav(view === 'tasks'
         ? 'tasks'
-        : view === 'calendar'
-          ? 'calendar'
-          : view === 'docs'
-            ? 'docs'
-            : view === 'messages'
-              ? 'messages'
-              : view === 'feed'
-                ? 'feed'
-            : 'settings');
+        : view === 'workflow'
+          ? 'workflow'
+          : view === 'calendar'
+            ? 'calendar'
+            : view === 'docs'
+              ? 'docs'
+              : view === 'messages'
+                ? 'messages'
+                : view === 'feed'
+                  ? 'feed'
+                  : 'settings');
 
       if (view === 'tasks') await renderGlobalTasks();
+      if (view === 'workflow') await renderWorkflowWorkspace();
       if (view === 'calendar') await renderGlobalCalendar();
       if (view === 'docs') await renderGlobalDocs();
       if (view === 'messages') {
@@ -12483,7 +13529,18 @@
       if (filters.theme) {
         filtered = filtered.filter(task => matchesQuery([task.theme], filters.theme));
       }
+      // Exclure les tâches archivées du sous-onglet Cartes
+      filtered = filtered.filter(task => !task.archivedAt);
       return filtered;
+    }
+
+    function buildTaskRecurrenceBadgeHtml(task) {
+      if (!task?.recurring?.enabled) return '';
+      const label = window.TaskMDARecurrence?.formatRecurrenceLabel?.(task.recurring) || '';
+      if (!label) return '';
+      // Extrait le type simple (ex: "Hebdomadaire" ou "Mensuelle" ou "Annuelle")
+      const simpleType = label.split('(')[0].trim();
+      return `<span class="task-recurrence-chip" title="${escapeHtml(label)}"><span class="material-symbols-outlined text-sm">event_repeat</span>${escapeHtml(simpleType)}</span>`;
     }
 
     function renderTasks(tasks) {
@@ -12535,6 +13592,7 @@
                 <span class="${urgencyMeta.chipClass}">${urgencyMeta.label}</span>
                 ${task.theme ? `<span class="task-theme-chip">${escapeHtml(task.theme)}</span>` : ''}
                 <span class="${statusMeta.chipClass}">${statusMeta.label}</span>
+                ${buildTaskRecurrenceBadgeHtml(task)}
               </div>
               <h4 class="text-base font-bold truncate">${escapeHtml(task.title)}</h4>
               <p class="text-sm text-slate-500 truncate">${escapeHtml(task.description || '')}</p>
@@ -12564,6 +13622,7 @@
                 <span class="${urgencyMeta.chipClass}">${urgencyMeta.label}</span>
                 ${task.theme ? `<span class="task-theme-chip">${escapeHtml(task.theme)}</span>` : ''}
                 ${getTaskGroupName(task, currentProjectState) ? `<span class="task-group-chip">${escapeHtml(getTaskGroupName(task, currentProjectState) || 'Groupe')}</span>` : ''}
+                ${buildTaskRecurrenceBadgeHtml(task)}
               </div>
               <h4 class="text-lg font-bold">${escapeHtml(task.title)}</h4>
             </div>
@@ -12718,6 +13777,7 @@
                 <span class="${getTaskUrgencyMeta(task.urgency).chipClass}">${getTaskUrgencyMeta(task.urgency).label}</span>
                 <span class="${getTaskStatusMeta(task.status).chipClass}">${getTaskStatusMeta(task.status).label}</span>
               </div>
+              ${buildTaskRecurrenceBadgeHtml(task)}
               <h4 class="font-semibold text-sm mb-1">${escapeHtml(task.title)}</h4>
               <p class="text-xs text-gray-500 mb-2">${escapeHtml(task.description || '')}</p>
               ${buildSubtaskProgressHtml(task, true)}
@@ -15055,7 +16115,7 @@
         return;
       }
       const input = document.getElementById(`message-edit-input-${messageId}`);
-      const trimmed = (input?.value || '').trim();
+      const trimmed = applyProfanityFilterToText((input?.value || '').trim());
       if (!trimmed) {
         showToast('❌ Le message ne peut pas être vide');
         return;
@@ -15178,6 +16238,7 @@
           }
         }
         await loadAppBrandingConfig({ ensureRemote: false });
+        await loadViewOptions();
         updateUserInfo();
         loadNotifications();
         notifiedCollaboratorEventIds = loadNotifiedEventIds();
@@ -15408,6 +16469,11 @@
       await showGlobalWorkspace('tasks');
       closeMobileSidebar();
     });
+    document.getElementById('nav-workflow')?.addEventListener('click', async (e) => {
+      e.preventDefault();
+      await showGlobalWorkspace('workflow');
+      closeMobileSidebar();
+    });
     document.getElementById('nav-calendar')?.addEventListener('click', async (e) => {
       e.preventDefault();
       await showGlobalWorkspace('calendar');
@@ -15435,6 +16501,15 @@
     });
     document.getElementById('btn-global-feed-post')?.addEventListener('click', async () => {
       await publishGlobalFeedPost();
+    });
+    document.getElementById('btn-global-feed-digest')?.addEventListener('click', () => {
+      const input = document.getElementById('global-feed-digest-files');
+      input?.click();
+    });
+    document.getElementById('global-feed-digest-files')?.addEventListener('change', async (event) => {
+      const files = event?.target?.files;
+      await publishGlobalFeedDigestFromFiles(files);
+      if (event?.target) event.target.value = '';
     });
     document.getElementById('btn-global-feed-insert-mention')?.addEventListener('click', () => {
       insertMentionTokenInGlobalFeed();
@@ -15487,6 +16562,7 @@
           globalTasksPage = 1;
           await renderGlobalTasks();
         }
+        if (globalWorkspaceView === 'workflow') await renderWorkflowWorkspace();
         if (globalWorkspaceView === 'calendar') await renderGlobalCalendar();
         if (globalWorkspaceView === 'docs') await renderGlobalDocs();
         if (globalWorkspaceView === 'messages') await renderGlobalMessages();
@@ -15710,6 +16786,9 @@
     document.getElementById('btn-global-send-message')?.addEventListener('click', async () => {
       await sendGlobalMessage();
     });
+    document.getElementById('btn-global-delete-conversation')?.addEventListener('click', async () => {
+      await deleteGlobalConversation();
+    });
     document.getElementById('global-message-input')?.addEventListener('keydown', async (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
@@ -15814,9 +16893,23 @@
     document.getElementById('global-settings-tab-groups')?.addEventListener('click', () => setGlobalSettingsTab('groups'));
     document.getElementById('global-settings-tab-roles')?.addEventListener('click', () => setGlobalSettingsTab('roles'));
     document.getElementById('global-settings-tab-software')?.addEventListener('click', () => setGlobalSettingsTab('software'));
+    document.getElementById('global-settings-tab-views')?.addEventListener('click', () => setGlobalSettingsTab('views'));
     document.getElementById('btn-global-settings-help')?.addEventListener('click', () => {
       globalSettingsHelpOpen = !globalSettingsHelpOpen;
       renderGlobalSettingsHelpBox();
+    });
+    document.querySelectorAll('.view-option-checkbox').forEach((checkbox) => {
+      checkbox.addEventListener('change', async (e) => {
+        const viewKey = e.target.getAttribute('data-view-key');
+        const isChecked = e.target.checked;
+        const nextOptions = { ...viewOptions, [viewKey]: isChecked };
+        await saveViewOptions(nextOptions);
+      });
+    });
+    document.getElementById('profanity-filter-mode-select')?.addEventListener('change', (e) => {
+      const nextMode = String(e?.target?.value || '').trim();
+      if (!nextMode) return;
+      setProfanityFilterMode(nextMode);
     });
     document.getElementById('btn-global-theme-add')?.addEventListener('click', createGlobalThemeFromSettings);
     document.getElementById('btn-global-group-add')?.addEventListener('click', createGlobalGroupFromSettings);
@@ -16354,6 +17447,10 @@
       taskPendingGroupMemberUserIds = [];
       if (taskAssigneeManualInput) taskAssigneeManualInput.value = '';
       if (taskAssigneeQuickInput) taskAssigneeQuickInput.value = '';
+      // Réinitialiser la configuration de récurrence
+      if (window.TaskMDARecurrenceUI?.resetRecurrenceForm) {
+        window.TaskMDARecurrenceUI.resetRecurrenceForm();
+      }
     });
     document.getElementById('btn-task-assignee-quick-add')?.addEventListener('click', () => {
       const value = document.getElementById('task-assignee-quick-input')?.value || '';
@@ -16492,6 +17589,20 @@
           : subtasksParsed
       };
 
+      // Extraire la configuration de récurrence
+      let recurring = null;
+      if (window.TaskMDARecurrenceUI?.extractRecurrenceConfig) {
+        try {
+          recurring = window.TaskMDARecurrenceUI.extractRecurrenceConfig();
+        } catch (error) {
+          showToast(`❌ Erreur de récurrence: ${error.message}`);
+          return;
+        }
+      }
+      if (recurring) {
+        payload.recurring = recurring;
+      }
+
       if (existingTask) {
         payload.subtasks = mergeSubtasksWithExisting(existingTask.subtasks || [], subtasksParsed);
         if (attachments.length > 0) {
@@ -16533,6 +17644,7 @@
           groupId: payload.groupId || null,
           groupName: payload.groupName || null,
           sharingMode: standaloneSharingMode,
+          recurring: recurring || null,
           createdAt: existingStandalone?.createdAt || Date.now(),
           updatedAt: Date.now(),
           archivedAt: existingStandalone?.archivedAt || null
@@ -16670,6 +17782,15 @@
         openProjectAfterConvert
       });
     });
+    document.getElementById('btn-close-global-conversation-delete')?.addEventListener('click', () => {
+      closeGlobalConversationDeleteModal();
+    });
+    document.getElementById('btn-global-conversation-delete-cancel')?.addEventListener('click', () => {
+      closeGlobalConversationDeleteModal();
+    });
+    document.getElementById('btn-global-conversation-delete-confirm')?.addEventListener('click', async () => {
+      await confirmDeleteGlobalConversation();
+    });
     document.getElementById('task-convert-project-name')?.addEventListener('keydown', async (e) => {
       if (e.key !== 'Enter') return;
       e.preventDefault();
@@ -16770,6 +17891,7 @@
         closeDocumentBindingModal();
         closeDocumentEditorModal();
         closeTaskConvertModal();
+        closeGlobalConversationDeleteModal();
         document.getElementById('modal-app-help')?.classList.add('hidden');
         closeGlobalTaskDetails();
         toggleNotificationsPanel(false);
@@ -16796,6 +17918,9 @@
     });
     registerSafeBackdropClose('modal-task-convert', () => {
       closeTaskConvertModal();
+    });
+    registerSafeBackdropClose('modal-global-conversation-delete', () => {
+      closeGlobalConversationDeleteModal();
     });
     registerSafeBackdropClose('modal-calendar-info-details', () => {
       closeStandaloneCalendarDetails();
@@ -17413,7 +18538,7 @@
       const input = document.getElementById('message-input');
       const filesInput = document.getElementById('message-files');
       const filesList = document.getElementById('message-files-list');
-      const content = input.value.trim();
+      const content = applyProfanityFilterToText(input.value.trim());
       messageRenderedDraftHtml = renderSafeMarkdown(content);
       let attachments = [];
 
@@ -17529,4 +18654,9 @@
     }
 
     debugLog('NEXUS MDA loaded');
+
+
+
+
+
 

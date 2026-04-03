@@ -56,6 +56,23 @@
     `;
   }
 
+  function renderPeerDismissButton(item = {}, escapeHtml = defaultEscape) {
+    if (item?.isGroup || item?.isBroadcast) return '';
+    const userId = String(item?.id || '').trim();
+    if (!userId) return '';
+    return `
+      <button
+        type="button"
+        class="discussion-group-dismiss-btn"
+        title="Masquer cette conversation pour moi"
+        aria-label="Masquer cette conversation pour moi"
+        onclick="event.stopPropagation(); hideGlobalMessagePeerConversation('${escapeHtml(userId)}')"
+      >
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    `;
+  }
+
   function renderContactsList({
     items = [],
     broadcastTarget = '__all__',
@@ -96,6 +113,7 @@
             ${item?.subtitle ? `<p class="discussion-member-channel-subtitle truncate">${escapeHtml(item.subtitle)}</p>` : ''}
           </div>
           ${renderGroupDismissButton(item, escapeHtml)}
+          ${renderPeerDismissButton(item, escapeHtml)}
           ${(!isBroadcast && !item?.isGroup) ? `
             <span
               role="button"

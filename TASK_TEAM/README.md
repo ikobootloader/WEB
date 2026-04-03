@@ -22,6 +22,7 @@ Nom d interface par defaut: `NEXUS MDA`.
   - `taskmda-notifications.js`
   - `taskmda-tasks.js`
   - `taskmda-social.js` (templates UI messagerie/fil d info)
+  - `taskmda-workflow.js` (module Workflow: carte, agents, taches, procedures, logiciels)
 - Persistance: IndexedDB (event sourcing + etat local projete).
 - Synchronisation: dossier partage (File System Access API), sans backend.
   - Le dossier lie est memorise (IndexedDB) et tente une reconnexion automatique au demarrage si permission valide.
@@ -55,6 +56,10 @@ Nom d interface par defaut: `NEXUS MDA`.
   - notifications automatiques des agents mentionnes,
   - references cliquables vers projet, tache ou info calendrier.
 - `Referentiels`: administration globale des thematiques, groupes et registre versions logicielles.
+- `Workflow`: rubrique transverse dediee a l organisation metier:
+  - vues `Carte`, `Organisation`, `Agents`, `Taches`, `Procedures`, `Logiciels metiers`
+  - CRUD initial agents/taches/procedures
+  - detail lateral editable + liens de base (agent/service/groupe/procedure/logiciel)
 - Correctif UX/CSS: isolation stricte des sections transverses (plus de melange visuel Taches/Calendrier).
 
 ### Ergonomie documents
@@ -90,7 +95,7 @@ Nom d interface par defaut: `NEXUS MDA`.
 ## Base de donnees
 
 - DB: `taskmda-team-standalone`
-- Version schema: `DB_VERSION = 11`
+- Version schema: `DB_VERSION = 13`
 - Stores:
   - `events`
   - `processedEvents`
@@ -108,6 +113,16 @@ Nom d interface par defaut: `NEXUS MDA`.
   - `softwareVersions`
   - `directoryUsers`
   - `appSettings`
+  - `workflowCommunities`
+  - `workflowServices`
+  - `workflowGroups`
+  - `workflowAgents`
+  - `workflowTasks`
+  - `workflowProcedures`
+  - `workflowSoftware`
+  - `workflowLayout`
+  - `workflowAudit`
+  - `workflowHistory`
 
 ## Synchronisation collaborative
 

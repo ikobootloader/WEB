@@ -31,6 +31,8 @@
   <link href="https://unpkg.com/tabulator-tables@5.6.1/dist/css/tabulator.min.css" rel="stylesheet">
   <script src="https://unpkg.com/tabulator-tables@5.6.1/dist/js/tabulator.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/build/pdf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
   <link href="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.snow.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/quill-image-resize-module@3.0.0/image-resize.min.js"></script>
@@ -43,7 +45,8 @@
       });
     };
   </script>
-  <link rel="stylesheet" href="css/taskmda-team.css?v=20260328-22">
+  <link rel="stylesheet" href="css/taskmda-team.css?v=20260402-01">
+  <link rel="stylesheet" href="css/taskmda-workflow.css?v=20260402-01">
   <script src="js/taskmda-crypto.js"></script>
 </head>
 <body>
@@ -194,6 +197,7 @@
         <a href="#" id="nav-projects" class="nav-link"><span class="material-symbols-outlined">folder_shared</span><span class="nav-link-label">Projets</span></a>
         <a href="#" id="nav-tasks" class="nav-link"><span class="material-symbols-outlined">assignment</span><span class="nav-link-label">Tâches</span></a>
         <a href="#" id="nav-calendar" class="nav-link"><span class="material-symbols-outlined">calendar_today</span><span class="nav-link-label">Calendrier</span></a>
+        <a href="#" id="nav-workflow" class="nav-link"><span class="material-symbols-outlined">schema</span><span class="nav-link-label">Workflow</span></a>
         <a href="#" id="nav-docs" class="nav-link"><span class="material-symbols-outlined">description</span><span class="nav-link-label">Documents</span></a>
         <a href="#" id="nav-messages" class="nav-link"><span class="material-symbols-outlined">chat</span><span class="nav-link-label">Messagerie</span></a>
         <a href="#" id="nav-feed" class="nav-link"><span class="material-symbols-outlined">campaign</span><span class="nav-link-label">Fil d'info</span></a>
@@ -210,11 +214,11 @@
 
     <section class="content">
       <div class="workspace max-w-7xl mx-auto">
-        <div id="dashboard-head" class="dashboard-head flex justify-between items-center mb-6">
+        <div id="dashboard-head" class="dashboard-head flex justify-between items-center mb-3">
           <h2 id="dashboard-title" class="section-title text-3xl font-extrabold text-primary">Tableau de bord</h2>
         </div>
 
-        <div class="dashboard-bento mb-6">
+        <div class="dashboard-bento mb-4">
           <div id="dashboard-stats" class="panel dashboard-glance p-5">
             <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-4">En un coup d'oeil</p>
             <div class="space-y-2">
@@ -282,12 +286,12 @@
         </div>
 
         <div id="global-hub" class="mt-0 hidden">
-          <div class="global-hub-head mb-3">
-            <h3 id="global-hub-title" class="section-title text-2xl font-extrabold mb-1">Vue transverse</h3>
+          <div class="global-hub-head mb-1">
+            <h3 id="global-hub-title" class="section-title text-2xl font-extrabold mb-0">Vue transverse</h3>
             <p id="global-hub-subtitle" class="text-sm text-slate-500">Tous projets confondus, y compris les éléments hors projet.</p>
           </div>
 
-          <div id="global-tasks-section" class="panel p-6 hidden">
+          <div id="global-tasks-section" class="panel p-3 hidden">
             <div id="global-tasks-view-tabs" class="project-view-tabs mb-3 flex items-center gap-2 text-xs overflow-x-auto" role="tablist" aria-label="Vues des tâches transverses">
               <button id="global-tasks-view-cards" role="tab" aria-selected="false" class="project-view-tab px-3 py-1.5 rounded-lg text-slate-700 font-semibold whitespace-nowrap">Cartes</button>
               <button id="global-tasks-view-calendar" role="tab" aria-selected="false" class="project-view-tab px-3 py-1.5 rounded-lg text-slate-700 font-semibold whitespace-nowrap">Calendrier</button>
@@ -324,7 +328,77 @@
             <div id="global-tasks-pagination" class="mt-4 flex items-center justify-between gap-3 text-sm text-slate-600"></div>
           </div>
 
-          <div id="global-calendar-section" class="panel p-6 hidden">
+          <div id="global-workflow-section" class="panel p-3 hidden">
+            <div class="workflow-head mb-3">
+              <div>
+                <h4 class="workflow-title">Workflow operationnel</h4>
+                <p class="workflow-subtitle">Carte organisationnelle et navigation agents, taches, procedures, logiciels metiers.</p>
+              </div>
+              <div class="workflow-quick-actions">
+                <button id="btn-workflow-add-community" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Ajouter une communaute</button>
+                <button id="btn-workflow-add-service" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Ajouter un service</button>
+                <button id="btn-workflow-add-group" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Ajouter un groupe</button>
+                <button id="btn-workflow-add-agent" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Ajouter un agent</button>
+                <button id="btn-workflow-add-task" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Ajouter une tache</button>
+                <button id="btn-workflow-add-procedure" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Ajouter une procédure</button>
+                <button id="btn-workflow-add-software" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Ajouter un logiciel</button>
+                <button id="btn-workflow-migrate-agent-users" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Auto-lier comptes agents</button>
+              </div>
+            </div>
+            <div class="workflow-toolbar mb-3">
+              <div class="workflow-view-tabs" role="tablist" aria-label="Vues workflow">
+                <button id="workflow-view-map" class="workflow-view-tab is-active" type="button">Carte</button>
+                <button id="workflow-view-organization" class="workflow-view-tab" type="button">Organisation</button>
+                <button id="workflow-view-agents" class="workflow-view-tab" type="button">Agents</button>
+                <button id="workflow-view-tasks" class="workflow-view-tab" type="button">Tâches</button>
+                <button id="workflow-view-kanban" class="workflow-view-tab" type="button">Kanban</button>
+                <button id="workflow-view-timeline" class="workflow-view-tab" type="button">Timeline</button>
+                <button id="workflow-view-procedures" class="workflow-view-tab" type="button">Procédures</button>
+                <button id="workflow-view-software" class="workflow-view-tab" type="button">Logiciels metiers</button>
+                <button id="workflow-view-journal" class="workflow-view-tab" type="button">Journal</button>
+              </div>
+              <div class="workflow-filters">
+                <input id="workflow-search" type="text" placeholder="Recherche workflow..." class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                <select id="workflow-service-filter" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  <option value="all">Tous services</option>
+                </select>
+                <select id="workflow-group-filter" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  <option value="all">Tous groupes</option>
+                </select>
+                <select id="workflow-agent-filter" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  <option value="all">Tous agents</option>
+                </select>
+                <select id="workflow-status-filter" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  <option value="all">Tous statuts</option>
+                  <option value="todo">A faire</option>
+                  <option value="in_progress">En cours</option>
+                  <option value="blocked">Bloquees</option>
+                  <option value="ready_for_review">A valider</option>
+                  <option value="done">Terminees</option>
+                  <option value="approved">Approuvees</option>
+                </select>
+              </div>
+            </div>
+            <div id="workflow-breadcrumbs" class="workflow-breadcrumbs mb-3"></div>
+            <div class="workflow-layout">
+              <div id="workflow-content" class="workflow-content">
+                <p class="text-sm text-slate-500">Chargement du workflow...</p>
+              </div>
+            </div>
+            <div id="workflow-detail-modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
+              <aside id="workflow-detail" class="workflow-detail workflow-detail-modal-panel hidden" aria-live="polite">
+                <div class="workflow-detail-head">
+                  <h5 id="workflow-detail-title" class="workflow-detail-title">Detail</h5>
+                  <button id="btn-workflow-detail-close" class="workflow-detail-close" type="button" aria-label="Fermer le panneau de detail">
+                    <span class="material-symbols-outlined">close</span>
+                  </button>
+                </div>
+                <div id="workflow-detail-body" class="workflow-detail-body"></div>
+              </aside>
+            </div>
+          </div>
+
+          <div id="global-calendar-section" class="panel p-3 hidden">
             <div class="calendar-toolbar-card mb-4">
               <div class="calendar-toolbar-top mb-3">
                 <div class="inline-flex items-center gap-2 text-xs">
@@ -376,7 +450,7 @@
             </div>
           </div>
 
-          <div id="global-messages-section" class="panel p-6 hidden">
+          <div id="global-messages-section" class="panel p-3 hidden">
             <div class="discussion-layout">
               <section class="discussion-main">
                 <div id="global-message-thread-empty" class="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
@@ -388,6 +462,7 @@
                     <p id="global-message-target-label" class="text-sm text-slate-600">Destinataire: Canal général (tous les agents connus)</p>
                     <span id="global-message-group-badge" class="discussion-channel-badge hidden" aria-live="polite"></span>
                     <div class="flex items-center gap-2">
+                      <button id="btn-global-delete-conversation" type="button" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-100 text-rose-700">Supprimer la conversation</button>
                       <button id="btn-global-toggle-emoji-picker" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700">Émojis</button>
                     </div>
                   </div>
@@ -430,7 +505,7 @@
             </div>
           </div>
 
-          <div id="global-feed-section" class="panel p-6 hidden">
+          <div id="global-feed-section" class="panel p-3 hidden">
             <div class="feed-layout">
               <section class="feed-stream">
                 <div class="feed-toolbar rounded-xl border border-slate-200 bg-slate-50 p-3 mb-3">
@@ -464,6 +539,12 @@
                       <span id="global-feed-fullscreen-icon" class="material-symbols-outlined text-[18px]">open_in_full</span>
                     </button>
                   </div>
+                </div>
+                <div class="flex justify-start mt-1 mb-3">
+                  <button id="btn-global-feed-digest" class="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold flex items-center gap-2" type="button">
+                    <span class="material-symbols-outlined text-[18px]">description</span>
+                    <span>Digérer document</span>
+                  </button>
                 </div>
                 <div class="project-editor-wrap border border-slate-300 rounded-xl bg-white overflow-hidden">
                   <div class="project-editor-toolbar project-editor-toolbar-fallback">
@@ -508,11 +589,12 @@
                     <span id="global-feed-post-btn-label">Publier</span>
                   </button>
                 </div>
+                <input id="global-feed-digest-files" type="file" class="hidden" accept=".eml,.msg,.txt,.md,.html,.htm,.pdf,.doc,.docx,.odt,.rtf" multiple>
               </aside>
             </div>
           </div>
 
-            <div id="global-docs-section" class="panel p-6 hidden">
+            <div id="global-docs-section" class="panel p-3 hidden">
               <div class="mb-4 grid grid-cols-1 md:grid-cols-3 gap-2 global-doc-toolbar">
                 <p class="md:col-span-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Recherche</p>
                 <input id="global-doc-search" type="text" placeholder="Recherche document/projet/thématique" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
@@ -530,7 +612,7 @@
             <div id="global-docs-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
           </div>
 
-        <div id="global-settings-section" class="panel p-6 hidden">
+        <div id="global-settings-section" class="panel p-3 hidden">
             <div class="global-settings-tabs-wrap mb-4">
               <div class="flex items-center justify-end mb-2">
                 <button id="btn-global-settings-help" type="button" class="global-settings-help-btn" aria-label="Aide" aria-expanded="false" aria-controls="global-settings-help-box" data-tooltip="Aide">
@@ -543,10 +625,11 @@
                 <button id="global-settings-tab-groups" role="tab" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Groupes</button>
                 <button id="global-settings-tab-roles" role="tab" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Habilitations</button>
                 <button id="global-settings-tab-software" role="tab" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Versions logicielles</button>
+                <button id="global-settings-tab-views" role="tab" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Options de vues</button>
               </div>
             </div>
-            <div id="global-settings-help-box" class="global-settings-help-box hidden mb-4">
-              <h4 id="global-settings-help-title" class="font-bold text-slate-800 mb-1">Aide</h4>
+            <div id="global-settings-help-box" class="global-settings-help-box hidden mb-2">
+              <h4 id="global-settings-help-title" class="font-bold text-slate-800 mb-0">Aide</h4>
               <p id="global-settings-help-text" class="text-sm text-slate-600"></p>
             </div>
             <div class="grid grid-cols-1 gap-4">
@@ -607,6 +690,37 @@
                   </div>
                   <div id="software-versions-list" class="space-y-2"></div>
                 </div>
+                <div class="global-settings-card-views rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <h4 class="font-bold text-slate-800 mb-3">Options d'affichage des vues</h4>
+                  <p class="text-xs text-slate-500 mb-4">Activez ou désactivez les onglets "Liste" dans les différentes sections de l'application.</p>
+                  <div class="space-y-3">
+                    <label class="flex items-center gap-3 cursor-pointer hover:bg-white p-2 rounded-lg">
+                      <input type="checkbox" id="view-option-global-tasks-list" class="view-option-checkbox w-4 h-4" data-view-key="globalTasksList">
+                      <span class="text-sm text-slate-700 font-medium">Afficher "Liste" dans Tâches (vue transverse)</span>
+                    </label>
+                    <label class="flex items-center gap-3 cursor-pointer hover:bg-white p-2 rounded-lg">
+                      <input type="checkbox" id="view-option-project-tasks-list" class="view-option-checkbox w-4 h-4" data-view-key="projectTasksList">
+                      <span class="text-sm text-slate-700 font-medium">Afficher "Liste" dans les projets</span>
+                    </label>
+                    <label class="flex items-center gap-3 cursor-pointer hover:bg-white p-2 rounded-lg">
+                      <input type="checkbox" id="view-option-calendar-list" class="view-option-checkbox w-4 h-4" data-view-key="calendarList">
+                      <span class="text-sm text-slate-700 font-medium">Afficher "Liste" dans le calendrier</span>
+                    </label>
+                  </div>
+                  <div class="mt-4 pt-4 border-t border-slate-200">
+                    <label for="profanity-filter-mode-select" class="block text-sm font-semibold text-slate-800 mb-1">Modération du langage</label>
+                    <p class="text-xs text-slate-500 mb-2">Traitement automatique des vulgarités dans la messagerie, les descriptions et le fil d'info.</p>
+                    <div class="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
+                      <select id="profanity-filter-mode-select" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                        <option value="off">Désactivé</option>
+                        <option value="remove">Supprimer</option>
+                        <option value="convert">Convertir (recommandé)</option>
+                        <option value="encrypt">Crypter</option>
+                      </select>
+                      <span id="profanity-filter-mode-current" class="px-3 py-2 rounded-lg bg-white border border-slate-200 text-xs font-semibold text-slate-600">Mode actuel: convert</span>
+                    </div>
+                  </div>
+                </div>
                 <div class="global-settings-card-software-tips rounded-xl border border-slate-200 bg-slate-50 p-4">
                   <h4 class="font-bold text-slate-800 mb-3">Conseils d’usage</h4>
                   <ul class="text-sm text-slate-600 space-y-2">
@@ -627,7 +741,7 @@
           </button>
 
           <div id="project-overview-anchor"></div>
-          <div id="project-overview-panel" class="panel p-6 mb-3">
+          <div id="project-overview-panel" class="panel pt-3 p-3 mb-3">
             <div class="flex items-start justify-between gap-3">
               <h2 id="project-title" class="section-title text-3xl font-extrabold mb-2"></h2>
               <div class="flex items-center gap-2">
@@ -668,7 +782,7 @@
               <button id="project-mode-settings" class="project-mode-tab">Configuration</button>
             </div>
           </div> <!-- end project-overview-panel -->
-          <div id="project-settings-panel" class="hidden panel p-6 mb-6">
+          <div id="project-settings-panel" class="hidden panel pt-3 mb-3">
             <div id="project-settings-tabs-wrap" class="global-settings-tabs-wrap mt-4 mb-4">
               <div id="project-settings-tabs-list" class="project-view-tabs flex items-center gap-2 overflow-x-auto" role="tablist" aria-label="Sous-onglets paramètres projet">
                 <button id="project-settings-tab-overview" role="tab" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap hidden">Aperçu projet</button>
@@ -798,7 +912,7 @@
             </div>
           </div>
           
-          <div id="project-work-panel" class="panel p-6 mb-6">
+          <div id="project-work-panel" class="panel pt-3 mb-3">
             <div id="project-work-layout" class="project-work-layout">
               <aside id="project-work-nav" class="project-work-nav">
                 <div id="project-view-tabs-wrap" class="project-view-tabs flex items-center gap-2 overflow-x-auto" role="tablist" aria-label="Vues du projet">
@@ -828,7 +942,7 @@
                   </div>
                   <button id="btn-add-task" class="btn-primary px-4 py-2 text-white font-semibold rounded-lg transition-all flex flex-col items-center justify-center gap-1">
                     <span class="material-symbols-outlined">add</span>
-                    <span style="font-size: 0.75rem; line-height: 1;">Nouvelle<br>Tâche</span>
+                    <span id="btn-add-task-text" style="font-size: 0.875rem; line-height: 1;">Nouvelle Tâche</span>
                   </button>
                 </div>
               </aside>
@@ -875,8 +989,8 @@
               <div class="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
                 <div class="flex items-center justify-between gap-3 mb-3">
                   <div class="flex items-center gap-2">
-                    <button id="calendar-prev-month" class="px-2 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-semibold">◀</button>
-                    <button id="calendar-next-month" class="px-2 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-semibold">▶</button>
+                    <button id="calendar-prev-month" class="px-2 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-semibold">â—€</button>
+                    <button id="calendar-next-month" class="px-2 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-semibold">â–¶</button>
                     <button id="calendar-today" class="px-3 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-semibold">Aujourd'hui</button>
                   </div>
                   <p id="calendar-month-label" class="text-sm font-bold text-slate-800"></p>
@@ -1046,7 +1160,7 @@
 
   <div id="modal-new-project" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
     <div class="bg-white rounded-2xl p-6 sm:p-8 max-w-4xl w-full mx-auto my-2 sm:my-4 max-h-[92vh] overflow-y-auto overscroll-contain">
-      <h3 class="section-title text-2xl font-extrabold mb-6">Nouveau projet</h3>
+      <h3 class="section-title text-2xl font-extrabold mb-3">Nouveau projet</h3>
       <div class="space-y-4">
         <div><label class="block text-sm font-semibold mb-2">Nom du projet *</label><input id="project-name" type="text" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"></div>
         <div class="project-editor-wrap">
@@ -1108,7 +1222,7 @@
 
   <div id="modal-new-task" class="task-modal hidden fixed inset-0 bg-black/50 flex items-start md:items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
     <div class="task-modal-panel bg-white rounded-2xl p-6 sm:p-8 max-w-4xl w-full mx-auto my-2 sm:my-4 md:my-0 max-h-[92vh] overflow-y-auto overscroll-contain">
-      <h3 class="section-title text-2xl font-extrabold mb-6">Nouvelle tâche</h3>
+      <h3 class="section-title text-2xl font-extrabold mb-3">Nouvelle tâche</h3>
       <div id="task-edit-lock-badge" class="hidden mb-4 text-xs px-3 py-2 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800"></div>
       <div class="space-y-4">
         <div><label class="block text-sm font-semibold mb-2">Titre</label><input id="task-title" type="text" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"></div>
@@ -1155,7 +1269,12 @@
           </div>
         </div>
         <div><label class="block text-sm font-semibold mb-2">Date de demande</label><input id="task-request-date" type="date" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"></div>
-        <div><label class="block text-sm font-semibold mb-2">Échéance</label><input id="task-due-date" type="date" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"></div>
+        
+        <!-- Échéance (masquée si récurrence) -->
+        <div id="task-due-date-wrap">
+          <label class="block text-sm font-semibold mb-2">Échéance</label>
+          <input id="task-due-date" type="date" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+        </div>
         <div><label class="block text-sm font-semibold mb-2">Statut</label><select id="task-status" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"><option value="todo">À faire</option><option value="en-cours">En cours</option><option value="suspendu">Suspendu</option><option value="termine">Terminé</option></select></div>
         <div><label class="block text-sm font-semibold mb-2">Urgence</label><select id="task-urgency" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"><option value="low">Basse</option><option value="medium">Moyenne</option><option value="high">Haute</option></select></div>
         <div id="task-project-metadata-wrap">
@@ -1168,6 +1287,83 @@
             <option value="private">Solo</option>
             <option value="shared">Collaboratif</option>
           </select>
+        </div>
+        <!-- Récurrence -->
+        <div class="border-t pt-4 mt-4">
+          <label class="flex items-center gap-2 text-sm font-semibold mb-4">
+            <input id="task-recurrence-enabled" type="checkbox" class="w-4 h-4 rounded">
+            <span>Tâche récurrente</span>
+          </label>
+          <div id="task-recurrence-config" class="hidden space-y-4">
+            <!-- Type de récurrence -->
+            <div>
+              <label class="block text-sm font-semibold mb-2">Type de récurrence</label>
+              <select id="task-recurrence-type" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+                <option value="weekly">Hebdomadaire</option>
+                <option value="monthly">Mensuelle</option>
+                <option value="yearly">Annuelle</option>
+              </select>
+            </div>
+            <!-- Intervalle -->
+            <div>
+              <label class="block text-sm font-semibold mb-2">Intervalle (tous les N périodes)</label>
+              <input id="task-recurrence-interval" type="number" min="1" value="1" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+            </div>
+            <!-- Configuration hebdomadaire -->
+            <div id="task-recurrence-weekly-config">
+              <label class="block text-sm font-semibold mb-2">Jours de la semaine</label>
+              <div class="grid grid-cols-4 gap-2">
+                <label class="flex items-center gap-2"><input type="checkbox" name="task-recurrence-weekday" value="0"> <span>Dim</span></label>
+                <label class="flex items-center gap-2"><input type="checkbox" name="task-recurrence-weekday" value="1" checked> <span>Lun</span></label>
+                <label class="flex items-center gap-2"><input type="checkbox" name="task-recurrence-weekday" value="2"> <span>Mar</span></label>
+                <label class="flex items-center gap-2"><input type="checkbox" name="task-recurrence-weekday" value="3"> <span>Mer</span></label>
+                <label class="flex items-center gap-2"><input type="checkbox" name="task-recurrence-weekday" value="4"> <span>Jeu</span></label>
+                <label class="flex items-center gap-2"><input type="checkbox" name="task-recurrence-weekday" value="5"> <span>Ven</span></label>
+                <label class="flex items-center gap-2"><input type="checkbox" name="task-recurrence-weekday" value="6"> <span>Sam</span></label>
+              </div>
+            </div>
+            <!-- Configuration mensuelle -->
+            <div id="task-recurrence-monthly-config" class="hidden">
+              <label class="block text-sm font-semibold mb-2">Jours du mois (séparés par des virgules)</label>
+              <input id="task-recurrence-month-days" type="text" placeholder="Ex: 1,15,28" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+              <p class="text-xs text-slate-500 mt-1">Entrez les numéros de jours (1-31) séparés par des virgules</p>
+            </div>
+            <!-- Configuration annuelle -->
+            <div id="task-recurrence-yearly-config" class="hidden">
+              <label class="block text-sm font-semibold mb-2">Dates (au format MM-DD, séparées par des virgules)</label>
+              <input id="task-recurrence-year-dates" type="text" placeholder="Ex: 01-01,06-15" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+              <p class="text-xs text-slate-500 mt-1">Entrez les dates au format MM-DD (exemple: 01-01 pour le 1er janvier)</p>
+            </div>
+            <!-- Date de début / première occurrence -->
+            <div>
+              <label id="task-recurrence-start-date-label" class="block text-sm font-semibold mb-2">Date de départ</label>
+              <input id="task-recurrence-start-date" type="date" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+              <p id="task-recurrence-start-date-hint" class="text-xs text-slate-500 mt-1">Date de la première occurrence</p>
+            </div>
+            <!-- Type de fin -->
+            <div>
+              <label class="block text-sm font-semibold mb-2">Fin de la récurrence</label>
+              <select id="task-recurrence-end-type" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+                <option value="infinite">Infini</option>
+                <option value="count">Nombre d'occurrences</option>
+                <option value="until">Jusqu'à une date</option>
+              </select>
+            </div>
+            <!-- Nombre d'occurrences -->
+            <div id="task-recurrence-count-config" class="hidden">
+              <label class="block text-sm font-semibold mb-2">Nombre d'occurrences</label>
+              <input id="task-recurrence-end-count" type="number" min="1" value="10" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+            </div>
+            <!-- Date de fin -->
+            <div id="task-recurrence-until-config" class="hidden">
+              <label class="block text-sm font-semibold mb-2">Date de fin</label>
+              <input id="task-recurrence-end-date" type="date" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+            </div>
+            <!-- Résumé -->
+            <div id="task-recurrence-summary" class="px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-900">
+              <!-- Résumé de la récurrence -->
+            </div>
+          </div>
         </div>
         <div>
           <label class="block text-sm font-semibold mb-2">Sous-tâches (une ligne = une sous-tâche)</label>
@@ -1313,6 +1509,10 @@
         <div class="rounded-lg border border-slate-200 bg-white px-3 py-2"><span class="text-slate-500">Assigné(s):</span> <span id="global-task-detail-assignees" class="font-medium text-slate-800"></span></div>
         <div class="rounded-lg border border-slate-200 bg-white px-3 py-2"><span class="text-slate-500">Groupe:</span> <span id="global-task-detail-group" class="font-medium text-slate-800"></span></div>
       </div>
+      <div id="global-task-detail-recurrence-wrap" class="hidden rounded-xl border border-slate-200 bg-white p-3 mb-3">
+        <p class="text-sm font-semibold text-slate-700 mb-2">Récurrence</p>
+        <div id="global-task-detail-recurrence" class="text-sm text-slate-700"></div>
+      </div>
       <div class="rounded-xl border border-slate-200 bg-white p-3 mb-3">
         <p class="text-sm font-semibold text-slate-700 mb-2">Sous-tâches</p>
         <div id="global-task-detail-subtasks" class="space-y-1 text-sm text-slate-700"></div>
@@ -1370,6 +1570,28 @@
       <div class="flex items-center justify-end gap-2">
         <button id="btn-task-convert-cancel" class="px-3 py-1.5 rounded-lg border border-slate-300 text-sm font-semibold">Annuler</button>
         <button id="btn-task-convert-confirm" class="btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold">Convertir en projet</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-global-conversation-delete" class="hidden fixed inset-0 bg-black/55 flex items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
+    <div class="task-detail-modal-panel bg-white rounded-2xl p-5 sm:p-6 max-w-xl w-full mx-auto max-h-[92vh] overflow-y-auto overscroll-contain">
+      <div class="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <h3 class="section-title text-2xl font-extrabold">Supprimer la conversation</h3>
+          <p class="text-sm text-slate-500 mt-1">Cette action supprime tous les messages du canal affiché, sans supprimer le groupe.</p>
+        </div>
+        <button id="btn-close-global-conversation-delete" class="px-3 py-1.5 rounded-lg border border-slate-300 text-sm font-semibold">Fermer</button>
+      </div>
+      <div class="rounded-xl border border-rose-200 bg-rose-50 p-3 mb-3">
+        <p class="text-xs uppercase tracking-wide text-rose-700 mb-1">Canal concerné</p>
+        <p id="global-conversation-delete-label" class="text-sm font-semibold text-rose-800">-</p>
+        <p id="global-conversation-delete-count" class="text-xs text-rose-700 mt-1">0 message</p>
+      </div>
+      <p class="text-sm text-slate-700 mb-4">Confirmez pour supprimer tout l'historique visible de cette conversation.</p>
+      <div class="flex items-center justify-end gap-2">
+        <button id="btn-global-conversation-delete-cancel" class="px-3 py-1.5 rounded-lg border border-slate-300 text-sm font-semibold">Annuler</button>
+        <button id="btn-global-conversation-delete-confirm" class="px-4 py-2 rounded-lg bg-rose-600 text-white text-sm font-semibold">Supprimer définitivement</button>
       </div>
     </div>
   </div>
@@ -1455,7 +1677,7 @@
 
   <div id="modal-edit-project" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
     <div class="bg-white rounded-2xl p-6 sm:p-8 max-w-4xl w-full mx-auto my-2 sm:my-4 max-h-[92vh] overflow-y-auto overscroll-contain">
-      <h3 class="section-title text-2xl font-extrabold mb-6">Modifier le projet</h3>
+      <h3 class="section-title text-2xl font-extrabold mb-3">Modifier le projet</h3>
       <div id="project-edit-lock-badge" class="hidden mb-4 text-xs px-3 py-2 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800"></div>
       <div class="space-y-4">
         <div><label class="block text-sm font-semibold mb-2">Nom du projet *</label><input id="edit-project-name" type="text" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"></div>
@@ -1531,16 +1753,37 @@
     </div>
   </div>
 
+  <div id="modal-workflow-entity" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl p-5 max-w-2xl w-full mx-auto my-2 max-h-[92vh] overflow-y-auto">
+      <div class="flex items-center justify-between gap-3 mb-3">
+        <h3 id="workflow-modal-title" class="section-title text-xl font-extrabold">Nouveau workflow</h3>
+        <button id="btn-close-workflow-modal" class="px-3 py-1.5 rounded-lg border border-slate-300 text-sm font-semibold">Fermer</button>
+      </div>
+      <div id="workflow-modal-body" class="space-y-3"></div>
+      <div class="mt-4 flex items-center justify-end gap-2">
+        <button id="btn-cancel-workflow-modal" class="px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold">Annuler</button>
+        <button id="btn-save-workflow-modal" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
   <div id="loading" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50"><div class="spinner"></div></div>
   <div id="toast" class="hidden fixed bottom-6 right-6 bg-primary text-white px-6 py-4 rounded-lg shadow-xl z-50"></div>
 
   <script src="js/taskmda-ui.js?v=20260325-02"></script>
   <script src="js/taskmda-theme.js?v=20260325-02"></script>
   <script src="js/taskmda-notifications.js?v=20260325-02"></script>
+  <script src="js/taskmda-recurrence.js"></script>
+  <script src="js/taskmda-recurrence-ui.js"></script>
   <script src="js/taskmda-tasks.js?v=20260325-02"></script>
   <script src="js/taskmda-social.js?v=20260328-06"></script>
   <script src="js/taskmda-editor.js?v=20260328-03"></script>
-  <script src="js/taskmda-team.js?v=20260328-21"></script>
+  <script src="js/taskmda-workflow-store.js?v=20260403-01"></script>
+  <script src="js/taskmda-workflow-graph.js?v=20260403-01"></script>
+  <script src="js/taskmda-workflow-ui.js?v=20260403-01"></script>
+  <script src="js/taskmda-workflow.js?v=20260402-01"></script>
+  <script src="js/taskmda-team.js?v=20260402-01"></script>
 </body>
 </html>
+
 
