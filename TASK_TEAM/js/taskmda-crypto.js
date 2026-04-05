@@ -15,6 +15,7 @@
   const SALT_KEY = 'taskmda-team-salt';
   const RECOVERY_KEY_BLOB = 'taskmda-team-recovery-blob';
   const ITER_COUNT = 310_000; // PBKDF2 iterations (OWASP 2024)
+  const LEGACY_ITERATION_CANDIDATES = [250_000, 210_000, 200_000, 150_000, 100_000];
 
   let cryptoKey = null; // Clé de chiffrement en mémoire uniquement
 
@@ -22,7 +23,7 @@
   // CRYPTO — PBKDF2 → AES-256-GCM
   // ============================================================================
 
-  async function deriveKey(password, salt) {
+  async function deriveKey(password, salt, iterations = ITER_COUNT) {
     const raw = await crypto.subtle.importKey(
       'raw',
       new TextEncoder().encode(password),
@@ -31,7 +32,7 @@
       ['deriveKey']
     );
     return crypto.subtle.deriveKey(
-      { name: 'PBKDF2', salt, iterations: ITER_COUNT, hash: 'SHA-256' },
+      { name: 'PBKDF2', salt, iterations: Math.max(50_000, Number(iterations) || ITER_COUNT), hash: 'SHA-256' },
       raw,
       { name: 'AES-GCM', length: 256 },
       true,
@@ -67,12 +68,42 @@
     return bufToHex(iv) + ':' + bufToHex(new Uint8Array(ct));
   }
 
-  async function decrypt(stored) {
-    if (!cryptoKey) throw new Error('Crypto key not initialized');
-    const [ivHex, ctHex] = stored.split(':');
+  function parseStoredCipher(stored) {
+    if (stored && typeof stored === 'object') {
+      const ivHex = String(stored.iv || '').trim();
+      const ctHex = String(stored.ct || stored.ciphertext || '').trim();
+      if (ivHex && ctHex) return { ivHex, ctHex };
+      throw new Error('Invalid encrypted payload object');
+    }
+    const raw = String(stored || '').trim();
+    if (!raw) throw new Error('Empty encrypted payload');
+    if (raw.startsWith('{') && raw.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          if (typeof parsed.encrypted === 'string') return parseStoredCipher(parsed.encrypted);
+          if (typeof parsed.cipher === 'string') return parseStoredCipher(parsed.cipher);
+          return parseStoredCipher(parsed);
+        }
+      } catch (_) {
+        // fallback to colon format
+      }
+    }
+    const sep = raw.indexOf(':');
+    if (sep <= 0) throw new Error('Invalid encrypted payload format');
+    const ivHex = raw.slice(0, sep).trim();
+    const ctHex = raw.slice(sep + 1).trim();
+    if (!ivHex || !ctHex) throw new Error('Invalid encrypted payload segments');
+    return { ivHex, ctHex };
+  }
+
+  async function decrypt(stored, keyOverride = null) {
+    const activeKey = keyOverride || cryptoKey;
+    if (!activeKey) throw new Error('Crypto key not initialized');
+    const { ivHex, ctHex } = parseStoredCipher(stored);
     const plain = await crypto.subtle.decrypt(
       { name: 'AES-GCM', iv: hexToBuf(ivHex) },
-      cryptoKey,
+      activeKey,
       hexToBuf(ctHex)
     );
     return JSON.parse(new TextDecoder().decode(plain));
@@ -124,8 +155,8 @@
     if (pwd.length < 4) throw new Error('Le mot de passe doit contenir au moins 4 caractères');
     const payload = await loadEncryptedData();
     const salt = crypto.getRandomValues(new Uint8Array(16));
-    const nextKey = await deriveKey(pwd, salt);
-    localStorage.setItem(SALT_KEY, bufToHex(salt));
+    const nextKey = await deriveKey(pwd, salt, ITER_COUNT);
+    saveSaltConfig(salt, ITER_COUNT);
     cryptoKey = nextKey;
     await saveEncryptedData(payload || { config: {}, version: '1.0-encrypted', updatedAt: Date.now() });
     const recoveryCode = await setupRecoveryForCurrentKey();
@@ -154,18 +185,12 @@
   }
 
   async function verifyPassword(password) {
-    const saltHex = localStorage.getItem(SALT_KEY);
-    if (!saltHex) return false;
+    const saltConfig = parseSaltConfig(localStorage.getItem(SALT_KEY));
+    if (!saltConfig?.saltHex) return false;
     const encrypted = localStorage.getItem(STORAGE_KEY_ENCRYPTED);
     if (!encrypted) return false;
     try {
-      const testKey = await deriveKey(password, hexToBuf(saltHex));
-      const [ivHex, ctHex] = encrypted.split(':');
-      await crypto.subtle.decrypt(
-        { name: 'AES-GCM', iv: hexToBuf(ivHex) },
-        testKey,
-        hexToBuf(ctHex)
-      );
+      await decryptWithPasswordCandidates(password, saltConfig, encrypted);
       return true;
     } catch {
       return false;
@@ -175,9 +200,66 @@
   const bufToHex = b => Array.from(b).map(x => x.toString(16).padStart(2,'0')).join('');
 
   function hexToBuf(h) {
-    const a = new Uint8Array(h.length/2);
-    for (let i=0; i<a.length; i++) a[i]=parseInt(h.slice(i*2,i*2+2),16);
+    const raw = String(h || '').trim();
+    if (!raw || raw.length % 2 !== 0 || /[^0-9a-f]/i.test(raw)) {
+      throw new Error('Invalid hex payload');
+    }
+    const a = new Uint8Array(raw.length / 2);
+    for (let i = 0; i < a.length; i += 1) {
+      a[i] = parseInt(raw.slice(i * 2, i * 2 + 2), 16);
+    }
     return a;
+  }
+
+  function parseSaltConfig(raw) {
+    const value = String(raw || '').trim();
+    if (!value) return null;
+    if (value.startsWith('{') && value.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(value);
+        const saltHex = String(parsed?.saltHex || '').trim();
+        const iter = Number(parsed?.iter || parsed?.iterations || 0);
+        if (!saltHex) return null;
+        return {
+          saltHex,
+          iterations: Number.isFinite(iter) && iter >= 50_000 ? iter : null,
+          encoded: true
+        };
+      } catch (_) {
+        // fallback below
+      }
+    }
+    return { saltHex: value, iterations: null, encoded: false };
+  }
+
+  function saveSaltConfig(salt, iterations = ITER_COUNT) {
+    localStorage.setItem(SALT_KEY, JSON.stringify({
+      version: 1,
+      saltHex: bufToHex(salt),
+      iter: Math.max(50_000, Number(iterations) || ITER_COUNT),
+      updatedAt: Date.now()
+    }));
+  }
+
+  function buildIterationCandidates(primary) {
+    const all = [Number(primary) || 0, ITER_COUNT, ...LEGACY_ITERATION_CANDIDATES];
+    return [...new Set(all.filter((n) => Number.isFinite(n) && n >= 50_000))];
+  }
+
+  async function decryptWithPasswordCandidates(password, saltConfig, encryptedPayload) {
+    const salt = hexToBuf(String(saltConfig?.saltHex || ''));
+    const iterationsList = buildIterationCandidates(saltConfig?.iterations);
+    let lastError = null;
+    for (const iter of iterationsList) {
+      try {
+        const key = await deriveKey(password, salt, iter);
+        const data = await decrypt(encryptedPayload, key);
+        return { key, data, iter };
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError || new Error('Unable to decrypt payload with candidate key parameters');
   }
 
   // ============================================================================
@@ -304,8 +386,8 @@
 
       // Create new encryption key
       const salt = crypto.getRandomValues(new Uint8Array(16));
-      localStorage.setItem(SALT_KEY, bufToHex(salt));
-      cryptoKey = await deriveKey(pwd, salt);
+      saveSaltConfig(salt, ITER_COUNT);
+      cryptoKey = await deriveKey(pwd, salt, ITER_COUNT);
 
       // Initialize empty encrypted storage
       await saveEncryptedData({
@@ -324,8 +406,8 @@
       }
     } else {
       // Unlock existing data
-      const saltHex = localStorage.getItem(SALT_KEY);
-      if (!saltHex) {
+      const saltConfig = parseSaltConfig(localStorage.getItem(SALT_KEY));
+      if (!saltConfig?.saltHex) {
         if (lockError) {
           lockError.textContent = '❌ Aucune donnée chiffrée trouvée';
           lockError.classList.remove('hidden');
@@ -334,11 +416,23 @@
       }
 
       try {
-        const salt = hexToBuf(saltHex);
-        cryptoKey = await deriveKey(pwd, salt);
+        const encryptedPayload = localStorage.getItem(STORAGE_KEY_ENCRYPTED);
+        if (!encryptedPayload) {
+          throw new Error('Encrypted payload missing');
+        }
+        const unlocked = await decryptWithPasswordCandidates(pwd, saltConfig, encryptedPayload);
+        cryptoKey = unlocked.key;
+        const decryptedData = unlocked.data;
 
-        // Try to decrypt data to verify password
-        const decryptedData = await loadEncryptedData();
+        const shouldMigrateSaltEncoding = !saltConfig.encoded;
+        const shouldMigrateIterations = Number(unlocked.iter || 0) !== ITER_COUNT;
+        if (shouldMigrateSaltEncoding || shouldMigrateIterations) {
+          const freshSalt = crypto.getRandomValues(new Uint8Array(16));
+          const migratedKey = await deriveKey(pwd, freshSalt, ITER_COUNT);
+          cryptoKey = migratedKey;
+          saveSaltConfig(freshSalt, ITER_COUNT);
+          await saveEncryptedData(decryptedData);
+        }
 
         hideLockScreen();
 
@@ -347,9 +441,23 @@
           onSuccess({ isNewUser: false, data: decryptedData });
         }
       } catch (e) {
-        console.error('Decryption error:', e);
+        const msg = String(e?.message || '').toLowerCase();
+        const isDecryptError = e && (
+          e.name === 'OperationError' ||
+          e.name === 'DataError' ||
+          e.name === 'SyntaxError' ||
+          e.name === 'TypeError' ||
+          msg.includes('invalid encrypted payload') ||
+          msg.includes('unable to decrypt payload') ||
+          msg.includes('invalid hex payload')
+        );
+        if (!isDecryptError) {
+          console.error('Decryption error:', e);
+        }
         if (lockError) {
-          lockError.textContent = '❌ Mot de passe incorrect';
+          lockError.textContent = isDecryptError
+            ? '❌ Mot de passe incorrect ou données chiffrées incompatibles'
+            : '❌ Erreur de déchiffrement';
           lockError.classList.remove('hidden');
         }
         cryptoKey = null;

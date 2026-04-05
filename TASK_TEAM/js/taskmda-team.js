@@ -44,6 +44,7 @@
 
     const DB_NAME = 'taskmda-team-standalone';
     const DB_VERSION = 13; // + historique workflow (versions/restauration)
+    const LOCAL_RESET_TS_KEY = 'taskmda_last_local_reset_ts';
     const DATA_EXPORT_STORES = {
       events: 'eventId',
       processedEvents: 'eventId',
@@ -303,6 +304,66 @@
       return ids.length;
     }
 
+    const corruptEncryptedRowsReported = new Set();
+    const corruptEncryptedRowsCleanupQueued = new Set();
+    const cryptoCleanupSummary = {
+      detectedByStore: new Map(),
+      purgedByStore: new Map(),
+      timer: null
+    };
+
+    function scheduleCryptoCleanupSummaryLog() {
+      if (cryptoCleanupSummary.timer) return;
+      cryptoCleanupSummary.timer = setTimeout(() => {
+        cryptoCleanupSummary.timer = null;
+        const detectedEntries = Array.from(cryptoCleanupSummary.detectedByStore.entries());
+        if (detectedEntries.length > 0) {
+          const total = detectedEntries.reduce((sum, [, count]) => sum + Number(count || 0), 0);
+          const detail = detectedEntries.map(([store, count]) => `${store}: ${count}`).join(', ');
+          console.warn(`[Crypto] Nettoyage auto: ${total} entrée(s) illisible(s) détectée(s) (${detail})`);
+        }
+        const purgedEntries = Array.from(cryptoCleanupSummary.purgedByStore.entries());
+        if (purgedEntries.length > 0) {
+          const total = purgedEntries.reduce((sum, [, count]) => sum + Number(count || 0), 0);
+          const detail = purgedEntries.map(([store, count]) => `${store}: ${count}`).join(', ');
+          console.info(`[Crypto] Nettoyage auto: ${total} entrée(s) purgée(s) (${detail})`);
+        }
+        cryptoCleanupSummary.detectedByStore.clear();
+        cryptoCleanupSummary.purgedByStore.clear();
+      }, 1200);
+    }
+
+    function queueCorruptEncryptedRowCleanup(storeName, key, error, source = 'get') {
+      const safeStore = String(storeName || '').trim();
+      const safeKey = String(key || '').trim();
+      if (!safeStore || !safeKey) return;
+      const marker = `${safeStore}::${safeKey}`;
+
+      if (!corruptEncryptedRowsReported.has(marker)) {
+        corruptEncryptedRowsReported.add(marker);
+        const detected = Number(cryptoCleanupSummary.detectedByStore.get(safeStore) || 0) + 1;
+        cryptoCleanupSummary.detectedByStore.set(safeStore, detected);
+        scheduleCryptoCleanupSummaryLog();
+      }
+      if (corruptEncryptedRowsCleanupQueued.has(marker)) return;
+      corruptEncryptedRowsCleanupQueued.add(marker);
+
+      setTimeout(async () => {
+        try {
+          if (!isValidIdbKey(key)) return;
+          const db = getDatabase();
+          await db.delete(safeStore, key);
+          const purged = Number(cryptoCleanupSummary.purgedByStore.get(safeStore) || 0) + 1;
+          cryptoCleanupSummary.purgedByStore.set(safeStore, purged);
+          scheduleCryptoCleanupSummaryLog();
+        } catch (cleanupError) {
+          console.warn(`[Crypto] failed to purge unreadable row in ${safeStore} for key ${safeKey}`, cleanupError);
+        } finally {
+          corruptEncryptedRowsCleanupQueued.delete(marker);
+        }
+      }, 0);
+    }
+
     async function getDecrypted(storeName, id, idField) {
       if (!isValidIdbKey(id)) return null;
       const db = getDatabase();
@@ -311,7 +372,12 @@
       if (!obj) return null;
 
       if (window.TaskMDACrypto && window.TaskMDACrypto.isUnlocked() && obj._isEncrypted) {
-        return await window.TaskMDACrypto.decryptFromDB(obj, idField);
+        try {
+          return await window.TaskMDACrypto.decryptFromDB(obj, idField);
+        } catch (error) {
+          queueCorruptEncryptedRowCleanup(storeName, id, error, 'get');
+          return null;
+        }
       } else {
         return obj;
       }
@@ -327,14 +393,20 @@
       if (!objs || objs.length === 0) return [];
 
       if (window.TaskMDACrypto && window.TaskMDACrypto.isUnlocked()) {
-        return await Promise.all(
+        const rows = await Promise.all(
           objs.map(obj => {
             if (obj._isEncrypted) {
-              return window.TaskMDACrypto.decryptFromDB(obj, idField);
+              return window.TaskMDACrypto.decryptFromDB(obj, idField)
+                .catch((error) => {
+                  const key = String(obj?.[idField] || obj?.id || obj?.key || 'unknown');
+                  queueCorruptEncryptedRowCleanup(storeName, key, error, 'getAll');
+                  return null;
+                });
             }
             return obj;
           })
         );
+        return rows.filter(Boolean);
       } else {
         return objs;
       }
@@ -350,14 +422,20 @@
       if (!objs || objs.length === 0) return [];
 
       if (window.TaskMDACrypto && window.TaskMDACrypto.isUnlocked()) {
-        return await Promise.all(
+        const rows = await Promise.all(
           objs.map(obj => {
             if (obj._isEncrypted) {
-              return window.TaskMDACrypto.decryptFromDB(obj, idField);
+              return window.TaskMDACrypto.decryptFromDB(obj, idField)
+                .catch((error) => {
+                  const key = String(obj?.[idField] || obj?.id || obj?.key || 'unknown');
+                  queueCorruptEncryptedRowCleanup(storeName, key, error, 'getByIndex');
+                  return null;
+                });
             }
             return obj;
           })
         );
+        return rows.filter(Boolean);
       } else {
         return objs;
       }
@@ -1610,20 +1688,582 @@
       return appBranding;
     }
 
+    const VIEW_SECTION_META = {
+      globalHub: {
+        label: 'Navigation transverse',
+        tabs: {
+          tasks: { label: 'Tâches', buttonId: 'nav-tasks' },
+          workflow: { label: 'Workflow', buttonId: 'nav-workflow' },
+          calendar: { label: 'Calendrier', buttonId: 'nav-calendar' },
+          docs: { label: 'Documents', buttonId: 'nav-docs' },
+          messages: { label: 'Messagerie', buttonId: 'nav-messages' },
+          feed: { label: "Fil d'info", buttonId: 'nav-feed' },
+          settings: { label: 'Référentiels', buttonId: 'nav-settings' }
+        }
+      },
+      globalTasks: {
+        label: 'Tâches transverses',
+        tabs: {
+          cards: { label: 'Cartes', buttonId: 'global-tasks-view-cards' },
+          calendar: { label: 'Calendrier', buttonId: 'global-tasks-view-calendar' },
+          list: { label: 'Liste', buttonId: 'global-tasks-view-list' },
+          kanban: { label: 'Kanban', buttonId: 'global-tasks-view-kanban' },
+          timeline: { label: 'Timeline', buttonId: 'global-tasks-view-timeline' },
+          archives: { label: 'Archives', buttonId: 'global-tasks-view-archives' }
+        }
+      },
+      project: {
+        label: 'Projet',
+        tabs: {
+          overview: { label: 'Aperçu', buttonId: 'view-overview' },
+          cards: { label: 'Cartes', buttonId: 'view-cards' },
+          list: { label: 'Liste', buttonId: 'view-list' },
+          kanban: { label: 'Kanban', buttonId: 'view-kanban' },
+          gantt: { label: 'Gantt', buttonId: 'view-gantt' },
+          timeline: { label: 'Timeline', buttonId: 'view-timeline' },
+          docs: { label: 'Documents', buttonId: 'view-docs' },
+          chat: { label: 'Discussion', buttonId: 'view-chat' },
+          activity: { label: 'Activité', buttonId: 'view-activity' },
+          archives: { label: 'Archives', buttonId: 'view-archives' }
+        }
+      },
+      workflow: {
+        label: 'Workflow',
+        tabs: {
+          map: { label: 'Carte', buttonId: 'workflow-view-map' },
+          organization: { label: 'Organisation', buttonId: 'workflow-view-organization' },
+          organigram: { label: 'Organigramme', buttonId: 'workflow-view-organigram' },
+          agents: { label: 'Agents', buttonId: 'workflow-view-agents' },
+          tasks: { label: 'Tâches', buttonId: 'workflow-view-tasks' },
+          kanban: { label: 'Kanban', buttonId: 'workflow-view-kanban' },
+          timeline: { label: 'Timeline', buttonId: 'workflow-view-timeline' },
+          procedures: { label: 'Procédures', buttonId: 'workflow-view-procedures' },
+          software: { label: 'Logiciels métiers', buttonId: 'workflow-view-software' },
+          journal: { label: 'Journal', buttonId: 'workflow-view-journal' }
+        }
+      },
+      globalCalendar: {
+        label: 'Calendrier transverse',
+        tabs: {
+          grid: { label: 'Calendrier', buttonId: 'global-calendar-view-grid' },
+          list: { label: 'Liste', buttonId: 'global-calendar-view-list' }
+        }
+      },
+      globalFeed: {
+        label: "Fil d'info",
+        tabs: {
+          all: { label: 'Tout', buttonId: 'global-feed-filter-all' },
+          mentions: { label: 'Mes mentions', buttonId: 'global-feed-filter-mentions' },
+          auto: { label: 'Activité auto', buttonId: 'global-feed-filter-auto' },
+          manual: { label: 'Posts manuels', buttonId: 'global-feed-filter-manual' },
+          'project-refs': { label: 'Références projet', buttonId: 'global-feed-filter-project-refs' },
+          'task-refs': { label: 'Références tâches', buttonId: 'global-feed-filter-task-refs' }
+        }
+      },
+      globalSettings: {
+        label: 'Référentiels',
+        tabs: {
+          branding: { label: 'Identité', buttonId: 'global-settings-tab-branding' },
+          themes: { label: 'Thématiques', buttonId: 'global-settings-tab-themes' },
+          groups: { label: 'Groupes', buttonId: 'global-settings-tab-groups' },
+          roles: { label: 'Habilitations', buttonId: 'global-settings-tab-roles' },
+          views: { label: 'Options de vues', buttonId: 'global-settings-tab-views' },
+          software: { label: 'Versions logicielles', buttonId: 'global-settings-tab-software' }
+        }
+      }
+    };
+
     const DEFAULT_VIEW_OPTIONS = {
-      globalTasksList: true,
-      projectTasksList: true,
-      calendarList: true
+      sections: {
+        globalHub: { defaultTab: 'tasks', tabs: { tasks: true, workflow: true, calendar: true, docs: true, messages: true, feed: true, settings: true } },
+        globalTasks: { defaultTab: 'cards', tabs: { cards: true, calendar: true, list: true, kanban: true, timeline: true, archives: true } },
+        project: { defaultTab: 'cards', tabs: { overview: true, cards: true, list: true, kanban: true, gantt: true, timeline: true, docs: true, chat: true, activity: true, archives: true } },
+        workflow: { defaultTab: 'organigram', tabs: { map: true, organization: true, organigram: true, agents: true, tasks: true, kanban: true, timeline: true, procedures: true, software: true, journal: true } },
+        globalCalendar: { defaultTab: 'grid', tabs: { grid: true, list: true } },
+        globalFeed: { defaultTab: 'all', tabs: { all: true, mentions: true, auto: true, manual: true, 'project-refs': true, 'task-refs': true } },
+        globalSettings: { defaultTab: 'branding', tabs: { branding: true, themes: true, groups: true, roles: true, views: true, software: true } }
+      },
+      ui: {
+        workflowActionButtons: 'icon_text'
+      },
+      policy: {
+        lockUserOverrides: false
+      }
+    };
+
+    const VIEW_ROLE_PRESETS = {
+      standard: {
+        label: 'Utilisateur standard',
+        description: 'Essentiel uniquement'
+      },
+      manager: {
+        label: 'Manager',
+        description: 'Essentiel + avance sur Projets, Taches et Workflow'
+      },
+      admin: {
+        label: 'Admin technique',
+        description: 'Toutes les vues'
+      }
+    };
+
+    const VIEW_ESSENTIAL_TABS = {
+      globalHub: ['tasks', 'workflow', 'calendar', 'docs', 'messages', 'feed', 'settings'],
+      globalTasks: ['cards', 'kanban', 'timeline'],
+      project: ['overview', 'cards', 'kanban', 'timeline'],
+      workflow: ['organigram', 'organization'],
+      globalCalendar: ['grid'],
+      globalFeed: ['all', 'mentions'],
+      globalSettings: ['branding', 'themes', 'groups', 'roles', 'views']
+    };
+
+    const UX_METRICS_DEFAULT = {
+      openNewProject: 0,
+      openNewTaskProject: 0,
+      openNewTaskGlobal: 0,
+      openNewDocGlobal: 0,
+      switchProjectView: 0,
+      switchGlobalTasksView: 0,
+      switchGlobalWorkspace: 0,
+      quickCommandUse: 0,
+      updatedAt: 0
     };
 
     let viewOptions = DEFAULT_VIEW_OPTIONS;
+    let uxMetrics = deepClone(UX_METRICS_DEFAULT);
+    let uxMetricsSaveTimer = null;
+
+    function normalizeWorkflowActionButtonsMode(rawMode) {
+      const mode = String(rawMode || '').trim().toLowerCase();
+      if (mode === 'text' || mode === 'icon' || mode === 'icon_text') return mode;
+      return 'icon_text';
+    }
+
+    function getWorkflowActionButtonsMode() {
+      return normalizeWorkflowActionButtonsMode(viewOptions?.ui?.workflowActionButtons);
+    }
+
+    function applyWorkflowActionButtonsModeToUI() {
+      const mode = getWorkflowActionButtonsMode();
+      const root = document.documentElement;
+      if (!root) return;
+      root.setAttribute('data-wf-action-buttons', mode);
+    }
+
+    function normalizeActionButtonLabel(value) {
+      return String(value || '').replace(/\s+/g, ' ').trim();
+    }
+
+    function inferActionButtonKind(label, button) {
+      const text = normalizeActionButtonLabel(label).toLowerCase();
+      if (text.includes('supprimer') || text.includes('delete')) return 'danger';
+      if (text.includes('archiv')) return 'archive';
+      if (text.includes('convert')) return 'convert';
+      if (text.includes('modifier') || text.includes('edit')) return 'edit';
+      if (text.includes('ouvrir')) return 'open';
+      if (text.includes('valider') || text.includes('approuv')) return 'success';
+      if (text.includes('termin')) return 'success';
+      if (text.includes('en cours') || text.includes('statut')) return 'progress';
+      if (text.includes('email') || text.includes('mail')) return 'notify';
+      if (text.includes('checklist') || text.includes('cocher')) return 'success';
+      if (text.includes('nouvelle tache') || text.includes('ajouter') || text.includes('creer')) return 'create';
+      if (button?.classList?.contains('task-action-btn-danger') || button?.classList?.contains('card-quick-btn-danger')) return 'danger';
+      if (button?.classList?.contains('task-action-btn-warn')) return 'archive';
+      if (button?.classList?.contains('workflow-card-action-btn')) {
+        if (button.classList.contains('is-danger')) return 'danger';
+        if (button.classList.contains('is-primary')) return 'open';
+      }
+      return 'default';
+    }
+
+    function inferActionButtonIcon(label, button) {
+      const kind = inferActionButtonKind(label, button);
+      if (kind === 'danger') return 'delete';
+      if (kind === 'archive') return 'archive';
+      if (kind === 'convert') return 'swap_horiz';
+      if (kind === 'edit') return 'edit';
+      if (kind === 'open') return 'open_in_new';
+      if (kind === 'success') return 'task_alt';
+      if (kind === 'progress') return 'play_arrow';
+      if (kind === 'notify') return 'mail';
+      if (kind === 'create') return 'add_task';
+      return 'bolt';
+    }
+
+    function ensureActionButtonDecor(button) {
+      if (!(button instanceof HTMLElement)) return;
+      if (button.dataset.actionUiDecorated === '1') return;
+      const rawLabel = button.getAttribute('data-action-label') || button.textContent || '';
+      const label = normalizeActionButtonLabel(rawLabel);
+      if (!label) return;
+      const actionKind = inferActionButtonKind(label, button);
+      button.setAttribute('data-action-kind', actionKind);
+      button.setAttribute('data-action-label', label);
+      button.setAttribute('title', button.getAttribute('title') || label);
+      button.setAttribute('aria-label', button.getAttribute('aria-label') || label);
+
+      let iconEl = button.querySelector('.taskmda-action-icon, .material-symbols-outlined');
+      if (!iconEl) {
+        iconEl = document.createElement('span');
+        iconEl.className = 'material-symbols-outlined taskmda-action-icon';
+        iconEl.setAttribute('aria-hidden', 'true');
+        iconEl.textContent = inferActionButtonIcon(label, button);
+        button.insertBefore(iconEl, button.firstChild);
+      } else {
+        iconEl.classList.add('taskmda-action-icon');
+      }
+
+      let labelEl = button.querySelector('.taskmda-action-label');
+      if (!labelEl) {
+        const candidate = Array.from(button.children).find((child) => (
+          child instanceof HTMLElement
+          && child !== iconEl
+          && !child.classList.contains('material-symbols-outlined')
+        ));
+        if (candidate) {
+          candidate.classList.add('taskmda-action-label');
+          labelEl = candidate;
+        } else {
+          labelEl = document.createElement('span');
+          labelEl.className = 'taskmda-action-label';
+          labelEl.textContent = label;
+          Array.from(button.childNodes).forEach((node) => {
+            if (node.nodeType === Node.TEXT_NODE && String(node.textContent || '').trim()) {
+              button.removeChild(node);
+            }
+          });
+          button.appendChild(labelEl);
+        }
+      }
+      if (labelEl && !normalizeActionButtonLabel(labelEl.textContent)) {
+        labelEl.textContent = label;
+      }
+      button.dataset.actionUiDecorated = '1';
+    }
+
+    let actionButtonsDecorateRaf = null;
+    let actionButtonsObserver = null;
+
+    function applyActionButtonsDisplayMode(root = document) {
+      if (!root?.querySelectorAll) return;
+      const selectors = '.task-action-btn, .workflow-card-action-btn, .workspace-action-inline';
+      root.querySelectorAll(selectors).forEach((button) => ensureActionButtonDecor(button));
+    }
+
+    function scheduleActionButtonsDecorate() {
+      if (actionButtonsDecorateRaf) cancelAnimationFrame(actionButtonsDecorateRaf);
+      actionButtonsDecorateRaf = requestAnimationFrame(() => {
+        actionButtonsDecorateRaf = null;
+        applyActionButtonsDisplayMode(document);
+      });
+    }
+
+    function ensureActionButtonsObserver() {
+      if (actionButtonsObserver || !document?.body) return;
+      actionButtonsObserver = new MutationObserver(() => {
+        scheduleActionButtonsDecorate();
+      });
+      actionButtonsObserver.observe(document.body, { childList: true, subtree: true });
+      scheduleActionButtonsDecorate();
+    }
+
+    function deepClone(value) {
+      try {
+        return JSON.parse(JSON.stringify(value));
+      } catch (_) {
+        return value;
+      }
+    }
+
+    function ensureViewSectionIntegrity(sectionKey, sectionOptions) {
+      const meta = VIEW_SECTION_META[sectionKey];
+      const safe = sectionOptions && typeof sectionOptions === 'object' ? sectionOptions : {};
+      const result = { defaultTab: '', tabs: {} };
+      const keys = Object.keys(meta?.tabs || {});
+      keys.forEach((tabKey) => {
+        result.tabs[tabKey] = safe.tabs?.[tabKey] !== false;
+      });
+      const enabledKeys = keys.filter((tabKey) => result.tabs[tabKey]);
+      if (enabledKeys.length === 0 && keys.length > 0) {
+        result.tabs[keys[0]] = true;
+      }
+      const enabledAfterFix = keys.filter((tabKey) => result.tabs[tabKey]);
+      const requestedDefault = String(safe.defaultTab || '');
+      result.defaultTab = enabledAfterFix.includes(requestedDefault) ? requestedDefault : (enabledAfterFix[0] || keys[0] || '');
+      return result;
+    }
 
     function normalizeViewOptions(raw = {}) {
-      return {
-        globalTasksList: Boolean(raw?.globalTasksList !== false),
-        projectTasksList: Boolean(raw?.projectTasksList !== false),
-        calendarList: Boolean(raw?.calendarList !== false)
+      const defaults = deepClone(DEFAULT_VIEW_OPTIONS);
+      const hasSections = raw && typeof raw === 'object' && raw.sections && typeof raw.sections === 'object';
+      const next = hasSections ? { sections: {} } : defaults;
+      if (hasSections) {
+        Object.keys(VIEW_SECTION_META).forEach((sectionKey) => {
+          next.sections[sectionKey] = ensureViewSectionIntegrity(sectionKey, raw.sections?.[sectionKey]);
+        });
+      } else {
+        next.sections.globalTasks.tabs.list = Boolean(raw?.globalTasksList !== false);
+        next.sections.project.tabs.list = Boolean(raw?.projectTasksList !== false);
+        next.sections.globalCalendar.tabs.list = Boolean(raw?.calendarList !== false);
+        Object.keys(VIEW_SECTION_META).forEach((sectionKey) => {
+          next.sections[sectionKey] = ensureViewSectionIntegrity(sectionKey, next.sections[sectionKey]);
+        });
+      }
+      next.ui = {
+        workflowActionButtons: normalizeWorkflowActionButtonsMode(raw?.ui?.workflowActionButtons || defaults?.ui?.workflowActionButtons)
       };
+      next.policy = {
+        lockUserOverrides: Boolean(raw?.policy?.lockUserOverrides === true)
+      };
+      return next;
+    }
+
+    function buildViewOptionsFromPreset(presetKey) {
+      const preset = String(presetKey || '').trim();
+      const next = deepClone(DEFAULT_VIEW_OPTIONS);
+      if (!next.sections) next.sections = {};
+      Object.keys(VIEW_SECTION_META).forEach((sectionKey) => {
+        const tabsMeta = VIEW_SECTION_META[sectionKey]?.tabs || {};
+        const section = next.sections[sectionKey] || { defaultTab: '', tabs: {} };
+        section.tabs = section.tabs || {};
+        Object.keys(tabsMeta).forEach((tabKey) => {
+          section.tabs[tabKey] = false;
+        });
+        const essential = VIEW_ESSENTIAL_TABS[sectionKey] || Object.keys(tabsMeta).slice(0, 1);
+        essential.forEach((tabKey) => {
+          if (tabKey in tabsMeta) section.tabs[tabKey] = true;
+        });
+        section.defaultTab = essential.find((tabKey) => section.tabs[tabKey]) || Object.keys(tabsMeta)[0] || '';
+        next.sections[sectionKey] = section;
+      });
+
+      if (preset === 'manager') {
+        ['project', 'globalTasks', 'workflow'].forEach((sectionKey) => {
+          const tabsMeta = VIEW_SECTION_META[sectionKey]?.tabs || {};
+          Object.keys(tabsMeta).forEach((tabKey) => {
+            next.sections[sectionKey].tabs[tabKey] = true;
+          });
+          next.sections[sectionKey].defaultTab = sectionKey === 'workflow'
+            ? 'organigram'
+            : sectionKey === 'project'
+              ? 'cards'
+              : 'cards';
+        });
+      } else if (preset === 'admin') {
+        Object.keys(VIEW_SECTION_META).forEach((sectionKey) => {
+          const tabsMeta = VIEW_SECTION_META[sectionKey]?.tabs || {};
+          Object.keys(tabsMeta).forEach((tabKey) => {
+            next.sections[sectionKey].tabs[tabKey] = true;
+          });
+          next.sections[sectionKey].defaultTab = DEFAULT_VIEW_OPTIONS.sections?.[sectionKey]?.defaultTab
+            || Object.keys(tabsMeta)[0]
+            || '';
+        });
+      }
+
+      return normalizeViewOptions(next);
+    }
+
+    function getEnabledTabs(sectionKey) {
+      const section = viewOptions?.sections?.[sectionKey];
+      const metaTabs = Object.keys(VIEW_SECTION_META[sectionKey]?.tabs || {});
+      return metaTabs.filter((tabKey) => section?.tabs?.[tabKey] !== false);
+    }
+
+    function getDefaultTab(sectionKey) {
+      const enabled = getEnabledTabs(sectionKey);
+      const requested = String(viewOptions?.sections?.[sectionKey]?.defaultTab || '');
+      return enabled.includes(requested) ? requested : (enabled[0] || '');
+    }
+
+    function isTabEnabled(sectionKey, tabKey) {
+      return viewOptions?.sections?.[sectionKey]?.tabs?.[tabKey] !== false;
+    }
+
+    function isViewOverridesLocked() {
+      return viewOptions?.policy?.lockUserOverrides === true;
+    }
+
+    function resolveViewWithLock(sectionKey, requestedTab, fallbackTab = '') {
+      if (!isViewOverridesLocked()) return String(requestedTab || fallbackTab || '').trim();
+      const lockedDefault = getDefaultTab(sectionKey);
+      return String(lockedDefault || requestedTab || fallbackTab || '').trim();
+    }
+
+    async function loadUxMetrics() {
+      const row = await getDecrypted('appSettings', 'uxMetrics', 'key');
+      const base = deepClone(UX_METRICS_DEFAULT);
+      if (!row?.value || typeof row.value !== 'object') {
+        uxMetrics = base;
+        return uxMetrics;
+      }
+      uxMetrics = {
+        ...base,
+        ...row.value,
+        updatedAt: Number(row.value.updatedAt || 0)
+      };
+      return uxMetrics;
+    }
+
+    function scheduleSaveUxMetrics() {
+      if (uxMetricsSaveTimer) clearTimeout(uxMetricsSaveTimer);
+      uxMetricsSaveTimer = setTimeout(async () => {
+        uxMetricsSaveTimer = null;
+        try {
+          await putEncrypted('appSettings', {
+            key: 'uxMetrics',
+            value: { ...uxMetrics, updatedAt: Date.now() },
+            updatedAt: Date.now()
+          }, 'key');
+        } catch (_) {
+          // noop
+        }
+      }, 500);
+    }
+
+    function trackUxMetric(metricKey) {
+      const key = String(metricKey || '').trim();
+      if (!key) return;
+      if (!(key in uxMetrics)) {
+        uxMetrics[key] = 0;
+      }
+      uxMetrics[key] = Number(uxMetrics[key] || 0) + 1;
+      uxMetrics.updatedAt = Date.now();
+      scheduleSaveUxMetrics();
+    }
+
+    const TAB_OVERFLOW_CONFIG = [
+      { listId: 'global-tasks-view-tabs', maxVisible: 4, controlClass: 'project-view-tab' },
+      { listId: 'project-view-tabs-wrap', maxVisible: 4, controlClass: 'project-view-tab' },
+      { listId: 'workflow-view-tabs-list', maxVisible: 4, controlClass: 'workflow-view-tab' },
+      { listId: 'global-feed-filter-tabs', maxVisible: 4, controlClass: 'feed-filter-btn' },
+      { listId: 'global-settings-tabs-list', maxVisible: 4, controlClass: 'project-view-tab' }
+    ];
+
+    function closeAllTabOverflowMenus() {
+      document.querySelectorAll('.tab-overflow-wrap.is-open').forEach((wrap) => {
+        wrap.classList.remove('is-open');
+        const trigger = wrap.querySelector('.tab-overflow-control');
+        trigger?.setAttribute?.('aria-expanded', 'false');
+      });
+    }
+
+    function refreshSingleTabOverflow(listEl, maxVisible = 4, controlClass = 'project-view-tab') {
+      if (!listEl) return;
+      Array.from(listEl.children).forEach((child) => {
+        if (!(child instanceof HTMLElement)) return;
+        if (child.classList.contains('tab-overflow-wrap')) return;
+        child.classList.remove('tab-overflow-hidden');
+      });
+      listEl.querySelector('.tab-overflow-wrap')?.remove();
+
+      const controls = Array.from(listEl.querySelectorAll(':scope > button'))
+        .filter((btn) => !btn.classList.contains('tab-overflow-control'))
+        .filter((btn) => !btn.classList.contains('hidden'));
+      if (controls.length <= maxVisible) return;
+
+      const direct = controls.slice(0, maxVisible);
+      const overflow = controls.slice(maxVisible);
+      overflow.forEach((btn) => btn.classList.add('tab-overflow-hidden'));
+
+      const wrap = document.createElement('div');
+      wrap.className = 'tab-overflow-wrap';
+      const trigger = document.createElement('button');
+      trigger.type = 'button';
+      trigger.className = `${controlClass} tab-overflow-control`;
+      trigger.setAttribute('aria-haspopup', 'menu');
+      trigger.setAttribute('aria-expanded', 'false');
+      trigger.textContent = `Plus (${overflow.length})`;
+      const menu = document.createElement('div');
+      menu.className = 'tab-overflow-menu';
+      menu.setAttribute('role', 'menu');
+      menu.innerHTML = overflow.map((btn) => {
+        const label = String(btn.textContent || '').trim();
+        const id = String(btn.id || '').trim();
+        const active = btn.classList.contains('view-tab-active') || btn.classList.contains('is-active');
+        return `
+          <button type="button" class="tab-overflow-item ${active ? 'is-active' : ''}" role="menuitem" data-tab-overflow-target="${escapeHtml(id)}">
+            ${escapeHtml(label)}
+          </button>
+        `;
+      }).join('');
+      let closeTimer = null;
+      const cancelClose = () => {
+        if (closeTimer) {
+          clearTimeout(closeTimer);
+          closeTimer = null;
+        }
+      };
+      const openMenu = () => {
+        cancelClose();
+        if (!wrap.classList.contains('is-open')) {
+          closeAllTabOverflowMenus();
+          wrap.classList.add('is-open');
+          trigger.setAttribute('aria-expanded', 'true');
+        }
+      };
+      const closeMenu = () => {
+        cancelClose();
+        wrap.classList.remove('is-open');
+        trigger.setAttribute('aria-expanded', 'false');
+      };
+      const scheduleClose = () => {
+        cancelClose();
+        closeTimer = setTimeout(() => {
+          closeMenu();
+        }, 120);
+      };
+      trigger.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (wrap.classList.contains('is-open')) closeMenu();
+        else openMenu();
+      });
+      trigger.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          closeMenu();
+          return;
+        }
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          if (wrap.classList.contains('is-open')) closeMenu();
+          else openMenu();
+        }
+      });
+      wrap.addEventListener('mouseenter', () => openMenu());
+      wrap.addEventListener('mouseleave', (e) => {
+        const related = e.relatedTarget;
+        if (related instanceof Node && wrap.contains(related)) return;
+        scheduleClose();
+      });
+      wrap.addEventListener('focusin', () => openMenu());
+      wrap.addEventListener('focusout', (e) => {
+        const related = e.relatedTarget;
+        if (related instanceof Node && wrap.contains(related)) return;
+        scheduleClose();
+      });
+      menu.addEventListener('click', (e) => {
+        const item = e.target.closest('[data-tab-overflow-target]');
+        if (!item) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const targetId = String(item.getAttribute('data-tab-overflow-target') || '').trim();
+        const targetBtn = targetId ? document.getElementById(targetId) : null;
+        closeMenu();
+        targetBtn?.click();
+      });
+      wrap.appendChild(trigger);
+      wrap.appendChild(menu);
+      const lastVisible = direct[direct.length - 1];
+      if (lastVisible?.nextSibling) listEl.insertBefore(wrap, lastVisible.nextSibling);
+      else listEl.appendChild(wrap);
+    }
+
+    function refreshManagedTabOverflow() {
+      TAB_OVERFLOW_CONFIG.forEach((entry) => {
+        const listEl = document.getElementById(entry.listId);
+        refreshSingleTabOverflow(listEl, entry.maxVisible, entry.controlClass);
+      });
     }
 
     async function getViewOptions() {
@@ -1651,25 +2291,155 @@
     }
 
     function applyViewOptionsToUI() {
-      // Afficher/masquer les onglets Liste selon les options
-      const globalTasksListBtn = document.getElementById('global-tasks-view-list');
-      const projectListBtn = document.getElementById('view-list');
-      const calendarListBtn = document.getElementById('global-calendar-view-list');
+      applyWorkflowActionButtonsModeToUI();
+      scheduleActionButtonsDecorate();
+      Object.entries(VIEW_SECTION_META).forEach(([sectionKey, sectionMeta]) => {
+        Object.entries(sectionMeta.tabs).forEach(([tabKey, tabMeta]) => {
+          const btn = document.getElementById(tabMeta.buttonId);
+          if (!btn) return;
+          btn.classList.toggle('hidden', !isTabEnabled(sectionKey, tabKey));
+        });
+      });
 
-      if (globalTasksListBtn) {
-        globalTasksListBtn.classList.toggle('hidden', !viewOptions.globalTasksList);
+      if (!isTabEnabled('globalTasks', globalTasksViewMode)) {
+        globalTasksViewMode = getDefaultTab('globalTasks') || 'cards';
+        localStorage.setItem('taskmda_global_tasks_view', globalTasksViewMode);
       }
-      if (projectListBtn) {
-        projectListBtn.classList.toggle('hidden', !viewOptions.projectTasksList);
+      if (!isTabEnabled('globalCalendar', globalCalendarViewMode)) {
+        globalCalendarViewMode = getDefaultTab('globalCalendar') || 'grid';
       }
-      if (calendarListBtn) {
-        calendarListBtn.classList.toggle('hidden', !viewOptions.calendarList);
+      if (!isTabEnabled('globalFeed', globalFeedFilterMode)) {
+        globalFeedFilterMode = getDefaultTab('globalFeed') || 'all';
+      }
+      if (!isTabEnabled('globalSettings', globalSettingsTab)) {
+        globalSettingsTab = getDefaultTab('globalSettings') || 'branding';
+      }
+      if (workspaceMode === 'global' && !isTabEnabled('globalHub', globalWorkspaceView)) {
+        const fallbackWorkspace = getDefaultTab('globalHub') || 'tasks';
+        showGlobalWorkspace(fallbackWorkspace).catch(() => null);
+        return;
       }
 
-      // Afficher le bouton "Nouvelle Tâche" en inline quand la Liste est désactivée
+      if (workspaceMode === 'project') {
+        const activeTab = activeProjectView === 'list' ? projectTaskPresentationMode : activeProjectView;
+        if (!isTabEnabled('project', activeTab)) {
+          const fallback = getDefaultTab('project');
+          if (fallback === 'cards' || fallback === 'list') {
+            setProjectTaskPresentationMode(fallback);
+          } else if (fallback) {
+            setProjectView(fallback);
+          }
+        }
+      }
+
+      const workflowButtons = VIEW_SECTION_META.workflow.tabs;
+      const activeWorkflowBtn = Object.values(workflowButtons)
+        .map((meta) => document.getElementById(meta.buttonId))
+        .find((btn) => btn && btn.classList.contains('is-active'));
+      if (activeWorkflowBtn && activeWorkflowBtn.classList.contains('hidden')) {
+        const workflowDefault = getDefaultTab('workflow');
+        const workflowDefaultBtnId = VIEW_SECTION_META.workflow.tabs?.[workflowDefault]?.buttonId;
+        const fallbackBtn = document.getElementById(workflowDefaultBtnId)
+          || Object.values(VIEW_SECTION_META.workflow.tabs)
+            .map((meta) => document.getElementById(meta.buttonId))
+            .find((btn) => btn && !btn.classList.contains('hidden'));
+        fallbackBtn?.click();
+      }
+
       const btnAddTask = document.getElementById('btn-add-task');
       if (btnAddTask) {
-        btnAddTask.classList.toggle('inline', !viewOptions.projectTasksList);
+        btnAddTask.classList.toggle('inline', !isTabEnabled('project', 'list'));
+      }
+
+      updateGlobalTasksViewButtons();
+      if (workspaceMode === 'global' && globalWorkspaceView === 'tasks') {
+        renderGlobalTasks().catch(() => null);
+      }
+      if (workspaceMode === 'global' && globalWorkspaceView === 'calendar') {
+        renderGlobalCalendar().catch(() => null);
+      }
+      if (workspaceMode === 'global' && globalWorkspaceView === 'feed') {
+        renderGlobalFeed().catch(() => null);
+      }
+      if (workspaceMode === 'global' && globalWorkspaceView === 'settings') {
+        renderGlobalSettings().catch(() => null);
+      }
+      refreshManagedTabOverflow();
+    }
+
+    function renderViewOptionsMatrix(isAdmin = false) {
+      const matrix = document.getElementById('view-options-matrix');
+      const summary = document.getElementById('view-options-summary');
+      if (!matrix) return;
+      const disabledAttr = isAdmin ? '' : 'disabled';
+      const disabledClass = isAdmin ? '' : ' opacity-60';
+      matrix.innerHTML = Object.entries(VIEW_SECTION_META).map(([sectionKey, sectionMeta]) => {
+        const enabledTabs = getEnabledTabs(sectionKey);
+        const defaultTab = getDefaultTab(sectionKey);
+        const tabRows = Object.entries(sectionMeta.tabs).map(([tabKey, tabMeta]) => {
+          const checked = isTabEnabled(sectionKey, tabKey) ? 'checked' : '';
+          return `
+            <label class="flex items-center gap-2 cursor-pointer hover:bg-white/80 p-2 rounded-lg${disabledClass}">
+              <input type="checkbox" class="view-option-checkbox w-4 h-4" data-view-section="${escapeHtml(sectionKey)}" data-view-tab="${escapeHtml(tabKey)}" ${checked} ${disabledAttr}>
+              <span class="text-sm text-slate-700 font-medium">${escapeHtml(tabMeta.label)}</span>
+            </label>
+          `;
+        }).join('');
+        const selectOptions = Object.entries(sectionMeta.tabs)
+          .filter(([tabKey]) => isTabEnabled(sectionKey, tabKey))
+          .map(([tabKey, tabMeta]) => `<option value="${escapeHtml(tabKey)}" ${defaultTab === tabKey ? 'selected' : ''}>${escapeHtml(tabMeta.label)}</option>`)
+          .join('');
+        return `
+          <div class="rounded-lg border border-slate-200 bg-white p-3">
+            <div class="flex items-center justify-between gap-2 mb-2">
+              <h5 class="text-sm font-bold text-slate-800">${escapeHtml(sectionMeta.label)}</h5>
+              <label class="text-xs text-slate-600 inline-flex items-center gap-2${disabledClass}">
+                <span>Onglet par défaut</span>
+                <select class="view-option-default px-2 py-1 border border-slate-300 rounded-lg text-xs" data-view-section="${escapeHtml(sectionKey)}" ${disabledAttr}>
+                  ${selectOptions}
+                </select>
+              </label>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1">${tabRows}</div>
+            <p class="text-[11px] text-slate-500 mt-2">${enabledTabs.length} onglet(s) actif(s)</p>
+          </div>
+        `;
+      }).join('');
+
+      if (summary) {
+        const sectionCount = Object.keys(VIEW_SECTION_META).length;
+        const tabsEnabled = Object.keys(VIEW_SECTION_META).reduce((sum, key) => sum + getEnabledTabs(key).length, 0);
+        const disabledAttr = isAdmin ? '' : 'disabled';
+        const disabledClass = isAdmin ? '' : ' opacity-60';
+        const lockChecked = isViewOverridesLocked() ? 'checked' : '';
+        const presetButtons = Object.entries(VIEW_ROLE_PRESETS).map(([presetKey, preset]) => `
+          <button
+            type="button"
+            class="view-preset-btn px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-semibold${disabledClass}"
+            data-view-preset="${escapeHtml(presetKey)}"
+            title="${escapeHtml(preset.description || '')}"
+            ${disabledAttr}
+          >${escapeHtml(preset.label)}</button>
+        `).join('');
+        summary.innerHTML = `
+          <div class="flex items-center justify-between gap-2 flex-wrap">
+            <p class="text-[11px] text-slate-500">${sectionCount} rubriques administrées, ${tabsEnabled} sous-onglets actifs</p>
+            <div class="inline-flex items-center gap-1.5 flex-wrap">
+              <span class="text-[11px] text-slate-500">Presets rôle:</span>
+              ${presetButtons}
+            </div>
+          </div>
+          <div class="mt-2 flex items-center justify-between gap-2 flex-wrap">
+            <label class="inline-flex items-center gap-2 text-[11px] text-slate-600${disabledClass}">
+              <input type="checkbox" class="view-option-lock-overrides w-4 h-4" data-view-policy-lock="true" ${lockChecked} ${disabledAttr}>
+              <span>Verrou admin: forcer les vues par défaut (pas d'override utilisateur)</span>
+            </label>
+            <button type="button" class="view-metrics-reset px-2.5 py-1 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-semibold${disabledClass}" data-view-kpi-reset="true" ${disabledAttr}>Réinitialiser KPI</button>
+          </div>
+          <div class="mt-2 text-[11px] text-slate-500">
+            KPI locaux: Projet ${Number(uxMetrics.openNewProject || 0)} | Tâche projet ${Number(uxMetrics.openNewTaskProject || 0)} | Tâche transverse ${Number(uxMetrics.openNewTaskGlobal || 0)} | Document transverse ${Number(uxMetrics.openNewDocGlobal || 0)} | Changement vues ${Number(uxMetrics.switchProjectView || 0) + Number(uxMetrics.switchGlobalTasksView || 0) + Number(uxMetrics.switchGlobalWorkspace || 0)}
+          </div>
+        `;
       }
     }
 
@@ -2163,6 +2933,110 @@
       userInfo.classList.remove('hidden');
     }
 
+    function normalizeIconToken(raw) {
+      return String(raw || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+    }
+
+    function deriveIconButtonTitle(element) {
+      if (!element) return '';
+      const explicitTitle = String(element.getAttribute('title') || '').trim();
+      if (explicitTitle) return explicitTitle;
+
+      const ariaLabel = String(element.getAttribute('aria-label') || '').trim();
+      if (ariaLabel) return ariaLabel;
+
+      const tooltip = String(element.getAttribute('data-tooltip') || '').trim();
+      if (tooltip) return tooltip;
+
+      const labelledBy = String(element.getAttribute('aria-labelledby') || '').trim();
+      if (labelledBy) {
+        const labels = labelledBy
+          .split(/\s+/)
+          .map((id) => document.getElementById(id))
+          .filter(Boolean)
+          .map((node) => String(node.textContent || '').trim())
+          .filter(Boolean);
+        if (labels.length > 0) return labels.join(' ');
+      }
+
+      const cloned = element.cloneNode(true);
+      cloned.querySelectorAll('.material-symbols-outlined, .material-icons, svg, i, .sr-only').forEach((node) => node.remove());
+      const text = String(cloned.textContent || '').replace(/\s+/g, ' ').trim();
+      if (text) return text;
+
+      const iconEl = element.querySelector('.material-symbols-outlined, .material-icons');
+      const iconToken = normalizeIconToken(iconEl?.textContent || '');
+      const iconMap = {
+        add: 'Ajouter',
+        add_circle: 'Ajouter',
+        add_task: 'Nouvelle tâche',
+        arrow_back: 'Retour',
+        calendar_today: 'Calendrier',
+        chat: 'Messagerie',
+        chevron_left: 'Précédent',
+        chevron_right: 'Suivant',
+        close: 'Fermer',
+        cloud_done: 'Connecté',
+        cloud_off: 'Non connecté',
+        delete: 'Supprimer',
+        delete_forever: 'Supprimer',
+        download: 'Télécharger',
+        edit: 'Modifier',
+        filter_alt: 'Filtres',
+        fullscreen: 'Plein écran',
+        grid_view: 'Vue grille',
+        help: 'Aide',
+        home: 'Accueil',
+        list: 'Liste',
+        menu: 'Menu',
+        more_horiz: 'Plus',
+        more_vert: 'Plus',
+        open_in_new: 'Ouvrir',
+        search: 'Rechercher',
+        send: 'Envoyer',
+        settings: 'Paramètres',
+        tune: 'Référentiels',
+        view_list: 'Vue liste',
+        visibility: 'Voir',
+        zoom_in: 'Zoom avant',
+        zoom_out: 'Zoom arrière'
+      };
+      if (iconMap[iconToken]) return iconMap[iconToken];
+      if (iconToken) {
+        const human = iconToken.replace(/_/g, ' ').trim();
+        return human.charAt(0).toUpperCase() + human.slice(1);
+      }
+      return '';
+    }
+
+    function applyIconButtonTitles(root = document) {
+      if (!root?.querySelectorAll) return;
+      const clickable = root.querySelectorAll('button, a[role="button"], [data-icon-button]');
+      clickable.forEach((element) => {
+        if (!(element instanceof HTMLElement)) return;
+        if (element.hasAttribute('data-skip-auto-title')) return;
+        if (!element.querySelector('.material-symbols-outlined, .material-icons, svg, i')) return;
+        const title = deriveIconButtonTitle(element);
+        if (title) element.setAttribute('title', title);
+      });
+    }
+
+    let iconButtonTitleObserver = null;
+    function startIconButtonTitleObserver() {
+      applyIconButtonTitles(document);
+      if (iconButtonTitleObserver || typeof MutationObserver === 'undefined' || !document.body) return;
+      let scheduled = false;
+      iconButtonTitleObserver = new MutationObserver(() => {
+        if (scheduled) return;
+        scheduled = true;
+        requestAnimationFrame(() => {
+          scheduled = false;
+          applyIconButtonTitles(document);
+        });
+      });
+      iconButtonTitleObserver.observe(document.body, { childList: true, subtree: true });
+    }
+
     function escapeCsvValue(value) {
       const raw = String(value ?? '');
       if (/[;"\n\r]/.test(raw)) {
@@ -2197,6 +3071,18 @@
       const hh = String(d.getHours()).padStart(2, '0');
       const mi = String(d.getMinutes()).padStart(2, '0');
       return `${yyyy}${mm}${dd}_${hh}${mi}`;
+    }
+
+    function renderLocalResetInfo() {
+      const info = document.getElementById('global-settings-local-reset-info');
+      if (!info) return;
+      const raw = localStorage.getItem(LOCAL_RESET_TS_KEY);
+      const ts = Number(raw || 0);
+      if (!Number.isFinite(ts) || ts <= 0) {
+        info.textContent = 'Dernière réinitialisation locale: aucune';
+        return;
+      }
+      info.textContent = `Dernière réinitialisation locale: ${new Date(ts).toLocaleString('fr-FR')}`;
     }
 
     async function buildUserDataSnapshot(version = 1) {
@@ -3042,6 +3928,7 @@
       const saveBrandingBtn = document.getElementById('btn-save-app-branding');
       const assignAdminBtn = document.getElementById('btn-assign-app-admin');
       const resetBrandingBtn = document.getElementById('btn-reset-app-branding');
+      renderLocalResetInfo();
       if (!themesList || !groupsList || !softwareList || !rolesList) return;
       if (!appBranding) {
         await loadAppBrandingConfig({ ensureRemote: false });
@@ -3107,7 +3994,14 @@
       }
 
       themesList.innerHTML = filteredThemes.length === 0
-        ? '<p class="text-xs text-slate-500">Aucune thématique globale.</p>'
+        ? buildWorkspaceEmptyState({
+            icon: 'sell',
+            title: 'Aucune thematique globale',
+            text: 'Ajoutez une thematique pour structurer rapidement les filtres transverses.',
+            ctaLabel: canManageBranding ? 'Ajouter une thematique' : '',
+            ctaOnclick: canManageBranding ? "focusElementById('global-theme-name-input')" : '',
+            compact: true
+          })
         : filteredThemes.map(item => `
             <div class="rounded-lg border border-slate-200 bg-white p-2 flex items-center justify-between gap-2">
               <span class="text-sm font-semibold text-slate-700 truncate">${escapeHtml(item.name)}</span>
@@ -3119,7 +4013,14 @@
           `).join('');
 
       groupsList.innerHTML = filteredGroups.length === 0
-        ? '<p class="text-xs text-slate-500">Aucun groupe global.</p>'
+        ? buildWorkspaceEmptyState({
+            icon: 'group',
+            title: 'Aucun groupe global',
+            text: 'Créez un groupe pour accelerer les assignations de membres.',
+            ctaLabel: canManageBranding ? 'Créer un groupe' : '',
+            ctaOnclick: canManageBranding ? "focusElementById('global-group-name-input')" : '',
+            compact: true
+          })
         : filteredGroups.map(item => `
             <div class="software-version-row rounded-lg border border-slate-200 bg-white p-3">
               <div class="software-version-main min-w-0">
@@ -3153,7 +4054,14 @@
           `).join('');
 
       rolesList.innerHTML = filteredRoles.length === 0
-        ? '<p class="text-xs text-slate-500">Aucune habilitation definie.</p>'
+        ? buildWorkspaceEmptyState({
+            icon: 'admin_panel_settings',
+            title: 'Aucune habilitation definie',
+            text: 'Ajoutez un role metier pour clarifier les permissions.',
+            ctaLabel: canManageBranding ? 'Ajouter une habilitation' : '',
+            ctaOnclick: canManageBranding ? "focusElementById('global-role-name-input')" : '',
+            compact: true
+          })
         : filteredRoles.map(item => `
             <div class="rounded-lg border border-slate-200 bg-white p-2 flex items-start justify-between gap-2">
               <div class="min-w-0">
@@ -3177,7 +4085,14 @@
           `).join('');
 
       softwareList.innerHTML = filteredSoftwareVersions.length === 0
-        ? '<p class="text-xs text-slate-500">Aucune version logicielle enregistrée.</p>'
+        ? buildWorkspaceEmptyState({
+            icon: 'deployed_code',
+            title: 'Aucune version logicielle enregistrée',
+            text: 'Documentez les versions utiles pour l equipe.',
+            ctaLabel: canManageBranding ? 'Ajouter une version' : '',
+            ctaOnclick: canManageBranding ? "focusElementById('software-name-input')" : '',
+            compact: true
+          })
         : filteredSoftwareVersions.map(item => `
             <div class="software-version-row rounded-lg border border-slate-200 bg-white p-3">
               <div class="software-version-main min-w-0">
@@ -3195,21 +4110,14 @@
       bindGlobalGroupMemberSearchInputs();
       bindGlobalGroupMemberSelectsToggle();
       
-      // Mettre à jour les checkboxes des options de vues
-      const globalTasksListCheckbox = document.getElementById('view-option-global-tasks-list');
-      const projectTasksListCheckbox = document.getElementById('view-option-project-tasks-list');
-      const calendarListCheckbox = document.getElementById('view-option-calendar-list');
+      // Mettre à jour la matrice des options de vues
       const profanityModeSelect = document.getElementById('profanity-filter-mode-select');
       const profanityModeCurrent = document.getElementById('profanity-filter-mode-current');
-      
-      if (globalTasksListCheckbox) {
-        globalTasksListCheckbox.checked = viewOptions.globalTasksList !== false;
-      }
-      if (projectTasksListCheckbox) {
-        projectTasksListCheckbox.checked = viewOptions.projectTasksList !== false;
-      }
-      if (calendarListCheckbox) {
-        calendarListCheckbox.checked = viewOptions.calendarList !== false;
+      const workflowActionsModeSelect = document.getElementById('view-option-workflow-actions-mode');
+      renderViewOptionsMatrix(canManageBranding);
+      if (workflowActionsModeSelect) {
+        workflowActionsModeSelect.value = getWorkflowActionButtonsMode();
+        workflowActionsModeSelect.disabled = !canManageBranding;
       }
       if (profanityModeSelect) {
         profanityModeSelect.value = getProfanityFilterMode();
@@ -4500,19 +5408,92 @@
       const container = document.getElementById('projects-container');
       const projectsList = document.getElementById('projects-list');
       const paginationContainer = document.getElementById('projects-pagination');
+      const filterCount = document.getElementById('projects-filter-count');
       const shouldShowProjectsList = workspaceMode === 'dashboard';
       const isListView = projectsViewMode === 'list';
       container.className = isListView
         ? 'space-y-3'
         : 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4';
       updateProjectsViewButtons();
-      const filteredProjects = projectsWithDescriptionMeta.filter(project => matchesQuery([
-        project.name,
-        project._descriptionPlain,
-        project.status,
-        project.sharingMode
-      ], globalSearchQuery));
+      const allProjectStates = await Promise.all(
+        projectsWithDescriptionMeta.map(async (project) => {
+          const state = await getProjectState(project.projectId);
+          return [project.projectId, state];
+        })
+      );
+      const stateByProjectId = new Map(allProjectStates);
+      const projectThemes = collectProjectThemeNames(projectsWithDescriptionMeta, stateByProjectId);
+      fillProjectThemeSelect('projects-filter-theme-known', projectThemes, 'Thématiques existantes...');
+      syncProjectsFilterControls();
+      const cardsQueryRaw = String(projectsFilters.query || '');
+      const cardsQuery = cardsQueryRaw.trim();
+      const combinedCardsQuery = `${globalSearchQuery} ${cardsQueryRaw}`.trim();
+      const themeFilterKey = normalizeCatalogKey(projectsFilters.theme || '');
+      const statusFilter = String(projectsFilters.status || 'all');
+      const sharingFilter = String(projectsFilters.sharing || 'all');
+      const ownershipFilter = String(projectsFilters.ownership || 'all');
+      const hasActiveProjectFilters = Boolean(cardsQuery)
+        || Boolean(themeFilterKey)
+        || statusFilter !== 'all'
+        || sharingFilter !== 'all'
+        || ownershipFilter !== 'all'
+        || String(projectsFilters.sort || 'recent') !== 'recent';
+      const me = String(currentUser?.userId || getCurrentUserId() || '').trim();
+      const filteredProjects = projectsWithDescriptionMeta.filter(project => {
+        const state = stateByProjectId.get(project.projectId);
+        if (!matchesQuery([
+          project.name,
+          project._descriptionPlain,
+          project.status,
+          project.sharingMode,
+          ...(state?.themes || []),
+          ...((state?.tasks || []).map((task) => String(task?.theme || '').trim())),
+          ...((state?.members || []).map((m) => String(m?.displayName || m?.userId || '').trim()))
+        ], combinedCardsQuery)) return false;
+
+        if (statusFilter !== 'all' && String(project.status || 'en-cours') !== statusFilter) return false;
+        if (sharingFilter === 'private' && String(project.sharingMode || '') !== 'private') return false;
+        if (sharingFilter === 'shared' && String(project.sharingMode || '') === 'private') return false;
+
+        if (ownershipFilter !== 'all' && me) {
+          const isMine = String(project.createdBy || '').trim() === me;
+          const memberIds = (state?.members || []).map((m) => String(m?.userId || '').trim()).filter(Boolean);
+          const hasOtherMember = memberIds.some((id) => id && id !== me);
+          const isTeam = String(project.sharingMode || '') !== 'private' || hasOtherMember;
+          if (ownershipFilter === 'mine' && !isMine) return false;
+          if (ownershipFilter === 'team' && !isTeam) return false;
+        }
+
+        if (themeFilterKey) {
+          const hasThemeMatch = [
+            ...(state?.themes || []),
+            ...((state?.tasks || []).map((task) => String(task?.theme || '').trim()))
+          ].some((themeName) => normalizeCatalogKey(themeName) === themeFilterKey);
+          if (!hasThemeMatch) return false;
+        }
+        return true;
+      });
+      const sortedProjects = [...filteredProjects];
+      const statusSortRank = { urgent: 0, 'en-cours': 1, planifie: 2, termine: 3 };
+      const sortMode = String(projectsFilters.sort || 'recent');
+      sortedProjects.sort((a, b) => {
+        if (sortMode === 'oldest') return Number(a.createdAt || 0) - Number(b.createdAt || 0);
+        if (sortMode === 'name-asc') return String(a.name || '').localeCompare(String(b.name || ''), 'fr', { sensitivity: 'base' });
+        if (sortMode === 'name-desc') return String(b.name || '').localeCompare(String(a.name || ''), 'fr', { sensitivity: 'base' });
+        if (sortMode === 'status') {
+          const delta = (statusSortRank[String(a.status || 'en-cours')] ?? 9) - (statusSortRank[String(b.status || 'en-cours')] ?? 9);
+          if (delta !== 0) return delta;
+          return String(a.name || '').localeCompare(String(b.name || ''), 'fr', { sensitivity: 'base' });
+        }
+        return Number(b.createdAt || 0) - Number(a.createdAt || 0);
+      });
       if (paginationContainer) paginationContainer.innerHTML = '';
+      if (filterCount) {
+        const shown = sortedProjects.length;
+        const total = projectsWithDescriptionMeta.length;
+        filterCount.textContent = `${shown} résultat${shown > 1 ? 's' : ''} sur ${total} projet${total > 1 ? 's' : ''}`;
+        filterCount.classList.toggle('projects-filter-count-active', hasActiveProjectFilters);
+      }
 
       if (projectsWithDescriptionMeta.length === 0) {
         projectsList.classList.toggle('hidden', !shouldShowProjectsList);
@@ -4530,26 +5511,23 @@
           </button>
         `;
         if (paginationContainer) paginationContainer.innerHTML = '';
+        if (filterCount) {
+          filterCount.textContent = '0 résultat sur 0 projet';
+          filterCount.classList.toggle('projects-filter-count-active', hasActiveProjectFilters);
+        }
         await renderDashboardNews();
         return;
       }
 
       projectsList.classList.toggle('hidden', !shouldShowProjectsList);
-      if (filteredProjects.length === 0) {
+      if (sortedProjects.length === 0) {
         container.innerHTML = '<p class="text-slate-500 text-center py-8">Aucun projet ne correspond à la recherche</p>';
         await renderDashboardNews();
         return;
       }
 
-      const pagination = paginateItems(filteredProjects, projectsPage, paginationConfig.projectsPerPage);
+      const pagination = paginateItems(sortedProjects, projectsPage, paginationConfig.projectsPerPage);
       projectsPage = pagination.currentPage;
-      const pageStates = await Promise.all(
-        pagination.pageItems.map(async (project) => {
-          const state = await getProjectState(project.projectId);
-          return [project.projectId, state];
-        })
-      );
-      const stateByProjectId = new Map(pageStates);
       container.innerHTML = pagination.pageItems.map(project => {
         const state = stateByProjectId.get(project.projectId);
         const canEdit = canEditProjectMeta(state);
@@ -4557,16 +5535,16 @@
         const isPrivate = project.sharingMode === 'private';
         const icon = isPrivate ? 'lock' : 'groups';
         const badge = isPrivate
-          ? '<span class="text-xs px-2 py-1 bg-slate-100 text-slate-700 rounded-full font-semibold whitespace-nowrap">PRIVE</span>'
-          : '<span class="text-xs px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full font-semibold whitespace-nowrap">PARTAGE</span>';
+          ? '<span class="workspace-chip workspace-chip-private">PRIVE</span>'
+          : '<span class="workspace-chip workspace-chip-shared">PARTAGE</span>';
         const status = String(project.status || 'en-cours');
         const statusBadge = status === 'urgent'
-          ? '<span class="text-[10px] px-2 py-1 rounded-full bg-red-100 text-red-700 font-semibold uppercase whitespace-nowrap">Urgent</span>'
+          ? '<span class="workspace-chip workspace-chip-status-urgent">Urgent</span>'
           : status === 'termine'
-            ? '<span class="text-[10px] px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 font-semibold uppercase whitespace-nowrap">Termine</span>'
+            ? '<span class="workspace-chip workspace-chip-status-termine">Termine</span>'
             : status === 'planifie'
-              ? '<span class="text-[10px] px-2 py-1 rounded-full bg-amber-100 text-amber-700 font-semibold uppercase whitespace-nowrap">Planifie</span>'
-              : '<span class="text-[10px] px-2 py-1 rounded-full bg-blue-100 text-blue-700 font-semibold uppercase whitespace-nowrap">En&nbsp;cours</span>';
+              ? '<span class="workspace-chip workspace-chip-status-planifie">Planifie</span>'
+              : '<span class="workspace-chip workspace-chip-status-active">En cours</span>';
         const progressClass = status === 'urgent'
           ? 'bg-red-500 w-[82%]'
           : status === 'termine'
@@ -4578,6 +5556,7 @@
           userId: member.userId,
           name: member.displayName || ''
         }));
+        const canCreateTask = canCreateTaskInProject(state);
         if (participantRows.length === 0 && project?.createdBy) {
           participantRows.push({ userId: project.createdBy, name: '' });
         }
@@ -4587,15 +5566,49 @@
         const creatorTooltip = `Projet cree par ${projectCreatorName}`;
 
         return `
-          <div class="project-card rounded-xl p-6 cursor-pointer ${isListView ? 'project-card-list' : ''}" onclick="showProjectDetail('${project.projectId}')">
+          <div class="project-card workspace-card-shell project-card-interactive rounded-xl p-6 cursor-pointer ${isListView ? 'project-card-list' : ''}" onclick="showProjectDetail('${project.projectId}')">
             <div class="flex items-start justify-between mb-2 gap-3">
-              <h4 class="text-xl font-bold font-headline text-slate-900 flex items-center gap-2">
+              <h4 class="workspace-card-title text-xl font-bold font-headline flex items-center gap-2">
                 <span class="material-symbols-outlined text-primary text-lg">${icon}</span>
                 <span>${project.name}</span>
               </h4>
               <div class="flex items-center gap-1">${badge}${statusBadge}</div>
             </div>
-            <p class="text-gray-600 text-sm mb-4 line-clamp-2">${escapeHtml(project._descriptionCard || 'Aucune description')}</p>
+            <p class="workspace-card-subtitle text-sm mb-4 line-clamp-2">${escapeHtml(project._descriptionCard || 'Aucune description')}</p>
+            <div class="card-hover-actions">
+              <button
+                class="card-quick-btn card-quick-btn-primary"
+                onclick="event.stopPropagation(); showProjectDetail('${project.projectId}')"
+                title="Ouvrir le projet"
+              >
+                <span class="material-symbols-outlined">open_in_new</span>
+                <span>Ouvrir</span>
+              </button>
+              <button
+                class="card-quick-btn"
+                ${canCreateTask ? '' : 'disabled title="Reserve aux membres autorises"'}
+                onclick="event.stopPropagation(); quickAddTaskToProject('${project.projectId}')"
+              >
+                <span class="material-symbols-outlined">add_task</span>
+                <span>Nouvelle tâche</span>
+              </button>
+              <button
+                class="card-quick-btn"
+                ${canEdit ? '' : 'disabled title="Reserve aux Proprietaires/Managers"'}
+                onclick="event.stopPropagation(); openEditProjectModalFromDashboard('${project.projectId}')"
+              >
+                <span class="material-symbols-outlined">edit</span>
+                <span>Modifier</span>
+              </button>
+              <button
+                class="card-quick-btn card-quick-btn-danger"
+                ${canDelete ? '' : 'disabled title="Reserve au Proprietaire"'}
+                onclick="event.stopPropagation(); deleteProjectFromDashboard('${project.projectId}')"
+              >
+                <span class="material-symbols-outlined">delete</span>
+                <span>Supprimer</span>
+              </button>
+            </div>
             <div class="flex items-center justify-between gap-2">
               <div class="flex items-center gap-2 text-sm text-gray-500">
                 <span class="material-symbols-outlined text-lg">calendar_today</span>
@@ -4605,18 +5618,6 @@
                 <span title="${escapeHtml(creatorTooltip)}" aria-label="${escapeHtml(creatorTooltip)}">${participantsHtml}</span>
                 <span class="text-[11px] font-semibold text-slate-500">${isPrivate ? 'Mode solo' : 'Mode collaboratif'}</span>
               </div>
-            </div>
-            <div class="mt-3 flex items-center gap-2">
-              <button
-                class="px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-slate-300 ${canEdit ? 'bg-white text-slate-700 hover:bg-slate-50' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}"
-                ${canEdit ? '' : 'disabled title="Reserve aux Proprietaires/Managers"'}
-                onclick="event.stopPropagation(); openEditProjectModalFromDashboard('${project.projectId}')"
-              >Modifier</button>
-              <button
-                class="px-2.5 py-1.5 rounded-lg text-xs font-semibold border ${canDelete ? 'border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100' : 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'}"
-                ${canDelete ? '' : 'disabled title="Reserve au Proprietaire"'}
-                onclick="event.stopPropagation(); deleteProjectFromDashboard('${project.projectId}')"
-              >Supprimer</button>
             </div>
             <div class="mt-4 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
               <div class="h-full rounded-full ${progressClass}"></div>
@@ -4658,6 +5659,7 @@
     let globalEmojiPickerOpen = false;
     let messageFilters = { query: '', onlyMine: false };
     let globalSearchQuery = '';
+    let projectsFilters = { query: '', theme: '', status: 'all', sharing: 'all', ownership: 'all', sort: 'recent' };
     let headerSearchResults = [];
     let headerSearchActiveIndex = -1;
     let headerSearchDebounceTimer = null;
@@ -4807,6 +5809,27 @@
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+    }
+
+    function buildWorkspaceEmptyState(options = {}) {
+      const icon = String(options.icon || 'inbox').trim() || 'inbox';
+      const title = String(options.title || 'Aucun element').trim() || 'Aucun element';
+      const text = String(options.text || '').trim();
+      const ctaLabel = String(options.ctaLabel || '').trim();
+      const ctaOnclick = String(options.ctaOnclick || '').trim();
+      const ctaId = String(options.ctaId || '').trim();
+      const compactClass = options.compact ? ' workspace-empty-state-compact' : '';
+      const ctaHtml = ctaLabel
+        ? `<button type="button" class="workspace-empty-cta" ${ctaId ? `id="${escapeHtml(ctaId)}"` : ''} ${ctaOnclick ? `onclick="${escapeHtml(ctaOnclick)}"` : ''}>${escapeHtml(ctaLabel)}</button>`
+        : '';
+      return `
+        <div class="workspace-empty-state${compactClass}" role="status" aria-live="polite">
+          <span class="workspace-empty-icon material-symbols-outlined" aria-hidden="true">${escapeHtml(icon)}</span>
+          <p class="workspace-empty-title">${escapeHtml(title)}</p>
+          ${text ? `<p class="workspace-empty-text">${escapeHtml(text)}</p>` : ''}
+          ${ctaHtml}
+        </div>
+      `;
     }
 
     function getProfanityFilterMode() {
@@ -5386,6 +6409,7 @@
         btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
       });
       updateGlobalTaskLayoutButtons();
+      refreshManagedTabOverflow();
     }
 
     function toggleGlobalTasksInlineCalendar(showCalendar) {
@@ -5436,7 +6460,7 @@
         },
         views: {
           title: 'Aide: Options de vues',
-          text: "Choisissez les vues a rendre disponibles dans l'application. Activez ou desactivez l'onglet Liste et reglez la moderation des vulgarites selon vos besoins."
+          text: "Administrez les sous-onglets visibles pour chaque rubrique et fixez un onglet par défaut. Les vues désactivées basculent automatiquement vers une vue autorisée."
         }
       };
       return helpByTab[tabKey] || helpByTab.branding;
@@ -5460,9 +6484,9 @@
     }
 
     function applyGlobalSettingsTabView() {
-      const allowed = new Set(['branding', 'themes', 'groups', 'roles', 'software', 'views']);
-      if (!allowed.has(String(globalSettingsTab || ''))) {
-        globalSettingsTab = 'branding';
+      const allowed = new Set(Object.keys(VIEW_SECTION_META.globalSettings?.tabs || {}));
+      if (!allowed.has(String(globalSettingsTab || '')) || !isTabEnabled('globalSettings', globalSettingsTab)) {
+        globalSettingsTab = getDefaultTab('globalSettings') || 'branding';
       }
       const tabButtons = {
         branding: document.getElementById('global-settings-tab-branding'),
@@ -5474,6 +6498,7 @@
       };
       Object.entries(tabButtons).forEach(([key, btn]) => {
         if (!btn) return;
+        btn.classList.toggle('hidden', !isTabEnabled('globalSettings', key));
         const active = key === globalSettingsTab;
         btn.classList.toggle('view-tab-active', active);
         btn.setAttribute('aria-selected', active ? 'true' : 'false');
@@ -5497,11 +6522,17 @@
       if (softwareTipsCard) softwareTipsCard.classList.toggle('hidden', globalSettingsTab !== 'software');
       globalSettingsSection?.classList.toggle('software-tab-active', globalSettingsTab === 'software');
       renderGlobalSettingsHelpBox();
+      refreshManagedTabOverflow();
     }
 
     function setGlobalSettingsTab(tabKey) {
-      const allowed = new Set(['branding', 'themes', 'groups', 'roles', 'software', 'views']);
-      const next = allowed.has(String(tabKey || '')) ? String(tabKey) : 'branding';
+      const requested = String(tabKey || '').trim();
+      const allowed = new Set(Object.keys(VIEW_SECTION_META.globalSettings?.tabs || {}));
+      let next = allowed.has(requested) ? requested : 'branding';
+      next = resolveViewWithLock('globalSettings', next, 'branding');
+      if (!isTabEnabled('globalSettings', next)) {
+        next = getDefaultTab('globalSettings') || 'branding';
+      }
       globalSettingsTab = next;
       localStorage.setItem('taskmda_global_settings_tab', next);
       applyGlobalSettingsTabView();
@@ -5581,7 +6612,17 @@
     }
 
     function setProjectTaskPresentationMode(mode) {
-      const nextMode = mode === 'list' ? 'list' : 'cards';
+      const requestedMode = mode === 'list' ? 'list' : 'cards';
+      let nextMode = requestedMode;
+      if (isViewOverridesLocked()) {
+        const lockedProjectDefault = resolveViewWithLock('project', requestedMode, 'cards');
+        if (lockedProjectDefault === 'cards' || lockedProjectDefault === 'list') {
+          nextMode = lockedProjectDefault;
+        } else {
+          setProjectView(lockedProjectDefault);
+          return;
+        }
+      }
       projectTaskPresentationMode = nextMode;
       localStorage.setItem('taskmda_project_task_presentation', nextMode);
       if (workspaceMode === 'project' && activeProjectView === 'list' && currentProjectState) {
@@ -6052,6 +7093,39 @@
 
     function setProjectView(view) {
       const previousView = activeProjectView;
+      const previousPresentation = projectTaskPresentationMode;
+      if (isViewOverridesLocked()) {
+        const lockedProjectDefault = resolveViewWithLock('project', view, 'cards');
+        if (lockedProjectDefault === 'cards' || lockedProjectDefault === 'list') {
+          projectTaskPresentationMode = lockedProjectDefault;
+          view = 'list';
+        } else {
+          view = lockedProjectDefault;
+        }
+      }
+
+      if (view === 'list') {
+        const preferredPresentation = projectTaskPresentationMode === 'list' ? 'list' : 'cards';
+        if (!isTabEnabled('project', preferredPresentation)) {
+          if (isTabEnabled('project', 'cards')) projectTaskPresentationMode = 'cards';
+          else if (isTabEnabled('project', 'list')) projectTaskPresentationMode = 'list';
+          else {
+            const fallback = getDefaultTab('project');
+            if (fallback && fallback !== 'list') {
+              view = fallback;
+            }
+          }
+        }
+      } else if (!isTabEnabled('project', view)) {
+        const fallback = getDefaultTab('project') || 'cards';
+        if (fallback === 'cards' || fallback === 'list') {
+          projectTaskPresentationMode = fallback;
+          view = 'list';
+        } else {
+          view = fallback;
+        }
+      }
+
       if (previousView === 'overview' && view !== 'overview') {
         collapseProjectDescriptionIfExpanded();
       }
@@ -6122,6 +7196,108 @@
         renderTasks(currentProjectState.tasks || []);
       }
       applyLiveSearchFilter();
+      if (previousView !== activeProjectView || (activeProjectView === 'list' && previousPresentation !== projectTaskPresentationMode)) {
+        trackUxMetric('switchProjectView');
+      }
+      refreshManagedTabOverflow();
+    }
+
+    function ensureQuickCommandModal() {
+      let modal = document.getElementById('quick-command-modal');
+      if (modal) return modal;
+      modal = document.createElement('div');
+      modal.id = 'quick-command-modal';
+      modal.className = 'hidden fixed inset-0 z-[90] bg-black/45 p-3 sm:p-4';
+      modal.innerHTML = `
+        <div class="h-full w-full flex items-start justify-center pt-[8vh]">
+          <div class="quick-command-panel w-full max-w-xl rounded-2xl border border-slate-200 bg-white shadow-2xl overflow-hidden">
+            <div class="px-4 py-3 border-b border-slate-200 flex items-center justify-between gap-2">
+              <h3 class="text-base font-extrabold text-slate-900">Commande rapide</h3>
+              <button type="button" id="quick-command-close" class="w-8 h-8 rounded-lg border border-slate-200 text-slate-600 bg-white hover:bg-slate-50" aria-label="Fermer">
+                <span class="material-symbols-outlined text-base">close</span>
+              </button>
+            </div>
+            <div class="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button type="button" class="quick-command-item" data-qc-action="new-project">Nouveau projet</button>
+              <button type="button" class="quick-command-item" data-qc-action="new-task-project">Nouvelle tâche projet</button>
+              <button type="button" class="quick-command-item" data-qc-action="new-task-global">Nouvelle tâche transverse</button>
+              <button type="button" class="quick-command-item" data-qc-action="new-doc-global">Nouveau document transverse</button>
+              <button type="button" class="quick-command-item" data-qc-action="goto-workflow">Aller à Workflow</button>
+              <button type="button" class="quick-command-item" data-qc-action="goto-organigram">Aller à Organigramme</button>
+            </div>
+            <p class="px-4 pb-3 text-[11px] text-slate-500">Raccourci: Ctrl/Cmd + K</p>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeQuickCommandModal();
+      });
+      modal.querySelector('#quick-command-close')?.addEventListener('click', () => closeQuickCommandModal());
+      modal.querySelectorAll('[data-qc-action]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const action = String(btn.getAttribute('data-qc-action') || '').trim();
+          await executeQuickCommand(action);
+        });
+      });
+      return modal;
+    }
+
+    function openQuickCommandModal() {
+      const modal = ensureQuickCommandModal();
+      if (!modal) return;
+      modal.classList.remove('hidden');
+      document.body.classList.add('overflow-hidden');
+      const first = modal.querySelector('.quick-command-item');
+      first?.focus?.();
+    }
+
+    function closeQuickCommandModal() {
+      const modal = document.getElementById('quick-command-modal');
+      if (!modal) return;
+      modal.classList.add('hidden');
+      document.body.classList.remove('overflow-hidden');
+    }
+
+    async function executeQuickCommand(action) {
+      const key = String(action || '').trim();
+      trackUxMetric('quickCommandUse');
+      closeQuickCommandModal();
+      if (key === 'new-project') {
+        trackUxMetric('openNewProject');
+        document.getElementById('modal-new-project')?.classList.remove('hidden');
+        document.getElementById('project-name')?.focus();
+        return;
+      }
+      if (key === 'new-task-project') {
+        if (!currentProjectId || workspaceMode !== 'project') {
+          showToast('Ouvrez un projet pour ajouter une tache projet');
+          return;
+        }
+        trackUxMetric('openNewTaskProject');
+        standaloneTaskMode = false;
+        openTaskModal();
+        return;
+      }
+      if (key === 'new-task-global') {
+        trackUxMetric('openNewTaskGlobal');
+        standaloneTaskMode = true;
+        openTaskModal();
+        return;
+      }
+      if (key === 'new-doc-global') {
+        await showGlobalWorkspace('docs');
+        document.getElementById('btn-global-doc-add')?.click();
+        return;
+      }
+      if (key === 'goto-workflow') {
+        await showGlobalWorkspace('workflow');
+        return;
+      }
+      if (key === 'goto-organigram') {
+        await showGlobalWorkspace('workflow');
+        document.getElementById('workflow-view-organigram')?.click();
+      }
     }
 
     async function getDirectoryUsersMap() {
@@ -8349,6 +9525,51 @@
       select.value = matchOption ? matchOption.value : '';
     }
 
+    function collectProjectThemeNames(projects = [], stateByProjectId = new Map()) {
+      const names = [];
+      (projects || []).forEach((project) => {
+        const state = stateByProjectId.get(project.projectId);
+        names.push(...(state?.themes || []));
+        names.push(...((state?.tasks || []).map((task) => String(task?.theme || '').trim())));
+      });
+      names.push(...((globalThemeCatalog || []).map((theme) => String(theme?.name || '').trim())));
+      return uniqueThemeNames(names);
+    }
+
+    function fillProjectThemeSelect(selectId, themes, emptyLabel = 'Thématiques existantes...') {
+      const select = document.getElementById(selectId);
+      if (!select) return;
+      const unique = uniqueThemeNames(themes);
+      select.innerHTML = [
+        `<option value="">${escapeHtml(emptyLabel)}</option>`,
+        ...unique.map((theme) => `<option value="${escapeHtml(theme)}">${escapeHtml(theme)}</option>`)
+      ].join('');
+      const currentThemeKey = normalizeCatalogKey(String(projectsFilters.theme || '').trim());
+      const matchOption = Array.from(select.options).find((opt) => {
+        if (!opt.value) return false;
+        return normalizeCatalogKey(opt.value) === currentThemeKey;
+      });
+      select.value = matchOption ? matchOption.value : '';
+    }
+
+    function syncProjectsFilterControls() {
+      const queryInput = document.getElementById('projects-filter-query');
+      const themeSelect = document.getElementById('projects-filter-theme-known');
+      const statusSelect = document.getElementById('projects-filter-status');
+      const sharingSelect = document.getElementById('projects-filter-sharing');
+      const ownershipSelect = document.getElementById('projects-filter-ownership');
+      const sortSelect = document.getElementById('projects-filter-sort');
+      if (queryInput) {
+        queryInput.value = projectsFilters.query || '';
+        queryInput.removeAttribute('list');
+      }
+      if (themeSelect) themeSelect.value = projectsFilters.theme || '';
+      if (statusSelect) statusSelect.value = projectsFilters.status || 'all';
+      if (sharingSelect) sharingSelect.value = projectsFilters.sharing || 'all';
+      if (ownershipSelect) ownershipSelect.value = projectsFilters.ownership || 'all';
+      if (sortSelect) sortSelect.value = projectsFilters.sort || 'recent';
+    }
+
     function syncProjectThemeFilterAssist(state) {
       const themes = [
         ...(state?.themes || []),
@@ -9084,6 +10305,18 @@
       await openEditProjectModal(projectId, true);
     }
 
+    async function quickAddTaskToProject(projectId) {
+      projectId = resolveProjectIdInput(projectId, currentProjectId);
+      if (!projectId) return;
+      await showProjectDetail(projectId, { resetScroll: true });
+      if (!currentProjectState?.project || !canCreateTaskInProject(currentProjectState)) {
+        showToast('Creation de tache non autorisee sur ce projet');
+        return;
+      }
+      standaloneTaskMode = false;
+      openTaskModal();
+    }
+
     async function saveProjectEdits() {
       if (!currentProjectId) return;
       try {
@@ -9516,7 +10749,13 @@
 
       if (filtered.length === 0) {
         detachGlobalKanbanInfiniteScroll();
-        container.innerHTML = '<p class="text-slate-500 text-center py-8">Aucune tâche trouvée</p>';
+        container.innerHTML = buildWorkspaceEmptyState({
+          icon: 'assignment',
+          title: 'Aucune tâche trouvée',
+          text: 'Ajustez les filtres ou créez une nouvelle tâche transverse.',
+          ctaLabel: 'Créer une tâche',
+          ctaOnclick: "document.getElementById('btn-global-add-task')?.click()"
+        });
         return;
       }
 
@@ -9573,7 +10812,7 @@
               <span>Echeance: ${formatDate(task.dueDate)}</span>
               <span>Assigne: ${escapeHtml(task._assigneeName)}</span>
             </div>
-            <div class="mt-3 flex flex-wrap gap-2 text-xs">${taskActions(task)}</div>
+            <div class="task-hover-actions mt-3 flex flex-wrap gap-2 text-xs">${taskActions(task)}</div>
           </div>
         `;
         if (mode === 'list') {
@@ -9640,7 +10879,7 @@
                 <span class="truncate">${escapeHtml(task._assigneeName)}</span>
                 <span class="whitespace-nowrap">${formatDate(task.dueDate)}</span>
               </div>
-              <div class="mt-2 flex flex-wrap gap-1 text-xs">${taskActions(task)}</div>
+              <div class="task-hover-actions mt-2 flex flex-wrap gap-1 text-xs">${taskActions(task)}</div>
             </div>
           `;
           container.innerHTML = cols.map(col => {
@@ -9993,7 +11232,7 @@
             <span>Échéance: ${formatDate(task.dueDate)}</span>
             <span>Assigné: ${escapeHtml(getTaskAssigneeName(task, stateByProjectId.get(task.sourceProjectId)) || 'Non assigné')}</span>
           </div>
-          <div class="mt-3 flex flex-wrap gap-2 text-xs">
+          <div class="task-hover-actions mt-3 flex flex-wrap gap-2 text-xs">
             ${canEdit ? `<button onclick="event.stopPropagation(); editGlobalTask('${taskRef}')" class="task-action-btn task-action-btn-subtle">Modifier</button>` : ''}
             ${canEdit ? `<button onclick="event.stopPropagation(); convertTaskToProject('${taskRef}')" class="task-action-btn task-action-btn-subtle">Convertir</button>` : ''}
             ${canArchive ? `<button onclick="event.stopPropagation(); archiveGlobalTask('${taskRef}')" class="task-action-btn task-action-btn-subtle task-action-btn-warn">Archiver</button>` : ''}
@@ -10191,7 +11430,13 @@
       }
 
       if (!isGrid && mixed.length === 0) {
-        container.innerHTML = '<p class="text-slate-500 text-center py-8">Aucune echeance pour ces criteres</p>';
+        container.innerHTML = buildWorkspaceEmptyState({
+          icon: 'calendar_month',
+          title: 'Aucune échéance pour ces critères',
+          text: 'Ajoutez une information hors projet ou élargissez vos filtres.',
+          ctaLabel: 'Ajouter une information',
+          ctaOnclick: "focusElementById('global-calendar-item-title')"
+        });
         return;
       }
 
@@ -10273,11 +11518,12 @@
 
         const selectedEntries = entriesByDay.get(globalCalendarSelectedDay) || [];
         if (selectedEntries.length === 0) {
-          dayDetails.innerHTML = `
-            <div class="calendar-detail-card text-sm text-slate-500">
-              Aucun element le ${formatDate(globalCalendarSelectedDay)}.
-            </div>
-          `;
+          dayDetails.innerHTML = buildWorkspaceEmptyState({
+            icon: 'event_busy',
+            title: `Aucun élément le ${formatDate(globalCalendarSelectedDay)}`,
+            text: 'Cette journée est libre pour le moment.',
+            compact: true
+          });
           return;
         }
         dayDetails.innerHTML = selectedEntries.map(entry => `
@@ -10290,9 +11536,9 @@
             <p class="text-sm text-slate-600 mt-1">${escapeHtml(entry.description || '')}</p>
             ${entry.entryType === 'info' && entry.id ? `
               <div class="mt-2 flex flex-wrap gap-2 text-xs">
-                <button onclick="event.stopPropagation(); editStandaloneCalendarItem('${entry.id}')" class="px-2 py-1 rounded bg-slate-100 text-slate-700">Modifier</button>
-                <button onclick="event.stopPropagation(); archiveStandaloneCalendarItem('${entry.id}')" class="px-2 py-1 rounded bg-amber-100 text-amber-700">Archiver</button>
-                <button onclick="event.stopPropagation(); deleteStandaloneCalendarItem('${entry.id}')" class="px-2 py-1 rounded bg-rose-100 text-rose-700">Supprimer</button>
+                <button onclick="event.stopPropagation(); editStandaloneCalendarItem('${entry.id}')" class="workspace-action-inline">Modifier</button>
+                <button onclick="event.stopPropagation(); archiveStandaloneCalendarItem('${entry.id}')" class="workspace-action-inline">Archiver</button>
+                <button onclick="event.stopPropagation(); deleteStandaloneCalendarItem('${entry.id}')" class="workspace-action-inline">Supprimer</button>
               </div>
             ` : ''}
           </div>
@@ -10316,9 +11562,9 @@
           </div>
           ${entry.entryType === 'info' && entry.id ? `
             <div class="mt-2 flex flex-wrap gap-2 text-xs">
-              <button onclick="event.stopPropagation(); editStandaloneCalendarItem('${entry.id}')" class="px-2 py-1 rounded bg-slate-100 text-slate-700">Modifier</button>
-              <button onclick="event.stopPropagation(); archiveStandaloneCalendarItem('${entry.id}')" class="px-2 py-1 rounded bg-amber-100 text-amber-700">Archiver</button>
-              <button onclick="event.stopPropagation(); deleteStandaloneCalendarItem('${entry.id}')" class="px-2 py-1 rounded bg-rose-100 text-rose-700">Supprimer</button>
+              <button onclick="event.stopPropagation(); editStandaloneCalendarItem('${entry.id}')" class="workspace-action-inline">Modifier</button>
+              <button onclick="event.stopPropagation(); archiveStandaloneCalendarItem('${entry.id}')" class="workspace-action-inline">Archiver</button>
+              <button onclick="event.stopPropagation(); deleteStandaloneCalendarItem('${entry.id}')" class="workspace-action-inline">Supprimer</button>
             </div>
           ` : ''}
         </div>
@@ -10671,12 +11917,18 @@
         .filter(doc => !themeFilter.trim() || matchesQuery([doc.theme], themeFilter));
 
       if (filtered.length === 0) {
-        container.innerHTML = '<p class="text-slate-500 text-center py-8 col-span-full">Aucun document trouvé</p>';
+        container.innerHTML = buildWorkspaceEmptyState({
+          icon: 'description',
+          title: 'Aucun document trouvé',
+          text: 'Importez un document transverse ou modifiez vos filtres.',
+          ctaLabel: 'Ajouter un document',
+          ctaOnclick: "document.getElementById('btn-global-doc-add')?.click()"
+        });
         return;
       }
 
       container.innerHTML = filtered.map(doc => `
-        <div class="doc-card bg-surface-container-low rounded-xl p-4">
+          <div class="doc-card workspace-card-shell bg-surface-container-low rounded-xl p-4">
           <div class="flex items-center justify-between mb-2">
             <span class="material-symbols-outlined text-primary">description</span>
             <div class="flex items-center gap-1">
@@ -10684,18 +11936,18 @@
               <span class="text-[10px] font-semibold uppercase px-2 py-1 rounded bg-white">${escapeHtml(getDocumentCategory(doc))}</span>
             </div>
           </div>
-          <h4 class="font-semibold text-sm truncate">${escapeHtml(doc.name || 'document')}</h4>
-          <p class="text-xs text-slate-500 mt-1">${escapeHtml(doc.sourceProjectName || 'Hors projet')} • ${escapeHtml(doc.theme || 'Général')}</p>
+          <h4 class="workspace-card-title font-semibold text-sm truncate">${escapeHtml(doc.name || 'document')}</h4>
+          <p class="workspace-card-subtitle text-xs mt-1">${escapeHtml(doc.sourceProjectName || 'Hors projet')} • ${escapeHtml(doc.theme || 'Général')}</p>
           <div class="mt-3 flex items-center justify-between text-xs">
             <span class="text-slate-500">${formatFileSize(doc.size || 0)}</span>
-            <div class="flex items-center gap-3">
-              ${isDocumentPreviewable(doc) ? `<button onclick="openDocumentPreview('${encodeURIComponent(doc.data || '')}','${encodeURIComponent(doc.name || '')}','${encodeURIComponent(doc.type || '')}')" class="text-slate-700 hover:underline">Aperçu</button>` : ''}
+            <div class="doc-hover-actions flex items-center gap-2 flex-wrap">
+              ${isDocumentPreviewable(doc) ? `<button onclick="openDocumentPreview('${encodeURIComponent(doc.data || '')}','${encodeURIComponent(doc.name || '')}','${encodeURIComponent(doc.type || '')}')" class="workspace-action-inline">Aperçu</button>` : ''}
               ${(() => {
                 const safeHref = sanitizeDownloadHref(doc.data || '', String(doc.type || ''));
                 if (!safeHref) {
-                  return '<span class="text-slate-400">Téléchargement indisponible</span>';
+                  return '<span class="workspace-action-inline opacity-60">Téléchargement indisponible</span>';
                 }
-                return `<a class="text-primary font-semibold hover:underline" href="${safeHref.replace(/"/g, '&quot;')}" download="${escapeHtml(doc.name || 'document')}">Télécharger</a>`;
+                return `<a class="workspace-action-inline" href="${safeHref.replace(/"/g, '&quot;')}" download="${escapeHtml(doc.name || 'document')}">Télécharger</a>`;
               })()}
               ${(() => {
                 const canManageDocBinding = doc.sourceType === 'standalone'
@@ -10705,18 +11957,18 @@
                   })());
                 if (doc.sourceType === 'standalone') {
                   return `
-                    ${isDocumentEditable(doc) ? `<button onclick="openGlobalDocumentEditor('${escapeHtml(doc.id)}')" class="text-slate-700 font-semibold hover:underline">Modifier</button>` : ''}
-                    ${canManageDocBinding ? `<button onclick="openDocumentBindingModal('${escapeHtml(doc.id)}')" class="text-slate-700 font-semibold hover:underline">Gérer</button>` : ''}
-                    <button onclick="deleteGlobalDocument('${escapeHtml(doc.id)}')" class="text-rose-700 font-semibold hover:underline">Supprimer</button>
+                    ${isDocumentEditable(doc) ? `<button onclick="openGlobalDocumentEditor('${escapeHtml(doc.id)}')" class="workspace-action-inline">Modifier</button>` : ''}
+                    ${canManageDocBinding ? `<button onclick="openDocumentBindingModal('${escapeHtml(doc.id)}')" class="workspace-action-inline">Gérer</button>` : ''}
+                    <button onclick="deleteGlobalDocument('${escapeHtml(doc.id)}')" class="workspace-action-inline">Supprimer</button>
                   `;
                 }
                 if (doc.sourceType === 'project-doc') {
                   const state = stateByProjectId.get(doc.sourceProjectId);
                   if (state && canEditProjectMeta(state)) {
                     return `
-                      ${isDocumentEditable(doc) ? `<button onclick="openGlobalDocumentEditor('${escapeHtml(doc.id)}')" class="text-slate-700 font-semibold hover:underline">Modifier</button>` : ''}
-                      ${canManageDocBinding ? `<button onclick="openDocumentBindingModal('${escapeHtml(doc.id)}')" class="text-slate-700 font-semibold hover:underline">Gérer</button>` : ''}
-                      <button onclick="deleteGlobalDocument('${escapeHtml(doc.id)}')" class="text-rose-700 font-semibold hover:underline">Supprimer</button>
+                      ${isDocumentEditable(doc) ? `<button onclick="openGlobalDocumentEditor('${escapeHtml(doc.id)}')" class="workspace-action-inline">Modifier</button>` : ''}
+                      ${canManageDocBinding ? `<button onclick="openDocumentBindingModal('${escapeHtml(doc.id)}')" class="workspace-action-inline">Gérer</button>` : ''}
+                      <button onclick="deleteGlobalDocument('${escapeHtml(doc.id)}')" class="workspace-action-inline">Supprimer</button>
                     `;
                   }
                   return '';
@@ -10725,8 +11977,8 @@
                 const task = (state?.tasks || []).find(t => t.taskId === doc.taskId);
                 if (state && task && canEditTaskInProject(task, state)) {
                   return `
-                    ${isDocumentEditable(doc) ? `<button onclick="openGlobalDocumentEditor('${escapeHtml(doc.id)}')" class="text-slate-700 font-semibold hover:underline">Modifier</button>` : ''}
-                    <button onclick="deleteGlobalDocument('${escapeHtml(doc.id)}')" class="text-rose-700 font-semibold hover:underline">Supprimer</button>
+                    ${isDocumentEditable(doc) ? `<button onclick="openGlobalDocumentEditor('${escapeHtml(doc.id)}')" class="workspace-action-inline">Modifier</button>` : ''}
+                    <button onclick="deleteGlobalDocument('${escapeHtml(doc.id)}')" class="workspace-action-inline">Supprimer</button>
                   `;
                 }
                 return '';
@@ -11690,7 +12942,12 @@
             multiSelectedIds: globalMessageRecipientUserIds,
             escapeHtml
           })
-        : '<p class="text-sm text-slate-500">Aucun agent connu.</p>';
+        : buildWorkspaceEmptyState({
+            icon: 'group_off',
+            title: 'Aucun agent connu',
+            text: 'Ajoutez des agents pour démarrer les conversations.',
+            compact: true
+          });
       if (hasMoreContacts) {
         contactsList.insertAdjacentHTML('beforeend', '<p class="text-[11px] text-slate-500 text-center py-1">Faites défiler pour charger plus de canaux…</p>');
       }
@@ -11746,11 +13003,19 @@
       if (items.length === 0) {
         empty.classList.remove('hidden');
         thread.classList.add('hidden');
-        thread.innerHTML = isBroadcastView
-          ? '<p class="text-slate-500 text-center py-8">Aucun message dans le canal general.</p>'
-          : (isGroupView
-            ? '<p class="text-slate-500 text-center py-8">Aucun message dans ce canal de groupe.</p>'
-            : '<p class="text-slate-500 text-center py-8">Aucun message pour cette discussion.</p>');
+        const title = isBroadcastView
+          ? 'Aucun message dans le canal général'
+          : (isGroupView ? 'Aucun message dans ce canal de groupe' : 'Aucun message pour cette discussion');
+        const text = isBroadcastView
+          ? 'Envoyez le premier message à tous les agents connus.'
+          : (isGroupView ? 'Démarrez ce canal avec un premier message.' : 'Lancez la conversation avec ce destinataire.');
+        thread.innerHTML = buildWorkspaceEmptyState({
+          icon: 'chat',
+          title,
+          text,
+          ctaLabel: 'Écrire un message',
+          ctaOnclick: "focusElementById('global-message-input')"
+        });
         return;
       }
 
@@ -11776,7 +13041,7 @@
           : '';
         const footerActionsHtml = mine && !isEditing
           ? `
-            <div class="mt-2 flex items-center gap-3 text-xs">
+            <div class="discussion-message-actions mt-2 flex items-center gap-3 text-xs">
               <button onclick="startEditGlobalMessage('${escapeHtml(String(msg.messageId || ''))}')" class="text-primary hover:underline">Editer</button>
               <button onclick="deleteGlobalMessage('${escapeHtml(String(msg.messageId || ''))}')" class="text-rose-600 hover:underline">Supprimer</button>
             </div>
@@ -12807,14 +14072,19 @@
         'project-refs': document.getElementById('global-feed-filter-project-refs'),
         'task-refs': document.getElementById('global-feed-filter-task-refs')
       };
+      if (!isTabEnabled('globalFeed', globalFeedFilterMode)) {
+        globalFeedFilterMode = getDefaultTab('globalFeed') || 'all';
+      }
       Object.entries(map).forEach(([key, btn]) => {
         if (!btn) return;
+        btn.classList.toggle('hidden', !isTabEnabled('globalFeed', key));
         const active = key === globalFeedFilterMode;
         btn.classList.toggle('view-tab-active', active);
         btn.setAttribute('aria-pressed', active ? 'true' : 'false');
       });
       const sortSelect = document.getElementById('global-feed-sort');
       if (sortSelect) sortSelect.value = globalFeedSortMode;
+      refreshManagedTabOverflow();
     }
 
     function renderGlobalFeedSummary(posts, mentionCatalog) {
@@ -12878,7 +14148,13 @@
       ));
 
       if (posts.length === 0) {
-        list.innerHTML = '<p class="text-slate-500 text-center py-8">Aucun élément pour ces critères.</p>';
+        list.innerHTML = buildWorkspaceEmptyState({
+          icon: 'campaign',
+          title: 'Aucun élément pour ces critères',
+          text: 'Publiez une première information ou élargissez les filtres du fil.',
+          ctaLabel: 'Rédiger un post',
+          ctaOnclick: "focusElementById('global-feed-input')"
+        });
         return;
       }
 
@@ -13294,7 +14570,8 @@
             currentUserId: () => currentUser?.userId || null,
             currentUserName: () => currentUser?.name || '',
             showToast: (message) => showToast(message),
-            canEditWorkflow: () => isAppAdmin(currentUser?.userId)
+            canEditWorkflow: () => isAppAdmin(currentUser?.userId),
+            getWorkflowActionButtonsMode: () => getWorkflowActionButtonsMode()
           }
         });
       }
@@ -13327,6 +14604,25 @@
     }
 
     async function showGlobalWorkspace(view) {
+      const requestedView = String(view || '').trim() || 'tasks';
+      view = resolveViewWithLock('globalHub', requestedView, 'tasks');
+      if (!isTabEnabled('globalHub', view)) {
+        view = getDefaultTab('globalHub') || 'tasks';
+      }
+      const previousWorkspaceView = globalWorkspaceView;
+      if (view === 'tasks') {
+        const lockedTasksMode = resolveViewWithLock('globalTasks', globalTasksViewMode, 'cards');
+        if (lockedTasksMode && globalTasksViewMode !== lockedTasksMode) {
+          globalTasksViewMode = lockedTasksMode;
+          localStorage.setItem('taskmda_global_tasks_view', globalTasksViewMode);
+        }
+      }
+      if (view === 'calendar') {
+        const lockedCalendarMode = resolveViewWithLock('globalCalendar', globalCalendarViewMode, 'grid');
+        if (lockedCalendarMode && globalCalendarViewMode !== lockedCalendarMode) {
+          globalCalendarViewMode = lockedCalendarMode;
+        }
+      }
       resetWorkspaceScrollTop();
       if (view !== 'tasks') {
         detachGlobalKanbanInfiniteScroll();
@@ -13361,7 +14657,17 @@
                   : 'settings');
 
       if (view === 'tasks') await renderGlobalTasks();
-      if (view === 'workflow') await renderWorkflowWorkspace();
+      if (view === 'workflow') {
+        await renderWorkflowWorkspace();
+        if (isViewOverridesLocked()) {
+          const workflowDefault = resolveViewWithLock('workflow', '', 'organigram');
+          const workflowDefaultBtnId = VIEW_SECTION_META.workflow.tabs?.[workflowDefault]?.buttonId;
+          const btn = workflowDefaultBtnId ? document.getElementById(workflowDefaultBtnId) : null;
+          if (btn && !btn.classList.contains('hidden')) {
+            btn.click();
+          }
+        }
+      }
       if (view === 'calendar') await renderGlobalCalendar();
       if (view === 'docs') await renderGlobalDocs();
       if (view === 'messages') {
@@ -13370,6 +14676,9 @@
       }
       if (view === 'feed') await renderGlobalFeed();
       if (view === 'settings') await renderGlobalSettings();
+      if (previousWorkspaceView !== view) {
+        trackUxMetric('switchGlobalWorkspace');
+      }
       closeMobileSidebar();
     }
 
@@ -13604,10 +14913,10 @@
           </div>
           <div class="mt-2 flex items-center justify-between gap-2 flex-wrap">
             <div class="task-card-participants">${participantsHtml}</div>
-            <div class="flex items-center gap-2">
-              ${canEditTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); editTask('${task.taskId}')" class="task-action-btn-subtle text-xs">Modifier</button>` : ''}
-              ${canEditTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); convertTaskToProject('${buildGlobalTaskRef({ sourceType: 'project', sourceProjectId: currentProjectId, taskId: task.taskId })}')" class="task-action-btn-subtle text-xs">Convertir</button>` : ''}
-              ${canDeleteTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); deleteTask('${task.taskId}')" class="task-action-btn-subtle text-xs text-red-600">Supprimer</button>` : ''}
+            <div class="task-hover-actions task-hover-actions-inline flex items-center gap-2">
+              ${canEditTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); editTask('${task.taskId}')" class="task-action-btn task-action-btn-subtle text-xs">Modifier</button>` : ''}
+              ${canEditTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); convertTaskToProject('${buildGlobalTaskRef({ sourceType: 'project', sourceProjectId: currentProjectId, taskId: task.taskId })}')" class="task-action-btn task-action-btn-subtle text-xs">Convertir</button>` : ''}
+              ${canDeleteTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); deleteTask('${task.taskId}')" class="task-action-btn task-action-btn-subtle text-xs text-red-600">Supprimer</button>` : ''}
             </div>
           </div>
           ${lockHint}
@@ -13626,7 +14935,7 @@
               </div>
               <h4 class="text-lg font-bold">${escapeHtml(task.title)}</h4>
             </div>
-            <div class="flex items-center gap-2">
+            <div class="doc-hover-actions flex items-center gap-2">
               <span class="${statusMeta.chipClass}">
                 ${statusMeta.label}
               </span>
@@ -13663,11 +14972,11 @@
           </div>
           <div class="task-card-bottom flex items-center justify-between text-sm gap-3 flex-wrap">
             <div class="task-card-participants">${participantsHtml}</div>
-            <div class="task-card-actions flex items-center gap-3">
-              ${canEditTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); convertTaskToProject('${buildGlobalTaskRef({ sourceType: 'project', sourceProjectId: currentProjectId, taskId: task.taskId })}')" class="text-slate-600 hover:underline">Convertir en projet</button>` : ''}
-              <button onclick="event.stopPropagation(); sendTaskStatusEmail('${task.taskId}', false)" class="text-slate-600 hover:underline">Email statut</button>
-              ${task.status === 'termine' ? `<button onclick="event.stopPropagation(); sendTaskStatusEmail('${task.taskId}', true)" class="text-emerald-700 hover:underline">Email achevée</button>` : ''}
-              ${canChangeTaskStatus(task, currentProjectState) ? `<button onclick="event.stopPropagation(); toggleTaskStatus('${task.taskId}')" class="text-primary hover:underline">Changer statut</button>` : ''}
+            <div class="task-card-actions task-hover-actions flex items-center gap-3">
+              ${canEditTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); convertTaskToProject('${buildGlobalTaskRef({ sourceType: 'project', sourceProjectId: currentProjectId, taskId: task.taskId })}')" class="task-action-btn task-action-btn-subtle">Convertir en projet</button>` : ''}
+              <button onclick="event.stopPropagation(); sendTaskStatusEmail('${task.taskId}', false)" class="task-action-btn task-action-btn-subtle">Email statut</button>
+              ${task.status === 'termine' ? `<button onclick="event.stopPropagation(); sendTaskStatusEmail('${task.taskId}', true)" class="task-action-btn task-action-btn-subtle">Email achevée</button>` : ''}
+              ${canChangeTaskStatus(task, currentProjectState) ? `<button onclick="event.stopPropagation(); toggleTaskStatus('${task.taskId}')" class="task-action-btn task-action-btn-subtle">Changer statut</button>` : ''}
             </div>
           </div>
           ${lockHint}
@@ -15387,23 +16696,23 @@
             <span class="material-symbols-outlined text-primary">description</span>
             <span class="text-[10px] font-semibold uppercase px-2 py-1 rounded bg-white">${escapeHtml(getDocumentCategory(doc))}</span>
           </div>
-          <h4 class="font-semibold text-sm truncate mb-1">${escapeHtml(doc.name || `document-${idx + 1}`)}</h4>
-          <p class="text-xs text-gray-500 mb-2">Source: ${escapeHtml(doc.taskTitle || 'Tâche')}</p>
+          <h4 class="workspace-card-title font-semibold text-sm truncate mb-1">${escapeHtml(doc.name || `document-${idx + 1}`)}</h4>
+          <p class="workspace-card-subtitle text-xs mb-2">Source: ${escapeHtml(doc.taskTitle || 'Tâche')}</p>
           <p class="text-[11px] text-slate-500 mb-2 truncate" title="${escapeHtml(linkedLabel)}">${escapeHtml(linkedLabel)}</p>
           <div class="text-[11px] text-slate-500 mb-3">${doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString('fr-FR') : ''}</div>
           <div class="flex items-center justify-between text-xs">
             <span class="text-gray-500">${formatFileSize(doc.size || 0)}</span>
-            <div class="flex items-center gap-2">
-              ${isDocumentPreviewable(doc) ? `<button onclick="openDocumentPreview('${encodeURIComponent(doc.data || '')}','${encodeURIComponent(doc.name || '')}','${encodeURIComponent(doc.type || '')}')" class="text-slate-700 hover:underline">Aperçu</button>` : ''}
-              ${isDocumentEditable(doc) && (canEditTaskDoc || canEditProjectDoc) ? `<button onclick="openProjectDocumentEditor('${doc.sourceType}','${escapeHtml(doc.sourceType === 'project-doc' ? doc.docId : doc.taskId)}',${Number(doc.attachmentIndex ?? -1)})" class="text-slate-700 hover:underline">Modifier</button>` : ''}
+            <div class="doc-hover-actions flex items-center gap-2 flex-wrap">
+              ${isDocumentPreviewable(doc) ? `<button onclick="openDocumentPreview('${encodeURIComponent(doc.data || '')}','${encodeURIComponent(doc.name || '')}','${encodeURIComponent(doc.type || '')}')" class="workspace-action-inline">Aperçu</button>` : ''}
+              ${isDocumentEditable(doc) && (canEditTaskDoc || canEditProjectDoc) ? `<button onclick="openProjectDocumentEditor('${doc.sourceType}','${escapeHtml(doc.sourceType === 'project-doc' ? doc.docId : doc.taskId)}',${Number(doc.attachmentIndex ?? -1)})" class="workspace-action-inline">Modifier</button>` : ''}
               ${(() => {
                 const safeHref = sanitizeDownloadHref(doc.data || '', String(doc.type || ''));
-                if (!safeHref) return '<span class="text-slate-400">Téléchargement indisponible</span>';
-                return `<a class="text-primary font-semibold hover:underline" href="${safeHref.replace(/"/g, '&quot;')}" download="${escapeHtml(doc.name || 'document')}">Télécharger</a>`;
+                if (!safeHref) return '<span class="workspace-action-inline opacity-60">Téléchargement indisponible</span>';
+                return `<a class="workspace-action-inline" href="${safeHref.replace(/"/g, '&quot;')}" download="${escapeHtml(doc.name || 'document')}">Télécharger</a>`;
               })()}
-              ${canManageProjectDocBinding ? `<button onclick="openDocumentBindingModal('${escapeHtml(`${currentProjectId}:project-doc:${doc.docId}`)}')" class="text-slate-700 font-semibold hover:underline">Gerer</button>` : ''}
-              ${canDeleteTaskDoc ? `<button onclick="removeAttachment('${doc.taskId}', ${doc.attachmentIndex})" class="text-red-600 hover:underline">Suppr.</button>` : ''}
-              ${canDeleteProjectDoc ? `<button onclick="deleteProjectDocument('${doc.docId}')" class="text-red-600 hover:underline">Suppr.</button>` : ''}
+              ${canManageProjectDocBinding ? `<button onclick="openDocumentBindingModal('${escapeHtml(`${currentProjectId}:project-doc:${doc.docId}`)}')" class="workspace-action-inline">Gérer</button>` : ''}
+              ${canDeleteTaskDoc ? `<button onclick="removeAttachment('${doc.taskId}', ${doc.attachmentIndex})" class="workspace-action-inline">Supprimer</button>` : ''}
+              ${canDeleteProjectDoc ? `<button onclick="deleteProjectDocument('${doc.docId}')" class="workspace-action-inline">Supprimer</button>` : ''}
             </div>
           </div>
         </div>
@@ -15415,12 +16724,22 @@
       const container = document.getElementById('activity-container');
       if (!container) return;
       if (!canReadProjectActivity(currentProjectState)) {
-        container.innerHTML = '<p class="text-gray-500 text-center py-8">Acces reserve aux Managers/Proprietaires.</p>';
+        container.innerHTML = buildWorkspaceEmptyState({
+          icon: 'lock',
+          title: 'Accès réservé',
+          text: 'Cette vue est disponible pour les Managers et Propriétaires.',
+          compact: true
+        });
         return;
       }
 
       if (!events || events.length === 0) {
-        container.innerHTML = '<p class="text-gray-500 text-center py-8">Aucune activité</p>';
+        container.innerHTML = buildWorkspaceEmptyState({
+          icon: 'history',
+          title: 'Aucune activité',
+          text: 'Les événements du projet apparaîtront ici.',
+          compact: true
+        });
         return;
       }
 
@@ -15475,18 +16794,42 @@
       }
 
       if (filtered.length === 0) {
-        container.innerHTML = '<p class="text-gray-500 text-center py-8">Aucun événement pour ces filtres</p>';
+        container.innerHTML = buildWorkspaceEmptyState({
+          icon: 'filter_alt_off',
+          title: 'Aucun événement pour ces filtres',
+          text: 'Modifiez vos filtres pour élargir le résultat.',
+          compact: true
+        });
         return;
       }
 
+      const metaByType = {
+        CREATE_PROJECT: { icon: 'folder_open', chipClass: 'workspace-chip workspace-chip-status-active' },
+        UPDATE_PROJECT: { icon: 'edit_note', chipClass: 'workspace-chip workspace-chip-status-planifie' },
+        DELETE_PROJECT: { icon: 'delete', chipClass: 'workspace-chip workspace-chip-status-urgent' },
+        CREATE_TASK: { icon: 'task_alt', chipClass: 'workspace-chip workspace-chip-status-active' },
+        UPDATE_TASK: { icon: 'edit', chipClass: 'workspace-chip workspace-chip-status-planifie' },
+        DELETE_TASK: { icon: 'delete_forever', chipClass: 'workspace-chip workspace-chip-status-urgent' },
+        SEND_MESSAGE: { icon: 'chat', chipClass: 'workspace-chip workspace-chip-status-active' },
+        UPDATE_MESSAGE: { icon: 'edit_square', chipClass: 'workspace-chip workspace-chip-status-planifie' },
+        DELETE_MESSAGE: { icon: 'delete', chipClass: 'workspace-chip workspace-chip-status-urgent' },
+        ADD_MEMBER: { icon: 'group_add', chipClass: 'workspace-chip workspace-chip-shared' },
+        REMOVE_MEMBER: { icon: 'person_remove', chipClass: 'workspace-chip workspace-chip-status-urgent' },
+        CREATE_DOCUMENT: { icon: 'description', chipClass: 'workspace-chip workspace-chip-status-active' },
+        DELETE_DOCUMENT: { icon: 'delete', chipClass: 'workspace-chip workspace-chip-status-urgent' }
+      };
+
       container.innerHTML = filtered.slice(0, 120).map(evt => `
-        <div class="activity-card bg-surface-container-low rounded-lg p-3 border border-slate-100">
+        <div class="activity-card workspace-card-shell bg-surface-container-low rounded-lg p-3 border border-slate-100">
           <div class="flex items-center justify-between gap-3">
-            <span class="text-sm font-semibold text-slate-800">${labels[evt.type] || evt.type}</span>
-            <span class="text-xs text-slate-500">${new Date(evt.timestamp).toLocaleString('fr-FR')}</span>
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="material-symbols-outlined text-base text-primary shrink-0">${escapeHtml(metaByType[evt.type]?.icon || 'event')}</span>
+              <span class="${metaByType[evt.type]?.chipClass || 'workspace-chip workspace-chip-private'}">${escapeHtml(labels[evt.type] || evt.type)}</span>
+            </div>
+            <span class="text-xs text-slate-500 shrink-0">${new Date(evt.timestamp).toLocaleString('fr-FR')}</span>
           </div>
-          <div class="text-xs text-slate-500 mt-1">auteur: ${escapeHtml(usersById.get(evt.author) || evt.payload?.authorName || evt.author || 'inconnu')}</div>
-          <div class="text-xs text-slate-500 mt-1 break-all">eventId: ${escapeHtml(evt.eventId || '')}</div>
+          <p class="workspace-card-subtitle text-xs mt-2">Auteur: ${escapeHtml(usersById.get(evt.author) || evt.payload?.authorName || evt.author || 'inconnu')}</p>
+          <p class="text-[11px] text-slate-500 mt-1 break-all font-mono">eventId: ${escapeHtml(evt.eventId || '')}</p>
         </div>
       `).join('');
     }
@@ -15628,7 +16971,7 @@
           ` : `
             <div class="markdown-content text-gray-700">${renderSafeMarkdown(msg.content)}</div>
             ${renderMessageAttachments(msg.attachments)}
-            <div class="mt-1 flex items-center gap-3 text-xs">
+            <div class="discussion-message-actions mt-1 flex items-center gap-3 text-xs">
               ${canEditProjectMessage(msg, currentProjectState) ? `<button onclick="startEditMessage('${msg.messageId}')" class="text-primary hover:underline">Éditer</button>` : ''}
               ${canDeleteProjectMessage(msg, currentProjectState) ? `<button onclick="deleteMessage('${msg.messageId}')" class="text-red-600 hover:underline">Supprimer</button>` : ''}
             </div>
@@ -15691,10 +17034,10 @@
                 ` : `
                   <div class="markdown-content">${renderSafeMarkdown(msg.content)}</div>
                   ${renderMessageAttachments(msg.attachments)}
-                  <div class="mt-2 flex items-center gap-3 text-xs">
-                    ${canEditProjectMessage(msg, currentProjectState) ? `<button onclick="startEditMessage('${msg.messageId}')" class="text-primary hover:underline">Editer</button>` : ''}
-                    ${canDeleteProjectMessage(msg, currentProjectState) ? `<button onclick="deleteMessage('${msg.messageId}')" class="text-rose-600 hover:underline">Supprimer</button>` : ''}
-                  </div>
+            <div class="discussion-message-actions mt-2 flex items-center gap-3 text-xs">
+              ${canEditProjectMessage(msg, currentProjectState) ? `<button onclick="startEditMessage('${msg.messageId}')" class="text-primary hover:underline">Editer</button>` : ''}
+              ${canDeleteProjectMessage(msg, currentProjectState) ? `<button onclick="deleteMessage('${msg.messageId}')" class="text-rose-600 hover:underline">Supprimer</button>` : ''}
+            </div>
                 `}
               </div>
             </div>
@@ -16239,6 +17582,7 @@
         }
         await loadAppBrandingConfig({ ensureRemote: false });
         await loadViewOptions();
+        await loadUxMetrics();
         updateUserInfo();
         loadNotifications();
         notifiedCollaboratorEventIds = loadNotifiedEventIds();
@@ -16248,6 +17592,7 @@
         // Save encrypted config after initialization
         await saveEncryptedConfig();
         showMainContent();
+        startIconButtonTitleObserver();
         showDashboard();
         updateSyncStatus('disconnected');
         await tryConnectSavedFolder();
@@ -16381,6 +17726,54 @@
       }
     }
 
+    async function deleteIndexedDbByName(dbName) {
+      return await new Promise((resolve, reject) => {
+        try {
+          const req = indexedDB.deleteDatabase(dbName);
+          req.onsuccess = () => resolve({ ok: true, blocked: false });
+          req.onerror = () => reject(req.error || new Error(`Suppression impossible: ${dbName}`));
+          req.onblocked = () => resolve({ ok: true, blocked: true });
+        } catch (error) {
+          reject(error);
+        }
+      });
+    }
+
+    async function resetAllLocalTestData() {
+      if (!isAppAdmin()) {
+        showToast('Action reservee a l admin application');
+        return;
+      }
+      const first = confirm(
+        'Réinitialiser toutes les données locales de test ?\n\n' +
+        'Cette action supprime les données locales (projets, tâches, référentiels, cache, sessions).'
+      );
+      if (!first) return;
+      const second = confirm('Confirmation finale: supprimer maintenant toutes les données locales ?');
+      if (!second) return;
+      try {
+        showLoading(true);
+        stopPolling();
+        stopDueReminders();
+        stopBackupReminders();
+        if (window.TaskMDACrypto && typeof window.TaskMDACrypto.lock === 'function') {
+          window.TaskMDACrypto.lock();
+        }
+
+        await deleteIndexedDbByName('taskmda-team-standalone');
+        await deleteIndexedDbByName('taskmda-handles');
+        const resetTs = Date.now();
+        localStorage.clear();
+        sessionStorage.clear();
+        localStorage.setItem(LOCAL_RESET_TS_KEY, String(resetTs));
+        location.reload();
+      } catch (error) {
+        console.error('Reset local test data failed:', error);
+        showToast(`Erreur reinitialisation: ${error.message}`);
+        showLoading(false);
+      }
+    }
+
     // ============================================================================
     // EVENT LISTENERS
     // ============================================================================
@@ -16460,6 +17853,40 @@
     document.getElementById('projects-view-list')?.addEventListener('click', async () => {
       await setProjectsViewMode('list');
     });
+    const rerenderDashboardProjectsFromFilters = async () => {
+      projectsPage = 1;
+      await renderProjects();
+    };
+    document.getElementById('projects-filter-query')?.addEventListener('input', async () => {
+      projectsFilters.query = String(document.getElementById('projects-filter-query')?.value || '');
+      await rerenderDashboardProjectsFromFilters();
+    });
+    document.getElementById('projects-filter-theme-known')?.addEventListener('change', async () => {
+      const value = String(document.getElementById('projects-filter-theme-known')?.value || '').trim();
+      projectsFilters.theme = value;
+      await rerenderDashboardProjectsFromFilters();
+    });
+    document.getElementById('projects-filter-status')?.addEventListener('change', async () => {
+      projectsFilters.status = String(document.getElementById('projects-filter-status')?.value || 'all');
+      await rerenderDashboardProjectsFromFilters();
+    });
+    document.getElementById('projects-filter-sharing')?.addEventListener('change', async () => {
+      projectsFilters.sharing = String(document.getElementById('projects-filter-sharing')?.value || 'all');
+      await rerenderDashboardProjectsFromFilters();
+    });
+    document.getElementById('projects-filter-ownership')?.addEventListener('change', async () => {
+      projectsFilters.ownership = String(document.getElementById('projects-filter-ownership')?.value || 'all');
+      await rerenderDashboardProjectsFromFilters();
+    });
+    document.getElementById('projects-filter-sort')?.addEventListener('change', async () => {
+      projectsFilters.sort = String(document.getElementById('projects-filter-sort')?.value || 'recent');
+      await rerenderDashboardProjectsFromFilters();
+    });
+    document.getElementById('projects-filter-reset')?.addEventListener('click', async () => {
+      projectsFilters = { query: '', theme: '', status: 'all', sharing: 'all', ownership: 'all', sort: 'recent' };
+      syncProjectsFilterControls();
+      await rerenderDashboardProjectsFromFilters();
+    });
     document.getElementById('btn-open-feed-from-dashboard-news')?.addEventListener('click', async () => {
       await showGlobalWorkspace('feed');
       closeMobileSidebar();
@@ -16522,27 +17949,27 @@
       renderGlobalFeed();
     });
     document.getElementById('global-feed-filter-all')?.addEventListener('click', () => {
-      globalFeedFilterMode = 'all';
+      globalFeedFilterMode = resolveViewWithLock('globalFeed', 'all', 'all');
       renderGlobalFeed();
     });
     document.getElementById('global-feed-filter-auto')?.addEventListener('click', () => {
-      globalFeedFilterMode = 'auto';
+      globalFeedFilterMode = resolveViewWithLock('globalFeed', 'auto', 'all');
       renderGlobalFeed();
     });
     document.getElementById('global-feed-filter-manual')?.addEventListener('click', () => {
-      globalFeedFilterMode = 'manual';
+      globalFeedFilterMode = resolveViewWithLock('globalFeed', 'manual', 'all');
       renderGlobalFeed();
     });
     document.getElementById('global-feed-filter-mentions')?.addEventListener('click', () => {
-      globalFeedFilterMode = 'mentions';
+      globalFeedFilterMode = resolveViewWithLock('globalFeed', 'mentions', 'all');
       renderGlobalFeed();
     });
     document.getElementById('global-feed-filter-project-refs')?.addEventListener('click', () => {
-      globalFeedFilterMode = 'project-refs';
+      globalFeedFilterMode = resolveViewWithLock('globalFeed', 'project-refs', 'all');
       renderGlobalFeed();
     });
     document.getElementById('global-feed-filter-task-refs')?.addEventListener('click', () => {
-      globalFeedFilterMode = 'task-refs';
+      globalFeedFilterMode = resolveViewWithLock('globalFeed', 'task-refs', 'all');
       renderGlobalFeed();
     });
     document.getElementById('global-feed-input')?.addEventListener('input', () => {
@@ -16675,42 +18102,48 @@
       rerenderProjectTasksFromFilters();
     });
     document.getElementById('global-tasks-view-cards')?.addEventListener('click', () => {
-      globalTasksViewMode = 'cards';
+      globalTasksViewMode = resolveViewWithLock('globalTasks', 'cards', 'cards');
       localStorage.setItem('taskmda_global_tasks_view', globalTasksViewMode);
       toggleGlobalTasksInlineCalendar(false);
       globalTasksPage = 1;
+      trackUxMetric('switchGlobalTasksView');
       renderGlobalTasks();
     });
     document.getElementById('global-tasks-view-list')?.addEventListener('click', () => {
-      globalTasksViewMode = 'list';
+      globalTasksViewMode = resolveViewWithLock('globalTasks', 'list', 'cards');
       localStorage.setItem('taskmda_global_tasks_view', globalTasksViewMode);
       toggleGlobalTasksInlineCalendar(false);
       globalTasksPage = 1;
+      trackUxMetric('switchGlobalTasksView');
       renderGlobalTasks();
     });
     document.getElementById('global-tasks-view-kanban')?.addEventListener('click', () => {
-      globalTasksViewMode = 'kanban';
+      globalTasksViewMode = resolveViewWithLock('globalTasks', 'kanban', 'cards');
       localStorage.setItem('taskmda_global_tasks_view', globalTasksViewMode);
       toggleGlobalTasksInlineCalendar(false);
+      trackUxMetric('switchGlobalTasksView');
       renderGlobalTasks();
     });
     document.getElementById('global-tasks-view-timeline')?.addEventListener('click', () => {
-      globalTasksViewMode = 'timeline';
+      globalTasksViewMode = resolveViewWithLock('globalTasks', 'timeline', 'cards');
       localStorage.setItem('taskmda_global_tasks_view', globalTasksViewMode);
       toggleGlobalTasksInlineCalendar(false);
+      trackUxMetric('switchGlobalTasksView');
       renderGlobalTasks();
     });
     document.getElementById('global-tasks-view-calendar')?.addEventListener('click', async () => {
-      globalTasksViewMode = 'calendar';
+      globalTasksViewMode = resolveViewWithLock('globalTasks', 'calendar', 'cards');
       localStorage.setItem('taskmda_global_tasks_view', globalTasksViewMode);
       toggleGlobalTasksInlineCalendar(true);
+      trackUxMetric('switchGlobalTasksView');
       await renderGlobalTasks();
       updateGlobalTasksViewButtons();
     });
     document.getElementById('global-tasks-view-archives')?.addEventListener('click', async () => {
-      globalTasksViewMode = 'archives';
+      globalTasksViewMode = resolveViewWithLock('globalTasks', 'archives', 'cards');
       localStorage.setItem('taskmda_global_tasks_view', globalTasksViewMode);
       toggleGlobalTasksInlineCalendar(false);
+      trackUxMetric('switchGlobalTasksView');
       await renderGlobalTasks();
       updateGlobalTasksViewButtons();
     });
@@ -16720,11 +18153,11 @@
       renderGlobalCalendar();
     });
     document.getElementById('global-calendar-view-list')?.addEventListener('click', () => {
-      globalCalendarViewMode = 'list';
+      globalCalendarViewMode = resolveViewWithLock('globalCalendar', 'list', 'grid');
       renderGlobalCalendar();
     });
     document.getElementById('global-calendar-view-grid')?.addEventListener('click', () => {
-      globalCalendarViewMode = 'grid';
+      globalCalendarViewMode = resolveViewWithLock('globalCalendar', 'grid', 'grid');
       renderGlobalCalendar();
     });
     document.getElementById('global-calendar-prev-month')?.addEventListener('click', () => {
@@ -16760,7 +18193,10 @@
       document.getElementById('global-doc-mode').value = 'private';
       renderGlobalDocs();
     });
-    document.getElementById('btn-global-doc-add')?.addEventListener('click', addStandaloneDocuments);
+    document.getElementById('btn-global-doc-add')?.addEventListener('click', () => {
+      trackUxMetric('openNewDocGlobal');
+      addStandaloneDocuments();
+    });
     document.getElementById('global-message-contact-search')?.addEventListener('input', async () => {
       globalMessageContactsRenderLimit = GLOBAL_MESSAGE_CONTACTS_INITIAL_BATCH;
       await renderGlobalMessages();
@@ -16887,6 +18323,9 @@
     document.getElementById('btn-reset-app-branding')?.addEventListener('click', async () => {
       await saveAppBrandingFromSettings(true);
     });
+    document.getElementById('btn-reset-test-data')?.addEventListener('click', async () => {
+      await resetAllLocalTestData();
+    });
     document.getElementById('btn-assign-app-admin')?.addEventListener('click', assignAppAdminFromSettings);
     document.getElementById('global-settings-tab-branding')?.addEventListener('click', () => setGlobalSettingsTab('branding'));
     document.getElementById('global-settings-tab-themes')?.addEventListener('click', () => setGlobalSettingsTab('themes'));
@@ -16898,14 +18337,88 @@
       globalSettingsHelpOpen = !globalSettingsHelpOpen;
       renderGlobalSettingsHelpBox();
     });
-    document.querySelectorAll('.view-option-checkbox').forEach((checkbox) => {
-      checkbox.addEventListener('change', async (e) => {
-        const viewKey = e.target.getAttribute('data-view-key');
-        const isChecked = e.target.checked;
-        const nextOptions = { ...viewOptions, [viewKey]: isChecked };
-        await saveViewOptions(nextOptions);
-      });
-    });
+    const handleViewOptionsChange = async (e) => {
+      const target = e.target;
+      if (!target) return;
+      if (!isAppAdmin()) {
+        showToast('Action reservee a l admin application');
+        await renderGlobalSettings();
+        return;
+      }
+      if (target.classList.contains('view-option-checkbox')) {
+        const sectionKey = String(target.getAttribute('data-view-section') || '').trim();
+        const tabKey = String(target.getAttribute('data-view-tab') || '').trim();
+        if (!sectionKey || !tabKey || !VIEW_SECTION_META[sectionKey]) return;
+        const next = deepClone(viewOptions || DEFAULT_VIEW_OPTIONS);
+        if (!next.sections || !next.sections[sectionKey] || !next.sections[sectionKey].tabs) return;
+        next.sections[sectionKey].tabs[tabKey] = !!target.checked;
+        await saveViewOptions(next);
+        renderViewOptionsMatrix(true);
+        return;
+      }
+      if (target.classList.contains('view-option-lock-overrides')) {
+        const next = deepClone(viewOptions || DEFAULT_VIEW_OPTIONS);
+        next.policy = next.policy || {};
+        next.policy.lockUserOverrides = !!target.checked;
+        await saveViewOptions(next);
+        renderViewOptionsMatrix(true);
+        return;
+      }
+      if (target.classList.contains('view-option-default')) {
+        const sectionKey = String(target.getAttribute('data-view-section') || '').trim();
+        const defaultTab = String(target.value || '').trim();
+        if (!sectionKey || !defaultTab || !VIEW_SECTION_META[sectionKey]) return;
+        const next = deepClone(viewOptions || DEFAULT_VIEW_OPTIONS);
+        if (!next.sections || !next.sections[sectionKey]) return;
+        next.sections[sectionKey].defaultTab = defaultTab;
+        await saveViewOptions(next);
+        renderViewOptionsMatrix(true);
+        return;
+      }
+      if (target.classList.contains('view-option-workflow-actions-mode')) {
+        const next = deepClone(viewOptions || DEFAULT_VIEW_OPTIONS);
+        next.ui = next.ui || {};
+        next.ui.workflowActionButtons = normalizeWorkflowActionButtonsMode(target.value);
+        await saveViewOptions(next);
+        if (workflowRuntime && workspaceMode === 'global' && globalWorkspaceView === 'workflow') {
+          await workflowRuntime.render().catch(() => null);
+        }
+        return;
+      }
+    };
+    const handleViewOptionsClick = async (e) => {
+      const resetBtn = e.target?.closest?.('[data-view-kpi-reset]');
+      if (resetBtn) {
+        if (!isAppAdmin()) {
+          showToast('Action reservee a l admin application');
+          await renderGlobalSettings();
+          return;
+        }
+        uxMetrics = deepClone(UX_METRICS_DEFAULT);
+        scheduleSaveUxMetrics();
+        renderViewOptionsMatrix(true);
+        showToast('KPI UX reinitialises');
+        return;
+      }
+      const presetBtn = e.target?.closest?.('[data-view-preset]');
+      if (!presetBtn) return;
+      if (!isAppAdmin()) {
+        showToast('Action reservee a l admin application');
+        await renderGlobalSettings();
+        return;
+      }
+      const presetKey = String(presetBtn.getAttribute('data-view-preset') || '').trim();
+      if (!presetKey || !VIEW_ROLE_PRESETS[presetKey]) return;
+      const next = buildViewOptionsFromPreset(presetKey);
+      await saveViewOptions(next);
+      renderViewOptionsMatrix(true);
+      showToast(`Preset applique: ${VIEW_ROLE_PRESETS[presetKey].label}`);
+    };
+    document.getElementById('view-options-matrix')?.addEventListener('change', handleViewOptionsChange);
+    document.getElementById('view-options-summary')?.addEventListener('change', handleViewOptionsChange);
+    document.getElementById('view-option-workflow-actions-mode')?.addEventListener('change', handleViewOptionsChange);
+    document.getElementById('view-options-matrix')?.addEventListener('click', handleViewOptionsClick);
+    document.getElementById('view-options-summary')?.addEventListener('click', handleViewOptionsClick);
     document.getElementById('profanity-filter-mode-select')?.addEventListener('change', (e) => {
       const nextMode = String(e?.target?.value || '').trim();
       if (!nextMode) return;
@@ -16997,6 +18510,7 @@
 
     // Project creation
     document.getElementById('btn-create-project').addEventListener('click', async () => {
+      trackUxMetric('openNewProject');
       document.getElementById('modal-new-project').classList.remove('hidden');
       document.getElementById('project-name').value = '';
       setProjectDescriptionEditorContent('project-description-editor', 'project-description-input', '');
@@ -17417,10 +18931,12 @@
 
     // Task modal
     document.getElementById('btn-add-task').addEventListener('click', () => {
+      trackUxMetric('openNewTaskProject');
       standaloneTaskMode = false;
       openTaskModal();
     });
     document.getElementById('btn-global-add-task')?.addEventListener('click', () => {
+      trackUxMetric('openNewTaskGlobal');
       standaloneTaskMode = true;
       openTaskModal();
     });
@@ -17833,6 +19349,25 @@
       lastPasteTs = Date.now();
     }, true);
 
+    document.addEventListener('keydown', async (e) => {
+      const key = String(e.key || '').toLowerCase();
+      const quickModalOpen = !document.getElementById('quick-command-modal')?.classList.contains('hidden');
+      if (key === 'escape' && quickModalOpen) {
+        e.preventDefault();
+        closeQuickCommandModal();
+        return;
+      }
+      if (!(e.ctrlKey || e.metaKey) || key !== 'k') return;
+      const target = e.target;
+      const inTextInput = target instanceof HTMLElement
+        && (target.matches('input, textarea, [contenteditable="true"], .ql-editor')
+          || target.closest('input, textarea, [contenteditable="true"], .ql-editor'));
+      if (inTextInput) return;
+      e.preventDefault();
+      if (quickModalOpen) closeQuickCommandModal();
+      else openQuickCommandModal();
+    });
+
     function hasActiveTextSelection() {
       try {
         const selection = window.getSelection?.();
@@ -17958,6 +19493,34 @@
     document.getElementById('view-docs').addEventListener('click', () => setProjectView('docs'));
     document.getElementById('view-chat').addEventListener('click', () => setProjectView('chat'));
     document.getElementById('view-archives')?.addEventListener('click', () => setProjectView('archives'));
+    document.getElementById('global-tasks-view-tabs')?.addEventListener('click', (e) => {
+      if (e?.target?.closest?.('.tab-overflow-wrap')) return;
+      setTimeout(() => refreshManagedTabOverflow(), 0);
+    });
+    document.getElementById('project-view-tabs-wrap')?.addEventListener('click', (e) => {
+      if (e?.target?.closest?.('.tab-overflow-wrap')) return;
+      setTimeout(() => refreshManagedTabOverflow(), 0);
+    });
+    document.getElementById('workflow-view-tabs-list')?.addEventListener('click', (e) => {
+      if (e?.target?.closest?.('.tab-overflow-wrap')) return;
+      setTimeout(() => refreshManagedTabOverflow(), 0);
+    });
+    document.getElementById('global-settings-tabs-list')?.addEventListener('click', (e) => {
+      if (e?.target?.closest?.('.tab-overflow-wrap')) return;
+      setTimeout(() => refreshManagedTabOverflow(), 0);
+    });
+    document.getElementById('global-feed-filter-tabs')?.addEventListener('click', (e) => {
+      if (e?.target?.closest?.('.tab-overflow-wrap')) return;
+      setTimeout(() => refreshManagedTabOverflow(), 0);
+    });
+    window.addEventListener('resize', () => {
+      refreshManagedTabOverflow();
+    });
+    document.addEventListener('click', (e) => {
+      if (e.target?.closest?.('.tab-overflow-wrap')) return;
+      closeAllTabOverflowMenus();
+    });
+    ensureActionButtonsObserver();
     document.getElementById('project-task-view-1')?.addEventListener('click', () => setProjectTaskCardsColumns(1));
     document.getElementById('project-task-view-2')?.addEventListener('click', () => setProjectTaskCardsColumns(2));
     document.getElementById('project-task-view-3')?.addEventListener('click', () => setProjectTaskCardsColumns(3));

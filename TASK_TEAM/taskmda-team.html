@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="fr" class="light">
 <head>
   <meta charset="UTF-8">
@@ -123,17 +123,18 @@
       </div>
       <div class="space-y-4 text-sm text-slate-700 leading-relaxed">
         <ul class="list-disc pl-5 space-y-1">
-          <li>Tableau de bord avec accès rapide et statistiques.</li>
+          <li>Tableau de bord avec accès rapide, statistiques et démarrage projet.</li>
           <li>Gestion de projets (solo/collaboratif), membres, groupes, thématiques et permissions.</li>
-          <li>Pilotage des tâches: Cartes, Liste, Kanban, Timeline, Calendrier, Archives.</li>
-          <li>Sous-tâches avec suivi de progression et assignation multi-agents.</li>
-          <li>Documents: dépôt, association aux tâches, recherche, filtrage, suppression.</li>
+          <li>Pilotage des tâches: Cartes, Liste, Kanban, Timeline, Calendrier, Archives + conversion tâche en projet.</li>
+          <li>Tâches récurrentes (hebdo/mensuelle/annuelle) avec intervalle et fin configurable.</li>
+          <li>Documents: dépôt, association aux tâches, recherche, filtrage, suppression et éditeur intégré.</li>
           <li>Calendrier transverse (projets + hors projet) avec informations éditables.</li>
-          <li>Messagerie projet et hors projet, notifications et mentions.</li>
-          <li>Fil d'information transverse (posts manuels + activités automatiques).</li>
+          <li>Messagerie projet et hors projet, notifications, mentions et recherche globale.</li>
+          <li>Fil d information transverse (posts manuels + activités automatiques + digestion documentaire).</li>
+          <li>Workflow complet: Carte, Organisation, Organigramme, Agents, Tâches, Kanban, Timeline, Procédures, Logiciels, Journal.</li>
           <li>Référentiels globaux: identité, thématiques, groupes, habilitations, versions logicielles.</li>
-          <li>Mode sombre, responsive design, export/import JSON, export CSV.</li>
-          <li>Synchronisation collaborative sans serveur via dossier partagé (FSA), avec chiffrement local.</li>
+          <li>Profil et sécurité: email/photo, export/import JSON, export CSV, changement mot de passe, clé de récupération.</li>
+          <li>Mode sombre, responsive design, synchronisation collaborative sans serveur (FSA) et chiffrement local.</li>
         </ul>
         <p class="text-xs text-slate-500 border-t border-slate-200 pt-3">Application créée par Frédérick MURAT - licence MIT - 2026</p>
       </div>
@@ -274,6 +275,38 @@
               </button>
             </div>
           </div>
+          <div id="projects-filter-row" class="mb-2 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-7 gap-2">
+            <input id="projects-filter-query" type="search" placeholder="Recherche globale des cartes projet" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+            <select id="projects-filter-theme-known" class="px-3 py-2 border border-slate-300 rounded-lg text-sm" title="Choisir parmi les thématiques existantes">
+              <option value="">Thématiques existantes...</option>
+            </select>
+            <select id="projects-filter-status" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+              <option value="all">Tous les statuts</option>
+              <option value="en-cours">En cours</option>
+              <option value="planifie">Planifié</option>
+              <option value="urgent">Urgent</option>
+              <option value="termine">Terminé</option>
+            </select>
+            <select id="projects-filter-sharing" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+              <option value="all">Tous les modes</option>
+              <option value="shared">Collaboratif</option>
+              <option value="private">Solo / privé</option>
+            </select>
+            <select id="projects-filter-ownership" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+              <option value="all">Tous les projets</option>
+              <option value="mine">Mes projets</option>
+              <option value="team">Projets d'équipe</option>
+            </select>
+            <select id="projects-filter-sort" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+              <option value="recent">Tri: plus récents</option>
+              <option value="oldest">Tri: plus anciens</option>
+              <option value="name-asc">Tri: nom A → Z</option>
+              <option value="name-desc">Tri: nom Z → A</option>
+              <option value="status">Tri: statut</option>
+            </select>
+            <button id="projects-filter-reset" class="px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold">Réinitialiser</button>
+          </div>
+          <div id="projects-filter-count" class="mb-4 text-xs text-slate-500 font-semibold">0 résultat sur 0 projet</div>
           <div id="projects-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
           <div id="projects-pagination" class="mt-4 flex items-center justify-between gap-3 text-xs text-slate-500"></div>
           <section id="dashboard-news" class="dashboard-news mt-5 hidden" aria-live="polite">
@@ -330,25 +363,28 @@
 
           <div id="global-workflow-section" class="panel p-3 hidden">
             <div class="workflow-head mb-3">
-              <div>
-                <h4 class="workflow-title">Workflow operationnel</h4>
-                <p class="workflow-subtitle">Carte organisationnelle et navigation agents, taches, procedures, logiciels metiers.</p>
-              </div>
               <div class="workflow-quick-actions">
-                <button id="btn-workflow-add-community" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Ajouter une communaute</button>
-                <button id="btn-workflow-add-service" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Ajouter un service</button>
-                <button id="btn-workflow-add-group" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Ajouter un groupe</button>
-                <button id="btn-workflow-add-agent" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Ajouter un agent</button>
-                <button id="btn-workflow-add-task" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Ajouter une tache</button>
-                <button id="btn-workflow-add-procedure" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Ajouter une procédure</button>
-                <button id="btn-workflow-add-software" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Ajouter un logiciel</button>
-                <button id="btn-workflow-migrate-agent-users" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Auto-lier comptes agents</button>
+                <div class="workflow-quick-add">
+                  <button id="workflow-quick-add-toggle" type="button" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Ajouter</button>
+                  <div id="workflow-quick-add-menu" class="workflow-quick-add-menu hidden" role="menu" aria-label="Ajouter un element workflow">
+                    <button id="btn-workflow-add-community" type="button" class="workflow-quick-add-item" role="menuitem">Communaute</button>
+                    <button id="btn-workflow-add-service" type="button" class="workflow-quick-add-item" role="menuitem">Service</button>
+                    <button id="btn-workflow-add-group" type="button" class="workflow-quick-add-item" role="menuitem">Groupe</button>
+                    <button id="btn-workflow-add-agent" type="button" class="workflow-quick-add-item" role="menuitem">Agent</button>
+                    <button id="btn-workflow-add-task" type="button" class="workflow-quick-add-item" role="menuitem">Tache</button>
+                    <button id="btn-workflow-add-procedure" type="button" class="workflow-quick-add-item" role="menuitem">Procedure</button>
+                    <button id="btn-workflow-add-software" type="button" class="workflow-quick-add-item" role="menuitem">Logiciel</button>
+                  </div>
+                </div>
+                <button id="btn-workflow-migrate-agent-users" class="workflow-btn-light px-3 py-2 rounded-lg text-sm font-semibold">Auto-lier comptes agents</button>
               </div>
             </div>
             <div class="workflow-toolbar mb-3">
-              <div class="workflow-view-tabs" role="tablist" aria-label="Vues workflow">
+              <div class="workflow-toolbar-main">
+                <div id="workflow-view-tabs-list" class="workflow-view-tabs" role="tablist" aria-label="Vues workflow">
                 <button id="workflow-view-map" class="workflow-view-tab is-active" type="button">Carte</button>
                 <button id="workflow-view-organization" class="workflow-view-tab" type="button">Organisation</button>
+                <button id="workflow-view-organigram" class="workflow-view-tab" type="button">Organigramme</button>
                 <button id="workflow-view-agents" class="workflow-view-tab" type="button">Agents</button>
                 <button id="workflow-view-tasks" class="workflow-view-tab" type="button">Tâches</button>
                 <button id="workflow-view-kanban" class="workflow-view-tab" type="button">Kanban</button>
@@ -356,8 +392,10 @@
                 <button id="workflow-view-procedures" class="workflow-view-tab" type="button">Procédures</button>
                 <button id="workflow-view-software" class="workflow-view-tab" type="button">Logiciels metiers</button>
                 <button id="workflow-view-journal" class="workflow-view-tab" type="button">Journal</button>
+                </div>
+                <button id="workflow-filters-toggle" class="workflow-btn-light px-3 py-2 rounded-lg text-sm font-semibold" type="button">Filtres</button>
               </div>
-              <div class="workflow-filters">
+              <div id="workflow-filters-panel" class="workflow-filters hidden">
                 <input id="workflow-search" type="text" placeholder="Recherche workflow..." class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
                 <select id="workflow-service-filter" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
                   <option value="all">Tous services</option>
@@ -453,7 +491,7 @@
           <div id="global-messages-section" class="panel p-3 hidden">
             <div class="discussion-layout">
               <section class="discussion-main">
-                <div id="global-message-thread-empty" class="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+                <div id="global-message-thread-empty" class="workspace-empty-state workspace-empty-state-compact">
                   Sélectionnez un agent ou laissez “Canal général” pour écrire à tous.
                 </div>
                 <div id="global-message-thread" class="discussion-messages hidden"></div>
@@ -499,7 +537,10 @@
                   <button id="btn-global-message-open-group-channel" type="button" class="discussion-recipient-btn">Ouvrir</button>
                 </div>
                 <div id="global-message-contacts-list" class="discussion-members-list">
-                  <p class="text-sm text-slate-500">Aucun agent connu.</p>
+                  <div class="workspace-empty-state workspace-empty-state-compact">
+                    <span class="workspace-empty-icon material-symbols-outlined" aria-hidden="true">group_off</span>
+                    <p class="workspace-empty-title">Aucun agent connu</p>
+                  </div>
                 </div>
               </aside>
             </div>
@@ -516,7 +557,7 @@
                       <option value="asc">Plus anciens</option>
                     </select>
                   </div>
-                  <div class="feed-filter-buttons" role="tablist" aria-label="Filtres du fil">
+                  <div id="global-feed-filter-tabs" class="feed-filter-buttons" role="tablist" aria-label="Filtres du fil">
                     <button id="global-feed-filter-all" class="feed-filter-btn view-tab-active" type="button">Tout</button>
                     <button id="global-feed-filter-auto" class="feed-filter-btn" type="button">Activité auto</button>
                     <button id="global-feed-filter-manual" class="feed-filter-btn" type="button">Posts manuels</button>
@@ -619,7 +660,7 @@
                   <span class="material-symbols-outlined text-[16px]" aria-hidden="true">help</span>
                 </button>
               </div>
-              <div class="project-view-tabs flex items-center gap-2 overflow-x-auto" role="tablist" aria-label="Onglets des référentiels">
+              <div id="global-settings-tabs-list" class="project-view-tabs flex items-center gap-2 overflow-x-auto" role="tablist" aria-label="Onglets des référentiels">
                 <button id="global-settings-tab-branding" role="tab" aria-selected="true" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Identité</button>
                 <button id="global-settings-tab-themes" role="tab" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Thématiques</button>
                 <button id="global-settings-tab-groups" role="tab" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Groupes</button>
@@ -648,6 +689,11 @@
                   <select id="app-admin-user-select" class="px-3 py-2 border border-slate-300 rounded-lg text-sm"></select>
                   <button id="btn-assign-app-admin" class="px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold">Definir Admin</button>
                   <button id="btn-reset-app-branding" class="px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold">Valeurs par defaut</button>
+                </div>
+                <div class="mt-4 pt-3 border-t border-slate-200">
+                  <p class="text-xs text-slate-500 mb-2">Environnement de test: suppression locale complète (IndexedDB + stockage navigateur).</p>
+                  <button id="btn-reset-test-data" class="px-3 py-2 rounded-lg border border-red-300 bg-red-50 text-red-700 text-sm font-semibold">Réinitialiser les données locales</button>
+                  <p id="global-settings-local-reset-info" class="mt-2 text-[11px] text-slate-500">Dernière réinitialisation locale: aucune</p>
                 </div>
               </div>
               <div class="global-settings-card-themes rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -692,20 +738,17 @@
                 </div>
                 <div class="global-settings-card-views rounded-xl border border-slate-200 bg-slate-50 p-4">
                   <h4 class="font-bold text-slate-800 mb-3">Options d'affichage des vues</h4>
-                  <p class="text-xs text-slate-500 mb-4">Activez ou désactivez les onglets "Liste" dans les différentes sections de l'application.</p>
-                  <div class="space-y-3">
-                    <label class="flex items-center gap-3 cursor-pointer hover:bg-white p-2 rounded-lg">
-                      <input type="checkbox" id="view-option-global-tasks-list" class="view-option-checkbox w-4 h-4" data-view-key="globalTasksList">
-                      <span class="text-sm text-slate-700 font-medium">Afficher "Liste" dans Tâches (vue transverse)</span>
-                    </label>
-                    <label class="flex items-center gap-3 cursor-pointer hover:bg-white p-2 rounded-lg">
-                      <input type="checkbox" id="view-option-project-tasks-list" class="view-option-checkbox w-4 h-4" data-view-key="projectTasksList">
-                      <span class="text-sm text-slate-700 font-medium">Afficher "Liste" dans les projets</span>
-                    </label>
-                    <label class="flex items-center gap-3 cursor-pointer hover:bg-white p-2 rounded-lg">
-                      <input type="checkbox" id="view-option-calendar-list" class="view-option-checkbox w-4 h-4" data-view-key="calendarList">
-                      <span class="text-sm text-slate-700 font-medium">Afficher "Liste" dans le calendrier</span>
-                    </label>
+                  <p class="text-xs text-slate-500 mb-3">Administrez les sous-onglets visibles par rubrique et définissez l'onglet par défaut.</p>
+                  <div id="view-options-summary" class="text-[11px] text-slate-500 mb-3"></div>
+                  <div id="view-options-matrix" class="space-y-3"></div>
+                  <div class="mt-4 pt-4 border-t border-slate-200">
+                    <label for="view-option-workflow-actions-mode" class="block text-sm font-semibold text-slate-800 mb-1">Boutons d'action (Workflow, Projets, Tâches)</label>
+                    <p class="text-xs text-slate-500 mb-2">Choisissez le rendu des actions sur les cartes et listes (texte, icône + texte, ou icône seule).</p>
+                    <select id="view-option-workflow-actions-mode" class="view-option-workflow-actions-mode px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                      <option value="icon_text">Icône + texte (recommandé)</option>
+                      <option value="text">Texte seul</option>
+                      <option value="icon">Icône seule</option>
+                    </select>
                   </div>
                   <div class="mt-4 pt-4 border-t border-slate-200">
                     <label for="profanity-filter-mode-select" class="block text-sm font-semibold text-slate-800 mb-1">Modération du langage</label>
@@ -1785,5 +1828,6 @@
   <script src="js/taskmda-team.js?v=20260402-01"></script>
 </body>
 </html>
+
 
 

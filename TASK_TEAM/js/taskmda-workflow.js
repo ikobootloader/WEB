@@ -85,6 +85,11 @@
         linkQuery: '',
         linkSort: 'source'
       },
+      organigramOptions: {
+        zoom: 1,
+        panX: 0,
+        panY: 0
+      },
       updatedAt: now
     };
   }
@@ -102,6 +107,7 @@
       bound: false,
       draggingTaskId: null,
       draggingMap: null,
+      draggingOrganigram: null,
       procedureQuill: null,
       activeView: 'map',
       query: '',
@@ -125,6 +131,11 @@
         applicativeVisible: 120,
         linkQuery: '',
         linkSort: 'source'
+      },
+      organigramOptions: {
+        zoom: 1,
+        panX: 0,
+        panY: 0
       },
       permissions: {
         isAdmin: false,
@@ -164,6 +175,10 @@
       statusFilter: document.getElementById('workflow-status-filter'),
       breadcrumbs: document.getElementById('workflow-breadcrumbs'),
       search: document.getElementById('workflow-search'),
+      filtersToggle: document.getElementById('workflow-filters-toggle'),
+      filtersPanel: document.getElementById('workflow-filters-panel'),
+      quickAddToggle: document.getElementById('workflow-quick-add-toggle'),
+      quickAddMenu: document.getElementById('workflow-quick-add-menu'),
       modal: document.getElementById('modal-workflow-entity'),
       modalTitle: document.getElementById('workflow-modal-title'),
       modalBody: document.getElementById('workflow-modal-body'),
@@ -173,6 +188,7 @@
     const viewIds = {
       map: 'workflow-view-map',
       organization: 'workflow-view-organization',
+      organigram: 'workflow-view-organigram',
       agents: 'workflow-view-agents',
       tasks: 'workflow-view-tasks',
       kanban: 'workflow-view-kanban',
@@ -250,6 +266,77 @@
       notifyInternal(`Kanban: ${updated.title || updated.id} deplacee vers ${targetStatus}`);
     }
 
+    async function quickCreateWorkflowTaskFromContext(contextType, contextId) {
+      if (!canEditWorkflow()) {
+        toast('Lecture seule: creation reservee au role admin ou manager workflow');
+        return;
+      }
+      const safeType = String(contextType || '').trim();
+      const safeId = String(contextId || '').trim();
+      if (!safeType || !safeId) return;
+      if (safeType !== 'procedure' && safeType !== 'software') return;
+
+      const source = getItem(safeType, safeId);
+      if (!source) return;
+      const sourceLabel = source.name || source.title || safeId;
+      const title = String(global.prompt(`Titre de la tache liee a ${sourceLabel}`, `Suivi ${sourceLabel}`) || '').trim();
+      if (!title) return;
+
+      let serviceId = null;
+      if (safeType === 'procedure') {
+        const linkedTaskIds = Array.isArray(source.linkedTaskIds) ? source.linkedTaskIds : [];
+        const linkedTask = state.collections.tasks.find((task) => linkedTaskIds.includes(task.id) || task.linkedProcedureId === safeId);
+        serviceId = linkedTask?.serviceId || null;
+      } else if (safeType === 'software') {
+        const linkedTaskIds = Array.isArray(source.linkedTaskIds) ? source.linkedTaskIds : [];
+        const linkedTask = state.collections.tasks.find((task) => linkedTaskIds.includes(task.id) || (Array.isArray(task.linkedSoftwareIds) && task.linkedSoftwareIds.includes(safeId)));
+        serviceId = linkedTask?.serviceId || null;
+      }
+      if (!serviceId && state.serviceFilter && state.serviceFilter !== 'all') {
+        serviceId = state.serviceFilter;
+      }
+
+      const row = {
+        id: `wf-task-${uid()}`,
+        title,
+        description: '',
+        ownerAgentId: null,
+        serviceId: serviceId || null,
+        groupId: null,
+        taskType: 'workflow',
+        frequency: 'ponctuelle',
+        priority: 'medium',
+        criticality: 'medium',
+        estimatedDuration: null,
+        prerequisiteTaskIds: [],
+        dependentTaskIds: [],
+        linkedProcedureId: safeType === 'procedure' ? safeId : null,
+        linkedSoftwareIds: safeType === 'software' ? [safeId] : [],
+        linkedDocumentIds: [],
+        linkedGlobalTaskIds: [],
+        linkedThemeKeys: [],
+        linkedGroupKeys: [],
+        checklist: [],
+        status: 'todo',
+        approvalStatus: 'pending',
+        approvedAt: null,
+        approvedByUserId: null,
+        metadata: { quickCreate: true, sourceType: safeType, sourceId: safeId },
+        createdAt: now(),
+        updatedAt: now()
+      };
+
+      await api.put('workflowTasks', row, STORE_KEY_FIELDS.workflowTasks);
+      await syncTaskDependencyGraph(row.id, [], []);
+      await syncBidirectionalExternalLinks();
+      await logAudit('create_task_quick', 'task', row.id, { title: row.title, sourceType: safeType, sourceId: safeId });
+      await loadCollections();
+      renderServiceFilter();
+      renderContent();
+      openDetail('task', row.id);
+      toast('Tache workflow ajoutee');
+    }
+
     function canEditWorkflow() {
       const admin = typeof api.canEditWorkflow === 'function' ? !!api.canEditWorkflow() : state.permissions.isAdmin;
       return !!(admin || state.permissions.isWorkflowManager);
@@ -282,7 +369,15 @@
     }
 
     function setView(nextView) {
-      const safe = viewIds[nextView] ? nextView : 'map';
+      let safe = viewIds[nextView] ? nextView : 'map';
+      const requestedBtn = document.getElementById(viewIds[safe] || '');
+      if (requestedBtn && requestedBtn.classList.contains('hidden')) {
+        const fallbackEntry = Object.entries(viewIds).find(([, id]) => {
+          const btn = document.getElementById(id);
+          return !!(btn && !btn.classList.contains('hidden'));
+        });
+        safe = fallbackEntry ? fallbackEntry[0] : safe;
+      }
       state.activeView = safe;
       Object.entries(viewIds).forEach(([key, id]) => {
         const btn = document.getElementById(id);
@@ -306,6 +401,7 @@
         },
         orgBranchState: { ...(state.orgBranchState || {}) },
         mapOptions: { ...(state.mapOptions || {}) },
+        organigramOptions: { ...(state.organigramOptions || {}) },
         updatedAt: now()
       };
       await api.put('workflowLayout', row, STORE_KEY_FIELDS.workflowLayout);
@@ -331,6 +427,17 @@
         state.mapOptions = global.TaskMDAWorkflowStore.sanitizeMapOptions(found?.mapOptions || {});
       } else if (found?.mapOptions && typeof found.mapOptions === 'object') {
         state.mapOptions = { ...state.mapOptions, ...found.mapOptions };
+      }
+      if (found?.organigramOptions && typeof found.organigramOptions === 'object') {
+        const src = found.organigramOptions;
+        const zoom = Number(src.zoom || 1);
+        const panX = Number(src.panX || 0);
+        const panY = Number(src.panY || 0);
+        state.organigramOptions = {
+          zoom: Number.isFinite(zoom) ? clampOrganigramZoom(zoom) : 1,
+          panX: Number.isFinite(panX) ? panX : 0,
+          panY: Number.isFinite(panY) ? panY : 0
+        };
       }
       if (refs.search) refs.search.value = state.query;
       if (refs.serviceFilter) refs.serviceFilter.value = state.serviceFilter;
@@ -387,6 +494,62 @@
           createdAt: now()
         };
       await api.put('workflowHistory', row, STORE_KEY_FIELDS.workflowHistory);
+    }
+
+    async function linkServiceToRoot(serviceId, rootServiceId) {
+      const sourceId = String(serviceId || '').trim();
+      const rootId = String(rootServiceId || '').trim();
+      if (!sourceId || !rootId || sourceId === rootId) return;
+      if (!canEditWorkflow()) {
+        toast('Lecture seule: edition reservee au role admin ou manager workflow');
+        return;
+      }
+
+      const source = getItem('service', sourceId);
+      const root = getItem('service', rootId);
+      if (!source || !root) {
+        toast('Service introuvable pour la liaison');
+        return;
+      }
+
+      const sourceLinks = Array.isArray(source.relatedServiceIds) ? source.relatedServiceIds.map((id) => String(id || '').trim()).filter(Boolean) : [];
+      const rootLinks = Array.isArray(root.relatedServiceIds) ? root.relatedServiceIds.map((id) => String(id || '').trim()).filter(Boolean) : [];
+      const nextSourceLinks = Array.from(new Set(sourceLinks.concat([rootId]))).filter((id) => id !== sourceId);
+      const nextRootLinks = Array.from(new Set(rootLinks.concat([sourceId]))).filter((id) => id !== rootId);
+
+      const sourceChanged = JSON.stringify(sourceLinks.slice().sort()) !== JSON.stringify(nextSourceLinks.slice().sort());
+      const rootChanged = JSON.stringify(rootLinks.slice().sort()) !== JSON.stringify(nextRootLinks.slice().sort());
+      if (!sourceChanged && !rootChanged) {
+        toast('Lien deja etabli');
+        return;
+      }
+
+      const updatedSource = {
+        ...source,
+        relatedServiceIds: nextSourceLinks,
+        updatedAt: now()
+      };
+      const updatedRoot = {
+        ...root,
+        relatedServiceIds: nextRootLinks,
+        updatedAt: now()
+      };
+
+      if (sourceChanged) {
+        await api.put('workflowServices', updatedSource, STORE_KEY_FIELDS.workflowServices);
+        await logHistory('update', 'service', sourceId, source, updatedSource, 'organigram_link_to_root', ['relatedServiceIds']);
+      }
+      if (rootChanged) {
+        await api.put('workflowServices', updatedRoot, STORE_KEY_FIELDS.workflowServices);
+        await logHistory('update', 'service', rootId, root, updatedRoot, 'organigram_link_to_root', ['relatedServiceIds']);
+      }
+
+      await logAudit('link_to_root', 'service', sourceId, { rootServiceId: rootId });
+      await loadCollections();
+      renderServiceFilter();
+      renderContent();
+      toast('Service relie a la racine');
+      notifyInternal(`Organigramme: liaison ${updatedSource.name || sourceId} -> ${updatedRoot.name || rootId}`);
     }
 
     function getEntityHistory(entityType, entityId, limit = 8) {
@@ -1109,6 +1272,7 @@
     function viewLabel(viewKey) {
       if (viewKey === 'map') return 'Carte';
       if (viewKey === 'organization') return 'Organisation';
+      if (viewKey === 'organigram') return 'Organigramme';
       if (viewKey === 'agents') return 'Agents';
       if (viewKey === 'tasks') return 'Taches';
       if (viewKey === 'kanban') return 'Kanban';
@@ -1139,7 +1303,65 @@
       }
     }
 
-    function cardHtml(type, id, title, sub, chips) {
+    function buildQuickCardActions(type, id, options = {}) {
+      const safeType = String(type || '').trim();
+      const safeId = String(id || '').trim();
+      if (!safeType || !safeId) return '';
+      const editable = canEditWorkflow();
+      const status = String(options.status || '').trim();
+      const actionModeRaw = typeof api.getWorkflowActionButtonsMode === 'function'
+        ? String(api.getWorkflowActionButtonsMode() || '').trim().toLowerCase()
+        : 'icon_text';
+      const actionMode = ['text', 'icon', 'icon_text'].includes(actionModeRaw) ? actionModeRaw : 'icon_text';
+      const actions = [{
+        action: 'open',
+        label: 'Ouvrir',
+        icon: 'open_in_new',
+        tone: 'primary'
+      }];
+
+      if (safeType === 'task' && editable) {
+        if (status !== 'in_progress') {
+          actions.push({ action: 'task-status', label: 'En cours', icon: 'play_arrow', nextStatus: 'in_progress' });
+        }
+        if (!['done', 'approved'].includes(status)) {
+          actions.push({ action: 'task-status', label: 'Terminee', icon: 'task_alt', nextStatus: 'done' });
+        }
+        if (status !== 'approved') {
+          actions.push({ action: 'task-status', label: 'Valider', icon: 'verified', nextStatus: 'approved' });
+        }
+      }
+
+      if ((safeType === 'procedure' || safeType === 'software') && editable) {
+        actions.push({ action: 'create-task', label: 'Ajouter tache', icon: 'add_task' });
+      }
+
+      if ((safeType === 'task' || safeType === 'procedure' || safeType === 'software') && editable) {
+        actions.push({ action: 'delete', label: 'Supprimer', icon: 'delete', tone: 'danger' });
+      }
+
+      return `
+        <div class="workflow-card-actions">
+          ${actions.map((entry) => `
+            <button
+              type="button"
+              class="workflow-card-action-btn ${entry.tone === 'primary' ? 'is-primary' : ''} ${entry.tone === 'danger' ? 'is-danger' : ''} ${actionMode === 'icon' ? 'is-icon-only' : ''} ${actionMode === 'text' ? 'is-text-only' : ''}"
+              data-wf-card-action="${esc(entry.action)}"
+              data-wf-type="${esc(safeType)}"
+              data-wf-id="${esc(safeId)}"
+              title="${esc(entry.label)}"
+              aria-label="${esc(entry.label)}"
+              ${entry.nextStatus ? `data-wf-next-status="${esc(entry.nextStatus)}"` : ''}
+            >
+              ${actionMode === 'text' ? '' : `<span class="material-symbols-outlined" aria-hidden="true">${esc(entry.icon || 'bolt')}</span>`}
+              ${actionMode === 'icon' ? '' : `<span>${esc(entry.label)}</span>`}
+            </button>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    function cardHtml(type, id, title, sub, chips, actionsHtml = '') {
       const selected = state.selectedType === type && String(state.selectedId) === String(id);
       const chipHtml = (chips || []).map((chip) => `<span class="workflow-chip">${esc(chip)}</span>`).join('');
       return `
@@ -1147,6 +1369,7 @@
           <p class="workflow-card-title">${esc(title)}</p>
           ${sub ? `<p class="workflow-card-sub">${esc(sub)}</p>` : ''}
           ${chipHtml ? `<div class="workflow-chip-row">${chipHtml}</div>` : ''}
+          ${actionsHtml || ''}
         </article>
       `;
     }
@@ -1155,6 +1378,12 @@
       const next = Number(value || 1);
       if (!Number.isFinite(next)) return 1;
       return Math.min(2.4, Math.max(0.6, next));
+    }
+
+    function clampOrganigramZoom(value) {
+      const next = Number(value || 1);
+      if (!Number.isFinite(next)) return 1;
+      return Math.min(2.2, Math.max(0.7, next));
     }
 
     function applyMapTransform() {
@@ -1171,6 +1400,17 @@
         if (!key || !(key in (state.mapOptions || {}))) return;
         toggle.checked = !!state.mapOptions[key];
       });
+    }
+
+    function applyOrganigramTransform() {
+      const canvas = refs.content?.querySelector('[data-wf-organigram-canvas]');
+      if (!canvas) return;
+      const zoom = clampOrganigramZoom(state.organigramOptions?.zoom || 1);
+      const panX = Number(state.organigramOptions?.panX || 0);
+      const panY = Number(state.organigramOptions?.panY || 0);
+      canvas.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+      const zoomLabel = refs.content?.querySelector('[data-wf-organigram-zoom-label]');
+      if (zoomLabel) zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
     }
 
     function buildMapRelations({ services, groups, agents, tasks, maps }) {
@@ -1416,7 +1656,9 @@
 
       const servicesByCommunity = new Map();
       filteredServices.forEach((service) => {
-        const communityId = String(service.communityId || '__none__');
+        const rawCommunityId = String(service.communityId || '').trim();
+        const hasKnownCommunity = rawCommunityId && maps.communityById.has(rawCommunityId);
+        const communityId = hasKnownCommunity ? rawCommunityId : '__none__';
         if (!servicesByCommunity.has(communityId)) servicesByCommunity.set(communityId, []);
         servicesByCommunity.get(communityId).push(service);
       });
@@ -1559,6 +1801,392 @@
       `;
     }
 
+    function renderOrganigramView() {
+      const maps = getMaps();
+      const filteredCommunities = applyFilters(state.collections.communities, () => 'all');
+      const filteredServices = applyFilters(state.collections.services, (item) => ({ serviceId: item.id }));
+      const filteredGroups = applyFilters(state.collections.groups, (item) => ({ serviceId: item.serviceId, groupId: item.id }));
+      const filteredAgents = applyFilters(state.collections.agents, (item) => ({
+        serviceId: item.serviceId,
+        groupId: Array.isArray(item.groupIds) && item.groupIds.length ? item.groupIds[0] : null,
+        agentId: item.id
+      }));
+      const visibleServiceIds = new Set(filteredServices.map((service) => String(service.id || '')));
+      const serviceAgentsMap = new Map();
+      filteredAgents.forEach((agent) => {
+        const serviceId = String(agent?.serviceId || '').trim();
+        if (!serviceId || !visibleServiceIds.has(serviceId)) return;
+        if (!serviceAgentsMap.has(serviceId)) serviceAgentsMap.set(serviceId, []);
+        serviceAgentsMap.get(serviceId).push(agent);
+      });
+
+      const tasksByService = new Map();
+      filterTasksByStatus(applyFilters(state.collections.tasks, (item) => ({
+        serviceId: item.serviceId,
+        groupId: item.groupId,
+        agentId: item.ownerAgentId
+      }))).forEach((task) => {
+        const serviceId = String(task?.serviceId || '').trim();
+        if (!serviceId || !visibleServiceIds.has(serviceId)) return;
+        if (!tasksByService.has(serviceId)) tasksByService.set(serviceId, []);
+        tasksByService.get(serviceId).push(task);
+      });
+      const groupsByService = new Map();
+      filteredGroups.forEach((group) => {
+        const serviceId = String(group?.serviceId || '').trim();
+        if (!serviceId || !visibleServiceIds.has(serviceId)) return;
+        if (!groupsByService.has(serviceId)) groupsByService.set(serviceId, []);
+        groupsByService.get(serviceId).push(group);
+      });
+      const servicesByCommunity = new Map();
+      filteredServices.forEach((service) => {
+        const rawCommunityId = String(service?.communityId || '').trim();
+        const hasKnownCommunity = rawCommunityId && maps.communityById.has(rawCommunityId);
+        const communityId = hasKnownCommunity ? rawCommunityId : '__none__';
+        if (!servicesByCommunity.has(communityId)) servicesByCommunity.set(communityId, []);
+        servicesByCommunity.get(communityId).push(service);
+      });
+
+      const linkMap = new Map(filteredServices.map((service) => [String(service.id || ''), new Set()]));
+      filteredServices.forEach((service) => {
+        const sourceId = String(service?.id || '').trim();
+        if (!sourceId || !linkMap.has(sourceId)) return;
+        const related = Array.isArray(service.relatedServiceIds) ? service.relatedServiceIds : [];
+        related.forEach((targetRawId) => {
+          const targetId = String(targetRawId || '').trim();
+          if (!targetId || targetId === sourceId || !linkMap.has(targetId)) return;
+          linkMap.get(sourceId).add(targetId);
+          linkMap.get(targetId).add(sourceId);
+        });
+      });
+
+      const rootService = filteredServices.find((service) => {
+        const serviceId = String(service?.id || '');
+        const agents = serviceAgentsMap.get(serviceId) || [];
+        return agents.length > 0 || tasksByService.has(serviceId);
+      }) || filteredServices[0] || null;
+
+      const rootId = String(rootService?.id || '');
+
+      const initials = (value) => {
+        const raw = String(value || '').trim();
+        if (!raw) return '?';
+        const letters = raw.split(/\s+/).map((part) => part[0]).filter(Boolean).slice(0, 2).join('');
+        return letters ? letters.toUpperCase() : raw.slice(0, 1).toUpperCase();
+      };
+
+      const statusMeta = (service) => {
+        const linkedTasks = tasksByService.get(String(service?.id || '')) || [];
+        const hasBlocked = linkedTasks.some((task) => String(task?.status || '') === 'blocked');
+        const hasReview = linkedTasks.some((task) => String(task?.status || '') === 'ready_for_review');
+        if (hasBlocked) return { label: 'TENSION', className: 'is-warning' };
+        if (hasReview) return { label: 'A VALIDER', className: 'is-review' };
+        return { label: 'ACTIF', className: 'is-active' };
+      };
+
+      const renderAgents = (serviceId) => {
+        const list = (serviceAgentsMap.get(String(serviceId || '')) || []).slice(0, 3);
+        if (!list.length) return '<span class="workflow-organigram-avatar is-empty">NA</span>';
+        const extra = Math.max(0, (serviceAgentsMap.get(String(serviceId || '')) || []).length - list.length);
+        return `
+          <div class="workflow-organigram-avatars">
+            ${list.map((agent) => `<span class="workflow-organigram-avatar" title="${esc(agent.displayName || 'Agent')}">${esc(initials(agent.displayName || agent.handle || 'A'))}</span>`).join('')}
+            ${extra > 0 ? `<span class="workflow-organigram-avatar is-extra">+${extra}</span>` : ''}
+          </div>
+        `;
+      };
+
+      const renderServiceCard = (service, options = {}) => {
+        const rootServiceId = String(options.rootServiceId || '').trim();
+        const serviceId = String(service?.id || '');
+        const isRoot = !!options.isRoot;
+        const linkedToRoot = rootServiceId ? !!linkMap.get(rootServiceId)?.has(serviceId) : false;
+        const showLinkToRootAction = rootServiceId && !isRoot && !linkedToRoot;
+        const manager = maps.agentById.get(service.managerAgentId)?.displayName
+          || (serviceAgentsMap.get(serviceId)?.[0]?.displayName)
+          || 'Responsable non defini';
+        const count = (serviceAgentsMap.get(serviceId) || []).length;
+        const tag = statusMeta(service);
+        const linkedCount = (linkMap.get(serviceId) && linkMap.get(serviceId).size) ? linkMap.get(serviceId).size : 0;
+        const groups = groupsByService.get(serviceId) || [];
+        const rootBadge = isRoot ? '<span class="workflow-organigram-service-root-badge">Racine</span>' : '';
+        const rootLinkState = !isRoot && rootServiceId
+          ? `<span class="workflow-organigram-service-linkstate ${linkedToRoot ? 'is-linked' : 'is-unlinked'}">${linkedToRoot ? 'Relie a la racine' : 'Non relie a la racine'}</span>`
+          : '';
+        const groupsHtml = groups.length
+          ? `
+            <div class="workflow-organigram-group-level">
+              <div class="workflow-organigram-group-line"></div>
+              <div class="workflow-organigram-group-grid">
+                ${groups.map((group) => `<article class="workflow-organigram-group-card" data-wf-type="group" data-wf-id="${esc(group.id)}"><p class="workflow-organigram-group-title">${esc(group.name || 'Groupe')}</p><p class="workflow-organigram-group-sub">${esc(group.type || 'metier')}</p></article>`).join('')}
+              </div>
+            </div>
+          `
+          : '<div class="workflow-organigram-group-empty">Aucun groupe rattache</div>';
+        return `
+          <div class="workflow-organigram-service-column">
+            <div class="workflow-organigram-service-stem" aria-hidden="true"></div>
+            <article class="workflow-organigram-service-card ${isRoot ? 'is-root' : ''}" data-wf-type="service" data-wf-id="${esc(serviceId)}">
+              <div class="workflow-organigram-service-head">
+                <p class="workflow-organigram-service-title">${esc(service.name || 'Service')}</p>
+                <span class="workflow-organigram-status ${esc(tag.className)}">${esc(tag.label)}</span>
+              </div>
+              <p class="workflow-organigram-service-sub">${esc(service.description || 'Service operationnel du workflow.')}</p>
+              <div class="workflow-organigram-service-foot">
+                ${renderAgents(serviceId)}
+                <div class="workflow-organigram-manager">
+                  <p>Responsable</p>
+                  <strong>${esc(manager)}</strong>
+                  <span>${esc(`${count} agent${count > 1 ? 's' : ''} - ${groups.length} groupe${groups.length > 1 ? 's' : ''} - ${linkedCount} lien${linkedCount > 1 ? 's' : ''}`)}</span>
+                </div>
+              </div>
+              <div class="workflow-organigram-service-meta">
+                ${rootBadge}
+                ${rootLinkState}
+              </div>
+              ${showLinkToRootAction ? `
+                <div class="workflow-detail-actions mt-2">
+                  <button type="button" class="workflow-btn-link-root" data-wf-organigram-link-root="${esc(serviceId)}" data-wf-organigram-root-id="${esc(rootServiceId)}"><span class="material-symbols-outlined">link</span><span>Relier maintenant</span></button>
+                </div>
+              ` : ''}
+            </article>
+            ${groupsHtml}
+          </div>
+        `;
+      };
+
+      const renderCommunityBlock = (community) => {
+        const communityId = String(community?.id || '__none__');
+        const services = servicesByCommunity.get(communityId) || [];
+        const totalAgents = services.reduce((sum, service) => {
+          const sid = String(service?.id || '');
+          return sum + (serviceAgentsMap.get(sid)?.length || 0);
+        }, 0);
+        const leadService = services[0] || null;
+        const leadManager = leadService
+          ? (maps.agentById.get(leadService.managerAgentId)?.displayName
+            || (serviceAgentsMap.get(String(leadService.id || ''))?.[0]?.displayName)
+            || 'Responsable non defini')
+          : 'Responsable non defini';
+        const serviceCols = services.map((service) => renderServiceCard(service, { isRoot: String(service.id || '') === rootId, rootServiceId: rootId })).join('');
+        return `
+          <section class="workflow-organigram-community-block">
+            <article class="workflow-organigram-community-card" data-wf-type="community" data-wf-id="${esc(community.id)}">
+              <div class="workflow-organigram-community-watermark material-symbols-outlined" aria-hidden="true">account_balance</div>
+              <p class="workflow-organigram-community-kicker">Siege social</p>
+              <h6>${esc(community.name || 'Communaute')}</h6>
+              <div class="workflow-organigram-community-foot">
+                <div>
+                  <p class="workflow-organigram-community-meta-label">Responsable</p>
+                  <strong>${esc(leadManager)}</strong>
+                </div>
+                <div class="workflow-organigram-community-count">
+                  <p class="workflow-organigram-community-meta-label">Effectif</p>
+                  <strong>${esc(`${totalAgents} agent${totalAgents > 1 ? 's' : ''}`)}</strong>
+                </div>
+              </div>
+            </article>
+            <div class="workflow-organigram-community-stem" aria-hidden="true"></div>
+            <div class="workflow-organigram-service-level">
+              ${services.length > 1 ? '<div class="workflow-organigram-service-line" aria-hidden="true"></div>' : ''}
+              <div class="workflow-organigram-grid">
+                ${serviceCols || '<div class="workflow-empty">Aucun service visible</div>'}
+              </div>
+            </div>
+          </section>
+        `;
+      };
+      const communityBlocks = filteredCommunities.map(renderCommunityBlock);
+      const orphanServices = servicesByCommunity.get('__none__') || [];
+      if (orphanServices.length) {
+        communityBlocks.push(`
+          <section class="workflow-organigram-community-block">
+            <article class="workflow-organigram-community-card is-ghost">
+              <p class="workflow-organigram-community-kicker">Communaute</p>
+              <h6>Sans communaute</h6>
+              <p>Services non rattaches</p>
+              <span>${orphanServices.length} service${orphanServices.length > 1 ? 's' : ''}</span>
+            </article>
+            <div class="workflow-organigram-community-stem" aria-hidden="true"></div>
+            <div class="workflow-organigram-service-level">
+              ${orphanServices.length > 1 ? '<div class="workflow-organigram-service-line" aria-hidden="true"></div>' : ''}
+              <div class="workflow-organigram-grid">
+                ${orphanServices.map((service) => renderServiceCard(service, { isRoot: String(service.id || '') === rootId, rootServiceId: rootId })).join('')}
+              </div>
+            </div>
+          </section>
+        `);
+      }
+
+      refs.content.innerHTML = `
+        <section class="workflow-organigram">
+          <div class="workflow-organigram-head">
+            <div>
+              <p class="workflow-organigram-kicker">Vue structurelle</p>
+              <h5 class="workflow-organigram-title">Organigramme institutionnel</h5>
+            </div>
+            <div class="workflow-organigram-controls">
+              <button type="button" class="workflow-org-action" data-wf-organigram-action="zoom_out" title="Zoom -">-</button>
+              <button type="button" class="workflow-org-action" data-wf-organigram-action="zoom_in" title="Zoom +">+</button>
+              <button type="button" class="workflow-org-action" data-wf-organigram-action="reset" title="Recentrer">Recentrer</button>
+              <button type="button" class="workflow-org-action" data-wf-organigram-action="export_pdf_portrait" title="Exporter en PDF portrait">PDF Portrait</button>
+              <button type="button" class="workflow-org-action" data-wf-organigram-action="export_pdf_landscape" title="Exporter en PDF paysage">PDF Paysage</button>
+              <button type="button" class="workflow-org-action" data-wf-organigram-action="export_pdf_auto" title="Exporter en PDF auto">PDF Auto</button>
+              <span class="workflow-map-zoom" data-wf-organigram-zoom-label>100%</span>
+            </div>
+          </div>
+          <div class="workflow-organigram-viewport" data-wf-organigram-viewport>
+            <div class="workflow-organigram-canvas" data-wf-organigram-canvas>
+              <div class="workflow-organigram-tree">
+                ${communityBlocks.join('') || '<div class="workflow-empty">Aucune donnee organisationnelle visible</div>'}
+              </div>
+            </div>
+          </div>
+        </section>
+      `;
+      applyOrganigramTransform();
+    }
+
+    function exportOrganigramAsPdf(orientation) {
+      const section = refs.content?.querySelector('.workflow-organigram');
+      if (!section) {
+        toast('Aucun organigramme a exporter');
+        return;
+      }
+      const mode = String(orientation || 'landscape') === 'portrait' ? 'portrait' : 'landscape';
+      const popup = window.open('', '_blank', `noopener,noreferrer,width=${mode === 'portrait' ? 1000 : 1320},height=920`);
+      if (!popup) {
+        toast('Pop-up bloquee: autorisez la fenetre pour exporter le PDF');
+        return;
+      }
+
+      const clone = section.cloneNode(true);
+      clone.querySelectorAll('.workflow-organigram-controls').forEach((node) => node.remove());
+      clone.querySelectorAll('.workflow-btn-link-root').forEach((node) => node.remove());
+      clone.querySelectorAll('[data-wf-organigram-canvas]').forEach((node) => {
+        node.style.transform = 'none';
+      });
+
+      const stylesheetLinks = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
+        .map((link) => link.outerHTML)
+        .join('\n');
+      const inlineStyles = Array.from(document.querySelectorAll('style'))
+        .map((styleNode) => styleNode.outerHTML)
+        .join('\n');
+      const exportedAt = new Date().toLocaleString();
+      const pageSize = mode === 'portrait' ? 'A4 portrait' : 'A4 landscape';
+      const modeLabel = mode === 'portrait' ? 'portrait' : 'paysage';
+
+      const html = `
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Organigramme workflow (${esc(modeLabel)})</title>
+  ${stylesheetLinks}
+  ${inlineStyles}
+  <style>
+    body { margin: 0; padding: 12px; background: #ffffff; color: #0f172a; font-family: "Inter", Arial, sans-serif; }
+    .wf-print-head { margin-bottom: 10px; border-bottom: 1px solid #cbd5e1; padding-bottom: 7px; }
+    .wf-print-title { margin: 0; font-size: 18px; font-weight: 800; }
+    .wf-print-meta { margin: 3px 0 0; font-size: 12px; color: #475569; }
+    .workflow-organigram { gap: 8px; }
+    .workflow-organigram-head { margin-bottom: 4px; }
+    .workflow-organigram-viewport { overflow: visible !important; border: 0 !important; min-height: auto !important; background: #ffffff !important; cursor: default !important; }
+    .workflow-organigram-canvas { transform: none !important; min-width: 0 !important; padding: 0 !important; }
+    .workflow-organigram-tree { gap: 12px; }
+    .workflow-organigram-community-block,
+    .workflow-organigram-community-card,
+    .workflow-organigram-service-column,
+    .workflow-organigram-service-card,
+    .workflow-organigram-group-card { break-inside: avoid; page-break-inside: avoid; }
+    .workflow-organigram-service-level,
+    .workflow-organigram-grid,
+    .workflow-organigram-group-grid { overflow: visible !important; }
+    .wf-print-portrait .workflow-organigram-service-column { width: min(100%, 280px); }
+    .wf-print-portrait .workflow-organigram-community-card { width: 100%; }
+    .wf-print-portrait .workflow-organigram-canvas { font-size: 0.95em; }
+    @page { size: ${pageSize}; margin: 8mm; }
+  </style>
+</head>
+<body class="wf-print-${esc(mode)}">
+  <header class="wf-print-head">
+    <h1 class="wf-print-title">Organigramme workflow</h1>
+    <p class="wf-print-meta">Format ${esc(modeLabel)} - export du ${esc(exportedAt)}</p>
+  </header>
+  ${clone.outerHTML}
+</body>
+</html>
+      `;
+
+      const printWithPopup = () => {
+        if (!popup) return false;
+        popup.document.open();
+        popup.document.write(html);
+        popup.document.close();
+        setTimeout(() => {
+          try {
+            popup.focus();
+            popup.print();
+          } catch (_) {
+            // fallback iframe below
+          }
+        }, 320);
+        return true;
+      };
+
+      const printWithIframe = () => {
+        const frame = document.createElement('iframe');
+        frame.style.position = 'fixed';
+        frame.style.right = '0';
+        frame.style.bottom = '0';
+        frame.style.width = '0';
+        frame.style.height = '0';
+        frame.style.border = '0';
+        frame.setAttribute('aria-hidden', 'true');
+        document.body.appendChild(frame);
+
+        const cleanup = () => setTimeout(() => frame.remove(), 1200);
+        frame.onload = () => {
+          setTimeout(() => {
+            try {
+              frame.contentWindow?.focus();
+              frame.contentWindow?.print();
+            } catch (error) {
+              console.error('workflow organigram print iframe', error);
+              toast('Erreur export PDF: impossible de lancer l impression');
+            } finally {
+              cleanup();
+            }
+          }, 260);
+        };
+        const doc = frame.contentDocument || frame.contentWindow?.document;
+        if (!doc) {
+          cleanup();
+          toast('Erreur export PDF: document d impression indisponible');
+          return;
+        }
+        doc.open();
+        doc.write(html);
+        doc.close();
+      };
+
+      const popupPrinted = printWithPopup();
+      if (!popupPrinted) {
+        printWithIframe();
+      }
+    }
+
+    function detectOrganigramPdfOrientation() {
+      const tree = refs.content?.querySelector('.workflow-organigram-tree');
+      if (!tree) return 'landscape';
+      const width = Number(tree.scrollWidth || tree.getBoundingClientRect?.().width || 0);
+      const height = Number(tree.scrollHeight || tree.getBoundingClientRect?.().height || 0);
+      if (!width || !height) return 'landscape';
+      const ratio = width / height;
+      return ratio > 0.9 ? 'landscape' : 'portrait';
+    }
+
     function exportOrganizationAsPdf() {
       const section = refs.content?.querySelector('.workflow-org');
       if (!section) {
@@ -1656,7 +2284,14 @@
         const doneCount = checklist.filter((entry) => entry.done).length;
         const bridgeCount = (item.linkedGlobalTaskIds || []).length + (item.linkedDocumentIds || []).length + (item.linkedThemeKeys || []).length + (item.linkedGroupKeys || []).length;
         const chips = [owner, procedure, item.status || 'todo', item.approvalStatus || 'pending', `${doneCount}/${checklist.length} checklist`, `${prereqCount} prerequis`, `${dependentCount} dependants`, `${bridgeCount} ponts`];
-        return cardHtml('task', item.id, item.title || 'Tache', item.description || '', chips);
+        return cardHtml(
+          'task',
+          item.id,
+          item.title || 'Tache',
+          item.description || '',
+          chips,
+          buildQuickCardActions('task', item.id, { status: item.status || 'todo' })
+        );
       });
       refs.content.innerHTML = `<div class="workflow-grid">${statusFilteredCards.join('') || '<div class="workflow-empty">Aucune tache workflow</div>'}</div>`;
     }
@@ -1670,7 +2305,14 @@
       const cards = applyFilters(filtered, () => 'all').map((item) => {
         const steps = Array.isArray(item.steps) ? item.steps.length : 0;
         const bridgeCount = (item.linkedGlobalTaskIds || []).length + (item.linkedGlobalDocIds || []).length + (item.linkedThemeKeys || []).length + (item.linkedGroupKeys || []).length;
-        return cardHtml('procedure', item.id, item.title || 'Procedure', item.summary || '', [`${steps} etapes`, `v${item.version || 1}`, `${bridgeCount} ponts`]);
+        return cardHtml(
+          'procedure',
+          item.id,
+          item.title || 'Procedure',
+          item.summary || '',
+          [`${steps} etapes`, `v${item.version || 1}`, `${bridgeCount} ponts`],
+          buildQuickCardActions('procedure', item.id)
+        );
       });
       refs.content.innerHTML = `<div class="workflow-grid">${cards.join('') || '<div class="workflow-empty">Aucune procedure</div>'}</div>`;
     }
@@ -1684,7 +2326,14 @@
       });
       const cards = applyFilters(filtered, () => 'all').map((item) => {
         const links = Array.isArray(item.linkedTaskIds) ? item.linkedTaskIds.length : 0;
-        return cardHtml('software', item.id, item.name || 'Logiciel', item.description || '', [`${item.category || 'Categorie'}`, `${links} taches`]);
+        return cardHtml(
+          'software',
+          item.id,
+          item.name || 'Logiciel',
+          item.description || '',
+          [`${item.category || 'Categorie'}`, `${links} taches`],
+          buildQuickCardActions('software', item.id)
+        );
       });
       refs.content.innerHTML = `<div class="workflow-grid">${cards.join('') || '<div class="workflow-empty">Aucun logiciel metier</div>'}</div>`;
     }
@@ -1718,6 +2367,7 @@
               <span class="workflow-chip">${esc(`${doneCount}/${checklist.length} checklist`)}</span>
               <span class="workflow-chip">${esc(task.priority || 'medium')}</span>
             </div>
+            ${buildQuickCardActions('task', task.id, { status })}
           </article>
         `);
       });
@@ -1763,6 +2413,7 @@
                   <span class="workflow-chip">${esc(owner)}</span>
                   <span class="workflow-chip">${esc(`${doneCount}/${checklist.length} checklist`)}</span>
                 </div>
+                ${buildQuickCardActions('task', task.id, { status: task.status || 'todo' })}
               </article>
             `;
           }).join('') || '<div class="workflow-empty">Aucune tache a afficher</div>'}
@@ -1799,6 +2450,7 @@
       if (!refs.content) return;
       if (state.activeView === 'map') renderMapView();
       else if (state.activeView === 'organization') renderOrganizationView();
+      else if (state.activeView === 'organigram') renderOrganigramView();
       else if (state.activeView === 'agents') renderAgentsView();
       else if (state.activeView === 'tasks') renderTasksView();
       else if (state.activeView === 'kanban') renderKanbanView();
@@ -2620,6 +3272,45 @@
       notifyInternal(`Suppression workflow: ${type} ${id}`);
     }
 
+    async function deleteEntityQuick(type, id) {
+      if (!canEditWorkflow()) {
+        toast('Lecture seule: edition reservee au role admin ou manager workflow');
+        return;
+      }
+      const safeType = String(type || '').trim();
+      const safeId = String(id || '').trim();
+      if (!safeType || !safeId) return;
+      const meta = ENTITY_META[safeType];
+      if (!meta) return;
+      const current = getItem(safeType, safeId);
+      if (!current) return;
+      const label = current.name || current.displayName || current.title || current.id || safeId;
+      if (!global.confirm(`Supprimer ${safeType} "${label}" ?`)) return;
+
+      await applyDetachOnDelete(safeType, safeId);
+      await api.remove(meta.store, safeId);
+      await logHistory('delete', safeType, safeId, current || null, null, 'quick_delete', Object.keys(current || {}));
+      if (safeType === 'task' || safeType === 'procedure') {
+        await syncBidirectionalExternalLinks();
+      }
+      await logAudit('delete', safeType, safeId, { source: 'quick_card_action' });
+
+      if (state.selectedType === safeType && String(state.selectedId || '') === safeId) {
+        state.selectedType = null;
+        state.selectedId = null;
+        refs.detail?.classList.add('hidden');
+        if (refs.detailBody) refs.detailBody.innerHTML = '';
+        refs.detailModal?.classList.add('hidden');
+        document.body.classList.remove('overflow-hidden');
+      }
+
+      await loadCollections();
+      renderServiceFilter();
+      renderContent();
+      toast('Element workflow supprime');
+      notifyInternal(`Suppression workflow: ${safeType} ${safeId}`);
+    }
+
     let workflowCreateKind = '';
 
     function openCreateModal(kind) {
@@ -2983,6 +3674,31 @@
       if (state.bound) return;
       state.bound = true;
 
+      refs.quickAddToggle?.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        refs.quickAddMenu?.classList.toggle('hidden');
+      });
+
+      refs.quickAddMenu?.addEventListener('click', (event) => {
+        const item = event.target.closest('.workflow-quick-add-item');
+        if (!item) return;
+        refs.quickAddMenu?.classList.add('hidden');
+      });
+
+      refs.filtersToggle?.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        refs.filtersPanel?.classList.toggle('hidden');
+      });
+
+      document.addEventListener('click', (event) => {
+        const inQuickAdd = event.target.closest('.workflow-quick-add');
+        if (!inQuickAdd) refs.quickAddMenu?.classList.add('hidden');
+        const inFilters = event.target.closest('#workflow-filters-panel, #workflow-filters-toggle');
+        if (!inFilters) refs.filtersPanel?.classList.add('hidden');
+      });
+
       Object.entries(viewIds).forEach(([key, id]) => {
         document.getElementById(id)?.addEventListener('click', () => setView(key));
       });
@@ -3023,9 +3739,38 @@
         renderContent();
       });
 
-      refs.content?.addEventListener('click', (event) => {
+      refs.content?.addEventListener('click', async (event) => {
+        const quickAction = event.target.closest('[data-wf-card-action][data-wf-type][data-wf-id]');
+        if (quickAction) {
+          event.preventDefault();
+          event.stopPropagation();
+          const action = String(quickAction.getAttribute('data-wf-card-action') || '').trim();
+          const type = String(quickAction.getAttribute('data-wf-type') || '').trim();
+          const id = String(quickAction.getAttribute('data-wf-id') || '').trim();
+          if (!action || !type || !id) return;
+          if (action === 'open' || action === 'edit') {
+            openDetail(type, id);
+            return;
+          }
+          if (action === 'create-task') {
+            await quickCreateWorkflowTaskFromContext(type, id);
+            return;
+          }
+          if (action === 'task-status' && type === 'task') {
+            const nextStatus = String(quickAction.getAttribute('data-wf-next-status') || '').trim();
+            if (!nextStatus) return;
+            await moveTaskToStatus(id, nextStatus);
+            return;
+          }
+          if (action === 'delete') {
+            await deleteEntityQuick(type, id);
+            return;
+          }
+        }
+
         const mapAction = event.target.closest('[data-wf-map-action]');
         if (mapAction) {
+          if (state.activeView !== 'map') return;
           event.preventDefault();
           event.stopPropagation();
           const action = String(mapAction.getAttribute('data-wf-map-action') || '').trim();
@@ -3038,6 +3783,51 @@
           }
           applyMapTransform();
           persistLayout().catch(() => null);
+          return;
+        }
+
+        const organigramAction = event.target.closest('[data-wf-organigram-action]');
+        if (organigramAction) {
+          if (state.activeView !== 'organigram') return;
+          event.preventDefault();
+          event.stopPropagation();
+          const action = String(organigramAction.getAttribute('data-wf-organigram-action') || '').trim();
+          if (action === 'export_pdf_portrait') {
+            exportOrganigramAsPdf('portrait');
+            return;
+          }
+          if (action === 'export_pdf_landscape') {
+            exportOrganigramAsPdf('landscape');
+            return;
+          }
+          if (action === 'export_pdf_auto') {
+            const mode = detectOrganigramPdfOrientation();
+            exportOrganigramAsPdf(mode);
+            return;
+          }
+          if (action === 'zoom_in') state.organigramOptions.zoom = clampOrganigramZoom((state.organigramOptions.zoom || 1) + 0.1);
+          if (action === 'zoom_out') state.organigramOptions.zoom = clampOrganigramZoom((state.organigramOptions.zoom || 1) - 0.1);
+          if (action === 'reset') {
+            state.organigramOptions.zoom = 1;
+            state.organigramOptions.panX = 0;
+            state.organigramOptions.panY = 0;
+          }
+          applyOrganigramTransform();
+          persistLayout().catch(() => null);
+          return;
+        }
+
+        const linkToRootAction = event.target.closest('[data-wf-organigram-link-root]');
+        if (linkToRootAction) {
+          if (state.activeView !== 'organigram') return;
+          event.preventDefault();
+          event.stopPropagation();
+          const sourceId = String(linkToRootAction.getAttribute('data-wf-organigram-link-root') || '').trim();
+          const rootId = String(linkToRootAction.getAttribute('data-wf-organigram-root-id') || '').trim();
+          linkServiceToRoot(sourceId, rootId).catch((error) => {
+            console.error('workflow organigram link root', error);
+            toast(`Erreur liaison: ${error.message}`);
+          });
           return;
         }
 
@@ -3164,6 +3954,17 @@
         persistLayout().catch(() => null);
       }, { passive: false });
 
+      refs.content?.addEventListener('wheel', (event) => {
+        const viewport = event.target.closest('[data-wf-organigram-viewport]');
+        if (!viewport || state.activeView !== 'organigram') return;
+        if (!event.ctrlKey) return;
+        event.preventDefault();
+        const delta = event.deltaY < 0 ? 0.08 : -0.08;
+        state.organigramOptions.zoom = clampOrganigramZoom((state.organigramOptions.zoom || 1) + delta);
+        applyOrganigramTransform();
+        persistLayout().catch(() => null);
+      }, { passive: false });
+
       refs.content?.addEventListener('mousedown', (event) => {
         const viewport = event.target.closest('[data-wf-map-viewport]');
         if (!viewport || state.activeView !== 'map') return;
@@ -3178,6 +3979,20 @@
         viewport.classList.add('is-panning');
       });
 
+      refs.content?.addEventListener('mousedown', (event) => {
+        const viewport = event.target.closest('[data-wf-organigram-viewport]');
+        if (!viewport || state.activeView !== 'organigram') return;
+        if (event.button !== 0) return;
+        if (event.target.closest('button, a, input, select, textarea, [data-wf-type]')) return;
+        state.draggingOrganigram = {
+          startX: event.clientX,
+          startY: event.clientY,
+          panX: Number(state.organigramOptions.panX || 0),
+          panY: Number(state.organigramOptions.panY || 0)
+        };
+        viewport.classList.add('is-panning');
+      });
+
       document.addEventListener('mousemove', (event) => {
         if (!state.draggingMap || state.activeView !== 'map') return;
         const dx = event.clientX - state.draggingMap.startX;
@@ -3187,10 +4002,26 @@
         applyMapTransform();
       });
 
+      document.addEventListener('mousemove', (event) => {
+        if (!state.draggingOrganigram || state.activeView !== 'organigram') return;
+        const dx = event.clientX - state.draggingOrganigram.startX;
+        const dy = event.clientY - state.draggingOrganigram.startY;
+        state.organigramOptions.panX = state.draggingOrganigram.panX + dx;
+        state.organigramOptions.panY = state.draggingOrganigram.panY + dy;
+        applyOrganigramTransform();
+      });
+
       document.addEventListener('mouseup', () => {
         if (!state.draggingMap) return;
         state.draggingMap = null;
         refs.content?.querySelectorAll('[data-wf-map-viewport].is-panning')?.forEach((node) => node.classList.remove('is-panning'));
+        persistLayout().catch(() => null);
+      });
+
+      document.addEventListener('mouseup', () => {
+        if (!state.draggingOrganigram) return;
+        state.draggingOrganigram = null;
+        refs.content?.querySelectorAll('[data-wf-organigram-viewport].is-panning')?.forEach((node) => node.classList.remove('is-panning'));
         persistLayout().catch(() => null);
       });
 
