@@ -64,6 +64,12 @@ Nom d interface par defaut: `NEXUS MDA`.
   - digestion documentaire locale (`.eml/.txt/.md/.html/.pdf/.doc/.docx/.odt/.rtf`) vers post resume.
 - Recherche globale dans le header (navigation directe vers projet/tache/document/message/canal).
 - `Referentiels`: administration globale des thematiques, groupes et registre versions logicielles.
+- `RGPD`: registre de traitements et pilotage conformite:
+  - vues `Registre`, `Activites`, `Brouillons detectes`, `Controles`, `Journal`,
+  - creation/edition/validation/archivage de fiches,
+  - detection semi-automatique depuis les contenus metier,
+  - exports JSON/CSV,
+  - liaison contextuelle `Impact RGPD` depuis Workflow / Projet / Tache (generer, lier, ouvrir fiche).
 - `Workflow`: rubrique transverse dediee a l organisation metier:
   - vues `Carte`, `Organisation`, `Organigramme`, `Agents`, `Processus`, `Modeles de processus`, `Taches`, `Kanban`, `Timeline`, `Procedures`, `Logiciels metiers`, `Analyse`, `Gouvernance`, `Journal`
   - carte metier: zoom/pan, auto-layout, mini-carte interactive, export PNG et export PDF
@@ -87,6 +93,14 @@ Nom d interface par defaut: `NEXUS MDA`.
   - export PDF des vues `Organisation` et `Organigramme` + fiches `Processus`, `Service`, `Agent`, `Logiciel`
   - detail editable + ponts transverses vers taches/documents/themes/groupes globaux
 - Correctif UX/CSS: isolation stricte des sections transverses (plus de melange visuel Taches/Calendrier).
+- Harmonisation UX globale:
+  - mode d affichage parametrable des boutons d action (`icone`, `texte`, `icone + texte`) applique a Workflow / Projets / Taches / Documents / RGPD,
+  - harmonisation des boutons `Fermer` sur les modales (meme regle de rendu que les boutons d action),
+  - fermeture des modales au clic hors fenetre,
+  - terminologie metier uniformisee (ex: `Date limite`, `Responsable`, `Visibilite`).
+- Personnalisation visuelle:
+  - couleur du chrome applicatif (header + sidebar) configurable utilisateur,
+  - prise en charge complete des variables de theme en mode clair/sombre (y compris hovers metier).
 
 ### Ergonomie documents
 - Versement documents projet:
@@ -133,7 +147,7 @@ Nom d interface par defaut: `NEXUS MDA`.
 ## Base de donnees
 
 - DB: `taskmda-team-standalone`
-- Version schema: `DB_VERSION = 13`
+- Version schema: `DB_VERSION = 16`
 - Stores:
   - `events`
   - `processedEvents`
@@ -158,9 +172,21 @@ Nom d interface par defaut: `NEXUS MDA`.
   - `workflowTasks`
   - `workflowProcedures`
   - `workflowSoftware`
+  - `workflowRoles`
+  - `workflowProcesses`
+  - `workflowProcessSteps`
+  - `workflowFlows`
+  - `workflowProcessTemplates`
+  - `workflowMetrics`
   - `workflowLayout`
   - `workflowAudit`
   - `workflowHistory`
+  - `rgpdActivities`
+  - `rgpdAssessments`
+  - `rgpdTemplates`
+  - `rgpdLinks`
+  - `rgpdAudit`
+  - `rgpdExports`
 
 ## Synchronisation collaborative
 
