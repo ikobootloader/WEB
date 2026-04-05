@@ -74,10 +74,8 @@
         <span class="material-symbols-outlined text-base">cloud_off</span>
         <span>Non connecté</span>
       </div>
-      <div id="bg-sync-indicator" class="hidden bg-sync-indicator is-idle" aria-live="polite" title="Synchronisation collaborative en arriere-plan">
-        <span class="bg-sync-dot"></span>
-        <span class="bg-sync-text" data-bg-sync-text>Synchro planifiee</span>
-        <span class="bg-sync-count" data-bg-sync-count>0</span>
+      <div id="bg-sync-indicator" class="bg-sync-indicator is-idle" aria-live="polite" title="Synchronisation collaborative">
+        <span class="material-symbols-outlined bg-sync-icon" aria-hidden="true">sync</span>
       </div>
       <button id="btn-link-folder" class="px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-semibold hover:bg-slate-50">
         Lier un dossier
@@ -378,7 +376,7 @@
             <div class="workflow-head mb-3">
               <div class="workflow-quick-actions">
                 <div class="workflow-quick-add">
-                  <button id="workflow-quick-add-toggle" type="button" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Ajouter</button>
+                  <button id="workflow-quick-add-toggle" type="button" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold" data-action-kind="create">Ajouter</button>
                   <div id="workflow-quick-add-menu" class="workflow-quick-add-menu hidden" role="menu" aria-label="Ajouter un element workflow">
                     <button id="btn-workflow-add-community" type="button" class="workflow-quick-add-item" role="menuitem">Communaute</button>
                     <button id="btn-workflow-add-service" type="button" class="workflow-quick-add-item" role="menuitem">Service</button>
@@ -395,7 +393,8 @@
                   </div>
                 </div>
                 <button id="btn-workflow-migrate-agent-users" class="workflow-btn-light px-3 py-2 rounded-lg text-sm font-semibold">Auto-lier comptes agents</button>
-                <button id="btn-workflow-inject-org-model" class="workflow-btn-light px-3 py-2 rounded-lg text-sm font-semibold">Injecter jeu d exemple</button>
+                <button id="btn-workflow-inject-org-model" class="workflow-btn-light px-3 py-2 rounded-lg text-sm font-semibold" data-action-kind="template">Injecter jeu d exemple</button>
+                <button id="workflow-filters-toggle" class="workflow-btn-light px-3 py-2 rounded-lg text-sm font-semibold" type="button">Filtres</button>
               </div>
             </div>
             <div class="workflow-toolbar mb-3">
@@ -416,7 +415,6 @@
                 <button id="workflow-view-governance" class="workflow-view-tab" type="button">Gouvernance</button>
                 <button id="workflow-view-journal" class="workflow-view-tab" type="button">Journal</button>
                 </div>
-                <button id="workflow-filters-toggle" class="workflow-btn-light px-3 py-2 rounded-lg text-sm font-semibold" type="button">Filtres</button>
               </div>
               <div id="workflow-filters-panel" class="workflow-filters hidden">
                 <input id="workflow-search" type="text" placeholder="Recherche workflow..." class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
@@ -523,8 +521,8 @@
                     <p id="global-message-target-label" class="text-sm text-slate-600">Destinataire: Canal général (tous les agents connus)</p>
                     <span id="global-message-group-badge" class="discussion-channel-badge hidden" aria-live="polite"></span>
                     <div class="flex items-center gap-2">
-                      <button id="btn-global-delete-conversation" type="button" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-100 text-rose-700">Supprimer la conversation</button>
-                      <button id="btn-global-toggle-emoji-picker" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700">Émojis</button>
+                      <button id="btn-global-delete-conversation" type="button" class="task-action-btn task-action-btn-danger" data-action-kind="danger">Supprimer la conversation</button>
+                      <button id="btn-global-toggle-emoji-picker" class="task-action-btn task-action-btn-subtle" data-action-kind="manage">Émojis</button>
                     </div>
                   </div>
                   <textarea id="global-message-input" rows="3" placeholder="Écrire un message..." class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"></textarea>
@@ -550,14 +548,14 @@
                 <h4 class="discussion-side-title">Agents connus</h4>
                 <input id="global-message-contact-search" type="text" placeholder="Rechercher un agent..." class="px-3 py-2 border border-slate-300 rounded-lg text-sm mb-2">
                 <div class="discussion-recipient-actions mb-2">
-                  <button id="btn-global-message-select-all" type="button" class="discussion-recipient-btn">Tout sélectionner</button>
-                  <button id="btn-global-message-clear-selection" type="button" class="discussion-recipient-btn">Tout désélectionner</button>
+                  <button id="btn-global-message-select-all" type="button" class="discussion-recipient-btn workspace-action-inline" data-action-kind="manage">Tout sélectionner</button>
+                  <button id="btn-global-message-clear-selection" type="button" class="discussion-recipient-btn workspace-action-inline" data-action-kind="manage">Tout désélectionner</button>
                 </div>
                 <div class="discussion-recipient-actions mb-2">
                   <select id="global-message-group-channel-select" class="px-3 py-2 border border-slate-300 rounded-lg text-sm flex-1">
                     <option value="">Canal de groupe (groupes existants)</option>
                   </select>
-                  <button id="btn-global-message-open-group-channel" type="button" class="discussion-recipient-btn">Ouvrir</button>
+                  <button id="btn-global-message-open-group-channel" type="button" class="discussion-recipient-btn workspace-action-inline" data-action-kind="open">Ouvrir</button>
                 </div>
                 <div id="global-message-contacts-list" class="discussion-members-list">
                   <div class="workspace-empty-state workspace-empty-state-compact">
@@ -916,10 +914,10 @@
           <div id="project-overview-panel" class="panel pt-3 p-3 mb-3">
             <div class="flex items-start justify-between gap-3">
               <h2 id="project-title" class="section-title text-3xl font-extrabold mb-2"></h2>
-              <div class="flex items-center gap-2">
-                <button id="btn-edit-project" class="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold">Modifier</button>
-                <button id="btn-delete-project" class="px-3 py-1.5 rounded-lg border border-red-200 text-red-700 text-sm font-semibold">Supprimer</button>
-              </div>
+                <div class="flex items-center gap-2">
+                <button id="btn-edit-project" class="task-action-btn" data-action-kind="edit">Modifier</button>
+                <button id="btn-delete-project" class="task-action-btn task-action-btn-danger" data-action-kind="danger">Supprimer</button>
+                </div>
             </div>
             <div class="mb-4">
               <div id="project-description-display" class="project-description markdown-content text-slate-700"></div>
@@ -945,8 +943,8 @@
             </div>
             <div id="project-rgpd-impact" class="mt-4"></div>
             <div class="mt-4 flex flex-wrap gap-2">
-              <button id="btn-email-project-status" class="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold">Email statut projet</button>
-              <button id="btn-email-project-complete" class="px-3 py-1.5 rounded-lg border border-emerald-200 text-emerald-700 text-sm font-semibold">Email projet achevé</button>
+              <button id="btn-email-project-status" class="task-action-btn task-action-btn-subtle" data-action-kind="notify">Email statut projet</button>
+              <button id="btn-email-project-complete" class="task-action-btn task-action-btn-subtle" data-action-kind="notify">Email projet achevé</button>
             </div>
             <div id="project-lock-warning" class="hidden mt-3 text-xs px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 text-amber-800"></div>
             <div class="project-mode-context-label mt-6">Navigation du projet</div>
@@ -1562,6 +1560,30 @@
         <button id="btn-close-doc-preview" class="px-3 py-1 rounded-lg border border-slate-300 text-sm font-semibold">Fermer</button>
       </div>
       <div id="doc-preview-content" class="min-h-[320px] bg-slate-50 border border-slate-200 rounded-xl p-3"></div>
+      <div id="doc-preview-meta" class="mt-3 rounded-xl border border-slate-200 bg-white p-3 space-y-2">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+          <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+            <p class="text-xs font-semibold text-slate-500 mb-1">Nom</p>
+            <p id="doc-preview-meta-name" data-inline-doc-preview-field="name" class="font-medium text-slate-800">-</p>
+          </div>
+          <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+            <p class="text-xs font-semibold text-slate-500 mb-1">Visibilité</p>
+            <p id="doc-preview-meta-sharing" data-inline-doc-preview-field="sharingMode" class="font-medium text-slate-800">-</p>
+          </div>
+          <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+            <p class="text-xs font-semibold text-slate-500 mb-1">Thématique</p>
+            <p id="doc-preview-meta-theme" data-inline-doc-preview-field="theme" class="font-medium text-slate-800">-</p>
+          </div>
+          <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+            <p class="text-xs font-semibold text-slate-500 mb-1">Source</p>
+            <p id="doc-preview-meta-source" class="font-medium text-slate-800">-</p>
+          </div>
+        </div>
+        <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+          <p class="text-xs font-semibold text-slate-500 mb-1">Notes</p>
+          <p id="doc-preview-meta-notes" data-inline-doc-preview-field="notes" class="text-sm text-slate-700 whitespace-pre-wrap break-words">-</p>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1581,18 +1603,24 @@
         </div>
         <div>
           <label for="doc-binding-mode" class="block text-sm font-semibold mb-1">Visibilité du document</label>
-          <select id="doc-binding-mode" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
-            <option value="private">Privée</option>
-            <option value="shared">Collaborative</option>
-          </select>
+          <div id="doc-binding-field-mode" data-inline-doc-binding-field="mode" class="rounded-lg">
+            <select id="doc-binding-mode" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+              <option value="private">Privée</option>
+              <option value="shared">Collaborative</option>
+            </select>
+          </div>
         </div>
         <div>
           <label for="doc-binding-project" class="block text-sm font-semibold mb-1">Rattacher à</label>
-          <select id="doc-binding-project" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"></select>
+          <div id="doc-binding-field-project" data-inline-doc-binding-field="project" class="rounded-lg">
+            <select id="doc-binding-project" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"></select>
+          </div>
         </div>
         <div>
           <label for="doc-binding-task" class="block text-sm font-semibold mb-1">Lier à une tâche (optionnel)</label>
-          <select id="doc-binding-task" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"></select>
+          <div id="doc-binding-field-task" data-inline-doc-binding-field="task" class="rounded-lg">
+            <select id="doc-binding-task" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"></select>
+          </div>
           <p class="text-[11px] text-slate-500 mt-1">Sans tâche, le document reste rattaché au projet uniquement.</p>
         </div>
       </div>
@@ -1791,8 +1819,8 @@
       </div>
       <p class="text-sm text-slate-700 mb-4">Confirmez pour supprimer tout l'historique visible de cette conversation.</p>
       <div class="flex items-center justify-end gap-2">
-        <button id="btn-global-conversation-delete-cancel" class="px-3 py-1.5 rounded-lg border border-slate-300 text-sm font-semibold">Annuler</button>
-        <button id="btn-global-conversation-delete-confirm" class="px-4 py-2 rounded-lg bg-rose-600 text-white text-sm font-semibold">Supprimer définitivement</button>
+        <button id="btn-global-conversation-delete-cancel" class="task-action-btn task-action-btn-subtle" data-action-kind="close">Annuler</button>
+        <button id="btn-global-conversation-delete-confirm" class="task-action-btn task-action-btn-danger" data-action-kind="danger">Supprimer définitivement</button>
       </div>
     </div>
   </div>

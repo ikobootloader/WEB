@@ -24,8 +24,23 @@
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   position: relative;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding-bottom: 2px;
+}
+
+.workflow-quick-actions::-webkit-scrollbar {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .workflow-quick-actions {
+    justify-content: flex-end;
+  }
 }
 
 .workflow-quick-add {
@@ -78,14 +93,41 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.55rem;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+}
+
+.workflow-toolbar-main .workflow-quick-actions {
+  margin-left: auto;
+  flex: 0 0 auto;
+  align-self: center;
+}
+
+.workflow-head.workflow-head-actions-moved {
+  display: none !important;
+  margin: 0 !important;
 }
 
 .workflow-view-tabs {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding-bottom: 2px;
+}
+
+.workflow-view-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+#workflow-filters-toggle {
+  flex: 0 0 auto;
+  align-self: center;
 }
 
 .workflow-view-tab {
@@ -1542,7 +1584,7 @@ html[data-wf-action-buttons="text"] .workflow-card-action-btn .taskmda-action-ic
 
   .workflow-quick-actions {
     width: 100%;
-    justify-content: space-between;
+    justify-content: flex-end;
   }
 
   .workflow-toolbar-main {

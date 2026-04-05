@@ -767,55 +767,39 @@ html.dark .feed-ref-btn {
 .bg-sync-indicator {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--outline);
-  background: var(--surface);
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.bg-sync-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: #9ca3af;
-}
-
-.bg-sync-count {
-  min-width: 16px;
-  height: 16px;
-  border-radius: 999px;
-  display: inline-flex;
-  align-items: center;
   justify-content: center;
-  padding: 0 4px;
-  font-size: 10px;
-  font-weight: 800;
-  background: rgba(148, 163, 184, 0.2);
-  color: inherit;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--app-chrome-control-border);
+  background: var(--app-chrome-control-bg);
+  color: var(--app-chrome-control-text);
+  flex: 0 0 36px;
+  transition: border-color 0.18s ease, background-color 0.18s ease, color 0.18s ease;
 }
 
-.bg-sync-indicator.is-queued .bg-sync-dot {
-  background: #f59e0b;
+.bg-sync-icon {
+  font-size: 19px;
+  line-height: 1;
+  transform: scaleX(-1);
 }
 
-.bg-sync-indicator.is-syncing .bg-sync-dot {
-  background: #2563eb;
-  animation: bg-sync-pulse 1s infinite;
+.bg-sync-indicator.is-queued,
+.bg-sync-indicator.is-syncing {
+  color: #1d4ed8;
 }
 
-.bg-sync-indicator.is-error .bg-sync-dot {
-  background: #ef4444;
+.bg-sync-indicator.is-error {
+  color: #dc2626;
 }
 
-@keyframes bg-sync-pulse {
-  0% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.35); }
-  70% { box-shadow: 0 0 0 8px rgba(37, 99, 235, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
+.bg-sync-indicator.is-syncing .bg-sync-icon {
+  animation: bg-sync-spin 0.85s linear infinite reverse;
+}
+
+@keyframes bg-sync-spin {
+  from { transform: scaleX(-1) rotate(0deg); }
+  to { transform: scaleX(-1) rotate(360deg); }
 }
 
 html.dark body {
@@ -900,13 +884,9 @@ html.dark #sidebar-link-folder {
 }
 
 html.dark .bg-sync-indicator {
-  border-color: #334769;
-  background: #18233d;
-  color: #b9c9e8;
-}
-
-html.dark .bg-sync-count {
-  background: rgba(122, 162, 255, 0.2);
+  border-color: var(--app-chrome-control-border);
+  background: var(--app-chrome-control-bg);
+  color: var(--app-chrome-control-text);
 }
 
 html.dark .panel,
@@ -1316,6 +1296,10 @@ html.dark #project-work-panel .text-gray-600 {
 
 html.dark .project-description.is-collapsed::after {
   background: linear-gradient(180deg, rgba(17, 27, 49, 0), rgba(17, 27, 49, 1));
+}
+
+html.dark .project-description.task-detail-inline-editable.project-description-empty:hover:not(.is-inline-editing)::before {
+  color: #9ec5ff;
 }
 
 html.dark .project-description-toggle {
@@ -2541,6 +2525,38 @@ html.dark #project-work-layout.is-vertical #project-view-tabs-wrap .tab-overflow
 .project-description {
   line-height: 1.5;
   position: relative;
+}
+
+.project-description.project-description-empty {
+  min-height: 30px;
+}
+
+.project-description.task-detail-inline-editable.project-description-empty:hover:not(.is-inline-editing)::before {
+  content: "edit";
+  font-family: "Material Symbols Outlined";
+  font-weight: normal;
+  font-style: normal;
+  font-size: 18px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  direction: ltr;
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #1d4ed8;
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+.project-description.task-detail-inline-editable.project-description-empty.is-inline-editing::before,
+.project-description.task-detail-inline-editable.project-description-empty[data-inline-editing="1"]::before,
+.project-description.task-detail-inline-editable.project-description-empty:has(.task-detail-inline-editor-wrap)::before {
+  content: none !important;
+  display: none !important;
 }
 
 .project-description.is-collapsed {
@@ -3843,6 +3859,31 @@ html.dark .global-kanban-col-count {
   backdrop-filter: blur(2px);
 }
 
+#modal-doc-preview button:focus-visible,
+#modal-doc-binding button:focus-visible,
+#modal-doc-binding [data-inline-doc-binding-field]:focus-visible,
+#modal-doc-preview [data-inline-doc-preview-field]:focus-visible,
+#modal-doc-binding select:focus-visible,
+#modal-task-convert button:focus-visible,
+#modal-task-convert input:focus-visible,
+#modal-task-convert select:focus-visible,
+#modal-global-conversation-delete button:focus-visible,
+#modal-calendar-info-details button:focus-visible,
+#modal-edit-user-name button:focus-visible,
+#modal-edit-user-name input:focus-visible,
+#modal-edit-user-name select:focus-visible,
+#modal-edit-project button:focus-visible,
+#modal-edit-project input:focus-visible,
+#modal-edit-project select:focus-visible,
+#modal-edit-project textarea:focus-visible,
+#modal-workflow-entity button:focus-visible,
+#modal-workflow-entity input:focus-visible,
+#modal-workflow-entity select:focus-visible,
+#modal-workflow-entity textarea:focus-visible {
+  outline: 2px solid hsl(var(--brand-primary));
+  outline-offset: 2px;
+}
+
 .modal-field-label {
   display: inline-flex;
   align-items: center;
@@ -3886,6 +3927,11 @@ html.dark .global-kanban-col-count {
 .task-detail-inline-editable:hover {
   background: rgba(26, 66, 138, 0.08);
   box-shadow: inset 0 0 0 1px rgba(26, 66, 138, 0.18);
+}
+
+.task-detail-inline-editable:focus-visible {
+  outline: 2px solid hsl(var(--brand-primary));
+  outline-offset: 2px;
 }
 
 .task-detail-inline-editable.is-inline-editing {
@@ -4009,6 +4055,10 @@ html.dark .task-detail-inline-editable:hover {
   box-shadow: inset 0 0 0 1px rgba(122, 162, 255, 0.35);
 }
 
+html.dark .task-detail-inline-editable:focus-visible {
+  outline-color: #8fb3ff;
+}
+
 html.dark .task-detail-inline-block {
   box-shadow: inset 0 1px 0 rgba(148, 173, 214, 0.12), 0 10px 22px rgba(0, 0, 0, 0.24);
 }
@@ -4060,6 +4110,127 @@ html.dark .task-detail-inline-quill-host .ql-toolbar button {
 html.dark .task-detail-inline-quill-host .ql-toolbar button:hover,
 html.dark .task-detail-inline-quill-host .ql-toolbar button:focus-visible {
   background: rgba(77, 119, 215, 0.24);
+}
+
+#modal-doc-binding .space-y-3 > div > label {
+  letter-spacing: 0.01em;
+}
+
+#modal-doc-binding .space-y-3 {
+  row-gap: 12px;
+}
+
+#modal-doc-binding .space-y-3 > div > label.block {
+  margin-bottom: 8px;
+}
+
+#modal-doc-binding #doc-binding-current-source {
+  margin-top: 8px;
+}
+
+#modal-doc-binding #doc-binding-current-source,
+#modal-doc-binding .text-\[11px\] {
+  line-height: 1.35;
+}
+
+#modal-doc-binding [data-inline-doc-binding-field] {
+  border-radius: 10px;
+  transition: background-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+#modal-doc-binding [data-inline-doc-binding-field].task-detail-inline-editable:hover {
+  background: rgba(26, 66, 138, 0.07);
+  box-shadow: inset 0 0 0 1px rgba(26, 66, 138, 0.18);
+}
+
+#modal-doc-binding [data-inline-doc-binding-field].is-inline-editing {
+  background: transparent;
+  box-shadow: none;
+}
+
+#modal-doc-binding [data-inline-doc-binding-field] > select:disabled {
+  opacity: 1;
+  color: var(--ui-field-text);
+  background: hsl(var(--surface-base));
+  border-color: var(--ui-field-border) !important;
+  cursor: pointer;
+}
+
+#modal-doc-binding [data-inline-doc-binding-field].task-detail-inline-editable > select:disabled {
+  color: #1f3b73;
+  font-weight: 600;
+}
+
+#modal-doc-binding [data-inline-doc-binding-field].is-inline-editing > select {
+  box-shadow: var(--ui-field-focus-ring);
+  border-color: var(--ui-field-focus-border) !important;
+  background: var(--ui-field-bg-focus);
+}
+
+#modal-doc-binding .flex.items-center.justify-end.gap-2.mt-4 {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+html.dark #modal-doc-binding [data-inline-doc-binding-field].task-detail-inline-editable:hover {
+  background: rgba(77, 119, 215, 0.2);
+  box-shadow: inset 0 0 0 1px rgba(122, 162, 255, 0.34);
+}
+
+html.dark #modal-doc-binding [data-inline-doc-binding-field] > select:disabled {
+  color: var(--ui-field-text);
+  background: hsl(var(--surface-base));
+}
+
+html.dark #modal-doc-binding [data-inline-doc-binding-field].task-detail-inline-editable > select:disabled {
+  color: #dbe8ff;
+}
+
+html.dark #modal-doc-binding .flex.items-center.justify-end.gap-2.mt-4 {
+  border-top-color: rgba(122, 162, 255, 0.24);
+}
+
+/* Cadence transversale modales: 8 / 12 / 16 */
+#modal-task-convert .space-y-2 > :not([hidden]) ~ :not([hidden]),
+#modal-doc-editor .space-y-2 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 8px;
+}
+
+#modal-doc-binding .space-y-3 > :not([hidden]) ~ :not([hidden]),
+#modal-doc-editor .space-y-3 > :not([hidden]) ~ :not([hidden]),
+#modal-workflow-entity #workflow-modal-body.space-y-3 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 12px;
+}
+
+#modal-task-convert .space-y-4 > :not([hidden]) ~ :not([hidden]),
+#modal-edit-user-name .space-y-4 > :not([hidden]) ~ :not([hidden]),
+#modal-edit-project .space-y-4 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 16px;
+}
+
+#modal-task-convert .flex.items-center.justify-end.gap-2,
+#modal-global-conversation-delete .flex.items-center.justify-end.gap-2,
+#modal-calendar-info-details .flex.flex-wrap.items-center.justify-end.gap-2,
+#modal-doc-editor .flex.justify-end.gap-2.mt-4 {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+#modal-task-convert label.block,
+#modal-global-conversation-delete label.block,
+#modal-calendar-info-details label.block,
+#modal-edit-user-name label.block,
+#modal-edit-project label.block {
+  margin-bottom: 8px;
+}
+
+html.dark #modal-task-convert .flex.items-center.justify-end.gap-2,
+html.dark #modal-global-conversation-delete .flex.items-center.justify-end.gap-2,
+html.dark #modal-calendar-info-details .flex.flex-wrap.items-center.justify-end.gap-2,
+html.dark #modal-doc-editor .flex.justify-end.gap-2.mt-4 {
+  border-top-color: rgba(122, 162, 255, 0.24);
 }
 
 input[type="text"],
@@ -4806,6 +4977,8 @@ html[data-wf-action-buttons="icon"] .workspace-action-inline,
 html[data-wf-action-buttons="icon"] .workflow-btn-light,
 html[data-wf-action-buttons="icon"] .workflow-btn-danger,
 html[data-wf-action-buttons="icon"] .workflow-btn-link-root,
+html[data-wf-action-buttons="icon"] #workflow-quick-add-toggle,
+html[data-wf-action-buttons="icon"] #workflow-filters-toggle,
 html[data-wf-action-buttons="icon"] .taskmda-modal-close-btn,
 html[data-wf-action-buttons="icon"] .rgpd-open-btn,
 html[data-wf-action-buttons="icon"] button[data-rgpd-context-action],
@@ -4822,11 +4995,199 @@ html[data-wf-action-buttons="icon"] button[id^="rgpd-"][id$="-btn"] {
   line-height: 1;
 }
 
+html[data-wf-action-buttons="icon"] .task-action-btn,
+html[data-wf-action-buttons="icon"] .workspace-action-inline,
+html[data-wf-action-buttons="icon"] .workflow-btn-light,
+html[data-wf-action-buttons="icon"] .workflow-btn-danger,
+html[data-wf-action-buttons="icon"] .workflow-btn-link-root,
+html[data-wf-action-buttons="icon"] #workflow-quick-add-toggle,
+html[data-wf-action-buttons="icon"] #workflow-filters-toggle,
+html[data-wf-action-buttons="icon"] .taskmda-modal-close-btn,
+html[data-wf-action-buttons="icon"] .rgpd-open-btn,
+html[data-wf-action-buttons="icon"] button[data-rgpd-context-action],
+html[data-wf-action-buttons="icon"] button[id^="rgpd-"][id$="-btn"] {
+  position: relative;
+}
+
+html[data-wf-action-buttons="icon"] .task-action-btn[data-ui-tooltip]::after,
+html[data-wf-action-buttons="icon"] .workspace-action-inline[data-ui-tooltip]::after,
+html[data-wf-action-buttons="icon"] .workflow-btn-light[data-ui-tooltip]::after,
+html[data-wf-action-buttons="icon"] .workflow-btn-danger[data-ui-tooltip]::after,
+html[data-wf-action-buttons="icon"] .workflow-btn-link-root[data-ui-tooltip]::after,
+html[data-wf-action-buttons="icon"] #workflow-quick-add-toggle[data-ui-tooltip]::after,
+html[data-wf-action-buttons="icon"] #workflow-filters-toggle[data-ui-tooltip]::after,
+html[data-wf-action-buttons="icon"] .taskmda-modal-close-btn[data-ui-tooltip]::after,
+html[data-wf-action-buttons="icon"] .rgpd-open-btn[data-ui-tooltip]::after,
+html[data-wf-action-buttons="icon"] button[data-rgpd-context-action][data-ui-tooltip]::after,
+html[data-wf-action-buttons="icon"] button[id^="rgpd-"][id$="-btn"][data-ui-tooltip]::after {
+  content: attr(data-ui-tooltip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  transform: translateX(-50%) translateY(4px) scale(0.98);
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 1200;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #1f2937;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(148, 163, 184, 0.55);
+  border-radius: 10px;
+  padding: 6px 9px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+html[data-wf-action-buttons="icon"] .task-action-btn[data-ui-tooltip]:hover::after,
+html[data-wf-action-buttons="icon"] .task-action-btn[data-ui-tooltip]:focus-visible::after,
+html[data-wf-action-buttons="icon"] .workspace-action-inline[data-ui-tooltip]:hover::after,
+html[data-wf-action-buttons="icon"] .workspace-action-inline[data-ui-tooltip]:focus-visible::after,
+html[data-wf-action-buttons="icon"] .workflow-btn-light[data-ui-tooltip]:hover::after,
+html[data-wf-action-buttons="icon"] .workflow-btn-light[data-ui-tooltip]:focus-visible::after,
+html[data-wf-action-buttons="icon"] .workflow-btn-danger[data-ui-tooltip]:hover::after,
+html[data-wf-action-buttons="icon"] .workflow-btn-danger[data-ui-tooltip]:focus-visible::after,
+html[data-wf-action-buttons="icon"] .workflow-btn-link-root[data-ui-tooltip]:hover::after,
+html[data-wf-action-buttons="icon"] .workflow-btn-link-root[data-ui-tooltip]:focus-visible::after,
+html[data-wf-action-buttons="icon"] #workflow-quick-add-toggle[data-ui-tooltip]:hover::after,
+html[data-wf-action-buttons="icon"] #workflow-quick-add-toggle[data-ui-tooltip]:focus-visible::after,
+html[data-wf-action-buttons="icon"] #workflow-filters-toggle[data-ui-tooltip]:hover::after,
+html[data-wf-action-buttons="icon"] #workflow-filters-toggle[data-ui-tooltip]:focus-visible::after,
+html[data-wf-action-buttons="icon"] .taskmda-modal-close-btn[data-ui-tooltip]:hover::after,
+html[data-wf-action-buttons="icon"] .taskmda-modal-close-btn[data-ui-tooltip]:focus-visible::after,
+html[data-wf-action-buttons="icon"] .rgpd-open-btn[data-ui-tooltip]:hover::after,
+html[data-wf-action-buttons="icon"] .rgpd-open-btn[data-ui-tooltip]:focus-visible::after,
+html[data-wf-action-buttons="icon"] button[data-rgpd-context-action][data-ui-tooltip]:hover::after,
+html[data-wf-action-buttons="icon"] button[data-rgpd-context-action][data-ui-tooltip]:focus-visible::after,
+html[data-wf-action-buttons="icon"] button[id^="rgpd-"][id$="-btn"][data-ui-tooltip]:hover::after,
+html[data-wf-action-buttons="icon"] button[id^="rgpd-"][id$="-btn"][data-ui-tooltip]:focus-visible::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0) scale(1);
+}
+
+html.dark[data-wf-action-buttons="icon"] .task-action-btn[data-ui-tooltip]::after,
+html.dark[data-wf-action-buttons="icon"] .workspace-action-inline[data-ui-tooltip]::after,
+html.dark[data-wf-action-buttons="icon"] .workflow-btn-light[data-ui-tooltip]::after,
+html.dark[data-wf-action-buttons="icon"] .workflow-btn-danger[data-ui-tooltip]::after,
+html.dark[data-wf-action-buttons="icon"] .workflow-btn-link-root[data-ui-tooltip]::after,
+html.dark[data-wf-action-buttons="icon"] #workflow-quick-add-toggle[data-ui-tooltip]::after,
+html.dark[data-wf-action-buttons="icon"] #workflow-filters-toggle[data-ui-tooltip]::after,
+html.dark[data-wf-action-buttons="icon"] .taskmda-modal-close-btn[data-ui-tooltip]::after,
+html.dark[data-wf-action-buttons="icon"] .rgpd-open-btn[data-ui-tooltip]::after,
+html.dark[data-wf-action-buttons="icon"] button[data-rgpd-context-action][data-ui-tooltip]::after,
+html.dark[data-wf-action-buttons="icon"] button[id^="rgpd-"][id$="-btn"][data-ui-tooltip]::after {
+  color: #dbe7ff;
+  background: rgba(18, 29, 52, 0.98);
+  border-color: rgba(122, 162, 255, 0.35);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+}
+
+/* Unification transverse: infobulle custom sur tous les boutons icône décorés */
+html[data-wf-action-buttons="icon"] [data-ui-tooltip] {
+  position: relative;
+}
+
+html[data-wf-action-buttons="icon"] [data-ui-tooltip]::after {
+  content: attr(data-ui-tooltip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  transform: translateX(-50%) translateY(4px) scale(0.98);
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 1300;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #1f2937;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(148, 163, 184, 0.55);
+  border-radius: 10px;
+  padding: 6px 9px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+html[data-wf-action-buttons="icon"] [data-ui-tooltip]:hover::after,
+html[data-wf-action-buttons="icon"] [data-ui-tooltip]:focus-visible::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0) scale(1);
+}
+
+html.dark[data-wf-action-buttons="icon"] [data-ui-tooltip]::after {
+  color: #dbe7ff;
+  background: rgba(18, 29, 52, 0.98);
+  border-color: rgba(122, 162, 255, 0.35);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+}
+
+/* Pseudo-tooltips desactives: remplacés par layer globale JS (évite clipping/z-index) */
+html[data-wf-action-buttons="icon"] [data-ui-tooltip]::after {
+  display: none !important;
+}
+
+.sidebar [data-ui-tooltip]::after {
+  display: none !important;
+}
+
+.app-icon-tooltip-layer {
+  position: fixed;
+  left: -9999px;
+  top: -9999px;
+  z-index: 99999;
+  pointer-events: none;
+  white-space: nowrap;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #1f2937;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(148, 163, 184, 0.55);
+  border-radius: 10px;
+  padding: 6px 9px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
+}
+
+.app-icon-tooltip-layer.hidden {
+  display: none !important;
+}
+
+html.dark .app-icon-tooltip-layer {
+  color: #dbe7ff;
+  background: rgba(18, 29, 52, 0.98);
+  border-color: rgba(122, 162, 255, 0.35);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+}
+
+html[data-wf-action-buttons="icon"] #workflow-quick-add-toggle,
+html[data-wf-action-buttons="icon"] #workflow-quick-add-toggle:hover,
+html[data-wf-action-buttons="icon"] #workflow-quick-add-toggle:focus-visible,
+html[data-wf-action-buttons="icon"] #workflow-quick-add-toggle:active {
+  border: 1px solid #93c5fd !important;
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+  box-shadow: none !important;
+  filter: none !important;
+  transform: none !important;
+}
+
+html[data-wf-action-buttons="icon"] #workflow-quick-add-toggle:hover,
+html[data-wf-action-buttons="icon"] #workflow-quick-add-toggle:focus-visible {
+  border-color: #60a5fa !important;
+  background: #dbeafe !important;
+  color: #1e3a8a !important;
+}
+
 html[data-wf-action-buttons="icon"] .task-action-btn .taskmda-action-label,
 html[data-wf-action-buttons="icon"] .workspace-action-inline .taskmda-action-label,
 html[data-wf-action-buttons="icon"] .workflow-btn-light .taskmda-action-label,
 html[data-wf-action-buttons="icon"] .workflow-btn-danger .taskmda-action-label,
 html[data-wf-action-buttons="icon"] .workflow-btn-link-root .taskmda-action-label,
+html[data-wf-action-buttons="icon"] #workflow-quick-add-toggle .taskmda-action-label,
+html[data-wf-action-buttons="icon"] #workflow-filters-toggle .taskmda-action-label,
 html[data-wf-action-buttons="icon"] .taskmda-modal-close-btn .taskmda-action-label,
 html[data-wf-action-buttons="icon"] .rgpd-open-btn .taskmda-action-label,
 html[data-wf-action-buttons="icon"] button[data-rgpd-context-action] .taskmda-action-label,
@@ -4851,6 +5212,8 @@ html[data-wf-action-buttons="icon"] .rgpd-open-btn .taskmda-action-icon,
 html[data-wf-action-buttons="icon"] .workflow-btn-light .taskmda-action-icon,
 html[data-wf-action-buttons="icon"] .workflow-btn-danger .taskmda-action-icon,
 html[data-wf-action-buttons="icon"] .workflow-btn-link-root .taskmda-action-icon,
+html[data-wf-action-buttons="icon"] #workflow-quick-add-toggle .taskmda-action-icon,
+html[data-wf-action-buttons="icon"] #workflow-filters-toggle .taskmda-action-icon,
 html[data-wf-action-buttons="icon"] button[data-rgpd-context-action] .taskmda-action-icon,
 html[data-wf-action-buttons="icon"] button[id^="rgpd-"][id$="-btn"] .taskmda-action-icon {
   width: 18px;
@@ -4870,6 +5233,8 @@ html[data-wf-action-buttons="icon"] .workspace-action-inline .material-symbols-o
 html[data-wf-action-buttons="icon"] .workflow-btn-light .material-symbols-outlined,
 html[data-wf-action-buttons="icon"] .workflow-btn-danger .material-symbols-outlined,
 html[data-wf-action-buttons="icon"] .workflow-btn-link-root .material-symbols-outlined,
+html[data-wf-action-buttons="icon"] #workflow-quick-add-toggle .material-symbols-outlined,
+html[data-wf-action-buttons="icon"] #workflow-filters-toggle .material-symbols-outlined,
 html[data-wf-action-buttons="icon"] .taskmda-modal-close-btn .material-symbols-outlined,
 html[data-wf-action-buttons="icon"] .rgpd-open-btn .material-symbols-outlined,
 html[data-wf-action-buttons="icon"] button[data-rgpd-context-action] .material-symbols-outlined,
@@ -4890,6 +5255,8 @@ html[data-wf-action-buttons="text"] .workspace-action-inline .taskmda-action-ico
 html[data-wf-action-buttons="text"] .workflow-btn-light .taskmda-action-icon,
 html[data-wf-action-buttons="text"] .workflow-btn-danger .taskmda-action-icon,
 html[data-wf-action-buttons="text"] .workflow-btn-link-root .taskmda-action-icon,
+html[data-wf-action-buttons="text"] #workflow-quick-add-toggle .taskmda-action-icon,
+html[data-wf-action-buttons="text"] #workflow-filters-toggle .taskmda-action-icon,
 html[data-wf-action-buttons="text"] .taskmda-modal-close-btn .taskmda-action-icon,
 html[data-wf-action-buttons="text"] .rgpd-open-btn .taskmda-action-icon,
 html[data-wf-action-buttons="text"] button[data-rgpd-context-action] .taskmda-action-icon,
@@ -4904,6 +5271,8 @@ html[data-wf-action-buttons="icon"] .workflow-card-action-btn,
 html[data-wf-action-buttons="icon"] .workflow-btn-light,
 html[data-wf-action-buttons="icon"] .workflow-btn-danger,
 html[data-wf-action-buttons="icon"] .workflow-btn-link-root,
+html[data-wf-action-buttons="icon"] #workflow-quick-add-toggle,
+html[data-wf-action-buttons="icon"] #workflow-filters-toggle,
 html[data-wf-action-buttons="icon"] .taskmda-modal-close-btn,
 html[data-wf-action-buttons="icon"] .rgpd-open-btn,
 html[data-wf-action-buttons="icon"] button[data-rgpd-context-action],
@@ -4918,6 +5287,8 @@ html[data-wf-action-buttons="icon"] .workflow-card-action-btn,
 html[data-wf-action-buttons="icon"] .workflow-btn-light,
 html[data-wf-action-buttons="icon"] .workflow-btn-danger,
 html[data-wf-action-buttons="icon"] .workflow-btn-link-root,
+html[data-wf-action-buttons="icon"] #workflow-quick-add-toggle,
+html[data-wf-action-buttons="icon"] #workflow-filters-toggle,
 html[data-wf-action-buttons="icon"] .taskmda-modal-close-btn,
 html[data-wf-action-buttons="icon"] .rgpd-open-btn,
 html[data-wf-action-buttons="icon"] button[data-rgpd-context-action],
@@ -7965,8 +8336,10 @@ html.dark .view-preset-btn:hover:not(:disabled) {
   #sync-status span:last-child {
     display: none;
   }
-  .bg-sync-indicator .bg-sync-text {
-    display: none;
+  .bg-sync-indicator {
+    width: 34px;
+    height: 34px;
+    flex-basis: 34px;
   }
   #user-info #user-name {
     display: none;
@@ -8163,6 +8536,17 @@ html.dark .view-preset-btn:hover:not(:disabled) {
   .discussion-send-btn {
     width: 100%;
     min-height: 42px;
+  }
+
+  #modal-doc-binding > div,
+  #modal-doc-editor > div,
+  #modal-task-convert > div,
+  #modal-global-conversation-delete > div,
+  #modal-calendar-info-details > div,
+  #modal-edit-user-name > div,
+  #modal-edit-project > div,
+  #modal-workflow-entity > div {
+    padding: 16px !important;
   }
 }
 

@@ -164,6 +164,8 @@
         linkMode: false,
         dragSourceStepId: null
       },
+      inlineDetailSaveTimers: new Map(),
+      inlineDetailFinalizeTimers: new Map(),
       selectedType: null,
       selectedId: null,
       collections: {
@@ -195,6 +197,9 @@
     const refs = {
       section: document.getElementById('global-workflow-section'),
       content: document.getElementById('workflow-content'),
+      toolbarMain: document.querySelector('#global-workflow-section .workflow-toolbar-main'),
+      head: document.querySelector('#global-workflow-section .workflow-head'),
+      quickActions: document.querySelector('#global-workflow-section .workflow-head .workflow-quick-actions'),
       detailModal: document.getElementById('workflow-detail-modal'),
       detail: document.getElementById('workflow-detail'),
       detailTitle: document.getElementById('workflow-detail-title'),
@@ -214,6 +219,17 @@
       modalBody: document.getElementById('workflow-modal-body'),
       modalSave: document.getElementById('btn-save-workflow-modal')
     };
+
+    function normalizeWorkflowTopActionsRow() {
+      const toolbarMain = refs.toolbarMain;
+      const quickActions = refs.quickActions;
+      if (toolbarMain && quickActions && quickActions.parentElement !== toolbarMain) {
+        toolbarMain.appendChild(quickActions);
+      }
+      if (refs.head && quickActions && quickActions.parentElement === toolbarMain) {
+        refs.head.classList.add('workflow-head-actions-moved');
+      }
+    }
 
     const viewIds = {
       map: 'workflow-view-map',
@@ -2755,6 +2771,7 @@ ${tasks.map((row)=>`<tr><td>${esc(row.title || row.id)}</td><td>${esc(row.status
     function closeDetailModal() {
       state.selectedType = null;
       state.selectedId = null;
+      clearWorkflowInlineSaveTimers();
       state.flowDesigner.sourceStepId = null;
       state.flowDesigner.selectedFlowId = null;
       state.flowDesigner.selectedFlowIds = [];
@@ -2881,7 +2898,7 @@ ${tasks.map((row)=>`<tr><td>${esc(row.title || row.id)}</td><td>${esc(row.status
               aria-label="${esc(entry.label)}"
               ${entry.nextStatus ? `data-wf-next-status="${esc(entry.nextStatus)}"` : ''}
             >
-              ${actionMode === 'text' ? '' : `<span class="material-symbols-outlined" aria-hidden="true">${esc(entry.icon || 'bolt')}</span>`}
+              ${actionMode === 'text' ? '' : `<span class="material-symbols-outlined" aria-hidden="true">${esc(entry.icon || 'more_horiz')}</span>`}
               ${actionMode === 'icon' ? '' : `<span>${esc(entry.label)}</span>`}
             </button>
           `).join('')}
@@ -4726,6 +4743,149 @@ ${clone.outerHTML}
       return `<label class="workflow-form-label" for="wf-field-${esc(key)}">${esc(label)}</label><input id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-input" type="text" value="${esc(value)}">`;
     }
 
+    function clearWorkflowInlineSaveTimers() {
+      state.inlineDetailSaveTimers.forEach((timer) => clearTimeout(timer));
+      state.inlineDetailFinalizeTimers.forEach((timer) => clearTimeout(timer));
+      state.inlineDetailSaveTimers.clear();
+      state.inlineDetailFinalizeTimers.clear();
+    }
+
+    function isWorkflowInlineEditableField(node, editable) {
+      if (!editable || !node) return false;
+      if (node.hasAttribute('readonly')) return false;
+      if (String(node.getAttribute('data-wf-key') || '').trim() === 'version') return false;
+      if (String(node.getAttribute('data-wf-key') || '').trim() === 'parentTemplateId') return false;
+      if (String(node.getAttribute('data-wf-key') || '').trim() === 'variantGroupKey') return false;
+      const tag = String(node.tagName || '').toUpperCase();
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+    }
+
+    function setWorkflowFieldReadMode(node, enabled) {
+      if (!node) return;
+      const tag = String(node.tagName || '').toUpperCase();
+      if (tag === 'SELECT') {
+        node.disabled = false;
+        node.dataset.wfSelectLocked = enabled ? '1' : '0';
+      } else {
+        node.readOnly = !!enabled;
+      }
+      node.classList.toggle('task-detail-inline-editable', !!enabled);
+      if (enabled) {
+        node.classList.remove('is-inline-editing');
+        node.setAttribute('title', 'Cliquer pour modifier');
+      } else {
+        node.classList.add('is-inline-editing');
+        node.removeAttribute('title');
+      }
+    }
+
+    function lockWorkflowField(node) {
+      if (!node || node.dataset.wfInlineEligible !== '1') return;
+      node.dataset.wfInlineEditing = '0';
+      setWorkflowFieldReadMode(node, true);
+    }
+
+    function unlockWorkflowField(node) {
+      if (!node || node.dataset.wfInlineEligible !== '1') return;
+      node.dataset.wfInlineEditing = '1';
+      setWorkflowFieldReadMode(node, false);
+    }
+
+    function scheduleWorkflowInlineAutosave(fieldKey, immediate = false) {
+      const safeKey = String(fieldKey || '').trim();
+      if (!safeKey || !state.selectedType || !state.selectedId) return;
+      const saveDelay = immediate ? 0 : 280;
+      if (state.inlineDetailSaveTimers.has(safeKey)) {
+        clearTimeout(state.inlineDetailSaveTimers.get(safeKey));
+      }
+      state.inlineDetailSaveTimers.set(safeKey, setTimeout(() => {
+        saveCurrentDetail({ silent: true, inlineAutosave: true, skipNotify: true }).catch((error) => {
+          console.error('workflow inline autosave failed', error);
+        });
+      }, saveDelay));
+      if (state.inlineDetailFinalizeTimers.has(safeKey)) {
+        clearTimeout(state.inlineDetailFinalizeTimers.get(safeKey));
+      }
+      state.inlineDetailFinalizeTimers.set(safeKey, setTimeout(() => {
+        saveCurrentDetail({ silent: true, inlineAutosave: true, skipNotify: true }).catch((error) => {
+          console.error('workflow inline finalize failed', error);
+        });
+      }, 950));
+    }
+
+    function bindWorkflowInlineField(node) {
+      if (!node || node.dataset.wfInlineBound === '1') return;
+      node.dataset.wfInlineBound = '1';
+      const key = String(node.getAttribute('data-wf-key') || '').trim();
+      if (!key) return;
+      node.addEventListener('mousedown', (event) => {
+        if (String(node.tagName || '').toUpperCase() !== 'SELECT') return;
+        if (node.dataset.wfInlineEligible !== '1') return;
+        if (node.dataset.wfInlineEditing === '1') return;
+        event.preventDefault();
+        unlockWorkflowField(node);
+        requestAnimationFrame(() => node.focus());
+      });
+      node.addEventListener('focus', () => {
+        if (node.dataset.wfInlineEligible === '1' && node.dataset.wfInlineEditing !== '1') {
+          unlockWorkflowField(node);
+        }
+      });
+      node.addEventListener('input', () => {
+        if (node.dataset.wfInlineEligible !== '1' || node.dataset.wfInlineEditing !== '1') return;
+        scheduleWorkflowInlineAutosave(key, false);
+      });
+      node.addEventListener('change', () => {
+        if (node.dataset.wfInlineEligible !== '1' || node.dataset.wfInlineEditing !== '1') return;
+        scheduleWorkflowInlineAutosave(key, false);
+      });
+      node.addEventListener('keydown', (event) => {
+        if (node.dataset.wfInlineEligible !== '1') return;
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          const original = node.dataset.wfInlineOriginalValue;
+          if (typeof original === 'string') node.value = original;
+          lockWorkflowField(node);
+          return;
+        }
+        if (event.key === 'Enter' && String(node.tagName || '').toUpperCase() !== 'TEXTAREA') {
+          event.preventDefault();
+          node.blur();
+        }
+      });
+      node.addEventListener('blur', () => {
+        if (node.dataset.wfInlineEligible !== '1') return;
+        if (node.dataset.wfInlineEditing !== '1') return;
+        scheduleWorkflowInlineAutosave(key, true);
+        node.dataset.wfInlineOriginalValue = String(node.value || '');
+        lockWorkflowField(node);
+      });
+    }
+
+    function initWorkflowDetailInlineEditing(editable = false) {
+      if (!refs.detailBody) return;
+      clearWorkflowInlineSaveTimers();
+      const fields = Array.from(refs.detailBody.querySelectorAll('[data-wf-key]'));
+      fields.forEach((node) => {
+        const eligible = isWorkflowInlineEditableField(node, editable);
+        node.dataset.wfInlineEligible = eligible ? '1' : '0';
+        bindWorkflowInlineField(node);
+        if (!eligible) return;
+        node.dataset.wfInlineOriginalValue = String(node.value || '');
+        lockWorkflowField(node);
+      });
+
+      if (refs.detailBody.dataset.wfInlineClickBound === '1') return;
+      refs.detailBody.dataset.wfInlineClickBound = '1';
+      refs.detailBody.addEventListener('click', (event) => {
+        const target = event.target instanceof Element ? event.target.closest('[data-wf-key]') : null;
+        if (!target || target.dataset.wfInlineEligible !== '1') return;
+        if (target.dataset.wfInlineEditing === '1') return;
+        unlockWorkflowField(target);
+        requestAnimationFrame(() => target.focus());
+      });
+    }
+
     function getProcessStepsSorted(processId) {
       const pid = String(processId || '').trim();
       return (state.collections.steps || [])
@@ -5218,12 +5378,12 @@ ${clone.outerHTML}
         <div class="workflow-detail-actions">
           <button id="btn-workflow-task-start" class="btn-primary px-3 py-2 rounded-lg text-white text-xs font-semibold" type="button">Passer en cours</button>
           <button id="btn-workflow-task-complete-checklist" class="btn-primary px-3 py-2 rounded-lg text-white text-xs font-semibold" type="button">Cocher checklist</button>
-          <button id="btn-workflow-task-approve" class="btn-primary px-3 py-2 rounded-lg text-white text-xs font-semibold" type="button">Valider</button>
+          <button id="btn-workflow-task-approve" class="btn-primary task-action-btn px-3 py-2 rounded-lg text-white text-xs font-semibold" data-action-kind="success" type="button">Valider</button>
         </div>
         ` : ''}
         ${type === 'process' ? `
         <div class="workflow-detail-actions">
-          ${editable ? '<button id="btn-workflow-process-submit" class="btn-primary px-3 py-2 rounded-lg text-white text-xs font-semibold" type="button">Soumettre en revue</button>' : ''}
+          ${editable ? '<button id="btn-workflow-process-submit" class="btn-primary task-action-btn px-3 py-2 rounded-lg text-white text-xs font-semibold" data-action-kind="submit" type="button">Soumettre en revue</button>' : ''}
           <button id="btn-workflow-process-approve" class="btn-primary px-3 py-2 rounded-lg text-white text-xs font-semibold" type="button" ${canValidateCurrentProcess ? '' : 'disabled'} title="${canValidateCurrentProcess ? 'Valider niveau' : 'Validation reservee aux profils habilites'}">Approuver niveau</button>
           <button id="btn-workflow-process-reject" class="workflow-btn-light px-3 py-2 rounded-lg text-xs font-semibold" type="button" ${canValidateCurrentProcess ? '' : 'disabled'} title="${canValidateCurrentProcess ? 'Rejeter vers draft' : 'Validation reservee aux profils habilites'}">Rejeter vers draft</button>
           <button id="btn-workflow-process-export" class="workflow-btn-light px-3 py-2 rounded-lg text-xs font-semibold" type="button">Exporter fiche PDF</button>
@@ -5274,7 +5434,7 @@ ${clone.outerHTML}
         ${editable ? `
         <div class="workflow-detail-actions">
           <button id="btn-workflow-delete" class="workflow-btn-danger" type="button">Supprimer</button>
-          <button id="btn-workflow-save" class="btn-primary px-3 py-2 rounded-lg text-white text-xs font-semibold" type="button">Enregistrer</button>
+          <button id="btn-workflow-save" class="btn-primary task-action-btn px-3 py-2 rounded-lg text-white text-xs font-semibold" data-action-kind="save" type="button">Enregistrer</button>
         </div>
         ` : '<p class="text-xs text-slate-500">Lecture seule: edition reservee au role admin ou manager workflow.</p>'}
       `;
@@ -5996,6 +6156,8 @@ ${clone.outerHTML}
         state.procedureQuill = null;
       }
 
+      initWorkflowDetailInlineEditing(editable);
+
       renderContent();
     }
 
@@ -6213,7 +6375,7 @@ ${clone.outerHTML}
       });
     }
 
-    async function saveCurrentDetail() {
+    async function saveCurrentDetail(options = {}) {
       if (!canEditWorkflow()) {
         toast('Lecture seule: edition reservee au role admin ou manager workflow');
         return;
@@ -6471,15 +6633,23 @@ ${clone.outerHTML}
         await syncBidirectionalExternalLinks();
       }
       await logAudit('update', type, updated.id, { fields: Object.keys(fields) });
-      await loadCollections();
-      renderServiceFilter();
-      renderContent();
-      openDetail(type, updated.id);
-      toast('Workflow mis a jour');
+      if (!options.inlineAutosave) {
+        await loadCollections();
+        renderServiceFilter();
+        renderContent();
+        openDetail(type, updated.id);
+      } else {
+        const list = getByType(type);
+        const idx = list.findIndex((row) => String(row.id) === String(updated.id));
+        if (idx >= 0) list[idx] = updated;
+      }
+      if (!options.silent) toast('Workflow mis a jour');
       if (type === 'procedure' && procedureVersionBumped) {
         queuedNotifications.push(`Procedure versionnee: ${updated.title || updated.id} v${updated.version}`);
       }
-      queuedNotifications.forEach((message) => notifyInternal(message));
+      if (!options.skipNotify) {
+        queuedNotifications.forEach((message) => notifyInternal(message));
+      }
     }
 
     async function syncTaskDependencyGraph(taskId, prerequisiteTaskIds, dependentTaskIds) {
@@ -8398,6 +8568,7 @@ ${clone.outerHTML}
 
     async function init() {
       if (!refs.section || !refs.content) return;
+      normalizeWorkflowTopActionsRow();
       bindEvents();
       await ensureSeedData();
       await loadCollections();

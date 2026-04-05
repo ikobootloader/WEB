@@ -95,9 +95,11 @@ Nom d interface par defaut: `NEXUS MDA`.
 - Correctif UX/CSS: isolation stricte des sections transverses (plus de melange visuel Taches/Calendrier).
 - Harmonisation UX globale:
   - mode d affichage parametrable des boutons d action (`icone`, `texte`, `icone + texte`) applique a Workflow / Projets / Taches / Documents / RGPD,
+  - infobulles custom harmonisees en mode `icone` sur les boutons d action (sans tooltip natif du navigateur), avec exclusion explicite du sidebar,
   - harmonisation des boutons `Fermer` sur les modales (meme regle de rendu que les boutons d action),
   - fermeture des modales au clic hors fenetre,
-  - terminologie metier uniformisee (ex: `Date limite`, `Responsable`, `Visibilite`).
+  - terminologie metier uniformisee (ex: `Date limite`, `Responsable`, `Visibilite`),
+  - edition inline en consultation sur les champs metier (projet, tache, documents, calendrier) avec autosauvegarde asynchrone (debounce + finalisation).
 - Personnalisation visuelle:
   - couleur du chrome applicatif (header + sidebar) configurable utilisateur,
   - prise en charge complete des variables de theme en mode clair/sombre (y compris hovers metier).
@@ -198,9 +200,9 @@ Nom d interface par defaut: `NEXUS MDA`.
   - enregistrement local immediat (IndexedDB),
   - replication dossier partage en arriere-plan via file asynchrone + retries.
 - Indicateur discret de synchro de fond dans le header (`bg-sync-indicator`):
-  - en attente,
-  - en cours,
-  - erreur de synchro.
+  - format icone seule pour eviter les sauts de layout,
+  - rotation pendant la synchro (etat en cours),
+  - etats en attente / en cours / erreur.
 
 ## Hardening recent
 

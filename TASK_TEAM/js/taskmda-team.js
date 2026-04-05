@@ -2027,6 +2027,7 @@
       if (text.includes('dupliquer') || text.includes('duplicate') || text.includes('variante')) return 'template';
       if (text.includes('monter') || text.includes('move up')) return 'move_up';
       if (text.includes('descendre') || text.includes('move down')) return 'move_down';
+      if (text.includes('filtre') || text.includes('filter')) return 'manage';
       if (text.includes('delete') || text === 'delete') return 'danger';
       if (text.includes('supprimer') || text.includes('delete')) return 'danger';
       if (text.includes('rejeter') || text.includes('reject')) return 'danger';
@@ -2038,6 +2039,7 @@
       if (text.includes('gerer') || text.includes('manage')) return 'manage';
       if (text.includes('soumettre') || text.includes('submit')) return 'submit';
       if (text.includes('publier') || text.includes('publish')) return 'publish';
+      if (text.includes('inject')) return 'create';
       if (text.includes('reactiv') || text.includes('desarchiv') || text.includes('unarchive')) return 'unarchive';
       if (text.includes('instancier') || text.includes('variante') || text.includes('template')) return 'template';
       if (text.includes('version') || text.includes('referentiel')) return 'registry';
@@ -2087,7 +2089,7 @@
       if (kind === 'progress') return 'play_arrow';
       if (kind === 'notify') return 'mail';
       if (kind === 'create') return 'add_circle';
-      return 'bolt';
+      return 'more_horiz';
     }
 
     function sanitizeActionButtonLabel(rawValue) {
@@ -2097,7 +2099,7 @@
         'open_in_new', 'swap_horiz', 'play_arrow', 'task_alt', 'add_circle',
         'content_copy', 'inventory_2',
         'delete', 'edit', 'visibility', 'archive', 'mail', 'download', 'save',
-        'sync', 'settings', 'publish', 'unarchive', 'link', 'bolt', 'close'
+        'sync', 'settings', 'publish', 'unarchive', 'link', 'bolt', 'more_horiz', 'close'
       ];
       const leadingIconsRegex = new RegExp(`^(?:${iconTokens.join('|')})\\s+`, 'i');
       while (leadingIconsRegex.test(value)) {
@@ -2155,7 +2157,8 @@
       if (!label) label = defaultFrenchActionLabel(actionKind);
       button.setAttribute('data-action-kind', actionKind);
       button.setAttribute('data-action-label', label);
-      button.setAttribute('title', label);
+      button.setAttribute('data-ui-tooltip', label);
+      button.removeAttribute('title');
       button.setAttribute('aria-label', label);
 
       let iconEl = button.querySelector('.taskmda-action-icon, .material-symbols-outlined');
@@ -2197,8 +2200,202 @@
       button.dataset.actionUiDecorated = '1';
     }
 
+    function inferTooltipLabelFromIconToken(token = '') {
+      const key = normalizeActionToken(token);
+      if (!key) return '';
+      const map = new Map([
+        ['add', 'Ajouter'],
+        ['add_circle', 'Ajouter'],
+        ['add_task', 'Ajouter'],
+        ['link', 'Lier'],
+        ['tune', 'Filtres'],
+        ['filter_list', 'Filtres'],
+        ['close', 'Fermer'],
+        ['delete', 'Supprimer'],
+        ['edit', 'Modifier'],
+        ['visibility', 'Ouvrir'],
+        ['save', 'Enregistrer'],
+        ['mail', 'Notifier'],
+        ['archive', 'Archiver'],
+        ['unarchive', 'Restaurer'],
+        ['sync', 'Synchroniser'],
+        ['download', 'Exporter'],
+        ['publish', 'Publier'],
+        ['rate_review', 'Soumettre'],
+        ['task_alt', 'Valider'],
+        ['play_arrow', 'Mettre en cours'],
+        ['content_copy', 'Modèle'],
+        ['inventory_2', 'Référentiel'],
+        ['logout', 'Déconnexion'],
+        ['help', 'Aide'],
+        ['notifications', 'Notifications'],
+        ['dark_mode', 'Thème'],
+        ['light_mode', 'Thème'],
+        ['search', 'Recherche'],
+        ['arrow_back', 'Retour'],
+        ['menu', 'Menu']
+      ]);
+      return map.get(key) || '';
+    }
+
+    function inferTooltipLabelFromElement(el) {
+      if (!(el instanceof HTMLElement)) return '';
+      const byAttr = sanitizeActionButtonLabel(
+        el.getAttribute('data-ui-tooltip')
+        || el.getAttribute('data-action-label')
+        || el.getAttribute('aria-label')
+        || el.getAttribute('title')
+        || ''
+      );
+      if (byAttr) return byAttr;
+
+      const byText = sanitizeActionButtonLabel(el.textContent || '');
+      if (byText) return byText;
+
+      const iconToken = String(
+        el.querySelector('.taskmda-action-icon, .material-symbols-outlined')?.textContent
+        || ''
+      ).trim();
+      const byIcon = inferTooltipLabelFromIconToken(iconToken);
+      if (byIcon) return byIcon;
+
+      const idToken = normalizeActionToken(el.id || '');
+      if (idToken.includes('notification')) return 'Notifications';
+      if (idToken.includes('help')) return 'Aide';
+      if (idToken.includes('logout')) return 'Déconnexion';
+      if (idToken.includes('filter')) return 'Filtres';
+      if (idToken.includes('search')) return 'Recherche';
+      if (idToken.includes('add')) return 'Ajouter';
+      return '';
+    }
+
+    function ensureGlobalIconTooltips(root = document) {
+      if (!root?.querySelectorAll) return;
+      if (getWorkflowActionButtonsMode() !== 'icon') return;
+      const selectors = 'button, a, [role="button"]';
+      const candidates = [];
+      if (root.matches?.(selectors)) candidates.push(root);
+      root.querySelectorAll(selectors).forEach((node) => candidates.push(node));
+      candidates.forEach((el) => {
+        if (!(el instanceof HTMLElement)) return;
+        if (el.closest('.sidebar')) {
+          el.removeAttribute('data-ui-tooltip');
+          return;
+        }
+        const hasIcon = !!el.querySelector('.taskmda-action-icon, .material-symbols-outlined');
+        if (!hasIcon) return;
+        const label = inferTooltipLabelFromElement(el);
+        if (!label) return;
+        el.setAttribute('data-ui-tooltip', label);
+        if (!el.getAttribute('aria-label')) el.setAttribute('aria-label', label);
+        el.removeAttribute('title');
+        el.querySelectorAll('[title]').forEach((child) => child.removeAttribute('title'));
+      });
+    }
+
     let actionButtonsDecorateRaf = null;
     let actionButtonsObserver = null;
+    let iconTooltipLayer = null;
+    let iconTooltipTarget = null;
+
+    function getIconTooltipLayer() {
+      if (iconTooltipLayer && document.body?.contains(iconTooltipLayer)) return iconTooltipLayer;
+      if (!document?.body) return null;
+      const el = document.createElement('div');
+      el.id = 'app-icon-tooltip-layer';
+      el.className = 'app-icon-tooltip-layer hidden';
+      el.setAttribute('aria-hidden', 'true');
+      document.body.appendChild(el);
+      iconTooltipLayer = el;
+      return iconTooltipLayer;
+    }
+
+    function hideIconTooltipLayer() {
+      const layer = getIconTooltipLayer();
+      if (!layer) return;
+      layer.classList.add('hidden');
+      iconTooltipTarget = null;
+    }
+
+    function positionIconTooltipLayer(target) {
+      const layer = getIconTooltipLayer();
+      if (!layer || !(target instanceof HTMLElement)) return;
+      const rect = target.getBoundingClientRect();
+      const layerRect = layer.getBoundingClientRect();
+      const margin = 10;
+      let left = rect.left + (rect.width / 2) - (layerRect.width / 2);
+      left = Math.max(8, Math.min(window.innerWidth - layerRect.width - 8, left));
+      let top = rect.top - layerRect.height - margin;
+      if (top < 8) {
+        top = rect.bottom + margin;
+      }
+      layer.style.left = `${Math.round(left)}px`;
+      layer.style.top = `${Math.round(top)}px`;
+    }
+
+    function showIconTooltipLayer(target) {
+      if (getWorkflowActionButtonsMode() !== 'icon') return;
+      if (!(target instanceof HTMLElement)) return;
+      if (target.closest('.sidebar')) return;
+      const label = sanitizeActionButtonLabel(target.getAttribute('data-ui-tooltip') || '');
+      if (!label) return;
+      const layer = getIconTooltipLayer();
+      if (!layer) return;
+      iconTooltipTarget = target;
+      layer.textContent = label;
+      layer.classList.remove('hidden');
+      positionIconTooltipLayer(target);
+    }
+
+    function ensureIconTooltipLayerBindings() {
+      if (document.documentElement?.dataset.iconTooltipLayerBound === '1') return;
+      if (!document?.body) return;
+      document.documentElement.dataset.iconTooltipLayerBound = '1';
+
+      const findTooltipTrigger = (node) => {
+        const el = node instanceof Element ? node : null;
+        if (!el) return null;
+        return el.closest('[data-ui-tooltip]');
+      };
+
+      document.addEventListener('mouseover', (event) => {
+        const trigger = findTooltipTrigger(event.target);
+        if (!trigger) return;
+        showIconTooltipLayer(trigger);
+      }, true);
+
+      document.addEventListener('mouseout', (event) => {
+        const from = findTooltipTrigger(event.target);
+        if (!from) return;
+        const to = event.relatedTarget instanceof Element ? event.relatedTarget.closest('[data-ui-tooltip]') : null;
+        if (from === to) return;
+        hideIconTooltipLayer();
+      }, true);
+
+      document.addEventListener('focusin', (event) => {
+        const trigger = findTooltipTrigger(event.target);
+        if (!trigger) return;
+        showIconTooltipLayer(trigger);
+      }, true);
+
+      document.addEventListener('focusout', (event) => {
+        const trigger = findTooltipTrigger(event.target);
+        if (!trigger) return;
+        const to = event.relatedTarget instanceof Element ? event.relatedTarget.closest('[data-ui-tooltip]') : null;
+        if (trigger === to) return;
+        hideIconTooltipLayer();
+      }, true);
+
+      window.addEventListener('scroll', () => {
+        if (!iconTooltipTarget) return;
+        positionIconTooltipLayer(iconTooltipTarget);
+      }, true);
+
+      window.addEventListener('resize', () => {
+        if (!iconTooltipTarget) return;
+        positionIconTooltipLayer(iconTooltipTarget);
+      });
+    }
 
     function applyActionButtonsDisplayMode(root = document) {
       if (!root?.querySelectorAll) return;
@@ -2209,6 +2406,8 @@
         'button.workflow-btn-light',
         'button.workflow-btn-danger',
         'button.workflow-btn-link-root',
+        'button#workflow-quick-add-toggle',
+        'button#workflow-filters-toggle',
         'button.workspace-action-inline',
         'a.workspace-action-inline',
         'button[data-action-kind]',
@@ -2233,7 +2432,16 @@
         'button[id^="rgpd-"][id$="-btn"]',
         'button#rgpd-filters-reset'
       ].join(', ');
-      root.querySelectorAll(selectors).forEach((button) => ensureActionButtonDecor(button));
+      root.querySelectorAll(selectors).forEach((button) => {
+        ensureActionButtonDecor(button);
+        button.removeAttribute('title');
+        button.querySelectorAll('[title]').forEach((child) => child.removeAttribute('title'));
+      });
+      root.querySelectorAll('[data-ui-tooltip][title], [data-action-kind][title], [data-action-label][title]').forEach((node) => {
+        node.removeAttribute('title');
+      });
+      ensureGlobalIconTooltips(root);
+      ensureIconTooltipLayerBindings();
     }
 
     function scheduleActionButtonsDecorate() {
@@ -3355,21 +3563,20 @@
       if (!indicator) return;
       backgroundSyncState = state;
       const count = Math.max(0, Number(pendingCount || 0));
-      const countEl = indicator.querySelector('[data-bg-sync-count]');
-      const textEl = indicator.querySelector('[data-bg-sync-text]');
-      indicator.classList.remove('hidden', 'is-idle', 'is-queued', 'is-syncing', 'is-error');
+      indicator.classList.remove('is-idle', 'is-queued', 'is-syncing', 'is-error');
       if (state === 'idle' && count === 0) {
-        indicator.classList.add('hidden', 'is-idle');
+        indicator.classList.add('is-idle');
+        indicator.title = 'Synchronisation collaborative';
+        indicator.setAttribute('aria-label', 'Synchronisation au repos');
         return;
       }
       const mode = state === 'error' ? 'is-error' : (state === 'syncing' ? 'is-syncing' : 'is-queued');
       indicator.classList.add(mode);
-      if (countEl) countEl.textContent = String(count);
-      if (textEl) {
-        textEl.textContent = state === 'error'
-          ? 'Synchronisation en attente'
-          : (state === 'syncing' ? 'Synchro en cours' : 'Synchro planifiee');
-      }
+      const title = state === 'error'
+        ? `Synchronisation en attente (${count})`
+        : (state === 'syncing' ? `Synchronisation en cours (${count})` : `Synchronisation planifiée (${count})`);
+      indicator.title = title;
+      indicator.setAttribute('aria-label', title);
     }
 
     function updateFolderButtons() {
@@ -4519,8 +4726,8 @@
             <div class="rounded-lg border border-slate-200 bg-white p-2 flex items-center justify-between gap-2">
               <span class="text-sm font-semibold text-slate-700 truncate">${escapeHtml(item.name)}</span>
               <div class="flex items-center gap-1 shrink-0">
-                <button onclick="editGlobalTheme('${escapeHtml(item.themeKey)}')" class="text-xs px-2 py-1 rounded bg-slate-100 text-slate-700">Modifier</button>
-                <button onclick="deleteGlobalTheme('${escapeHtml(item.themeKey)}')" class="text-xs px-2 py-1 rounded bg-rose-100 text-rose-700">Supprimer</button>
+                <button onclick="editGlobalTheme('${escapeHtml(item.themeKey)}')" class="task-action-btn task-action-btn-subtle" data-action-kind="edit">Modifier</button>
+                <button onclick="deleteGlobalTheme('${escapeHtml(item.themeKey)}')" class="task-action-btn task-action-btn-danger" data-action-kind="danger">Supprimer</button>
               </div>
             </div>
           `).join('');
@@ -4543,8 +4750,8 @@
                   <p class="text-[11px] text-slate-500 mt-1">${(item.memberUserIds || []).length} membre(s)</p>
                 </div>
                 <div class="flex items-center gap-1 shrink-0">
-                  <button onclick="editGlobalGroup('${escapeHtml(item.groupKey)}')" class="text-xs px-2 py-1 rounded bg-slate-100 text-slate-700">Modifier</button>
-                  <button onclick="deleteGlobalGroup('${escapeHtml(item.groupKey)}')" class="text-xs px-2 py-1 rounded bg-rose-100 text-rose-700">Supprimer</button>
+                  <button onclick="editGlobalGroup('${escapeHtml(item.groupKey)}')" class="task-action-btn task-action-btn-subtle" data-action-kind="edit">Modifier</button>
+                  <button onclick="deleteGlobalGroup('${escapeHtml(item.groupKey)}')" class="task-action-btn task-action-btn-danger" data-action-kind="danger">Supprimer</button>
                 </div>
               </div>
               <div class="mt-2 grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2">
@@ -4561,7 +4768,7 @@
                     </option>
                   `).join('')}
                 </select>
-                <button onclick="saveGlobalGroupMembers('${escapeHtml(item.groupKey)}')" class="text-xs px-3 py-2 rounded bg-blue-100 text-blue-700 font-semibold">Sauver membres</button>
+                <button onclick="saveGlobalGroupMembers('${escapeHtml(item.groupKey)}')" class="task-action-btn" data-action-kind="save">Sauver membres</button>
               </div>
             </div>
           `).join('');
@@ -4584,14 +4791,14 @@
               </div>
               <div class="flex items-center gap-1 shrink-0">
                 ${canManageBranding
-                  ? `<button onclick="editProjectRole('${escapeHtml(item.roleKey)}')" class="text-xs px-2 py-1 rounded bg-slate-100 text-slate-700">Modifier</button>`
-                  : '<button class="text-xs px-2 py-1 rounded bg-slate-100 text-slate-400 cursor-not-allowed" disabled>Modifier</button>'
+                  ? `<button onclick="editProjectRole('${escapeHtml(item.roleKey)}')" class="task-action-btn task-action-btn-subtle" data-action-kind="edit">Modifier</button>`
+                  : '<button class="task-action-btn task-action-btn-subtle opacity-50 cursor-not-allowed" data-action-kind="edit" disabled>Modifier</button>'
                 }
                 ${item.isSystem
-                  ? '<button class="text-xs px-2 py-1 rounded bg-slate-100 text-slate-400 cursor-not-allowed" disabled>Supprimer</button>'
+                  ? '<button class="task-action-btn task-action-btn-subtle opacity-50 cursor-not-allowed" data-action-kind="danger" disabled>Supprimer</button>'
                   : (canManageBranding
-                    ? `<button onclick="deleteProjectRole('${escapeHtml(item.roleKey)}')" class="text-xs px-2 py-1 rounded bg-rose-100 text-rose-700">Supprimer</button>`
-                    : '<button class="text-xs px-2 py-1 rounded bg-slate-100 text-slate-400 cursor-not-allowed" disabled>Supprimer</button>')
+                    ? `<button onclick="deleteProjectRole('${escapeHtml(item.roleKey)}')" class="task-action-btn task-action-btn-danger" data-action-kind="danger">Supprimer</button>`
+                    : '<button class="task-action-btn task-action-btn-subtle opacity-50 cursor-not-allowed" data-action-kind="danger" disabled>Supprimer</button>')
                 }
               </div>
             </div>
@@ -4615,8 +4822,8 @@
                 <p class="text-[11px] text-slate-400 mt-1">Mise à jour: ${new Date(item.updatedAt || item.createdAt || Date.now()).toLocaleString('fr-FR')}</p>
               </div>
               <div class="software-version-actions flex items-center gap-1 shrink-0">
-                <button onclick="editSoftwareVersionEntry('${escapeHtml(item.softwareId)}')" class="text-xs px-2 py-1 rounded bg-slate-100 text-slate-700">Modifier</button>
-                <button onclick="deleteSoftwareVersionEntry('${escapeHtml(item.softwareId)}')" class="text-xs px-2 py-1 rounded bg-rose-100 text-rose-700">Supprimer</button>
+                <button onclick="editSoftwareVersionEntry('${escapeHtml(item.softwareId)}')" class="task-action-btn task-action-btn-subtle" data-action-kind="edit">Modifier</button>
+                <button onclick="deleteSoftwareVersionEntry('${escapeHtml(item.softwareId)}')" class="task-action-btn task-action-btn-danger" data-action-kind="danger">Supprimer</button>
               </div>
             </div>
           `).join('');
@@ -6207,8 +6414,22 @@
     let globalCalendarSelectedDay = null;
     let editingGlobalCalendarItemId = null;
     let currentCalendarInfoDetailId = null;
+    let currentCalendarInfoDetailItem = null;
+    let currentCalendarInfoDetailCanEdit = false;
+    const calendarDetailInlineDebounceTimers = new Map();
+    const calendarDetailInlineFinalizeTimers = new Map();
+    const calendarDetailInlineLastSavedValues = new Map();
     let currentDocBindingContext = null;
+    let currentDocBindingCanEdit = false;
+    const docBindingInlineDebounceTimers = new Map();
+    const docBindingInlineFinalizeTimers = new Map();
+    let docBindingInlineSaving = false;
     let currentDocEditorContext = null;
+    let currentDocPreviewContext = null;
+    let currentDocPreviewCanEdit = false;
+    const docPreviewInlineDebounceTimers = new Map();
+    const docPreviewInlineFinalizeTimers = new Map();
+    const docPreviewInlineLastSavedValues = new Map();
     let docSpreadsheetEditorState = {
       table: null,
       activeTab: 'css',
@@ -6309,6 +6530,10 @@
     const taskDetailInlineDebounceTimers = new Map();
     const taskDetailInlineFinalizeTimers = new Map();
     const taskDetailInlineLastSavedValues = new Map();
+    let currentProjectInlineCanEdit = false;
+    const projectInlineDebounceTimers = new Map();
+    const projectInlineFinalizeTimers = new Map();
+    const projectInlineLastSavedValues = new Map();
     let workflowRgpdBridgeObserver = null;
     let globalKanbanInfiniteScrollState = null;
     const chatEmojiPalette = [
@@ -8334,8 +8559,8 @@
                 <p class="text-xs text-slate-500 mt-1">${escapeHtml(memberNames.join(', ') || 'Aucun membre')}</p>
               </div>
               <div class="flex items-center gap-2 text-xs">
-                <button onclick="selectUserGroup('${group.groupId}')" class="px-2 py-1 rounded bg-slate-100 text-slate-700">Selectionner</button>
-                ${canManage ? `<button onclick="deleteUserGroup('${group.groupId}')" class="px-2 py-1 rounded bg-rose-100 text-rose-700">Supprimer</button>` : ''}
+                <button onclick="selectUserGroup('${group.groupId}')" class="task-action-btn task-action-btn-subtle" data-action-kind="open">Selectionner</button>
+                ${canManage ? `<button onclick="deleteUserGroup('${group.groupId}')" class="task-action-btn task-action-btn-danger" data-action-kind="danger">Supprimer</button>` : ''}
               </div>
             </div>
           </div>
@@ -8380,7 +8605,7 @@
           && member.userId !== currentUser?.userId
           && (myRole === 'owner' || normalizedRole === 'member');
         const removeBtn = canRemoveMember
-          ? `<button onclick="removeProjectMember('${escapeHtml(member.userId)}')" class="text-red-600 hover:underline text-xs">Retirer</button>`
+          ? `<button onclick="removeProjectMember('${escapeHtml(member.userId)}')" class="task-action-btn task-action-btn-danger" data-action-kind="danger">Retirer</button>`
           : '';
         return `
           <div class="flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2 bg-slate-50">
@@ -9063,8 +9288,12 @@
       el.classList.toggle('task-detail-inline-editable', !!currentGlobalTaskDetailCanEdit);
       if (currentGlobalTaskDetailCanEdit) {
         el.setAttribute('title', 'Cliquer pour modifier');
+        el.setAttribute('tabindex', '0');
+        el.setAttribute('role', 'button');
       } else {
         el.removeAttribute('title');
+        el.removeAttribute('tabindex');
+        el.removeAttribute('role');
       }
     }
 
@@ -9159,7 +9388,15 @@
           el.className = `${meta.chipClass} task-detail-inline-editable`;
           el.textContent = meta.label;
           el.dataset.inlineTaskField = 'status';
-          if (currentGlobalTaskDetailCanEdit) el.setAttribute('title', 'Cliquer pour modifier');
+          if (currentGlobalTaskDetailCanEdit) {
+            el.setAttribute('title', 'Cliquer pour modifier');
+            el.setAttribute('tabindex', '0');
+            el.setAttribute('role', 'button');
+          } else {
+            el.removeAttribute('title');
+            el.removeAttribute('tabindex');
+            el.removeAttribute('role');
+          }
         }
         return;
       }
@@ -9170,7 +9407,15 @@
           el.className = `${meta.chipClass} task-detail-inline-editable`;
           el.textContent = meta.label;
           el.dataset.inlineTaskField = 'urgency';
-          if (currentGlobalTaskDetailCanEdit) el.setAttribute('title', 'Cliquer pour modifier');
+          if (currentGlobalTaskDetailCanEdit) {
+            el.setAttribute('title', 'Cliquer pour modifier');
+            el.setAttribute('tabindex', '0');
+            el.setAttribute('role', 'button');
+          } else {
+            el.removeAttribute('title');
+            el.removeAttribute('tabindex');
+            el.removeAttribute('role');
+          }
         }
       }
     }
@@ -9587,6 +9832,13 @@
       });
     }
 
+    function shouldIgnoreInlineActivationKeydown(target, trigger) {
+      if (!(target instanceof Element) || !(trigger instanceof Element)) return true;
+      if (trigger.querySelector('.task-detail-inline-editor-wrap')) return true;
+      if (target.closest('input, textarea, select, button, a[href], [contenteditable="true"], [contenteditable=""]')) return true;
+      return false;
+    }
+
     function initTaskDetailInlineEditing(canEdit = false) {
       currentGlobalTaskDetailCanEdit = !!canEdit;
       const titleEl = document.getElementById('global-task-detail-title');
@@ -9620,6 +9872,15 @@
         const trigger = clickTarget?.closest('[data-inline-task-field]');
         if (!trigger) return;
         if (trigger.querySelector('.task-detail-inline-editor-wrap')) return;
+        startTaskDetailInlineEdit(trigger);
+      });
+      modal.addEventListener('keydown', (event) => {
+        const target = event.target instanceof Element ? event.target : null;
+        const trigger = target?.closest('[data-inline-task-field]');
+        if (!trigger) return;
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        if (shouldIgnoreInlineActivationKeydown(target, trigger)) return;
+        event.preventDefault();
         startTaskDetailInlineEdit(trigger);
       });
     }
@@ -10514,9 +10775,9 @@
               <span class="text-[10px] px-2 py-1 rounded-full font-semibold ${statusClass[inv.status] || statusClass.pending}">${escapeHtml(inv.status || 'pending')}</span>
             </div>
             <div class="mt-2 flex flex-wrap gap-2 text-xs">
-              ${canManage ? `<button onclick="sendInvitationEmail('${inv.inviteId}')" class="px-2 py-1 rounded bg-slate-100 text-slate-700">Email</button>` : ''}
-              ${canManage && (myRole === 'owner' || normalizeProjectRole(inv.role) === 'member') ? `<button onclick="updateInviteStatus('${inv.inviteId}','accepted')" class="px-2 py-1 rounded bg-emerald-100 text-emerald-700">Accepté</button>` : ''}
-              ${canManage ? `<button onclick="updateInviteStatus('${inv.inviteId}','declined')" class="px-2 py-1 rounded bg-rose-100 text-rose-700">Refusé</button>` : ''}
+              ${canManage ? `<button onclick="sendInvitationEmail('${inv.inviteId}')" class="task-action-btn task-action-btn-subtle" data-action-kind="notify">Email</button>` : ''}
+              ${canManage && (myRole === 'owner' || normalizeProjectRole(inv.role) === 'member') ? `<button onclick="updateInviteStatus('${inv.inviteId}','accepted')" class="task-action-btn" data-action-kind="success">Accepté</button>` : ''}
+              ${canManage ? `<button onclick="updateInviteStatus('${inv.inviteId}','declined')" class="task-action-btn task-action-btn-danger" data-action-kind="danger">Refusé</button>` : ''}
             </div>
           </div>
         `).join('');
@@ -10682,7 +10943,7 @@
               <p class="text-xs text-slate-500 truncate">${escapeHtml(group.description || 'Sans description')}</p>
               <p class="text-[11px] text-slate-500 mt-1">${assignedCount} tâche(s)</p>
             </div>
-            ${canManage ? `<button onclick="deleteProjectGroup('${group.groupId}')" class="text-xs px-2 py-1 rounded bg-rose-100 text-rose-700">Supprimer</button>` : ''}
+            ${canManage ? `<button onclick="deleteProjectGroup('${group.groupId}')" class="task-action-btn task-action-btn-danger" data-action-kind="danger">Supprimer</button>` : ''}
           </div>
         `;
       }).join('');
@@ -10742,8 +11003,8 @@
                 <p class="text-[11px] text-slate-500 truncate">${escapeHtml(memberNames.join(', ') || 'Aucun membre')}</p>
               </div>
               <div class="flex items-center gap-2 text-xs">
-                <button onclick="selectProjectGroup('${group.groupId}')" class="px-2 py-1 rounded bg-slate-100 text-slate-700">Modifier</button>
-                ${canManage ? `<button onclick="deleteProjectGroup('${group.groupId}')" class="px-2 py-1 rounded bg-rose-100 text-rose-700">Supprimer</button>` : ''}
+                <button onclick="selectProjectGroup('${group.groupId}')" class="task-action-btn task-action-btn-subtle" data-action-kind="edit">Modifier</button>
+                ${canManage ? `<button onclick="deleteProjectGroup('${group.groupId}')" class="task-action-btn task-action-btn-danger" data-action-kind="danger">Supprimer</button>` : ''}
               </div>
             </div>
           </div>
@@ -11587,10 +11848,12 @@
       if (!descEl || !toggleBtn) return;
 
       const html = sanitizeProjectDescriptionHtml(descriptionText || '');
-      const fallback = 'Aucune description';
-      descEl.innerHTML = html || `<p>${fallback}</p>`;
+      descEl.innerHTML = html || '<p>&nbsp;</p>';
 
       const plain = (descEl.textContent || '').trim();
+      const hasMedia = descEl.querySelector('img, iframe, video, embed, object') !== null;
+      const isDescriptionEmpty = !plain && !hasMedia;
+      descEl.classList.toggle('project-description-empty', isDescriptionEmpty);
       const imagesCount = descEl.querySelectorAll('img').length;
       const shouldCollapse = plain.length > 360 || imagesCount > 1 || plain.split('\n').length >= 5;
       descEl.classList.toggle('is-collapsed', shouldCollapse && !projectDescriptionExpanded);
@@ -11598,6 +11861,282 @@
       if (shouldCollapse) {
         toggleBtn.textContent = projectDescriptionExpanded ? 'Voir moins' : 'Afficher tout';
       }
+    }
+
+    function resetProjectInlineEditingState() {
+      for (const timer of projectInlineDebounceTimers.values()) clearTimeout(timer);
+      for (const timer of projectInlineFinalizeTimers.values()) clearTimeout(timer);
+      projectInlineDebounceTimers.clear();
+      projectInlineFinalizeTimers.clear();
+      projectInlineLastSavedValues.clear();
+    }
+
+    function normalizeProjectInlineFieldValue(field, rawValue) {
+      const value = rawValue === null || rawValue === undefined ? '' : String(rawValue);
+      if (field === 'title') return value.trim();
+      if (field === 'description') return sanitizeProjectDescriptionHtml(value || '');
+      return value.trim();
+    }
+
+    function decorateProjectInlineEditableElement(el, field) {
+      if (!el) return;
+      el.dataset.inlineProjectField = field;
+      el.classList.toggle('task-detail-inline-editable', !!currentProjectInlineCanEdit);
+      if (currentProjectInlineCanEdit) {
+        el.setAttribute('title', 'Cliquer pour modifier');
+        el.setAttribute('tabindex', '0');
+        el.setAttribute('role', 'button');
+      } else {
+        el.removeAttribute('title');
+        el.removeAttribute('tabindex');
+        el.removeAttribute('role');
+      }
+    }
+
+    function refreshProjectInlineDisplay(field, value) {
+      if (field === 'title') {
+        const titleEl = document.getElementById('project-title');
+        if (titleEl) {
+          titleEl.textContent = String(value || '').trim() || 'Projet';
+          decorateProjectInlineEditableElement(titleEl, 'title');
+        }
+        return;
+      }
+      if (field === 'description') {
+        renderProjectDescription(value || '');
+        const descEl = document.getElementById('project-description-display');
+        decorateProjectInlineEditableElement(descEl, 'description');
+      }
+    }
+
+    async function persistProjectInlineField(projectId, field, rawValue, options = {}) {
+      const normalizedValue = normalizeProjectInlineFieldValue(field, rawValue);
+      const saveKey = `${projectId}::${field}`;
+      const signature = `${field}::${normalizedValue}`;
+      if (!options.force && projectInlineLastSavedValues.get(saveKey) === signature) return normalizedValue;
+      const state = await getProjectState(projectId);
+      if (!state?.project || !canEditProjectMeta(state)) return normalizedValue;
+
+      let changes = null;
+      if (field === 'title') {
+        if (!normalizedValue) return normalizedValue;
+        changes = { name: normalizedValue };
+      } else if (field === 'description') {
+        changes = { description: normalizedValue };
+      } else {
+        return normalizedValue;
+      }
+
+      const event = createEvent(
+        EventTypes.UPDATE_PROJECT,
+        projectId,
+        currentUser.userId,
+        { changes }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) {
+        await writeEventToSharedFolder(projectId, event);
+      }
+
+      if (currentProjectState?.project && currentProjectState.project.projectId === projectId) {
+        currentProjectState = {
+          ...currentProjectState,
+          project: {
+            ...currentProjectState.project,
+            ...changes
+          }
+        };
+      }
+
+      projectInlineLastSavedValues.set(saveKey, signature);
+      return normalizedValue;
+    }
+
+    async function scheduleProjectInlineSave(field, rawValue, options = {}) {
+      const projectId = String(currentProjectId || '').trim();
+      if (!projectId) return;
+      const normalizedValue = normalizeProjectInlineFieldValue(field, rawValue);
+      if (projectInlineDebounceTimers.has(field)) {
+        clearTimeout(projectInlineDebounceTimers.get(field));
+      }
+      projectInlineDebounceTimers.set(field, setTimeout(() => {
+        persistProjectInlineField(projectId, field, normalizedValue).catch((error) => {
+          console.error('project inline save failed', error);
+        });
+      }, options.immediate ? 0 : 220));
+      if (projectInlineFinalizeTimers.has(field)) {
+        clearTimeout(projectInlineFinalizeTimers.get(field));
+      }
+      projectInlineFinalizeTimers.set(field, setTimeout(() => {
+        persistProjectInlineField(projectId, field, normalizedValue, { force: true }).catch((error) => {
+          console.error('project inline finalize save failed', error);
+        });
+      }, 900));
+    }
+
+    function startProjectInlineEdit(triggerEl) {
+      if (!currentProjectInlineCanEdit || !triggerEl || triggerEl.dataset.inlineEditing === '1') return;
+      const field = String(triggerEl.dataset.inlineProjectField || '').trim();
+      if (!field) return;
+      const stateProject = currentProjectState?.project || {};
+      const startValue = field === 'title'
+        ? String(stateProject.name || '')
+        : String(stateProject.description || '');
+
+      triggerEl.dataset.inlineEditing = '1';
+      triggerEl.classList.add('is-inline-editing');
+      triggerEl.innerHTML = '';
+      const wrap = document.createElement('span');
+      wrap.className = 'task-detail-inline-editor-wrap task-detail-inline-block';
+      triggerEl.appendChild(wrap);
+
+      let done = false;
+      const finish = async (nextValue, commit) => {
+        if (done) return;
+        done = true;
+        triggerEl.dataset.inlineEditing = '0';
+        triggerEl.classList.remove('is-inline-editing');
+
+        if (field === 'title') {
+          const safeValue = String(nextValue || '').trim() || String(startValue || 'Projet');
+          if (commit) {
+            if (currentProjectState?.project) currentProjectState.project.name = safeValue;
+            await scheduleProjectInlineSave('title', safeValue, { immediate: true });
+          } else if (currentProjectState?.project) {
+            currentProjectState.project.name = String(startValue || '');
+          }
+          refreshProjectInlineDisplay('title', safeValue);
+          return;
+        }
+
+        if (commit) {
+          if (currentProjectState?.project) currentProjectState.project.description = String(nextValue || '');
+          await scheduleProjectInlineSave('description', String(nextValue || ''), { immediate: true });
+          refreshProjectInlineDisplay('description', String(nextValue || ''));
+        } else {
+          if (currentProjectState?.project) currentProjectState.project.description = String(startValue || '');
+          refreshProjectInlineDisplay('description', String(startValue || ''));
+        }
+      };
+
+      if (field === 'description' && window.Quill && typeof ensureProjectDescriptionQuillEditor === 'function') {
+        const editorId = `project-detail-inline-desc-${uuidv4()}`;
+        const host = document.createElement('div');
+        host.id = editorId;
+        host.className = 'task-detail-inline-quill-host';
+        wrap.appendChild(host);
+        const quill = ensureProjectDescriptionQuillEditor(editorId);
+        if (!quill) {
+          const fallback = document.createElement('textarea');
+          fallback.rows = 8;
+          fallback.className = 'task-detail-inline-input task-detail-inline-textarea';
+          fallback.value = getProjectDescriptionPlainText(startValue || '');
+          wrap.appendChild(fallback);
+          fallback.addEventListener('input', () => {
+            const html = plainTextToRichHtml(fallback.value || '');
+            if (currentProjectState?.project) currentProjectState.project.description = html;
+            scheduleProjectInlineSave('description', html).catch((error) => {
+              console.error('project inline fallback autosave failed', error);
+            });
+          });
+          fallback.addEventListener('blur', async () => {
+            const html = plainTextToRichHtml(fallback.value || '');
+            await finish(html, true);
+          });
+          fallback.addEventListener('keydown', async (event) => {
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              await finish(startValue, false);
+            }
+          });
+          requestAnimationFrame(() => fallback.focus());
+          return;
+        }
+
+        const safeHtml = sanitizeProjectDescriptionHtml(startValue || '');
+        quill.clipboard.dangerouslyPasteHTML(safeHtml || '<p><br></p>');
+        quill.on('text-change', () => {
+          const html = String(quill.root?.innerHTML || '').trim();
+          if (currentProjectState?.project) currentProjectState.project.description = html;
+          scheduleProjectInlineSave('description', html).catch((error) => {
+            console.error('project inline quill autosave failed', error);
+          });
+        });
+        const root = quill.root;
+        root.addEventListener('keydown', async (event) => {
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            await finish(startValue, false);
+          }
+        });
+        wrap.addEventListener('focusout', async (event) => {
+          if (wrap.contains(event.relatedTarget)) return;
+          const html = String(quill.root?.innerHTML || '').trim();
+          await finish(html, true);
+        });
+        requestAnimationFrame(() => root.focus());
+        return;
+      }
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'task-detail-inline-input';
+      input.value = startValue || '';
+      wrap.appendChild(input);
+      input.addEventListener('input', () => {
+        if (currentProjectState?.project) currentProjectState.project.name = String(input.value || '').trim();
+        scheduleProjectInlineSave('title', input.value).catch((error) => {
+          console.error('project inline title autosave failed', error);
+        });
+      });
+      input.addEventListener('blur', async () => {
+        await finish(input.value, true);
+      });
+      input.addEventListener('keydown', async (event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          await finish(startValue, false);
+          return;
+        }
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          input.blur();
+        }
+      });
+      requestAnimationFrame(() => {
+        input.focus();
+        input.select();
+      });
+    }
+
+    function initProjectInlineEditing(canEdit = false) {
+      currentProjectInlineCanEdit = !!canEdit;
+      const titleEl = document.getElementById('project-title');
+      const descEl = document.getElementById('project-description-display');
+      decorateProjectInlineEditableElement(titleEl, 'title');
+      decorateProjectInlineEditableElement(descEl, 'description');
+
+      const panel = document.getElementById('project-overview-panel');
+      if (!panel || panel.dataset.inlineProjectEditorBound === '1') return;
+      panel.dataset.inlineProjectEditorBound = '1';
+      panel.addEventListener('click', (event) => {
+        const rawTarget = event.target;
+        const clickTarget = rawTarget instanceof Element ? rawTarget : null;
+        if (clickTarget?.closest('a[data-inline-ignore], a[href], button')) return;
+        const trigger = clickTarget?.closest('[data-inline-project-field]');
+        if (!trigger) return;
+        if (trigger.querySelector('.task-detail-inline-editor-wrap')) return;
+        startProjectInlineEdit(trigger);
+      });
+      panel.addEventListener('keydown', (event) => {
+        const target = event.target instanceof Element ? event.target : null;
+        const trigger = target?.closest('[data-inline-project-field]');
+        if (!trigger) return;
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        if (shouldIgnoreInlineActivationKeydown(target, trigger)) return;
+        event.preventDefault();
+        startProjectInlineEdit(trigger);
+      });
     }
 
     async function showProjectDetail(projectId, options = {}) {
@@ -11665,8 +12204,9 @@
       await refreshTaskAssigneeOptionsMulti(state);
       const btnEditProject = document.getElementById('btn-edit-project');
       const btnDeleteProject = document.getElementById('btn-delete-project');
+      const canEditProjectOverviewInline = canEditProjectMeta(state);
       if (btnEditProject) {
-        const allowed = canEditProjectMeta(state);
+        const allowed = canEditProjectOverviewInline;
         btnEditProject.disabled = !allowed;
         btnEditProject.classList.toggle('opacity-50', !allowed);
         btnEditProject.title = allowed ? '' : 'Reserve aux Proprietaires/Managers';
@@ -11690,6 +12230,7 @@
       }
 
       currentProjectState = state;
+      initProjectInlineEditing(canEditProjectOverviewInline);
       const canSendChat = canSendProjectMessage(state);
       const btnSendMessage = document.getElementById('btn-send-message');
       const messageInput = document.getElementById('message-input');
@@ -12035,6 +12576,7 @@
       resetWorkspaceScrollTop();
       closeMobileSidebar();
       clearProjectWorkFocusState();
+      resetProjectInlineEditingState();
       workspaceMode = 'dashboard';
       projectsPage = 1;
       document.getElementById('project-detail').classList.add('hidden');
@@ -12061,6 +12603,7 @@
       resetWorkspaceScrollTop();
       closeMobileSidebar();
       clearProjectWorkFocusState();
+      resetProjectInlineEditingState();
       workspaceMode = 'dashboard';
       projectsPage = 1;
       document.getElementById('project-detail').classList.add('hidden');
@@ -12772,8 +13315,8 @@
                 <p class="text-xs text-slate-500 mt-1">Archivee le ${task.archivedAt ? new Date(task.archivedAt).toLocaleString('fr-FR') : '-'}</p>
               </div>
               <div class="flex items-center gap-2 text-xs">
-                ${canEdit ? `<button onclick="restoreGlobalTask('${taskRef}')" class="px-2 py-1 rounded bg-emerald-100 text-emerald-700">Restaurer</button>` : ''}
-                ${canDelete ? `<button onclick="deleteGlobalTask('${taskRef}')" class="px-2 py-1 rounded bg-rose-100 text-rose-700">Supprimer</button>` : ''}
+                ${canEdit ? `<button onclick="restoreGlobalTask('${taskRef}')" class="task-action-btn" data-action-kind="unarchive">Restaurer</button>` : ''}
+                ${canDelete ? `<button onclick="deleteGlobalTask('${taskRef}')" class="task-action-btn task-action-btn-danger" data-action-kind="danger">Supprimer</button>` : ''}
               </div>
             </div>
           </div>
@@ -13219,6 +13762,265 @@
     window.deleteGlobalDocument = deleteGlobalDocument;
     window.openDocumentBindingModal = openDocumentBindingModal;
 
+    function normalizeCalendarDetailInlineFieldValue(field, value) {
+      const raw = String(value ?? '').trim();
+      if (field === 'title') return raw;
+      if (field === 'description') return String(value ?? '').trim();
+      if (field === 'date') return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : '';
+      if (field === 'theme') return raw || 'General';
+      if (field === 'sharingMode') return normalizeSharingMode(raw || 'private', 'private');
+      return raw;
+    }
+
+    async function ensureCalendarDetailInlineLock(itemId) {
+      const id = String(itemId || '').trim();
+      if (!id) return false;
+      if (activeCalendarEditLock?.itemId === id && activeCalendarEditLock?.lockId) return true;
+      if (activeCalendarEditLock?.itemId && activeCalendarEditLock.itemId !== id) {
+        await releaseCalendarItemLock(activeCalendarEditLock.itemId, activeCalendarEditLock.lockId || '');
+        activeCalendarEditLock = null;
+      }
+      const lockResult = await acquireCalendarItemLock(id);
+      if (!lockResult.ok) {
+        showToast(buildLockBlockedMessage(lockResult.lock, 'Information calendrier en cours de modification'));
+        return false;
+      }
+      activeCalendarEditLock = { itemId: id, lockId: lockResult.lockId || '' };
+      return true;
+    }
+
+    function refreshCalendarDetailInlineDisplay(field, value) {
+      const normalizedValue = normalizeCalendarDetailInlineFieldValue(field, value);
+      if (field === 'title') {
+        const el = document.getElementById('calendar-info-detail-title');
+        if (el) el.textContent = normalizedValue || 'Information';
+        return;
+      }
+      if (field === 'description') {
+        const el = document.getElementById('calendar-info-detail-description');
+        if (el) el.textContent = normalizedValue || 'Aucune description.';
+        return;
+      }
+      if (field === 'date') {
+        const el = document.getElementById('calendar-info-detail-date');
+        if (el) el.textContent = formatDate(normalizedValue || null);
+        return;
+      }
+      if (field === 'theme') {
+        const el = document.getElementById('calendar-info-detail-theme');
+        if (el) el.textContent = normalizedValue || 'General';
+        const subtitleEl = document.getElementById('calendar-info-detail-subtitle');
+        if (subtitleEl) subtitleEl.textContent = `Hors projet • ${normalizedValue || 'General'}`;
+        return;
+      }
+      if (field === 'sharingMode') {
+        const chip = document.getElementById('calendar-info-detail-sharing-chip');
+        if (chip) {
+          const isShared = normalizeSharingMode(normalizedValue, 'private') === 'shared';
+          chip.className = `inline-flex text-[10px] px-2 py-1 rounded-full font-semibold ${isShared ? 'calendar-chip-shared' : 'calendar-chip-private'} task-detail-inline-editable`;
+          chip.textContent = isShared ? 'Collaborative' : 'Privée';
+          if (currentCalendarInfoDetailCanEdit) {
+            chip.setAttribute('title', 'Cliquer pour modifier');
+            chip.setAttribute('tabindex', '0');
+            chip.setAttribute('role', 'button');
+          } else {
+            chip.removeAttribute('title');
+            chip.removeAttribute('tabindex');
+            chip.removeAttribute('role');
+          }
+        }
+      }
+    }
+
+    function decorateCalendarDetailEditableElement(el, field) {
+      if (!el) return;
+      el.dataset.inlineCalendarField = field;
+      el.classList.toggle('task-detail-inline-editable', !!currentCalendarInfoDetailCanEdit);
+      if (currentCalendarInfoDetailCanEdit) {
+        el.setAttribute('title', 'Cliquer pour modifier');
+        el.setAttribute('tabindex', '0');
+        el.setAttribute('role', 'button');
+      } else {
+        el.removeAttribute('title');
+        el.removeAttribute('tabindex');
+        el.removeAttribute('role');
+      }
+    }
+
+    function initCalendarDetailInlineEditing(canEdit = false) {
+      currentCalendarInfoDetailCanEdit = !!canEdit;
+      decorateCalendarDetailEditableElement(document.getElementById('calendar-info-detail-title'), 'title');
+      decorateCalendarDetailEditableElement(document.getElementById('calendar-info-detail-description'), 'description');
+      decorateCalendarDetailEditableElement(document.getElementById('calendar-info-detail-date'), 'date');
+      decorateCalendarDetailEditableElement(document.getElementById('calendar-info-detail-theme'), 'theme');
+      decorateCalendarDetailEditableElement(document.getElementById('calendar-info-detail-sharing-chip'), 'sharingMode');
+
+      const modal = document.getElementById('modal-calendar-info-details');
+      if (!modal || modal.dataset.inlineCalendarEditorBound === '1') return;
+      modal.dataset.inlineCalendarEditorBound = '1';
+      modal.addEventListener('click', (event) => {
+        const clickTarget = event.target instanceof Element ? event.target : null;
+        const trigger = clickTarget?.closest('[data-inline-calendar-field]');
+        if (!trigger) return;
+        if (trigger.querySelector('.task-detail-inline-editor-wrap')) return;
+        startCalendarDetailInlineEdit(trigger).catch((error) => console.error('calendar inline edit', error));
+      });
+      modal.addEventListener('keydown', (event) => {
+        const target = event.target instanceof Element ? event.target : null;
+        const trigger = target?.closest('[data-inline-calendar-field]');
+        if (!trigger) return;
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        if (shouldIgnoreInlineActivationKeydown(target, trigger)) return;
+        event.preventDefault();
+        startCalendarDetailInlineEdit(trigger).catch((error) => console.error('calendar inline edit', error));
+      });
+    }
+
+    async function persistCalendarDetailInlineField(itemId, field, rawValue, options = {}) {
+      const id = String(itemId || '').trim();
+      if (!id) return null;
+      const normalizedValue = normalizeCalendarDetailInlineFieldValue(field, rawValue);
+      const saveKey = `${id}::${field}`;
+      const signature = `${field}::${normalizedValue}`;
+      if (!options.force && calendarDetailInlineLastSavedValues.get(saveKey) === signature) return normalizedValue;
+      if (!(await ensureCalendarDetailInlineLock(id))) return normalizedValue;
+      const existing = currentCalendarInfoDetailItem || await getDecrypted('globalCalendarItems', id, 'id');
+      if (!existing) return normalizedValue;
+      const updated = { ...existing, updatedAt: Date.now() };
+      if (field === 'description') updated.notes = normalizedValue;
+      else updated[field] = normalizedValue;
+      await putEncrypted('globalCalendarItems', updated, 'id');
+      currentCalendarInfoDetailItem = updated;
+      calendarDetailInlineLastSavedValues.set(saveKey, signature);
+      return normalizedValue;
+    }
+
+    async function scheduleCalendarDetailInlineSave(field, rawValue, options = {}) {
+      const id = String(currentCalendarInfoDetailId || '').trim();
+      if (!id) return;
+      const debounceDelay = options.immediate ? 0 : 220;
+      if (calendarDetailInlineDebounceTimers.has(field)) {
+        clearTimeout(calendarDetailInlineDebounceTimers.get(field));
+      }
+      calendarDetailInlineDebounceTimers.set(field, setTimeout(() => {
+        persistCalendarDetailInlineField(id, field, rawValue).catch((error) => {
+          console.error('calendar inline save failed', error);
+        });
+      }, debounceDelay));
+      if (calendarDetailInlineFinalizeTimers.has(field)) {
+        clearTimeout(calendarDetailInlineFinalizeTimers.get(field));
+      }
+      calendarDetailInlineFinalizeTimers.set(field, setTimeout(() => {
+        persistCalendarDetailInlineField(id, field, rawValue, { force: true }).catch((error) => {
+          console.error('calendar inline finalize save failed', error);
+        });
+      }, 900));
+    }
+
+    function buildCalendarDetailInlineEditor(field, value) {
+      if (field === 'description') {
+        const input = document.createElement('textarea');
+        input.rows = 5;
+        input.className = 'task-detail-inline-input task-detail-inline-textarea';
+        input.value = value || '';
+        input.placeholder = 'Saisissez une description';
+        return input;
+      }
+      if (field === 'date') {
+        const input = document.createElement('input');
+        input.type = 'date';
+        input.className = 'task-detail-inline-input';
+        input.value = value || '';
+        return input;
+      }
+      if (field === 'sharingMode') {
+        const select = document.createElement('select');
+        select.className = 'task-detail-inline-input task-detail-inline-select';
+        [['private', 'Privée'], ['shared', 'Collaborative']].forEach(([v, l]) => {
+          const opt = document.createElement('option');
+          opt.value = v;
+          opt.textContent = l;
+          if (v === value) opt.selected = true;
+          select.appendChild(opt);
+        });
+        return select;
+      }
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'task-detail-inline-input';
+      input.value = value || '';
+      return input;
+    }
+
+    async function startCalendarDetailInlineEdit(triggerEl) {
+      if (!currentCalendarInfoDetailCanEdit || !triggerEl) return;
+      const field = String(triggerEl.dataset.inlineCalendarField || '').trim();
+      if (!field || triggerEl.dataset.inlineEditing === '1') return;
+      const id = String(currentCalendarInfoDetailId || '').trim();
+      if (!id) return;
+      const source = currentCalendarInfoDetailItem || await getDecrypted('globalCalendarItems', id, 'id');
+      if (!source) return;
+      const startValue = normalizeCalendarDetailInlineFieldValue(field, field === 'description' ? source.notes : source[field]);
+      triggerEl.dataset.inlineEditing = '1';
+      triggerEl.classList.add('is-inline-editing');
+      triggerEl.innerHTML = '';
+      const wrap = document.createElement('span');
+      wrap.className = 'task-detail-inline-editor-wrap task-detail-inline-block';
+      const editor = buildCalendarDetailInlineEditor(field, startValue);
+      wrap.appendChild(editor);
+      triggerEl.appendChild(wrap);
+
+      let done = false;
+      const finish = async (nextRawValue, commit) => {
+        if (done) return;
+        done = true;
+        const nextValue = normalizeCalendarDetailInlineFieldValue(field, nextRawValue);
+        triggerEl.dataset.inlineEditing = '0';
+        triggerEl.classList.remove('is-inline-editing');
+        if (commit) {
+          currentCalendarInfoDetailItem = {
+            ...(currentCalendarInfoDetailItem || {}),
+            ...(field === 'description' ? { notes: nextValue } : { [field]: nextValue })
+          };
+          await scheduleCalendarDetailInlineSave(field, nextValue, { immediate: true });
+          refreshCalendarDetailInlineDisplay(field, nextValue);
+          await renderGlobalCalendar();
+        } else {
+          refreshCalendarDetailInlineDisplay(field, field === 'description' ? source.notes : source[field]);
+        }
+      };
+
+      editor.addEventListener('input', async () => {
+        const nextValue = editor.value;
+        currentCalendarInfoDetailItem = {
+          ...(currentCalendarInfoDetailItem || source),
+          ...(field === 'description'
+            ? { notes: normalizeCalendarDetailInlineFieldValue(field, nextValue) }
+            : { [field]: normalizeCalendarDetailInlineFieldValue(field, nextValue) })
+        };
+        await scheduleCalendarDetailInlineSave(field, nextValue);
+      });
+      editor.addEventListener('blur', async () => {
+        await finish(editor.value, true);
+      });
+      editor.addEventListener('keydown', async (event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          await finish(field === 'description' ? source.notes : source[field], false);
+          return;
+        }
+        if (event.key === 'Enter' && field !== 'description') {
+          event.preventDefault();
+          editor.blur();
+        }
+      });
+
+      requestAnimationFrame(() => {
+        editor.focus();
+        if (typeof editor.select === 'function' && field !== 'sharingMode') editor.select();
+      });
+    }
+
     async function openStandaloneCalendarDetails(itemId) {
       const id = String(itemId || '').trim();
       if (!id) return;
@@ -13229,6 +14031,7 @@
       }
 
       currentCalendarInfoDetailId = id;
+      currentCalendarInfoDetailItem = { ...item };
       const modal = document.getElementById('modal-calendar-info-details');
       const titleEl = document.getElementById('calendar-info-detail-title');
       const subtitleEl = document.getElementById('calendar-info-detail-subtitle');
@@ -13244,15 +14047,29 @@
       dateEl.textContent = formatDate(item.date);
       themeEl.textContent = item.theme || 'General';
       badgesEl.innerHTML = `
-        <span class="inline-flex text-[10px] px-2 py-1 rounded-full calendar-chip-info font-semibold">Info hors projet</span>
-        <span class="inline-flex text-[10px] px-2 py-1 rounded-full font-semibold ${normalizeSharingMode(item.sharingMode, 'private') === 'shared' ? 'calendar-chip-shared' : 'calendar-chip-private'}">${normalizeSharingMode(item.sharingMode, 'private') === 'shared' ? 'Collaborative' : 'Privée'}</span>
+        <span id="calendar-info-detail-type-chip" class="inline-flex text-[10px] px-2 py-1 rounded-full calendar-chip-info font-semibold">Info hors projet</span>
+        <span id="calendar-info-detail-sharing-chip" class="inline-flex text-[10px] px-2 py-1 rounded-full font-semibold ${normalizeSharingMode(item.sharingMode, 'private') === 'shared' ? 'calendar-chip-shared' : 'calendar-chip-private'}">${normalizeSharingMode(item.sharingMode, 'private') === 'shared' ? 'Collaborative' : 'Privée'}</span>
       `;
-
+      initCalendarDetailInlineEditing(true);
+      refreshCalendarDetailInlineDisplay('title', item.title || '');
+      refreshCalendarDetailInlineDisplay('description', item.notes || '');
+      refreshCalendarDetailInlineDisplay('date', item.date || '');
+      refreshCalendarDetailInlineDisplay('theme', item.theme || 'General');
+      refreshCalendarDetailInlineDisplay('sharingMode', normalizeSharingMode(item.sharingMode, 'private'));
       modal.classList.remove('hidden');
     }
 
-    function closeStandaloneCalendarDetails() {
+    async function closeStandaloneCalendarDetails() {
+      for (const timer of calendarDetailInlineDebounceTimers.values()) clearTimeout(timer);
+      for (const timer of calendarDetailInlineFinalizeTimers.values()) clearTimeout(timer);
+      calendarDetailInlineDebounceTimers.clear();
+      calendarDetailInlineFinalizeTimers.clear();
+      if (activeCalendarEditLock?.itemId && String(activeCalendarEditLock.itemId) === String(currentCalendarInfoDetailId || '')) {
+        await releaseCalendarItemLock(activeCalendarEditLock.itemId, activeCalendarEditLock.lockId || '');
+        activeCalendarEditLock = null;
+      }
       currentCalendarInfoDetailId = null;
+      currentCalendarInfoDetailItem = null;
       document.getElementById('modal-calendar-info-details')?.classList.add('hidden');
     }
 
@@ -13424,7 +14241,7 @@
           <div class="mt-3 flex items-center justify-between text-xs">
             <span class="text-slate-500">${formatFileSize(doc.size || 0)}</span>
             <div class="doc-hover-actions flex items-center gap-2 flex-wrap">
-              ${isDocumentPreviewable(doc) ? `<button onclick="openDocumentPreview('${encodeURIComponent(doc.data || '')}','${encodeURIComponent(doc.name || '')}','${encodeURIComponent(doc.type || '')}')" class="workspace-action-inline" data-action-kind="preview" data-action-label="Aperçu">Aperçu</button>` : ''}
+              ${isDocumentPreviewable(doc) ? `<button onclick="openDocumentPreview('${encodeURIComponent(doc.data || '')}','${encodeURIComponent(doc.name || '')}','${encodeURIComponent(doc.type || '')}','${encodeDocumentPreviewRef(doc)}')" class="workspace-action-inline" data-action-kind="preview" data-action-label="Aperçu">Aperçu</button>` : ''}
               ${(() => {
                 const safeHref = sanitizeDownloadHref(doc.data || '', String(doc.type || ''));
                 if (!safeHref) {
@@ -13532,9 +14349,116 @@
       };
     }
 
+    function resetDocumentBindingInlineEditingState() {
+      for (const timer of docBindingInlineDebounceTimers.values()) clearTimeout(timer);
+      for (const timer of docBindingInlineFinalizeTimers.values()) clearTimeout(timer);
+      docBindingInlineDebounceTimers.clear();
+      docBindingInlineFinalizeTimers.clear();
+      docBindingInlineSaving = false;
+    }
+
+    function setDocumentBindingFieldReadMode(fieldKey, enabled = true) {
+      const wrap = document.getElementById(`doc-binding-field-${fieldKey}`);
+      const selectId = fieldKey === 'mode'
+        ? 'doc-binding-mode'
+        : fieldKey === 'project'
+          ? 'doc-binding-project'
+          : 'doc-binding-task';
+      const select = document.getElementById(selectId);
+      if (!wrap || !select) return;
+      const canEnableTask = fieldKey !== 'task' || !!String(document.getElementById('doc-binding-project')?.value || '').trim();
+      const shouldReadMode = enabled || !currentDocBindingCanEdit || !canEnableTask;
+      select.disabled = shouldReadMode;
+      wrap.classList.toggle('task-detail-inline-editable', !!currentDocBindingCanEdit && shouldReadMode && canEnableTask);
+      wrap.classList.toggle('is-inline-editing', !shouldReadMode);
+      if (currentDocBindingCanEdit && shouldReadMode && canEnableTask) {
+        wrap.setAttribute('title', 'Cliquer pour modifier');
+        wrap.setAttribute('tabindex', '0');
+        wrap.setAttribute('role', 'button');
+      } else {
+        wrap.removeAttribute('title');
+        wrap.removeAttribute('tabindex');
+        wrap.removeAttribute('role');
+      }
+    }
+
+    function setDocumentBindingReadModeAll(enabled = true) {
+      setDocumentBindingFieldReadMode('mode', enabled);
+      setDocumentBindingFieldReadMode('project', enabled);
+      setDocumentBindingFieldReadMode('task', enabled);
+    }
+
+    async function scheduleDocumentBindingInlineSave(options = {}) {
+      if (!currentDocBindingContext?.doc) return;
+      if (docBindingInlineSaving) return;
+      const key = 'binding';
+      if (docBindingInlineDebounceTimers.has(key)) clearTimeout(docBindingInlineDebounceTimers.get(key));
+      docBindingInlineDebounceTimers.set(key, setTimeout(() => {
+        saveDocumentBindingChanges({ keepOpen: true, silent: true, inlineAutosave: true }).catch((error) => {
+          console.error('document binding inline save failed', error);
+        });
+      }, options.immediate ? 0 : 220));
+      if (docBindingInlineFinalizeTimers.has(key)) clearTimeout(docBindingInlineFinalizeTimers.get(key));
+      docBindingInlineFinalizeTimers.set(key, setTimeout(() => {
+        saveDocumentBindingChanges({ keepOpen: true, silent: true, inlineAutosave: true }).catch((error) => {
+          console.error('document binding inline finalize save failed', error);
+        });
+      }, 900));
+    }
+
+    function initDocumentBindingInlineEditing(canEdit = false) {
+      currentDocBindingCanEdit = !!canEdit;
+      setDocumentBindingReadModeAll(true);
+      const modal = document.getElementById('modal-doc-binding');
+      if (!modal || modal.dataset.inlineDocBindingBound === '1') return;
+      modal.dataset.inlineDocBindingBound = '1';
+      modal.addEventListener('click', (event) => {
+        const rawTarget = event.target;
+        const clickTarget = rawTarget instanceof Element ? rawTarget : null;
+        if (clickTarget?.closest('button, a[href]')) return;
+        const fieldWrap = clickTarget?.closest('[data-inline-doc-binding-field]');
+        if (!(fieldWrap instanceof HTMLElement)) return;
+        if (!currentDocBindingCanEdit) return;
+        const fieldKey = String(fieldWrap.getAttribute('data-inline-doc-binding-field') || '').trim();
+        if (!fieldKey) return;
+        setDocumentBindingFieldReadMode(fieldKey, false);
+        const selectId = fieldKey === 'mode'
+          ? 'doc-binding-mode'
+          : fieldKey === 'project'
+            ? 'doc-binding-project'
+            : 'doc-binding-task';
+        const select = document.getElementById(selectId);
+        if (select && !select.disabled) {
+          requestAnimationFrame(() => select.focus());
+        }
+      });
+      modal.addEventListener('keydown', (event) => {
+        const target = event.target instanceof Element ? event.target : null;
+        const fieldWrap = target?.closest('[data-inline-doc-binding-field]');
+        if (!(fieldWrap instanceof HTMLElement)) return;
+        if (!currentDocBindingCanEdit) return;
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        if (shouldIgnoreInlineActivationKeydown(target, fieldWrap)) return;
+        event.preventDefault();
+        const fieldKey = String(fieldWrap.getAttribute('data-inline-doc-binding-field') || '').trim();
+        if (!fieldKey) return;
+        setDocumentBindingFieldReadMode(fieldKey, false);
+        const selectId = fieldKey === 'mode'
+          ? 'doc-binding-mode'
+          : fieldKey === 'project'
+            ? 'doc-binding-project'
+            : 'doc-binding-task';
+        const select = document.getElementById(selectId);
+        if (select && !select.disabled) {
+          requestAnimationFrame(() => select.focus());
+        }
+      });
+    }
+
     async function openDocumentBindingModal(docId) {
       const id = String(docId || '').trim();
       if (!id) return;
+      resetDocumentBindingInlineEditingState();
       const doc = await resolveDocumentForBinding(id);
       if (!doc) {
         showToast('Document introuvable');
@@ -13578,17 +14502,22 @@
         doc
       };
       await populateDocBindingTaskOptions(sourceProjectId, Array.isArray(doc.linkedTaskIds) ? (doc.linkedTaskIds[0] || '') : '');
+      initDocumentBindingInlineEditing(true);
+      setDocumentBindingReadModeAll(true);
       modal.classList.remove('hidden');
     }
 
     function closeDocumentBindingModal() {
       currentDocBindingContext = null;
+      currentDocBindingCanEdit = false;
+      resetDocumentBindingInlineEditingState();
       document.getElementById('modal-doc-binding')?.classList.add('hidden');
     }
 
-    async function saveDocumentBindingChanges() {
+    async function saveDocumentBindingChanges(options = {}) {
       const ctx = currentDocBindingContext;
       if (!ctx?.doc) return;
+      if (docBindingInlineSaving) return;
       const doc = ctx.doc;
       const projectSelect = document.getElementById('doc-binding-project');
       const taskSelect = document.getElementById('doc-binding-task');
@@ -13599,13 +14528,18 @@
       const selectedTaskId = String(taskSelect.value || '').trim();
       const nextSharingMode = normalizeSharingMode(modeSelect.value, 'private');
       let changed = false;
+      let nextBindingId = '';
+      const silent = options?.silent === true;
+      const keepOpen = options?.keepOpen === true;
+      const inlineAutosave = options?.inlineAutosave === true;
+      docBindingInlineSaving = true;
 
-      await runWithLoading(async () => {
+      const persistChanges = async () => {
         if (doc.sourceType === 'standalone') {
           if (!targetProjectId) {
             const current = await getDecrypted('globalDocs', doc.id, 'id');
             if (!current) {
-              showToast('Document introuvable');
+              if (!silent) showToast('Document introuvable');
               return;
             }
             await putEncrypted('globalDocs', {
@@ -13613,21 +14547,23 @@
               sharingMode: nextSharingMode,
               updatedAt: Date.now()
             }, 'id');
-            showToast('Document mis à jour');
+            if (!silent) showToast('Document mis à jour');
             changed = true;
+            nextBindingId = String(doc.id || '');
             return;
           }
           const targetState = await getProjectState(targetProjectId);
           if (!targetState?.project || !canEditProjectMeta(targetState)) {
-            showToast('Action non autorisée sur le projet cible');
+            if (!silent) showToast('Action non autorisée sur le projet cible');
             return;
           }
+          const newDocId = uuidv4();
           const createEventDoc = createEvent(
             EventTypes.CREATE_DOCUMENT,
             targetProjectId,
             currentUser.userId,
             {
-              docId: uuidv4(),
+              docId: newDocId,
               name: doc.name,
               type: doc.type,
               size: doc.size,
@@ -13641,20 +14577,22 @@
           await publishEvent(createEventDoc);
           if (sharedFolderHandle) await writeEventToSharedFolder(targetProjectId, createEventDoc);
           await deleteFromStore('globalDocs', doc.id);
-          showToast('Document rattaché au projet');
+          if (!silent) showToast('Document rattaché au projet');
           changed = true;
+          nextBindingId = `${targetProjectId}:project-doc:${newDocId}`;
           return;
         }
 
         if (doc.sourceType === 'project-doc') {
           const sourceState = await getProjectState(doc.sourceProjectId);
           if (!sourceState?.project || !canEditProjectMeta(sourceState)) {
-            showToast('Action non autorisée');
+            if (!silent) showToast('Action non autorisée');
             return;
           }
           if (!targetProjectId) {
+            const newGlobalId = uuidv4();
             await putEncrypted('globalDocs', {
-              id: uuidv4(),
+              id: newGlobalId,
               name: doc.name,
               type: doc.type,
               size: doc.size,
@@ -13665,18 +14603,20 @@
               createdAt: Date.now(),
               updatedAt: Date.now()
             }, 'id');
+            nextBindingId = newGlobalId;
           } else {
             const targetState = await getProjectState(targetProjectId);
             if (!targetState?.project || !canEditProjectMeta(targetState)) {
-              showToast('Action non autorisée sur le projet cible');
+              if (!silent) showToast('Action non autorisée sur le projet cible');
               return;
             }
+            const newDocId = uuidv4();
             const createEventDoc = createEvent(
               EventTypes.CREATE_DOCUMENT,
               targetProjectId,
               currentUser.userId,
               {
-                docId: uuidv4(),
+                docId: newDocId,
                 name: doc.name,
                 type: doc.type,
                 size: doc.size,
@@ -13689,6 +14629,7 @@
             );
             await publishEvent(createEventDoc);
             if (sharedFolderHandle) await writeEventToSharedFolder(targetProjectId, createEventDoc);
+            nextBindingId = `${targetProjectId}:project-doc:${newDocId}`;
           }
 
           const deleteEventDoc = createEvent(
@@ -13699,13 +14640,43 @@
           );
           await publishEvent(deleteEventDoc);
           if (sharedFolderHandle) await writeEventToSharedFolder(doc.sourceProjectId, deleteEventDoc);
-          showToast(targetProjectId ? 'Document déplacé / mis à jour' : 'Document détaché hors projet');
+          if (!silent) showToast(targetProjectId ? 'Document déplacé / mis à jour' : 'Document détaché hors projet');
           changed = true;
         }
-      });
+      };
+
+      try {
+        if (inlineAutosave) {
+          await persistChanges();
+        } else {
+          await runWithLoading(persistChanges);
+        }
+      } finally {
+        docBindingInlineSaving = false;
+      }
 
       if (!changed) return;
-      closeDocumentBindingModal();
+      if (keepOpen && nextBindingId) {
+        const currentBindingId = String(doc.id || '').trim();
+        if (String(nextBindingId) !== currentBindingId) {
+          await openDocumentBindingModal(nextBindingId);
+        } else {
+          const refreshed = await resolveDocumentForBinding(nextBindingId);
+          if (refreshed) {
+            currentDocBindingContext = { doc: refreshed };
+            const sourceProjectId = String(refreshed.sourceProjectId || '').trim();
+            const selectedTask = Array.isArray(refreshed.linkedTaskIds) ? (refreshed.linkedTaskIds[0] || '') : '';
+            await populateDocBindingTaskOptions(sourceProjectId, selectedTask);
+            const modeSelect = document.getElementById('doc-binding-mode');
+            const projectSelect = document.getElementById('doc-binding-project');
+            if (modeSelect) modeSelect.value = normalizeSharingMode(refreshed.sharingMode, 'private');
+            if (projectSelect) projectSelect.value = sourceProjectId;
+            setDocumentBindingReadModeAll(true);
+          }
+        }
+      } else {
+        closeDocumentBindingModal();
+      }
       await renderGlobalDocs();
     }
 
@@ -14515,18 +15486,18 @@
           ? `
             <div class="space-y-2">
               <textarea id="global-message-edit-input-${escapeHtml(String(msg.messageId || ''))}" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">${escapeHtml(editingGlobalMessageDraft)}</textarea>
-              <div class="flex items-center gap-3 text-xs">
-                <button onclick="saveEditedGlobalMessage('${escapeHtml(String(msg.messageId || ''))}')" class="text-primary hover:underline">Enregistrer</button>
-                <button onclick="cancelEditGlobalMessage()" class="text-slate-600 hover:underline">Annuler</button>
+              <div class="flex items-center gap-2 text-xs">
+                <button onclick="saveEditedGlobalMessage('${escapeHtml(String(msg.messageId || ''))}')" class="workspace-action-inline" data-action-kind="save">Enregistrer</button>
+                <button onclick="cancelEditGlobalMessage()" class="workspace-action-inline" data-action-kind="close">Annuler</button>
               </div>
             </div>
           `
           : '';
         const footerActionsHtml = mine && !isEditing
           ? `
-            <div class="discussion-message-actions mt-2 flex items-center gap-3 text-xs">
-              <button onclick="startEditGlobalMessage('${escapeHtml(String(msg.messageId || ''))}')" class="text-primary hover:underline">Editer</button>
-              <button onclick="deleteGlobalMessage('${escapeHtml(String(msg.messageId || ''))}')" class="text-rose-600 hover:underline">Supprimer</button>
+            <div class="discussion-message-actions mt-2 flex items-center gap-2 text-xs">
+              <button onclick="startEditGlobalMessage('${escapeHtml(String(msg.messageId || ''))}')" class="workspace-action-inline" data-action-kind="edit">Editer</button>
+              <button onclick="deleteGlobalMessage('${escapeHtml(String(msg.messageId || ''))}')" class="workspace-action-inline" data-action-kind="danger">Supprimer</button>
             </div>
           `
           : '';
@@ -15677,8 +16648,8 @@
               </div>
               <div class="flex items-center gap-2">
                 ${!isAuto && String(post.authorUserId || '') === String(currentUser?.userId || '') ? `
-                  <button onclick="startEditGlobalFeedPost('${postId}')" class="text-xs text-slate-500 hover:text-blue-600 font-semibold transition-colors" title="Éditer">Éditer</button>
-                  <button onclick="deleteGlobalFeedPost('${postId}')" class="text-xs text-slate-500 hover:text-rose-600 font-semibold transition-colors" title="Supprimer">Supprimer</button>
+                  <button onclick="startEditGlobalFeedPost('${postId}')" class="workspace-action-inline" data-action-kind="edit" title="Éditer">Éditer</button>
+                  <button onclick="deleteGlobalFeedPost('${postId}')" class="workspace-action-inline" data-action-kind="danger" title="Supprimer">Supprimer</button>
                   <span class="text-slate-300">|</span>
                 ` : ''}
                 <span class="feed-item-type ${typeClass}">${typeLabel}</span>
@@ -17426,8 +18397,8 @@
                   <p class="text-xs text-slate-500 mt-1">Archivee le ${task.archivedAt ? new Date(task.archivedAt).toLocaleString('fr-FR') : '-'}</p>
                 </div>
                 <div class="flex items-center gap-2 text-xs">
-                  ${canEdit ? `<button onclick="restoreArchivedTask('${task.taskId}')" class="px-2 py-1 rounded bg-emerald-100 text-emerald-700">Restaurer</button>` : ''}
-                  ${canDelete ? `<button onclick="deleteTask('${task.taskId}')" class="px-2 py-1 rounded bg-rose-100 text-rose-700">Supprimer</button>` : ''}
+                  ${canEdit ? `<button onclick="restoreArchivedTask('${task.taskId}')" class="task-action-btn" data-action-kind="unarchive">Restaurer</button>` : ''}
+                  ${canDelete ? `<button onclick="deleteTask('${task.taskId}')" class="task-action-btn task-action-btn-danger" data-action-kind="danger">Supprimer</button>` : ''}
                 </div>
               </div>
             </div>
@@ -18079,15 +19050,421 @@
       return 'none';
     }
 
-    function openDocumentPreview(dataEncoded, nameEncoded, typeEncoded) {
+    function resetDocumentPreviewInlineEditingState() {
+      for (const timer of docPreviewInlineDebounceTimers.values()) clearTimeout(timer);
+      for (const timer of docPreviewInlineFinalizeTimers.values()) clearTimeout(timer);
+      docPreviewInlineDebounceTimers.clear();
+      docPreviewInlineFinalizeTimers.clear();
+      docPreviewInlineLastSavedValues.clear();
+    }
+
+    function parseDocumentPreviewRef(refEncoded) {
+      try {
+        if (!refEncoded) return null;
+        return JSON.parse(decodeURIComponent(refEncoded));
+      } catch {
+        return null;
+      }
+    }
+
+    function getDocumentPreviewSourceLabel(ctx = {}) {
+      if (ctx.sourceType === 'standalone') return 'Hors projet';
+      if (ctx.sourceType === 'project-doc') return String(ctx.sourceProjectName || 'Document projet');
+      if (ctx.sourceType === 'project') return String(ctx.sourceProjectName || 'Pièce jointe de tâche');
+      if (ctx.sourceType === 'task-attachment') return String(ctx.sourceProjectName || 'Pièce jointe de tâche');
+      return 'Document';
+    }
+
+    function encodeDocumentPreviewRef(doc = {}, fallbackProjectId = '') {
+      try {
+        const sourceType = String(doc?.sourceType || '').trim();
+        const payload = {
+          sourceType: sourceType === 'project' ? 'task-attachment' : sourceType,
+          id: String(doc?.id || '').trim(),
+          projectId: String(doc?.sourceProjectId || fallbackProjectId || '').trim(),
+          docId: String(doc?.docId || '').trim(),
+          taskId: String(doc?.taskId || '').trim(),
+          attachmentIndex: Number.isFinite(Number(doc?.attachmentIndex)) ? Number(doc.attachmentIndex) : -1,
+          sourceProjectName: String(doc?.sourceProjectName || '').trim()
+        };
+        return encodeURIComponent(JSON.stringify(payload));
+      } catch {
+        return '';
+      }
+    }
+
+    function normalizeDocumentPreviewInlineFieldValue(field, rawValue) {
+      const value = rawValue == null ? '' : String(rawValue);
+      if (field === 'name') return value.trim();
+      if (field === 'theme') return value.trim() || 'General';
+      if (field === 'notes') return value.replace(/\r\n/g, '\n').trim();
+      if (field === 'sharingMode') return normalizeSharingMode(value, 'private');
+      return value.trim();
+    }
+
+    function getDocumentPreviewFieldValue(doc = {}, field = '') {
+      if (field === 'name') return String(doc?.name || '');
+      if (field === 'theme') return String(doc?.theme || 'General');
+      if (field === 'notes') return String(doc?.notes || '');
+      if (field === 'sharingMode') return normalizeSharingMode(doc?.sharingMode, 'private');
+      return '';
+    }
+
+    function decorateDocumentPreviewEditableElement(el, field) {
+      if (!el) return;
+      el.dataset.inlineDocPreviewField = field;
+      el.classList.toggle('task-detail-inline-editable', !!currentDocPreviewCanEdit);
+      if (currentDocPreviewCanEdit) {
+        el.setAttribute('title', 'Cliquer pour modifier');
+        el.setAttribute('tabindex', '0');
+        el.setAttribute('role', 'button');
+      } else {
+        el.removeAttribute('title');
+        el.removeAttribute('tabindex');
+        el.removeAttribute('role');
+      }
+    }
+
+    function refreshDocumentPreviewInlineDisplay(field, value) {
+      const normalized = normalizeDocumentPreviewInlineFieldValue(field, value);
+      const ctxDoc = currentDocPreviewContext?.doc || {};
+      if (field === 'name') {
+        const el = document.getElementById('doc-preview-meta-name');
+        const title = document.getElementById('doc-preview-title');
+        const display = normalized || 'document';
+        if (el) {
+          el.textContent = display;
+          decorateDocumentPreviewEditableElement(el, 'name');
+        }
+        if (title) title.textContent = `Aperçu: ${display}`;
+        return;
+      }
+      if (field === 'theme') {
+        const el = document.getElementById('doc-preview-meta-theme');
+        if (el) {
+          el.textContent = normalized || 'Général';
+          decorateDocumentPreviewEditableElement(el, 'theme');
+        }
+        return;
+      }
+      if (field === 'notes') {
+        const el = document.getElementById('doc-preview-meta-notes');
+        if (el) {
+          const display = normalized || 'Aucune note.';
+          el.textContent = display;
+          decorateDocumentPreviewEditableElement(el, 'notes');
+        }
+        return;
+      }
+      if (field === 'sharingMode') {
+        const el = document.getElementById('doc-preview-meta-sharing');
+        if (el) {
+          const mode = normalizeSharingMode(normalized, normalizeSharingMode(ctxDoc?.sharingMode, 'private'));
+          el.textContent = sharingModeLabel(mode);
+          decorateDocumentPreviewEditableElement(el, 'sharingMode');
+        }
+      }
+    }
+
+    function buildDocumentPreviewInlineEditor(field, value) {
+      if (field === 'notes') {
+        const textarea = document.createElement('textarea');
+        textarea.rows = 4;
+        textarea.className = 'task-detail-inline-input task-detail-inline-textarea';
+        textarea.value = String(value || '');
+        textarea.placeholder = 'Ajouter une note';
+        return textarea;
+      }
+      if (field === 'sharingMode') {
+        const select = document.createElement('select');
+        select.className = 'task-detail-inline-input task-detail-inline-select';
+        [
+          ['private', 'Privée'],
+          ['shared', 'Collaborative']
+        ].forEach(([v, l]) => {
+          const opt = document.createElement('option');
+          opt.value = v;
+          opt.textContent = l;
+          if (v === value) opt.selected = true;
+          select.appendChild(opt);
+        });
+        return select;
+      }
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'task-detail-inline-input';
+      input.value = String(value || '');
+      return input;
+    }
+
+    async function persistDocumentPreviewInlineField(field, rawValue, options = {}) {
+      const ctx = currentDocPreviewContext;
+      if (!ctx?.doc) return;
+      const normalizedValue = normalizeDocumentPreviewInlineFieldValue(field, rawValue);
+      const saveKey = `${ctx.docRef || ctx.id || ''}::${field}`;
+      const signature = `${field}::${normalizedValue}`;
+      if (!options.force && docPreviewInlineLastSavedValues.get(saveKey) === signature) return;
+
+      const sourceType = String(ctx.sourceType || '').trim();
+      if (sourceType === 'standalone') {
+        const row = await getDecrypted('globalDocs', ctx.id, 'id');
+        if (!row) return;
+        const next = { ...row, updatedAt: Date.now() };
+        if (field === 'name' && normalizedValue) next.name = normalizedValue;
+        if (field === 'theme') next.theme = normalizedValue || 'General';
+        if (field === 'notes') next.notes = normalizedValue;
+        if (field === 'sharingMode') next.sharingMode = normalizeSharingMode(normalizedValue, normalizeSharingMode(row.sharingMode, 'private'));
+        await putEncrypted('globalDocs', next, 'id');
+        currentDocPreviewContext.doc = { ...currentDocPreviewContext.doc, ...next };
+      } else if (sourceType === 'project-doc') {
+        const state = await getProjectState(ctx.projectId, { ignoreAccessCheck: true });
+        if (!state?.project) return;
+        const doc = (state.documents || []).find((item) => String(item.docId || '') === String(ctx.docId || ''));
+        if (!doc) return;
+        const canEdit = canEditProjectMeta(state) || (doc.createdBy && doc.createdBy === currentUser?.userId);
+        if (!canEdit) return;
+        const changes = {};
+        if (field === 'name' && normalizedValue) changes.name = normalizedValue;
+        if (field === 'theme') changes.theme = normalizedValue || 'General';
+        if (field === 'notes') changes.notes = normalizedValue;
+        if (field === 'sharingMode') {
+          changes.sharingMode = normalizeSharingMode(
+            normalizedValue,
+            normalizeSharingMode(doc.sharingMode, normalizeSharingMode(state.project.sharingMode, 'shared'))
+          );
+        }
+        if (!Object.keys(changes).length) return;
+        const event = createEvent(EventTypes.UPDATE_DOCUMENT, ctx.projectId, currentUser.userId, { docId: doc.docId, changes });
+        await publishEvent(event);
+        if (sharedFolderHandle) await writeEventToSharedFolder(ctx.projectId, event);
+        currentDocPreviewContext.doc = { ...currentDocPreviewContext.doc, ...changes };
+      } else if ((sourceType === 'project' || sourceType === 'task-attachment') && field === 'name') {
+        const state = await getProjectState(ctx.projectId, { ignoreAccessCheck: true });
+        const task = (state?.tasks || []).find((item) => String(item.taskId || '') === String(ctx.taskId || ''));
+        const idx = Number(ctx.attachmentIndex);
+        if (!state?.project || !task || !task.attachments?.[idx] || !canEditTaskInProject(task, state)) return;
+        const attachments = [...(task.attachments || [])];
+        attachments[idx] = { ...attachments[idx], name: normalizedValue || attachments[idx].name };
+        const event = createEvent(EventTypes.UPDATE_TASK, ctx.projectId, currentUser.userId, {
+          taskId: task.taskId,
+          changes: { attachments }
+        });
+        await publishEvent(event);
+        if (sharedFolderHandle) await writeEventToSharedFolder(ctx.projectId, event);
+        currentDocPreviewContext.doc = { ...currentDocPreviewContext.doc, name: attachments[idx].name };
+      } else {
+        return;
+      }
+
+      docPreviewInlineLastSavedValues.set(saveKey, signature);
+    }
+
+    async function scheduleDocumentPreviewInlineSave(field, rawValue, options = {}) {
+      if (!currentDocPreviewContext?.doc) return;
+      const normalizedValue = normalizeDocumentPreviewInlineFieldValue(field, rawValue);
+      if (docPreviewInlineDebounceTimers.has(field)) {
+        clearTimeout(docPreviewInlineDebounceTimers.get(field));
+      }
+      docPreviewInlineDebounceTimers.set(field, setTimeout(() => {
+        persistDocumentPreviewInlineField(field, normalizedValue).catch((error) => {
+          console.error('document preview inline save failed', error);
+        });
+      }, options.immediate ? 0 : 220));
+      if (docPreviewInlineFinalizeTimers.has(field)) {
+        clearTimeout(docPreviewInlineFinalizeTimers.get(field));
+      }
+      docPreviewInlineFinalizeTimers.set(field, setTimeout(() => {
+        persistDocumentPreviewInlineField(field, normalizedValue, { force: true }).catch((error) => {
+          console.error('document preview inline finalize save failed', error);
+        });
+      }, 900));
+    }
+
+    function startDocumentPreviewInlineEdit(triggerEl) {
+      if (!currentDocPreviewCanEdit || !triggerEl || triggerEl.dataset.inlineEditing === '1') return;
+      const field = String(triggerEl.dataset.inlineDocPreviewField || '').trim();
+      if (!field) return;
+      if ((currentDocPreviewContext?.sourceType === 'project' || currentDocPreviewContext?.sourceType === 'task-attachment')
+        && field !== 'name') return;
+      const startValue = getDocumentPreviewFieldValue(currentDocPreviewContext?.doc || {}, field);
+      triggerEl.dataset.inlineEditing = '1';
+      triggerEl.classList.add('is-inline-editing');
+      triggerEl.innerHTML = '';
+
+      const wrap = document.createElement('span');
+      wrap.className = 'task-detail-inline-editor-wrap';
+      const editor = buildDocumentPreviewInlineEditor(field, startValue);
+      wrap.appendChild(editor);
+      triggerEl.appendChild(wrap);
+
+      let done = false;
+      const finish = async (nextValue, commit) => {
+        if (done) return;
+        done = true;
+        triggerEl.dataset.inlineEditing = '0';
+        triggerEl.classList.remove('is-inline-editing');
+        if (commit) {
+          const normalized = normalizeDocumentPreviewInlineFieldValue(field, nextValue);
+          currentDocPreviewContext.doc = {
+            ...(currentDocPreviewContext.doc || {}),
+            [field]: normalized
+          };
+          await scheduleDocumentPreviewInlineSave(field, normalized, { immediate: true });
+          refreshDocumentPreviewInlineDisplay(field, normalized);
+        } else {
+          refreshDocumentPreviewInlineDisplay(field, startValue);
+        }
+      };
+
+      editor.addEventListener('input', async () => {
+        const val = editor.value;
+        currentDocPreviewContext.doc = {
+          ...(currentDocPreviewContext.doc || {}),
+          [field]: val
+        };
+        await scheduleDocumentPreviewInlineSave(field, val);
+      });
+      editor.addEventListener('blur', async () => {
+        await finish(editor.value, true);
+      });
+      editor.addEventListener('keydown', async (event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          await finish(startValue, false);
+          return;
+        }
+        if (event.key === 'Enter' && field !== 'notes') {
+          event.preventDefault();
+          editor.blur();
+        }
+      });
+
+      requestAnimationFrame(() => {
+        editor.focus();
+        if (typeof editor.select === 'function' && field !== 'sharingMode') editor.select();
+      });
+    }
+
+    function initDocumentPreviewInlineEditing(canEdit = false) {
+      currentDocPreviewCanEdit = !!canEdit;
+      const editableFields = ['name', 'sharingMode', 'theme', 'notes'];
+      editableFields.forEach((field) => {
+        const el = document.getElementById(`doc-preview-meta-${field === 'sharingMode' ? 'sharing' : field}`);
+        if (!el) return;
+        if ((currentDocPreviewContext?.sourceType === 'project' || currentDocPreviewContext?.sourceType === 'task-attachment')
+          && field !== 'name') {
+          el.classList.remove('task-detail-inline-editable');
+          el.removeAttribute('title');
+          el.removeAttribute('data-inline-doc-preview-field');
+          el.removeAttribute('tabindex');
+          el.removeAttribute('role');
+          return;
+        }
+        decorateDocumentPreviewEditableElement(el, field);
+      });
+      const modal = document.getElementById('modal-doc-preview');
+      if (!modal || modal.dataset.inlineDocPreviewBound === '1') return;
+      modal.dataset.inlineDocPreviewBound = '1';
+      modal.addEventListener('click', (event) => {
+        const rawTarget = event.target;
+        const clickTarget = rawTarget instanceof Element ? rawTarget : null;
+        if (clickTarget?.closest('a[data-inline-ignore], a[href], button')) return;
+        const trigger = clickTarget?.closest('[data-inline-doc-preview-field]');
+        if (!trigger) return;
+        if (trigger.querySelector('.task-detail-inline-editor-wrap')) return;
+        startDocumentPreviewInlineEdit(trigger);
+      });
+      modal.addEventListener('keydown', (event) => {
+        const target = event.target instanceof Element ? event.target : null;
+        const trigger = target?.closest('[data-inline-doc-preview-field]');
+        if (!trigger) return;
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        if (shouldIgnoreInlineActivationKeydown(target, trigger)) return;
+        event.preventDefault();
+        startDocumentPreviewInlineEdit(trigger);
+      });
+    }
+
+    async function resolveDocumentPreviewContext(ref = null) {
+      const sourceType = String(ref?.sourceType || '').trim();
+      if (sourceType === 'standalone' && ref?.id) {
+        const row = await getDecrypted('globalDocs', ref.id, 'id');
+        if (!row) return null;
+        return {
+          ...ref,
+          sourceType: 'standalone',
+          docRef: String(ref.id || ''),
+          doc: row,
+          canEdit: true
+        };
+      }
+      if (sourceType === 'project-doc' && ref?.projectId && ref?.docId) {
+        const state = await getProjectState(ref.projectId, { ignoreAccessCheck: true });
+        const doc = (state?.documents || []).find((item) => String(item.docId || '') === String(ref.docId || ''));
+        if (!state?.project || !doc) return null;
+        const canEdit = canEditProjectMeta(state) || (doc.createdBy && doc.createdBy === currentUser?.userId);
+        return {
+          ...ref,
+          sourceType: 'project-doc',
+          docRef: `${ref.projectId}:project-doc:${doc.docId}`,
+          doc: {
+            ...doc,
+            sourceProjectName: state.project.name
+          },
+          canEdit
+        };
+      }
+      if ((sourceType === 'project' || sourceType === 'task-attachment') && ref?.projectId && ref?.taskId && Number.isFinite(Number(ref?.attachmentIndex))) {
+        const state = await getProjectState(ref.projectId, { ignoreAccessCheck: true });
+        const task = (state?.tasks || []).find((item) => String(item.taskId || '') === String(ref.taskId || ''));
+        const idx = Number(ref.attachmentIndex);
+        const attachment = task?.attachments?.[idx];
+        if (!state?.project || !task || !attachment) return null;
+        return {
+          ...ref,
+          sourceType: 'task-attachment',
+          docRef: `${ref.projectId}:${task.taskId}:${idx}`,
+          doc: {
+            ...attachment,
+            sourceProjectName: state.project.name,
+            sharingMode: normalizeSharingMode(state.project.sharingMode, 'shared')
+          },
+          canEdit: canEditTaskInProject(task, state)
+        };
+      }
+      return null;
+    }
+
+    async function openDocumentPreview(dataEncoded, nameEncoded, typeEncoded, refEncoded = '') {
       const modal = document.getElementById('modal-doc-preview');
       const title = document.getElementById('doc-preview-title');
       const content = document.getElementById('doc-preview-content');
+      const metaName = document.getElementById('doc-preview-meta-name');
+      const metaTheme = document.getElementById('doc-preview-meta-theme');
+      const metaNotes = document.getElementById('doc-preview-meta-notes');
+      const metaSharing = document.getElementById('doc-preview-meta-sharing');
+      const metaSource = document.getElementById('doc-preview-meta-source');
       if (!modal || !title || !content) return;
 
       const data = decodeURIComponent(dataEncoded || '');
       const name = decodeURIComponent(nameEncoded || '');
       const type = decodeURIComponent(typeEncoded || '');
+      const parsedRef = parseDocumentPreviewRef(refEncoded);
+      const resolvedContext = await resolveDocumentPreviewContext(parsedRef);
+      currentDocPreviewContext = resolvedContext || {
+        sourceType: '',
+        docRef: '',
+        canEdit: false,
+        doc: {
+          name: name || 'document',
+          type: type || '',
+          data,
+          theme: 'General',
+          notes: '',
+          sharingMode: 'private'
+        }
+      };
+      resetDocumentPreviewInlineEditingState();
       title.textContent = `Aperçu: ${name || 'document'}`;
       content.innerHTML = '';
 
@@ -18160,14 +19537,34 @@
         content.appendChild(p);
       }
 
+      if (metaName) metaName.textContent = String(currentDocPreviewContext?.doc?.name || name || 'document');
+      if (metaTheme) metaTheme.textContent = String(currentDocPreviewContext?.doc?.theme || 'Général');
+      if (metaNotes) metaNotes.textContent = String(currentDocPreviewContext?.doc?.notes || 'Aucune note.');
+      if (metaSharing) metaSharing.textContent = sharingModeLabel(normalizeSharingMode(currentDocPreviewContext?.doc?.sharingMode, 'private'));
+      if (metaSource) metaSource.textContent = getDocumentPreviewSourceLabel(currentDocPreviewContext || {});
+      initDocumentPreviewInlineEditing(!!currentDocPreviewContext?.canEdit);
       modal.classList.remove('hidden');
     }
 
-    function closeDocumentPreview() {
+    async function closeDocumentPreview() {
       const modal = document.getElementById('modal-doc-preview');
+      if (!modal || modal.classList.contains('hidden')) return;
       const content = document.getElementById('doc-preview-content');
       if (content) content.innerHTML = '';
+      const previousContext = currentDocPreviewContext;
+      currentDocPreviewContext = null;
+      currentDocPreviewCanEdit = false;
+      resetDocumentPreviewInlineEditingState();
       modal?.classList.add('hidden');
+      if (workspaceMode === 'project' && currentProjectId) {
+        const latest = await getProjectState(currentProjectId);
+        if (latest?.project) {
+          currentProjectState = latest;
+          renderDocuments(latest);
+        }
+      } else if (workspaceMode === 'globalDocs' || previousContext?.sourceType === 'standalone') {
+        await renderGlobalDocs();
+      }
     }
 
     window.openDocumentPreview = openDocumentPreview;
@@ -19102,7 +20499,7 @@
           <div class="flex items-center justify-between text-xs">
             <span class="text-gray-500">${formatFileSize(doc.size || 0)}</span>
             <div class="doc-hover-actions flex items-center gap-2 flex-wrap">
-              ${isDocumentPreviewable(doc) ? `<button onclick="openDocumentPreview('${encodeURIComponent(doc.data || '')}','${encodeURIComponent(doc.name || '')}','${encodeURIComponent(doc.type || '')}')" class="workspace-action-inline" data-action-kind="preview" data-action-label="Aperçu">Aperçu</button>` : ''}
+              ${isDocumentPreviewable(doc) ? `<button onclick="openDocumentPreview('${encodeURIComponent(doc.data || '')}','${encodeURIComponent(doc.name || '')}','${encodeURIComponent(doc.type || '')}','${encodeDocumentPreviewRef(doc, currentProjectId)}')" class="workspace-action-inline" data-action-kind="preview" data-action-label="Aperçu">Aperçu</button>` : ''}
               ${isDocumentEditable(doc) && (canEditTaskDoc || canEditProjectDoc) ? `<button onclick="openProjectDocumentEditor('${doc.sourceType}','${escapeHtml(doc.sourceType === 'project-doc' ? doc.docId : doc.taskId)}',${Number(doc.attachmentIndex ?? -1)})" class="workspace-action-inline" data-action-kind="edit" data-action-label="Modifier">Modifier</button>` : ''}
               ${(() => {
                 const safeHref = sanitizeDownloadHref(doc.data || '', String(doc.type || ''));
@@ -19362,17 +20759,17 @@
           ${editingMessageId === msg.messageId ? `
             <div class="space-y-2">
               <textarea id="message-edit-input-${msg.messageId}" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">${escapeHtml(editingMessageDraft)}</textarea>
-              <div class="flex items-center gap-3 text-xs">
-                <button onclick="saveEditedMessage('${msg.messageId}')" class="text-primary hover:underline">Enregistrer</button>
-                <button onclick="cancelEditMessage()" class="text-slate-600 hover:underline">Annuler</button>
+              <div class="flex items-center gap-2 text-xs">
+                <button onclick="saveEditedMessage('${msg.messageId}')" class="workspace-action-inline" data-action-kind="save">Enregistrer</button>
+                <button onclick="cancelEditMessage()" class="workspace-action-inline" data-action-kind="close">Annuler</button>
               </div>
             </div>
           ` : `
             <div class="markdown-content text-gray-700">${renderSafeMarkdown(msg.content)}</div>
             ${renderMessageAttachments(msg.attachments)}
-            <div class="discussion-message-actions mt-1 flex items-center gap-3 text-xs">
-              ${canEditProjectMessage(msg, currentProjectState) ? `<button onclick="startEditMessage('${msg.messageId}')" class="text-primary hover:underline">Éditer</button>` : ''}
-              ${canDeleteProjectMessage(msg, currentProjectState) ? `<button onclick="deleteMessage('${msg.messageId}')" class="text-red-600 hover:underline">Supprimer</button>` : ''}
+            <div class="discussion-message-actions mt-1 flex items-center gap-2 text-xs">
+              ${canEditProjectMessage(msg, currentProjectState) ? `<button onclick="startEditMessage('${msg.messageId}')" class="workspace-action-inline" data-action-kind="edit">Éditer</button>` : ''}
+              ${canDeleteProjectMessage(msg, currentProjectState) ? `<button onclick="deleteMessage('${msg.messageId}')" class="workspace-action-inline" data-action-kind="danger">Supprimer</button>` : ''}
             </div>
           `}
         </div>
@@ -19425,17 +20822,17 @@
                 ${editingMessageId === msg.messageId ? `
                   <div class="space-y-2">
                     <textarea id="message-edit-input-${msg.messageId}" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">${escapeHtml(editingMessageDraft)}</textarea>
-                    <div class="flex items-center gap-3 text-xs">
-                      <button onclick="saveEditedMessage('${msg.messageId}')" class="text-primary hover:underline">Enregistrer</button>
-                      <button onclick="cancelEditMessage()" class="text-slate-600 hover:underline">Annuler</button>
+                    <div class="flex items-center gap-2 text-xs">
+                      <button onclick="saveEditedMessage('${msg.messageId}')" class="workspace-action-inline" data-action-kind="save">Enregistrer</button>
+                      <button onclick="cancelEditMessage()" class="workspace-action-inline" data-action-kind="close">Annuler</button>
                     </div>
                   </div>
                 ` : `
                   <div class="markdown-content">${renderSafeMarkdown(msg.content)}</div>
                   ${renderMessageAttachments(msg.attachments)}
-            <div class="discussion-message-actions mt-2 flex items-center gap-3 text-xs">
-              ${canEditProjectMessage(msg, currentProjectState) ? `<button onclick="startEditMessage('${msg.messageId}')" class="text-primary hover:underline">Editer</button>` : ''}
-              ${canDeleteProjectMessage(msg, currentProjectState) ? `<button onclick="deleteMessage('${msg.messageId}')" class="text-rose-600 hover:underline">Supprimer</button>` : ''}
+            <div class="discussion-message-actions mt-2 flex items-center gap-2 text-xs">
+              ${canEditProjectMessage(msg, currentProjectState) ? `<button onclick="startEditMessage('${msg.messageId}')" class="workspace-action-inline" data-action-kind="edit">Editer</button>` : ''}
+              ${canDeleteProjectMessage(msg, currentProjectState) ? `<button onclick="deleteMessage('${msg.messageId}')" class="workspace-action-inline" data-action-kind="danger">Supprimer</button>` : ''}
             </div>
                 `}
               </div>
@@ -20770,6 +22167,27 @@
     });
     document.getElementById('doc-binding-project')?.addEventListener('change', async (e) => {
       await populateDocBindingTaskOptions(e.target?.value || '', '');
+      setDocumentBindingFieldReadMode('task', true);
+      await scheduleDocumentBindingInlineSave();
+      setDocumentBindingFieldReadMode('project', true);
+    });
+    document.getElementById('doc-binding-project')?.addEventListener('blur', () => {
+      setDocumentBindingFieldReadMode('project', true);
+      setDocumentBindingFieldReadMode('task', true);
+    });
+    document.getElementById('doc-binding-mode')?.addEventListener('change', async () => {
+      await scheduleDocumentBindingInlineSave();
+      setDocumentBindingFieldReadMode('mode', true);
+    });
+    document.getElementById('doc-binding-mode')?.addEventListener('blur', () => {
+      setDocumentBindingFieldReadMode('mode', true);
+    });
+    document.getElementById('doc-binding-task')?.addEventListener('change', async () => {
+      await scheduleDocumentBindingInlineSave();
+      setDocumentBindingFieldReadMode('task', true);
+    });
+    document.getElementById('doc-binding-task')?.addEventListener('blur', () => {
+      setDocumentBindingFieldReadMode('task', true);
     });
     document.getElementById('btn-save-doc-binding')?.addEventListener('click', saveDocumentBindingChanges);
     document.getElementById('btn-close-doc-editor')?.addEventListener('click', () => {
@@ -21870,25 +23288,25 @@
       e.preventDefault();
       document.getElementById('btn-task-convert-confirm')?.click();
     });
-    document.getElementById('btn-close-calendar-info-details')?.addEventListener('click', () => {
-      closeStandaloneCalendarDetails();
+    document.getElementById('btn-close-calendar-info-details')?.addEventListener('click', async () => {
+      await closeStandaloneCalendarDetails();
     });
     document.getElementById('btn-calendar-info-detail-edit')?.addEventListener('click', async () => {
       if (!currentCalendarInfoDetailId) return;
       const targetId = currentCalendarInfoDetailId;
-      closeStandaloneCalendarDetails();
+      await closeStandaloneCalendarDetails();
       await editStandaloneCalendarItem(targetId);
     });
     document.getElementById('btn-calendar-info-detail-archive')?.addEventListener('click', async () => {
       if (!currentCalendarInfoDetailId) return;
       const targetId = currentCalendarInfoDetailId;
-      closeStandaloneCalendarDetails();
+      await closeStandaloneCalendarDetails();
       await archiveStandaloneCalendarItem(targetId);
     });
     document.getElementById('btn-calendar-info-detail-delete')?.addEventListener('click', async () => {
       if (!currentCalendarInfoDetailId) return;
       const targetId = currentCalendarInfoDetailId;
-      closeStandaloneCalendarDetails();
+      await closeStandaloneCalendarDetails();
       await deleteStandaloneCalendarItem(targetId);
     });
 
@@ -21980,7 +23398,7 @@
         pendingProfilePhotoDirty = false;
         document.getElementById('modal-edit-project').classList.add('hidden');
         editProjectFromDashboard = false;
-        document.getElementById('modal-doc-preview').classList.add('hidden');
+        await closeDocumentPreview();
         closeDocumentBindingModal();
         closeDocumentEditorModal();
         closeTaskConvertModal();
@@ -22015,8 +23433,8 @@
     registerSafeBackdropClose('modal-global-conversation-delete', () => {
       closeGlobalConversationDeleteModal();
     });
-    registerSafeBackdropClose('modal-calendar-info-details', () => {
-      closeStandaloneCalendarDetails();
+    registerSafeBackdropClose('modal-calendar-info-details', async () => {
+      await closeStandaloneCalendarDetails();
     });
     registerSafeBackdropClose('modal-doc-binding', () => {
       closeDocumentBindingModal();
@@ -22524,8 +23942,8 @@
     });
     document.getElementById('btn-add-project-documents')?.addEventListener('click', addProjectDocuments);
     document.getElementById('btn-close-doc-preview')?.addEventListener('click', closeDocumentPreview);
-    registerSafeBackdropClose('modal-doc-preview', () => {
-      closeDocumentPreview();
+    registerSafeBackdropClose('modal-doc-preview', async () => {
+      await closeDocumentPreview();
     });
 
     async function readTaskFiles() {
