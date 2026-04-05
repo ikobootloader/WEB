@@ -43,6 +43,7 @@
       showStructure: src.showStructure !== false,
       showTransverse: src.showTransverse !== false,
       showApplicative: src.showApplicative !== false,
+      showMinimap: src.showMinimap !== false,
       showAllStructure: src.showAllStructure === true,
       showAllTransverse: src.showAllTransverse === true,
       showAllApplicative: src.showAllApplicative === true,

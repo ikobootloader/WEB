@@ -65,11 +65,26 @@ Nom d interface par defaut: `NEXUS MDA`.
 - Recherche globale dans le header (navigation directe vers projet/tache/document/message/canal).
 - `Referentiels`: administration globale des thematiques, groupes et registre versions logicielles.
 - `Workflow`: rubrique transverse dediee a l organisation metier:
-  - vues `Carte`, `Organisation`, `Organigramme`, `Agents`, `Taches`, `Kanban`, `Timeline`, `Procedures`, `Logiciels metiers`, `Journal`
-  - CRUD complet: communautes, services, groupes, agents, taches, procedures, logiciels
+  - vues `Carte`, `Organisation`, `Organigramme`, `Agents`, `Processus`, `Modeles de processus`, `Taches`, `Kanban`, `Timeline`, `Procedures`, `Logiciels metiers`, `Analyse`, `Gouvernance`, `Journal`
+  - carte metier: zoom/pan, auto-layout, mini-carte interactive, export PNG et export PDF
+  - concepteur de processus: edition par blocs d etapes (ajout rapide, duplication, reordonnancement, reliage automatique des flux)
+  - concepteur de flux: mode graphe non-lineaire (branches decision/parallele/exception, branche oui/non, bascule lineaire)
+  - visualisation SVG des liaisons et edition inline des flux (source, cible, type, condition, libelle)
+  - interaction graphe: clic noeud (source/cible) et clic arete (chargement edition)
+  - mode drag-link: creation d un flux par glisser source -> cible sur le graphe
+  - multi-selection des flux: mode multi-select, selection Ctrl/Shift/Cmd, suppression groupee, application groupee du type de flux
+  - CRUD complet: communautes, services, groupes, agents, roles, processus, etapes, flux, templates, taches, procedures, logiciels
   - liens avances: dependances inter-taches, liaisons inter-services, hierarchie manager/agents
+  - modeles de processus: creation depuis processus, instanciation, publication/archivage, versioning, variantes
+  - gouvernance processus: validation multi-niveaux, mode sequentiel optionnel, quorum par niveau, exports JSON/CSV
+  - echange de donnees workflow: export modele complet JSON + export synthese processus CSV
+  - integration referentielle: logiciels metiers relies au suivi global des versions logicielles (lecture, ouverture du registre, synchronisation version)
+  - separation des droits: edition/soumission distinctes de la validation, controles d approbation par roles requis
+  - alertes proactives de gouvernance (responsable manquant, quorum incomplet, etapes non affectees)
+  - analyse avancee: matrices processus x services / processus x logiciels / agents x responsabilites, dependances critiques, listes d anomalies (etapes non affectees, logiciels sans procedure, processus incomplets)
+  - injection d un jeu d exemple complet de modelisation organisationnelle (bouton dedie dans la barre Workflow)
   - journal/audit + historique des modifications avec restauration de versions
-  - export PDF des vues `Organisation` et `Organigramme`
+  - export PDF des vues `Organisation` et `Organigramme` + fiches `Processus`, `Service`, `Agent`, `Logiciel`
   - detail editable + ponts transverses vers taches/documents/themes/groupes globaux
 - Correctif UX/CSS: isolation stricte des sections transverses (plus de melange visuel Taches/Calendrier).
 
@@ -182,7 +197,7 @@ Nom d interface par defaut: `NEXUS MDA`.
 - Navigation: dashboard, projets, taches, calendrier, documents, referentiels, workflow.
 - CRUD: projet, tache projet/hors projet, document hors projet, info calendrier.
 - Recurrence: creation/edition des taches recurrentes et affichage des libelles.
-- Workflow: CRUD entites, kanban, timeline, journal, historique/restauration.
+- Workflow: CRUD entites, modeles/variantes, gouvernance/validation, kanban, timeline, journal, historique/restauration.
 - Collaboration: membres, invitations, groupes projet/globaux, thematiques, permissions.
 - Communication: notifications + generation des mails + fil d info.
 - Responsive: mobile/tablette/desktop.

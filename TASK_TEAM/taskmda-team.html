@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NEXUS MDA | Solo et Collaboratif</title>
+  <title>NEXUS MDA | Privée et Collaborative</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
@@ -98,6 +98,9 @@
         <button id="btn-edit-user-name" class="text-slate-400 hover:text-primary" title="Modifier le nom">
           <span class="material-symbols-outlined text-sm">edit</span>
         </button>
+        <button id="btn-user-logout" class="theme-toggle-btn user-logout-icon-btn" aria-label="Déconnexion" title="Déconnexion">
+          <span class="material-symbols-outlined text-xl">logout</span>
+        </button>
       </div>
     </div>
   </header>
@@ -131,8 +134,23 @@
           <li>Calendrier transverse (projets + hors projet) avec informations éditables.</li>
           <li>Messagerie projet et hors projet, notifications, mentions et recherche globale.</li>
           <li>Fil d information transverse (posts manuels + activités automatiques + digestion documentaire).</li>
-          <li>Workflow complet: Carte, Organisation, Organigramme, Agents, Tâches, Kanban, Timeline, Procédures, Logiciels, Journal.</li>
+          <li>Workflow complet: Carte, Organisation, Organigramme, Agents, Processus, Modèles de processus, Tâches, Kanban, Timeline, Procédures, Logiciels, Analyse, Gouvernance, Journal.</li>
+          <li>Carte métier enrichie: zoom/pan, auto-layout, mini-carte interactive, export PNG et export PDF.</li>
+          <li>Concepteur de processus: bibliothèque de blocs d étapes, ajout rapide, duplication, réordonnancement et reliage automatique des flux.</li>
+          <li>Concepteur de flux (graphe): création de branches non-linéaires (décision, parallèle, exception), branche oui/non et bascule mode linéaire.</li>
+          <li>Visualisation graphe: mini-graphe SVG des étapes/liaisons et édition inline des flux (source, cible, type, condition, libellé).</li>
+          <li>Édition visuelle rapide: clic nœud pour composer source/cible, clic arête pour charger un flux dans le formulaire d édition.</li>
+          <li>Sélection multiple de flux: multi-select, sélection Ctrl/Shift/Cmd, suppression groupée et application groupée du type de flux.</li>
+          <li>Mode drag-link: activer le mode liaison puis glisser d un nœud source vers un nœud cible pour créer un flux.</li>
+          <li>Gouvernance workflow: validations multi-niveaux (mode standard ou séquentiel), quorum par niveau, alertes bloquantes et exports JSON/CSV.</li>
+          <li>Gouvernance des droits: séparation soumission/édition et validation, avec contrôles par rôles approbateurs sur les niveaux de validation.</li>
+          <li>Modèles de processus: création depuis processus, instanciation, publication/archivage, versioning et variantes de modèle.</li>
+          <li>Analyse workflow enrichie: matrices processus x services, processus x logiciels, agents x responsabilités, dépendances critiques et listes d anomalies (étapes sans responsable, logiciels sans procédure, processus incomplets).</li>
+          <li>Exports d échange: export du modèle workflow complet en JSON et export de synthèse processus en CSV.</li>
+          <li>Restitution PDF: export fiche processus, fiche service, fiche agent et fiche logiciel métier.</li>
+          <li>Bouton d injection d un jeu d exemple complet pour modéliser une organisation (communautés, services, groupes, agents, rôles, processus, étapes, flux, modèles, tâches, procédures, logiciels).</li>
           <li>Référentiels globaux: identité, thématiques, groupes, habilitations, versions logicielles.</li>
+          <li>Workflow ↔ Référentiels: les logiciels métiers affichent et synchronisent la version depuis le suivi global des versions logicielles.</li>
           <li>Profil et sécurité: email/photo, export/import JSON, export CSV, changement mot de passe, clé de récupération.</li>
           <li>Mode sombre, responsive design, synchronisation collaborative sans serveur (FSA) et chiffrement local.</li>
         </ul>
@@ -160,7 +178,7 @@
             Sélectionner le dossier partagé
           </button>
           <button id="btn-continue-local" class="mt-3 py-3 px-5 rounded-xl border border-slate-300 text-slate-700 text-base font-semibold bg-white hover:bg-slate-50">
-            Continuer sans dossier partagé (mode solo)
+            Continuer sans dossier partagé (visibilité privée)
           </button>
           <p class="text-xs text-slate-500 mt-3">
             Compatibilité: Chrome/Edge modernes (File System Access API).
@@ -202,15 +220,10 @@
         <a href="#" id="nav-docs" class="nav-link"><span class="material-symbols-outlined">description</span><span class="nav-link-label">Documents</span></a>
         <a href="#" id="nav-messages" class="nav-link"><span class="material-symbols-outlined">chat</span><span class="nav-link-label">Messagerie</span></a>
         <a href="#" id="nav-feed" class="nav-link"><span class="material-symbols-outlined">campaign</span><span class="nav-link-label">Fil d'info</span></a>
+        <a href="#" id="nav-rgpd" class="nav-link"><span class="material-symbols-outlined">gpp_good</span><span class="nav-link-label">RGPD</span></a>
         <a href="#" id="nav-settings" class="nav-link"><span class="material-symbols-outlined">tune</span><span class="nav-link-label">Référentiels</span></a>
       </nav>
       <button id="sidebar-create-project" class="sidebar-cta"><span class="material-symbols-outlined sidebar-btn-icon" aria-hidden="true">add</span><span class="sidebar-btn-label">Nouveau Projet</span></button>
-      <div class="sidebar-footer">
-        <button id="sidebar-logout" class="sidebar-logout-btn">
-          <span class="material-symbols-outlined">logout</span>
-          <span class="sidebar-btn-label">Déconnexion</span>
-        </button>
-      </div>
     </aside>
 
     <section class="content">
@@ -289,8 +302,8 @@
             </select>
             <select id="projects-filter-sharing" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
               <option value="all">Tous les modes</option>
-              <option value="shared">Collaboratif</option>
-              <option value="private">Solo / privé</option>
+              <option value="shared">Collaborative</option>
+              <option value="private">Privée</option>
             </select>
             <select id="projects-filter-ownership" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
               <option value="all">Tous les projets</option>
@@ -371,12 +384,18 @@
                     <button id="btn-workflow-add-service" type="button" class="workflow-quick-add-item" role="menuitem">Service</button>
                     <button id="btn-workflow-add-group" type="button" class="workflow-quick-add-item" role="menuitem">Groupe</button>
                     <button id="btn-workflow-add-agent" type="button" class="workflow-quick-add-item" role="menuitem">Agent</button>
+                    <button id="btn-workflow-add-role" type="button" class="workflow-quick-add-item" role="menuitem">Role</button>
+                    <button id="btn-workflow-add-process" type="button" class="workflow-quick-add-item" role="menuitem">Processus</button>
+                    <button id="btn-workflow-add-template" type="button" class="workflow-quick-add-item" role="menuitem">Modèle de processus</button>
+                    <button id="btn-workflow-add-step" type="button" class="workflow-quick-add-item" role="menuitem">Etape</button>
+                    <button id="btn-workflow-add-flow" type="button" class="workflow-quick-add-item" role="menuitem">Flux</button>
                     <button id="btn-workflow-add-task" type="button" class="workflow-quick-add-item" role="menuitem">Tache</button>
                     <button id="btn-workflow-add-procedure" type="button" class="workflow-quick-add-item" role="menuitem">Procedure</button>
                     <button id="btn-workflow-add-software" type="button" class="workflow-quick-add-item" role="menuitem">Logiciel</button>
                   </div>
                 </div>
                 <button id="btn-workflow-migrate-agent-users" class="workflow-btn-light px-3 py-2 rounded-lg text-sm font-semibold">Auto-lier comptes agents</button>
+                <button id="btn-workflow-inject-org-model" class="workflow-btn-light px-3 py-2 rounded-lg text-sm font-semibold">Injecter jeu d exemple</button>
               </div>
             </div>
             <div class="workflow-toolbar mb-3">
@@ -386,11 +405,15 @@
                 <button id="workflow-view-organization" class="workflow-view-tab" type="button">Organisation</button>
                 <button id="workflow-view-organigram" class="workflow-view-tab" type="button">Organigramme</button>
                 <button id="workflow-view-agents" class="workflow-view-tab" type="button">Agents</button>
+                <button id="workflow-view-processes" class="workflow-view-tab" type="button">Processus</button>
+                <button id="workflow-view-templates" class="workflow-view-tab" type="button">Modèles de processus</button>
                 <button id="workflow-view-tasks" class="workflow-view-tab" type="button">Tâches</button>
                 <button id="workflow-view-kanban" class="workflow-view-tab" type="button">Kanban</button>
                 <button id="workflow-view-timeline" class="workflow-view-tab" type="button">Timeline</button>
                 <button id="workflow-view-procedures" class="workflow-view-tab" type="button">Procédures</button>
                 <button id="workflow-view-software" class="workflow-view-tab" type="button">Logiciels metiers</button>
+                <button id="workflow-view-analytics" class="workflow-view-tab" type="button">Analyse</button>
+                <button id="workflow-view-governance" class="workflow-view-tab" type="button">Gouvernance</button>
                 <button id="workflow-view-journal" class="workflow-view-tab" type="button">Journal</button>
                 </div>
                 <button id="workflow-filters-toggle" class="workflow-btn-light px-3 py-2 rounded-lg text-sm font-semibold" type="button">Filtres</button>
@@ -460,10 +483,10 @@
                 <button id="global-calendar-reset" class="px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold">Réinitialiser</button>
               </div>
               <div class="calendar-legend mt-3">
-                <span class="calendar-legend-chip calendar-legend-chip-shared">Collaboratif</span>
-                <span class="calendar-legend-chip calendar-legend-chip-private">Solo</span>
+                <span class="calendar-legend-chip calendar-legend-chip-shared">Collaborative</span>
+                <span class="calendar-legend-chip calendar-legend-chip-private">Privée</span>
                 <span class="calendar-legend-chip calendar-legend-chip-info">Info hors projet</span>
-                <span class="calendar-legend-chip calendar-legend-chip-task">Échéance tâche</span>
+                <span class="calendar-legend-chip calendar-legend-chip-task">Date limite tâche</span>
               </div>
             </div>
             <div id="global-calendar-item-form" class="mb-4 grid grid-cols-1 md:grid-cols-5 gap-2">
@@ -471,8 +494,8 @@
               <input id="global-calendar-item-date" type="date" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
               <input id="global-calendar-item-theme" type="text" placeholder="Thématique" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
               <select id="global-calendar-item-mode" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                <option value="private">Solo</option>
-                <option value="shared">Collaboratif</option>
+                <option value="private">Privée</option>
+                <option value="shared">Collaborative</option>
               </select>
               <input id="global-calendar-item-notes" type="text" placeholder="Description courte" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
               <button id="btn-global-calendar-add" class="btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold md:col-span-5">Ajouter info hors projet</button>
@@ -635,6 +658,103 @@
             </div>
           </div>
 
+          <div id="global-rgpd-section" class="panel p-3 hidden">
+            <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div class="flex items-center gap-2">
+                <button id="rgpd-detect-btn" type="button" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Lancer détection</button>
+                <button id="rgpd-new-btn" type="button" class="px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold">Nouvelle activité</button>
+              </div>
+              <div class="flex items-center gap-2">
+                <button id="rgpd-export-json-btn" type="button" class="px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold">Export JSON</button>
+                <button id="rgpd-export-csv-btn" type="button" class="px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold">Export CSV</button>
+              </div>
+            </div>
+            <div class="project-view-tabs mb-3 flex items-center gap-2 text-xs overflow-x-auto" role="tablist" aria-label="Vues RGPD">
+              <button id="rgpd-tab-records" role="tab" aria-selected="true" class="project-view-tab view-tab-active px-3 py-1.5 rounded-lg text-slate-700 font-semibold whitespace-nowrap">Registre</button>
+              <button id="rgpd-tab-activities" role="tab" aria-selected="false" class="project-view-tab px-3 py-1.5 rounded-lg text-slate-700 font-semibold whitespace-nowrap">Activités</button>
+              <button id="rgpd-tab-drafts" role="tab" aria-selected="false" class="project-view-tab px-3 py-1.5 rounded-lg text-slate-700 font-semibold whitespace-nowrap">Brouillons détectés</button>
+              <button id="rgpd-tab-controls" role="tab" aria-selected="false" class="project-view-tab px-3 py-1.5 rounded-lg text-slate-700 font-semibold whitespace-nowrap">Contrôles</button>
+              <button id="rgpd-tab-journal" role="tab" aria-selected="false" class="project-view-tab px-3 py-1.5 rounded-lg text-slate-700 font-semibold whitespace-nowrap">Journal</button>
+            </div>
+            <div id="rgpd-filter-row" class="mb-3 grid grid-cols-1 md:grid-cols-4 gap-2">
+              <input id="rgpd-search-input" type="text" placeholder="Recherche RGPD (activité, finalité, source...)" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+              <select id="rgpd-status-filter" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                <option value="all">Tous statuts</option>
+                <option value="draft">Brouillon</option>
+                <option value="to_validate">À valider</option>
+                <option value="validated">Validée</option>
+                <option value="archived">Archivée</option>
+              </select>
+              <select id="rgpd-risk-filter" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                <option value="all">Tous risques</option>
+                <option value="low">Faible</option>
+                <option value="medium">Moyen</option>
+                <option value="high">Élevé</option>
+              </select>
+              <button id="rgpd-filters-reset" type="button" class="px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold">Réinitialiser</button>
+            </div>
+            <div id="rgpd-metrics" class="grid grid-cols-1 md:grid-cols-4 gap-2 mb-3"></div>
+            <div id="rgpd-view-content" class="grid grid-cols-1 xl:grid-cols-[1.25fr_1fr] gap-3">
+              <div id="rgpd-list" class="space-y-2"></div>
+              <div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <h4 class="font-bold text-slate-800 mb-2">Fiche activité</h4>
+                <div id="rgpd-empty-detail" class="text-sm text-slate-500">Sélectionnez une activité RGPD pour la consulter et la compléter.</div>
+                <div id="rgpd-detail-form" class="hidden space-y-2">
+                  <input id="rgpd-detail-title" type="text" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" placeholder="Intitulé de l'activité">
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <select id="rgpd-detail-status" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                      <option value="draft">Brouillon</option>
+                      <option value="to_validate">À valider</option>
+                      <option value="validated">Validée</option>
+                      <option value="archived">Archivée</option>
+                    </select>
+                    <select id="rgpd-detail-risk" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                      <option value="low">Risque faible</option>
+                      <option value="medium">Risque moyen</option>
+                      <option value="high">Risque élevé</option>
+                    </select>
+                  </div>
+                  <textarea id="rgpd-detail-purpose" rows="2" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" placeholder="Finalité"></textarea>
+                  <select id="rgpd-detail-legal-basis" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    <option value="">Base légale à renseigner</option>
+                    <option value="consent">Consentement</option>
+                    <option value="contract">Exécution du contrat</option>
+                    <option value="legal_obligation">Obligation légale</option>
+                    <option value="legitimate_interest">Intérêt légitime</option>
+                    <option value="public_task">Mission d'intérêt public</option>
+                  </select>
+                  <input id="rgpd-detail-data-subjects" type="text" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" placeholder="Catégories de personnes (séparées par ,)">
+                  <input id="rgpd-detail-data-categories" type="text" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" placeholder="Catégories de données (séparées par ,)">
+                  <input id="rgpd-detail-recipients" type="text" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" placeholder="Destinataires (séparés par ,)">
+                  <input id="rgpd-detail-retention" type="text" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" placeholder="Durée de conservation">
+                  <label class="inline-flex items-center gap-2 text-sm text-slate-700">
+                    <input id="rgpd-detail-transfer" type="checkbox">
+                    <span>Transfert hors UE</span>
+                  </label>
+                  <input id="rgpd-detail-transfer-details" type="text" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" placeholder="Détails du transfert (si applicable)">
+                  <textarea id="rgpd-detail-security" rows="2" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" placeholder="Mesures de sécurité (séparées par ,)"></textarea>
+                  <label class="inline-flex items-center gap-2 text-sm text-slate-700">
+                    <input id="rgpd-detail-dpia-required" type="checkbox">
+                    <span>AIPD requise</span>
+                  </label>
+                  <select id="rgpd-detail-dpia-status" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    <option value="not_required">AIPD non requise</option>
+                    <option value="to_assess">AIPD à évaluer</option>
+                    <option value="in_progress">AIPD en cours</option>
+                    <option value="completed">AIPD complétée</option>
+                  </select>
+                  <div id="rgpd-detail-links" class="text-xs text-slate-600 rounded-lg border border-slate-200 bg-white px-3 py-2"></div>
+                  <div class="flex flex-wrap gap-2 pt-1">
+                    <button id="rgpd-detail-save-btn" type="button" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Enregistrer</button>
+                    <button id="rgpd-detail-validate-btn" type="button" class="px-3 py-2 rounded-lg bg-emerald-100 text-emerald-700 text-sm font-semibold">Valider</button>
+                    <button id="rgpd-detail-archive-btn" type="button" class="px-3 py-2 rounded-lg bg-amber-100 text-amber-700 text-sm font-semibold">Archiver</button>
+                    <button id="rgpd-detail-delete-btn" type="button" class="px-3 py-2 rounded-lg bg-rose-100 text-rose-700 text-sm font-semibold">Supprimer</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
             <div id="global-docs-section" class="panel p-3 hidden">
               <div class="mb-4 grid grid-cols-1 md:grid-cols-3 gap-2 global-doc-toolbar">
                 <p class="md:col-span-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Recherche</p>
@@ -642,8 +762,8 @@
                 <input id="global-doc-theme" type="text" placeholder="Thématique (hors projet)" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
                 <div class="global-doc-drop-host md:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-2 mt-1">
                 <select id="global-doc-mode" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                  <option value="private">Solo</option>
-                  <option value="shared">Collaboratif</option>
+                  <option value="private">Privée</option>
+                  <option value="shared">Collaborative</option>
                 </select>
                 <input id="global-doc-files" type="file" multiple class="js-file-drop-input px-3 py-2 border border-slate-300 rounded-lg bg-slate-50 text-sm" data-drop-host=".global-doc-drop-host" data-drop-label="Deposez des documents hors projet ici">
                 <button id="btn-global-doc-add" class="btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold">Ajouter doc hors projet</button>
@@ -679,12 +799,21 @@
                   <h4 class="font-bold text-slate-800">Identite application</h4>
                   <span id="app-admin-badge" class="text-[11px] font-semibold px-2 py-1 rounded-full bg-slate-200 text-slate-700">Role: utilisateur</span>
                 </div>
-                <p class="text-xs text-slate-500 mb-3">Seul l'Admin application peut modifier les textes du header (utile en mode collaboratif).</p>
+                <p class="text-xs text-slate-500 mb-3">Seul l'Admin application peut modifier les textes et couleurs du header/sidebar (utile en visibilité collaborative).</p>
                 <div class="grid grid-cols-1 xl:grid-cols-[1fr_1fr_auto] gap-2 mb-2">
                   <input id="app-display-name-input" type="text" maxlength="60" placeholder="Nom de l'application" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
                   <input id="app-display-subtitle-input" type="text" maxlength="120" placeholder="Descriptif court" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
                   <button id="btn-save-app-branding" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Enregistrer</button>
                 </div>
+                <div class="grid grid-cols-1 xl:grid-cols-[auto_1fr] gap-2 mb-2">
+                  <input id="app-chrome-bg-light-color" type="color" value="#d9dadd" class="h-10 w-16 px-1 py-1 border border-slate-300 rounded-lg bg-white" title="Couleur fond mode clair">
+                  <input id="app-chrome-bg-light-input" type="text" maxlength="40" placeholder="Fond Header/Sidebar mode clair (ex: rgb(217 218 221) ou #d9dadd)" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                </div>
+                <div class="grid grid-cols-1 xl:grid-cols-[auto_1fr] gap-2 mb-2">
+                  <input id="app-chrome-bg-dark-color" type="color" value="#0f1525" class="h-10 w-16 px-1 py-1 border border-slate-300 rounded-lg bg-white" title="Couleur fond mode sombre">
+                  <input id="app-chrome-bg-dark-input" type="text" maxlength="40" placeholder="Fond Header/Sidebar mode sombre (ex: rgb(15 21 37) ou #0f1525)" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                </div>
+                <p class="text-xs text-slate-500 mb-2">Personnalise le fond du bandeau supérieur et de la barre latérale pour les modes clair et sombre.</p>
                 <div class="grid grid-cols-1 xl:grid-cols-[1fr_auto_auto] gap-2">
                   <select id="app-admin-user-select" class="px-3 py-2 border border-slate-300 rounded-lg text-sm"></select>
                   <button id="btn-assign-app-admin" class="px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold">Definir Admin</button>
@@ -814,6 +943,7 @@
                 <p id="project-kpi-messages" class="text-lg font-extrabold text-primary">0</p>
               </div>
             </div>
+            <div id="project-rgpd-impact" class="mt-4"></div>
             <div class="mt-4 flex flex-wrap gap-2">
               <button id="btn-email-project-status" class="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold">Email statut projet</button>
               <button id="btn-email-project-complete" class="px-3 py-1.5 rounded-lg border border-emerald-200 text-emerald-700 text-sm font-semibold">Email projet achevé</button>
@@ -1226,7 +1356,7 @@
           <div id="project-description-editor" class="project-description-editor" contenteditable="true" aria-label="Description projet (éditeur riche)"></div>
           <textarea id="project-description-input" class="hidden"></textarea>
           <input id="project-description-image-input" type="file" accept="image/*" multiple class="hidden">
-          <p class="text-[11px] text-slate-500 mt-1">Mise en forme riche Quill activée (images + vidéos). Astuce: cliquez une image pour afficher les poignées de redimensionnement.</p>
+          <p class="text-[11px] text-slate-500 mt-1">Décrivez le contexte, l'objectif et le résultat attendu. Astuce: cliquez une image pour la redimensionner.</p>
         </div>
         <div><label class="block text-sm font-semibold mb-2">Statut</label><select id="project-status" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"><option value="en-cours">En cours</option><option value="planifie">Planifié</option><option value="urgent">Urgent</option><option value="termine">Terminé</option></select></div>
         <div>
@@ -1237,9 +1367,9 @@
           </select>
         </div>
         <div>
-          <label class="block text-sm font-semibold mb-2">Groupes globaux à associer</label>
+          <label class="block text-sm font-semibold mb-2">Associer des groupes globaux</label>
           <select id="project-group-presets" multiple class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary min-h-[96px]"></select>
-          <p class="text-[11px] text-slate-500 mt-1">Optionnel. Ces groupes seront ajoutés au projet dès sa création.</p>
+          <p class="text-[11px] text-slate-500 mt-1">Optionnel. Les groupes sélectionnés seront ajoutés au projet dès la création.</p>
         </div>
         <div class="space-y-2">
           <label class="block text-sm font-semibold mb-1">Documents initiaux (optionnel)</label>
@@ -1254,7 +1384,7 @@
           <label class="flex items-center gap-2 p-3 rounded-lg border border-slate-300"><input type="radio" name="sharing-mode" value="private" checked> <span>Privé (solo)</span></label>
           <label class="flex items-center gap-2 p-3 rounded-lg border border-slate-300 mt-2"><input type="radio" name="sharing-mode" value="shared"> <span>Partagé (collaboratif E2E)</span></label>
         </div>
-        <div id="passphrase-section" class="hidden"><label class="block text-sm font-semibold mb-2">Passphrase (optionnel)</label><input id="project-passphrase" type="text" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"></div>
+        <div id="passphrase-section" class="hidden"><label class="block text-sm font-semibold mb-2">Phrase secrète (optionnelle)</label><input id="project-passphrase" type="text" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"></div>
       </div>
       <div class="flex gap-4 mt-6">
         <button id="btn-cancel-project" class="flex-1 px-4 py-3 border border-slate-300 rounded-lg font-semibold">Annuler</button>
@@ -1264,32 +1394,32 @@
   </div>
 
   <div id="modal-new-task" class="task-modal hidden fixed inset-0 bg-black/50 flex items-start md:items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
-    <div class="task-modal-panel bg-white rounded-2xl p-6 sm:p-8 max-w-4xl w-full mx-auto my-2 sm:my-4 md:my-0 max-h-[92vh] overflow-y-auto overscroll-contain">
+    <div class="task-modal-panel task-modal-panel-neo bg-white rounded-2xl p-6 sm:p-8 max-w-4xl w-full mx-auto my-2 sm:my-4 md:my-0 max-h-[92vh] overflow-y-auto overscroll-contain">
       <h3 class="section-title text-2xl font-extrabold mb-3">Nouvelle tâche</h3>
       <div id="task-edit-lock-badge" class="hidden mb-4 text-xs px-3 py-2 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800"></div>
       <div class="space-y-4">
-        <div><label class="block text-sm font-semibold mb-2">Titre</label><input id="task-title" type="text" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"></div>
+        <div><label class="modal-field-label block text-sm font-semibold mb-2"><span class="material-symbols-outlined modal-field-icon" aria-hidden="true">title</span><span>Titre</span></label><input id="task-title" type="text" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"></div>
         <div>
-          <label class="block text-sm font-semibold mb-2">Assigné à (membres du projet)</label>
+          <label class="modal-field-label block text-sm font-semibold mb-2"><span class="material-symbols-outlined modal-field-icon" aria-hidden="true">group</span><span>Responsables (membres du projet)</span></label>
           <select id="task-assignee" multiple class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary min-h-[92px]"></select>
           <div id="task-group-assignment-wrap" class="mt-3">
-            <label class="block text-sm font-semibold mb-2">Groupe</label>
+            <label class="modal-field-label block text-sm font-semibold mb-2"><span class="material-symbols-outlined modal-field-icon" aria-hidden="true">groups</span><span>Groupe</span></label>
             <select id="task-group" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
               <option value="">Aucun groupe</option>
             </select>
             <div id="task-group-pending-members" class="task-group-pending-members hidden"></div>
           </div>
-          <label class="block text-sm font-semibold mt-3 mb-2">Assignation manuelle (hors membres)</label>
+          <label class="modal-field-label block text-sm font-semibold mt-3 mb-2"><span class="material-symbols-outlined modal-field-icon" aria-hidden="true">person_add</span><span>Ajout manuel (hors membres)</span></label>
           <textarea id="task-assignee-manual" rows="2" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Une ligne par nom ou email (ex: Jean Dupont <jean@orga.fr>)"></textarea>
           <div class="mt-2 task-assignee-quick-row">
             <input id="task-assignee-quick-input" type="text" list="task-assignee-quick-options" class="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Ajouter un agent à la volée">
             <button id="btn-task-assignee-quick-add" type="button" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Ajouter</button>
           </div>
           <datalist id="task-assignee-quick-options"></datalist>
-          <p class="text-[11px] text-slate-500 mt-1">Astuce: si le nom correspond à un membre du projet, il sera sélectionné automatiquement.</p>
+          <p class="text-[11px] text-slate-500 mt-1">Astuce: un nom reconnu est relié automatiquement au membre correspondant.</p>
         </div>
         <div>
-          <label class="block text-sm font-semibold mb-2">Description</label>
+          <label class="modal-field-label block text-sm font-semibold mb-2"><span class="material-symbols-outlined modal-field-icon" aria-hidden="true">description</span><span>Description</span></label>
           <div class="project-editor-wrap">
             <input id="task-description-image-input" type="file" accept="image/*" class="hidden">
             <div class="project-editor-toolbar project-editor-toolbar-fallback">
@@ -1311,24 +1441,24 @@
             <textarea id="task-description" rows="3" class="hidden"></textarea>
           </div>
         </div>
-        <div><label class="block text-sm font-semibold mb-2">Date de demande</label><input id="task-request-date" type="date" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"></div>
+        <div><label class="modal-field-label block text-sm font-semibold mb-2"><span class="material-symbols-outlined modal-field-icon" aria-hidden="true">calendar_clock</span><span>Date de demande</span></label><input id="task-request-date" type="date" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"></div>
         
-        <!-- Échéance (masquée si récurrence) -->
+        <!-- Date limite (masquée si récurrence) -->
         <div id="task-due-date-wrap">
-          <label class="block text-sm font-semibold mb-2">Échéance</label>
+          <label class="modal-field-label block text-sm font-semibold mb-2"><span class="material-symbols-outlined modal-field-icon" aria-hidden="true">event</span><span>Date limite</span></label>
           <input id="task-due-date" type="date" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
         </div>
-        <div><label class="block text-sm font-semibold mb-2">Statut</label><select id="task-status" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"><option value="todo">À faire</option><option value="en-cours">En cours</option><option value="suspendu">Suspendu</option><option value="termine">Terminé</option></select></div>
-        <div><label class="block text-sm font-semibold mb-2">Urgence</label><select id="task-urgency" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"><option value="low">Basse</option><option value="medium">Moyenne</option><option value="high">Haute</option></select></div>
+        <div><label class="modal-field-label block text-sm font-semibold mb-2"><span class="material-symbols-outlined modal-field-icon" aria-hidden="true">flag</span><span>Statut</span></label><select id="task-status" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"><option value="todo">À faire</option><option value="en-cours">En cours</option><option value="suspendu">Suspendu</option><option value="termine">Terminé</option></select></div>
+        <div><label class="modal-field-label block text-sm font-semibold mb-2"><span class="material-symbols-outlined modal-field-icon" aria-hidden="true">priority_high</span><span>Urgence</span></label><select id="task-urgency" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"><option value="low">Basse</option><option value="medium">Moyenne</option><option value="high">Haute</option></select></div>
         <div id="task-project-metadata-wrap">
-          <label class="block text-sm font-semibold mb-2">Thématique</label>
+          <label class="modal-field-label block text-sm font-semibold mb-2"><span class="material-symbols-outlined modal-field-icon" aria-hidden="true">sell</span><span>Thématique</span></label>
           <input id="task-theme" type="text" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Sujet principal de la tâche">
         </div>
         <div id="task-standalone-mode-wrap" class="hidden">
-          <label class="block text-sm font-semibold mb-2">Mode hors projet</label>
+          <label class="modal-field-label block text-sm font-semibold mb-2"><span class="material-symbols-outlined modal-field-icon" aria-hidden="true">handshake</span><span>Visibilité hors projet</span></label>
           <select id="task-standalone-mode" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
-            <option value="private">Solo</option>
-            <option value="shared">Collaboratif</option>
+            <option value="private">Privée</option>
+            <option value="shared">Collaborative</option>
           </select>
         </div>
         <!-- Récurrence -->
@@ -1340,7 +1470,7 @@
           <div id="task-recurrence-config" class="hidden space-y-4">
             <!-- Type de récurrence -->
             <div>
-              <label class="block text-sm font-semibold mb-2">Type de récurrence</label>
+              <label class="modal-field-label block text-sm font-semibold mb-2"><span class="material-symbols-outlined modal-field-icon" aria-hidden="true">event_repeat</span><span>Type de récurrence</span></label>
               <select id="task-recurrence-type" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
                 <option value="weekly">Hebdomadaire</option>
                 <option value="monthly">Mensuelle</option>
@@ -1349,7 +1479,7 @@
             </div>
             <!-- Intervalle -->
             <div>
-              <label class="block text-sm font-semibold mb-2">Intervalle (tous les N périodes)</label>
+              <label class="modal-field-label block text-sm font-semibold mb-2"><span class="material-symbols-outlined modal-field-icon" aria-hidden="true">tune</span><span>Intervalle (tous les N périodes)</span></label>
               <input id="task-recurrence-interval" type="number" min="1" value="1" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
             </div>
             <!-- Configuration hebdomadaire -->
@@ -1367,13 +1497,13 @@
             </div>
             <!-- Configuration mensuelle -->
             <div id="task-recurrence-monthly-config" class="hidden">
-              <label class="block text-sm font-semibold mb-2">Jours du mois (séparés par des virgules)</label>
+              <label class="block text-sm font-semibold mb-2">Jours du mois (ex: 1,15,28)</label>
               <input id="task-recurrence-month-days" type="text" placeholder="Ex: 1,15,28" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
-              <p class="text-xs text-slate-500 mt-1">Entrez les numéros de jours (1-31) séparés par des virgules</p>
+              <p class="text-xs text-slate-500 mt-1">Saisissez les jours 1 à 31, séparés par des virgules.</p>
             </div>
             <!-- Configuration annuelle -->
             <div id="task-recurrence-yearly-config" class="hidden">
-              <label class="block text-sm font-semibold mb-2">Dates (au format MM-DD, séparées par des virgules)</label>
+              <label class="block text-sm font-semibold mb-2">Dates annuelles (MM-JJ, ex: 03-15,09-01)</label>
               <input id="task-recurrence-year-dates" type="text" placeholder="Ex: 01-01,06-15" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
               <p class="text-xs text-slate-500 mt-1">Entrez les dates au format MM-DD (exemple: 01-01 pour le 1er janvier)</p>
             </div>
@@ -1409,13 +1539,13 @@
           </div>
         </div>
         <div>
-          <label class="block text-sm font-semibold mb-2">Sous-tâches (une ligne = une sous-tâche)</label>
+          <label class="block text-sm font-semibold mb-2">Plan d'exécution (1 ligne = 1 sous-tâche)</label>
           <textarea id="task-subtasks" rows="3" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Ex: Rédiger note&#10;Valider avec service juridique"></textarea>
         </div>
         <div>
-          <label class="block text-sm font-semibold mb-2">Pièces jointes</label>
+          <label class="block text-sm font-semibold mb-2">Pièces jointes de travail</label>
           <input id="task-files" type="file" multiple class="js-file-drop-input w-full px-3 py-2 border border-slate-300 rounded-lg bg-slate-50" data-drop-label="Deposez des pieces jointes pour la tache">
-          <label class="mt-2 inline-flex items-center gap-2 text-sm text-slate-700"><input id="task-share-docs" type="checkbox" checked> <span>Partager dans l'espace documentaire</span></label>
+          <label class="mt-2 inline-flex items-center gap-2 text-sm text-slate-700"><input id="task-share-docs" type="checkbox" checked> <span>Publier aussi dans Documents</span></label>
         </div>
       </div>
       <div class="flex gap-4 mt-6">
@@ -1450,18 +1580,18 @@
           <p id="doc-binding-name" class="text-sm text-slate-700 truncate">-</p>
         </div>
         <div>
-          <label for="doc-binding-mode" class="block text-sm font-semibold mb-1">Mode de visibilité</label>
+          <label for="doc-binding-mode" class="block text-sm font-semibold mb-1">Visibilité du document</label>
           <select id="doc-binding-mode" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
-            <option value="private">Solo</option>
-            <option value="shared">Collaboratif</option>
+            <option value="private">Privée</option>
+            <option value="shared">Collaborative</option>
           </select>
         </div>
         <div>
-          <label for="doc-binding-project" class="block text-sm font-semibold mb-1">Rattachement</label>
+          <label for="doc-binding-project" class="block text-sm font-semibold mb-1">Rattacher à</label>
           <select id="doc-binding-project" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"></select>
         </div>
         <div>
-          <label for="doc-binding-task" class="block text-sm font-semibold mb-1">Tâche (optionnel)</label>
+          <label for="doc-binding-task" class="block text-sm font-semibold mb-1">Lier à une tâche (optionnel)</label>
           <select id="doc-binding-task" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"></select>
           <p class="text-[11px] text-slate-500 mt-1">Sans tâche, le document reste rattaché au projet uniquement.</p>
         </div>
@@ -1533,38 +1663,66 @@
   </div>
 
   <div id="modal-global-task-details" class="hidden fixed inset-0 bg-black/55 flex items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
-    <div class="task-detail-modal-panel bg-white rounded-2xl p-5 sm:p-6 max-w-2xl w-full mx-auto max-h-[92vh] overflow-y-auto overscroll-contain">
-      <div class="flex items-start justify-between gap-3 mb-3">
-        <div>
-          <h3 id="global-task-detail-title" class="section-title text-2xl font-extrabold">Détail tâche</h3>
+    <div class="task-detail-modal-panel task-detail-modal-panel-neo bg-white rounded-2xl p-5 sm:p-6 max-w-2xl w-full mx-auto max-h-[92vh] overflow-y-auto overscroll-contain">
+      <div class="modal-header-neo flex items-start justify-between gap-3 mb-3">
+        <div class="min-w-0">
+          <h3 class="section-title text-2xl font-extrabold modal-title-neo">
+            <span class="material-symbols-outlined modal-title-icon" aria-hidden="true">task</span>
+            <span id="global-task-detail-title">Détail tâche</span>
+          </h3>
           <p id="global-task-detail-subtitle" class="text-sm text-slate-500 mt-1"></p>
         </div>
         <button id="btn-close-global-task-details" class="px-3 py-1.5 rounded-lg border border-slate-300 text-sm font-semibold">Fermer</button>
       </div>
       <div class="flex flex-wrap items-center gap-2 mb-3" id="global-task-detail-badges"></div>
-      <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 mb-3">
-        <p class="text-sm font-semibold text-slate-700 mb-1">Description</p>
+      <div class="modal-section-neo rounded-xl border border-slate-200 bg-slate-50 p-3 mb-3">
+        <p class="modal-section-title text-sm font-semibold text-slate-700 mb-1">
+          <span class="material-symbols-outlined" aria-hidden="true">description</span>
+          <span>Description</span>
+        </p>
         <p id="global-task-detail-description" class="text-sm text-slate-700 whitespace-pre-wrap break-words"></p>
       </div>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm mb-3">
-        <div class="rounded-lg border border-slate-200 bg-white px-3 py-2"><span class="text-slate-500">Demande:</span> <span id="global-task-detail-request-date" class="font-medium text-slate-800"></span></div>
-        <div class="rounded-lg border border-slate-200 bg-white px-3 py-2"><span class="text-slate-500">Échéance:</span> <span id="global-task-detail-due-date" class="font-medium text-slate-800"></span></div>
-        <div class="rounded-lg border border-slate-200 bg-white px-3 py-2"><span class="text-slate-500">Assigné(s):</span> <span id="global-task-detail-assignees" class="font-medium text-slate-800"></span></div>
-        <div class="rounded-lg border border-slate-200 bg-white px-3 py-2"><span class="text-slate-500">Groupe:</span> <span id="global-task-detail-group" class="font-medium text-slate-800"></span></div>
+      <div class="modal-info-grid grid grid-cols-1 md:grid-cols-2 gap-2 text-sm mb-3">
+        <div class="modal-info-card rounded-lg border border-slate-200 bg-white px-3 py-2">
+          <span class="material-symbols-outlined modal-info-icon" aria-hidden="true">calendar_clock</span>
+          <div><p class="modal-info-label">Demande</p><p id="global-task-detail-request-date" class="font-medium text-slate-800"></p></div>
+        </div>
+        <div class="modal-info-card rounded-lg border border-slate-200 bg-white px-3 py-2">
+          <span class="material-symbols-outlined modal-info-icon" aria-hidden="true">event</span>
+          <div><p class="modal-info-label">Date limite</p><p id="global-task-detail-due-date" class="font-medium text-slate-800"></p></div>
+        </div>
+        <div class="modal-info-card rounded-lg border border-slate-200 bg-white px-3 py-2">
+          <span class="material-symbols-outlined modal-info-icon" aria-hidden="true">group</span>
+          <div><p class="modal-info-label">Responsable(s)</p><p id="global-task-detail-assignees" class="font-medium text-slate-800"></p></div>
+        </div>
+        <div class="modal-info-card rounded-lg border border-slate-200 bg-white px-3 py-2">
+          <span class="material-symbols-outlined modal-info-icon" aria-hidden="true">groups</span>
+          <div><p class="modal-info-label">Groupe</p><p id="global-task-detail-group" class="font-medium text-slate-800"></p></div>
+        </div>
       </div>
-      <div id="global-task-detail-recurrence-wrap" class="hidden rounded-xl border border-slate-200 bg-white p-3 mb-3">
-        <p class="text-sm font-semibold text-slate-700 mb-2">Récurrence</p>
+      <div id="global-task-detail-recurrence-wrap" class="hidden modal-section-neo rounded-xl border border-slate-200 bg-white p-3 mb-3">
+        <p class="modal-section-title text-sm font-semibold text-slate-700 mb-2">
+          <span class="material-symbols-outlined" aria-hidden="true">event_repeat</span>
+          <span>Récurrence</span>
+        </p>
         <div id="global-task-detail-recurrence" class="text-sm text-slate-700"></div>
       </div>
-      <div class="rounded-xl border border-slate-200 bg-white p-3 mb-3">
-        <p class="text-sm font-semibold text-slate-700 mb-2">Sous-tâches</p>
+      <div class="modal-section-neo rounded-xl border border-slate-200 bg-white p-3 mb-3">
+        <p class="modal-section-title text-sm font-semibold text-slate-700 mb-2">
+          <span class="material-symbols-outlined" aria-hidden="true">checklist</span>
+          <span>Sous-tâches</span>
+        </p>
         <div id="global-task-detail-subtasks" class="space-y-1 text-sm text-slate-700"></div>
       </div>
-      <div class="rounded-xl border border-slate-200 bg-white p-3 mb-4">
-        <p class="text-sm font-semibold text-slate-700 mb-2">Documents liés</p>
+      <div class="modal-section-neo rounded-xl border border-slate-200 bg-white p-3 mb-4">
+        <p class="modal-section-title text-sm font-semibold text-slate-700 mb-2">
+          <span class="material-symbols-outlined" aria-hidden="true">folder_open</span>
+          <span>Documents liés</span>
+        </p>
         <div id="global-task-detail-attachments" class="space-y-1 text-sm text-slate-700"></div>
       </div>
-      <div class="flex flex-wrap items-center justify-end gap-2">
+      <div id="global-task-detail-rgpd" class="mb-4"></div>
+      <div class="modal-action-bar-neo flex flex-wrap items-center justify-end gap-2">
         <button id="btn-global-task-detail-convert" class="task-action-btn">Convertir en projet</button>
         <button id="btn-global-task-detail-edit" class="task-action-btn">Modifier</button>
         <button id="btn-global-task-detail-archive" class="task-action-btn task-action-btn-warn">Archiver</button>
@@ -1578,7 +1736,7 @@
       <div class="flex items-start justify-between gap-3 mb-3">
         <div>
           <h3 class="section-title text-2xl font-extrabold">Convertir la tâche en projet</h3>
-          <p class="text-sm text-slate-500 mt-1">Assistant rapide avec options avancées.</p>
+          <p class="text-sm text-slate-500 mt-1">Créez un projet en quelques secondes à partir de cette tâche.</p>
         </div>
         <button id="btn-close-task-convert-modal" class="px-3 py-1.5 rounded-lg border border-slate-300 text-sm font-semibold">Fermer</button>
       </div>
@@ -1592,10 +1750,10 @@
           <input id="task-convert-project-name" type="text" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Ex: Projet modernisation">
         </div>
         <div>
-          <label for="task-convert-mode" class="block text-sm font-semibold mb-1">Mode du projet</label>
+          <label for="task-convert-mode" class="block text-sm font-semibold mb-1">Visibilité du projet</label>
           <select id="task-convert-mode" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
-            <option value="private">Solo</option>
-            <option value="shared">Collaboratif</option>
+            <option value="private">Privée</option>
+            <option value="shared">Collaborative</option>
           </select>
         </div>
       </div>
@@ -1606,7 +1764,7 @@
         </label>
         <label class="inline-flex items-center gap-2 text-sm text-slate-700">
           <input id="task-convert-open-project" type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked>
-          <span>Ouvrir le nouveau projet après conversion</span>
+          <span>Ouvrir le nouveau projet après la conversion</span>
         </label>
       </div>
       <p id="task-convert-error" class="hidden text-sm text-rose-600 font-semibold mb-3">Merci de saisir un nom de projet.</p>
@@ -1688,11 +1846,11 @@
           <p class="text-[11px] text-slate-500 mt-1">PNG/JPG, max 2 Mo.</p>
         </div>
         <div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
-          <p class="text-sm font-semibold text-slate-700 mb-2">Sauvegarde / restauration</p>
+          <p class="text-sm font-semibold text-slate-700 mb-2">Sauvegarde et restauration</p>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <button id="btn-export-user-json" class="px-3 py-2 rounded-lg bg-white border border-slate-300 text-slate-700 text-sm font-semibold">Exporter JSON</button>
             <button id="btn-import-user-json" class="px-3 py-2 rounded-lg bg-white border border-slate-300 text-slate-700 text-sm font-semibold">Importer JSON</button>
-            <button id="btn-export-excel" class="sm:col-span-2 px-3 py-2 rounded-lg bg-white border border-slate-300 text-slate-700 text-sm font-semibold">Exporter projets+tâches (Excel CSV)</button>
+            <button id="btn-export-excel" class="sm:col-span-2 px-3 py-2 rounded-lg bg-white border border-slate-300 text-slate-700 text-sm font-semibold">Exporter projets et tâches (CSV Excel)</button>
           </div>
           <input id="import-user-json-input" type="file" accept="application/json" class="hidden">
         </div>
@@ -1708,7 +1866,7 @@
             <button id="btn-show-recovery-key" class="px-3 py-2 rounded-lg bg-white border border-slate-300 text-slate-700 text-sm font-semibold">Afficher la clé de récupération</button>
             <button id="btn-regenerate-recovery-key" class="px-3 py-2 rounded-lg bg-white border border-slate-300 text-slate-700 text-sm font-semibold">Régénérer la clé</button>
           </div>
-          <p class="text-[11px] text-slate-500 mt-2">Conservez votre clé de récupération hors ligne. Sans mot de passe ni clé, les données chiffrées ne sont pas récupérables.</p>
+          <p class="text-[11px] text-slate-500 mt-2">Conservez votre clé de récupération hors ligne. Sans mot de passe ni clé, les données chiffrées ne pourront pas être restaurées.</p>
         </div>
       </div>
       <div class="flex gap-4 mt-6">
@@ -1744,13 +1902,13 @@
           <div id="edit-project-description-editor" class="project-description-editor" contenteditable="true" aria-label="Description projet (éditeur riche)"></div>
           <textarea id="edit-project-description" class="hidden"></textarea>
           <input id="edit-project-description-image-input" type="file" accept="image/*" multiple class="hidden">
-          <p class="text-[11px] text-slate-500 mt-1">Les images intégrées seront indexées automatiquement dans les documents du projet (les vidéos restent en lien intégré).</p>
+          <p class="text-[11px] text-slate-500 mt-1">Les images intégrées sont automatiquement indexées dans Documents (les vidéos restent en lien).</p>
         </div>
         <div>
-          <label class="block text-sm font-semibold mb-2">Documents à ajouter au projet</label>
+          <label class="block text-sm font-semibold mb-2">Ajouter des documents au projet</label>
           <input id="edit-project-doc-files" type="file" multiple class="js-file-drop-input w-full px-3 py-2 border border-slate-300 rounded-lg bg-white text-sm" data-drop-label="Déposez les documents à ajouter au projet">
           <p id="edit-project-doc-files-summary" class="text-xs text-slate-500 mt-2">Aucun fichier sélectionné</p>
-          <p class="text-[11px] text-slate-500 mt-1">Ces documents seront ajoutés automatiquement dans l’onglet Documents du projet après enregistrement.</p>
+          <p class="text-[11px] text-slate-500 mt-1">Ces documents seront ajoutés automatiquement dans l’onglet Documents après enregistrement.</p>
         </div>
         <div><label class="block text-sm font-semibold mb-2">Statut</label><select id="edit-project-status" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"><option value="en-cours">En cours</option><option value="planifie">Planifié</option><option value="urgent">Urgent</option><option value="termine">Terminé</option></select></div>
         <div>

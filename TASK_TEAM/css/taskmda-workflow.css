@@ -564,6 +564,108 @@ html[data-wf-action-buttons="text"] .workflow-card-action-btn .taskmda-action-ic
   gap: 0.55rem;
 }
 
+.workflow-map-minimap-wrap {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.workflow-map-minimap-surface {
+  position: relative;
+  width: min(260px, 42vw);
+  height: 130px;
+  border: 1px solid rgba(101, 115, 141, 0.28);
+  border-radius: 0.7rem;
+  background: linear-gradient(180deg, #ffffff, #f8faff);
+  overflow: hidden;
+  cursor: crosshair;
+}
+
+.workflow-map-minimap-nodes {
+  position: absolute;
+  inset: 0;
+}
+
+.workflow-map-minimap-node {
+  position: absolute;
+  border: 1px solid rgba(51, 65, 85, 0.35);
+  border-radius: 0.2rem;
+}
+
+.workflow-map-minimap-viewport {
+  position: absolute;
+  border: 2px solid #1d4ed8;
+  background: rgba(29, 78, 216, 0.12);
+  border-radius: 0.3rem;
+  pointer-events: none;
+}
+
+.workflow-flow-graph-wrap {
+  border: 1px solid rgba(101, 115, 141, 0.24);
+  border-radius: 0.75rem;
+  background: linear-gradient(180deg, #ffffff, #f8faff);
+  padding: 0.4rem;
+  overflow: auto;
+  margin-top: 0.45rem;
+  margin-bottom: 0.45rem;
+}
+
+.workflow-flow-graph-wrap.is-link-mode {
+  border-color: rgba(37, 99, 235, 0.55);
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.22);
+}
+
+.workflow-flow-graph-svg {
+  width: 100%;
+  min-width: 820px;
+  display: block;
+}
+
+.workflow-flow-graph-node,
+.workflow-flow-graph-edge {
+  cursor: pointer;
+}
+
+.workflow-flow-graph-wrap.is-link-mode .workflow-flow-graph-node {
+  cursor: crosshair;
+}
+
+.workflow-flow-graph-node rect {
+  transition: stroke-width 0.12s ease, filter 0.12s ease;
+}
+
+.workflow-flow-graph-node.is-selected rect {
+  stroke-width: 2.6px;
+  filter: drop-shadow(0 0 6px rgba(37, 99, 235, 0.38));
+}
+
+.workflow-flow-graph-edge {
+  transition: stroke-width 0.12s ease, filter 0.12s ease;
+}
+
+.workflow-flow-graph-edge.is-selected {
+  stroke-width: 3px;
+  filter: drop-shadow(0 0 4px rgba(37, 99, 235, 0.32));
+}
+
+.workflow-flow-graph-node-type {
+  font-size: 9px;
+  fill: #334155;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.workflow-flow-graph-node-label {
+  font-size: 10px;
+  fill: #0f172a;
+  font-weight: 700;
+}
+
+.workflow-flow-graph-edge-label {
+  font-size: 10px;
+  fill: #334155;
+  font-weight: 700;
+}
+
 .workflow-map-links-col {
   border: 1px solid rgba(101, 115, 141, 0.2);
   border-radius: 0.75rem;
@@ -1577,6 +1679,35 @@ html.dark .workflow-map-viewport,
 html.dark .workflow-map-links-col {
   border-color: rgba(138, 161, 202, 0.26);
   background: linear-gradient(180deg, #1a2744, #15213b);
+}
+
+html.dark .workflow-map-minimap-surface {
+  border-color: rgba(138, 161, 202, 0.32);
+  background: linear-gradient(180deg, #1a2744, #15213b);
+}
+
+html.dark .workflow-map-minimap-viewport {
+  border-color: #60a5fa;
+  background: rgba(96, 165, 250, 0.18);
+}
+
+html.dark .workflow-flow-graph-wrap {
+  border-color: rgba(138, 161, 202, 0.32);
+  background: linear-gradient(180deg, #1a2744, #15213b);
+}
+
+html.dark .workflow-flow-graph-wrap.is-link-mode {
+  border-color: rgba(96, 165, 250, 0.7);
+  box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.26);
+}
+
+html.dark .workflow-flow-graph-node-type,
+html.dark .workflow-flow-graph-edge-label {
+  fill: #c8d8f5;
+}
+
+html.dark .workflow-flow-graph-node-label {
+  fill: #e8f0ff;
 }
 
 html.dark .workflow-map-legend,
