@@ -903,6 +903,167 @@ ${tasks.map((row)=>`<tr><td>${esc(row.title || row.id)}</td><td>${esc(row.status
       printSheetHtml(html);
     }
 
+    function exportContingencyPlanPdf(planId) {
+      const plan = (state.collections.contingencyPlans || []).find((row) => String(row.id) === String(planId || ''));
+      if (!plan) return;
+      const maps = getMaps();
+      const actions = (state.collections.contingencyActions || [])
+        .filter((row) => String(row.planId) === String(planId))
+        .sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
+      const activations = (state.collections.contingencyActivations || [])
+        .filter((row) => String(row.planId) === String(planId))
+        .sort((a, b) => Number(b.startedAt || 0) - Number(a.startedAt || 0))
+        .slice(0, 10);
+      const exercises = (state.collections.contingencyExercises || [])
+        .filter((row) => String(row.planId) === String(planId))
+        .sort((a, b) => String(b.exerciseDate || '').localeCompare(String(a.exerciseDate || '')))
+        .slice(0, 10);
+      const reviews = (state.collections.contingencyReviews || [])
+        .filter((row) => String(row.planId) === String(planId))
+        .sort((a, b) => String(b.reviewDate || '').localeCompare(String(a.reviewDate || '')))
+        .slice(0, 10);
+      const exportedAt = new Date().toLocaleString('fr-FR');
+      const readiness = computeContingencyPlanReadiness(plan);
+      const owner = maps.agentById.get(plan.ownerAgentId)?.displayName || '-';
+      const backup = maps.agentById.get(plan.backupAgentId)?.displayName || '-';
+      const service = maps.serviceById.get(plan.serviceId)?.name || '-';
+      const process = maps.processById.get(plan.processId)?.title || '-';
+      const software = (state.collections.software || []).find((row) => String(row.id) === String(plan.softwareId || ''))?.name || '-';
+      const html = `<!doctype html>
+<html lang="fr"><head><meta charset="UTF-8"><title>Plan de contingence - ${esc(plan.title || plan.code || '')}</title>
+<style>
+body{font-family:Arial,sans-serif;padding:16px;color:#0f172a}
+h1{font-size:20px;margin:0 0 8px;color:#002b6b} h2{font-size:15px;margin:14px 0 6px;color:#1a428a;border-bottom:1px solid #cbd5e1;padding-bottom:4px}
+table{border-collapse:collapse;width:100%;font-size:12px;margin:8px 0} th,td{border:1px solid #cbd5e1;padding:6px;text-align:left}
+.meta{font-size:12px;color:#475569;margin-bottom:8px}
+.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600}
+.badge-critical{background:#fee;color:#b91c1c} .badge-high{background:#fed7aa;color:#c2410c}
+.badge-medium{background:#fef3c7;color:#d97706} .badge-low{background:#d1fae5;color:#059669}
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:8px 0}
+.info-item{font-size:12px} .info-label{font-weight:600;color:#475569}
+</style></head><body>
+<h1>PLAN DE CONTINGENCE</h1>
+<p class="meta">Export: ${esc(exportedAt)} | Code: ${esc(plan.code || '-')}</p>
+<h2>Informations generales</h2>
+<div class="info-grid">
+  <div class="info-item"><span class="info-label">Titre:</span> ${esc(plan.title || '-')}</div>
+  <div class="info-item"><span class="info-label">Version:</span> ${esc(String(plan.version || 1))}</div>
+  <div class="info-item"><span class="info-label">Statut:</span> <span class="badge badge-${esc(normalizeContingencyPlanStatus(plan.status))}">${esc(normalizeContingencyPlanStatus(plan.status))}</span></div>
+  <div class="info-item"><span class="info-label">Criticite:</span> <span class="badge badge-${esc(normalizeContingencyCriticality(plan.criticality))}">${esc(normalizeContingencyCriticality(plan.criticality))}</span></div>
+  <div class="info-item"><span class="info-label">Responsable:</span> ${esc(owner)}</div>
+  <div class="info-item"><span class="info-label">Suppleant:</span> ${esc(backup)}</div>
+  <div class="info-item"><span class="info-label">Service:</span> ${esc(service)}</div>
+  <div class="info-item"><span class="info-label">Processus:</span> ${esc(process)}</div>
+  <div class="info-item"><span class="info-label">Logiciel:</span> ${esc(software)}</div>
+  <div class="info-item"><span class="info-label">Preparation:</span> ${esc(String(readiness))}%</div>
+  <div class="info-item"><span class="info-label">Derniere revue:</span> ${esc(plan.lastReviewDate || '-')}</div>
+  <div class="info-item"><span class="info-label">Dernier test:</span> ${esc(plan.lastTestDate || '-')}</div>
+</div>
+<h2>Description et perimetre</h2>
+<p>${esc(plan.description || '-')}</p>
+<p><strong>Perimetre:</strong> ${esc(plan.scope || '-')}</p>
+<h2>Declencheurs</h2>
+<p>${esc(plan.triggerConditions || '-')}</p>
+<h2>Impacts</h2>
+<p>${esc(plan.impacts || '-')}</p>
+<h2>Actions de contingence (${actions.length})</h2>
+<table><thead><tr><th>Ordre</th><th>Action</th><th>Responsable</th><th>Statut</th></tr></thead><tbody>
+${actions.map((row)=>`<tr><td>${esc(String(row.order || '-'))}</td><td>${esc(row.title || '-')}</td><td>${esc(maps.agentById.get(row.ownerAgentId)?.displayName || '-')}</td><td>${esc(normalizeContingencyActionStatus(row.status))}</td></tr>`).join('') || '<tr><td colspan="4">Aucune action definie</td></tr>'}
+</tbody></table>
+<h2>Historique des activations (${activations.length})</h2>
+<table><thead><tr><th>Date</th><th>Statut</th><th>Initiateur</th><th>Cloture</th></tr></thead><tbody>
+${activations.map((row)=>`<tr><td>${esc(row.startedAt ? new Date(Number(row.startedAt)).toLocaleString('fr-FR') : '-')}</td><td>${esc(normalizeContingencyActivationStatus(row.status))}</td><td>${esc(String(row.initiatorUserId || '-'))}</td><td>${esc(row.closedAt ? new Date(Number(row.closedAt)).toLocaleString('fr-FR') : '-')}</td></tr>`).join('') || '<tr><td colspan="4">Aucune activation</td></tr>'}
+</tbody></table>
+<h2>Exercices et tests (${exercises.length})</h2>
+<table><thead><tr><th>Date</th><th>Resultat</th><th>Notes</th></tr></thead><tbody>
+${exercises.map((row)=>`<tr><td>${esc(row.exerciseDate || '-')}</td><td>${esc(normalizeContingencyExerciseResult(row.result))}</td><td>${esc(row.notes || row.findings || '-')}</td></tr>`).join('') || '<tr><td colspan="3">Aucun exercice</td></tr>'}
+</tbody></table>
+<h2>Revues periodiques (${reviews.length})</h2>
+<table><thead><tr><th>Date</th><th>Prochaine revue</th><th>Constats</th></tr></thead><tbody>
+${reviews.map((row)=>`<tr><td>${esc(row.reviewDate || '-')}</td><td>${esc(row.nextReviewDate || '-')}</td><td>${esc(row.findings || '-')}</td></tr>`).join('') || '<tr><td colspan="3">Aucune revue</td></tr>'}
+</tbody></table>
+<script>window.addEventListener('load',()=>setTimeout(()=>{window.print();},220));</script>
+</body></html>`;
+      printSheetHtml(html);
+    }
+
+    function exportContingencyPlanCsv(planId) {
+      const plan = (state.collections.contingencyPlans || []).find((row) => String(row.id) === String(planId || ''));
+      if (!plan) return;
+      const maps = getMaps();
+      const actions = (state.collections.contingencyActions || [])
+        .filter((row) => String(row.planId) === String(planId))
+        .sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
+      const activations = (state.collections.contingencyActivations || [])
+        .filter((row) => String(row.planId) === String(planId))
+        .sort((a, b) => Number(b.startedAt || 0) - Number(a.startedAt || 0));
+      const exercises = (state.collections.contingencyExercises || [])
+        .filter((row) => String(row.planId) === String(planId))
+        .sort((a, b) => String(b.exerciseDate || '').localeCompare(String(a.exerciseDate || '')));
+      const reviews = (state.collections.contingencyReviews || [])
+        .filter((row) => String(row.planId) === String(planId))
+        .sort((a, b) => String(b.reviewDate || '').localeCompare(String(a.reviewDate || '')));
+      const readiness = computeContingencyPlanReadiness(plan);
+      const owner = maps.agentById.get(plan.ownerAgentId)?.displayName || '-';
+      const backup = maps.agentById.get(plan.backupAgentId)?.displayName || '-';
+      const service = maps.serviceById.get(plan.serviceId)?.name || '-';
+      const csvEsc = (val) => {
+        const str = String(val || '').replace(/"/g, '""');
+        return `"${str}"`;
+      };
+      const lines = [];
+      lines.push('PLAN DE CONTINGENCE - EXPORT CSV');
+      lines.push('');
+      lines.push('INFORMATIONS GENERALES');
+      lines.push(`Titre,${csvEsc(plan.title)}`);
+      lines.push(`Code,${csvEsc(plan.code)}`);
+      lines.push(`Version,${csvEsc(plan.version || 1)}`);
+      lines.push(`Statut,${csvEsc(normalizeContingencyPlanStatus(plan.status))}`);
+      lines.push(`Criticite,${csvEsc(normalizeContingencyCriticality(plan.criticality))}`);
+      lines.push(`Responsable,${csvEsc(owner)}`);
+      lines.push(`Suppleant,${csvEsc(backup)}`);
+      lines.push(`Service,${csvEsc(service)}`);
+      lines.push(`Preparation,${csvEsc(readiness)}%`);
+      lines.push(`Derniere revue,${csvEsc(plan.lastReviewDate || '-')}`);
+      lines.push(`Dernier test,${csvEsc(plan.lastTestDate || '-')}`);
+      lines.push(`Description,${csvEsc(plan.description)}`);
+      lines.push(`Declencheurs,${csvEsc(plan.triggerConditions)}`);
+      lines.push(`Impacts,${csvEsc(plan.impacts)}`);
+      lines.push('');
+      lines.push('ACTIONS DE CONTINGENCE');
+      lines.push('Ordre,Action,Responsable,Statut');
+      actions.forEach((row) => {
+        lines.push(`${csvEsc(row.order)},${csvEsc(row.title)},${csvEsc(maps.agentById.get(row.ownerAgentId)?.displayName || '-')},${csvEsc(normalizeContingencyActionStatus(row.status))}`);
+      });
+      lines.push('');
+      lines.push('ACTIVATIONS');
+      lines.push('Date debut,Statut,Initiateur,Date cloture');
+      activations.forEach((row) => {
+        lines.push(`${csvEsc(row.startedAt ? new Date(Number(row.startedAt)).toLocaleString('fr-FR') : '-')},${csvEsc(normalizeContingencyActivationStatus(row.status))},${csvEsc(row.initiatorUserId)},${csvEsc(row.closedAt ? new Date(Number(row.closedAt)).toLocaleString('fr-FR') : '-')}`);
+      });
+      lines.push('');
+      lines.push('EXERCICES');
+      lines.push('Date,Resultat,Notes');
+      exercises.forEach((row) => {
+        lines.push(`${csvEsc(row.exerciseDate)},${csvEsc(normalizeContingencyExerciseResult(row.result))},${csvEsc(row.notes || row.findings)}`);
+      });
+      lines.push('');
+      lines.push('REVUES');
+      lines.push('Date,Prochaine revue,Constats');
+      reviews.forEach((row) => {
+        lines.push(`${csvEsc(row.reviewDate)},${csvEsc(row.nextReviewDate)},${csvEsc(row.findings)}`);
+      });
+      const csv = lines.join('\n');
+      const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `plan-contingence-${String(plan.code || plan.id || 'export')}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+      toast('Export CSV genere');
+    }
+
     async function syncWorkflowSoftwareWithLatestVersion(softwareId) {
       const software = (state.collections.software || []).find((row) => String(row.id) === String(softwareId || ''));
       if (!software) return false;
@@ -2024,8 +2185,9 @@ ${tasks.map((row)=>`<tr><td>${esc(row.title || row.id)}</td><td>${esc(row.status
       if (!safePlanId) return;
       const plan = (state.collections.contingencyPlans || []).find((row) => String(row.id || '') === safePlanId);
       if (!plan) return;
+      const activationId = `wf-cont-activation-${uid()}`;
       const row = {
-        id: `wf-cont-activation-${uid()}`,
+        id: activationId,
         planId: safePlanId,
         status: 'active',
         trigger: String(plan.triggerConditions || '').trim() || 'activation_manuelle',
@@ -2038,13 +2200,55 @@ ${tasks.map((row)=>`<tr><td>${esc(row.title || row.id)}</td><td>${esc(row.status
       await api.put('workflowContingencyActivations', row, STORE_KEY_FIELDS.workflowContingencyActivations);
       await logContingencyAudit('activation_start', safePlanId, { activationId: row.id });
       await logAudit('contingency_activation_start', 'contingencyPlan', safePlanId, { activationId: row.id });
+
+      const actions = (state.collections.contingencyActions || [])
+        .filter((act) => String(act.planId || '') === safePlanId)
+        .sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
+
+      const tasksGenerated = [];
+      for (const action of actions) {
+        const taskId = `wf-task-${uid()}`;
+        const taskObj = {
+          id: taskId,
+          title: `[CONTINGENCE] ${String(action.title || 'Action')}`,
+          description: `Action de contingence du plan: ${String(plan.title || '')}\nActivation: ${activationId}\nOrdre: ${action.order || 1}`,
+          processId: String(plan.processId || '').trim() || null,
+          serviceId: String(plan.serviceId || '').trim() || null,
+          groupId: null,
+          ownerAgentId: String(action.ownerAgentId || plan.ownerAgentId || '').trim() || null,
+          status: 'todo',
+          priority: String(plan.criticality || 'medium'),
+          approvalStatus: 'pending',
+          checklist: [],
+          linkedProcedureId: null,
+          linkedSoftwareIds: String(plan.softwareId || '').trim() ? [String(plan.softwareId).trim()] : [],
+          prerequisiteTaskIds: [],
+          dependentTaskIds: [],
+          linkedGlobalTaskIds: [],
+          linkedDocumentIds: [],
+          linkedThemeKeys: [],
+          linkedGroupKeys: [],
+          metadata: {
+            contingencyPlanId: safePlanId,
+            contingencyActivationId: activationId,
+            contingencyActionId: String(action.id || '')
+          },
+          createdAt: now(),
+          updatedAt: now()
+        };
+        await api.put('workflowTasks', taskObj, STORE_KEY_FIELDS.workflowTasks);
+        tasksGenerated.push(taskId);
+        await logAudit('task_create_from_contingency', 'task', taskId, { planId: safePlanId, activationId, actionId: action.id });
+      }
+
+      await notifyInternal(`Plan de contingence active: ${String(plan.title || '')} - ${tasksGenerated.length} tache(s) generee(s)`);
       await loadCollections();
       renderServiceFilter();
       renderContent();
       if (state.selectedType === 'contingencyPlan' && String(state.selectedId || '') === safePlanId) {
         openDetail('contingencyPlan', safePlanId);
       }
-      toast('Plan de contingence active');
+      toast(`Plan active - ${tasksGenerated.length} tache(s) generee(s)`);
     }
 
     async function closeContingencyActivation(activationId) {
@@ -3445,6 +3649,7 @@ ${tasks.map((row)=>`<tr><td>${esc(row.title || row.id)}</td><td>${esc(row.status
 
     function refreshWorkflowActionPermissions() {
       const editable = canEditWorkflow();
+      console.log('[PERMISSIONS] canEditWorkflow:', editable, 'state.permissions:', state.permissions);
       [
         'btn-workflow-add-community',
         'btn-workflow-add-service',
@@ -3458,6 +3663,7 @@ ${tasks.map((row)=>`<tr><td>${esc(row.title || row.id)}</td><td>${esc(row.status
         'btn-workflow-add-task',
         'btn-workflow-add-procedure',
         'btn-workflow-add-software',
+        'btn-workflow-add-contingency-plan',
         'btn-workflow-migrate-agent-users',
         'btn-workflow-inject-org-model'
       ].forEach((id) => {
@@ -5596,14 +5802,118 @@ ${clone.outerHTML}
       }).length;
       const notTestedCount = plans.filter((row) => !normalizeIsoDate(row.lastTestDate || '')).length;
       const weakPrepCount = plans.filter((row) => computeContingencyPlanReadiness(row) < 50).length;
+      const criticalCount = plans.filter((row) => normalizeContingencyCriticality(row.criticality) === 'critical').length;
+      const activeActivations = (state.collections.contingencyActivations || []).filter((act) => normalizeContingencyActivationStatus(act.status) === 'active').length;
+      const avgReadiness = plans.length > 0 ? Math.round(plans.reduce((sum, row) => sum + computeContingencyPlanReadiness(row), 0) / plans.length) : 0;
+
+      const byCriticality = {};
+      plans.forEach((row) => {
+        const crit = normalizeContingencyCriticality(row.criticality);
+        byCriticality[crit] = (byCriticality[crit] || 0) + 1;
+      });
+      const byService = {};
+      plans.forEach((row) => {
+        const svc = maps.serviceById.get(row.serviceId)?.name || 'Sans service';
+        byService[svc] = (byService[svc] || 0) + 1;
+      });
+      const byStatus = {};
+      plans.forEach((row) => {
+        const st = normalizeContingencyPlanStatus(row.status);
+        byStatus[st] = (byStatus[st] || 0) + 1;
+      });
+
+      const criticalityHtml = Object.entries(byCriticality).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([crit, count]) =>
+        `<p class="workflow-card-sub"><span class="workflow-badge workflow-badge-${esc(crit)}">${esc(crit)}</span>: ${esc(String(count))}</p>`
+      ).join('');
+      const serviceHtml = Object.entries(byService).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([svc, count]) =>
+        `<p class="workflow-card-sub">${esc(svc)}: ${esc(String(count))}</p>`
+      ).join('');
+      const statusHtml = Object.entries(byStatus).sort((a, b) => b[1] - a[1]).map(([st, count]) =>
+        `<p class="workflow-card-sub">${esc(st)}: ${esc(String(count))}</p>`
+      ).join('');
+
+      const alertPlans = [];
+      plans.forEach((row) => {
+        const alerts = [];
+        const nextReview = normalizeIsoDate(row.nextReviewDate || '');
+        if (nextReview && nextReview < today) {
+          alerts.push({ type: 'warning', message: 'Revue en retard' });
+        }
+        if (!normalizeIsoDate(row.lastTestDate || '')) {
+          alerts.push({ type: 'error', message: 'Jamais teste' });
+        }
+        const daysSinceTest = normalizeIsoDate(row.lastTestDate || '') ? Math.floor((Date.now() - new Date(row.lastTestDate).getTime()) / (1000 * 60 * 60 * 24)) : null;
+        if (daysSinceTest && daysSinceTest > 365) {
+          alerts.push({ type: 'warning', message: `Test datant de ${daysSinceTest} jours` });
+        }
+        const readiness = computeContingencyPlanReadiness(row);
+        if (readiness < 30 && normalizeContingencyCriticality(row.criticality) === 'critical') {
+          alerts.push({ type: 'error', message: `Preparation critique faible (${readiness}%)` });
+        } else if (readiness < 50) {
+          alerts.push({ type: 'warning', message: `Preparation faible (${readiness}%)` });
+        }
+        if (!row.ownerAgentId) {
+          alerts.push({ type: 'error', message: 'Pas de responsable' });
+        }
+        if (normalizeContingencyCriticality(row.criticality) === 'critical' && !row.backupAgentId) {
+          alerts.push({ type: 'warning', message: 'Plan critique sans suppleant' });
+        }
+        if (alerts.length > 0) {
+          alertPlans.push({ plan: row, alerts });
+        }
+      });
+      const alertsHtml = alertPlans.length > 0 ? `
+        <div class="workflow-map-col mt-3" style="background:#fef3c7;border:1px solid #f59e0b;border-radius:12px;padding:1rem;">
+          <h3 style="margin:0 0 0.75rem;font-size:15px;font-weight:700;color:#92400e;display:flex;align-items:center;gap:0.5rem;">
+            <span class="material-symbols-outlined" style="font-size:20px;">warning</span>
+            Alertes et actions requises (${alertPlans.length})
+          </h3>
+          ${alertPlans.slice(0, 10).map((item) => {
+            const errorCount = item.alerts.filter((a) => a.type === 'error').length;
+            const warningCount = item.alerts.filter((a) => a.type === 'warning').length;
+            return `
+              <div style="background:white;border-radius:8px;padding:0.75rem;margin-bottom:0.5rem;border-left:4px solid ${errorCount > 0 ? '#dc2626' : '#f59e0b'}">
+                <p style="margin:0 0 0.5rem;font-weight:700;font-size:13px;">
+                  <a href="#" data-wf-open-detail="contingencyPlan" data-wf-open-detail-id="${esc(item.plan.id)}" style="color:#002b6b;text-decoration:none;">${esc(item.plan.title || item.plan.code || 'Plan sans titre')}</a>
+                  <span style="margin-left:0.5rem;font-size:11px;font-weight:600;padding:2px 6px;border-radius:4px;background:${errorCount > 0 ? '#fee' : '#fef3c7'};color:${errorCount > 0 ? '#b91c1c' : '#d97706'};">
+                    ${errorCount > 0 ? `${errorCount} erreur${errorCount > 1 ? 's' : ''}` : ''} ${warningCount > 0 ? `${warningCount} avertissement${warningCount > 1 ? 's' : ''}` : ''}
+                  </span>
+                </p>
+                <ul style="margin:0;padding-left:1.25rem;font-size:12px;color:#475569;">
+                  ${item.alerts.map((alert) => `<li style="color:${alert.type === 'error' ? '#dc2626' : '#f59e0b'};">${esc(alert.message)}</li>`).join('')}
+                </ul>
+              </div>
+            `;
+          }).join('')}
+          ${alertPlans.length > 10 ? `<p style="margin:0.5rem 0 0;font-size:12px;color:#92400e;font-style:italic;">... et ${alertPlans.length - 10} autre(s) plan(s) avec alertes</p>` : ''}
+        </div>
+      ` : '';
 
       refs.content.innerHTML = `
         <div class="workflow-metrics-grid">
-          <article class="workflow-card"><p class="workflow-card-title">Plans</p><p class="workflow-card-sub">${esc(String(plans.length))}</p></article>
-          <article class="workflow-card"><p class="workflow-card-title">Revues dues</p><p class="workflow-card-sub">${esc(String(reviewDueCount))}</p></article>
-          <article class="workflow-card"><p class="workflow-card-title">Sans test</p><p class="workflow-card-sub">${esc(String(notTestedCount))}</p></article>
-          <article class="workflow-card"><p class="workflow-card-title">Preparation < 50%</p><p class="workflow-card-sub">${esc(String(weakPrepCount))}</p></article>
+          <article class="workflow-card"><p class="workflow-card-title">Total plans</p><p class="workflow-card-sub text-2xl font-bold">${esc(String(plans.length))}</p></article>
+          <article class="workflow-card"><p class="workflow-card-title">Plans critiques</p><p class="workflow-card-sub text-2xl font-bold text-red-600">${esc(String(criticalCount))}</p></article>
+          <article class="workflow-card"><p class="workflow-card-title">Activations en cours</p><p class="workflow-card-sub text-2xl font-bold text-orange-600">${esc(String(activeActivations))}</p></article>
+          <article class="workflow-card"><p class="workflow-card-title">Preparation moyenne</p><p class="workflow-card-sub text-2xl font-bold">${esc(String(avgReadiness))}%</p></article>
+          <article class="workflow-card"><p class="workflow-card-title">Revues dues</p><p class="workflow-card-sub text-xl font-bold ${reviewDueCount > 0 ? 'text-orange-600' : 'text-green-600'}">${esc(String(reviewDueCount))}</p></article>
+          <article class="workflow-card"><p class="workflow-card-title">Non testes</p><p class="workflow-card-sub text-xl font-bold ${notTestedCount > 0 ? 'text-red-600' : 'text-green-600'}">${esc(String(notTestedCount))}</p></article>
+          <article class="workflow-card"><p class="workflow-card-title">Preparation faible</p><p class="workflow-card-sub text-xl font-bold ${weakPrepCount > 0 ? 'text-orange-600' : 'text-green-600'}">${esc(String(weakPrepCount))}</p></article>
         </div>
+        <div class="workflow-metrics-grid mt-3">
+          <article class="workflow-card">
+            <p class="workflow-card-title">Par criticite</p>
+            ${criticalityHtml || '<p class="workflow-card-sub">Aucune donnee</p>'}
+          </article>
+          <article class="workflow-card">
+            <p class="workflow-card-title">Par service</p>
+            ${serviceHtml || '<p class="workflow-card-sub">Aucune donnee</p>'}
+          </article>
+          <article class="workflow-card">
+            <p class="workflow-card-title">Par statut</p>
+            ${statusHtml || '<p class="workflow-card-sub">Aucune donnee</p>'}
+          </article>
+        </div>
+        ${alertsHtml}
         <div class="workflow-grid mt-3">${cards.join('') || '<div class="workflow-empty">Aucun plan de contingence</div>'}</div>
       `;
     }
@@ -6918,19 +7228,52 @@ ${clone.outerHTML}
           ` : '<p class="workflow-card-sub">Aucune activation.</p>'}
         </div>
         <div class="workflow-map-col workflow-perm-panel">
-          <h6>Exercices et revues</h6>
-          ${contingencyExercises.length ? `<p class="workflow-card-sub">Exercices: ${esc(String(contingencyExercises.length))}</p>` : '<p class="workflow-card-sub">Aucun exercice.</p>'}
-          ${contingencyReviews.length ? `<p class="workflow-card-sub">Revues: ${esc(String(contingencyReviews.length))}</p>` : '<p class="workflow-card-sub">Aucune revue.</p>'}
+          <h6>Exercices de test</h6>
+          ${contingencyExercises.length ? `
+            <div class="workflow-perm-table-wrap">
+              <table class="workflow-perm-table">
+                <thead><tr><th>Date</th><th>Resultat</th><th>Notes</th>${editable ? '<th></th>' : ''}</tr></thead>
+                <tbody>
+                  ${contingencyExercises.map((row) => `<tr>
+                    <td>${esc(String(row.exerciseDate || '-'))}</td>
+                    <td><span class="workflow-badge workflow-badge-${esc(normalizeContingencyExerciseResult(row.result))}">${esc(normalizeContingencyExerciseResult(row.result))}</span></td>
+                    <td>${esc(String(row.notes || row.findings || '-'))}</td>
+                    ${editable ? `<td class="text-right"><button type="button" class="workflow-btn-light text-xs" data-wf-cont-exercise-delete="${esc(String(row.id || ''))}">Supprimer</button></td>` : ''}
+                  </tr>`).join('')}
+                </tbody>
+              </table>
+            </div>
+          ` : '<p class="workflow-card-sub">Aucun exercice enregistre.</p>'}
           ${editable ? `
-            <div class="workflow-perm-create-grid">
+            <div class="workflow-perm-create-grid" style="margin-top:0.6rem;">
               <input id="wf-cont-exercise-date" class="workflow-form-input" type="date">
               <select id="wf-cont-exercise-result" class="workflow-form-select">${CONTINGENCY_EXERCISE_RESULT.map((s) => `<option value="${esc(s)}">${esc(s)}</option>`).join('')}</select>
               <input id="wf-cont-exercise-notes" class="workflow-form-input" type="text" placeholder="Resultat / ecarts">
               <button id="btn-wf-cont-exercise-add" type="button" class="workflow-btn-light px-3 py-2 rounded-lg text-xs font-semibold">Ajouter exercice</button>
             </div>
-            <div class="workflow-perm-create-grid" style="margin-top:0.45rem;">
-              <input id="wf-cont-review-date" class="workflow-form-input" type="date">
-              <input id="wf-cont-review-next-date" class="workflow-form-input" type="date">
+          ` : ''}
+        </div>
+        <div class="workflow-map-col workflow-perm-panel">
+          <h6>Revues periodiques</h6>
+          ${contingencyReviews.length ? `
+            <div class="workflow-perm-table-wrap">
+              <table class="workflow-perm-table">
+                <thead><tr><th>Date revue</th><th>Prochaine revue</th><th>Constats</th>${editable ? '<th></th>' : ''}</tr></thead>
+                <tbody>
+                  ${contingencyReviews.map((row) => `<tr>
+                    <td>${esc(String(row.reviewDate || '-'))}</td>
+                    <td>${esc(String(row.nextReviewDate || '-'))}</td>
+                    <td>${esc(String(row.findings || row.comments || '-'))}</td>
+                    ${editable ? `<td class="text-right"><button type="button" class="workflow-btn-light text-xs" data-wf-cont-review-delete="${esc(String(row.id || ''))}">Supprimer</button></td>` : ''}
+                  </tr>`).join('')}
+                </tbody>
+              </table>
+            </div>
+          ` : '<p class="workflow-card-sub">Aucune revue enregistree.</p>'}
+          ${editable ? `
+            <div class="workflow-perm-create-grid" style="margin-top:0.6rem;">
+              <input id="wf-cont-review-date" class="workflow-form-input" type="date" placeholder="Date revue">
+              <input id="wf-cont-review-next-date" class="workflow-form-input" type="date" placeholder="Prochaine revue">
               <input id="wf-cont-review-comments" class="workflow-form-input" type="text" placeholder="Constats revue">
               <button id="btn-wf-cont-review-add" type="button" class="workflow-btn-light px-3 py-2 rounded-lg text-xs font-semibold">Ajouter revue</button>
             </div>
@@ -6946,6 +7289,8 @@ ${clone.outerHTML}
         </div>
         <div class="workflow-detail-actions">
           ${editable ? '<button id="btn-wf-cont-activate" class="btn-primary px-3 py-2 rounded-lg text-white text-xs font-semibold" type="button">Activer plan</button>' : ''}
+          <button id="btn-wf-cont-export-pdf" class="workflow-btn-light px-3 py-2 rounded-lg text-xs font-semibold" type="button">Exporter PDF</button>
+          <button id="btn-wf-cont-export-csv" class="workflow-btn-light px-3 py-2 rounded-lg text-xs font-semibold" type="button">Exporter CSV</button>
         </div>
         ` : ''}
         ${editable && type === 'template' ? `
@@ -7923,6 +8268,12 @@ ${clone.outerHTML}
           document.getElementById('btn-wf-cont-activate')?.addEventListener('click', async () => {
              await activateContingencyPlan(id);
           });
+          document.getElementById('btn-wf-cont-export-pdf')?.addEventListener('click', () => {
+             exportContingencyPlanPdf(id);
+          });
+          document.getElementById('btn-wf-cont-export-csv')?.addEventListener('click', () => {
+             exportContingencyPlanCsv(id);
+          });
           document.getElementById('btn-wf-cont-action-add')?.addEventListener('click', async () => {
              const title = String(document.getElementById('wf-cont-action-title')?.value || '').trim();
              const ownerAgentId = String(document.getElementById('wf-cont-action-owner')?.value || '').trim();
@@ -7967,6 +8318,96 @@ ${clone.outerHTML}
                const actId = String(btn.getAttribute('data-wf-cont-activation-close') || '').trim();
                if (!global.confirm('Voulez-vous vraiment cloturer cette crise pour ce plan ?')) return;
                await closeContingencyActivation(actId);
+            });
+          });
+          document.getElementById('btn-wf-cont-exercise-add')?.addEventListener('click', async () => {
+             const exerciseDate = String(document.getElementById('wf-cont-exercise-date')?.value || '').trim();
+             const result = normalizeContingencyExerciseResult(document.getElementById('wf-cont-exercise-result')?.value || 'pending');
+             const notes = String(document.getElementById('wf-cont-exercise-notes')?.value || '').trim();
+             if (!exerciseDate) { toast('Date d exercice requise'); return; }
+             const exerciseId = `wf-cont-exercise-${uid()}`;
+             const exerciseObj = {
+               id: exerciseId,
+               planId: id,
+               exerciseDate,
+               result,
+               notes,
+               participants: [],
+               findings: notes,
+               recommendations: [],
+               createdAt: now(),
+               updatedAt: now()
+             };
+             await api.put('workflowContingencyExercises', exerciseObj, STORE_KEY_FIELDS.workflowContingencyExercises);
+             await logContingencyAudit('exercise_add', id, { exerciseId, exerciseDate, result });
+             await loadCollections();
+             renderServiceFilter();
+             renderContent();
+             openDetail('contingencyPlan', id);
+             toast('Exercice ajoute');
+          });
+          document.getElementById('btn-wf-cont-review-add')?.addEventListener('click', async () => {
+             const reviewDate = String(document.getElementById('wf-cont-review-date')?.value || '').trim();
+             const nextReviewDate = String(document.getElementById('wf-cont-review-next-date')?.value || '').trim();
+             const comments = String(document.getElementById('wf-cont-review-comments')?.value || '').trim();
+             if (!reviewDate) { toast('Date de revue requise'); return; }
+             const reviewId = `wf-cont-review-${uid()}`;
+             const reviewObj = {
+               id: reviewId,
+               planId: id,
+               reviewDate,
+               reviewerUserId: currentUserId(),
+               findings: comments,
+               recommendations: [],
+               nextReviewDate: nextReviewDate || null,
+               status: 'completed',
+               createdAt: now(),
+               updatedAt: now()
+             };
+             await api.put('workflowContingencyReviews', reviewObj, STORE_KEY_FIELDS.workflowContingencyReviews);
+             await logContingencyAudit('review_add', id, { reviewId, reviewDate, nextReviewDate });
+             const planCurrent = getItem('contingencyPlan', id);
+             if (planCurrent) {
+               const planUpdated = {
+                 ...planCurrent,
+                 lastReviewDate: reviewDate,
+                 nextReviewDate: nextReviewDate || planCurrent.nextReviewDate,
+                 updatedAt: now()
+               };
+               await api.put('workflowContingencyPlans', planUpdated, STORE_KEY_FIELDS.workflowContingencyPlans);
+             }
+             await loadCollections();
+             renderServiceFilter();
+             renderContent();
+             openDetail('contingencyPlan', id);
+             toast('Revue ajoutee');
+          });
+          refs.detailBody?.querySelectorAll('[data-wf-cont-exercise-delete]')?.forEach((btn) => {
+            btn.addEventListener('click', async () => {
+              const exerciseId = String(btn.getAttribute('data-wf-cont-exercise-delete') || '').trim();
+              if (!exerciseId) return;
+              if (!global.confirm('Supprimer cet exercice ?')) return;
+              await api.remove('workflowContingencyExercises', exerciseId);
+              await logContingencyAudit('exercise_delete', id, { exerciseId });
+              await loadCollections();
+              renderServiceFilter();
+              renderContent();
+              openDetail('contingencyPlan', id);
+              toast('Exercice supprime');
+            });
+          });
+          refs.detailBody?.querySelectorAll('[data-wf-cont-review-delete]')?.forEach((btn) => {
+            btn.addEventListener('click', async () => {
+              const reviewId = String(btn.getAttribute('data-wf-cont-review-delete') || '').trim();
+              if (!reviewId) return;
+              if (!global.confirm('Supprimer cette revue ?')) return;
+              await api.remove('workflowContingencyReviews', reviewId);
+              await logContingencyAudit('review_delete', id, { reviewId });
+              await loadCollections();
+              renderServiceFilter();
+              renderContent();
+              openDetail('contingencyPlan', id);
+              toast('Revue supprimee');
             });
           });
         }
@@ -9838,17 +10279,19 @@ ${clone.outerHTML}
       if (state.bound) return;
       state.bound = true;
 
-      refs.quickAddToggle?.addEventListener('click', (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        refs.quickAddMenu?.classList.toggle('hidden');
-      });
+      console.log('[BIND] refs.quickAddToggle:', refs.quickAddToggle);
+      if (refs.quickAddToggle) {
+        refs.quickAddToggle.addEventListener('click', (event) => {
+          console.log('[TOGGLE] Button clicked!');
+          event.preventDefault();
+          event.stopPropagation();
+          refs.quickAddMenu?.classList.toggle('hidden');
+        });
+        console.log('[BIND] Event listener added to quickAddToggle');
+      } else {
+        console.error('[BIND] quickAddToggle is null!');
+      }
 
-      refs.quickAddMenu?.addEventListener('click', (event) => {
-        const item = event.target.closest('.workflow-quick-add-item');
-        if (!item) return;
-        refs.quickAddMenu?.classList.add('hidden');
-      });
 
       refs.filtersToggle?.addEventListener('click', (event) => {
         event.preventDefault();
@@ -9857,10 +10300,13 @@ ${clone.outerHTML}
       });
 
       document.addEventListener('click', (event) => {
-        const inQuickAdd = event.target.closest('.workflow-quick-add');
-        if (!inQuickAdd) refs.quickAddMenu?.classList.add('hidden');
-        const inFilters = event.target.closest('#workflow-filters-panel, #workflow-filters-toggle');
-        if (!inFilters) refs.filtersPanel?.classList.add('hidden');
+        // Utiliser setTimeout pour permettre aux handlers des boutons de s'exécuter d'abord
+        setTimeout(() => {
+          const inQuickAdd = event.target.closest('.workflow-quick-add');
+          if (!inQuickAdd) refs.quickAddMenu?.classList.add('hidden');
+          const inFilters = event.target.closest('#workflow-filters-panel, #workflow-filters-toggle');
+          if (!inFilters) refs.filtersPanel?.classList.add('hidden');
+        }, 0);
       });
 
       Object.entries(viewIds).forEach(([key, id]) => {
@@ -10482,57 +10928,42 @@ ${clone.outerHTML}
         }
       });
 
-      document.getElementById('btn-workflow-add-community')?.addEventListener('click', () => {
-        openCreateModal('community');
-      });
+      // Utiliser la délégation d'événements sur le menu parent
+      // Cela évite que les listeners soient perdus si les boutons sont modifiés
+      if (refs.quickAddMenu) {
+        refs.quickAddMenu.addEventListener('click', (e) => {
+          const button = e.target.closest('button[id^="btn-workflow-add-"]');
+          if (!button) return;
 
-      document.getElementById('btn-workflow-add-service')?.addEventListener('click', () => {
-        openCreateModal('service');
-      });
+          console.log('[MENU CLICK] Button clicked:', button.id);
+          e.stopPropagation();
+          refs.quickAddMenu.classList.add('hidden');
 
-      document.getElementById('btn-workflow-add-group')?.addEventListener('click', () => {
-        openCreateModal('group');
-      });
+          // Mapper l'ID du bouton à l'action correspondante
+          const actionMap = {
+            'btn-workflow-add-community': 'community',
+            'btn-workflow-add-service': 'service',
+            'btn-workflow-add-group': 'group',
+            'btn-workflow-add-agent': 'agent',
+            'btn-workflow-add-role': 'role',
+            'btn-workflow-add-process': 'process',
+            'btn-workflow-add-template': 'template',
+            'btn-workflow-add-step': 'step',
+            'btn-workflow-add-flow': 'flow',
+            'btn-workflow-add-task': 'task',
+            'btn-workflow-add-procedure': 'procedure',
+            'btn-workflow-add-software': 'software',
+            'btn-workflow-add-contingency-plan': 'contingency-plan'
+          };
 
-      document.getElementById('btn-workflow-add-agent')?.addEventListener('click', () => {
-        openCreateModal('agent');
-      });
-
-      document.getElementById('btn-workflow-add-role')?.addEventListener('click', () => {
-        openCreateModal('role');
-      });
-
-      document.getElementById('btn-workflow-add-process')?.addEventListener('click', () => {
-        openCreateModal('process');
-      });
-
-      document.getElementById('btn-workflow-add-template')?.addEventListener('click', () => {
-        openCreateModal('template');
-      });
-
-      document.getElementById('btn-workflow-add-step')?.addEventListener('click', () => {
-        openCreateModal('step');
-      });
-
-      document.getElementById('btn-workflow-add-flow')?.addEventListener('click', () => {
-        openCreateModal('flow');
-      });
-
-      document.getElementById('btn-workflow-add-task')?.addEventListener('click', () => {
-        openCreateModal('task');
-      });
-
-      document.getElementById('btn-workflow-add-procedure')?.addEventListener('click', () => {
-        openCreateModal('procedure');
-      });
-
-      document.getElementById('btn-workflow-add-software')?.addEventListener('click', () => {
-        openCreateModal('software');
-      });
-
-      document.getElementById('btn-workflow-add-contingency-plan')?.addEventListener('click', () => {
-        openCreateModal('contingency-plan');
-      });
+          const modalKind = actionMap[button.id];
+          if (modalKind) {
+            console.log('[MENU CLICK] Opening modal:', modalKind);
+            openCreateModal(modalKind);
+          }
+        });
+        console.log('[BIND] Event delegation added to quick-add menu');
+      }
 
       document.getElementById('btn-workflow-migrate-agent-users')?.addEventListener('click', () => {
         migrateAgentUserIdsFromDirectory().catch((error) => {
@@ -10570,8 +11001,6 @@ ${clone.outerHTML}
           toast(`Erreur workflow: ${error.message}`);
         });
       });
-
-      refreshWorkflowActionPermissions();
     }
 
     async function init() {

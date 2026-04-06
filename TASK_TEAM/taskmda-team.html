@@ -318,6 +318,26 @@
             <button id="projects-filter-reset" class="px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold">Réinitialiser</button>
           </div>
           <div id="projects-filter-count" class="mb-4 text-xs text-slate-500 font-semibold">0 résultat sur 0 projet</div>
+
+          <!-- Carousel pour le dashboard -->
+          <div id="projects-carousel" class="projects-carousel hidden">
+            <div class="projects-carousel-header">
+              <h3 class="projects-carousel-title">Derniers projets créés</h3>
+              <div class="projects-carousel-controls">
+                <button id="carousel-prev" class="carousel-nav-btn" aria-label="Projet précédent">
+                  <span class="material-symbols-outlined">chevron_left</span>
+                </button>
+                <button id="carousel-next" class="carousel-nav-btn" aria-label="Projet suivant">
+                  <span class="material-symbols-outlined">chevron_right</span>
+                </button>
+              </div>
+            </div>
+            <div class="projects-carousel-container">
+              <div id="projects-carousel-track" class="projects-carousel-track"></div>
+            </div>
+            <div id="projects-carousel-indicators" class="projects-carousel-indicators"></div>
+          </div>
+
           <div id="projects-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
           <div id="projects-pagination" class="mt-4 flex items-center justify-between gap-3 text-xs text-slate-500"></div>
           <section id="dashboard-news" class="dashboard-news mt-5 hidden" aria-live="polite">

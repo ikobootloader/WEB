@@ -2492,17 +2492,18 @@ html[data-wf-action-buttons="icon"] #btn-open-global-calendar-item-modal:focus-v
 html[data-wf-action-buttons="icon"] .kanban-col-add-btn {
   display: inline-grid !important;
   place-items: center !important;
-  width: 44px !important;
-  min-width: 44px !important;
-  height: 40px !important;
-  min-height: 40px !important;
+  width: 32px !important;
+  min-width: 32px !important;
+  height: 32px !important;
+  min-height: 32px !important;
   padding: 0 !important;
-  border-radius: 10px !important;
+  border-radius: 8px !important;
   gap: 0 !important;
-  border: 1px solid #1f4b92 !important;
-  background: var(--primary) !important;
-  color: #ffffff !important;
-  box-shadow: 0 6px 14px rgba(0, 43, 107, 0.18) !important;
+  border: 1px solid #cbd5e1 !important;
+  background: #f1f5f9 !important;
+  color: #64748b !important;
+  box-shadow: none !important;
+  transition: all 0.2s ease;
 }
 
 html[data-wf-action-buttons="icon"] .kanban-col-add-btn .taskmda-action-label {
@@ -2511,17 +2512,17 @@ html[data-wf-action-buttons="icon"] .kanban-col-add-btn .taskmda-action-label {
 
 html[data-wf-action-buttons="icon"] .kanban-col-add-btn .material-symbols-outlined,
 html[data-wf-action-buttons="icon"] .kanban-col-add-btn .taskmda-action-icon {
-  font-size: 23px !important;
+  font-size: 18px !important;
   line-height: 1;
   margin: 0 !important;
 }
 
 html[data-wf-action-buttons="icon"] .kanban-col-add-btn:hover,
 html[data-wf-action-buttons="icon"] .kanban-col-add-btn:focus-visible {
-  border-color: #173b73 !important;
-  background: #0a377f !important;
-  color: #ffffff !important;
-  box-shadow: 0 8px 18px rgba(0, 43, 107, 0.24) !important;
+  border-color: #94a3b8 !important;
+  background: #e2e8f0 !important;
+  color: #475569 !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08) !important;
 }
 
 html[data-wf-action-buttons="icon"] .taskmda-create-cta:not(#btn-add-task):not(#btn-global-add-task):not(#btn-open-global-calendar-item-modal):not(#btn-global-doc-add):not(.kanban-col-add-btn) {
@@ -5651,10 +5652,10 @@ html[data-wf-action-buttons="icon"][data-wf-action-shape="round"] #btn-global-ad
 html[data-wf-action-buttons="icon"][data-wf-action-shape="round"] #btn-open-global-calendar-item-modal,
 html[data-wf-action-buttons="icon"][data-wf-action-shape="round"] #btn-global-doc-add,
 html[data-wf-action-buttons="icon"][data-wf-action-shape="round"] .kanban-col-add-btn {
-  width: 40px !important;
-  min-width: 40px !important;
-  height: 40px !important;
-  min-height: 40px !important;
+  width: 32px !important;
+  min-width: 32px !important;
+  height: 32px !important;
+  min-height: 32px !important;
   border-radius: 999px !important;
 }
 
@@ -9339,4 +9340,95 @@ html.dark .global-feed-editor:hover::-webkit-scrollbar-thumb {
 .project-members-summary-names {
   color: #334155;
   font-weight: 600;
+}
+
+/* ===================================
+   PROJECTS CAROUSEL (Dashboard)
+   =================================== */
+
+.projects-carousel {
+  margin-bottom: 2rem;
+}
+
+.projects-carousel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+.projects-carousel-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.projects-carousel-controls {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.carousel-nav-btn {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.carousel-nav-btn:hover:not(:disabled) {
+  border-color: #94a3b8;
+  background: #f8fafc;
+  color: #334155;
+}
+
+.carousel-nav-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.carousel-nav-btn .material-symbols-outlined {
+  font-size: 20px;
+}
+
+.projects-carousel-container {
+  position: relative;
+}
+
+.projects-carousel-track {
+  /* Pas de styles spécifiques, les classes grid/space-y sont appliquées dynamiquement */
+}
+
+.projects-carousel-indicators {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+}
+
+.carousel-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #cbd5e1;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  padding: 0;
+}
+
+.carousel-indicator:hover {
+  background: #94a3b8;
+}
+
+.carousel-indicator.active {
+  width: 24px;
+  border-radius: 4px;
+  background: var(--primary);
 }

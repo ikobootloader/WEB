@@ -71,7 +71,7 @@ Nom d interface par defaut: `NEXUS MDA`.
   - exports JSON/CSV,
   - liaison contextuelle `Impact RGPD` depuis Workflow / Projet / Tache (generer, lier, ouvrir fiche).
 - `Workflow`: rubrique transverse dediee a l organisation metier:
-  - vues `Carte`, `Organisation`, `Organigramme`, `Agents`, `Processus`, `Modeles de processus`, `Taches`, `Kanban`, `Timeline`, `Procedures`, `Logiciels metiers`, `Analyse`, `Gouvernance`, `Journal`
+  - vues `Carte`, `Organisation`, `Organigramme`, `Agents`, `Processus`, `Modeles de processus`, `Taches`, `Kanban`, `Timeline`, `Procedures`, `Logiciels metiers`, `Contingence`, `Analyse`, `Gouvernance`, `Journal`
   - carte metier: zoom/pan, auto-layout, mini-carte interactive, export PNG et export PDF
   - concepteur de processus: edition par blocs d etapes (ajout rapide, duplication, reordonnancement, reliage automatique des flux)
   - concepteur de flux: mode graphe non-lineaire (branches decision/parallele/exception, branche oui/non, bascule lineaire)
@@ -89,8 +89,9 @@ Nom d interface par defaut: `NEXUS MDA`.
   - alertes proactives de gouvernance (responsable manquant, quorum incomplet, etapes non affectees)
   - analyse avancee: matrices processus x services / processus x logiciels / agents x responsabilites, dependances critiques, listes d anomalies (etapes non affectees, logiciels sans procedure, processus incomplets)
   - injection d un jeu d exemple complet de modelisation organisationnelle (bouton dedie dans la barre Workflow)
+  - gestion des plans de contingence: creation, actions, activation avec generation automatique de taches, exercices de test, revues periodiques, dashboard avec alertes, exports PDF/CSV
   - journal/audit + historique des modifications avec restauration de versions
-  - export PDF des vues `Organisation` et `Organigramme` + fiches `Processus`, `Service`, `Agent`, `Logiciel`
+  - export PDF des vues `Organisation` et `Organigramme` + fiches `Processus`, `Service`, `Agent`, `Logiciel`, `Plan de contingence`
   - detail editable + ponts transverses vers taches/documents/themes/groupes globaux
 - Correctif UX/CSS: isolation stricte des sections transverses (plus de melange visuel Taches/Calendrier).
 - Harmonisation UX globale:

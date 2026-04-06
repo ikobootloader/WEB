@@ -62,6 +62,10 @@
   gap: 0.2rem;
 }
 
+.workflow-quick-add-menu.hidden {
+  display: none;
+}
+
 .workflow-quick-add-item {
   text-align: left;
   border: 1px solid transparent;

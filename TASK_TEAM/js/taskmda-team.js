@@ -6318,6 +6318,162 @@
       panel.classList.remove('hidden');
     }
 
+    let carouselCurrentPage = 1;
+    let carouselAllProjects = [];
+    let carouselStateByProjectId = null;
+
+    function renderProjectsCarousel(projects, stateByProjectId) {
+      carouselAllProjects = projects;
+      carouselStateByProjectId = stateByProjectId;
+      carouselCurrentPage = 1;
+      updateCarouselPage();
+    }
+
+    function updateCarouselPage() {
+      const track = document.getElementById('projects-carousel-track');
+      const indicators = document.getElementById('projects-carousel-indicators');
+      if (!track || !indicators) return;
+
+      const isListView = projectsViewMode === 'list';
+      const itemsPerPage = isListView ? 1 : 3;
+      const totalPages = Math.ceil(carouselAllProjects.length / itemsPerPage);
+      const startIndex = (carouselCurrentPage - 1) * itemsPerPage;
+      const endIndex = startIndex + itemsPerPage;
+      const pageProjects = carouselAllProjects.slice(startIndex, endIndex);
+
+      // Utiliser exactement le même HTML que la grille normale
+      track.className = isListView
+        ? 'projects-carousel-track space-y-3'
+        : 'projects-carousel-track grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4';
+
+      track.innerHTML = pageProjects.map(project => {
+        const state = carouselStateByProjectId.get(project.projectId);
+        const canEdit = canEditProjectMeta(state);
+        const canDelete = canDeleteProjectMeta(state);
+        const isPrivate = project.sharingMode === 'private';
+        const icon = isPrivate ? 'lock' : 'groups';
+        const badge = isPrivate
+          ? '<span class="workspace-chip workspace-chip-private">PRIVE</span>'
+          : '<span class="workspace-chip workspace-chip-shared">PARTAGE</span>';
+        const status = String(project.status || 'en-cours');
+        const statusBadge = status === 'urgent'
+          ? '<span class="workspace-chip workspace-chip-status-urgent">Urgent</span>'
+          : status === 'termine'
+            ? '<span class="workspace-chip workspace-chip-status-termine">Termine</span>'
+            : status === 'planifie'
+              ? '<span class="workspace-chip workspace-chip-status-planifie">Planifie</span>'
+              : '<span class="workspace-chip workspace-chip-status-active">En cours</span>';
+        const progressClass = status === 'urgent'
+          ? 'bg-red-500 w-[82%]'
+          : status === 'termine'
+            ? 'bg-emerald-500 w-full'
+            : status === 'planifie'
+              ? 'bg-amber-500 w-[28%]'
+              : 'bg-primary w-[58%]';
+        const participantRows = (state?.members || []).map(member => ({
+          userId: member.userId,
+          name: member.displayName || ''
+        }));
+        const canCreateTask = canCreateTaskInProject(state);
+        if (participantRows.length === 0 && project?.createdBy) {
+          participantRows.push({ userId: project.createdBy, name: '' });
+        }
+        const participantsHtml = renderParticipantsStack(participantRows, 3);
+        const projectCreatorIdentity = resolveKnownUserIdentity(project?.createdBy || '', project?.createdBy ? fallbackDirectoryName(project.createdBy) : 'Utilisateur');
+        const projectCreatorName = projectCreatorIdentity?.name || 'Utilisateur';
+        const creatorTooltip = `Projet cree par ${projectCreatorName}`;
+
+        return `
+          <div class="project-card workspace-card-shell project-card-interactive rounded-xl p-6 cursor-pointer ${isListView ? 'project-card-list' : ''}" onclick="showProjectDetail('${project.projectId}')">
+            <div class="flex items-start justify-between mb-2 gap-3">
+              <h4 class="workspace-card-title text-xl font-bold font-headline flex items-center gap-2">
+                <span class="material-symbols-outlined text-primary text-lg">${icon}</span>
+                <span>${project.name}</span>
+              </h4>
+              <div class="flex items-center gap-1">${badge}${statusBadge}</div>
+            </div>
+            ${isListView ? `<p class="workspace-card-subtitle text-sm mb-4 line-clamp-2">${escapeHtml(project._descriptionCard || 'Aucune description')}</p>` : ''}
+            <div class="card-hover-actions">
+              <button
+                class="card-quick-btn card-quick-btn-primary"
+                onclick="event.stopPropagation(); showProjectDetail('${project.projectId}')"
+                title="Ouvrir le projet"
+              >
+                <span class="material-symbols-outlined">open_in_new</span>
+                <span>Ouvrir</span>
+              </button>
+              <button
+                class="card-quick-btn"
+                ${canCreateTask ? '' : 'disabled title="Reserve aux membres autorises"'}
+                onclick="event.stopPropagation(); quickAddTaskToProject('${project.projectId}')"
+              >
+                <span class="material-symbols-outlined">add_task</span>
+                <span>Nouvelle tâche</span>
+              </button>
+              <button
+                class="card-quick-btn"
+                ${canEdit ? '' : 'disabled title="Reserve aux Proprietaires/Managers"'}
+                onclick="event.stopPropagation(); openEditProjectModalFromDashboard('${project.projectId}')"
+              >
+                <span class="material-symbols-outlined">edit</span>
+                <span>Modifier</span>
+              </button>
+              <button
+                class="card-quick-btn card-quick-btn-danger"
+                ${canDelete ? '' : 'disabled title="Reserve au Proprietaire"'}
+                onclick="event.stopPropagation(); deleteProjectFromDashboard('${project.projectId}')"
+              >
+                <span class="material-symbols-outlined">delete</span>
+                <span>Supprimer</span>
+              </button>
+            </div>
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2 text-sm text-gray-500">
+                <span class="material-symbols-outlined text-lg">calendar_today</span>
+                <span>${new Date(project.createdAt).toLocaleDateString('fr-FR')}</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span title="${escapeHtml(creatorTooltip)}" aria-label="${escapeHtml(creatorTooltip)}">${participantsHtml}</span>
+                <span class="text-[11px] font-semibold text-slate-500">${isPrivate ? 'Visibilité privée' : 'Visibilité collaborative'}</span>
+              </div>
+            </div>
+            <div class="mt-4 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+              <div class="h-full rounded-full ${progressClass}"></div>
+            </div>
+            <div class="mt-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">${status}</div>
+          </div>
+        `;
+      }).join('');
+
+      // Mettre à jour les indicateurs
+      indicators.innerHTML = Array.from({ length: totalPages }, (_, i) =>
+        `<button class="carousel-indicator ${i + 1 === carouselCurrentPage ? 'active' : ''}" onclick="goToCarouselPage(${i + 1})" aria-label="Page ${i + 1}"></button>`
+      ).join('');
+
+      updateCarouselButtons();
+    }
+
+    function goToCarouselPage(page) {
+      const isListView = projectsViewMode === 'list';
+      const itemsPerPage = isListView ? 1 : 3;
+      const totalPages = Math.ceil(carouselAllProjects.length / itemsPerPage);
+      carouselCurrentPage = Math.max(1, Math.min(page, totalPages));
+      updateCarouselPage();
+    }
+
+    function updateCarouselButtons() {
+      const prevBtn = document.getElementById('carousel-prev');
+      const nextBtn = document.getElementById('carousel-next');
+      if (!prevBtn || !nextBtn) return;
+
+      const isListView = projectsViewMode === 'list';
+      const itemsPerPage = isListView ? 1 : 3;
+      const totalPages = Math.ceil(carouselAllProjects.length / itemsPerPage);
+
+      prevBtn.disabled = carouselCurrentPage === 1;
+      nextBtn.disabled = carouselCurrentPage >= totalPages;
+    }
+
     async function renderProjects() {
       await refreshKnownUsersCache();
       const projects = await getAllProjects();
@@ -6453,6 +6609,23 @@
         container.innerHTML = '<p class="text-slate-500 text-center py-8">Aucun projet ne correspond à la recherche</p>';
         await renderDashboardNews();
         return;
+      }
+
+      // Sur le dashboard (sans filtres), afficher un carousel avec les 9 derniers projets
+      const carousel = document.getElementById('projects-carousel');
+      if (isDashboardHome && !hasActiveProjectFilters) {
+        const recentProjects = sortedProjects.slice(0, 9);
+        if (carousel) {
+          renderProjectsCarousel(recentProjects, stateByProjectId);
+          carousel.classList.remove('hidden');
+        }
+        if (container) container.classList.add('hidden');
+        if (paginationContainer) paginationContainer.innerHTML = '';
+        await renderDashboardNews();
+        return;
+      } else {
+        if (carousel) carousel.classList.add('hidden');
+        if (container) container.classList.remove('hidden');
       }
 
       const pagination = paginateItems(sortedProjects, projectsPage, paginationConfig.projectsPerPage);
@@ -22643,6 +22816,22 @@
     document.getElementById('btn-toggle-permissions-details')?.addEventListener('click', () => {
       projectPermissionDetailsOpen = !projectPermissionDetailsOpen;
       renderProjectPermissionMatrix(currentProjectState);
+    });
+
+    // Carousel navigation
+    document.getElementById('carousel-prev')?.addEventListener('click', () => {
+      if (carouselCurrentPage > 1) {
+        goToCarouselPage(carouselCurrentPage - 1);
+      }
+    });
+
+    document.getElementById('carousel-next')?.addEventListener('click', () => {
+      const isListView = projectsViewMode === 'list';
+      const itemsPerPage = isListView ? 1 : 3;
+      const totalPages = Math.ceil(carouselAllProjects.length / itemsPerPage);
+      if (carouselCurrentPage < totalPages) {
+        goToCarouselPage(carouselCurrentPage + 1);
+      }
     });
 
     // Project creation
