@@ -1,6 +1,6 @@
 :root {
   --topbar-height: 78px;
-  --app-chrome-bg-light: rgb(217 218 221);
+  --app-chrome-bg-light: rgb(236 239 248);
   --app-chrome-bg-dark: rgb(15 21 37);
   --app-chrome-bg: var(--app-chrome-bg-light);
   --app-chrome-divider: rgba(101, 115, 141, 0.24);
@@ -1903,6 +1903,37 @@ html[data-wf-action-buttons="text"] .card-quick-btn .taskmda-action-icon {
   color: #0f172a;
 }
 
+/* === Tab Icons === */
+.project-view-tab,
+.workflow-view-tab,
+.project-mode-tab,
+#global-calendar-view-grid,
+#global-calendar-view-list {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+}
+
+.tab-icon {
+  font-size: 1rem;
+  line-height: 1;
+  margin-right: 0.35rem;
+  flex-shrink: 0;
+  vertical-align: middle;
+  font-variation-settings: 'wght' 400;
+}
+
+/* Hide tab icons globally when toggled off */
+html[data-tab-icons="off"] .tab-icon {
+  display: none !important;
+}
+
+/* In vertical layout, icon stays and helps identify the tab at a glance */
+#project-work-layout.is-vertical .project-view-tab .tab-icon {
+  font-size: 1.05rem;
+}
+
+
 .workflow-view-tabs,
 .feed-filter-buttons {
   overflow: visible !important;
@@ -3271,6 +3302,8 @@ html.dark #project-work-panel.project-work-focus-fallback {
   font-weight: 700;
   border-radius: 10px;
   padding: 7px 12px;
+  display: inline-flex;
+  align-items: center;
 }
 
 #project-settings-panel.is-vertical #project-settings-tabs-wrap {
@@ -9399,10 +9432,6 @@ html.dark .global-feed-editor:hover::-webkit-scrollbar-thumb {
 
 .projects-carousel-container {
   position: relative;
-}
-
-.projects-carousel-track {
-  /* Pas de styles spécifiques, les classes grid/space-y sont appliquées dynamiquement */
 }
 
 .projects-carousel-indicators {

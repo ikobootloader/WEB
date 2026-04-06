@@ -1623,7 +1623,16 @@ ${reviews.map((row)=>`<tr><td>${esc(row.reviewDate || '-')}</td><td>${esc(row.ne
         btn.classList.toggle('is-active', key === safe);
       });
       persistLayout().catch(() => null);
+      updateToolbarVisibility();
       render();
+    }
+
+    function updateToolbarVisibility() {
+      const quickAdd = refs.quickAdd || document.querySelector('#global-workflow-section .workflow-quick-add');
+      if (quickAdd) {
+        const hideInAdd = ['analytics', 'governance', 'journal'];
+        quickAdd.classList.toggle('hidden', hideInAdd.includes(state.activeView));
+      }
     }
 
     async function persistLayout() {
@@ -10279,33 +10288,59 @@ ${clone.outerHTML}
       if (state.bound) return;
       state.bound = true;
 
-      console.log('[BIND] refs.quickAddToggle:', refs.quickAddToggle);
-      if (refs.quickAddToggle) {
-        refs.quickAddToggle.addEventListener('click', (event) => {
-          console.log('[TOGGLE] Button clicked!');
+      // Gestion du bouton "Ajouter" (Quick Add) avec delegation d'evenement pour robustesse
+      document.addEventListener('click', (event) => {
+        const toggleBtn = event.target.closest('#workflow-quick-add-toggle');
+        if (toggleBtn) {
           event.preventDefault();
           event.stopPropagation();
-          refs.quickAddMenu?.classList.toggle('hidden');
-        });
-        console.log('[BIND] Event listener added to quickAddToggle');
-      } else {
-        console.error('[BIND] quickAddToggle is null!');
-      }
+          
+          // Logique contextuelle : fenetre modale directe ou menu de creation rapide
+          const viewToModalMap = {
+            'agents': 'agent',
+            'processes': 'process',
+            'templates': 'template',
+            'tasks': 'task',
+            'kanban': 'task',
+            'timeline': 'task',
+            'procedures': 'procedure',
+            'software': 'software',
+            'contingency': 'contingency-plan'
+          };
+          
+          const modalKind = viewToModalMap[state.activeView];
+          if (modalKind) {
+            // Ouvrir directement la modale de creation appropriee
+            openCreateModal(modalKind);
+          } else {
+            // Ouvrir le menu de creation rapide (fallback ou vues Map/Org/etc)
+            const menu = refs.quickAddMenu || document.getElementById('workflow-quick-add-menu');
+            menu?.classList.toggle('hidden');
+          }
+          return;
+        }
 
+        const filtersToggle = event.target.closest('#workflow-filters-toggle');
+        if (filtersToggle) {
+          event.preventDefault();
+          event.stopPropagation();
+          const panel = refs.filtersPanel || document.getElementById('workflow-filters-panel');
+          panel?.classList.toggle('hidden');
+          return;
+        }
 
-      refs.filtersToggle?.addEventListener('click', (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        refs.filtersPanel?.classList.toggle('hidden');
-      });
-
-      document.addEventListener('click', (event) => {
-        // Utiliser setTimeout pour permettre aux handlers des boutons de s'exécuter d'abord
+        // Fermer les menus si clic a l'exterieur (avec petit delai pour laisser les handlers s'executer)
         setTimeout(() => {
           const inQuickAdd = event.target.closest('.workflow-quick-add');
-          if (!inQuickAdd) refs.quickAddMenu?.classList.add('hidden');
+          if (!inQuickAdd) {
+            const menu = refs.quickAddMenu || document.getElementById('workflow-quick-add-menu');
+            menu?.classList.add('hidden');
+          }
           const inFilters = event.target.closest('#workflow-filters-panel, #workflow-filters-toggle');
-          if (!inFilters) refs.filtersPanel?.classList.add('hidden');
+          if (!inFilters) {
+            const panel = refs.filtersPanel || document.getElementById('workflow-filters-panel');
+            panel?.classList.add('hidden');
+          }
         }, 0);
       });
 

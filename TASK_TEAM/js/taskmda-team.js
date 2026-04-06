@@ -1,4 +1,4 @@
-﻿    // ============================================================================
+    // ============================================================================
     // TASKMDA TEAM - STANDALONE VERSION
     // Toutes les fonctionnalités event-sourcing dans un seul fichier HTML
     // ============================================================================
@@ -2027,6 +2027,7 @@
       ui: {
         workflowActionButtons: 'icon_text',
         iconTooltips: true,
+        tabIcons: true,
         workflowActionButtonsShape: 'rect'
       },
       policy: {
@@ -2099,6 +2100,16 @@
       return viewOptions?.ui?.iconTooltips !== false;
     }
 
+    function isTabIconsEnabled() {
+      return viewOptions?.ui?.tabIcons !== false;
+    }
+
+    function applyTabIconsToUI() {
+      const root = document.documentElement;
+      if (!root) return;
+      root.setAttribute('data-tab-icons', isTabIconsEnabled() ? 'on' : 'off');
+    }
+
     function applyWorkflowActionButtonsModeToUI() {
       const mode = getWorkflowActionButtonsMode();
       const shape = getWorkflowActionButtonsShape();
@@ -2106,6 +2117,7 @@
       if (!root) return;
       root.setAttribute('data-wf-action-buttons', mode);
       root.setAttribute('data-wf-action-shape', shape);
+      applyTabIconsToUI();
     }
 
     function normalizeActionButtonLabel(value) {
@@ -2393,6 +2405,7 @@
     function isEligibleIconTooltipElement(el) {
       if (!(el instanceof HTMLElement)) return false;
       if (el.closest('.sidebar')) return false;
+      if (el.closest('.workflow-quick-add-menu')) return false;
       return el.matches(
         'button.task-action-btn, button.card-quick-btn, button.workflow-card-action-btn, button.workflow-btn-light, button.workflow-btn-danger, button.workflow-btn-link-root, button.workspace-action-inline, a.workspace-action-inline, button[data-action-kind], button[data-action-label], a[data-action-kind], a[data-action-label], button.taskmda-modal-close-btn, button.rgpd-open-btn, button[data-rgpd-context-action], button[id^="rgpd-"][id$="-btn"], button#rgpd-filters-reset'
       );
@@ -2871,6 +2884,7 @@
       next.ui = {
         workflowActionButtons: normalizeWorkflowActionButtonsMode(raw?.ui?.workflowActionButtons || defaults?.ui?.workflowActionButtons),
         iconTooltips: raw?.ui?.iconTooltips !== false,
+        tabIcons: raw?.ui?.tabIcons !== false,
         workflowActionButtonsShape: normalizeWorkflowActionButtonsShape(raw?.ui?.workflowActionButtonsShape || defaults?.ui?.workflowActionButtonsShape)
       };
       next.policy = {
@@ -3039,12 +3053,16 @@
       menu.className = 'tab-overflow-menu';
       menu.setAttribute('role', 'menu');
       menu.innerHTML = overflow.map((btn) => {
-        const label = String(btn.textContent || '').trim();
+        const clone = btn.cloneNode(true);
+        clone.querySelectorAll('.tab-icon').forEach((el) => el.remove());
+        const label = String(clone.textContent || '').replace(/\s+/g, ' ').trim();
+        const iconEl = btn.querySelector('.tab-icon');
+        const iconHtml = iconEl ? `<span class="material-symbols-outlined tab-icon">${escapeHtml(iconEl.textContent.trim())}</span> ` : '';
         const id = String(btn.id || '').trim();
         const active = btn.classList.contains('view-tab-active') || btn.classList.contains('is-active');
         return `
           <button type="button" class="tab-overflow-item ${active ? 'is-active' : ''}" role="menuitem" data-tab-overflow-target="${escapeHtml(id)}">
-            ${escapeHtml(label)}
+            ${iconHtml}${escapeHtml(label)}
           </button>
         `;
       }).join('');
@@ -3275,6 +3293,7 @@
         const disabledClass = isAdmin ? '' : ' opacity-60';
         const lockChecked = isViewOverridesLocked() ? 'checked' : '';
         const tooltipChecked = isIconTooltipsEnabled() ? 'checked' : '';
+        const tabIconsChecked = isTabIconsEnabled() ? 'checked' : '';
         const presetButtons = Object.entries(VIEW_ROLE_PRESETS).map(([presetKey, preset]) => `
           <button
             type="button"
@@ -3305,6 +3324,10 @@
                 title="Astuce: cette option est surtout utile quand l'affichage des actions est en mode icône. En mode texte, elle a peu d'effet."
                 aria-label="Aide: cette option concerne surtout le mode icône"
               >help</span>
+            </label>
+            <label class="inline-flex items-center gap-2 text-[11px] text-slate-600${disabledClass}">
+              <input type="checkbox" class="view-option-tab-icons w-4 h-4" data-view-ui-tab-icons="true" ${tabIconsChecked} ${disabledAttr}>
+              <span>Afficher les icônes dans les onglets de navigation</span>
             </label>
             <button type="button" class="view-metrics-reset px-2.5 py-1 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-semibold${disabledClass}" data-view-kpi-reset="true" ${disabledAttr}>Réinitialiser KPI</button>
           </div>
@@ -22705,6 +22728,15 @@
         next.ui = next.ui || {};
         next.ui.iconTooltips = !!target.checked;
         await saveViewOptions(next);
+        renderViewOptionsMatrix(true);
+        return;
+      }
+      if (target.classList.contains('view-option-tab-icons')) {
+        const next = deepClone(viewOptions || DEFAULT_VIEW_OPTIONS);
+        next.ui = next.ui || {};
+        next.ui.tabIcons = !!target.checked;
+        await saveViewOptions(next);
+        applyTabIconsToUI();
         renderViewOptionsMatrix(true);
         return;
       }

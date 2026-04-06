@@ -120,7 +120,10 @@
     <div class="bg-white rounded-2xl p-6 sm:p-8 max-w-3xl w-full mx-auto my-2 sm:my-4 max-h-[92vh] overflow-y-auto overscroll-contain">
       <div class="flex items-center justify-between gap-3 mb-4">
         <h3 class="section-title text-2xl font-extrabold">Aide - Fonctionnalités</h3>
-        <button id="btn-close-app-help" class="px-3 py-1.5 rounded-lg border border-slate-300 text-sm font-semibold">Fermer</button>
+        <button id="btn-close-app-help" class="taskmda-modal-close-btn" type="button" data-action-kind="close" data-action-label="Fermer" aria-label="Fermer">
+          <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">close</span>
+          <span class="taskmda-action-label">Fermer</span>
+        </button>
       </div>
       <div class="space-y-4 text-sm text-slate-700 leading-relaxed">
         <ul class="list-disc pl-5 space-y-1">
@@ -221,7 +224,7 @@
         <a href="#" id="nav-rgpd" class="nav-link"><span class="material-symbols-outlined">gpp_good</span><span class="nav-link-label">RGPD</span></a>
         <a href="#" id="nav-settings" class="nav-link"><span class="material-symbols-outlined">tune</span><span class="nav-link-label">Référentiels</span></a>
       </nav>
-      <button id="sidebar-create-project" class="sidebar-cta"><span class="material-symbols-outlined sidebar-btn-icon" aria-hidden="true">add</span><span class="sidebar-btn-label">Nouveau Projet</span></button>
+      <button id="sidebar-create-project" class="sidebar-cta"><span class="material-symbols-outlined sidebar-btn-icon" aria-hidden="true">add_circle</span><span class="sidebar-btn-label">Nouveau Projet</span></button>
     </aside>
 
     <section class="content">
@@ -357,12 +360,12 @@
 
           <div id="global-tasks-section" class="panel p-3 hidden">
             <div id="global-tasks-view-tabs" class="project-view-tabs mb-3 flex items-center gap-2 text-xs overflow-x-auto" role="tablist" aria-label="Vues des tâches transverses">
-              <button id="global-tasks-view-cards" role="tab" aria-selected="false" class="project-view-tab px-3 py-1.5 rounded-lg text-slate-700 font-semibold whitespace-nowrap">Cartes</button>
-              <button id="global-tasks-view-calendar" role="tab" aria-selected="false" class="project-view-tab px-3 py-1.5 rounded-lg text-slate-700 font-semibold whitespace-nowrap">Calendrier</button>
-              <button id="global-tasks-view-list" role="tab" aria-selected="false" class="project-view-tab px-3 py-1.5 rounded-lg text-slate-700 font-semibold whitespace-nowrap">Liste</button>
-              <button id="global-tasks-view-kanban" role="tab" aria-selected="false" class="project-view-tab px-3 py-1.5 rounded-lg text-slate-700 font-semibold whitespace-nowrap">Kanban</button>
-              <button id="global-tasks-view-timeline" role="tab" aria-selected="false" class="project-view-tab px-3 py-1.5 rounded-lg text-slate-700 font-semibold whitespace-nowrap">Timeline</button>
-              <button id="global-tasks-view-archives" role="tab" aria-selected="false" class="project-view-tab px-3 py-1.5 rounded-lg text-slate-700 font-semibold whitespace-nowrap">Archives</button>
+              <button id="global-tasks-view-cards" role="tab" aria-selected="false" class="project-view-tab px-3 py-1.5 rounded-lg text-slate-700 font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">grid_view</span> Cartes</button>
+              <button id="global-tasks-view-calendar" role="tab" aria-selected="false" class="project-view-tab px-3 py-1.5 rounded-lg text-slate-700 font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">event</span> Calendrier</button>
+              <button id="global-tasks-view-list" role="tab" aria-selected="false" class="project-view-tab px-3 py-1.5 rounded-lg text-slate-700 font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">view_list</span> Liste</button>
+              <button id="global-tasks-view-kanban" role="tab" aria-selected="false" class="project-view-tab px-3 py-1.5 rounded-lg text-slate-700 font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">view_kanban</span> Kanban</button>
+              <button id="global-tasks-view-timeline" role="tab" aria-selected="false" class="project-view-tab px-3 py-1.5 rounded-lg text-slate-700 font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">calendar_month</span> Timeline</button>
+              <button id="global-tasks-view-archives" role="tab" aria-selected="false" class="project-view-tab px-3 py-1.5 rounded-lg text-slate-700 font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">archive</span> Archives</button>
             </div>
             <div id="global-task-layout-toolbar" class="project-task-layout-toolbar mb-3 hidden">
               <span class="project-task-layout-label">Affichage cartes</span>
@@ -386,9 +389,9 @@
               <select id="global-task-theme-known" class="px-3 py-2 border border-slate-300 rounded-lg text-sm" title="Choisir parmi les thématiques existantes">
                 <option value="">Thématiques existantes...</option>
               </select>
-              <button id="btn-global-add-task" class="btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold inline-flex items-center justify-center gap-2" data-action-kind="create" data-action-label="Nouvelle tâche hors projet" aria-label="Nouvelle tâche hors projet">
-                <span class="material-symbols-outlined">add</span>
-                <span id="btn-global-add-task-text">Nouvelle tâche hors projet</span>
+              <button id="btn-global-add-task" class="btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold inline-flex items-center justify-center gap-2 taskmda-create-cta" data-action-kind="create" data-action-label="Nouvelle tâche hors projet" aria-label="Nouvelle tâche hors projet">
+                <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">add_circle</span>
+                <span class="taskmda-action-label" id="btn-global-add-task-text">Nouvelle tâche hors projet</span>
               </button>
             </div>
             <div id="global-tasks-container" class="space-y-3"></div>
@@ -401,19 +404,30 @@
                 <div class="workflow-quick-add">
                   <button id="workflow-quick-add-toggle" type="button" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold" data-action-kind="create">Ajouter</button>
                   <div id="workflow-quick-add-menu" class="workflow-quick-add-menu hidden" role="menu" aria-label="Ajouter un element workflow">
-                    <button id="btn-workflow-add-community" type="button" class="workflow-quick-add-item" role="menuitem">Communaute</button>
-                    <button id="btn-workflow-add-service" type="button" class="workflow-quick-add-item" role="menuitem">Service</button>
-                    <button id="btn-workflow-add-group" type="button" class="workflow-quick-add-item" role="menuitem">Groupe</button>
-                    <button id="btn-workflow-add-agent" type="button" class="workflow-quick-add-item" role="menuitem">Agent</button>
-                    <button id="btn-workflow-add-role" type="button" class="workflow-quick-add-item" role="menuitem">Role</button>
-                    <button id="btn-workflow-add-process" type="button" class="workflow-quick-add-item" role="menuitem">Processus</button>
-                    <button id="btn-workflow-add-template" type="button" class="workflow-quick-add-item" role="menuitem">Modèle de processus</button>
-                    <button id="btn-workflow-add-step" type="button" class="workflow-quick-add-item" role="menuitem">Etape</button>
-                    <button id="btn-workflow-add-flow" type="button" class="workflow-quick-add-item" role="menuitem">Flux</button>
-                    <button id="btn-workflow-add-task" type="button" class="workflow-quick-add-item" role="menuitem">Tache</button>
-                    <button id="btn-workflow-add-procedure" type="button" class="workflow-quick-add-item" role="menuitem">Procedure</button>
-                    <button id="btn-workflow-add-software" type="button" class="workflow-quick-add-item" role="menuitem">Logiciel</button>
-                    <button id="btn-workflow-add-contingency-plan" type="button" class="workflow-quick-add-item" role="menuitem">Plan contingence</button>
+                    <div class="workflow-quick-add-column">
+                      <div class="workflow-quick-add-group-label">Organisation</div>
+                      <button id="btn-workflow-add-community" type="button" class="workflow-quick-add-item" role="menuitem"><span class="material-symbols-outlined">account_tree</span>Nouvelle communaute</button>
+                      <button id="btn-workflow-add-service" type="button" class="workflow-quick-add-item" role="menuitem"><span class="material-symbols-outlined">corporate_fare</span>Nouveau service</button>
+                      <button id="btn-workflow-add-group" type="button" class="workflow-quick-add-item" role="menuitem"><span class="material-symbols-outlined">groups</span>Nouveau groupe</button>
+                      <button id="btn-workflow-add-agent" type="button" class="workflow-quick-add-item" role="menuitem"><span class="material-symbols-outlined">person_add</span>Nouvel agent</button>
+                      <button id="btn-workflow-add-role" type="button" class="workflow-quick-add-item" role="menuitem"><span class="material-symbols-outlined">badge</span>Nouveau role</button>
+                    </div>
+                    
+                    <div class="workflow-quick-add-column">
+                      <div class="workflow-quick-add-group-label">Operations</div>
+                      <button id="btn-workflow-add-process" type="button" class="workflow-quick-add-item" role="menuitem"><span class="material-symbols-outlined">hub</span>Nouveau processus</button>
+                      <button id="btn-workflow-add-template" type="button" class="workflow-quick-add-item" role="menuitem"><span class="material-symbols-outlined">description</span>Modele de processus</button>
+                      <button id="btn-workflow-add-step" type="button" class="workflow-quick-add-item" role="menuitem"><span class="material-symbols-outlined">ads_click</span>Nouvelle etape</button>
+                      <button id="btn-workflow-add-flow" type="button" class="workflow-quick-add-item" role="menuitem"><span class="material-symbols-outlined">alt_route</span>Nouveau flux</button>
+                      <button id="btn-workflow-add-task" type="button" class="workflow-quick-add-item" role="menuitem"><span class="material-symbols-outlined">assignment_add</span>Nouvelle tache</button>
+                    </div>
+                    
+                    <div class="workflow-quick-add-column">
+                      <div class="workflow-quick-add-group-label">Referentiel</div>
+                      <button id="btn-workflow-add-procedure" type="button" class="workflow-quick-add-item" role="menuitem"><span class="material-symbols-outlined">article</span>Nouvelle procedure</button>
+                      <button id="btn-workflow-add-software" type="button" class="workflow-quick-add-item" role="menuitem"><span class="material-symbols-outlined">computer</span>Nouveau logiciel</button>
+                      <button id="btn-workflow-add-contingency-plan" type="button" class="workflow-quick-add-item" role="menuitem"><span class="material-symbols-outlined">emergency_home</span>Plan de contingence</button>
+                    </div>
                   </div>
                 </div>
                 <button id="btn-workflow-migrate-agent-users" class="workflow-btn-light px-3 py-2 rounded-lg text-sm font-semibold">Auto-lier comptes agents</button>
@@ -424,21 +438,21 @@
             <div class="workflow-toolbar mb-3">
               <div class="workflow-toolbar-main">
                 <div id="workflow-view-tabs-list" class="workflow-view-tabs" role="tablist" aria-label="Vues workflow">
-                <button id="workflow-view-map" class="workflow-view-tab is-active" type="button">Carte</button>
-                <button id="workflow-view-organization" class="workflow-view-tab" type="button">Organisation</button>
-                <button id="workflow-view-organigram" class="workflow-view-tab" type="button">Organigramme</button>
-                <button id="workflow-view-agents" class="workflow-view-tab" type="button">Agents</button>
-                <button id="workflow-view-processes" class="workflow-view-tab" type="button">Processus</button>
-                <button id="workflow-view-templates" class="workflow-view-tab" type="button">Modèles de processus</button>
-                <button id="workflow-view-tasks" class="workflow-view-tab" type="button">Tâches</button>
-                <button id="workflow-view-kanban" class="workflow-view-tab" type="button">Kanban</button>
-                <button id="workflow-view-timeline" class="workflow-view-tab" type="button">Timeline</button>
-                <button id="workflow-view-procedures" class="workflow-view-tab" type="button">Procédures</button>
-                <button id="workflow-view-software" class="workflow-view-tab" type="button">Logiciels metiers</button>
-                <button id="workflow-view-contingency" class="workflow-view-tab" type="button">Contingence</button>
-                <button id="workflow-view-analytics" class="workflow-view-tab" type="button">Analyse</button>
-                <button id="workflow-view-governance" class="workflow-view-tab" type="button">Gouvernance</button>
-                <button id="workflow-view-journal" class="workflow-view-tab" type="button">Journal</button>
+                <button id="workflow-view-map" class="workflow-view-tab is-active" type="button"><span class="material-symbols-outlined tab-icon">map</span> Carte</button>
+                <button id="workflow-view-organization" class="workflow-view-tab" type="button"><span class="material-symbols-outlined tab-icon">corporate_fare</span> Organisation</button>
+                <button id="workflow-view-organigram" class="workflow-view-tab" type="button"><span class="material-symbols-outlined tab-icon">account_tree</span> Organigramme</button>
+                <button id="workflow-view-agents" class="workflow-view-tab" type="button"><span class="material-symbols-outlined tab-icon">manage_accounts</span> Agents</button>
+                <button id="workflow-view-processes" class="workflow-view-tab" type="button"><span class="material-symbols-outlined tab-icon">hub</span> Processus</button>
+                <button id="workflow-view-templates" class="workflow-view-tab" type="button"><span class="material-symbols-outlined tab-icon">description</span> Modèles de processus</button>
+                <button id="workflow-view-tasks" class="workflow-view-tab" type="button"><span class="material-symbols-outlined tab-icon">assignment</span> Tâches</button>
+                <button id="workflow-view-kanban" class="workflow-view-tab" type="button"><span class="material-symbols-outlined tab-icon">view_kanban</span> Kanban</button>
+                <button id="workflow-view-timeline" class="workflow-view-tab" type="button"><span class="material-symbols-outlined tab-icon">calendar_month</span> Timeline</button>
+                <button id="workflow-view-procedures" class="workflow-view-tab" type="button"><span class="material-symbols-outlined tab-icon">article</span> Procédures</button>
+                <button id="workflow-view-software" class="workflow-view-tab" type="button"><span class="material-symbols-outlined tab-icon">computer</span> Logiciels metiers</button>
+                <button id="workflow-view-contingency" class="workflow-view-tab" type="button"><span class="material-symbols-outlined tab-icon">emergency_home</span> Contingence</button>
+                <button id="workflow-view-analytics" class="workflow-view-tab" type="button"><span class="material-symbols-outlined tab-icon">bar_chart</span> Analyse</button>
+                <button id="workflow-view-governance" class="workflow-view-tab" type="button"><span class="material-symbols-outlined tab-icon">verified</span> Gouvernance</button>
+                <button id="workflow-view-journal" class="workflow-view-tab" type="button"><span class="material-symbols-outlined tab-icon">history</span> Journal</button>
                 </div>
               </div>
               <div id="workflow-filters-panel" class="workflow-filters hidden">
@@ -486,8 +500,8 @@
             <div class="calendar-toolbar-card mb-4">
               <div class="calendar-toolbar-top mb-3">
                 <div class="inline-flex items-center gap-2 text-xs">
-                  <button id="global-calendar-view-grid" class="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 font-semibold">Vue calendrier</button>
-                  <button id="global-calendar-view-list" class="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 font-semibold">Vue liste</button>
+                  <button id="global-calendar-view-grid" class="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 font-semibold"><span class="material-symbols-outlined tab-icon">event</span> Vue calendrier</button>
+                  <button id="global-calendar-view-list" class="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 font-semibold"><span class="material-symbols-outlined tab-icon">view_list</span> Vue liste</button>
                 </div>
                 <div class="calendar-month-nav">
                   <div class="calendar-quick-actions">
@@ -533,9 +547,9 @@
                   <span class="calendar-legend-chip calendar-legend-chip-task">Date limite tâche</span>
                 </div>
                 <div id="global-calendar-item-form">
-                  <button id="btn-open-global-calendar-item-modal" type="button" class="calendar-create-trigger" aria-label="Ajouter une info hors projet">
-                    <span class="material-symbols-outlined">add</span>
-                    <span>Ajouter info hors projet</span>
+                  <button id="btn-open-global-calendar-item-modal" type="button" class="calendar-create-trigger taskmda-create-cta" data-action-kind="create" data-action-label="Ajouter info hors projet" aria-label="Ajouter une info hors projet">
+                    <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">add_circle</span>
+                    <span class="taskmda-action-label">Ajouter info hors projet</span>
                   </button>
                 </div>
               </div>
@@ -710,11 +724,11 @@
               </div>
             </div>
             <div class="project-view-tabs mb-3 flex items-center gap-2 text-xs overflow-x-auto" role="tablist" aria-label="Vues RGPD">
-              <button id="rgpd-tab-records" role="tab" aria-selected="true" class="project-view-tab view-tab-active px-3 py-1.5 rounded-lg text-slate-700 font-semibold whitespace-nowrap">Registre</button>
-              <button id="rgpd-tab-activities" role="tab" aria-selected="false" class="project-view-tab px-3 py-1.5 rounded-lg text-slate-700 font-semibold whitespace-nowrap">Activités</button>
-              <button id="rgpd-tab-drafts" role="tab" aria-selected="false" class="project-view-tab px-3 py-1.5 rounded-lg text-slate-700 font-semibold whitespace-nowrap">Brouillons détectés</button>
-              <button id="rgpd-tab-controls" role="tab" aria-selected="false" class="project-view-tab px-3 py-1.5 rounded-lg text-slate-700 font-semibold whitespace-nowrap">Contrôles</button>
-              <button id="rgpd-tab-journal" role="tab" aria-selected="false" class="project-view-tab px-3 py-1.5 rounded-lg text-slate-700 font-semibold whitespace-nowrap">Journal</button>
+              <button id="rgpd-tab-records" role="tab" aria-selected="true" class="project-view-tab view-tab-active px-3 py-1.5 rounded-lg text-slate-700 font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">menu_book</span> Registre</button>
+              <button id="rgpd-tab-activities" role="tab" aria-selected="false" class="project-view-tab px-3 py-1.5 rounded-lg text-slate-700 font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">assignment</span> Activités</button>
+              <button id="rgpd-tab-drafts" role="tab" aria-selected="false" class="project-view-tab px-3 py-1.5 rounded-lg text-slate-700 font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">edit_document</span> Brouillons détectés</button>
+              <button id="rgpd-tab-controls" role="tab" aria-selected="false" class="project-view-tab px-3 py-1.5 rounded-lg text-slate-700 font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">fact_check</span> Contrôles</button>
+              <button id="rgpd-tab-journal" role="tab" aria-selected="false" class="project-view-tab px-3 py-1.5 rounded-lg text-slate-700 font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">history</span> Journal</button>
             </div>
             <div id="rgpd-filter-row" class="mb-3 grid grid-cols-1 md:grid-cols-4 gap-2">
               <input id="rgpd-search-input" type="text" placeholder="Recherche RGPD (activité, finalité, source...)" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
@@ -806,7 +820,10 @@
                   <option value="shared">Collaborative</option>
                 </select>
                 <input id="global-doc-files" type="file" multiple class="js-file-drop-input px-3 py-2 border border-slate-300 rounded-lg bg-slate-50 text-sm" data-drop-host=".global-doc-drop-host" data-drop-label="Deposez des documents hors projet ici">
-                <button id="btn-global-doc-add" class="btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold">Ajouter doc hors projet</button>
+                <button id="btn-global-doc-add" class="btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold taskmda-create-cta" data-action-kind="create" data-action-label="Ajouter document hors projet" aria-label="Ajouter document hors projet">
+                  <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">add_circle</span>
+                  <span class="taskmda-action-label">Ajouter doc hors projet</span>
+                </button>
                 </div>
                 <button id="global-doc-reset" class="px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold">Réinitialiser</button>
             </div>
@@ -821,11 +838,11 @@
                 </button>
               </div>
               <div id="global-settings-tabs-list" class="project-view-tabs flex items-center gap-2 overflow-x-auto" role="tablist" aria-label="Onglets des référentiels">
-                <button id="global-settings-tab-branding" role="tab" aria-selected="true" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Identité</button>
-                <button id="global-settings-tab-themes" role="tab" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Thématiques</button>
-                <button id="global-settings-tab-groups" role="tab" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Groupes</button>
-                <button id="global-settings-tab-roles" role="tab" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Habilitations</button>
-                <button id="global-settings-tab-views" role="tab" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Options de vues</button>
+                <button id="global-settings-tab-branding" role="tab" aria-selected="true" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">badge</span> Identité</button>
+                <button id="global-settings-tab-themes" role="tab" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">palette</span> Thématiques</button>
+                <button id="global-settings-tab-groups" role="tab" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">groups</span> Groupes</button>
+                <button id="global-settings-tab-roles" role="tab" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">admin_panel_settings</span> Habilitations</button>
+                <button id="global-settings-tab-views" role="tab" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">tune</span> Options de vues</button>
               </div>
             </div>
             <div id="global-settings-help-box" class="global-settings-help-box hidden mb-2">
@@ -868,7 +885,10 @@
                 <h4 class="font-bold text-slate-800 mb-3">Thématiques globales</h4>
                 <div class="flex gap-2 mb-3">
                   <input id="global-theme-name-input" type="text" placeholder="Ex: Juridique" class="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                  <button id="btn-global-theme-add" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Ajouter</button>
+                  <button id="btn-global-theme-add" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold taskmda-create-cta" data-action-kind="create" data-action-label="Ajouter thématique" aria-label="Ajouter thématique">
+                    <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">add_circle</span>
+                    <span class="taskmda-action-label">Ajouter</span>
+                  </button>
                 </div>
                 <div id="global-themes-admin-list" class="space-y-2"></div>
               </div>
@@ -879,7 +899,10 @@
                   <input id="global-group-description-input" type="text" placeholder="Description (optionnelle)" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
                   <input id="global-group-members-search" type="text" placeholder="Rechercher un utilisateur connu..." class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
                   <select id="global-group-members-input" multiple class="px-3 py-2 border border-slate-300 rounded-lg text-sm min-h-[96px]"></select>
-                  <button id="btn-global-group-add" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Ajouter</button>
+                  <button id="btn-global-group-add" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold taskmda-create-cta" data-action-kind="create" data-action-label="Ajouter groupe" aria-label="Ajouter groupe">
+                    <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">add_circle</span>
+                    <span class="taskmda-action-label">Ajouter</span>
+                  </button>
                 </div>
                 <div id="global-groups-admin-list" class="space-y-2"></div>
               </div>
@@ -888,7 +911,10 @@
                 <div class="grid grid-cols-1 sm:grid-cols-[1fr_180px_auto] gap-2 mb-3">
                   <input id="global-role-name-input" type="text" placeholder="Ex: Referent metier" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
                   <select id="global-role-base-input" class="px-3 py-2 border border-slate-300 rounded-lg text-sm"></select>
-                  <button id="btn-global-role-add" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Ajouter</button>
+                  <button id="btn-global-role-add" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold taskmda-create-cta" data-action-kind="create" data-action-label="Ajouter habilitation" aria-label="Ajouter habilitation">
+                    <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">add_circle</span>
+                    <span class="taskmda-action-label">Ajouter</span>
+                  </button>
                 </div>
                 <p class="text-xs text-slate-500 mb-3">Chaque habilitation est rattachee a un niveau technique (Proprietaire, Manager, Membre).</p>
                 <div id="global-roles-admin-list" class="space-y-2"></div>
@@ -986,8 +1012,8 @@
             <div id="project-lock-warning" class="hidden mt-3 text-xs px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 text-amber-800"></div>
             <div class="project-mode-context-label mt-6">Navigation du projet</div>
             <div class="project-detail-mode-tabs mt-2">
-              <button id="project-mode-work" class="project-mode-tab view-tab-active">Espace de travail</button>
-              <button id="project-mode-settings" class="project-mode-tab">Configuration</button>
+              <button id="project-mode-work" class="project-mode-tab view-tab-active"><span class="material-symbols-outlined tab-icon">work</span> Espace de travail</button>
+              <button id="project-mode-settings" class="project-mode-tab"><span class="material-symbols-outlined tab-icon">settings</span> Configuration</button>
             </div>
           </div> <!-- end project-overview-panel -->
           <div id="project-settings-panel" class="hidden panel pt-3 mb-3">
@@ -1124,16 +1150,16 @@
             <div id="project-work-layout" class="project-work-layout">
               <aside id="project-work-nav" class="project-work-nav">
                 <div id="project-view-tabs-wrap" class="project-view-tabs flex items-center gap-2 overflow-x-auto" role="tablist" aria-label="Vues du projet">
-                  <button id="view-overview" role="tab" aria-controls="project-overview-panel" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Aperçu projet</button>
-                  <button id="view-cards" role="tab" aria-controls="task-list-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Cartes</button>
-                  <button id="view-list" role="tab" aria-controls="task-list-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Liste</button>
-                  <button id="view-kanban" role="tab" aria-controls="kanban-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Kanban</button>
-                  <button id="view-gantt" role="tab" aria-controls="gantt-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Gantt</button>
-                  <button id="view-timeline" role="tab" aria-controls="timeline-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Timeline</button>
-                  <button id="view-docs" role="tab" aria-controls="documents-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Documents</button>
-                  <button id="view-chat" role="tab" aria-controls="discussion-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Discussion</button>
-                  <button id="view-activity" role="tab" aria-controls="activity-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Activité</button>
-                  <button id="view-archives" role="tab" aria-controls="archives-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Archives <span id="archived-tasks-count" class="text-xs opacity-80">(0)</span></button>
+                  <button id="view-overview" role="tab" aria-controls="project-overview-panel" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">dashboard</span> Aperçu projet</button>
+                  <button id="view-cards" role="tab" aria-controls="task-list-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">grid_view</span> Cartes</button>
+                  <button id="view-list" role="tab" aria-controls="task-list-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">view_list</span> Liste</button>
+                  <button id="view-kanban" role="tab" aria-controls="kanban-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">view_kanban</span> Kanban</button>
+                  <button id="view-gantt" role="tab" aria-controls="gantt-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">view_timeline</span> Gantt</button>
+                  <button id="view-timeline" role="tab" aria-controls="timeline-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">calendar_month</span> Timeline</button>
+                  <button id="view-docs" role="tab" aria-controls="documents-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">description</span> Documents</button>
+                  <button id="view-chat" role="tab" aria-controls="discussion-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">forum</span> Discussion</button>
+                  <button id="view-activity" role="tab" aria-controls="activity-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">history</span> Activité</button>
+                  <button id="view-archives" role="tab" aria-controls="archives-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">archive</span> Archives <span id="archived-tasks-count" class="text-xs opacity-80">(0)</span></button>
                 </div>
                 <div class="project-work-nav-controls">
                   <div class="project-subnav-layout-group" role="group" aria-label="Disposition des sous-onglets">
@@ -1148,9 +1174,9 @@
                       <span class="project-subnav-focus-text">Plein écran</span>
                     </button>
                   </div>
-                  <button id="btn-add-task" class="btn-primary px-4 py-2 text-white font-semibold rounded-lg transition-all flex flex-col items-center justify-center gap-1" data-action-kind="create" data-action-label="Nouvelle tâche" aria-label="Nouvelle tâche">
-                    <span class="material-symbols-outlined">add</span>
-                    <span id="btn-add-task-text" style="font-size: 0.875rem; line-height: 1;">Nouvelle Tâche</span>
+                  <button id="btn-add-task" class="btn-primary px-4 py-2 text-white font-semibold rounded-lg transition-all flex flex-col items-center justify-center gap-1 taskmda-create-cta" data-action-kind="create" data-action-label="Nouvelle tâche" aria-label="Nouvelle tâche">
+                    <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">add_circle</span>
+                    <span class="taskmda-action-label" id="btn-add-task-text" style="font-size: 0.875rem; line-height: 1;">Nouvelle Tâche</span>
                   </button>
                 </div>
               </aside>
@@ -1598,7 +1624,10 @@
     <div class="max-w-5xl mx-auto bg-white rounded-2xl p-4 sm:p-6">
       <div class="flex items-center justify-between mb-3">
         <h3 id="doc-preview-title" class="section-title text-xl font-extrabold">Aperçu document</h3>
-        <button id="btn-close-doc-preview" class="px-3 py-1 rounded-lg border border-slate-300 text-sm font-semibold">Fermer</button>
+        <button id="btn-close-doc-preview" class="taskmda-modal-close-btn" type="button" data-action-kind="close" data-action-label="Fermer" aria-label="Fermer">
+          <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">close</span>
+          <span class="taskmda-action-label">Fermer</span>
+        </button>
       </div>
       <div id="doc-preview-content" class="min-h-[320px] bg-slate-50 border border-slate-200 rounded-xl p-3"></div>
       <div id="doc-preview-meta" class="mt-3 rounded-xl border border-slate-200 bg-white p-3 space-y-2">
@@ -1635,7 +1664,10 @@
           <h3 class="section-title text-xl font-extrabold">Gérer le document</h3>
           <p id="doc-binding-current-source" class="text-sm text-slate-500 mt-1">Source: Hors projet</p>
         </div>
-        <button id="btn-close-doc-binding" class="px-3 py-1.5 rounded-lg border border-slate-300 text-sm font-semibold">Fermer</button>
+        <button id="btn-close-doc-binding" class="taskmda-modal-close-btn" type="button" data-action-kind="close" data-action-label="Fermer" aria-label="Fermer">
+          <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">close</span>
+          <span class="taskmda-action-label">Fermer</span>
+        </button>
       </div>
       <div class="space-y-3">
         <div>
@@ -1678,7 +1710,10 @@
           <h3 id="doc-editor-title" class="section-title text-xl font-extrabold">Modifier le document</h3>
           <p id="doc-editor-subtitle" class="text-sm text-slate-500 mt-1">Edition</p>
         </div>
-        <button id="btn-close-doc-editor" class="px-3 py-1.5 rounded-lg border border-slate-300 text-sm font-semibold">Fermer</button>
+        <button id="btn-close-doc-editor" class="taskmda-modal-close-btn" type="button" data-action-kind="close" data-action-label="Fermer" aria-label="Fermer">
+          <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">close</span>
+          <span class="taskmda-action-label">Fermer</span>
+        </button>
       </div>
 
       <div id="doc-editor-text-mode" class="space-y-2">
@@ -1741,7 +1776,10 @@
           </h3>
           <p id="global-task-detail-subtitle" class="text-sm text-slate-500 mt-1"></p>
         </div>
-        <button id="btn-close-global-task-details" class="px-3 py-1.5 rounded-lg border border-slate-300 text-sm font-semibold">Fermer</button>
+        <button id="btn-close-global-task-details" class="taskmda-modal-close-btn" type="button" data-action-kind="close" data-action-label="Fermer" aria-label="Fermer">
+          <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">close</span>
+          <span class="taskmda-action-label">Fermer</span>
+        </button>
       </div>
       <div class="flex flex-wrap items-center gap-2 mb-3" id="global-task-detail-badges"></div>
       <div class="modal-section-neo rounded-xl border border-slate-200 bg-slate-50 p-3 mb-3">
@@ -1807,7 +1845,10 @@
           <h3 class="section-title text-2xl font-extrabold">Convertir la tâche en projet</h3>
           <p class="text-sm text-slate-500 mt-1">Créez un projet en quelques secondes à partir de cette tâche.</p>
         </div>
-        <button id="btn-close-task-convert-modal" class="px-3 py-1.5 rounded-lg border border-slate-300 text-sm font-semibold">Fermer</button>
+        <button id="btn-close-task-convert-modal" class="taskmda-modal-close-btn" type="button" data-action-kind="close" data-action-label="Fermer" aria-label="Fermer">
+          <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">close</span>
+          <span class="taskmda-action-label">Fermer</span>
+        </button>
       </div>
       <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 mb-3">
         <p class="text-xs uppercase tracking-wide text-slate-500 mb-1">Tâche source</p>
@@ -1851,7 +1892,10 @@
           <h3 class="section-title text-2xl font-extrabold">Supprimer la conversation</h3>
           <p class="text-sm text-slate-500 mt-1">Cette action supprime tous les messages du canal affiché, sans supprimer le groupe.</p>
         </div>
-        <button id="btn-close-global-conversation-delete" class="px-3 py-1.5 rounded-lg border border-slate-300 text-sm font-semibold">Fermer</button>
+        <button id="btn-close-global-conversation-delete" class="taskmda-modal-close-btn" type="button" data-action-kind="close" data-action-label="Fermer" aria-label="Fermer">
+          <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">close</span>
+          <span class="taskmda-action-label">Fermer</span>
+        </button>
       </div>
       <div class="rounded-xl border border-rose-200 bg-rose-50 p-3 mb-3">
         <p class="text-xs uppercase tracking-wide text-rose-700 mb-1">Canal concerné</p>
@@ -1873,7 +1917,10 @@
           <h3 id="calendar-info-detail-title" class="section-title text-2xl font-extrabold">Détail information</h3>
           <p id="calendar-info-detail-subtitle" class="text-sm text-slate-500 mt-1"></p>
         </div>
-        <button id="btn-close-calendar-info-details" class="px-3 py-1.5 rounded-lg border border-slate-300 text-sm font-semibold">Fermer</button>
+        <button id="btn-close-calendar-info-details" class="taskmda-modal-close-btn" type="button" data-action-kind="close" data-action-label="Fermer" aria-label="Fermer">
+          <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">close</span>
+          <span class="taskmda-action-label">Fermer</span>
+        </button>
       </div>
       <div class="flex flex-wrap items-center gap-2 mb-3" id="calendar-info-detail-badges"></div>
       <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 mb-3">
@@ -1939,7 +1986,7 @@
           <span class="taskmda-action-label">Annuler</span>
         </button>
         <button id="btn-global-calendar-add" type="button" class="task-action-btn calendar-item-modal-action-btn" data-action-kind="create" data-action-label="Ajouter info hors projet">
-          <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">add</span>
+          <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">add_circle</span>
           <span class="taskmda-action-label">Ajouter info hors projet</span>
         </button>
       </div>
@@ -2081,7 +2128,10 @@
     <div class="bg-white rounded-2xl p-5 max-w-2xl w-full mx-auto my-2 max-h-[92vh] overflow-y-auto">
       <div class="flex items-center justify-between gap-3 mb-3">
         <h3 id="workflow-modal-title" class="section-title text-xl font-extrabold">Nouveau workflow</h3>
-        <button id="btn-close-workflow-modal" class="px-3 py-1.5 rounded-lg border border-slate-300 text-sm font-semibold">Fermer</button>
+        <button id="btn-close-workflow-modal" class="taskmda-modal-close-btn" type="button" data-action-kind="close" data-action-label="Fermer" aria-label="Fermer">
+          <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">close</span>
+          <span class="taskmda-action-label">Fermer</span>
+        </button>
       </div>
       <div id="workflow-modal-body" class="space-y-3"></div>
       <div class="mt-4 flex items-center justify-end gap-2">
