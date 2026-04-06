@@ -1,4 +1,4 @@
-﻿
+
 (function initTaskMdaWorkflowModule(global) {
   'use strict';
 
@@ -18,7 +18,18 @@
     workflowMetrics: 'id',
     workflowLayout: 'id',
     workflowAudit: 'id',
-    workflowHistory: 'id'
+    workflowHistory: 'id',
+    workflowPermissionProfiles: 'id',
+    workflowPermissionAssignments: 'id',
+    workflowPermissionRequests: 'id',
+    workflowPermissionReviews: 'id',
+    workflowPermissionAudit: 'id',
+    workflowContingencyPlans: 'id',
+    workflowContingencyActions: 'id',
+    workflowContingencyActivations: 'id',
+    workflowContingencyExercises: 'id',
+    workflowContingencyReviews: 'id',
+    workflowContingencyAudit: 'id'
   };
 
   const ENTITY_META = {
@@ -34,7 +45,8 @@
     metric: { store: 'workflowMetrics', label: 'Metrique workflow' },
     task: { store: 'workflowTasks', label: 'Tache workflow' },
     procedure: { store: 'workflowProcedures', label: 'Procedure' },
-    software: { store: 'workflowSoftware', label: 'Logiciel metier' }
+    software: { store: 'workflowSoftware', label: 'Logiciel metier' },
+    contingencyPlan: { store: 'workflowContingencyPlans', label: 'Plan de contingence' }
   };
 
   function normalize(value) {
@@ -129,6 +141,9 @@
       agentFilter: 'all',
       statusFilter: 'all',
       governanceFilter: 'all',
+      governancePermissionSoftwareFilter: 'all',
+      governancePermissionBeneficiaryTypeFilter: 'all',
+      governancePermissionRequestStatusFilter: 'all',
       orgBranchState: {},
       mapOptions: {
         zoom: 1,
@@ -164,6 +179,7 @@
         linkMode: false,
         dragSourceStepId: null
       },
+      permissionAutoReviewRunning: false,
       inlineDetailSaveTimers: new Map(),
       inlineDetailFinalizeTimers: new Map(),
       selectedType: null,
@@ -184,6 +200,17 @@
         tasks: [],
         procedures: [],
         software: [],
+        permissionProfiles: [],
+        permissionAssignments: [],
+        permissionRequests: [],
+        permissionReviews: [],
+        permissionAudit: [],
+        contingencyPlans: [],
+        contingencyActions: [],
+        contingencyActivations: [],
+        contingencyExercises: [],
+        contingencyReviews: [],
+        contingencyAudit: [],
         softwareVersions: [],
         audit: [],
         history: [],
@@ -243,6 +270,7 @@
       timeline: 'workflow-view-timeline',
       procedures: 'workflow-view-procedures',
       software: 'workflow-view-software',
+      contingency: 'workflow-view-contingency',
       analytics: 'workflow-view-analytics',
       governance: 'workflow-view-governance',
       journal: 'workflow-view-journal'
@@ -250,6 +278,16 @@
 
     const TASK_STATUS_OPTIONS = ['todo', 'in_progress', 'blocked', 'ready_for_review', 'done', 'approved'];
     const TASK_APPROVAL_OPTIONS = ['pending', 'approved', 'rejected'];
+    const PERMISSION_LEVEL_OPTIONS = ['read', 'write', 'validate', 'admin'];
+    const PERMISSION_STATUS_OPTIONS = ['active', 'suspended', 'revoked', 'review_due'];
+    const PERMISSION_REQUEST_ACTIONS = ['grant', 'update', 'revoke'];
+    const PERMISSION_REQUEST_STATUS = ['draft', 'submitted', 'approved', 'rejected', 'executed'];
+    const PERMISSION_REVIEW_DECISIONS = ['pending', 'kept', 'revoked'];
+    const CONTINGENCY_PLAN_STATUS = ['draft', 'ready', 'active', 'archived'];
+    const CONTINGENCY_PLAN_CRITICALITY = ['low', 'medium', 'high', 'critical'];
+    const CONTINGENCY_ACTION_STATUS = ['todo', 'in_progress', 'done', 'blocked'];
+    const CONTINGENCY_ACTIVATION_STATUS = ['active', 'closed'];
+    const CONTINGENCY_EXERCISE_RESULT = ['pending', 'ok', 'partial', 'ko'];
 
     function now() {
       return typeof api.now === 'function' ? Number(api.now()) : Date.now();
@@ -942,9 +980,15 @@ ${tasks.map((row)=>`<tr><td>${esc(row.title || row.id)}</td><td>${esc(row.status
           updatedAt: Number(process.updatedAt || process.createdAt || 0) || 0
         };
       });
+      const permissions = {
+        assignments: Array.isArray(state.collections.permissionAssignments) ? state.collections.permissionAssignments : [],
+        requests: Array.isArray(state.collections.permissionRequests) ? state.collections.permissionRequests : [],
+        reviews: Array.isArray(state.collections.permissionReviews) ? state.collections.permissionReviews : []
+      };
       return {
         exportedAt: Date.now(),
         processes,
+        permissions,
         metrics: Array.isArray(state.collections.metrics) ? state.collections.metrics : []
       };
     }
@@ -971,10 +1015,11 @@ ${tasks.map((row)=>`<tr><td>${esc(row.title || row.id)}</td><td>${esc(row.status
     function exportGovernanceCsv() {
       const dataset = serializeGovernanceDataset();
       const rows = [
-        ['processId', 'title', 'status', 'serviceId', 'ownerAgentId', 'requiredLevels', 'approvedLevel', 'mode', 'requiredRoleIds', 'levelRules', 'approverCount', 'updatedAt']
+        ['kind', 'id', 'title', 'status', 'serviceId', 'ownerAgentId', 'requiredLevels', 'approvedLevel', 'mode', 'requiredRoleIds', 'levelRules', 'approverCount', 'updatedAt']
       ];
       dataset.processes.forEach((row) => {
         rows.push([
+          'process',
           row.processId,
           row.title,
           row.status,
@@ -989,6 +1034,57 @@ ${tasks.map((row)=>`<tr><td>${esc(row.title || row.id)}</td><td>${esc(row.status
           row.updatedAt ? new Date(row.updatedAt).toISOString() : ''
         ]);
       });
+      (dataset.permissions?.assignments || []).forEach((row) => {
+        rows.push([
+          'permission_assignment',
+          String(row.id || ''),
+          String(row.profileName || row.profileId || ''),
+          normalizePermissionStatus(row.status),
+          String(row.softwareId || ''),
+          String(row.beneficiaryId || ''),
+          '',
+          '',
+          '',
+          String(row.beneficiaryType || ''),
+          '',
+          '',
+          Number(row.updatedAt || row.createdAt || 0) ? new Date(Number(row.updatedAt || row.createdAt || 0)).toISOString() : ''
+        ]);
+      });
+      (dataset.permissions?.requests || []).forEach((row) => {
+        rows.push([
+          'permission_request',
+          String(row.id || ''),
+          String(row.profileName || row.profileId || ''),
+          normalizePermissionRequestStatus(row.status),
+          String(row.softwareId || ''),
+          String(row.beneficiaryId || ''),
+          '',
+          '',
+          String(row.action || ''),
+          String(row.beneficiaryType || ''),
+          '',
+          '',
+          Number(row.updatedAt || row.requestedAt || row.createdAt || 0) ? new Date(Number(row.updatedAt || row.requestedAt || row.createdAt || 0)).toISOString() : ''
+        ]);
+      });
+      (dataset.permissions?.reviews || []).forEach((row) => {
+        rows.push([
+          'permission_review',
+          String(row.id || ''),
+          String(row.assignmentId || ''),
+          normalizePermissionReviewDecision(row.decision),
+          String(row.softwareId || ''),
+          String(row.reviewerUserId || ''),
+          '',
+          '',
+          '',
+          '',
+          String(row.reviewDate || ''),
+          '',
+          Number(row.updatedAt || row.createdAt || 0) ? new Date(Number(row.updatedAt || row.createdAt || 0)).toISOString() : ''
+        ]);
+      });
       const csv = rows.map((cols) => cols.map((value) => {
         const safe = String(value ?? '');
         return `"${safe.replace(/"/g, '""')}"`;
@@ -996,6 +1092,120 @@ ${tasks.map((row)=>`<tr><td>${esc(row.title || row.id)}</td><td>${esc(row.status
       const ts = new Date().toISOString().replace(/[:.]/g, '-');
       downloadTextFile(`workflow-governance-${ts}.csv`, csv, 'text/csv;charset=utf-8');
       toast('Export gouvernance CSV genere');
+    }
+
+    function getGovernancePermissionFilterState() {
+      return {
+        softwareId: String(state.governancePermissionSoftwareFilter || 'all'),
+        beneficiaryType: String(state.governancePermissionBeneficiaryTypeFilter || 'all'),
+        requestStatus: String(state.governancePermissionRequestStatusFilter || 'all')
+      };
+    }
+
+    function matchesGovernancePermissionFilters(row, filters, kind = 'assignment') {
+      const safeRow = row || {};
+      const safeFilters = filters || getGovernancePermissionFilterState();
+      if (safeFilters.softwareId && safeFilters.softwareId !== 'all' && String(safeRow.softwareId || '') !== safeFilters.softwareId) {
+        return false;
+      }
+      if (safeFilters.beneficiaryType && safeFilters.beneficiaryType !== 'all') {
+        let rowType = normalizePermissionBeneficiaryType(safeRow.beneficiaryType);
+        if (kind === 'review') {
+          const assignmentId = String(safeRow.assignmentId || '').trim();
+          const assignment = (state.collections.permissionAssignments || []).find((entry) => String(entry.id || '') === assignmentId);
+          if (assignment) rowType = normalizePermissionBeneficiaryType(assignment.beneficiaryType);
+        }
+        if (rowType !== safeFilters.beneficiaryType) return false;
+      }
+      if (kind === 'request' && safeFilters.requestStatus && safeFilters.requestStatus !== 'all') {
+        const rowStatus = normalizePermissionRequestStatus(safeRow.status);
+        if (rowStatus !== safeFilters.requestStatus) return false;
+      }
+      return true;
+    }
+
+    function exportPermissionMatrixCsv() {
+      const filters = getGovernancePermissionFilterState();
+      const assignments = (state.collections.permissionAssignments || []).filter((row) => matchesGovernancePermissionFilters(row, filters, 'assignment'));
+      const requests = (state.collections.permissionRequests || []).filter((row) => matchesGovernancePermissionFilters(row, filters, 'request'));
+      const reviews = (state.collections.permissionReviews || []).filter((row) => matchesGovernancePermissionFilters(row, filters, 'review'));
+
+      const softwareById = new Map((state.collections.software || []).map((row) => [String(row.id || ''), row]));
+      const rows = [[
+        'softwareId',
+        'softwareName',
+        'activeAssignments',
+        'reviewDueAssignments',
+        'expiredAssignments',
+        'revokedAssignments',
+        'submittedRequests',
+        'approvedRequests',
+        'pendingReviews'
+      ]];
+
+      const matrixBySoftware = new Map();
+      function ensure(softwareId) {
+        const sid = String(softwareId || '').trim();
+        if (!matrixBySoftware.has(sid)) {
+          matrixBySoftware.set(sid, {
+            softwareId: sid,
+            softwareName: softwareById.get(sid)?.name || sid || 'Logiciel non reference',
+            activeAssignments: 0,
+            reviewDueAssignments: 0,
+            expiredAssignments: 0,
+            revokedAssignments: 0,
+            submittedRequests: 0,
+            approvedRequests: 0,
+            pendingReviews: 0
+          });
+        }
+        return matrixBySoftware.get(sid);
+      }
+
+      const today = todayIsoDate();
+      assignments.forEach((row) => {
+        const bucket = ensure(row.softwareId);
+        const status = normalizePermissionStatus(row.status);
+        if (status === 'active') bucket.activeAssignments += 1;
+        if (status === 'review_due') bucket.reviewDueAssignments += 1;
+        if (status === 'revoked') bucket.revokedAssignments += 1;
+        const endDate = normalizeIsoDate(row.endDate || '');
+        if (endDate && endDate < today && status !== 'revoked') bucket.expiredAssignments += 1;
+      });
+      requests.forEach((row) => {
+        const bucket = ensure(row.softwareId);
+        const status = normalizePermissionRequestStatus(row.status);
+        if (status === 'submitted') bucket.submittedRequests += 1;
+        if (status === 'approved') bucket.approvedRequests += 1;
+      });
+      reviews.forEach((row) => {
+        const bucket = ensure(row.softwareId);
+        if (normalizePermissionReviewDecision(row.decision) === 'pending') bucket.pendingReviews += 1;
+      });
+
+      Array.from(matrixBySoftware.values())
+        .sort((a, b) => String(a.softwareName || '').localeCompare(String(b.softwareName || ''), 'fr'))
+        .forEach((row) => {
+          rows.push([
+            row.softwareId,
+            row.softwareName,
+            String(row.activeAssignments),
+            String(row.reviewDueAssignments),
+            String(row.expiredAssignments),
+            String(row.revokedAssignments),
+            String(row.submittedRequests),
+            String(row.approvedRequests),
+            String(row.pendingReviews)
+          ]);
+        });
+
+      const csv = rows.map((cols) => cols.map((value) => {
+        const safe = String(value ?? '');
+        return `"${safe.replace(/"/g, '""')}"`;
+      }).join(';')).join('\n');
+      const ts = new Date().toISOString().replace(/[:.]/g, '-');
+      downloadTextFile(`workflow-permissions-matrix-${ts}.csv`, csv, 'text/csv;charset=utf-8');
+      toast('Export matrice habilitations CSV genere');
     }
 
     function serializeWorkflowModelDataset() {
@@ -1556,7 +1766,7 @@ ${tasks.map((row)=>`<tr><td>${esc(row.title || row.id)}</td><td>${esc(row.status
     }
 
     async function loadCollections() {
-      const [communities, services, groups, agents, roles, processes, steps, flows, templates, metrics, users, directoryUsers, tasks, procedures, software, softwareVersions, audit, history, globalTasks, globalDocs, globalThemes, globalGroups] = await Promise.all([
+      const [communities, services, groups, agents, roles, processes, steps, flows, templates, metrics, users, directoryUsers, tasks, procedures, software, permissionProfiles, permissionAssignments, permissionRequests, permissionReviews, permissionAudit, contingencyPlans, contingencyActions, contingencyActivations, contingencyExercises, contingencyReviews, contingencyAudit, softwareVersions, audit, history, globalTasks, globalDocs, globalThemes, globalGroups] = await Promise.all([
         api.getAll('workflowCommunities', STORE_KEY_FIELDS.workflowCommunities),
         api.getAll('workflowServices', STORE_KEY_FIELDS.workflowServices),
         api.getAll('workflowGroups', STORE_KEY_FIELDS.workflowGroups),
@@ -1572,6 +1782,17 @@ ${tasks.map((row)=>`<tr><td>${esc(row.title || row.id)}</td><td>${esc(row.status
         api.getAll('workflowTasks', STORE_KEY_FIELDS.workflowTasks),
         api.getAll('workflowProcedures', STORE_KEY_FIELDS.workflowProcedures),
         api.getAll('workflowSoftware', STORE_KEY_FIELDS.workflowSoftware),
+        api.getAll('workflowPermissionProfiles', STORE_KEY_FIELDS.workflowPermissionProfiles),
+        api.getAll('workflowPermissionAssignments', STORE_KEY_FIELDS.workflowPermissionAssignments),
+        api.getAll('workflowPermissionRequests', STORE_KEY_FIELDS.workflowPermissionRequests),
+        api.getAll('workflowPermissionReviews', STORE_KEY_FIELDS.workflowPermissionReviews),
+        api.getAll('workflowPermissionAudit', STORE_KEY_FIELDS.workflowPermissionAudit),
+        api.getAll('workflowContingencyPlans', STORE_KEY_FIELDS.workflowContingencyPlans),
+        api.getAll('workflowContingencyActions', STORE_KEY_FIELDS.workflowContingencyActions),
+        api.getAll('workflowContingencyActivations', STORE_KEY_FIELDS.workflowContingencyActivations),
+        api.getAll('workflowContingencyExercises', STORE_KEY_FIELDS.workflowContingencyExercises),
+        api.getAll('workflowContingencyReviews', STORE_KEY_FIELDS.workflowContingencyReviews),
+        api.getAll('workflowContingencyAudit', STORE_KEY_FIELDS.workflowContingencyAudit),
         typeof api.getSoftwareVersionCatalog === 'function' ? api.getSoftwareVersionCatalog() : Promise.resolve([]),
         api.getAll('workflowAudit', STORE_KEY_FIELDS.workflowAudit),
         api.getAll('workflowHistory', STORE_KEY_FIELDS.workflowHistory),
@@ -1596,6 +1817,17 @@ ${tasks.map((row)=>`<tr><td>${esc(row.title || row.id)}</td><td>${esc(row.status
       state.collections.tasks = Array.isArray(tasks) ? tasks : [];
       state.collections.procedures = Array.isArray(procedures) ? procedures : [];
       state.collections.software = Array.isArray(software) ? software : [];
+      state.collections.permissionProfiles = Array.isArray(permissionProfiles) ? permissionProfiles : [];
+      state.collections.permissionAssignments = Array.isArray(permissionAssignments) ? permissionAssignments : [];
+      state.collections.permissionRequests = Array.isArray(permissionRequests) ? permissionRequests : [];
+      state.collections.permissionReviews = Array.isArray(permissionReviews) ? permissionReviews : [];
+      state.collections.permissionAudit = Array.isArray(permissionAudit) ? permissionAudit : [];
+      state.collections.contingencyPlans = Array.isArray(contingencyPlans) ? contingencyPlans : [];
+      state.collections.contingencyActions = Array.isArray(contingencyActions) ? contingencyActions : [];
+      state.collections.contingencyActivations = Array.isArray(contingencyActivations) ? contingencyActivations : [];
+      state.collections.contingencyExercises = Array.isArray(contingencyExercises) ? contingencyExercises : [];
+      state.collections.contingencyReviews = Array.isArray(contingencyReviews) ? contingencyReviews : [];
+      state.collections.contingencyAudit = Array.isArray(contingencyAudit) ? contingencyAudit : [];
       state.collections.softwareVersions = Array.isArray(softwareVersions) ? softwareVersions : [];
       state.collections.audit = Array.isArray(audit) ? audit : [];
       state.collections.history = Array.isArray(history) ? history : [];
@@ -1603,6 +1835,7 @@ ${tasks.map((row)=>`<tr><td>${esc(row.title || row.id)}</td><td>${esc(row.status
       state.collections.globalDocs = Array.isArray(globalDocs) ? globalDocs : [];
       state.collections.globalThemes = Array.isArray(globalThemes) ? globalThemes : [];
       state.collections.globalGroups = Array.isArray(globalGroups) ? globalGroups : [];
+      await runAutomaticPermissionReviews();
       resolveWorkflowPermissions();
     }
 
@@ -1673,6 +1906,484 @@ ${tasks.map((row)=>`<tr><td>${esc(row.title || row.id)}</td><td>${esc(row.status
 
     function parseUniqueCsv(value) {
       return Array.from(new Set(parseCsv(value).map((id) => String(id || '').trim()).filter(Boolean)));
+    }
+
+    function normalizePermissionBeneficiaryType(value) {
+      const key = String(value || '').trim().toLowerCase();
+      return ['agent', 'user', 'group', 'role'].includes(key) ? key : 'agent';
+    }
+
+    function normalizePermissionStatus(value) {
+      const key = String(value || '').trim().toLowerCase();
+      return PERMISSION_STATUS_OPTIONS.includes(key) ? key : 'active';
+    }
+
+    function normalizePermissionLevel(value) {
+      const key = String(value || '').trim().toLowerCase();
+      return PERMISSION_LEVEL_OPTIONS.includes(key) ? key : 'read';
+    }
+
+    function normalizePermissionRequestAction(value) {
+      const key = String(value || '').trim().toLowerCase();
+      return PERMISSION_REQUEST_ACTIONS.includes(key) ? key : 'grant';
+    }
+
+    function normalizePermissionRequestStatus(value) {
+      const key = String(value || '').trim().toLowerCase();
+      return PERMISSION_REQUEST_STATUS.includes(key) ? key : 'draft';
+    }
+
+    function permissionRequestActionLabel(value) {
+      const key = normalizePermissionRequestAction(value);
+      if (key === 'grant') return 'Octroi';
+      if (key === 'update') return 'Modification';
+      if (key === 'revoke') return 'Retrait';
+      return key;
+    }
+
+    function permissionRequestStatusLabel(value) {
+      const key = normalizePermissionRequestStatus(value);
+      if (key === 'draft') return 'Brouillon';
+      if (key === 'submitted') return 'Soumise';
+      if (key === 'approved') return 'Approuvee';
+      if (key === 'rejected') return 'Refusee';
+      if (key === 'executed') return 'Executee';
+      return key;
+    }
+
+    function normalizePermissionReviewDecision(value) {
+      const key = String(value || '').trim().toLowerCase();
+      return PERMISSION_REVIEW_DECISIONS.includes(key) ? key : 'pending';
+    }
+
+    function getPermissionRequestTransitions(status) {
+      const current = normalizePermissionRequestStatus(status);
+      if (current === 'draft') return ['submit'];
+      if (current === 'submitted') return ['approve', 'reject'];
+      if (current === 'approved') return ['execute', 'reject'];
+      return [];
+    }
+
+    function normalizeIsoDate(value) {
+      const raw = String(value || '').trim();
+      return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : '';
+    }
+
+    function normalizeContingencyPlanStatus(value) {
+      const key = String(value || '').trim().toLowerCase();
+      return CONTINGENCY_PLAN_STATUS.includes(key) ? key : 'draft';
+    }
+
+    function normalizeContingencyCriticality(value) {
+      const key = String(value || '').trim().toLowerCase();
+      return CONTINGENCY_PLAN_CRITICALITY.includes(key) ? key : 'medium';
+    }
+
+    function normalizeContingencyActionStatus(value) {
+      const key = String(value || '').trim().toLowerCase();
+      return CONTINGENCY_ACTION_STATUS.includes(key) ? key : 'todo';
+    }
+
+    function normalizeContingencyActivationStatus(value) {
+      const key = String(value || '').trim().toLowerCase();
+      return CONTINGENCY_ACTIVATION_STATUS.includes(key) ? key : 'active';
+    }
+
+    function normalizeContingencyExerciseResult(value) {
+      const key = String(value || '').trim().toLowerCase();
+      return CONTINGENCY_EXERCISE_RESULT.includes(key) ? key : 'pending';
+    }
+
+    function computeContingencyPlanReadiness(plan) {
+      const planId = String(plan?.id || '').trim();
+      if (!planId) return 0;
+      const actions = (state.collections.contingencyActions || []).filter((row) => String(row.planId || '') === planId);
+      if (!actions.length) return 0;
+      const done = actions.filter((row) => normalizeContingencyActionStatus(row.status) === 'done').length;
+      return Math.round((done / actions.length) * 100);
+    }
+
+    async function logContingencyAudit(eventType, planId, payload = {}) {
+      const row = {
+        id: `wf-cont-audit-${uid()}`,
+        planId: String(planId || '').trim() || null,
+        eventType: String(eventType || '').trim() || 'update',
+        byUserId: currentUserId(),
+        payload: payload || null,
+        createdAt: now()
+      };
+      await api.put('workflowContingencyAudit', row, STORE_KEY_FIELDS.workflowContingencyAudit);
+    }
+
+    async function activateContingencyPlan(planId) {
+      if (!canEditWorkflow()) {
+        toast('Lecture seule: edition reservee au role admin ou manager workflow');
+        return;
+      }
+      const safePlanId = String(planId || '').trim();
+      if (!safePlanId) return;
+      const plan = (state.collections.contingencyPlans || []).find((row) => String(row.id || '') === safePlanId);
+      if (!plan) return;
+      const row = {
+        id: `wf-cont-activation-${uid()}`,
+        planId: safePlanId,
+        status: 'active',
+        trigger: String(plan.triggerConditions || '').trim() || 'activation_manuelle',
+        initiatorUserId: currentUserId(),
+        notes: '',
+        startedAt: now(),
+        closedAt: null,
+        updatedAt: now()
+      };
+      await api.put('workflowContingencyActivations', row, STORE_KEY_FIELDS.workflowContingencyActivations);
+      await logContingencyAudit('activation_start', safePlanId, { activationId: row.id });
+      await logAudit('contingency_activation_start', 'contingencyPlan', safePlanId, { activationId: row.id });
+      await loadCollections();
+      renderServiceFilter();
+      renderContent();
+      if (state.selectedType === 'contingencyPlan' && String(state.selectedId || '') === safePlanId) {
+        openDetail('contingencyPlan', safePlanId);
+      }
+      toast('Plan de contingence active');
+    }
+
+    async function closeContingencyActivation(activationId) {
+      if (!canEditWorkflow()) {
+        toast('Lecture seule: edition reservee au role admin ou manager workflow');
+        return;
+      }
+      const safeActivationId = String(activationId || '').trim();
+      if (!safeActivationId) return;
+      const current = (state.collections.contingencyActivations || []).find((row) => String(row.id || '') === safeActivationId);
+      if (!current) return;
+      const next = {
+        ...current,
+        status: 'closed',
+        closedAt: now(),
+        updatedAt: now()
+      };
+      await api.put('workflowContingencyActivations', next, STORE_KEY_FIELDS.workflowContingencyActivations);
+      await logContingencyAudit('activation_close', String(next.planId || ''), { activationId: next.id });
+      await logAudit('contingency_activation_close', 'contingencyPlan', String(next.planId || ''), { activationId: next.id });
+      await loadCollections();
+      renderServiceFilter();
+      renderContent();
+      if (state.selectedType === 'contingencyPlan' && String(state.selectedId || '') === String(next.planId || '')) {
+        openDetail('contingencyPlan', String(next.planId || ''));
+      }
+      toast('Activation cloturee');
+    }
+
+    function resolvePermissionBeneficiaryLabel(type, id) {
+      const safeType = normalizePermissionBeneficiaryType(type);
+      const safeId = String(id || '').trim();
+      if (!safeId) return '';
+      if (safeType === 'agent') {
+        return String(state.collections.agents.find((row) => String(row.id) === safeId)?.displayName || safeId);
+      }
+      if (safeType === 'group') {
+        return String(state.collections.groups.find((row) => String(row.id) === safeId)?.name || safeId);
+      }
+      if (safeType === 'role') {
+        return String(state.collections.roles.find((row) => String(row.id) === safeId)?.name || safeId);
+      }
+      const userFromStore = state.collections.users.find((row) => String(row.userId) === safeId)
+        || state.collections.directoryUsers.find((row) => String(row.userId) === safeId);
+      return String(userFromStore?.name || userFromStore?.displayName || safeId);
+    }
+
+    async function logPermissionAudit(action, softwareId, payload = {}) {
+      const entry = {
+        id: `wf-perm-audit-${uid()}`,
+        action: String(action || '').trim() || 'update',
+        softwareId: String(softwareId || '').trim() || null,
+        entityType: 'permission',
+        entityId: String(payload?.id || payload?.assignmentId || payload?.profileId || payload?.requestId || '').trim() || null,
+        payload: payload || null,
+        byUserId: currentUserId(),
+        createdAt: now()
+      };
+      await api.put('workflowPermissionAudit', entry, STORE_KEY_FIELDS.workflowPermissionAudit);
+    }
+
+    function permissionReviewDatePlusDays(days) {
+      const d = new Date();
+      d.setDate(d.getDate() + Math.max(1, Number(days || 90) || 90));
+      return d.toISOString().slice(0, 10);
+    }
+
+    function todayIsoDate() {
+      return new Date().toISOString().slice(0, 10);
+    }
+
+    function findPermissionAssignmentsForRequest(request) {
+      const softwareId = String(request?.softwareId || '').trim();
+      const beneficiaryType = normalizePermissionBeneficiaryType(request?.beneficiaryType);
+      const beneficiaryId = String(request?.beneficiaryId || '').trim();
+      if (!softwareId || !beneficiaryId) return [];
+      return (state.collections.permissionAssignments || []).filter((row) => (
+        String(row.softwareId || '') === softwareId
+        && normalizePermissionBeneficiaryType(row.beneficiaryType) === beneficiaryType
+        && String(row.beneficiaryId || '') === beneficiaryId
+      ));
+    }
+
+    async function executePermissionRequestRow(request) {
+      const requestId = String(request?.id || '').trim();
+      if (!requestId) throw new Error('Demande invalide');
+      const softwareId = String(request.softwareId || '').trim();
+      if (!softwareId) throw new Error('Logiciel manquant');
+      const profileId = String(request.profileId || '').trim();
+      const action = normalizePermissionRequestAction(request.action);
+      const beneficiaryType = normalizePermissionBeneficiaryType(request.beneficiaryType);
+      const beneficiaryId = String(request.beneficiaryId || '').trim();
+      if (!beneficiaryId) throw new Error('Beneficiaire manquant');
+      const relatedAssignments = findPermissionAssignmentsForRequest(request);
+      const nowTs = now();
+      const actorId = currentUserId();
+      const today = todayIsoDate();
+
+      if (action === 'revoke') {
+        if (!relatedAssignments.length) return null;
+        const changes = relatedAssignments.map(async (assignment) => {
+          const next = {
+            ...assignment,
+            status: 'revoked',
+            endDate: normalizeIsoDate(assignment.endDate || '') || today,
+            updatedAt: nowTs
+          };
+          await api.put('workflowPermissionAssignments', next, STORE_KEY_FIELDS.workflowPermissionAssignments);
+          return next;
+        });
+        const updated = await Promise.all(changes);
+        return { action, updatedAssignments: updated, actorId };
+      }
+
+      const profile = (state.collections.permissionProfiles || []).find((row) => String(row.id || '') === profileId);
+      if (!profile && action !== 'revoke') throw new Error('Profil introuvable');
+
+      const base = {
+        softwareId,
+        profileId,
+        profileName: String(profile?.name || request.profileName || profileId || ''),
+        level: normalizePermissionLevel(profile?.level || request.level || 'read'),
+        beneficiaryType,
+        beneficiaryId,
+        beneficiaryLabel: resolvePermissionBeneficiaryLabel(beneficiaryType, beneficiaryId),
+        status: 'active',
+        startDate: normalizeIsoDate(request.startDate || '') || today,
+        endDate: normalizeIsoDate(request.endDate || ''),
+        reviewDate: normalizeIsoDate(request.reviewDate || '') || permissionReviewDatePlusDays(90),
+        notes: String(request.justification || request.comments || '').trim(),
+        updatedAt: nowTs
+      };
+
+      const target = relatedAssignments[0] || null;
+      if (target) {
+        const next = { ...target, ...base };
+        await api.put('workflowPermissionAssignments', next, STORE_KEY_FIELDS.workflowPermissionAssignments);
+        return { action, updatedAssignments: [next], actorId };
+      }
+
+      const row = {
+        id: `wf-perm-assignment-${uid()}`,
+        ...base,
+        source: 'request',
+        createdByUserId: String(request.requestedByUserId || actorId),
+        createdAt: nowTs
+      };
+      await api.put('workflowPermissionAssignments', row, STORE_KEY_FIELDS.workflowPermissionAssignments);
+      return { action, updatedAssignments: [row], actorId };
+    }
+
+    async function transitionPermissionRequest(requestId, transition) {
+      if (!canEditWorkflow()) {
+        toast('Lecture seule: edition reservee au role admin ou manager workflow');
+        return;
+      }
+      const safeRequestId = String(requestId || '').trim();
+      const action = String(transition || '').trim().toLowerCase();
+      if (!safeRequestId || !action) return;
+      const current = (state.collections.permissionRequests || []).find((row) => String(row.id || '') === safeRequestId);
+      if (!current) return;
+      const currentStatus = normalizePermissionRequestStatus(current.status);
+      const next = { ...current, updatedAt: now() };
+      const actorId = currentUserId();
+
+      if (action === 'submit') {
+        if (currentStatus !== 'draft') return;
+        next.status = 'submitted';
+      } else if (action === 'approve') {
+        if (currentStatus !== 'submitted') return;
+        if (String(current.requestedByUserId || '') === actorId && !state.permissions.isAdmin) {
+          toast('Separation des droits: demandeur et valideur doivent etre differents');
+          return;
+        }
+        next.status = 'approved';
+        next.approverUserId = actorId;
+        next.approvedAt = now();
+      } else if (action === 'reject') {
+        if (!['submitted', 'approved'].includes(currentStatus)) return;
+        if (String(current.requestedByUserId || '') === actorId && !state.permissions.isAdmin) {
+          toast('Separation des droits: demandeur et valideur doivent etre differents');
+          return;
+        }
+        next.status = 'rejected';
+        next.approverUserId = actorId;
+        if (!next.approvedAt) next.approvedAt = now();
+      } else if (action === 'execute') {
+        if (currentStatus !== 'approved') return;
+        const execResult = await executePermissionRequestRow(current);
+        next.status = 'executed';
+        next.executedByUserId = actorId;
+        next.executedAt = now();
+        await logPermissionAudit('request_execute', String(current.softwareId || ''), {
+          requestId: next.id,
+          action: current.action,
+          assignmentCount: Number(execResult?.updatedAssignments?.length || 0)
+        });
+      } else {
+        return;
+      }
+
+      await api.put('workflowPermissionRequests', next, STORE_KEY_FIELDS.workflowPermissionRequests);
+      await logPermissionAudit(`request_${action}`, String(next.softwareId || ''), {
+        requestId: next.id,
+        from: currentStatus,
+        to: next.status,
+        by: actorId
+      });
+      await logAudit(`permission_request_${action}`, 'software', String(next.softwareId || ''), {
+        requestId: next.id,
+        from: currentStatus,
+        to: next.status
+      });
+      await loadCollections();
+      renderServiceFilter();
+      renderContent();
+      if (state.selectedType === 'software' && String(state.selectedId || '') === String(next.softwareId || '')) {
+        openDetail('software', String(next.softwareId || ''));
+      }
+      toast(`Demande ${next.status}`);
+    }
+
+    async function transitionPermissionReview(reviewId, decision) {
+      if (!canEditWorkflow()) {
+        toast('Lecture seule: edition reservee au role admin ou manager workflow');
+        return;
+      }
+      const safeReviewId = String(reviewId || '').trim();
+      const targetDecision = normalizePermissionReviewDecision(decision);
+      if (!safeReviewId || targetDecision === 'pending') return;
+      const current = (state.collections.permissionReviews || []).find((row) => String(row.id || '') === safeReviewId);
+      if (!current) return;
+      if (normalizePermissionReviewDecision(current.decision) !== 'pending') {
+        toast('Cette revue est deja traitee');
+        return;
+      }
+      const assignmentId = String(current.assignmentId || '').trim();
+      const assignment = (state.collections.permissionAssignments || []).find((row) => String(row.id || '') === assignmentId);
+      if (!assignment) {
+        toast('Attribution introuvable');
+        return;
+      }
+      const actorId = currentUserId();
+      const reviewedAt = now();
+      const today = todayIsoDate();
+      const nextReviewDate = permissionReviewDatePlusDays(90);
+      const nextReview = {
+        ...current,
+        decision: targetDecision,
+        reviewerUserId: actorId,
+        reviewedAt,
+        updatedAt: reviewedAt
+      };
+      const nextAssignment = {
+        ...assignment,
+        status: targetDecision === 'revoked' ? 'revoked' : 'active',
+        endDate: targetDecision === 'revoked'
+          ? (normalizeIsoDate(assignment.endDate || '') || today)
+          : normalizeIsoDate(assignment.endDate || ''),
+        reviewDate: targetDecision === 'revoked' ? normalizeIsoDate(assignment.reviewDate || '') : nextReviewDate,
+        updatedAt: reviewedAt
+      };
+      await Promise.all([
+        api.put('workflowPermissionReviews', nextReview, STORE_KEY_FIELDS.workflowPermissionReviews),
+        api.put('workflowPermissionAssignments', nextAssignment, STORE_KEY_FIELDS.workflowPermissionAssignments)
+      ]);
+      await logPermissionAudit(`review_${targetDecision}`, String(nextAssignment.softwareId || ''), {
+        reviewId: nextReview.id,
+        assignmentId: nextAssignment.id,
+        beneficiaryType: nextAssignment.beneficiaryType,
+        beneficiaryId: nextAssignment.beneficiaryId
+      });
+      await logAudit(`permission_review_${targetDecision}`, 'software', String(nextAssignment.softwareId || ''), {
+        reviewId: nextReview.id,
+        assignmentId: nextAssignment.id
+      });
+      await loadCollections();
+      renderServiceFilter();
+      renderContent();
+      if (state.selectedType === 'software' && String(state.selectedId || '') === String(nextAssignment.softwareId || '')) {
+        openDetail('software', String(nextAssignment.softwareId || ''));
+      }
+      toast(targetDecision === 'revoked' ? 'Habilitation retiree via revue' : 'Revue validee');
+    }
+
+    async function runAutomaticPermissionReviews() {
+      if (state.permissionAutoReviewRunning) return;
+      state.permissionAutoReviewRunning = true;
+      try {
+        const today = todayIsoDate();
+        const reviewRows = Array.isArray(state.collections.permissionReviews) ? state.collections.permissionReviews : [];
+        const reviewDedupe = new Set(reviewRows.map((row) => `${String(row.assignmentId || '')}::${String(row.reviewDate || '')}`));
+        const toCreate = [];
+        const toUpdate = [];
+        (state.collections.permissionAssignments || []).forEach((assignment) => {
+          if (!assignment) return;
+          const assignmentId = String(assignment.id || '').trim();
+          if (!assignmentId) return;
+          const reviewDate = normalizeIsoDate(assignment.reviewDate || '');
+          if (!reviewDate || reviewDate > today) return;
+          if (normalizePermissionStatus(assignment.status) === 'revoked') return;
+          const key = `${assignmentId}::${reviewDate}`;
+          if (!reviewDedupe.has(key)) {
+            toCreate.push({
+              id: `wf-perm-review-${uid()}`,
+              softwareId: String(assignment.softwareId || '').trim() || null,
+              assignmentId,
+              reviewDate,
+              decision: 'pending',
+              reviewerUserId: null,
+              comments: 'Revue automatique générée',
+              createdAt: now(),
+              updatedAt: now()
+            });
+            reviewDedupe.add(key);
+          }
+          if (normalizePermissionStatus(assignment.status) !== 'review_due') {
+            toUpdate.push({ ...assignment, status: 'review_due', updatedAt: now() });
+          }
+        });
+        if (!toCreate.length && !toUpdate.length) return;
+        await Promise.all([
+          ...toCreate.map((row) => api.put('workflowPermissionReviews', row, STORE_KEY_FIELDS.workflowPermissionReviews)),
+          ...toUpdate.map((row) => api.put('workflowPermissionAssignments', row, STORE_KEY_FIELDS.workflowPermissionAssignments))
+        ]);
+        const bySoftware = new Map();
+        toCreate.forEach((row) => {
+          const sid = String(row.softwareId || '').trim() || 'global';
+          bySoftware.set(sid, (bySoftware.get(sid) || 0) + 1);
+        });
+        for (const [softwareId, count] of bySoftware.entries()) {
+          await logPermissionAudit('auto_review_due', softwareId === 'global' ? null : softwareId, {
+            createdReviews: count,
+            date: today
+          });
+        }
+      } finally {
+        state.permissionAutoReviewRunning = false;
+      }
     }
 
     function forwardWorkflowLinks(entityType, item) {
@@ -2605,6 +3316,7 @@ ${tasks.map((row)=>`<tr><td>${esc(row.title || row.id)}</td><td>${esc(row.status
       if (type === 'task') return state.collections.tasks;
       if (type === 'procedure') return state.collections.procedures;
       if (type === 'software') return state.collections.software;
+      if (type === 'contingencyPlan') return state.collections.contingencyPlans;
       return [];
     }
 
@@ -2797,6 +3509,7 @@ ${tasks.map((row)=>`<tr><td>${esc(row.title || row.id)}</td><td>${esc(row.status
       if (viewKey === 'timeline') return 'Timeline';
       if (viewKey === 'procedures') return 'Procedures';
       if (viewKey === 'software') return 'Logiciels metiers';
+      if (viewKey === 'contingency') return 'Contingence';
       if (viewKey === 'analytics') return 'Analyse';
       if (viewKey === 'governance') return 'Gouvernance';
       if (viewKey === 'journal') return 'Journal';
@@ -2855,9 +3568,8 @@ ${tasks.map((row)=>`<tr><td>${esc(row.title || row.id)}</td><td>${esc(row.status
       if ((safeType === 'procedure' || safeType === 'software') && editable) {
         actions.push({ action: 'create-task', label: 'Ajouter tache', icon: 'add_task' });
       }
-
-      if (safeType === 'software') {
-        actions.push({ action: 'open-software-registry', label: 'Versions ref', icon: 'inventory_2' });
+      if (safeType === 'contingencyPlan' && editable) {
+        actions.push({ action: 'contingency-activate', label: 'Activer', icon: 'warning' });
       }
 
       if (safeType === 'process' && editable) {
@@ -2881,7 +3593,7 @@ ${tasks.map((row)=>`<tr><td>${esc(row.title || row.id)}</td><td>${esc(row.status
         }
       }
 
-      if ((safeType === 'task' || safeType === 'procedure' || safeType === 'software' || safeType === 'process' || safeType === 'step' || safeType === 'flow' || safeType === 'role' || safeType === 'template') && editable) {
+      if ((safeType === 'task' || safeType === 'procedure' || safeType === 'software' || safeType === 'process' || safeType === 'step' || safeType === 'flow' || safeType === 'role' || safeType === 'template' || safeType === 'contingencyPlan') && editable) {
         actions.push({ action: 'delete', label: 'Supprimer', icon: 'delete', tone: 'danger' });
       }
 
@@ -4327,7 +5039,46 @@ ${clone.outerHTML}
         groupId: item.groupId,
         agentId: item.ownerAgentId
       }));
+      const today = todayIsoDate();
+      const dayMs = 24 * 60 * 60 * 1000;
+      const softwareById = new Map((state.collections.software || []).map((row) => [String(row.id || ''), row]));
+      const profileById = new Map((state.collections.permissionProfiles || []).map((row) => [String(row.id || ''), row]));
+      const filterSoftwareId = String(state.governancePermissionSoftwareFilter || 'all');
+      const filterBeneficiaryType = String(state.governancePermissionBeneficiaryTypeFilter || 'all');
+      const filterRequestStatus = String(state.governancePermissionRequestStatusFilter || 'all');
+      const allPermissionAssignments = Array.isArray(state.collections.permissionAssignments) ? state.collections.permissionAssignments : [];
+      const allPermissionRequests = Array.isArray(state.collections.permissionRequests) ? state.collections.permissionRequests : [];
+      const allPermissionReviews = Array.isArray(state.collections.permissionReviews) ? state.collections.permissionReviews : [];
+      const permissionAssignments = allPermissionAssignments.filter((row) => (
+        matchesGovernancePermissionFilters(row, {
+          softwareId: filterSoftwareId,
+          beneficiaryType: filterBeneficiaryType,
+          requestStatus: filterRequestStatus
+        }, 'assignment')
+      ));
+      const permissionRequests = allPermissionRequests.filter((row) => (
+        matchesGovernancePermissionFilters(row, {
+          softwareId: filterSoftwareId,
+          beneficiaryType: filterBeneficiaryType,
+          requestStatus: filterRequestStatus
+        }, 'request')
+      ));
+      const permissionReviews = allPermissionReviews.filter((row) => (
+        matchesGovernancePermissionFilters(row, {
+          softwareId: filterSoftwareId,
+          beneficiaryType: filterBeneficiaryType,
+          requestStatus: filterRequestStatus
+        }, 'review')
+      ));
       const alerts = [];
+      const assignmentById = new Map(allPermissionAssignments.map((row) => [String(row.id || ''), row]));
+
+      function daysFromTimestamp(timestamp) {
+        const safeTs = Number(timestamp || 0);
+        if (!safeTs || !Number.isFinite(safeTs)) return 0;
+        return Math.max(0, Math.floor((Date.now() - safeTs) / dayMs));
+      }
+
       processes.forEach((process) => {
         const pid = String(process.id || '');
         const title = process.title || pid;
@@ -4337,13 +5088,13 @@ ${clone.outerHTML}
         const requiredRoleIds = validation.requiredRoleIds;
         const hasOwner = !!process.ownerAgentId;
         if (!hasOwner) {
-          alerts.push({ severity: 'high', type: 'owner_missing', processId: pid, message: `Processus sans responsable: ${title}` });
+          alerts.push({ severity: 'high', type: 'owner_missing', processId: pid, entityType: 'process', entityId: pid, message: `Processus sans responsable: ${title}` });
         }
         if (String(process.status || '') === 'review' && requiredRoleIds.length === 0) {
-          alerts.push({ severity: 'high', type: 'approver_role_missing', processId: pid, message: `Revue sans role approbateur requis: ${title}` });
+          alerts.push({ severity: 'high', type: 'approver_role_missing', processId: pid, entityType: 'process', entityId: pid, message: `Revue sans role approbateur requis: ${title}` });
         }
         if (String(process.status || '') === 'review' && level < requiredLevels) {
-          alerts.push({ severity: 'medium', type: 'approval_pending', processId: pid, message: `Validation en attente (${level}/${requiredLevels}): ${title}` });
+          alerts.push({ severity: 'medium', type: 'approval_pending', processId: pid, entityType: 'process', entityId: pid, message: `Validation en attente (${level}/${requiredLevels}): ${title}` });
         }
         if (String(process.status || '') === 'review') {
           const currentTarget = Math.max(1, Math.min(requiredLevels, level + 1));
@@ -4351,18 +5102,99 @@ ${clone.outerHTML}
           const quorum = Math.max(1, Number(levelRule.quorum || 1) || 1);
           const approvalsAtLevel = validation.approvers.filter((entry) => Number(entry?.level || 0) === currentTarget).length;
           if (approvalsAtLevel < quorum) {
-            alerts.push({ severity: 'high', type: 'approval_quorum_missing', processId: pid, message: `Quorum niveau ${currentTarget} incomplet (${approvalsAtLevel}/${quorum}): ${title}` });
+            alerts.push({ severity: 'high', type: 'approval_quorum_missing', processId: pid, entityType: 'process', entityId: pid, message: `Quorum niveau ${currentTarget} incomplet (${approvalsAtLevel}/${quorum}): ${title}` });
           }
         }
         const processSteps = (state.collections.steps || []).filter((step) => String(step.processId || '') === pid);
         const unassignedCount = processSteps.filter((step) => !step.ownerAgentId && !step.roleId).length;
         if (unassignedCount > 0) {
-          alerts.push({ severity: 'high', type: 'step_unassigned', processId: pid, message: `${unassignedCount} etape(s) non affectee(s): ${title}` });
+          alerts.push({ severity: 'high', type: 'step_unassigned', processId: pid, entityType: 'process', entityId: pid, message: `${unassignedCount} etape(s) non affectee(s): ${title}` });
         }
       });
+
+      permissionAssignments.forEach((assignment) => {
+        const assignmentId = String(assignment?.id || '').trim();
+        if (!assignmentId) return;
+        const softwareId = String(assignment.softwareId || '').trim();
+        const softwareLabel = softwareById.get(softwareId)?.name || softwareId || 'Logiciel';
+        const status = normalizePermissionStatus(assignment.status);
+        const profileExists = !!profileById.get(String(assignment.profileId || ''));
+        if (!profileExists) {
+          alerts.push({
+            severity: 'high',
+            type: 'permission_profile_missing',
+            entityType: 'software',
+            entityId: softwareId,
+            message: `Habilitation sans profil valide (${softwareLabel})`
+          });
+        }
+        const endDate = normalizeIsoDate(assignment.endDate || '');
+        if (endDate && endDate < today && status !== 'revoked') {
+          alerts.push({
+            severity: 'high',
+            type: 'permission_assignment_expired',
+            entityType: 'software',
+            entityId: softwareId,
+            message: `Habilitation expiree non retiree (${softwareLabel})`
+          });
+        }
+        if (status === 'review_due') {
+          alerts.push({
+            severity: 'high',
+            type: 'permission_review_due',
+            entityType: 'software',
+            entityId: softwareId,
+            message: `Revue d habilitation a traiter (${softwareLabel})`
+          });
+        }
+      });
+
+      permissionRequests.forEach((request) => {
+        const status = normalizePermissionRequestStatus(request.status);
+        if (!['submitted', 'approved'].includes(status)) return;
+        const softwareId = String(request.softwareId || '').trim();
+        const softwareLabel = softwareById.get(softwareId)?.name || softwareId || 'Logiciel';
+        const ageDays = daysFromTimestamp(request.requestedAt || request.updatedAt || request.createdAt || 0);
+        if (status === 'submitted' && ageDays >= 3) {
+          alerts.push({
+            severity: ageDays >= 7 ? 'high' : 'medium',
+            type: 'permission_request_stale',
+            entityType: 'software',
+            entityId: softwareId,
+            message: `Demande soumise en attente depuis ${ageDays}j (${softwareLabel})`
+          });
+        }
+        if (status === 'approved' && ageDays >= 2) {
+          alerts.push({
+            severity: 'medium',
+            type: 'permission_request_execution_pending',
+            entityType: 'software',
+            entityId: softwareId,
+            message: `Demande approuvee non executee depuis ${ageDays}j (${softwareLabel})`
+          });
+        }
+      });
+
+      permissionReviews.forEach((review) => {
+        const decision = normalizePermissionReviewDecision(review.decision);
+        if (decision !== 'pending') return;
+        const assignment = assignmentById.get(String(review.assignmentId || ''));
+        const softwareId = String(review.softwareId || assignment?.softwareId || '').trim();
+        const softwareLabel = softwareById.get(softwareId)?.name || softwareId || 'Logiciel';
+        const reviewDate = normalizeIsoDate(review.reviewDate || '');
+        if (!reviewDate || reviewDate > today) return;
+        alerts.push({
+          severity: 'high',
+          type: 'permission_review_pending',
+          entityType: 'software',
+          entityId: softwareId,
+          message: `Revue automatique en attente (${softwareLabel}, ${reviewDate})`
+        });
+      });
+
       const highAlerts = alerts.filter((row) => row.severity === 'high');
       if (highAlerts.length) {
-        const today = new Date().toISOString().slice(0, 10);
+        const todayKey = new Date().toISOString().slice(0, 10);
         const storageKey = 'workflow.governance.alerts.seen.v1';
         let seenMap = {};
         try {
@@ -4374,13 +5206,13 @@ ${clone.outerHTML}
         }
         let dirty = false;
         highAlerts.slice(0, 10).forEach((alert) => {
-          const dedupeKey = `${today}:${String(alert.processId || '')}:${String(alert.type || '')}`;
+          const dedupeKey = `${todayKey}:${String(alert.entityType || 'process')}:${String(alert.entityId || alert.processId || '')}:${String(alert.type || '')}`;
           if (seenMap[dedupeKey]) return;
           notifyInternal(`Alerte gouvernance: ${alert.message}`);
           seenMap[dedupeKey] = now();
           dirty = true;
         });
-        const dayPrefix = `${today}:`;
+        const dayPrefix = `${todayKey}:`;
         Object.keys(seenMap).forEach((key) => {
           if (key.startsWith(dayPrefix)) return;
           delete seenMap[key];
@@ -4428,6 +5260,134 @@ ${clone.outerHTML}
         `;
       }).join('');
 
+      const matrixBySoftwareMap = new Map();
+      function ensureSoftwareMatrixRow(softwareId) {
+        const sid = String(softwareId || '').trim();
+        if (!matrixBySoftwareMap.has(sid)) {
+          const name = softwareById.get(sid)?.name || sid || 'Logiciel non reference';
+          matrixBySoftwareMap.set(sid, {
+            softwareId: sid,
+            softwareName: name,
+            active: 0,
+            reviewDue: 0,
+            revoked: 0,
+            expired: 0,
+            submitted: 0,
+            approved: 0,
+            reviewsPending: 0
+          });
+        }
+        return matrixBySoftwareMap.get(sid);
+      }
+      permissionAssignments.forEach((row) => {
+        const bucket = ensureSoftwareMatrixRow(row.softwareId);
+        const status = normalizePermissionStatus(row.status);
+        if (status === 'active') bucket.active += 1;
+        if (status === 'review_due') bucket.reviewDue += 1;
+        if (status === 'revoked') bucket.revoked += 1;
+        const endDate = normalizeIsoDate(row.endDate || '');
+        if (endDate && endDate < today && status !== 'revoked') bucket.expired += 1;
+      });
+      permissionRequests.forEach((row) => {
+        const bucket = ensureSoftwareMatrixRow(row.softwareId);
+        const status = normalizePermissionRequestStatus(row.status);
+        if (status === 'submitted') bucket.submitted += 1;
+        if (status === 'approved') bucket.approved += 1;
+      });
+      permissionReviews.forEach((row) => {
+        const bucket = ensureSoftwareMatrixRow(row.softwareId);
+        if (normalizePermissionReviewDecision(row.decision) === 'pending') bucket.reviewsPending += 1;
+      });
+      const matrixSoftwareRows = Array.from(matrixBySoftwareMap.values())
+        .sort((a, b) => String(a.softwareName || '').localeCompare(String(b.softwareName || ''), 'fr'))
+        .map((row) => `
+          <tr>
+            <td class="px-2 py-1">${esc(row.softwareName)}</td>
+            <td class="px-2 py-1 text-center">${esc(String(row.active))}</td>
+            <td class="px-2 py-1 text-center">${esc(String(row.reviewDue))}</td>
+            <td class="px-2 py-1 text-center">${esc(String(row.expired))}</td>
+            <td class="px-2 py-1 text-center">${esc(String(row.submitted))}</td>
+            <td class="px-2 py-1 text-center">${esc(String(row.approved))}</td>
+            <td class="px-2 py-1 text-center">${esc(String(row.reviewsPending))}</td>
+            <td class="px-2 py-1 text-right">
+              ${row.softwareId ? `<button type="button" class="workflow-btn-light px-2 py-1 text-xs" data-wf-governance-action="open_software" data-wf-id="${esc(row.softwareId)}">Ouvrir</button>` : ''}
+            </td>
+          </tr>
+        `).join('');
+
+      const matrixByBeneficiaryMap = new Map();
+      function ensureBeneficiaryMatrixRow(beneficiaryType, beneficiaryId) {
+        const type = normalizePermissionBeneficiaryType(beneficiaryType);
+        const id = String(beneficiaryId || '').trim();
+        const key = `${type}:${id}`;
+        if (!matrixByBeneficiaryMap.has(key)) {
+          matrixByBeneficiaryMap.set(key, {
+            key,
+            beneficiaryType: type,
+            beneficiaryId: id,
+            label: resolvePermissionBeneficiaryLabel(type, id) || id || '-',
+            softwareIds: new Set(),
+            active: 0,
+            reviewDue: 0,
+            revoked: 0,
+            pendingRequests: 0
+          });
+        }
+        return matrixByBeneficiaryMap.get(key);
+      }
+      permissionAssignments.forEach((row) => {
+        const bucket = ensureBeneficiaryMatrixRow(row.beneficiaryType, row.beneficiaryId);
+        const softwareId = String(row.softwareId || '').trim();
+        if (softwareId) bucket.softwareIds.add(softwareId);
+        const status = normalizePermissionStatus(row.status);
+        if (status === 'active') bucket.active += 1;
+        if (status === 'review_due') bucket.reviewDue += 1;
+        if (status === 'revoked') bucket.revoked += 1;
+      });
+      permissionRequests.forEach((row) => {
+        const status = normalizePermissionRequestStatus(row.status);
+        if (status !== 'submitted' && status !== 'approved') return;
+        const bucket = ensureBeneficiaryMatrixRow(row.beneficiaryType, row.beneficiaryId);
+        bucket.pendingRequests += 1;
+      });
+      const matrixBeneficiaryRows = Array.from(matrixByBeneficiaryMap.values())
+        .sort((a, b) => String(a.label || '').localeCompare(String(b.label || ''), 'fr'))
+        .map((row) => `
+          <tr>
+            <td class="px-2 py-1">${esc(row.label)}</td>
+            <td class="px-2 py-1">${esc(row.beneficiaryType)}</td>
+            <td class="px-2 py-1 text-center">${esc(String(row.softwareIds.size))}</td>
+            <td class="px-2 py-1 text-center">${esc(String(row.active))}</td>
+            <td class="px-2 py-1 text-center">${esc(String(row.reviewDue))}</td>
+            <td class="px-2 py-1 text-center">${esc(String(row.pendingRequests))}</td>
+            <td class="px-2 py-1 text-right">
+              <button type="button" class="workflow-btn-light px-2 py-1 text-xs" data-wf-governance-action="open_beneficiary" data-wf-beneficiary-type="${esc(row.beneficiaryType)}" data-wf-beneficiary-id="${esc(row.beneficiaryId)}">Ouvrir</button>
+            </td>
+          </tr>
+        `).join('');
+      const softwareFilterOptions = [
+        `<option value="all" ${filterSoftwareId === 'all' ? 'selected' : ''}>Tous logiciels</option>`,
+        ...Array.from(softwareById.values())
+          .slice()
+          .sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || ''), 'fr'))
+          .map((row) => {
+            const sid = String(row?.id || '');
+            const selected = sid === filterSoftwareId ? 'selected' : '';
+            return `<option value="${esc(sid)}" ${selected}>${esc(String(row?.name || sid))}</option>`;
+          })
+      ].join('');
+      const beneficiaryTypeFilterOptions = [
+        { value: 'all', label: 'Tous beneficiaires' },
+        { value: 'agent', label: 'Agents' },
+        { value: 'user', label: 'Utilisateurs' },
+        { value: 'group', label: 'Groupes' },
+        { value: 'role', label: 'Roles' }
+      ].map((row) => `<option value="${esc(row.value)}" ${row.value === filterBeneficiaryType ? 'selected' : ''}>${esc(row.label)}</option>`).join('');
+      const requestStatusFilterOptions = [
+        { value: 'all', label: 'Tous statuts demandes' },
+        ...PERMISSION_REQUEST_STATUS.map((status) => ({ value: status, label: permissionRequestStatusLabel(status) }))
+      ].map((row) => `<option value="${esc(row.value)}" ${row.value === filterRequestStatus ? 'selected' : ''}>${esc(row.label)}</option>`).join('');
+
       refs.content.innerHTML = `
         <div class="workflow-detail-actions mb-3">
           <label class="workflow-form-label m-0">Filtre alertes</label>
@@ -4436,8 +5396,13 @@ ${clone.outerHTML}
             <option value="high" ${severityFilter === 'high' ? 'selected' : ''}>Bloquantes</option>
             <option value="medium" ${severityFilter === 'medium' ? 'selected' : ''}>Moyennes</option>
           </select>
+          <select class="workflow-form-select max-w-[240px]" data-wf-governance-perm-software-filter>${softwareFilterOptions}</select>
+          <select class="workflow-form-select max-w-[220px]" data-wf-governance-perm-beneficiary-filter>${beneficiaryTypeFilterOptions}</select>
+          <select class="workflow-form-select max-w-[230px]" data-wf-governance-perm-request-status-filter>${requestStatusFilterOptions}</select>
+          <button type="button" class="workflow-btn-light px-3 py-2 rounded-lg text-xs font-semibold" data-wf-governance-perm-reset="1">Reinitialiser filtres habilitations</button>
           <button type="button" class="workflow-btn-light px-3 py-2 rounded-lg text-xs font-semibold" data-wf-governance-export="json">Export JSON</button>
           <button type="button" class="workflow-btn-light px-3 py-2 rounded-lg text-xs font-semibold" data-wf-governance-export="csv">Export CSV</button>
+          <button type="button" class="workflow-btn-light px-3 py-2 rounded-lg text-xs font-semibold" data-wf-governance-export="perm-matrix-csv">Export matrice habilitations CSV</button>
         </div>
         <div class="workflow-map">
           <section class="workflow-map-col">
@@ -4465,6 +5430,49 @@ ${clone.outerHTML}
                   </tr>
                 </thead>
                 <tbody>${rows || '<tr><td class="px-2 py-1 text-slate-500" colspan="8">Aucun processus</td></tr>'}</tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+        <div class="workflow-map mt-3">
+          <section class="workflow-map-col">
+            <h6>Matrice transverse habilitations - par logiciel</h6>
+            <div class="overflow-x-auto">
+              <table class="min-w-full text-xs">
+                <thead>
+                  <tr>
+                    <th class="px-2 py-1 text-left">Logiciel</th>
+                    <th class="px-2 py-1 text-center">Actives</th>
+                    <th class="px-2 py-1 text-center">A revoir</th>
+                    <th class="px-2 py-1 text-center">Expirees</th>
+                    <th class="px-2 py-1 text-center">Demandes soumises</th>
+                    <th class="px-2 py-1 text-center">Demandes approuvees</th>
+                    <th class="px-2 py-1 text-center">Revues en attente</th>
+                    <th class="px-2 py-1 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>${matrixSoftwareRows || '<tr><td class="px-2 py-1 text-slate-500" colspan="8">Aucune donnee d habilitation</td></tr>'}</tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+        <div class="workflow-map mt-3">
+          <section class="workflow-map-col">
+            <h6>Matrice transverse habilitations - par beneficiaire</h6>
+            <div class="overflow-x-auto">
+              <table class="min-w-full text-xs">
+                <thead>
+                  <tr>
+                    <th class="px-2 py-1 text-left">Beneficiaire</th>
+                    <th class="px-2 py-1 text-left">Type</th>
+                    <th class="px-2 py-1 text-center">Logiciels</th>
+                    <th class="px-2 py-1 text-center">Actives</th>
+                    <th class="px-2 py-1 text-center">A revoir</th>
+                    <th class="px-2 py-1 text-center">Demandes en cours</th>
+                    <th class="px-2 py-1 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>${matrixBeneficiaryRows || '<tr><td class="px-2 py-1 text-slate-500" colspan="7">Aucune donnee d habilitation</td></tr>'}</tbody>
               </table>
             </div>
           </section>
@@ -4544,6 +5552,62 @@ ${clone.outerHTML}
       refs.content.innerHTML = `<div class="workflow-grid">${cards.join('') || '<div class="workflow-empty">Aucun logiciel metier</div>'}</div>`;
     }
 
+    function renderContingencyView() {
+      const maps = getMaps();
+      const today = todayIsoDate();
+      const plans = applyFilters(state.collections.contingencyPlans || [], (item) => ({
+        serviceId: item.serviceId,
+        groupId: null,
+        agentId: item.ownerAgentId
+      }));
+      const cards = plans.map((plan) => {
+        const readiness = computeContingencyPlanReadiness(plan);
+        const owner = maps.agentById.get(plan.ownerAgentId)?.displayName || '-';
+        const backup = maps.agentById.get(plan.backupAgentId)?.displayName || '-';
+        const service = maps.serviceById.get(plan.serviceId)?.name || '-';
+        const status = normalizeContingencyPlanStatus(plan.status);
+        const criticality = normalizeContingencyCriticality(plan.criticality);
+        const nextReviewDate = normalizeIsoDate(plan.nextReviewDate || '');
+        const reviewFlag = nextReviewDate && nextReviewDate < today ? 'Revue due' : 'Revue ok';
+        const testFlag = normalizeIsoDate(plan.lastTestDate || '') ? 'Teste' : 'Non teste';
+        const chips = [
+          `Statut: ${status}`,
+          `Criticite: ${criticality}`,
+          `Preparation: ${readiness}%`,
+          `Service: ${service}`,
+          `Owner: ${owner}`,
+          `Backup: ${backup}`,
+          reviewFlag,
+          testFlag
+        ];
+        return cardHtml(
+          'contingencyPlan',
+          plan.id,
+          plan.title || plan.code || 'Plan de contingence',
+          plan.description || '',
+          chips,
+          buildQuickCardActions('contingencyPlan', plan.id, { status })
+        );
+      });
+
+      const reviewDueCount = plans.filter((row) => {
+        const reviewDate = normalizeIsoDate(row.nextReviewDate || row.lastReviewDate || '');
+        return !!reviewDate && reviewDate <= today;
+      }).length;
+      const notTestedCount = plans.filter((row) => !normalizeIsoDate(row.lastTestDate || '')).length;
+      const weakPrepCount = plans.filter((row) => computeContingencyPlanReadiness(row) < 50).length;
+
+      refs.content.innerHTML = `
+        <div class="workflow-metrics-grid">
+          <article class="workflow-card"><p class="workflow-card-title">Plans</p><p class="workflow-card-sub">${esc(String(plans.length))}</p></article>
+          <article class="workflow-card"><p class="workflow-card-title">Revues dues</p><p class="workflow-card-sub">${esc(String(reviewDueCount))}</p></article>
+          <article class="workflow-card"><p class="workflow-card-title">Sans test</p><p class="workflow-card-sub">${esc(String(notTestedCount))}</p></article>
+          <article class="workflow-card"><p class="workflow-card-title">Preparation < 50%</p><p class="workflow-card-sub">${esc(String(weakPrepCount))}</p></article>
+        </div>
+        <div class="workflow-grid mt-3">${cards.join('') || '<div class="workflow-empty">Aucun plan de contingence</div>'}</div>
+      `;
+    }
+
     function renderKanbanView() {
       const lanes = [
         { key: 'todo', label: 'A faire' },
@@ -4582,7 +5646,24 @@ ${clone.outerHTML}
         <div class="workflow-map workflow-kanban">
           ${lanes.map((lane) => `
             <section class="workflow-map-col workflow-kanban-lane" data-wf-kanban-lane="${esc(lane.key)}">
-              <h6>${esc(lane.label)}</h6>
+              <div class="workflow-kanban-lane-head">
+                <h6>${esc(lane.label)}</h6>
+                ${canEditWorkflow() ? `
+                  <button
+                    type="button"
+                    class="workflow-btn-light workflow-kanban-add-btn taskmda-create-cta"
+                    data-action-kind="create"
+                    data-action-label="Ajouter une tâche workflow"
+                    data-ui-tooltip="Ajouter une tâche workflow"
+                    data-wf-kanban-add="1"
+                    data-wf-target-status="${esc(lane.key)}"
+                    aria-label="Ajouter une tâche workflow dans ${esc(lane.label)}"
+                  >
+                    <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">add</span>
+                    <span class="taskmda-action-label">Ajouter</span>
+                  </button>
+                ` : ''}
+              </div>
               <div class="workflow-grid">${taskCardsByLane.get(lane.key).join('') || '<div class="workflow-empty">Aucune tache</div>'}</div>
             </section>
           `).join('')}
@@ -4667,6 +5748,7 @@ ${clone.outerHTML}
       else if (state.activeView === 'timeline') renderTimelineView();
       else if (state.activeView === 'procedures') renderProceduresView();
       else if (state.activeView === 'software') renderSoftwareView();
+      else if (state.activeView === 'contingency') renderContingencyView();
       else if (state.activeView === 'analytics') renderAnalyticsView();
       else if (state.activeView === 'governance') renderGovernanceView();
       else if (state.activeView === 'journal') renderJournalView();
@@ -5120,6 +6202,98 @@ ${clone.outerHTML}
       `;
     }
 
+    async function activateContingencyPlan(planId) {
+      if (!planId) return;
+      const plan = getItem('contingencyPlan', planId);
+      if (!plan) return;
+      
+      const isAlreadyActive = (state.collections.contingencyActivations || [])
+        .filter((act) => String(act.planId) === String(planId))
+        .some((act) => normalizeContingencyActivationStatus(act.status) === 'active');
+      if (isAlreadyActive) {
+        toast('Plan deja actif');
+        return;
+      }
+      
+      const actions = (state.collections.contingencyActions || [])
+        .filter((row) => String(row.planId || '') === String(planId));
+
+      const actId = `wf-cont-act-${uid()}`;
+      const activation = {
+        id: actId,
+        planId: planId,
+        startedAt: now(),
+        endedAt: null,
+        status: 'active',
+        initiatorUserId: currentUserId(),
+        metadata: { triggeringContext: 'Activation manuelle', tasksGenerated: actions.length }
+      };
+      await api.put('workflowContingencyActivations', activation, STORE_KEY_FIELDS.workflowContingencyActivations);
+      
+      plan.status = 'active';
+      await api.put('workflowContingencyPlans', plan, STORE_KEY_FIELDS.workflowContingencyPlans);
+      
+      for (const action of actions) {
+          const taskId = `wf-task-${uid()}`;
+          const task = {
+            id: taskId,
+            processId: plan.processId || null,
+            serviceId: plan.serviceId || null,
+            groupId: null,
+            ownerAgentId: action.ownerAgentId || plan.ownerAgentId || null,
+            title: `[Urgence] ${action.title || 'Action contingence'}`,
+            description: `Action generée automatiquement par le déclenchement du plan de contingence: ${plan.title || plan.id}.`,
+            status: 'todo',
+            priority: 'high',
+            approvalStatus: 'pending',
+            checklist: [],
+            linkedProcedureId: null,
+            linkedSoftwareIds: plan.softwareId ? [plan.softwareId] : [],
+            prerequisiteTaskIds: [],
+            dependentTaskIds: [],
+            linkedGlobalTaskIds: [],
+            linkedDocumentIds: Object.keys(plan.linkedDocumentIds || {}),
+            linkedThemeKeys: [],
+            linkedGroupKeys: [],
+            createdAt: now(),
+            updatedAt: now()
+          };
+          await api.put('workflowTasks', task, STORE_KEY_FIELDS.workflowTasks);
+      }
+      
+      await logAudit('contingency_activate', 'contingencyPlan', planId, { activationId: actId, actionsGenerated: actions.length });
+      
+      await loadCollections();
+      renderServiceFilter();
+      renderContent();
+      openDetail('contingencyPlan', planId);
+      toast('Plan declenche et taches genérees.');
+    }
+
+    async function closeContingencyActivation(activationId) {
+      if (!activationId) return;
+      const act = (state.collections.contingencyActivations || []).find((a) => String(a.id) === String(activationId));
+      if (!act) return;
+      
+      act.status = 'closed';
+      act.endedAt = now();
+      await api.put('workflowContingencyActivations', act, STORE_KEY_FIELDS.workflowContingencyActivations);
+      
+      const plan = getItem('contingencyPlan', act.planId);
+      if (plan) {
+         plan.status = 'valid';
+         await api.put('workflowContingencyPlans', plan, STORE_KEY_FIELDS.workflowContingencyPlans);
+      }
+      
+      await logAudit('contingency_close', 'contingencyPlan', act.planId, { activationId: activationId });
+      
+      await loadCollections();
+      renderServiceFilter();
+      renderContent();
+      openDetail('contingencyPlan', act.planId);
+      toast('Crise cloturee.');
+    }
+
     function openDetail(type, id) {
       const item = getItem(type, id);
       if (!item || !refs.detail || !refs.detailBody || !refs.detailTitle) return;
@@ -5286,6 +6460,28 @@ ${clone.outerHTML}
         fields.push(fieldHtml('Categorie', 'category', item.category || '', 'text'));
         fields.push(fieldHtml('Documentation (1 ligne = 1 URL)', 'documentationLinks', (item.documentationLinks || []).join('\n'), 'textarea'));
       }
+      if (type === 'contingencyPlan') {
+        fields.push(fieldHtml('Titre', 'title', item.title || '', 'text'));
+        fields.push(fieldHtml('Code', 'code', item.code || '', 'text'));
+        fields.push(fieldHtml('Description', 'description', item.description || '', 'textarea'));
+        fields.push(fieldHtml('Perimetre', 'scope', item.scope || '', 'text'));
+        fields.push(fieldHtml('Statut', 'status', normalizeContingencyPlanStatus(item.status), 'text'));
+        fields.push(fieldHtml('Criticite', 'criticality', normalizeContingencyCriticality(item.criticality), 'text'));
+        fields.push(fieldHtml('Version', 'version', String(item.version || 1), 'text'));
+        fields.push(fieldHtml('Responsable', 'ownerAgentId', item.ownerAgentId || '', 'select-agent'));
+        fields.push(fieldHtml('Suppleant', 'backupAgentId', item.backupAgentId || '', 'select-agent'));
+        fields.push(fieldHtml('Service', 'serviceId', item.serviceId || '', 'select-service'));
+        fields.push(fieldHtml('Processus lie', 'processId', item.processId || '', 'select-process'));
+        fields.push(fieldHtml('Logiciel lie (id)', 'softwareId', item.softwareId || '', 'text'));
+        fields.push(fieldHtml('Declencheurs', 'triggerConditions', item.triggerConditions || '', 'textarea'));
+        fields.push(fieldHtml('Impacts', 'impacts', item.impacts || '', 'textarea'));
+        fields.push(fieldHtml('Date derniere revue', 'lastReviewDate', item.lastReviewDate || '', 'text'));
+        fields.push(fieldHtml('Date dernier test', 'lastTestDate', item.lastTestDate || '', 'text'));
+        fields.push(fieldHtml('Prochaine revue', 'nextReviewDate', item.nextReviewDate || '', 'text'));
+        fields.push(fieldHtml('Niveau preparation (0-100)', 'readinessLevel', String(item.readinessLevel || ''), 'text'));
+        fields.push(fieldHtml('Documents lies (csv ids)', 'linkedDocumentIds', toCsv(item.linkedDocumentIds), 'text'));
+        fields.push(fieldHtml('Taches liees (csv ids)', 'linkedTaskIds', toCsv(item.linkedTaskIds), 'text'));
+      }
 
       const editable = canEditWorkflow();
       let crossLinksHtml = '';
@@ -5356,6 +6552,70 @@ ${clone.outerHTML}
       const canValidateCurrentProcess = type === 'process' ? canValidateWorkflow(item) : false;
       const softwareVersionMatches = type === 'software' ? getMatchedSoftwareVersionEntries(item).slice(0, 8) : [];
       const softwareVersionLatest = type === 'software' ? (softwareVersionMatches[0] || null) : null;
+      const permissionProfiles = type === 'software'
+        ? (state.collections.permissionProfiles || [])
+          .filter((row) => String(row.softwareId || '') === String(id))
+          .slice()
+          .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'fr'))
+        : [];
+      const permissionAssignments = type === 'software'
+        ? (state.collections.permissionAssignments || [])
+          .filter((row) => String(row.softwareId || '') === String(id))
+          .slice()
+          .sort((a, b) => Number(b.updatedAt || b.createdAt || 0) - Number(a.updatedAt || a.createdAt || 0))
+        : [];
+      const permissionRequests = type === 'software'
+        ? (state.collections.permissionRequests || [])
+          .filter((row) => String(row.softwareId || '') === String(id))
+          .slice()
+          .sort((a, b) => Number(b.requestedAt || b.updatedAt || b.createdAt || 0) - Number(a.requestedAt || a.updatedAt || a.createdAt || 0))
+        : [];
+      const permissionAudit = type === 'software'
+        ? (state.collections.permissionAudit || [])
+          .filter((row) => String(row.softwareId || '') === String(id))
+          .slice()
+          .sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0))
+          .slice(0, 20)
+        : [];
+      const permissionReviews = type === 'software'
+        ? (state.collections.permissionReviews || [])
+          .filter((row) => String(row.softwareId || '') === String(id))
+          .slice()
+          .sort((a, b) => String(b.reviewDate || '').localeCompare(String(a.reviewDate || '')))
+        : [];
+      const contingencyActions = type === 'contingencyPlan'
+        ? (state.collections.contingencyActions || [])
+          .filter((row) => String(row.planId || '') === String(id))
+          .slice()
+          .sort((a, b) => Number(a.order || 0) - Number(b.order || 0))
+        : [];
+      const contingencyActivations = type === 'contingencyPlan'
+        ? (state.collections.contingencyActivations || [])
+          .filter((row) => String(row.planId || '') === String(id))
+          .slice()
+          .sort((a, b) => Number(b.startedAt || 0) - Number(a.startedAt || 0))
+        : [];
+      const contingencyExercises = type === 'contingencyPlan'
+        ? (state.collections.contingencyExercises || [])
+          .filter((row) => String(row.planId || '') === String(id))
+          .slice()
+          .sort((a, b) => String(b.exerciseDate || '').localeCompare(String(a.exerciseDate || '')))
+        : [];
+      const contingencyReviews = type === 'contingencyPlan'
+        ? (state.collections.contingencyReviews || [])
+          .filter((row) => String(row.planId || '') === String(id))
+          .slice()
+          .sort((a, b) => String(b.reviewDate || '').localeCompare(String(a.reviewDate || '')))
+        : [];
+      const contingencyAudit = type === 'contingencyPlan'
+        ? (state.collections.contingencyAudit || [])
+          .filter((row) => String(row.planId || '') === String(id))
+          .slice()
+          .sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0))
+          .slice(0, 25)
+        : [];
+      const profileById = new Map(permissionProfiles.map((row) => [String(row.id || ''), row]));
+      const assignmentById = new Map(permissionAssignments.map((row) => [String(row.id || ''), row]));
 
       refs.detailBody.innerHTML = `
         ${fields.map((field) => `<div>${field}</div>`).join('')}
@@ -5402,7 +6662,7 @@ ${clone.outerHTML}
         ` : ''}
         ${type === 'software' ? `
         <div class="workflow-map-col">
-          <h6>Version referentielle</h6>
+          <h6>Suivi des versions logicielles</h6>
           <p class="workflow-card-sub">Version: ${esc(String(softwareVersionLatest?.version || item?.metadata?.softwareVersion || '-'))}</p>
           <p class="workflow-card-sub">Maj: ${esc(softwareVersionLatest?.updatedAt ? new Date(Number(softwareVersionLatest.updatedAt)).toLocaleString('fr-FR') : '-')}</p>
           <p class="workflow-card-sub">Ref ID: ${esc(String(softwareVersionLatest?.softwareId || item?.metadata?.softwareVersionRefId || '-'))}</p>
@@ -5410,16 +6670,282 @@ ${clone.outerHTML}
           ${softwareVersionMatches.length ? `
           <div class="overflow-x-auto" style="margin-top:0.4rem;">
             <table class="min-w-full text-xs">
-              <thead><tr><th class="px-2 py-1 text-left">Version</th><th class="px-2 py-1 text-left">Maj</th></tr></thead>
-              <tbody>${softwareVersionMatches.map((row) => `<tr><td class="px-2 py-1">${esc(String(row.version || '-'))}</td><td class="px-2 py-1">${esc(row.updatedAt ? new Date(Number(row.updatedAt)).toLocaleString('fr-FR') : '-')}</td></tr>`).join('')}</tbody>
+              <thead><tr><th class="px-2 py-1 text-left">Version</th><th class="px-2 py-1 text-left">Maj</th><th class="px-2 py-1 text-left">Notes</th>${editable ? '<th class="px-2 py-1 text-right">Actions</th>' : ''}</tr></thead>
+              <tbody>${softwareVersionMatches.map((row) => `<tr><td class="px-2 py-1">${esc(String(row.version || '-'))}</td><td class="px-2 py-1">${esc(row.updatedAt ? new Date(Number(row.updatedAt)).toLocaleString('fr-FR') : '-')}</td><td class="px-2 py-1">${esc(String(row.notes || '-'))}</td>${editable ? `<td class="px-2 py-1 text-right"><button type="button" class="workflow-btn-light text-xs px-2 py-1" data-wf-software-version-edit="${esc(String(row.softwareId || ''))}">Modifier</button> <button type="button" class="workflow-btn-light text-xs px-2 py-1" data-wf-software-version-delete="${esc(String(row.softwareId || ''))}">Supprimer</button></td>` : ''}</tr>`).join('')}</tbody>
             </table>
           </div>
           ` : '<p class="workflow-card-sub">Aucune entree referentielle pour ce logiciel.</p>'}
+          ${editable ? `
+            <div class="workflow-perm-create-grid" style="margin-top:0.45rem;">
+              <input id="wf-software-version-input" class="workflow-form-input" type="text" placeholder="Version (ex: 3.4.1)">
+              <input id="wf-software-version-notes-input" class="workflow-form-input" type="text" placeholder="Notes version (optionnel)">
+              <button id="btn-wf-software-version-add" type="button" class="btn-primary px-3 py-2 rounded-lg text-white text-xs font-semibold">Ajouter version</button>
+            </div>
+          ` : ''}
+        </div>
+        <div class="workflow-map-col workflow-perm-panel">
+          <h6>Profils d habilitation</h6>
+          ${permissionProfiles.length ? `
+            <div class="workflow-perm-table-wrap">
+              <table class="workflow-perm-table">
+                <thead><tr><th>Nom</th><th>Niveau</th><th>Sensibilite</th><th></th></tr></thead>
+                <tbody>
+                  ${permissionProfiles.map((row) => `
+                    <tr>
+                      <td>${esc(String(row.name || '-'))}</td>
+                      <td>${esc(String(row.level || 'read'))}</td>
+                      <td>${esc(String(row.sensitivity || 'normal'))}</td>
+                      <td class="text-right">
+                        ${editable ? `<button type="button" class="workflow-btn-light text-xs" data-wf-perm-profile-delete="${esc(String(row.id || ''))}">Supprimer</button>` : ''}
+                      </td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          ` : '<p class="workflow-card-sub">Aucun profil defini.</p>'}
+          ${editable ? `
+            <div class="workflow-perm-create-grid">
+              <input id="wf-perm-profile-name" class="workflow-form-input" type="text" placeholder="Nom profil (ex: Lecteur metier)">
+              <select id="wf-perm-profile-level" class="workflow-form-select">
+                ${PERMISSION_LEVEL_OPTIONS.map((level) => `<option value="${esc(level)}">${esc(level)}</option>`).join('')}
+              </select>
+              <select id="wf-perm-profile-sensitivity" class="workflow-form-select">
+                <option value="normal">normal</option>
+                <option value="sensitive">sensitive</option>
+                <option value="critical">critical</option>
+              </select>
+              <input id="wf-perm-profile-description" class="workflow-form-input" type="text" placeholder="Description courte (optionnel)">
+              <button id="btn-wf-perm-profile-add" type="button" class="btn-primary px-3 py-2 rounded-lg text-white text-xs font-semibold">Ajouter profil</button>
+            </div>
+          ` : ''}
+        </div>
+        <div class="workflow-map-col workflow-perm-panel">
+          <h6>Attributions d habilitation</h6>
+          ${permissionAssignments.length ? `
+            <div class="workflow-perm-table-wrap">
+              <table class="workflow-perm-table">
+                <thead><tr><th>Beneficiaire</th><th>Profil</th><th>Statut</th><th>Revue</th><th></th></tr></thead>
+                <tbody>
+                  ${permissionAssignments.map((row) => `
+                    <tr>
+                      <td>${esc(resolvePermissionBeneficiaryLabel(row.beneficiaryType, row.beneficiaryId))} <span class="workflow-card-sub">(${esc(String(row.beneficiaryType || 'agent'))})</span></td>
+                      <td>${esc(String(profileById.get(String(row.profileId || ''))?.name || row.profileName || row.profileId || '-'))}</td>
+                      <td>${esc(String(row.status || 'active'))}</td>
+                      <td>${esc(String(row.reviewDate || '-'))}</td>
+                      <td class="text-right">
+                        ${editable ? `<button type="button" class="workflow-btn-light text-xs" data-wf-perm-assignment-delete="${esc(String(row.id || ''))}">Supprimer</button>` : ''}
+                      </td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          ` : '<p class="workflow-card-sub">Aucune attribution enregistree.</p>'}
+          ${editable ? `
+            <div class="workflow-perm-create-grid">
+              <select id="wf-perm-assignment-beneficiary-type" class="workflow-form-select">
+                <option value="agent">agent</option>
+                <option value="user">user</option>
+                <option value="group">group</option>
+                <option value="role">role</option>
+              </select>
+              <input id="wf-perm-assignment-beneficiary-id" class="workflow-form-input" type="text" placeholder="ID beneficiaire">
+              <select id="wf-perm-assignment-profile-id" class="workflow-form-select">
+                <option value="">Profil...</option>
+                ${permissionProfiles.map((row) => `<option value="${esc(String(row.id || ''))}">${esc(String(row.name || row.id || 'Profil'))}</option>`).join('')}
+              </select>
+              <select id="wf-perm-assignment-status" class="workflow-form-select">
+                ${PERMISSION_STATUS_OPTIONS.map((status) => `<option value="${esc(status)}">${esc(status)}</option>`).join('')}
+              </select>
+              <input id="wf-perm-assignment-start" class="workflow-form-input" type="date">
+              <input id="wf-perm-assignment-end" class="workflow-form-input" type="date">
+              <input id="wf-perm-assignment-review" class="workflow-form-input" type="date">
+              <input id="wf-perm-assignment-notes" class="workflow-form-input" type="text" placeholder="Motif / notes">
+              <button id="btn-wf-perm-assignment-add" type="button" class="btn-primary px-3 py-2 rounded-lg text-white text-xs font-semibold">Ajouter attribution</button>
+            </div>
+          ` : ''}
+        </div>
+        <div class="workflow-map-col workflow-perm-panel">
+          <h6>Demandes d habilitation</h6>
+          ${permissionRequests.length ? `
+            <div class="workflow-perm-table-wrap">
+              <table class="workflow-perm-table">
+                <thead><tr><th>Action</th><th>Beneficiaire</th><th>Profil</th><th>Statut</th><th></th></tr></thead>
+                <tbody>
+                  ${permissionRequests.map((row) => `
+                    <tr>
+                      <td>${esc(permissionRequestActionLabel(row.action || 'grant'))}</td>
+                      <td>${esc(resolvePermissionBeneficiaryLabel(row.beneficiaryType, row.beneficiaryId))}</td>
+                      <td>${esc(String(profileById.get(String(row.profileId || ''))?.name || row.profileName || row.profileId || '-'))}</td>
+                      <td>${esc(permissionRequestStatusLabel(row.status || 'draft'))}</td>
+                      <td class="text-right">
+                        ${editable ? getPermissionRequestTransitions(row.status).map((transition) => {
+                          const label = transition === 'submit'
+                            ? 'Soumettre'
+                            : transition === 'approve'
+                              ? 'Approuver'
+                              : transition === 'reject'
+                                ? 'Rejeter'
+                                : 'Executer';
+                          const kindClass = transition === 'approve' || transition === 'execute'
+                            ? 'btn-primary text-white'
+                            : 'workflow-btn-light';
+                          return `<button type="button" class="${kindClass} text-xs px-2 py-1" data-wf-perm-request-transition="${esc(String(row.id || ''))}" data-wf-perm-transition-action="${esc(transition)}">${esc(label)}</button>`;
+                        }).join(' ') : ''}
+                        ${editable ? `<button type="button" class="workflow-btn-light text-xs" data-wf-perm-request-delete="${esc(String(row.id || ''))}">Supprimer</button>` : ''}
+                      </td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          ` : '<p class="workflow-card-sub">Aucune demande enregistree.</p>'}
+          ${editable ? `
+            <div class="workflow-perm-create-grid">
+              <select id="wf-perm-request-action" class="workflow-form-select">
+                ${PERMISSION_REQUEST_ACTIONS.map((action) => `<option value="${esc(action)}">${esc(permissionRequestActionLabel(action))}</option>`).join('')}
+              </select>
+              <select id="wf-perm-request-status" class="workflow-form-select">
+                ${PERMISSION_REQUEST_STATUS.map((status) => `<option value="${esc(status)}">${esc(permissionRequestStatusLabel(status))}</option>`).join('')}
+              </select>
+              <select id="wf-perm-request-beneficiary-type" class="workflow-form-select">
+                <option value="agent">agent</option>
+                <option value="user">user</option>
+                <option value="group">group</option>
+                <option value="role">role</option>
+              </select>
+              <input id="wf-perm-request-beneficiary-id" class="workflow-form-input" type="text" placeholder="ID beneficiaire">
+              <select id="wf-perm-request-profile-id" class="workflow-form-select">
+                <option value="">Profil...</option>
+                ${permissionProfiles.map((row) => `<option value="${esc(String(row.id || ''))}">${esc(String(row.name || row.id || 'Profil'))}</option>`).join('')}
+              </select>
+              <input id="wf-perm-request-justification" class="workflow-form-input" type="text" placeholder="Justification">
+              <button id="btn-wf-perm-request-add" type="button" class="btn-primary px-3 py-2 rounded-lg text-white text-xs font-semibold">Ajouter demande</button>
+            </div>
+          ` : ''}
+        </div>
+        <div class="workflow-map-col workflow-perm-panel">
+          <h6>Revues d habilitation</h6>
+          ${permissionReviews.length ? `
+            <div class="workflow-perm-table-wrap">
+              <table class="workflow-perm-table">
+                <thead><tr><th>Date revue</th><th>Beneficiaire</th><th>Decision</th><th></th></tr></thead>
+                <tbody>
+                  ${permissionReviews.map((row) => {
+                    const assignment = assignmentById.get(String(row.assignmentId || ''));
+                    const beneficiaryLabel = assignment
+                      ? resolvePermissionBeneficiaryLabel(assignment.beneficiaryType, assignment.beneficiaryId)
+                      : '-';
+                    const decision = normalizePermissionReviewDecision(row.decision);
+                    return `
+                      <tr>
+                        <td>${esc(String(row.reviewDate || '-'))}</td>
+                        <td>${esc(beneficiaryLabel)}</td>
+                        <td>${esc(decision)}</td>
+                        <td class="text-right">
+                          ${editable && decision === 'pending'
+                            ? `<button type="button" class="btn-primary text-white text-xs px-2 py-1" data-wf-perm-review-transition="${esc(String(row.id || ''))}" data-wf-perm-review-decision="kept">Conserver</button>
+                               <button type="button" class="workflow-btn-light text-xs px-2 py-1" data-wf-perm-review-transition="${esc(String(row.id || ''))}" data-wf-perm-review-decision="revoked">Retirer</button>`
+                            : ''}
+                        </td>
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
+          ` : '<p class="workflow-card-sub">Aucune revue d habilitation.</p>'}
+        </div>
+        <div class="workflow-map-col workflow-perm-panel">
+          <h6>Journal habilitations</h6>
+          ${permissionAudit.length ? `
+            <ul class="workflow-perm-audit-list">
+              ${permissionAudit.map((row) => `<li><strong>${esc(String(row.action || 'update'))}</strong> - ${esc(row.createdAt ? new Date(Number(row.createdAt)).toLocaleString('fr-FR') : '-')} - ${esc(String(row.byUserId || 'system'))}</li>`).join('')}
+            </ul>
+          ` : '<p class="workflow-card-sub">Aucun evenement d habilitation.</p>'}
         </div>
         <div class="workflow-detail-actions">
           <button id="btn-workflow-software-export" class="workflow-btn-light px-3 py-2 rounded-lg text-xs font-semibold" type="button">Exporter fiche logiciel PDF</button>
           <button id="btn-workflow-software-sync-version" class="workflow-btn-light px-3 py-2 rounded-lg text-xs font-semibold" type="button">Synchroniser version</button>
-          <button id="btn-workflow-software-open-registry" class="workflow-btn-light px-3 py-2 rounded-lg text-xs font-semibold" type="button">Ouvrir référentiel versions</button>
+        </div>
+        ` : ''}
+        ${type === 'contingencyPlan' ? `
+        <div class="workflow-map-col workflow-perm-panel">
+          <h6>Actions de contingence</h6>
+          ${contingencyActions.length ? `
+            <div class="workflow-perm-table-wrap">
+              <table class="workflow-perm-table">
+                <thead><tr><th>Ordre</th><th>Action</th><th>Responsable</th><th>Statut</th><th></th></tr></thead>
+                <tbody>
+                  ${contingencyActions.map((row) => `<tr>
+                    <td>${esc(String(row.order || '-'))}</td>
+                    <td>${esc(String(row.title || '-'))}</td>
+                    <td>${esc(String(getMaps().agentById.get(row.ownerAgentId)?.displayName || '-'))}</td>
+                    <td>${esc(normalizeContingencyActionStatus(row.status))}</td>
+                    <td class="text-right">${editable ? `<button type="button" class="workflow-btn-light text-xs" data-wf-cont-action-delete="${esc(String(row.id || ''))}">Supprimer</button>` : ''}</td>
+                  </tr>`).join('')}
+                </tbody>
+              </table>
+            </div>
+          ` : '<p class="workflow-card-sub">Aucune action definie.</p>'}
+          ${editable ? `
+            <div class="workflow-perm-create-grid">
+              <input id="wf-cont-action-title" class="workflow-form-input" type="text" placeholder="Action a declencher">
+              <select id="wf-cont-action-owner" class="workflow-form-select">${buildSelectOptions(state.collections.agents, 'id', 'displayName', '')}</select>
+              <select id="wf-cont-action-status" class="workflow-form-select">${CONTINGENCY_ACTION_STATUS.map((s) => `<option value="${esc(s)}">${esc(s)}</option>`).join('')}</select>
+              <input id="wf-cont-action-order" class="workflow-form-input" type="number" min="1" value="${esc(String((contingencyActions.length || 0) + 1))}">
+              <button id="btn-wf-cont-action-add" type="button" class="btn-primary px-3 py-2 rounded-lg text-white text-xs font-semibold">Ajouter action</button>
+            </div>
+          ` : ''}
+        </div>
+        <div class="workflow-map-col workflow-perm-panel">
+          <h6>Activations</h6>
+          ${contingencyActivations.length ? `
+            <div class="workflow-perm-table-wrap">
+              <table class="workflow-perm-table">
+                <thead><tr><th>Debut</th><th>Statut</th><th>Initiateur</th><th></th></tr></thead>
+                <tbody>
+                  ${contingencyActivations.map((row) => `<tr>
+                    <td>${esc(row.startedAt ? new Date(Number(row.startedAt)).toLocaleString('fr-FR') : '-')}</td>
+                    <td>${esc(normalizeContingencyActivationStatus(row.status))}</td>
+                    <td>${esc(String(row.initiatorUserId || '-'))}</td>
+                    <td class="text-right">${editable && normalizeContingencyActivationStatus(row.status) === 'active' ? `<button type="button" class="workflow-btn-light text-xs" data-wf-cont-activation-close="${esc(String(row.id || ''))}">Cloturer</button>` : ''}</td>
+                  </tr>`).join('')}
+                </tbody>
+              </table>
+            </div>
+          ` : '<p class="workflow-card-sub">Aucune activation.</p>'}
+        </div>
+        <div class="workflow-map-col workflow-perm-panel">
+          <h6>Exercices et revues</h6>
+          ${contingencyExercises.length ? `<p class="workflow-card-sub">Exercices: ${esc(String(contingencyExercises.length))}</p>` : '<p class="workflow-card-sub">Aucun exercice.</p>'}
+          ${contingencyReviews.length ? `<p class="workflow-card-sub">Revues: ${esc(String(contingencyReviews.length))}</p>` : '<p class="workflow-card-sub">Aucune revue.</p>'}
+          ${editable ? `
+            <div class="workflow-perm-create-grid">
+              <input id="wf-cont-exercise-date" class="workflow-form-input" type="date">
+              <select id="wf-cont-exercise-result" class="workflow-form-select">${CONTINGENCY_EXERCISE_RESULT.map((s) => `<option value="${esc(s)}">${esc(s)}</option>`).join('')}</select>
+              <input id="wf-cont-exercise-notes" class="workflow-form-input" type="text" placeholder="Resultat / ecarts">
+              <button id="btn-wf-cont-exercise-add" type="button" class="workflow-btn-light px-3 py-2 rounded-lg text-xs font-semibold">Ajouter exercice</button>
+            </div>
+            <div class="workflow-perm-create-grid" style="margin-top:0.45rem;">
+              <input id="wf-cont-review-date" class="workflow-form-input" type="date">
+              <input id="wf-cont-review-next-date" class="workflow-form-input" type="date">
+              <input id="wf-cont-review-comments" class="workflow-form-input" type="text" placeholder="Constats revue">
+              <button id="btn-wf-cont-review-add" type="button" class="workflow-btn-light px-3 py-2 rounded-lg text-xs font-semibold">Ajouter revue</button>
+            </div>
+          ` : ''}
+        </div>
+        <div class="workflow-map-col workflow-perm-panel">
+          <h6>Journal contingence</h6>
+          ${contingencyAudit.length ? `
+            <ul class="workflow-perm-audit-list">
+              ${contingencyAudit.map((row) => `<li><strong>${esc(String(row.eventType || 'update'))}</strong> - ${esc(row.createdAt ? new Date(Number(row.createdAt)).toLocaleString('fr-FR') : '-')} - ${esc(String(row.byUserId || 'system'))}</li>`).join('')}
+            </ul>
+          ` : '<p class="workflow-card-sub">Aucun evenement.</p>'}
+        </div>
+        <div class="workflow-detail-actions">
+          ${editable ? '<button id="btn-wf-cont-activate" class="btn-primary px-3 py-2 rounded-lg text-white text-xs font-semibold" type="button">Activer plan</button>' : ''}
         </div>
         ` : ''}
         ${editable && type === 'template' ? `
@@ -5464,18 +6990,262 @@ ${clone.outerHTML}
         });
       }
       if (type === 'software') {
+        const refreshSoftwareDetail = async () => {
+          await loadCollections();
+          renderServiceFilter();
+          renderContent();
+          openDetail('software', id);
+        };
         document.getElementById('btn-workflow-software-export')?.addEventListener('click', () => {
           exportSoftwareSheetPdf(id);
         });
         document.getElementById('btn-workflow-software-sync-version')?.addEventListener('click', async () => {
           await syncWorkflowSoftwareWithLatestVersion(id);
         });
-        document.getElementById('btn-workflow-software-open-registry')?.addEventListener('click', async () => {
-          if (typeof api.openSoftwareVersionRegistry === 'function') {
-            await api.openSoftwareVersionRegistry();
-          } else {
-            toast('Referentiel versions indisponible');
+        document.getElementById('btn-wf-software-version-add')?.addEventListener('click', async () => {
+          if (!editable) return;
+          if (typeof api.upsertSoftwareVersionEntry !== 'function') {
+            toast('Ajout de version indisponible');
+            return;
           }
+          const version = String(document.getElementById('wf-software-version-input')?.value || '').trim();
+          const notes = String(document.getElementById('wf-software-version-notes-input')?.value || '').trim();
+          if (!version) {
+            toast('Version requise');
+            return;
+          }
+          await api.upsertSoftwareVersionEntry({
+            softwareName: String(item.name || '').trim() || String(id),
+            version,
+            notes
+          });
+          await logAudit('software_version_create_inline', 'software', id, { version, notes });
+          await refreshSoftwareDetail();
+          toast('Version logicielle ajoutee');
+        });
+        refs.detailBody?.querySelectorAll('[data-wf-software-version-edit]')?.forEach((btn) => {
+          btn.addEventListener('click', async () => {
+            if (!editable) return;
+            if (typeof api.upsertSoftwareVersionEntry !== 'function') {
+              toast('Edition de version indisponible');
+              return;
+            }
+            const softwareVersionId = String(btn.getAttribute('data-wf-software-version-edit') || '').trim();
+            if (!softwareVersionId) return;
+            const current = (state.collections.softwareVersions || []).find((row) => String(row.softwareId || '') === softwareVersionId);
+            if (!current) return;
+            const nextVersion = (global.prompt('Version', String(current.version || '')) || '').trim();
+            if (!nextVersion) return;
+            const nextNotes = (global.prompt('Notes', String(current.notes || '')) || '').trim();
+            await api.upsertSoftwareVersionEntry({
+              softwareId: softwareVersionId,
+              softwareName: String(current.softwareName || item.name || '').trim() || String(id),
+              version: nextVersion,
+              notes: nextNotes
+            });
+            await logAudit('software_version_update_inline', 'software', id, { softwareVersionId, version: nextVersion });
+            await refreshSoftwareDetail();
+            toast('Version logicielle modifiee');
+          });
+        });
+        refs.detailBody?.querySelectorAll('[data-wf-software-version-delete]')?.forEach((btn) => {
+          btn.addEventListener('click', async () => {
+            if (!editable) return;
+            if (typeof api.deleteSoftwareVersionEntry !== 'function') {
+              toast('Suppression de version indisponible');
+              return;
+            }
+            const softwareVersionId = String(btn.getAttribute('data-wf-software-version-delete') || '').trim();
+            if (!softwareVersionId) return;
+            const current = (state.collections.softwareVersions || []).find((row) => String(row.softwareId || '') === softwareVersionId);
+            if (!current) return;
+            if (!global.confirm(`Supprimer l entree ${String(current.softwareName || item.name || 'Logiciel')} ${String(current.version || '')} ?`)) return;
+            await api.deleteSoftwareVersionEntry(softwareVersionId);
+            await logAudit('software_version_delete_inline', 'software', id, { softwareVersionId });
+            await refreshSoftwareDetail();
+            toast('Version logicielle supprimee');
+          });
+        });
+        document.getElementById('btn-wf-perm-profile-add')?.addEventListener('click', async () => {
+          if (!editable) return;
+          const profileName = String(document.getElementById('wf-perm-profile-name')?.value || '').trim();
+          if (!profileName) {
+            toast('Nom de profil requis');
+            return;
+          }
+          const profileLevel = normalizePermissionLevel(document.getElementById('wf-perm-profile-level')?.value || 'read');
+          const profileSensitivity = String(document.getElementById('wf-perm-profile-sensitivity')?.value || 'normal').trim() || 'normal';
+          const profileDescription = String(document.getElementById('wf-perm-profile-description')?.value || '').trim();
+          const row = {
+            id: `wf-perm-profile-${uid()}`,
+            softwareId: id,
+            name: profileName,
+            level: profileLevel,
+            sensitivity: profileSensitivity,
+            description: profileDescription,
+            createdByUserId: currentUserId(),
+            createdAt: now(),
+            updatedAt: now()
+          };
+          await api.put('workflowPermissionProfiles', row, STORE_KEY_FIELDS.workflowPermissionProfiles);
+          await logPermissionAudit('profile_create', id, { profileId: row.id, name: row.name, level: row.level });
+          await logAudit('permission_profile_create', 'software', id, { profileId: row.id, name: row.name });
+          await loadCollections();
+          renderServiceFilter();
+          renderContent();
+          openDetail('software', id);
+          toast('Profil d habilitation ajoute');
+        });
+        refs.detailBody?.querySelectorAll('[data-wf-perm-profile-delete]')?.forEach((btn) => {
+          btn.addEventListener('click', async () => {
+            if (!editable) return;
+            const profileId = String(btn.getAttribute('data-wf-perm-profile-delete') || '').trim();
+            if (!profileId) return;
+            const inUse = (state.collections.permissionAssignments || []).some((row) => String(row.profileId || '') === profileId);
+            if (inUse) {
+              toast('Profil utilise par des attributions');
+              return;
+            }
+            await api.remove('workflowPermissionProfiles', profileId);
+            await logPermissionAudit('profile_delete', id, { profileId });
+            await logAudit('permission_profile_delete', 'software', id, { profileId });
+            await loadCollections();
+            renderServiceFilter();
+            renderContent();
+            openDetail('software', id);
+          });
+        });
+
+        document.getElementById('btn-wf-perm-assignment-add')?.addEventListener('click', async () => {
+          if (!editable) return;
+          const beneficiaryType = normalizePermissionBeneficiaryType(document.getElementById('wf-perm-assignment-beneficiary-type')?.value || 'agent');
+          const beneficiaryId = String(document.getElementById('wf-perm-assignment-beneficiary-id')?.value || '').trim();
+          const profileId = String(document.getElementById('wf-perm-assignment-profile-id')?.value || '').trim();
+          if (!beneficiaryId || !profileId) {
+            toast('Beneficiaire et profil requis');
+            return;
+          }
+          const profile = (state.collections.permissionProfiles || []).find((row) => String(row.id || '') === profileId);
+          if (!profile) {
+            toast('Profil introuvable');
+            return;
+          }
+          const row = {
+            id: `wf-perm-assignment-${uid()}`,
+            softwareId: id,
+            profileId,
+            profileName: String(profile.name || profileId),
+            level: normalizePermissionLevel(profile.level),
+            beneficiaryType,
+            beneficiaryId,
+            beneficiaryLabel: resolvePermissionBeneficiaryLabel(beneficiaryType, beneficiaryId),
+            status: normalizePermissionStatus(document.getElementById('wf-perm-assignment-status')?.value || 'active'),
+            startDate: normalizeIsoDate(document.getElementById('wf-perm-assignment-start')?.value || ''),
+            endDate: normalizeIsoDate(document.getElementById('wf-perm-assignment-end')?.value || ''),
+            reviewDate: normalizeIsoDate(document.getElementById('wf-perm-assignment-review')?.value || ''),
+            notes: String(document.getElementById('wf-perm-assignment-notes')?.value || '').trim(),
+            source: 'manual',
+            createdByUserId: currentUserId(),
+            createdAt: now(),
+            updatedAt: now()
+          };
+          await api.put('workflowPermissionAssignments', row, STORE_KEY_FIELDS.workflowPermissionAssignments);
+          await logPermissionAudit('assignment_create', id, { assignmentId: row.id, beneficiaryType, beneficiaryId, profileId });
+          await logAudit('permission_assignment_create', 'software', id, { assignmentId: row.id, beneficiaryId, profileId });
+          await loadCollections();
+          renderServiceFilter();
+          renderContent();
+          openDetail('software', id);
+          toast('Attribution ajoutee');
+        });
+        refs.detailBody?.querySelectorAll('[data-wf-perm-assignment-delete]')?.forEach((btn) => {
+          btn.addEventListener('click', async () => {
+            if (!editable) return;
+            const assignmentId = String(btn.getAttribute('data-wf-perm-assignment-delete') || '').trim();
+            if (!assignmentId) return;
+            await api.remove('workflowPermissionAssignments', assignmentId);
+            await logPermissionAudit('assignment_delete', id, { assignmentId });
+            await logAudit('permission_assignment_delete', 'software', id, { assignmentId });
+            await loadCollections();
+            renderServiceFilter();
+            renderContent();
+            openDetail('software', id);
+          });
+        });
+
+        document.getElementById('btn-wf-perm-request-add')?.addEventListener('click', async () => {
+          if (!editable) return;
+          const action = normalizePermissionRequestAction(document.getElementById('wf-perm-request-action')?.value || 'grant');
+          const status = normalizePermissionRequestStatus(document.getElementById('wf-perm-request-status')?.value || 'draft');
+          const beneficiaryType = normalizePermissionBeneficiaryType(document.getElementById('wf-perm-request-beneficiary-type')?.value || 'agent');
+          const beneficiaryId = String(document.getElementById('wf-perm-request-beneficiary-id')?.value || '').trim();
+          const profileId = String(document.getElementById('wf-perm-request-profile-id')?.value || '').trim();
+          const justification = String(document.getElementById('wf-perm-request-justification')?.value || '').trim();
+          if (!beneficiaryId || !profileId) {
+            toast('Beneficiaire et profil requis');
+            return;
+          }
+          const profile = (state.collections.permissionProfiles || []).find((row) => String(row.id || '') === profileId);
+          const row = {
+            id: `wf-perm-request-${uid()}`,
+            softwareId: id,
+            action,
+            status,
+            beneficiaryType,
+            beneficiaryId,
+            beneficiaryLabel: resolvePermissionBeneficiaryLabel(beneficiaryType, beneficiaryId),
+            profileId,
+            profileName: String(profile?.name || profileId),
+            requestedByUserId: currentUserId(),
+            approverUserId: null,
+            executedByUserId: null,
+            requestedAt: now(),
+            approvedAt: null,
+            executedAt: null,
+            justification,
+            comments: '',
+            updatedAt: now()
+          };
+          await api.put('workflowPermissionRequests', row, STORE_KEY_FIELDS.workflowPermissionRequests);
+          await logPermissionAudit('request_create', id, { requestId: row.id, action: row.action, beneficiaryId, profileId });
+          await logAudit('permission_request_create', 'software', id, { requestId: row.id, action: row.action });
+          await loadCollections();
+          renderServiceFilter();
+          renderContent();
+          openDetail('software', id);
+          toast('Demande ajoutee');
+        });
+        refs.detailBody?.querySelectorAll('[data-wf-perm-request-delete]')?.forEach((btn) => {
+          btn.addEventListener('click', async () => {
+            if (!editable) return;
+            const requestId = String(btn.getAttribute('data-wf-perm-request-delete') || '').trim();
+            if (!requestId) return;
+            await api.remove('workflowPermissionRequests', requestId);
+            await logPermissionAudit('request_delete', id, { requestId });
+            await logAudit('permission_request_delete', 'software', id, { requestId });
+            await loadCollections();
+            renderServiceFilter();
+            renderContent();
+            openDetail('software', id);
+          });
+        });
+        refs.detailBody?.querySelectorAll('[data-wf-perm-request-transition]')?.forEach((btn) => {
+          btn.addEventListener('click', async () => {
+            if (!editable) return;
+            const requestId = String(btn.getAttribute('data-wf-perm-request-transition') || '').trim();
+            const transition = String(btn.getAttribute('data-wf-perm-transition-action') || '').trim();
+            if (!requestId || !transition) return;
+            await transitionPermissionRequest(requestId, transition);
+          });
+        });
+        refs.detailBody?.querySelectorAll('[data-wf-perm-review-transition]')?.forEach((btn) => {
+          btn.addEventListener('click', async () => {
+            if (!editable) return;
+            const reviewId = String(btn.getAttribute('data-wf-perm-review-transition') || '').trim();
+            const decision = String(btn.getAttribute('data-wf-perm-review-decision') || '').trim();
+            if (!reviewId || !decision) return;
+            await transitionPermissionReview(reviewId, decision);
+          });
         });
       }
 
@@ -6148,6 +7918,58 @@ ${clone.outerHTML}
             btn.textContent = isHidden ? 'Masquer diff' : 'Voir diff';
           });
         });
+        
+        if (type === 'contingencyPlan') {
+          document.getElementById('btn-wf-cont-activate')?.addEventListener('click', async () => {
+             await activateContingencyPlan(id);
+          });
+          document.getElementById('btn-wf-cont-action-add')?.addEventListener('click', async () => {
+             const title = String(document.getElementById('wf-cont-action-title')?.value || '').trim();
+             const ownerAgentId = String(document.getElementById('wf-cont-action-owner')?.value || '').trim();
+             const status = normalizeContingencyActionStatus(document.getElementById('wf-cont-action-status')?.value || 'valid');
+             const orderValue = parseInt(String(document.getElementById('wf-cont-action-order')?.value || '1'), 10);
+             if (!title) { toast('Titre de l action requis'); return; }
+             const actionId = `wf-cont-act-row-${uid()}`;
+             const actionObj = {
+               id: actionId,
+               planId: id,
+               title,
+               ownerAgentId,
+               order: isNaN(orderValue) ? 1 : orderValue,
+               status,
+               createdAt: now(),
+               updatedAt: now()
+             };
+             await api.put('workflowContingencyActions', actionObj, STORE_KEY_FIELDS.workflowContingencyActions);
+             await logAudit('contingency_action_add', 'contingencyPlan', id, { actionId });
+             await loadCollections();
+             renderServiceFilter();
+             renderContent();
+             openDetail('contingencyPlan', id);
+             toast('Action ajoutee');
+          });
+          refs.detailBody?.querySelectorAll('[data-wf-cont-action-delete]')?.forEach((btn) => {
+            btn.addEventListener('click', async () => {
+              const actionId = String(btn.getAttribute('data-wf-cont-action-delete') || '').trim();
+              if (!actionId) return;
+              if (!global.confirm('Supprimer cette action de contingence ?')) return;
+              await api.remove('workflowContingencyActions', actionId);
+              await logAudit('contingency_action_delete', 'contingencyPlan', id, { actionId });
+              await loadCollections();
+              renderServiceFilter();
+              renderContent();
+              openDetail('contingencyPlan', id);
+              toast('Action supprimee');
+            });
+          });
+          refs.detailBody?.querySelectorAll('[data-wf-cont-activation-close]')?.forEach((btn) => {
+            btn.addEventListener('click', async () => {
+               const actId = String(btn.getAttribute('data-wf-cont-activation-close') || '').trim();
+               if (!global.confirm('Voulez-vous vraiment cloturer cette crise pour ce plan ?')) return;
+               await closeContingencyActivation(actId);
+            });
+          });
+        }
       }
 
       if (type === 'procedure') {
@@ -6720,6 +8542,11 @@ ${clone.outerHTML}
             updates.push(api.put('workflowProcesses', { ...process, serviceId: null, updatedAt: now() }, STORE_KEY_FIELDS.workflowProcesses));
           }
         });
+        state.collections.contingencyPlans.forEach((plan) => {
+          if (plan.serviceId === id) {
+            updates.push(api.put('workflowContingencyPlans', { ...plan, serviceId: null, updatedAt: now() }, STORE_KEY_FIELDS.workflowContingencyPlans));
+          }
+        });
         state.collections.steps.forEach((step) => {
           if (step.serviceId === id) {
             updates.push(api.put('workflowProcessSteps', { ...step, serviceId: null, updatedAt: now() }, STORE_KEY_FIELDS.workflowProcessSteps));
@@ -6776,6 +8603,21 @@ ${clone.outerHTML}
             updates.push(api.put('workflowProcessSteps', { ...step, ownerAgentId: null, updatedAt: now() }, STORE_KEY_FIELDS.workflowProcessSteps));
           }
         });
+        state.collections.contingencyPlans.forEach((plan) => {
+          if (plan.ownerAgentId === id || plan.backupAgentId === id) {
+            updates.push(api.put('workflowContingencyPlans', {
+              ...plan,
+              ownerAgentId: plan.ownerAgentId === id ? null : plan.ownerAgentId,
+              backupAgentId: plan.backupAgentId === id ? null : plan.backupAgentId,
+              updatedAt: now()
+            }, STORE_KEY_FIELDS.workflowContingencyPlans));
+          }
+        });
+        state.collections.contingencyActions.forEach((row) => {
+          if (row.ownerAgentId === id) {
+            updates.push(api.put('workflowContingencyActions', { ...row, ownerAgentId: null, updatedAt: now() }, STORE_KEY_FIELDS.workflowContingencyActions));
+          }
+        });
       }
 
       if (type === 'role') {
@@ -6805,6 +8647,11 @@ ${clone.outerHTML}
         state.collections.templates.forEach((tpl) => {
           if (tpl.sourceProcessId === id) {
             updates.push(api.put('workflowProcessTemplates', { ...tpl, sourceProcessId: null, updatedAt: now() }, STORE_KEY_FIELDS.workflowProcessTemplates));
+          }
+        });
+        state.collections.contingencyPlans.forEach((plan) => {
+          if (plan.processId === id) {
+            updates.push(api.put('workflowContingencyPlans', { ...plan, processId: null, updatedAt: now() }, STORE_KEY_FIELDS.workflowContingencyPlans));
           }
         });
       }
@@ -6845,6 +8692,44 @@ ${clone.outerHTML}
           if (Array.isArray(step.linkedSoftwareIds) && step.linkedSoftwareIds.includes(id)) {
             updates.push(api.put('workflowProcessSteps', { ...step, linkedSoftwareIds: step.linkedSoftwareIds.filter((sid) => sid !== id), updatedAt: now() }, STORE_KEY_FIELDS.workflowProcessSteps));
           }
+        });
+        state.collections.permissionProfiles.forEach((row) => {
+          if (String(row.softwareId || '') === String(id)) updates.push(api.remove('workflowPermissionProfiles', row.id));
+        });
+        state.collections.permissionAssignments.forEach((row) => {
+          if (String(row.softwareId || '') === String(id)) updates.push(api.remove('workflowPermissionAssignments', row.id));
+        });
+        state.collections.permissionRequests.forEach((row) => {
+          if (String(row.softwareId || '') === String(id)) updates.push(api.remove('workflowPermissionRequests', row.id));
+        });
+        state.collections.permissionReviews.forEach((row) => {
+          if (String(row.softwareId || '') === String(id)) updates.push(api.remove('workflowPermissionReviews', row.id));
+        });
+        state.collections.permissionAudit.forEach((row) => {
+          if (String(row.softwareId || '') === String(id)) updates.push(api.remove('workflowPermissionAudit', row.id));
+        });
+        state.collections.contingencyPlans.forEach((plan) => {
+          if (String(plan.softwareId || '') === String(id)) {
+            updates.push(api.put('workflowContingencyPlans', { ...plan, softwareId: null, updatedAt: now() }, STORE_KEY_FIELDS.workflowContingencyPlans));
+          }
+        });
+      }
+
+      if (type === 'contingencyPlan') {
+        state.collections.contingencyActions.forEach((row) => {
+          if (String(row.planId || '') === String(id)) updates.push(api.remove('workflowContingencyActions', row.id));
+        });
+        state.collections.contingencyActivations.forEach((row) => {
+          if (String(row.planId || '') === String(id)) updates.push(api.remove('workflowContingencyActivations', row.id));
+        });
+        state.collections.contingencyExercises.forEach((row) => {
+          if (String(row.planId || '') === String(id)) updates.push(api.remove('workflowContingencyExercises', row.id));
+        });
+        state.collections.contingencyReviews.forEach((row) => {
+          if (String(row.planId || '') === String(id)) updates.push(api.remove('workflowContingencyReviews', row.id));
+        });
+        state.collections.contingencyAudit.forEach((row) => {
+          if (String(row.planId || '') === String(id)) updates.push(api.remove('workflowContingencyAudit', row.id));
         });
       }
 
@@ -6988,7 +8873,7 @@ ${clone.outerHTML}
       }
     }
 
-    function openCreateModal(kind) {
+    function openCreateModal(kind, options = {}) {
       if (!canEditWorkflow()) {
         toast('Lecture seule: creation reservee au role admin ou manager workflow');
         return;
@@ -7308,6 +9193,8 @@ ${clone.outerHTML}
       if (kind === 'task') {
         const defaultServiceId = state.serviceFilter !== 'all' ? state.serviceFilter : '';
         const defaultOwnerAgentId = getCurrentUserPrimaryAgentId(defaultServiceId, state.groupFilter !== 'all' ? state.groupFilter : '') || '';
+        const requestedStatus = String(options?.statusPrefill || '').trim();
+        const selectedTaskStatus = TASK_STATUS_OPTIONS.includes(requestedStatus) ? requestedStatus : 'todo';
         refs.modalTitle.textContent = 'Nouvelle tache workflow';
         refs.modalBody.innerHTML = `
           <div><label class="workflow-form-label">Titre</label><input id="wf-create-task-title" class="workflow-form-input" type="text" placeholder="Ex: Verifier les pieces du dossier"></div>
@@ -7322,7 +9209,7 @@ ${clone.outerHTML}
               <div><label class="workflow-form-label">Description</label><textarea id="wf-create-task-description" class="workflow-form-textarea"></textarea></div>
               <div><label class="workflow-form-label">Service</label><select id="wf-create-task-service" class="workflow-form-select">${buildSelectOptions(state.collections.services, 'id', 'name', defaultServiceId)}</select></div>
               <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:0.6rem;">
-                <div><label class="workflow-form-label">Statut</label><select id="wf-create-task-status" class="workflow-form-select">${TASK_STATUS_OPTIONS.map((status) => `<option value="${esc(status)}" ${status === 'todo' ? 'selected' : ''}>${esc(status)}</option>`).join('')}</select></div>
+                <div><label class="workflow-form-label">Statut</label><select id="wf-create-task-status" class="workflow-form-select">${TASK_STATUS_OPTIONS.map((status) => `<option value="${esc(status)}" ${status === selectedTaskStatus ? 'selected' : ''}>${esc(status)}</option>`).join('')}</select></div>
                 <div><label class="workflow-form-label">Validation</label><select id="wf-create-task-approval" class="workflow-form-select">${TASK_APPROVAL_OPTIONS.map((status) => `<option value="${esc(status)}" ${status === 'pending' ? 'selected' : ''}>${esc(status)}</option>`).join('')}</select></div>
               </div>
               <div><label class="workflow-form-label">Checklist execution (1 ligne, prefixe [x] optionnel)</label><textarea id="wf-create-task-checklist" class="workflow-form-textarea"></textarea></div>
@@ -7387,6 +9274,29 @@ ${clone.outerHTML}
         `;
         const softwareNameInput = document.getElementById('wf-create-software-name');
         if (softwareNameInput) softwareNameInput.focus();
+      }
+
+      if (kind === 'contingency-plan') {
+        refs.modalTitle.textContent = 'Nouveau plan de contingence';
+        refs.modalBody.innerHTML = `
+          <div><label class="workflow-form-label">Titre</label><input id="wf-create-contingency-title" class="workflow-form-input" type="text" placeholder="Ex: Plan bascule secours"></div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:0.6rem;">
+            <div><label class="workflow-form-label">Criticite</label><select id="wf-create-contingency-criticality" class="workflow-form-select"><option value="low">Basse</option><option value="medium" selected>Moyenne</option><option value="high">Haute</option></select></div>
+            <div><label class="workflow-form-label">Statut</label><select id="wf-create-contingency-status" class="workflow-form-select"><option value="draft">Brouillon</option><option value="active" selected>Actif</option><option value="archived">Archive</option></select></div>
+          </div>
+          <details style="border:1px solid #cbd5e1;border-radius:12px;padding:0.65rem 0.75rem;background:#f8fafc;" open>
+            <summary class="workflow-form-label" style="cursor:pointer;list-style:none;">Liens et perimetre</summary>
+            <div style="margin-top:0.6rem;display:grid;gap:0.6rem;">
+              <div><label class="workflow-form-label">Description / Perimetre</label><textarea id="wf-create-contingency-description" class="workflow-form-textarea"></textarea></div>
+              <div><label class="workflow-form-label">Processus impacte</label><select id="wf-create-contingency-process" class="workflow-form-select"><option value="">-- Aucun --</option>${buildSelectOptions(state.collections.processes, 'id', 'title', '')}</select></div>
+              <div><label class="workflow-form-label">Service impacte</label><select id="wf-create-contingency-service" class="workflow-form-select"><option value="">-- Aucun --</option>${buildSelectOptions(state.collections.services, 'id', 'name', '')}</select></div>
+              <div><label class="workflow-form-label">Logiciel metier impacte</label><select id="wf-create-contingency-software" class="workflow-form-select"><option value="">-- Aucun --</option>${buildSelectOptions(state.collections.software, 'id', 'name', '')}</select></div>
+              <div><label class="workflow-form-label">Proprietaire (Agent)</label><select id="wf-create-contingency-owner" class="workflow-form-select"><option value="">-- Aucun --</option>${buildSelectOptions(state.collections.agents, 'id', 'displayName', '')}</select></div>
+            </div>
+          </details>
+        `;
+        const contingencyTitleInput = document.getElementById('wf-create-contingency-title');
+        if (contingencyTitleInput) contingencyTitleInput.focus();
       }
       injectCreateModalHints(kind);
     }
@@ -7891,6 +9801,38 @@ ${clone.outerHTML}
         closeCreateModal();
         toast('Logiciel workflow ajoute');
       }
+
+      if (workflowCreateKind === 'contingency-plan') {
+        const title = String(document.getElementById('wf-create-contingency-title')?.value || '').trim();
+        if (!title) {
+          toast('Titre plan de contingence requis');
+          return;
+        }
+        const row = {
+          id: `wf-contingency-plan-${uid()}`,
+          code: '',
+          title,
+          description: String(document.getElementById('wf-create-contingency-description')?.value || '').trim(),
+          criticality: String(document.getElementById('wf-create-contingency-criticality')?.value || 'medium').trim(),
+          status: String(document.getElementById('wf-create-contingency-status')?.value || 'draft').trim(),
+          ownerAgentId: String(document.getElementById('wf-create-contingency-owner')?.value || '').trim() || null,
+          processId: String(document.getElementById('wf-create-contingency-process')?.value || '').trim() || null,
+          serviceId: String(document.getElementById('wf-create-contingency-service')?.value || '').trim() || null,
+          softwareId: String(document.getElementById('wf-create-contingency-software')?.value || '').trim() || null,
+          version: 1,
+          metadata: {},
+          createdAt: now(),
+          updatedAt: now()
+        };
+        await api.put('workflowContingencyPlans', row, STORE_KEY_FIELDS.workflowContingencyPlans);
+        await logAudit('create', 'contingencyPlan', row.id, { title: row.title });
+        await loadCollections();
+        renderServiceFilter();
+        renderContent();
+        openDetail('contingencyPlan', row.id);
+        closeCreateModal();
+        toast('Plan de contingence ajoute');
+      }
     }
     function bindEvents() {
       if (state.bound) return;
@@ -7978,6 +9920,10 @@ ${clone.outerHTML}
             await quickCreateWorkflowTaskFromContext(type, id);
             return;
           }
+          if (action === 'contingency-activate' && type === 'contingencyPlan') {
+            await activateContingencyPlan(id);
+            return;
+          }
           if (action === 'create-template' && type === 'process') {
             await createTemplateFromProcess(id);
             return;
@@ -8010,14 +9956,6 @@ ${clone.outerHTML}
             if (type === 'service') exportServiceSheetPdf(id);
             if (type === 'agent') exportAgentSheetPdf(id);
             if (type === 'software') exportSoftwareSheetPdf(id);
-            return;
-          }
-          if (action === 'open-software-registry' && type === 'software') {
-            if (typeof api.openSoftwareVersionRegistry === 'function') {
-              await api.openSoftwareVersionRegistry();
-            } else {
-              toast('Referentiel versions indisponible');
-            }
             return;
           }
           if (action === 'process-submit-review' && type === 'process') {
@@ -8064,12 +10002,36 @@ ${clone.outerHTML}
           event.stopPropagation();
           const action = String(governanceAction.getAttribute('data-wf-governance-action') || '').trim();
           const id = String(governanceAction.getAttribute('data-wf-id') || '').trim();
-          if (!id) return;
           if (action === 'open') {
+            if (!id) return;
             openDetail('process', id);
             return;
           }
+          if (action === 'open_software') {
+            if (!id) return;
+            openDetail('software', id);
+            return;
+          }
+          if (action === 'open_beneficiary') {
+            const beneficiaryType = String(governanceAction.getAttribute('data-wf-beneficiary-type') || '').trim();
+            const beneficiaryId = String(governanceAction.getAttribute('data-wf-beneficiary-id') || '').trim();
+            if (beneficiaryType === 'agent' && beneficiaryId) {
+              openDetail('agent', beneficiaryId);
+              return;
+            }
+            if (beneficiaryType === 'group' && beneficiaryId) {
+              openDetail('group', beneficiaryId);
+              return;
+            }
+            if (beneficiaryType === 'role' && beneficiaryId) {
+              openDetail('role', beneficiaryId);
+              return;
+            }
+            toast('Ouverture detail indisponible pour ce beneficiaire');
+            return;
+          }
           if (action === 'approve') {
+            if (!id) return;
             transitionProcessValidation(id, 'approve_level').catch((error) => {
               console.error('workflow governance approve', error);
               toast(`Erreur validation: ${error.message}`);
@@ -8077,6 +10039,7 @@ ${clone.outerHTML}
             return;
           }
           if (action === 'reject') {
+            if (!id) return;
             transitionProcessValidation(id, 'reject').catch((error) => {
               console.error('workflow governance reject', error);
               toast(`Erreur rejet: ${error.message}`);
@@ -8097,6 +10060,20 @@ ${clone.outerHTML}
             exportGovernanceCsv();
             return;
           }
+          if (action === 'perm-matrix-csv') {
+            exportPermissionMatrixCsv();
+            return;
+          }
+        }
+        const governancePermReset = event.target.closest('[data-wf-governance-perm-reset]');
+        if (governancePermReset) {
+          event.preventDefault();
+          event.stopPropagation();
+          state.governancePermissionSoftwareFilter = 'all';
+          state.governancePermissionBeneficiaryTypeFilter = 'all';
+          state.governancePermissionRequestStatusFilter = 'all';
+          renderContent();
+          return;
         }
         const mapAction = event.target.closest('[data-wf-map-action]');
         if (mapAction) {
@@ -8305,6 +10282,24 @@ ${clone.outerHTML}
           renderContent();
           return;
         }
+        const governancePermSoftwareFilter = event.target.closest('[data-wf-governance-perm-software-filter]');
+        if (governancePermSoftwareFilter) {
+          state.governancePermissionSoftwareFilter = String(governancePermSoftwareFilter.value || 'all') || 'all';
+          renderContent();
+          return;
+        }
+        const governancePermBeneficiaryFilter = event.target.closest('[data-wf-governance-perm-beneficiary-filter]');
+        if (governancePermBeneficiaryFilter) {
+          state.governancePermissionBeneficiaryTypeFilter = String(governancePermBeneficiaryFilter.value || 'all') || 'all';
+          renderContent();
+          return;
+        }
+        const governancePermRequestStatusFilter = event.target.closest('[data-wf-governance-perm-request-status-filter]');
+        if (governancePermRequestStatusFilter) {
+          state.governancePermissionRequestStatusFilter = String(governancePermRequestStatusFilter.value || 'all') || 'all';
+          renderContent();
+          return;
+        }
         const mapInput = event.target.closest('[data-wf-map-input]');
         if (!mapInput || state.activeView !== 'map') return;
         const key = String(mapInput.getAttribute('data-wf-map-input') || '').trim();
@@ -8449,6 +10444,15 @@ ${clone.outerHTML}
         });
       });
 
+      refs.content?.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-wf-kanban-add="1"]');
+        if (!button || !canEditWorkflow() || state.activeView !== 'kanban') return;
+        event.preventDefault();
+        event.stopPropagation();
+        const status = String(button.getAttribute('data-wf-target-status') || '').trim();
+        openCreateModal('task', { statusPrefill: status });
+      });
+
       document.getElementById('btn-workflow-detail-close')?.addEventListener('click', () => {
         closeDetailModal();
       });
@@ -8524,6 +10528,10 @@ ${clone.outerHTML}
 
       document.getElementById('btn-workflow-add-software')?.addEventListener('click', () => {
         openCreateModal('software');
+      });
+
+      document.getElementById('btn-workflow-add-contingency-plan')?.addEventListener('click', () => {
+        openCreateModal('contingency-plan');
       });
 
       document.getElementById('btn-workflow-migrate-agent-users')?.addEventListener('click', () => {

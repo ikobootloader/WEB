@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="fr" class="light">
 <head>
   <meta charset="UTF-8">
@@ -147,8 +147,8 @@
           <li>Exports d échange: export du modèle workflow complet en JSON et export de synthèse processus en CSV.</li>
           <li>Restitution PDF: export fiche processus, fiche service, fiche agent et fiche logiciel métier.</li>
           <li>Bouton d injection d un jeu d exemple complet pour modéliser une organisation (communautés, services, groupes, agents, rôles, processus, étapes, flux, modèles, tâches, procédures, logiciels).</li>
-          <li>Référentiels globaux: identité, thématiques, groupes, habilitations, versions logicielles.</li>
-          <li>Workflow ↔ Référentiels: les logiciels métiers affichent et synchronisent la version depuis le suivi global des versions logicielles.</li>
+          <li>Référentiels globaux: identité, thématiques, groupes, habilitations et options de vues.</li>
+          <li>Workflow: les logiciels métiers intègrent directement le suivi des versions dans leur fiche.</li>
           <li>Profil et sécurité: email/photo, export/import JSON, export CSV, changement mot de passe, clé de récupération.</li>
           <li>Mode sombre, responsive design, synchronisation collaborative sans serveur (FSA) et chiffrement local.</li>
         </ul>
@@ -366,7 +366,10 @@
               <select id="global-task-theme-known" class="px-3 py-2 border border-slate-300 rounded-lg text-sm" title="Choisir parmi les thématiques existantes">
                 <option value="">Thématiques existantes...</option>
               </select>
-              <button id="btn-global-add-task" class="btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold">Nouvelle tâche hors projet</button>
+              <button id="btn-global-add-task" class="btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold inline-flex items-center justify-center gap-2" data-action-kind="create" data-action-label="Nouvelle tâche hors projet" aria-label="Nouvelle tâche hors projet">
+                <span class="material-symbols-outlined">add</span>
+                <span id="btn-global-add-task-text">Nouvelle tâche hors projet</span>
+              </button>
             </div>
             <div id="global-tasks-container" class="space-y-3"></div>
             <div id="global-tasks-pagination" class="mt-4 flex items-center justify-between gap-3 text-sm text-slate-600"></div>
@@ -390,6 +393,7 @@
                     <button id="btn-workflow-add-task" type="button" class="workflow-quick-add-item" role="menuitem">Tache</button>
                     <button id="btn-workflow-add-procedure" type="button" class="workflow-quick-add-item" role="menuitem">Procedure</button>
                     <button id="btn-workflow-add-software" type="button" class="workflow-quick-add-item" role="menuitem">Logiciel</button>
+                    <button id="btn-workflow-add-contingency-plan" type="button" class="workflow-quick-add-item" role="menuitem">Plan contingence</button>
                   </div>
                 </div>
                 <button id="btn-workflow-migrate-agent-users" class="workflow-btn-light px-3 py-2 rounded-lg text-sm font-semibold">Auto-lier comptes agents</button>
@@ -411,6 +415,7 @@
                 <button id="workflow-view-timeline" class="workflow-view-tab" type="button">Timeline</button>
                 <button id="workflow-view-procedures" class="workflow-view-tab" type="button">Procédures</button>
                 <button id="workflow-view-software" class="workflow-view-tab" type="button">Logiciels metiers</button>
+                <button id="workflow-view-contingency" class="workflow-view-tab" type="button">Contingence</button>
                 <button id="workflow-view-analytics" class="workflow-view-tab" type="button">Analyse</button>
                 <button id="workflow-view-governance" class="workflow-view-tab" type="button">Gouvernance</button>
                 <button id="workflow-view-journal" class="workflow-view-tab" type="button">Journal</button>
@@ -465,7 +470,28 @@
                   <button id="global-calendar-view-list" class="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 font-semibold">Vue liste</button>
                 </div>
                 <div class="calendar-month-nav">
-                  <button id="global-calendar-today" class="px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-700 text-xs font-semibold">Aujourd'hui</button>
+                  <div class="calendar-quick-actions">
+                    <button
+                      id="global-calendar-today"
+                      type="button"
+                      class="calendar-nav-icon-btn task-action-btn task-action-btn-subtle"
+                      data-action-kind="default"
+                      data-action-label="Aujourd'hui"
+                      aria-label="Aujourd'hui"
+                    >
+                      <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">today</span>
+                    </button>
+                    <button
+                      id="global-calendar-reset"
+                      type="button"
+                      class="calendar-nav-icon-btn task-action-btn task-action-btn-subtle"
+                      data-action-kind="default"
+                      data-action-label="Réinitialiser"
+                      aria-label="Réinitialiser"
+                    >
+                      <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">restart_alt</span>
+                    </button>
+                  </div>
                   <button id="global-calendar-prev-month" class="px-2 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-700" aria-label="Mois précédent">
                     <span class="material-symbols-outlined text-[18px]">chevron_left</span>
                   </button>
@@ -475,28 +501,24 @@
                   </button>
                 </div>
               </div>
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+              <div class="calendar-toolbar-main grid grid-cols-1 md:grid-cols-2 gap-2">
                 <input id="global-calendar-search" type="text" placeholder="Recherche par thématique/sujet/projet" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
                 <select id="global-calendar-month" class="px-3 py-2 border border-slate-300 rounded-lg text-sm"></select>
-                <button id="global-calendar-reset" class="px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold">Réinitialiser</button>
               </div>
-              <div class="calendar-legend mt-3">
-                <span class="calendar-legend-chip calendar-legend-chip-shared">Collaborative</span>
-                <span class="calendar-legend-chip calendar-legend-chip-private">Privée</span>
-                <span class="calendar-legend-chip calendar-legend-chip-info">Info hors projet</span>
-                <span class="calendar-legend-chip calendar-legend-chip-task">Date limite tâche</span>
+              <div class="calendar-toolbar-bottom mt-3">
+                <div class="calendar-legend">
+                  <span class="calendar-legend-chip calendar-legend-chip-shared">Collaborative</span>
+                  <span class="calendar-legend-chip calendar-legend-chip-private">Privée</span>
+                  <span class="calendar-legend-chip calendar-legend-chip-info">Info hors projet</span>
+                  <span class="calendar-legend-chip calendar-legend-chip-task">Date limite tâche</span>
+                </div>
+                <div id="global-calendar-item-form">
+                  <button id="btn-open-global-calendar-item-modal" type="button" class="calendar-create-trigger" aria-label="Ajouter une info hors projet">
+                    <span class="material-symbols-outlined">add</span>
+                    <span>Ajouter info hors projet</span>
+                  </button>
+                </div>
               </div>
-            </div>
-            <div id="global-calendar-item-form" class="mb-4 grid grid-cols-1 md:grid-cols-5 gap-2">
-              <input id="global-calendar-item-title" type="text" placeholder="Sujet hors projet" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-              <input id="global-calendar-item-date" type="date" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-              <input id="global-calendar-item-theme" type="text" placeholder="Thématique" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-              <select id="global-calendar-item-mode" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                <option value="private">Privée</option>
-                <option value="shared">Collaborative</option>
-              </select>
-              <input id="global-calendar-item-notes" type="text" placeholder="Description courte" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-              <button id="btn-global-calendar-add" class="btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold md:col-span-5">Ajouter info hors projet</button>
             </div>
             <div id="global-calendar-list-wrap" class="calendar-surface">
               <div id="global-calendar-container" class="space-y-3"></div>
@@ -783,7 +805,6 @@
                 <button id="global-settings-tab-themes" role="tab" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Thématiques</button>
                 <button id="global-settings-tab-groups" role="tab" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Groupes</button>
                 <button id="global-settings-tab-roles" role="tab" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Habilitations</button>
-                <button id="global-settings-tab-software" role="tab" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Versions logicielles</button>
                 <button id="global-settings-tab-views" role="tab" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">Options de vues</button>
               </div>
             </div>
@@ -853,16 +874,6 @@
                 <div id="global-roles-admin-list" class="space-y-2"></div>
               </div>
               <div class="grid grid-cols-1 gap-4">
-                <div class="global-settings-card-software rounded-xl border border-slate-200 bg-slate-50 p-4">
-                  <h4 class="font-bold text-slate-800 mb-3">Suivi des versions logicielles</h4>
-                  <div class="grid grid-cols-1 gap-2 mb-3">
-                    <input id="software-name-input" type="text" placeholder="Logiciel (ex: Solis)" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                    <input id="software-version-input" type="text" placeholder="Version (ex: 10.2.1)" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                    <input id="software-notes-input" type="text" placeholder="Notes (optionnel)" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                    <button id="btn-software-add" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Ajouter</button>
-                  </div>
-                  <div id="software-versions-list" class="space-y-2"></div>
-                </div>
                 <div class="global-settings-card-views rounded-xl border border-slate-200 bg-slate-50 p-4">
                   <h4 class="font-bold text-slate-800 mb-3">Options d'affichage des vues</h4>
                   <p class="text-xs text-slate-500 mb-3">Administrez les sous-onglets visibles par rubrique et définissez l'onglet par défaut.</p>
@@ -875,6 +886,12 @@
                       <option value="icon_text">Icône + texte (recommandé)</option>
                       <option value="text">Texte seul</option>
                       <option value="icon">Icône seule</option>
+                    </select>
+                    <label for="view-option-workflow-actions-shape" class="block text-sm font-semibold text-slate-800 mt-3 mb-1">Format des boutons en mode icône</label>
+                    <p class="text-xs text-slate-500 mb-2">Choisissez la forme visuelle des boutons d'action quand l'affichage est en mode icône.</p>
+                    <select id="view-option-workflow-actions-shape" class="view-option-workflow-actions-shape px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                      <option value="rect">Rectangulaire arrondi (style header)</option>
+                      <option value="round">Rond</option>
                     </select>
                   </div>
                   <div class="mt-4 pt-4 border-t border-slate-200">
@@ -896,7 +913,7 @@
                   <ul class="text-sm text-slate-600 space-y-2">
                     <li>Utilisez les groupes globaux pour standardiser les attributions entre projets.</li>
                     <li>Gardez les thématiques courtes et stables pour faciliter la recherche.</li>
-                    <li>Mettez à jour les versions logicielles après chaque montée de version métier.</li>
+                    <li>Pilotez les versions logicielles directement dans Workflow, onglet Logiciels métiers.</li>
                   </ul>
                 </div>
               </div>
@@ -1111,7 +1128,7 @@
                       <span class="project-subnav-focus-text">Plein écran</span>
                     </button>
                   </div>
-                  <button id="btn-add-task" class="btn-primary px-4 py-2 text-white font-semibold rounded-lg transition-all flex flex-col items-center justify-center gap-1">
+                  <button id="btn-add-task" class="btn-primary px-4 py-2 text-white font-semibold rounded-lg transition-all flex flex-col items-center justify-center gap-1" data-action-kind="create" data-action-label="Nouvelle tâche" aria-label="Nouvelle tâche">
                     <span class="material-symbols-outlined">add</span>
                     <span id="btn-add-task-text" style="font-size: 0.875rem; line-height: 1;">Nouvelle Tâche</span>
                   </button>
@@ -1160,8 +1177,12 @@
               <div class="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
                 <div class="flex items-center justify-between gap-3 mb-3">
                   <div class="flex items-center gap-2">
-                    <button id="calendar-prev-month" class="px-2 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-semibold">â—€</button>
-                    <button id="calendar-next-month" class="px-2 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-semibold">â–¶</button>
+                    <button id="calendar-prev-month" class="px-2 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-semibold" aria-label="Mois précédent">
+                      <span class="material-symbols-outlined text-[18px]">chevron_left</span>
+                    </button>
+                    <button id="calendar-next-month" class="px-2 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-semibold" aria-label="Mois suivant">
+                      <span class="material-symbols-outlined text-[18px]">chevron_right</span>
+                    </button>
                     <button id="calendar-today" class="px-3 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-semibold">Aujourd'hui</button>
                   </div>
                   <p id="calendar-month-label" class="text-sm font-bold text-slate-800"></p>
@@ -1840,13 +1861,67 @@
         <p id="calendar-info-detail-description" class="text-sm text-slate-700 whitespace-pre-wrap break-words"></p>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm mb-4">
-        <div class="rounded-lg border border-slate-200 bg-white px-3 py-2"><span class="text-slate-500">Date:</span> <span id="calendar-info-detail-date" class="font-medium text-slate-800"></span></div>
+        <div class="rounded-lg border border-slate-200 bg-white px-3 py-2"><span class="text-slate-500">Période:</span> <span id="calendar-info-detail-date" class="font-medium text-slate-800"></span></div>
         <div class="rounded-lg border border-slate-200 bg-white px-3 py-2"><span class="text-slate-500">Thématique:</span> <span id="calendar-info-detail-theme" class="font-medium text-slate-800"></span></div>
       </div>
       <div class="flex flex-wrap items-center justify-end gap-2">
         <button id="btn-calendar-info-detail-edit" class="task-action-btn">Modifier</button>
         <button id="btn-calendar-info-detail-archive" class="task-action-btn task-action-btn-warn">Archiver</button>
         <button id="btn-calendar-info-detail-delete" class="task-action-btn task-action-btn-danger">Supprimer</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-calendar-item-form" class="hidden fixed inset-0 bg-black/55 flex items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
+    <div class="task-detail-modal-panel global-calendar-item-modal-panel bg-white rounded-2xl p-5 sm:p-6 w-full mx-auto max-h-[92vh] overflow-y-auto overscroll-contain">
+      <div class="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <h3 id="calendar-item-form-title" class="section-title text-2xl font-extrabold">Ajouter info hors projet</h3>
+          <p class="text-sm text-slate-500 mt-1">Créez une information liée à une date du calendrier.</p>
+        </div>
+        <button id="btn-close-calendar-item-form" type="button" class="taskmda-modal-close-btn" data-action-kind="close" data-action-label="Fermer">
+          <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">close</span>
+          <span class="taskmda-action-label">Fermer</span>
+        </button>
+      </div>
+      <div class="global-calendar-item-modal-fields">
+        <input id="global-calendar-item-title" type="text" placeholder="Sujet hors projet" class="global-calendar-item-modal-input">
+        <div class="global-calendar-item-modal-date-grid">
+          <label class="global-calendar-item-modal-field">
+            <span class="global-calendar-item-modal-label">Début</span>
+            <input id="global-calendar-item-date" type="date" class="global-calendar-item-modal-input" title="Date de début">
+          </label>
+          <label class="global-calendar-item-modal-field">
+            <span class="global-calendar-item-modal-label">Fin</span>
+            <input id="global-calendar-item-end-date" type="date" class="global-calendar-item-modal-input" title="Date de fin">
+          </label>
+        </div>
+        <div class="global-calendar-item-modal-time-grid">
+          <label class="global-calendar-item-modal-field">
+            <span class="global-calendar-item-modal-label">Horaire début</span>
+            <input id="global-calendar-item-start-time" type="time" class="global-calendar-item-modal-input" title="Heure de début">
+          </label>
+          <label class="global-calendar-item-modal-field">
+            <span class="global-calendar-item-modal-label">Horaire fin</span>
+            <input id="global-calendar-item-end-time" type="time" class="global-calendar-item-modal-input" title="Heure de fin">
+          </label>
+        </div>
+        <input id="global-calendar-item-theme" type="text" placeholder="Thématique" class="global-calendar-item-modal-input">
+        <select id="global-calendar-item-mode" class="global-calendar-item-modal-input">
+          <option value="private">Privée</option>
+          <option value="shared">Collaborative</option>
+        </select>
+        <input id="global-calendar-item-notes" type="text" placeholder="Description courte" class="global-calendar-item-modal-input">
+      </div>
+      <div class="global-calendar-item-modal-footer">
+        <button id="btn-cancel-calendar-item-form" type="button" class="task-action-btn task-action-btn-subtle calendar-item-modal-action-btn" data-action-kind="default" data-action-label="Annuler">
+          <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">undo</span>
+          <span class="taskmda-action-label">Annuler</span>
+        </button>
+        <button id="btn-global-calendar-add" type="button" class="task-action-btn calendar-item-modal-action-btn" data-action-kind="create" data-action-label="Ajouter info hors projet">
+          <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">add</span>
+          <span class="taskmda-action-label">Ajouter info hors projet</span>
+        </button>
       </div>
     </div>
   </div>
@@ -2010,7 +2085,11 @@
   <script src="js/taskmda-workflow-store.js?v=20260403-01"></script>
   <script src="js/taskmda-workflow-graph.js?v=20260403-01"></script>
   <script src="js/taskmda-workflow-ui.js?v=20260403-01"></script>
-  <script src="js/taskmda-workflow.js?v=20260402-01"></script>
+  <script src="js/taskmda-workflow.js?v=20260406-02"></script>
+  <script src="js/taskmda-app-init.js?v=20260406-01"></script>
+  <script src="js/taskmda-projects-ui.js?v=20260406-01"></script>
+  <script src="js/taskmda-comms-ui.js?v=20260406-01"></script>
+  <script src="js/taskmda-admin-ui.js?v=20260406-01"></script>
   <script src="js/taskmda-team.js?v=20260402-01"></script>
 </body>
 </html>

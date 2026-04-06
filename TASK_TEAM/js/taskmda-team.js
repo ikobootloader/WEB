@@ -43,7 +43,7 @@
     // ============================================================================
 
     const DB_NAME = 'taskmda-team-standalone';
-    const DB_VERSION = 16; // + module RGPD (activites, assessments, templates, liens, audit)
+    const DB_VERSION = 18; // + module contingence workflow
     const LOCAL_RESET_TS_KEY = 'taskmda_last_local_reset_ts';
     const DATA_EXPORT_STORES = {
       events: 'eventId',
@@ -78,6 +78,17 @@
       workflowLayout: 'id',
       workflowAudit: 'id',
       workflowHistory: 'id',
+      workflowPermissionProfiles: 'id',
+      workflowPermissionAssignments: 'id',
+      workflowPermissionRequests: 'id',
+      workflowPermissionReviews: 'id',
+      workflowPermissionAudit: 'id',
+      workflowContingencyPlans: 'id',
+      workflowContingencyActions: 'id',
+      workflowContingencyActivations: 'id',
+      workflowContingencyExercises: 'id',
+      workflowContingencyReviews: 'id',
+      workflowContingencyAudit: 'id',
       rgpdActivities: 'id',
       rgpdAssessments: 'id',
       rgpdTemplates: 'id',
@@ -283,6 +294,87 @@
               store.createIndex('createdAt', 'createdAt');
               store.createIndex('entityType_entityId', ['entityType', 'entityId']);
               store.createIndex('action', 'action');
+            }
+            if (!db.objectStoreNames.contains('workflowPermissionProfiles')) {
+              const store = db.createObjectStore('workflowPermissionProfiles', { keyPath: 'id' });
+              store.createIndex('softwareId', 'softwareId');
+              store.createIndex('name', 'name');
+              store.createIndex('updatedAt', 'updatedAt');
+            }
+            if (!db.objectStoreNames.contains('workflowPermissionAssignments')) {
+              const store = db.createObjectStore('workflowPermissionAssignments', { keyPath: 'id' });
+              store.createIndex('softwareId', 'softwareId');
+              store.createIndex('beneficiaryType', 'beneficiaryType');
+              store.createIndex('beneficiaryId', 'beneficiaryId');
+              store.createIndex('status', 'status');
+              store.createIndex('reviewDate', 'reviewDate');
+            }
+            if (!db.objectStoreNames.contains('workflowPermissionRequests')) {
+              const store = db.createObjectStore('workflowPermissionRequests', { keyPath: 'id' });
+              store.createIndex('softwareId', 'softwareId');
+              store.createIndex('beneficiaryType', 'beneficiaryType');
+              store.createIndex('beneficiaryId', 'beneficiaryId');
+              store.createIndex('status', 'status');
+              store.createIndex('requestedAt', 'requestedAt');
+            }
+            if (!db.objectStoreNames.contains('workflowPermissionReviews')) {
+              const store = db.createObjectStore('workflowPermissionReviews', { keyPath: 'id' });
+              store.createIndex('softwareId', 'softwareId');
+              store.createIndex('assignmentId', 'assignmentId');
+              store.createIndex('decision', 'decision');
+              store.createIndex('reviewedAt', 'reviewedAt');
+            }
+            if (!db.objectStoreNames.contains('workflowPermissionAudit')) {
+              const store = db.createObjectStore('workflowPermissionAudit', { keyPath: 'id' });
+              store.createIndex('softwareId', 'softwareId');
+              store.createIndex('entityType', 'entityType');
+              store.createIndex('createdAt', 'createdAt');
+            }
+            if (!db.objectStoreNames.contains('workflowContingencyPlans')) {
+              const store = db.createObjectStore('workflowContingencyPlans', { keyPath: 'id' });
+              store.createIndex('title', 'title');
+              store.createIndex('status', 'status');
+              store.createIndex('criticality', 'criticality');
+              store.createIndex('ownerAgentId', 'ownerAgentId');
+              store.createIndex('serviceId', 'serviceId');
+              store.createIndex('processId', 'processId');
+              store.createIndex('softwareId', 'softwareId');
+              store.createIndex('updatedAt', 'updatedAt');
+            }
+            if (!db.objectStoreNames.contains('workflowContingencyActions')) {
+              const store = db.createObjectStore('workflowContingencyActions', { keyPath: 'id' });
+              store.createIndex('planId', 'planId');
+              store.createIndex('status', 'status');
+              store.createIndex('ownerAgentId', 'ownerAgentId');
+              store.createIndex('order', 'order');
+              store.createIndex('updatedAt', 'updatedAt');
+            }
+            if (!db.objectStoreNames.contains('workflowContingencyActivations')) {
+              const store = db.createObjectStore('workflowContingencyActivations', { keyPath: 'id' });
+              store.createIndex('planId', 'planId');
+              store.createIndex('status', 'status');
+              store.createIndex('startedAt', 'startedAt');
+              store.createIndex('closedAt', 'closedAt');
+            }
+            if (!db.objectStoreNames.contains('workflowContingencyExercises')) {
+              const store = db.createObjectStore('workflowContingencyExercises', { keyPath: 'id' });
+              store.createIndex('planId', 'planId');
+              store.createIndex('result', 'result');
+              store.createIndex('exerciseDate', 'exerciseDate');
+              store.createIndex('updatedAt', 'updatedAt');
+            }
+            if (!db.objectStoreNames.contains('workflowContingencyReviews')) {
+              const store = db.createObjectStore('workflowContingencyReviews', { keyPath: 'id' });
+              store.createIndex('planId', 'planId');
+              store.createIndex('status', 'status');
+              store.createIndex('reviewDate', 'reviewDate');
+              store.createIndex('nextReviewDate', 'nextReviewDate');
+            }
+            if (!db.objectStoreNames.contains('workflowContingencyAudit')) {
+              const store = db.createObjectStore('workflowContingencyAudit', { keyPath: 'id' });
+              store.createIndex('planId', 'planId');
+              store.createIndex('eventType', 'eventType');
+              store.createIndex('createdAt', 'createdAt');
             }
 
             if (!db.objectStoreNames.contains('rgpdActivities')) {
@@ -1888,6 +1980,7 @@
           timeline: { label: 'Timeline', buttonId: 'workflow-view-timeline' },
           procedures: { label: 'Procédures', buttonId: 'workflow-view-procedures' },
           software: { label: 'Logiciels métiers', buttonId: 'workflow-view-software' },
+          contingency: { label: 'Contingence', buttonId: 'workflow-view-contingency' },
           journal: { label: 'Journal', buttonId: 'workflow-view-journal' }
         }
       },
@@ -1916,8 +2009,7 @@
           themes: { label: 'Thématiques', buttonId: 'global-settings-tab-themes' },
           groups: { label: 'Groupes', buttonId: 'global-settings-tab-groups' },
           roles: { label: 'Habilitations', buttonId: 'global-settings-tab-roles' },
-          views: { label: 'Options de vues', buttonId: 'global-settings-tab-views' },
-          software: { label: 'Versions logicielles', buttonId: 'global-settings-tab-software' }
+          views: { label: 'Options de vues', buttonId: 'global-settings-tab-views' }
         }
       }
     };
@@ -1927,13 +2019,15 @@
         globalHub: { defaultTab: 'tasks', tabs: { tasks: true, workflow: true, calendar: true, docs: true, messages: true, feed: true, rgpd: true, settings: true } },
         globalTasks: { defaultTab: 'cards', tabs: { cards: true, calendar: true, list: true, kanban: true, timeline: true, archives: true } },
         project: { defaultTab: 'cards', tabs: { overview: true, cards: true, list: true, kanban: true, gantt: true, timeline: true, docs: true, chat: true, activity: true, archives: true } },
-        workflow: { defaultTab: 'organigram', tabs: { map: true, organization: true, organigram: true, agents: true, tasks: true, kanban: true, timeline: true, procedures: true, software: true, journal: true } },
+        workflow: { defaultTab: 'organigram', tabs: { map: true, organization: true, organigram: true, agents: true, tasks: true, kanban: true, timeline: true, procedures: true, software: true, contingency: true, journal: true } },
         globalCalendar: { defaultTab: 'grid', tabs: { grid: true, list: true } },
         globalFeed: { defaultTab: 'all', tabs: { all: true, mentions: true, auto: true, manual: true, 'project-refs': true, 'task-refs': true } },
-        globalSettings: { defaultTab: 'branding', tabs: { branding: true, themes: true, groups: true, roles: true, views: true, software: true } }
+        globalSettings: { defaultTab: 'branding', tabs: { branding: true, themes: true, groups: true, roles: true, views: true } }
       },
       ui: {
-        workflowActionButtons: 'icon_text'
+        workflowActionButtons: 'icon_text',
+        iconTooltips: true,
+        workflowActionButtonsShape: 'rect'
       },
       policy: {
         lockUserOverrides: false
@@ -1987,15 +2081,31 @@
       return 'icon_text';
     }
 
+    function normalizeWorkflowActionButtonsShape(rawShape) {
+      const shape = String(rawShape || '').trim().toLowerCase();
+      if (shape === 'round' || shape === 'rect') return shape;
+      return 'rect';
+    }
+
     function getWorkflowActionButtonsMode() {
       return normalizeWorkflowActionButtonsMode(viewOptions?.ui?.workflowActionButtons);
     }
 
+    function getWorkflowActionButtonsShape() {
+      return normalizeWorkflowActionButtonsShape(viewOptions?.ui?.workflowActionButtonsShape);
+    }
+
+    function isIconTooltipsEnabled() {
+      return viewOptions?.ui?.iconTooltips !== false;
+    }
+
     function applyWorkflowActionButtonsModeToUI() {
       const mode = getWorkflowActionButtonsMode();
+      const shape = getWorkflowActionButtonsShape();
       const root = document.documentElement;
       if (!root) return;
       root.setAttribute('data-wf-action-buttons', mode);
+      root.setAttribute('data-wf-action-shape', shape);
     }
 
     function normalizeActionButtonLabel(value) {
@@ -2174,11 +2284,22 @@
 
       let labelEl = button.querySelector('.taskmda-action-label');
       if (!labelEl) {
-        const candidate = Array.from(button.children).find((child) => (
+        const candidates = Array.from(button.children).filter((child) => (
           child instanceof HTMLElement
           && child !== iconEl
           && !child.classList.contains('material-symbols-outlined')
         ));
+        let candidate = null;
+        let candidateScore = -1;
+        candidates.forEach((child) => {
+          const raw = sanitizeActionButtonLabel(child.textContent || '');
+          if (!raw) return;
+          const score = normalizeActionToken(raw).length;
+          if (score > candidateScore) {
+            candidate = child;
+            candidateScore = score;
+          }
+        });
         if (candidate) {
           candidate.classList.add('taskmda-action-label');
           labelEl = candidate;
@@ -2269,16 +2390,31 @@
       return '';
     }
 
+    function isEligibleIconTooltipElement(el) {
+      if (!(el instanceof HTMLElement)) return false;
+      if (el.closest('.sidebar')) return false;
+      return el.matches(
+        'button.task-action-btn, button.card-quick-btn, button.workflow-card-action-btn, button.workflow-btn-light, button.workflow-btn-danger, button.workflow-btn-link-root, button.workspace-action-inline, a.workspace-action-inline, button[data-action-kind], button[data-action-label], a[data-action-kind], a[data-action-label], button.taskmda-modal-close-btn, button.rgpd-open-btn, button[data-rgpd-context-action], button[id^="rgpd-"][id$="-btn"], button#rgpd-filters-reset'
+      );
+    }
+
     function ensureGlobalIconTooltips(root = document) {
       if (!root?.querySelectorAll) return;
-      if (getWorkflowActionButtonsMode() !== 'icon') return;
+      if (getWorkflowActionButtonsMode() !== 'icon' || !isIconTooltipsEnabled()) {
+        root.querySelectorAll('[data-ui-tooltip]').forEach((node) => {
+          if (!(node instanceof HTMLElement)) return;
+          if (isEligibleIconTooltipElement(node)) node.removeAttribute('data-ui-tooltip');
+        });
+        hideIconTooltipLayer();
+        return;
+      }
       const selectors = 'button, a, [role="button"]';
       const candidates = [];
       if (root.matches?.(selectors)) candidates.push(root);
       root.querySelectorAll(selectors).forEach((node) => candidates.push(node));
       candidates.forEach((el) => {
         if (!(el instanceof HTMLElement)) return;
-        if (el.closest('.sidebar')) {
+        if (!isEligibleIconTooltipElement(el)) {
           el.removeAttribute('data-ui-tooltip');
           return;
         }
@@ -2334,9 +2470,9 @@
     }
 
     function showIconTooltipLayer(target) {
-      if (getWorkflowActionButtonsMode() !== 'icon') return;
+      if (getWorkflowActionButtonsMode() !== 'icon' || !isIconTooltipsEnabled()) return;
       if (!(target instanceof HTMLElement)) return;
-      if (target.closest('.sidebar')) return;
+      if (!isEligibleIconTooltipElement(target)) return;
       const label = sanitizeActionButtonLabel(target.getAttribute('data-ui-tooltip') || '');
       if (!label) return;
       const layer = getIconTooltipLayer();
@@ -2355,7 +2491,8 @@
       const findTooltipTrigger = (node) => {
         const el = node instanceof Element ? node : null;
         if (!el) return null;
-        return el.closest('[data-ui-tooltip]');
+        const trigger = el.closest('[data-ui-tooltip]');
+        return isEligibleIconTooltipElement(trigger) ? trigger : null;
       };
 
       document.addEventListener('mouseover', (event) => {
@@ -2397,8 +2534,42 @@
       });
     }
 
+    function harmonizeCreateCtaButtons(root = document) {
+      if (!root?.querySelectorAll) return;
+      const createButtonCatalog = [
+        ['btn-global-doc-add', 'Ajouter doc hors projet'],
+        ['btn-global-theme-add', 'Ajouter'],
+        ['btn-global-group-add', 'Ajouter'],
+        ['btn-global-role-add', 'Ajouter'],
+        ['btn-software-add', 'Ajouter'],
+        ['btn-add-member', 'Ajouter membre'],
+        ['btn-create-user-group', 'Créer groupe utilisateurs'],
+        ['btn-create-group', 'Créer groupe'],
+        ['btn-add-theme', 'Ajouter'],
+        ['btn-add-project-documents', 'Ajouter document(s)'],
+        ['btn-task-assignee-quick-add', 'Ajouter'],
+        ['btn-open-global-calendar-item-modal', 'Ajouter info hors projet'],
+        ['rgpd-new-btn', 'Nouvelle activité'],
+        ['workflow-quick-add-toggle', 'Ajouter']
+      ];
+      createButtonCatalog.forEach(([id, fallbackLabel]) => {
+        const button = document.getElementById(id);
+        if (!(button instanceof HTMLElement)) return;
+        button.classList.add('taskmda-create-cta');
+        button.setAttribute('data-action-kind', 'create');
+        if (!button.getAttribute('data-action-label')) {
+          const textLabel = String(button.textContent || '').replace(/\s+/g, ' ').trim();
+          button.setAttribute('data-action-label', textLabel || fallbackLabel);
+        }
+        if (!button.getAttribute('aria-label')) {
+          button.setAttribute('aria-label', button.getAttribute('data-action-label') || fallbackLabel);
+        }
+      });
+    }
+
     function applyActionButtonsDisplayMode(root = document) {
       if (!root?.querySelectorAll) return;
+      harmonizeCreateCtaButtons(root);
       const selectors = [
         'button.task-action-btn',
         'button.card-quick-btn',
@@ -2535,7 +2706,9 @@
         labels.forEach((label) => {
           if (!(label instanceof HTMLElement)) return;
           if (label.dataset.modalIconDecorated === '1') return;
-          if (label.querySelector('.modal-field-icon')) {
+          const existingIcon = label.querySelector('.modal-field-icon, .material-symbols-outlined');
+          if (existingIcon) {
+            label.classList.add('modal-label-with-icon');
             label.dataset.modalIconDecorated = '1';
             return;
           }
@@ -2696,7 +2869,9 @@
         });
       }
       next.ui = {
-        workflowActionButtons: normalizeWorkflowActionButtonsMode(raw?.ui?.workflowActionButtons || defaults?.ui?.workflowActionButtons)
+        workflowActionButtons: normalizeWorkflowActionButtonsMode(raw?.ui?.workflowActionButtons || defaults?.ui?.workflowActionButtons),
+        iconTooltips: raw?.ui?.iconTooltips !== false,
+        workflowActionButtonsShape: normalizeWorkflowActionButtonsShape(raw?.ui?.workflowActionButtonsShape || defaults?.ui?.workflowActionButtonsShape)
       };
       next.policy = {
         lockUserOverrides: Boolean(raw?.policy?.lockUserOverrides === true)
@@ -3099,6 +3274,7 @@
         const disabledAttr = isAdmin ? '' : 'disabled';
         const disabledClass = isAdmin ? '' : ' opacity-60';
         const lockChecked = isViewOverridesLocked() ? 'checked' : '';
+        const tooltipChecked = isIconTooltipsEnabled() ? 'checked' : '';
         const presetButtons = Object.entries(VIEW_ROLE_PRESETS).map(([presetKey, preset]) => `
           <button
             type="button"
@@ -3120,6 +3296,15 @@
             <label class="inline-flex items-center gap-2 text-[11px] text-slate-600${disabledClass}">
               <input type="checkbox" class="view-option-lock-overrides w-4 h-4" data-view-policy-lock="true" ${lockChecked} ${disabledAttr}>
               <span>Verrou admin: forcer les vues par défaut (pas d'override utilisateur)</span>
+            </label>
+            <label class="inline-flex items-center gap-2 text-[11px] text-slate-600${disabledClass}">
+              <input type="checkbox" class="view-option-icon-tooltips w-4 h-4" data-view-ui-tooltips="true" ${tooltipChecked} ${disabledAttr}>
+              <span>Activer les tooltips des boutons d'action (mode icône)</span>
+              <span
+                class="material-symbols-outlined text-[14px] text-slate-500 cursor-help"
+                title="Astuce: cette option est surtout utile quand l'affichage des actions est en mode icône. En mode texte, elle a peu d'effet."
+                aria-label="Aide: cette option concerne surtout le mode icône"
+              >help</span>
             </label>
             <button type="button" class="view-metrics-reset px-2.5 py-1 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-semibold${disabledClass}" data-view-kpi-reset="true" ${disabledAttr}>Réinitialiser KPI</button>
           </div>
@@ -4544,6 +4729,48 @@
       await refreshGroupSelectorsAfterCatalogChange();
     }
 
+    async function upsertSoftwareVersionCatalogEntry(payload = {}, options = {}) {
+      const softwareId = String(payload?.softwareId || payload?.id || '').trim();
+      const softwareName = String(payload?.softwareName || '').trim();
+      const version = String(payload?.version || '').trim();
+      const notes = String(payload?.notes || '').trim();
+      if (!softwareName || !version) {
+        throw new Error('Logiciel et version sont requis');
+      }
+      let existing = null;
+      if (softwareId) {
+        existing = await getDecrypted('softwareVersions', softwareId, 'softwareId');
+      }
+      const row = {
+        softwareId: softwareId || uuidv4(),
+        softwareName,
+        version,
+        notes,
+        createdAt: Number(existing?.createdAt || payload?.createdAt || Date.now()) || Date.now(),
+        updatedAt: Date.now(),
+        updatedBy: currentUser?.userId || String(existing?.updatedBy || '').trim() || ''
+      };
+      await putEncrypted('softwareVersions', row, 'softwareId');
+      await refreshGlobalTaxonomyCache();
+      if (options.renderGlobalSettings !== false) {
+        await renderGlobalSettings();
+      }
+      return row;
+    }
+
+    async function removeSoftwareVersionCatalogEntry(softwareId, options = {}) {
+      const id = String(softwareId || '').trim();
+      if (!id) return false;
+      const current = await getDecrypted('softwareVersions', id, 'softwareId');
+      if (!current) return false;
+      await deleteFromStore('softwareVersions', id);
+      await refreshGlobalTaxonomyCache();
+      if (options.renderGlobalSettings !== false) {
+        await renderGlobalSettings();
+      }
+      return true;
+    }
+
     async function createSoftwareVersionEntry() {
       const softwareNameInput = document.getElementById('software-name-input');
       const versionInput = document.getElementById('software-version-input');
@@ -4556,15 +4783,11 @@
         return;
       }
       await runWithLoading(async () => {
-        await putEncrypted('softwareVersions', {
-        softwareId: uuidv4(),
-        softwareName,
-        version,
-        notes,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        updatedBy: currentUser?.userId || ''
-      }, 'softwareId');
+        await upsertSoftwareVersionCatalogEntry({
+          softwareName,
+          version,
+          notes
+        }, { renderGlobalSettings: false });
       if (softwareNameInput) softwareNameInput.value = '';
       if (versionInput) versionInput.value = '';
       if (notesInput) notesInput.value = '';
@@ -4583,14 +4806,12 @@
       const nextVersion = (window.prompt('Version', current.version || '') || '').trim();
       if (!nextVersion) return;
       const nextNotes = (window.prompt('Notes', current.notes || '') || '').trim();
-      await putEncrypted('softwareVersions', {
-        ...current,
+      await upsertSoftwareVersionCatalogEntry({
+        softwareId: current.softwareId,
         softwareName: nextSoftwareName,
         version: nextVersion,
-        notes: nextNotes,
-        updatedAt: Date.now(),
-        updatedBy: currentUser?.userId || current.updatedBy || ''
-      }, 'softwareId');
+        notes: nextNotes
+      }, { renderGlobalSettings: false });
       showToast('Version logicielle modifiée');
       await renderGlobalSettings();
     }
@@ -4601,8 +4822,7 @@
       const current = await getDecrypted('softwareVersions', id, 'softwareId');
       if (!current) return;
       if (!confirm(`Supprimer l'entree ${current.softwareName} ${current.version} ?`)) return;
-      const db = getDatabase();
-      await deleteFromStore('softwareVersions', id);
+      await removeSoftwareVersionCatalogEntry(id, { renderGlobalSettings: false });
       showToast('Version logicielle supprimée');
       await renderGlobalSettings();
     }
@@ -4617,7 +4837,6 @@
       const themesList = document.getElementById('global-themes-admin-list');
       const groupsList = document.getElementById('global-groups-admin-list');
       const rolesList = document.getElementById('global-roles-admin-list');
-      const softwareList = document.getElementById('software-versions-list');
       const roleNameInput = document.getElementById('global-role-name-input');
       const roleBaseInput = document.getElementById('global-role-base-input');
       const roleAddBtn = document.getElementById('btn-global-role-add');
@@ -4633,7 +4852,7 @@
       const assignAdminBtn = document.getElementById('btn-assign-app-admin');
       const resetBrandingBtn = document.getElementById('btn-reset-app-branding');
       renderLocalResetInfo();
-      if (!themesList || !groupsList || !softwareList || !rolesList) return;
+      if (!themesList || !groupsList || !rolesList) return;
       if (!appBranding) {
         await loadAppBrandingConfig({ ensureRemote: false });
       }
@@ -4702,8 +4921,6 @@
         .filter(item => matchesQuery([item?.name], globalSearchQuery));
       const filteredGroups = (globalGroupCatalog || [])
         .filter(item => matchesQuery([item?.name, item?.description], globalSearchQuery));
-      const filteredSoftwareVersions = (globalSoftwareVersionCatalog || [])
-        .filter(item => matchesQuery([item?.softwareName, item?.version, item?.notes], globalSearchQuery));
       const filteredRoles = getProjectRoleCatalog()
         .filter(item => matchesQuery([item?.label, item?.baseRole, item?.roleKey], globalSearchQuery));
 
@@ -4804,29 +5021,6 @@
             </div>
           `).join('');
 
-      softwareList.innerHTML = filteredSoftwareVersions.length === 0
-        ? buildWorkspaceEmptyState({
-            icon: 'inventory_2',
-            title: 'Aucune version logicielle enregistrée',
-            text: 'Documentez les versions utiles pour l equipe.',
-            ctaLabel: canManageBranding ? 'Ajouter une version' : '',
-            ctaOnclick: canManageBranding ? "focusElementById('software-name-input')" : '',
-            compact: true
-          })
-        : filteredSoftwareVersions.map(item => `
-            <div class="software-version-row rounded-lg border border-slate-200 bg-white p-3">
-              <div class="software-version-main min-w-0">
-                <p class="text-sm font-semibold text-slate-700 break-words">${escapeHtml(item.softwareName)}</p>
-                <p class="text-xs text-slate-500 mt-0.5">Version: <span class="font-medium text-slate-700">${escapeHtml(item.version)}</span></p>
-                <p class="text-xs text-slate-500 mt-0.5 break-words">${escapeHtml(item.notes || 'Sans note')}</p>
-                <p class="text-[11px] text-slate-400 mt-1">Mise à jour: ${new Date(item.updatedAt || item.createdAt || Date.now()).toLocaleString('fr-FR')}</p>
-              </div>
-              <div class="software-version-actions flex items-center gap-1 shrink-0">
-                <button onclick="editSoftwareVersionEntry('${escapeHtml(item.softwareId)}')" class="task-action-btn task-action-btn-subtle" data-action-kind="edit">Modifier</button>
-                <button onclick="deleteSoftwareVersionEntry('${escapeHtml(item.softwareId)}')" class="task-action-btn task-action-btn-danger" data-action-kind="danger">Supprimer</button>
-              </div>
-            </div>
-          `).join('');
       bindGlobalGroupMemberSearchInputs();
       bindGlobalGroupMemberSelectsToggle();
       
@@ -4834,10 +5028,15 @@
       const profanityModeSelect = document.getElementById('profanity-filter-mode-select');
       const profanityModeCurrent = document.getElementById('profanity-filter-mode-current');
       const workflowActionsModeSelect = document.getElementById('view-option-workflow-actions-mode');
+      const workflowActionsShapeSelect = document.getElementById('view-option-workflow-actions-shape');
       renderViewOptionsMatrix(canManageBranding);
       if (workflowActionsModeSelect) {
         workflowActionsModeSelect.value = getWorkflowActionButtonsMode();
         workflowActionsModeSelect.disabled = !canManageBranding;
+      }
+      if (workflowActionsShapeSelect) {
+        workflowActionsShapeSelect.value = getWorkflowActionButtonsShape();
+        workflowActionsShapeSelect.disabled = !canManageBranding;
       }
       if (profanityModeSelect) {
         profanityModeSelect.value = getProfanityFilterMode();
@@ -5033,6 +5232,10 @@
         if (item.view === 'settings' && item.settingsTab) {
           setGlobalSettingsTab(item.settingsTab);
           await renderGlobalSettings();
+        }
+        if (item.view === 'workflow' && item.workflowTab) {
+          const workflowTabButton = document.getElementById(`workflow-view-${item.workflowTab}`);
+          workflowTabButton?.click();
         }
         return;
       }
@@ -5253,7 +5456,7 @@
       const globalCalendarItems = await getAllDecrypted('globalCalendarItems', 'id');
       (globalCalendarItems || []).forEach((item) => {
         if (item.archivedAt) return;
-        if (!matchesQuery([item.title, item.description, item.theme], q)) return;
+        if (!matchesQuery([item.title, item.description, item.notes, item.theme, buildCalendarItemDateLabel(item)], q)) return;
         push({
           key: `calendar-item:${item.id}`,
           action: 'open-global-calendar-item',
@@ -5302,14 +5505,14 @@
           badge: 'Parametre'
         })),
         ...(globalSoftwareVersionCatalog || []).filter((item) => matchesQuery([item?.softwareName, item?.version, item?.notes], q)).map((item) => ({
-          key: `settings-soft:${item.softwareId}`,
+          key: `workflow-soft-version:${item.softwareId}`,
           action: 'workspace',
-          view: 'settings',
-          settingsTab: 'software',
+          view: 'workflow',
+          workflowTab: 'software',
           icon: 'inventory_2',
           title: `${item.softwareName || 'Logiciel'} ${item.version || ''}`.trim(),
-          meta: 'Referentiels > Suivi versions logicielles',
-          badge: 'Parametre'
+          meta: 'Workflow > Logiciels metiers',
+          badge: 'Workflow'
         })),
         ...getProjectRoleCatalog().filter((item) => matchesQuery([item?.label, item?.baseRole], q)).map((item) => ({
           key: `settings-role:${item.roleKey}`,
@@ -6362,7 +6565,7 @@
     let workspaceMode = 'dashboard'; // dashboard | project | global
     let globalWorkspaceView = 'tasks'; // tasks | workflow | calendar | docs | messages | feed | rgpd | settings
     let workflowRuntime = null;
-    let globalSettingsTab = localStorage.getItem('taskmda_global_settings_tab') || 'branding'; // branding | themes | groups | roles | software
+    let globalSettingsTab = localStorage.getItem('taskmda_global_settings_tab') || 'branding'; // branding | themes | groups | roles | views
     let globalSettingsHelpOpen = false;
     let projectDetailMode = 'work'; // work | settings
     let projectSettingsTab = 'members'; // members | collab | permissions
@@ -6442,6 +6645,7 @@
     let selectedProjectGroupId = null;
     let taskPendingGroupMemberUserIds = [];
     let editingStandaloneTaskId = null;
+    let pendingTaskStatusPrefill = null;
     let pendingTaskConvertRef = null;
     let globalThemeCatalog = [];
     let globalGroupCatalog = [];
@@ -6584,6 +6788,43 @@
           ${text ? `<p class="workspace-empty-text">${escapeHtml(text)}</p>` : ''}
           ${ctaHtml}
         </div>
+      `;
+    }
+
+    function renderProjectMembersSummary(state, maxVisible = 3) {
+      const members = Array.isArray(state?.members) ? state.members : [];
+      const normalized = [];
+      const seen = new Set();
+      members.forEach((member) => {
+        const uid = String(member?.userId || '').trim();
+        if (!uid || seen.has(uid)) return;
+        seen.add(uid);
+        normalized.push(resolveKnownUserIdentity(uid, String(member?.displayName || '').trim()));
+      });
+      if (normalized.length === 0 && state?.project?.createdBy) {
+        normalized.push(resolveKnownUserIdentity(state.project.createdBy, 'Utilisateur'));
+      }
+      const count = normalized.length;
+      const countLabel = `${count} membre${count > 1 ? 's' : ''}`;
+      if (count === 0) {
+        return `<span class="project-members-summary"><span class="project-members-summary-count">${escapeHtml(countLabel)}</span></span>`;
+      }
+      const visible = normalized.slice(0, Math.max(1, maxVisible));
+      const names = normalized.map((p) => p.name).filter(Boolean);
+      const nameLabel = names.slice(0, 2).join(', ') + (names.length > 2 ? ` +${names.length - 2}` : '');
+      const chipsHtml = visible.map((p, idx) => {
+        const style = safeAvatarInlineStyle(
+          p.avatarDataUrl,
+          stringToColor(p.userId || p.name || String(idx))
+        );
+        return `<span class="participant-chip" style="${style}" aria-label="${escapeHtml(p.name)}">${escapeHtml(getInitials(p.name))}</span>`;
+      }).join('');
+      return `
+        <span class="project-members-summary" title="${escapeHtml(names.join(', '))}">
+          <span class="participants-stack">${chipsHtml}</span>
+          <span class="project-members-summary-names">${escapeHtml(nameLabel)}</span>
+          <span class="project-members-summary-count">(${escapeHtml(countLabel)})</span>
+        </span>
       `;
     }
 
@@ -6965,6 +7206,97 @@
       return date.toLocaleDateString('fr-FR');
     }
 
+    function normalizeCalendarYmd(rawValue) {
+      const raw = String(rawValue || '').trim();
+      return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : '';
+    }
+
+    function normalizeCalendarHm(rawValue) {
+      const raw = String(rawValue || '').trim();
+      return /^\d{2}:\d{2}$/.test(raw) ? raw : '';
+    }
+
+    function parseCalendarYmdToDate(rawYmd) {
+      const ymd = normalizeCalendarYmd(rawYmd);
+      if (!ymd) return null;
+      const [year, month, day] = ymd.split('-').map((part) => Number(part));
+      if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+      const date = new Date(year, month - 1, day);
+      return Number.isNaN(date.getTime()) ? null : date;
+    }
+
+    function getCalendarItemStartDate(item) {
+      return normalizeCalendarYmd(item?.startDate) || normalizeCalendarYmd(item?.date);
+    }
+
+    function getCalendarItemEndDate(item) {
+      const startDate = getCalendarItemStartDate(item);
+      const endDate = normalizeCalendarYmd(item?.endDate) || startDate;
+      if (!startDate) return endDate;
+      return endDate >= startDate ? endDate : startDate;
+    }
+
+    function getCalendarItemStartTime(item) {
+      return normalizeCalendarHm(item?.startTime);
+    }
+
+    function getCalendarItemEndTime(item) {
+      return normalizeCalendarHm(item?.endTime);
+    }
+
+    function buildCalendarItemDateLabel(item) {
+      const startDate = getCalendarItemStartDate(item);
+      const endDate = getCalendarItemEndDate(item) || startDate;
+      if (!startDate) return 'Non définie';
+      const periodLabel = startDate === endDate
+        ? formatDate(startDate)
+        : `${formatDate(startDate)} → ${formatDate(endDate)}`;
+      const startTime = getCalendarItemStartTime(item);
+      const endTime = getCalendarItemEndTime(item);
+      if (startTime && endTime) return `${periodLabel} • ${startTime}–${endTime}`;
+      if (startTime) return `${periodLabel} • à partir de ${startTime}`;
+      if (endTime) return `${periodLabel} • jusqu'à ${endTime}`;
+      return periodLabel;
+    }
+
+    function doesCalendarRangeOverlapMonth(startDateRaw, endDateRaw, monthValue) {
+      const month = String(monthValue || '');
+      if (!/^\d{4}-\d{2}$/.test(month)) return false;
+      const monthStart = `${month}-01`;
+      const [yearStr, monthStr] = month.split('-');
+      const lastDay = new Date(Number(yearStr), Number(monthStr), 0).getDate();
+      const monthEnd = `${month}-${String(lastDay).padStart(2, '0')}`;
+      const startDate = normalizeCalendarYmd(startDateRaw);
+      const endDate = normalizeCalendarYmd(endDateRaw) || startDate;
+      if (!startDate) return false;
+      const safeEnd = endDate && endDate >= startDate ? endDate : startDate;
+      return startDate <= monthEnd && safeEnd >= monthStart;
+    }
+
+    function getCalendarRangeDayKeysInMonth(startDateRaw, endDateRaw, monthValue) {
+      if (!doesCalendarRangeOverlapMonth(startDateRaw, endDateRaw, monthValue)) return [];
+      const month = String(monthValue || '');
+      const monthStart = `${month}-01`;
+      const [yearStr, monthStr] = month.split('-');
+      const lastDay = new Date(Number(yearStr), Number(monthStr), 0).getDate();
+      const monthEnd = `${month}-${String(lastDay).padStart(2, '0')}`;
+      const startDate = normalizeCalendarYmd(startDateRaw);
+      const endDate = normalizeCalendarYmd(endDateRaw) || startDate;
+      if (!startDate) return [];
+      const rangeStart = startDate < monthStart ? monthStart : startDate;
+      const rangeEnd = endDate > monthEnd ? monthEnd : endDate;
+      const start = parseCalendarYmdToDate(rangeStart);
+      const end = parseCalendarYmdToDate(rangeEnd);
+      if (!start || !end) return [];
+      const keys = [];
+      let cursor = new Date(start);
+      while (cursor.getTime() <= end.getTime()) {
+        keys.push(toYmd(cursor));
+        cursor.setDate(cursor.getDate() + 1);
+      }
+      return keys;
+    }
+
     function getTaskDueStatus(task) {
       if (!task?.dueDate) return { isDueToday: false, isOverdue: false, daysUntilDue: null };
       
@@ -7209,10 +7541,6 @@
           title: 'Aide: Habilitations',
           text: "Les habilitations globales se basent sur les niveaux techniques Proprietaire, Manager et Membre, avec des libelles metier personnalisables."
         },
-        software: {
-          title: 'Aide: Versions logicielles',
-          text: "Maintenez ici un registre des versions de vos logiciels metier. Mettez a jour apres chaque changement pour garder un suivi fiable."
-        },
         views: {
           title: 'Aide: Options de vues',
           text: "Administrez les sous-onglets visibles pour chaque rubrique et fixez un onglet par défaut. Les vues désactivées basculent automatiquement vers une vue autorisée."
@@ -7248,7 +7576,6 @@
         themes: document.getElementById('global-settings-tab-themes'),
         groups: document.getElementById('global-settings-tab-groups'),
         roles: document.getElementById('global-settings-tab-roles'),
-        software: document.getElementById('global-settings-tab-software'),
         views: document.getElementById('global-settings-tab-views')
       };
       Object.entries(tabButtons).forEach(([key, btn]) => {
@@ -7263,7 +7590,6 @@
       const themesCard = document.querySelector('#global-settings-section .global-settings-card-themes');
       const groupsCard = document.querySelector('#global-settings-section .global-settings-card-groups');
       const rolesCard = document.querySelector('#global-settings-section .global-settings-card-roles');
-      const softwareCard = document.querySelector('#global-settings-section .global-settings-card-software');
       const viewsCard = document.querySelector('#global-settings-section .global-settings-card-views');
       const softwareTipsCard = document.querySelector('#global-settings-section .global-settings-card-software-tips');
       const globalSettingsSection = document.getElementById('global-settings-section');
@@ -7272,10 +7598,9 @@
       if (themesCard) themesCard.classList.toggle('hidden', globalSettingsTab !== 'themes');
       if (groupsCard) groupsCard.classList.toggle('hidden', globalSettingsTab !== 'groups');
       if (rolesCard) rolesCard.classList.toggle('hidden', globalSettingsTab !== 'roles');
-      if (softwareCard) softwareCard.classList.toggle('hidden', globalSettingsTab !== 'software');
       if (viewsCard) viewsCard.classList.toggle('hidden', globalSettingsTab !== 'views');
-      if (softwareTipsCard) softwareTipsCard.classList.toggle('hidden', globalSettingsTab !== 'software');
-      globalSettingsSection?.classList.toggle('software-tab-active', globalSettingsTab === 'software');
+      if (softwareTipsCard) softwareTipsCard.classList.toggle('hidden', globalSettingsTab !== 'views');
+      globalSettingsSection?.classList.toggle('software-tab-active', false);
       renderGlobalSettingsHelpBox();
       refreshManagedTabOverflow();
     }
@@ -9737,6 +10062,7 @@
       const wrap = document.createElement('span');
       wrap.className = 'task-detail-inline-editor-wrap';
       let editor = null;
+      let quillEditor = null;
       if (field === 'description' && window.Quill && typeof ensureProjectDescriptionQuillEditor === 'function') {
         const editorId = `task-detail-inline-desc-${uuidv4()}`;
         const host = document.createElement('div');
@@ -9747,6 +10073,7 @@
         const quill = ensureProjectDescriptionQuillEditor(editorId);
         const safeHtml = sanitizeProjectDescriptionHtml(currentGlobalTaskDetailTask?.descriptionHtml || plainTextToRichHtml(startValue || ''));
         if (quill) {
+          quillEditor = quill;
           quill.clipboard.dangerouslyPasteHTML(safeHtml || '<p><br></p>');
           quill.on('text-change', () => {
             const html = String(quill.root?.innerHTML || '').trim();
@@ -9809,20 +10136,49 @@
         applyTaskDetailInlineFieldToTask(currentGlobalTaskDetailTask || {}, field, nextValue);
         await scheduleTaskDetailInlineSave(field, nextValue);
       });
-      editor.addEventListener('blur', async () => {
-        await finish(editor.value, true);
-      });
-      editor.addEventListener('keydown', async (event) => {
-        if (event.key === 'Escape') {
+      if (quillEditor && field === 'description') {
+        const root = quillEditor.root;
+        let interactingWithToolbar = false;
+        const toolbar = wrap.querySelector('.ql-toolbar');
+        if (toolbar) {
+          const markToolbarInteraction = () => {
+            interactingWithToolbar = true;
+            setTimeout(() => {
+              interactingWithToolbar = false;
+            }, 0);
+          };
+          toolbar.addEventListener('pointerdown', markToolbarInteraction);
+          toolbar.addEventListener('mousedown', markToolbarInteraction);
+        }
+        root.addEventListener('keydown', async (event) => {
+          if (event.key !== 'Escape') return;
           event.preventDefault();
           await finish(getTaskDetailInlineFieldValue(currentGlobalTaskDetailTask || {}, field), false);
-          return;
-        }
-        if (event.key === 'Enter' && field !== 'description' && field !== 'subtasks') {
-          event.preventDefault();
-          editor.blur();
-        }
-      });
+        });
+        wrap.addEventListener('focusout', async (event) => {
+          if (interactingWithToolbar) return;
+          if (wrap.contains(event.relatedTarget)) return;
+          const active = document.activeElement;
+          if (active instanceof Element && wrap.contains(active)) return;
+          const html = String(quillEditor.root?.innerHTML || '').trim();
+          await finish(html, true);
+        });
+      } else {
+        editor.addEventListener('blur', async () => {
+          await finish(editor.value, true);
+        });
+        editor.addEventListener('keydown', async (event) => {
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            await finish(getTaskDetailInlineFieldValue(currentGlobalTaskDetailTask || {}, field), false);
+            return;
+          }
+          if (event.key === 'Enter' && field !== 'description' && field !== 'subtasks') {
+            event.preventDefault();
+            editor.blur();
+          }
+        });
+      }
 
       requestAnimationFrame(() => {
         editor.focus();
@@ -10286,12 +10642,16 @@
         if (attachments.length === 0) {
           attachmentsEl.innerHTML = '<p class="text-slate-500">Aucun document lié.</p>';
         } else {
-          attachmentsEl.innerHTML = attachments.map((file, index) => `
-            <a class="inline-flex items-center gap-1 text-primary hover:underline mr-3" href="${file?.data || '#'}" download="${escapeHtml(file?.name || `piece-jointe-${index + 1}`)}">
+          attachmentsEl.innerHTML = attachments.map((file, index) => {
+            const safeHref = sanitizeDownloadHref(file?.data || '', String(file?.type || ''));
+            const href = safeHref ? safeHref.replace(/"/g, '&quot;') : '#';
+            return `
+            <a class="inline-flex items-center gap-1 text-primary hover:underline mr-3 ${safeHref ? '' : 'opacity-60 pointer-events-none'}" href="${href}" ${safeHref ? `download="${escapeHtml(file?.name || `piece-jointe-${index + 1}`)}"` : ''}>
               <span class="material-symbols-outlined text-sm">attach_file</span>
               <span>${escapeHtml(file?.name || `piece-jointe-${index + 1}`)}</span>
             </a>
-          `).join('');
+          `;
+          }).join('');
         }
       }
 
@@ -10437,16 +10797,20 @@
           attachmentsEl.innerHTML = allItems.map((item) => {
             if (item.type === 'attachment') {
               const file = item.file || {};
+              const safeHref = sanitizeDownloadHref(file?.data || '', String(file?.type || ''));
+              const href = safeHref ? safeHref.replace(/"/g, '&quot;') : '#';
               return `
-                <a class="inline-flex items-center gap-1 text-primary hover:underline mr-3" href="${file?.data || '#'}" download="${escapeHtml(file?.name || `piece-jointe-${item.index + 1}`)}">
+                <a class="inline-flex items-center gap-1 text-primary hover:underline mr-3 ${safeHref ? '' : 'opacity-60 pointer-events-none'}" href="${href}" ${safeHref ? `download="${escapeHtml(file?.name || `piece-jointe-${item.index + 1}`)}"` : ''}>
                   <span class="material-symbols-outlined text-sm">attach_file</span>
                   <span>${escapeHtml(file?.name || `piece-jointe-${item.index + 1}`)}</span>
                 </a>
               `;
             }
             const doc = item.doc || {};
+            const safeHref = sanitizeDownloadHref(doc?.data || '', String(doc?.type || ''));
+            const href = safeHref ? safeHref.replace(/"/g, '&quot;') : '#';
             return `
-              <a class="inline-flex items-center gap-1 text-primary hover:underline mr-3" href="${doc?.data || '#'}" download="${escapeHtml(doc?.name || 'document')}">
+              <a class="inline-flex items-center gap-1 text-primary hover:underline mr-3 ${safeHref ? '' : 'opacity-60 pointer-events-none'}" href="${href}" ${safeHref ? `download="${escapeHtml(doc?.name || 'document')}"` : ''}>
                 <span class="material-symbols-outlined text-sm">description</span>
                 <span>${escapeHtml(doc?.name || 'document')}</span>
               </a>
@@ -11695,6 +12059,25 @@
         .map(label => ({ id: uuidv4(), label, done: false }));
     }
 
+    function normalizeTaskStatusForCreate(rawStatus) {
+      const value = String(rawStatus || '').trim();
+      return ['todo', 'en-cours', 'suspendu', 'termine'].includes(value) ? value : 'todo';
+    }
+
+    function openProjectTaskCreateModalWithStatus(status = 'todo') {
+      trackUxMetric('openNewTaskProject');
+      standaloneTaskMode = false;
+      pendingTaskStatusPrefill = normalizeTaskStatusForCreate(status);
+      openTaskModal();
+    }
+
+    function openGlobalTaskCreateModalWithStatus(status = 'todo') {
+      trackUxMetric('openNewTaskGlobal');
+      standaloneTaskMode = true;
+      pendingTaskStatusPrefill = normalizeTaskStatusForCreate(status);
+      openTaskModal();
+    }
+
     function openTaskModal(task = null) {
       const modal = document.getElementById('modal-new-task');
       modal.classList.remove('hidden');
@@ -11735,6 +12118,7 @@
       }
 
       if (task) {
+        pendingTaskStatusPrefill = null;
         editingTaskId = task.taskId;
         editingStandaloneTaskId = standaloneTaskMode ? (task.id || editingStandaloneTaskId || null) : null;
         document.getElementById('task-title').value = task.title || '';
@@ -11788,12 +12172,14 @@
       } else {
         editingTaskId = null;
         editingStandaloneTaskId = null;
+        const defaultStatus = normalizeTaskStatusForCreate(pendingTaskStatusPrefill || 'todo');
+        pendingTaskStatusPrefill = null;
         document.getElementById('task-title').value = '';
         setProjectDescriptionEditorContent('task-description-editor', 'task-description', '');
         document.getElementById('task-assignee-manual').value = '';
         document.getElementById('task-request-date').value = toYmd(new Date());
         document.getElementById('task-due-date').value = '';
-        document.getElementById('task-status').value = 'todo';
+        document.getElementById('task-status').value = defaultStatus;
         document.getElementById('task-urgency').value = 'medium';
         document.getElementById('task-subtasks').value = '';
         document.getElementById('task-files').value = '';
@@ -12063,6 +12449,18 @@
           });
         });
         const root = quill.root;
+        let interactingWithToolbar = false;
+        const toolbar = wrap.querySelector('.ql-toolbar');
+        if (toolbar) {
+          const markToolbarInteraction = () => {
+            interactingWithToolbar = true;
+            setTimeout(() => {
+              interactingWithToolbar = false;
+            }, 0);
+          };
+          toolbar.addEventListener('pointerdown', markToolbarInteraction);
+          toolbar.addEventListener('mousedown', markToolbarInteraction);
+        }
         root.addEventListener('keydown', async (event) => {
           if (event.key === 'Escape') {
             event.preventDefault();
@@ -12070,7 +12468,10 @@
           }
         });
         wrap.addEventListener('focusout', async (event) => {
+          if (interactingWithToolbar) return;
           if (wrap.contains(event.relatedTarget)) return;
+          const active = document.activeElement;
+          if (active instanceof Element && wrap.contains(active)) return;
           const html = String(quill.root?.innerHTML || '').trim();
           await finish(html, true);
         });
@@ -12183,7 +12584,10 @@
       document.getElementById('project-title').textContent = state.project.name;
       renderProjectDescription(state.project.description || '');
       document.getElementById('project-date').textContent = new Date(state.project.createdAt).toLocaleDateString('fr-FR');
-      document.getElementById('project-members-count').textContent = `${state.members.length} membre${state.members.length > 1 ? 's' : ''}`;
+      const projectMembersCountEl = document.getElementById('project-members-count');
+      if (projectMembersCountEl) {
+        projectMembersCountEl.innerHTML = renderProjectMembersSummary(state, 3);
+      }
       const visibleTasks = (state.tasks || []).filter(t => !t.archivedAt);
       document.getElementById('project-kpi-tasks').textContent = String(visibleTasks.length);
       document.getElementById('project-kpi-done').textContent = String(visibleTasks.filter(t => t.status === 'termine').length);
@@ -12914,8 +13318,22 @@
             return `
               <div class="global-kanban-col rounded-xl border border-slate-200 bg-slate-50 p-3" data-col="${col.key}" ondragover="allowKanbanDrop(event)" ondrop="dropGlobalKanbanTask(event, '${col.key}')">
                 <div class="global-kanban-col-head flex items-center justify-between mb-2">
-                  <h4 class="text-sm font-bold text-slate-800">${col.label}</h4>
-                  <span class="global-kanban-col-count text-xs">${items.length}</span>
+                  <div class="flex items-center gap-2">
+                    <h4 class="text-sm font-bold text-slate-800">${col.label}</h4>
+                    <span class="global-kanban-col-count text-xs">${items.length}</span>
+                  </div>
+                  <button
+                    type="button"
+                    class="kanban-col-add-btn global-kanban-col-add-btn taskmda-create-cta"
+                    data-action-kind="create"
+                    data-action-label="Ajouter une tâche hors projet"
+                    data-ui-tooltip="Ajouter une tâche hors projet"
+                    aria-label="Ajouter une tâche hors projet dans ${escapeHtml(col.label)}"
+                    onclick="event.stopPropagation(); openGlobalTaskCreateModalWithStatus('${col.key}')"
+                  >
+                    <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">add</span>
+                    <span class="taskmda-action-label">Ajouter</span>
+                  </button>
                 </div>
                 <div id="global-kanban-items-${col.key}" class="global-kanban-items space-y-2 pr-1" data-col-key="${col.key}" data-rendered="${initialCount}">
                   ${initialCount > 0 ? items.slice(0, initialCount).map(taskCardKanban).join('') : '<p class="text-xs text-slate-400 py-2">Aucune tache</p>'}
@@ -13422,19 +13840,34 @@
       const infoEntries = (standaloneItems || []).map(item => ({
         entryType: 'info',
         id: item.id,
-        date: item.date,
+        date: getCalendarItemStartDate(item),
+        startDate: getCalendarItemStartDate(item),
+        endDate: getCalendarItemEndDate(item),
+        startTime: getCalendarItemStartTime(item),
+        endTime: getCalendarItemEndTime(item),
         title: item.title || 'Information',
         description: item.notes || '',
         theme: item.theme || 'General',
         source: 'Hors projet',
         sharingMode: item.sharingMode || 'private',
         archivedAt: item.archivedAt || null,
-        sortDate: item.date ? new Date(item.date).getTime() : 0
+        sortDate: getCalendarItemStartDate(item) ? (parseCalendarYmdToDate(getCalendarItemStartDate(item))?.getTime() || 0) : 0
       }));
       const mixed = [...taskEntries, ...infoEntries]
         .filter(entry => !entry.archivedAt)
-        .filter(entry => String(entry.date || '').startsWith(month))
-        .filter(entry => matchesQuery([entry.title, entry.description, entry.theme, entry.source, sharingModeLabel(entry.sharingMode)], q))
+        .filter(entry => (
+          entry.entryType === 'info'
+            ? doesCalendarRangeOverlapMonth(entry.startDate, entry.endDate, month)
+            : String(entry.date || '').startsWith(month)
+        ))
+        .filter(entry => matchesQuery([
+          entry.title,
+          entry.description,
+          entry.theme,
+          entry.source,
+          sharingModeLabel(entry.sharingMode),
+          entry.entryType === 'info' ? buildCalendarItemDateLabel(entry) : formatDate(entry.date)
+        ], q))
         .sort((a, b) => a.sortDate - b.sortDate);
       const isSharedEntry = (entry) => normalizeSharingMode(entry?.sharingMode, 'private') === 'shared';
       const getEntryOpenAction = (entry) => {
@@ -13461,7 +13894,7 @@
           title: 'Aucune échéance pour ces critères',
           text: 'Ajoutez une information hors projet ou élargissez vos filtres.',
           ctaLabel: 'Ajouter une information',
-          ctaOnclick: "focusElementById('global-calendar-item-title')"
+          ctaOnclick: 'openGlobalCalendarItemModal()'
         });
         return;
       }
@@ -13490,6 +13923,14 @@
 
         const entriesByDay = new Map();
         mixed.forEach(entry => {
+          if (entry.entryType === 'info') {
+            const keys = getCalendarRangeDayKeysInMonth(entry.startDate, entry.endDate, month);
+            keys.forEach((key) => {
+              if (!entriesByDay.has(key)) entriesByDay.set(key, []);
+              entriesByDay.get(key).push(entry);
+            });
+            return;
+          }
           const key = String(entry.date || '');
           if (!entriesByDay.has(key)) entriesByDay.set(key, []);
           entriesByDay.get(key).push(entry);
@@ -13519,8 +13960,11 @@
           const isToday = dayKey === todayKey;
           const isSelected = dayKey === globalCalendarSelectedDay;
           return `
-            <button class="global-cal-day min-h-[72px] rounded-lg border p-1 text-left ${modeClass} ${isSelected ? 'global-cal-day-selected' : ''} ${isToday ? 'global-cal-day-today' : ''}" data-day="${dayKey}">
+            <div class="global-cal-day min-h-[72px] rounded-lg border p-1 text-left ${modeClass} ${isSelected ? 'global-cal-day-selected' : ''} ${isToday ? 'global-cal-day-today' : ''}" data-day="${dayKey}" role="button" tabindex="0" aria-label="Jour ${day} du calendrier">
               <div class="global-cal-day-number ${isToday ? 'global-cal-day-number-today' : ''}">${day}</div>
+              <button type="button" class="global-cal-day-add" data-day="${dayKey}" aria-label="Ajouter une info hors projet le ${dayKey}">
+                <span class="material-symbols-outlined">add</span>
+              </button>
               <div class="mt-1 space-y-1">
                 ${(dayEntries || []).slice(0, 2).map(item => `<div class="calendar-day-item ${isSharedEntry(item) ? 'calendar-day-item-shared' : 'calendar-day-item-private'}">${escapeHtml(item.title || '')}</div>`).join('')}
                 ${dayEntries.length > 2 ? `<div class="calendar-day-more">+${dayEntries.length - 2}</div>` : ''}
@@ -13531,14 +13975,31 @@
                   ${privateCount > 0 ? `<span class="calendar-mini-chip calendar-mini-chip-private">Privée ${privateCount}</span>` : ''}
                 </div>
               ` : ''}
-            </button>
+            </div>
           `;
         }).join('');
         grid.innerHTML = `${dayHeaders}${blanks}${dayCells}`;
-        grid.querySelectorAll('.global-cal-day').forEach(btn => {
-          btn.addEventListener('click', () => {
-            globalCalendarSelectedDay = btn.getAttribute('data-day');
+        grid.querySelectorAll('.global-cal-day').forEach(dayCell => {
+          const selectDay = () => {
+            globalCalendarSelectedDay = dayCell.getAttribute('data-day');
             renderGlobalCalendar();
+          };
+          dayCell.addEventListener('click', selectDay);
+          dayCell.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              selectDay();
+            }
+          });
+        });
+        grid.querySelectorAll('.global-cal-day-add').forEach(addButton => {
+          addButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const dayKey = String(addButton.getAttribute('data-day') || '');
+            if (!dayKey) return;
+            globalCalendarSelectedDay = dayKey;
+            openGlobalCalendarItemModal(dayKey);
           });
         });
 
@@ -13559,6 +14020,7 @@
               <span class="inline-flex text-[10px] px-2 py-1 rounded-full font-semibold ${isSharedEntry(entry) ? 'calendar-chip-shared' : 'calendar-chip-private'}">${isSharedEntry(entry) ? 'Collaborative' : 'Privée'}</span>
             </div>
             <p class="text-xs text-slate-500 mt-1">${escapeHtml(entry.source || 'Hors projet')} - ${escapeHtml(entry.theme || 'General')}</p>
+            <p class="text-xs text-slate-500 mt-1">${escapeHtml(entry.entryType === 'info' ? buildCalendarItemDateLabel(entry) : formatDate(entry.date))}</p>
             <p class="text-sm text-slate-600 mt-1">${escapeHtml(entry.description || '')}</p>
             ${entry.entryType === 'info' && entry.id ? `
               <div class="mt-2 flex flex-wrap gap-2 text-xs">
@@ -13576,7 +14038,7 @@
         <div class="calendar-entry-card ${isSharedEntry(entry) ? 'calendar-entry-card-shared' : 'calendar-entry-card-private'} ${getEntryOpenAction(entry) ? 'cursor-pointer' : ''}" ${getEntryOpenAction(entry) ? `onclick="${getEntryOpenAction(entry)}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();${getEntryOpenAction(entry)};}"` : ''}>
           <div class="flex items-center justify-between gap-2">
             <h4 class="font-semibold text-slate-800">${escapeHtml(entry.title || 'Element')}</h4>
-            <span class="text-xs text-slate-500">${formatDate(entry.date)}</span>
+            <span class="text-xs text-slate-500">${escapeHtml(entry.entryType === 'info' ? buildCalendarItemDateLabel(entry) : formatDate(entry.date))}</span>
           </div>
           <p class="text-xs text-slate-500 mt-1">${escapeHtml(entry.source || 'Hors projet')} • ${escapeHtml(entry.theme || 'General')}</p>
           <p class="text-sm text-slate-600 mt-1">${escapeHtml(entry.description || '')}</p>
@@ -13758,6 +14220,8 @@
     window.convertTaskToProject = convertTaskToProject;
     window.openGlobalTaskDetails = openGlobalTaskDetails;
     window.openProjectTaskDetails = openProjectTaskDetails;
+    window.openProjectTaskCreateModalWithStatus = openProjectTaskCreateModalWithStatus;
+    window.openGlobalTaskCreateModalWithStatus = openGlobalTaskCreateModalWithStatus;
     window.closeGlobalTaskDetails = closeGlobalTaskDetails;
     window.deleteGlobalDocument = deleteGlobalDocument;
     window.openDocumentBindingModal = openDocumentBindingModal;
@@ -13803,7 +14267,15 @@
       }
       if (field === 'date') {
         const el = document.getElementById('calendar-info-detail-date');
-        if (el) el.textContent = formatDate(normalizedValue || null);
+        if (el) {
+          const source = {
+            ...(currentCalendarInfoDetailItem || {}),
+            date: normalizedValue || '',
+            startDate: normalizedValue || '',
+            endDate: normalizedValue || ''
+          };
+          el.textContent = buildCalendarItemDateLabel(source);
+        }
         return;
       }
       if (field === 'theme') {
@@ -13888,6 +14360,11 @@
       if (!existing) return normalizedValue;
       const updated = { ...existing, updatedAt: Date.now() };
       if (field === 'description') updated.notes = normalizedValue;
+      else if (field === 'date') {
+        updated.date = normalizedValue;
+        updated.startDate = normalizedValue;
+        updated.endDate = normalizedValue;
+      }
       else updated[field] = normalizedValue;
       await putEncrypted('globalCalendarItems', updated, 'id');
       currentCalendarInfoDetailItem = updated;
@@ -13961,12 +14438,15 @@
       const source = currentCalendarInfoDetailItem || await getDecrypted('globalCalendarItems', id, 'id');
       if (!source) return;
       const startValue = normalizeCalendarDetailInlineFieldValue(field, field === 'description' ? source.notes : source[field]);
+      const resolvedStartValue = field === 'date'
+        ? normalizeCalendarDetailInlineFieldValue('date', source.startDate || source.date || '')
+        : startValue;
       triggerEl.dataset.inlineEditing = '1';
       triggerEl.classList.add('is-inline-editing');
       triggerEl.innerHTML = '';
       const wrap = document.createElement('span');
       wrap.className = 'task-detail-inline-editor-wrap task-detail-inline-block';
-      const editor = buildCalendarDetailInlineEditor(field, startValue);
+      const editor = buildCalendarDetailInlineEditor(field, resolvedStartValue);
       wrap.appendChild(editor);
       triggerEl.appendChild(wrap);
 
@@ -14044,7 +14524,7 @@
       titleEl.textContent = item.title || 'Information';
       subtitleEl.textContent = `Hors projet • ${item.theme || 'General'}`;
       descriptionEl.textContent = item.notes || 'Aucune description.';
-      dateEl.textContent = formatDate(item.date);
+      dateEl.textContent = buildCalendarItemDateLabel(item);
       themeEl.textContent = item.theme || 'General';
       badgesEl.innerHTML = `
         <span id="calendar-info-detail-type-chip" class="inline-flex text-[10px] px-2 py-1 rounded-full calendar-chip-info font-semibold">Info hors projet</span>
@@ -14053,7 +14533,7 @@
       initCalendarDetailInlineEditing(true);
       refreshCalendarDetailInlineDisplay('title', item.title || '');
       refreshCalendarDetailInlineDisplay('description', item.notes || '');
-      refreshCalendarDetailInlineDisplay('date', item.date || '');
+      refreshCalendarDetailInlineDisplay('date', item.startDate || item.date || '');
       refreshCalendarDetailInlineDisplay('theme', item.theme || 'General');
       refreshCalendarDetailInlineDisplay('sharingMode', normalizeSharingMode(item.sharingMode, 'private'));
       modal.classList.remove('hidden');
@@ -14082,21 +14562,51 @@
       const form = document.getElementById('global-calendar-item-form');
       if (!form) return;
       form.classList.toggle('is-editing', !!isEditing);
+      const title = document.getElementById('calendar-item-form-title');
+      if (title) title.textContent = isEditing ? 'Modifier info hors projet' : 'Ajouter info hors projet';
     }
 
-    function resetStandaloneCalendarForm() {
+    function openGlobalCalendarItemModal(prefillDate = '') {
+      const modal = document.getElementById('modal-calendar-item-form');
+      if (!modal) return;
+      modal.classList.remove('hidden');
+      if (prefillDate && /^\d{4}-\d{2}-\d{2}$/.test(String(prefillDate))) {
+        const startDateInput = document.getElementById('global-calendar-item-date');
+        const endDateInput = document.getElementById('global-calendar-item-end-date');
+        if (startDateInput && (!editingGlobalCalendarItemId || !startDateInput.value)) {
+          startDateInput.value = String(prefillDate);
+        }
+        if (endDateInput && (!editingGlobalCalendarItemId || !endDateInput.value)) {
+          endDateInput.value = String(prefillDate);
+        }
+      }
+      document.getElementById('global-calendar-item-title')?.focus();
+    }
+
+    function closeGlobalCalendarItemModal() {
+      document.getElementById('modal-calendar-item-form')?.classList.add('hidden');
+    }
+
+    function resetStandaloneCalendarForm(options = {}) {
+      const keepDate = !!options.keepDate;
       if (activeCalendarEditLock?.itemId) {
         releaseCalendarItemLock(activeCalendarEditLock.itemId, activeCalendarEditLock.lockId || '');
         activeCalendarEditLock = null;
       }
       const titleInput = document.getElementById('global-calendar-item-title');
-      const dateInput = document.getElementById('global-calendar-item-date');
+      const startDateInput = document.getElementById('global-calendar-item-date');
+      const endDateInput = document.getElementById('global-calendar-item-end-date');
+      const startTimeInput = document.getElementById('global-calendar-item-start-time');
+      const endTimeInput = document.getElementById('global-calendar-item-end-time');
       const themeInput = document.getElementById('global-calendar-item-theme');
       const notesInput = document.getElementById('global-calendar-item-notes');
       const modeInput = document.getElementById('global-calendar-item-mode');
       const submitBtn = document.getElementById('btn-global-calendar-add');
       if (titleInput) titleInput.value = '';
-      if (dateInput) dateInput.value = '';
+      if (startDateInput && !keepDate) startDateInput.value = '';
+      if (endDateInput && !keepDate) endDateInput.value = '';
+      if (startTimeInput) startTimeInput.value = '';
+      if (endTimeInput) endTimeInput.value = '';
       if (themeInput) themeInput.value = '';
       if (notesInput) notesInput.value = '';
       if (modeInput) modeInput.value = 'private';
@@ -14124,8 +14634,12 @@
         return;
       }
       activeCalendarEditLock = { itemId: id, lockId: lockResult.lockId || '' };
+      openGlobalCalendarItemModal(getCalendarItemStartDate(item) || '');
       document.getElementById('global-calendar-item-title').value = item.title || '';
-      document.getElementById('global-calendar-item-date').value = item.date || '';
+      document.getElementById('global-calendar-item-date').value = getCalendarItemStartDate(item) || '';
+      document.getElementById('global-calendar-item-end-date').value = getCalendarItemEndDate(item) || getCalendarItemStartDate(item) || '';
+      document.getElementById('global-calendar-item-start-time').value = getCalendarItemStartTime(item) || '';
+      document.getElementById('global-calendar-item-end-time').value = getCalendarItemEndTime(item) || '';
       document.getElementById('global-calendar-item-theme').value = item.theme || '';
       document.getElementById('global-calendar-item-notes').value = item.notes || '';
       document.getElementById('global-calendar-item-mode').value = normalizeSharingMode(item.sharingMode, 'private');
@@ -14149,6 +14663,7 @@
       }, 'id');
       if (editingGlobalCalendarItemId === id) {
         resetStandaloneCalendarForm();
+        closeGlobalCalendarItemModal();
       }
       showToast('Information archivee');
       addNotification('Calendrier', 'Information hors projet archivee', null);
@@ -14164,6 +14679,7 @@
       await deleteFromStore('globalCalendarItems', id);
       if (editingGlobalCalendarItemId === id) {
         resetStandaloneCalendarForm();
+        closeGlobalCalendarItemModal();
       }
       showToast('Information supprimee');
       addNotification('Calendrier', 'Information hors projet supprimee', null);
@@ -14172,12 +14688,28 @@
 
     async function addStandaloneCalendarItem() {
       const title = (document.getElementById('global-calendar-item-title')?.value || '').trim();
-      const date = document.getElementById('global-calendar-item-date')?.value || '';
+      const startDate = normalizeCalendarYmd(document.getElementById('global-calendar-item-date')?.value || '');
+      const endDateRaw = normalizeCalendarYmd(document.getElementById('global-calendar-item-end-date')?.value || '');
+      const endDate = endDateRaw || startDate;
+      const startTime = normalizeCalendarHm(document.getElementById('global-calendar-item-start-time')?.value || '');
+      const endTime = normalizeCalendarHm(document.getElementById('global-calendar-item-end-time')?.value || '');
       const theme = (document.getElementById('global-calendar-item-theme')?.value || '').trim() || 'General';
       const notes = (document.getElementById('global-calendar-item-notes')?.value || '').trim();
       const sharingMode = document.getElementById('global-calendar-item-mode')?.value || 'private';
-      if (!title || !date) {
-        showToast('Sujet et date sont requis');
+      if (!title || !startDate) {
+        showToast('Sujet et date de début sont requis');
+        return;
+      }
+      if (endDate < startDate) {
+        showToast('La date de fin doit être postérieure ou égale à la date de début');
+        return;
+      }
+      if ((startTime && !endTime) || (!startTime && endTime)) {
+        showToast('Renseignez l’heure de début et l’heure de fin');
+        return;
+      }
+      if (startDate === endDate && startTime && endTime && endTime <= startTime) {
+        showToast('Sur la même journée, l’heure de fin doit être après l’heure de début');
         return;
       }
       const editId = String(editingGlobalCalendarItemId || '').trim();
@@ -14185,7 +14717,11 @@
       await putEncrypted('globalCalendarItems', {
         id: existing?.id || uuidv4(),
         title,
-        date,
+        date: startDate,
+        startDate,
+        endDate,
+        startTime,
+        endTime,
         theme,
         notes,
         sharingMode: normalizeSharingMode(sharingMode, 'private'),
@@ -14195,6 +14731,7 @@
       }, 'id');
 
       resetStandaloneCalendarForm();
+      closeGlobalCalendarItemModal();
       if (existing?.id) {
         await releaseCalendarItemLock(existing.id, activeCalendarEditLock?.lockId || '');
       }
@@ -14203,6 +14740,8 @@
       addNotification('Calendrier', existing ? 'Information hors projet mise a jour' : 'Information hors projet ajoutee', null);
       await renderGlobalCalendar();
     }
+
+    window.openGlobalCalendarItemModal = openGlobalCalendarItemModal;
 
     async function renderGlobalDocs() {
       const container = document.getElementById('global-docs-container');
@@ -15874,7 +16413,18 @@
         metric: 'workflowMetrics',
         layout: 'workflowLayout',
         audit: 'workflowAudit',
-        history: 'workflowHistory'
+        history: 'workflowHistory',
+        permission_profile: 'workflowPermissionProfiles',
+        permission_assignment: 'workflowPermissionAssignments',
+        permission_request: 'workflowPermissionRequests',
+        permission_review: 'workflowPermissionReviews',
+        permission_audit: 'workflowPermissionAudit',
+        contingency_plan: 'workflowContingencyPlans',
+        contingency_action: 'workflowContingencyActions',
+        contingency_activation: 'workflowContingencyActivations',
+        contingency_exercise: 'workflowContingencyExercises',
+        contingency_review: 'workflowContingencyReviews',
+        contingency_audit: 'workflowContingencyAudit'
       };
       return mapping[key] || null;
     }
@@ -15897,7 +16447,18 @@
         workflowMetrics: 'metric',
         workflowLayout: 'layout',
         workflowAudit: 'audit',
-        workflowHistory: 'history'
+        workflowHistory: 'history',
+        workflowPermissionProfiles: 'permission_profile',
+        workflowPermissionAssignments: 'permission_assignment',
+        workflowPermissionRequests: 'permission_request',
+        workflowPermissionReviews: 'permission_review',
+        workflowPermissionAudit: 'permission_audit',
+        workflowContingencyPlans: 'contingency_plan',
+        workflowContingencyActions: 'contingency_action',
+        workflowContingencyActivations: 'contingency_activation',
+        workflowContingencyExercises: 'contingency_exercise',
+        workflowContingencyReviews: 'contingency_review',
+        workflowContingencyAudit: 'contingency_audit'
       };
       return mapping[key] || '';
     }
@@ -16023,7 +16584,7 @@
       const infos = await getAllDecrypted('globalCalendarItems', 'id');
       calendarSelect.innerHTML = `<option value="">Reference info calendrier (optionnel)</option>${(infos || [])
         .filter((i) => !i.archivedAt)
-        .map((i) => `<option value="${escapeHtml(i.id)}">${escapeHtml(`${i.title || 'Info'} • ${formatDate(i.date)}`)}</option>`).join('')}`;
+        .map((i) => `<option value="${escapeHtml(i.id)}">${escapeHtml(`${i.title || 'Info'} • ${buildCalendarItemDateLabel(i)}`)}</option>`).join('')}`;
 
       await updateGlobalFeedMentionCounter();
       return mentionCatalog;
@@ -17931,10 +18492,15 @@
               await refreshGlobalTaxonomyCache();
               return Array.isArray(globalSoftwareVersionCatalog) ? globalSoftwareVersionCatalog.slice() : [];
             },
+            upsertSoftwareVersionEntry: async (payload = {}) => (
+              upsertSoftwareVersionCatalogEntry(payload, { renderGlobalSettings: false })
+            ),
+            deleteSoftwareVersionEntry: async (softwareId) => (
+              removeSoftwareVersionCatalogEntry(softwareId, { renderGlobalSettings: false })
+            ),
             openSoftwareVersionRegistry: async () => {
-              await showGlobalWorkspace('settings');
-              setGlobalSettingsTab('software');
-              await renderGlobalSettings();
+              await showGlobalWorkspace('workflow');
+              document.getElementById('workflow-view-software')?.click();
             }
           }
         });
@@ -18481,8 +19047,22 @@
         return `
           <div class="kanban-col rounded-xl p-3" data-col="${col.key}" ondragover="allowKanbanDrop(event)" ondrop="dropKanbanTask(event, '${col.key}')">
             <div class="flex items-center justify-between mb-3">
-              <h4 class="font-bold text-sm">${col.label}</h4>
-              <span class="text-xs px-2 py-1 rounded-full bg-white">${items.length}</span>
+              <div class="flex items-center gap-2">
+                <h4 class="font-bold text-sm">${col.label}</h4>
+                <span class="text-xs px-2 py-1 rounded-full bg-white">${items.length}</span>
+              </div>
+              <button
+                type="button"
+                class="kanban-col-add-btn taskmda-create-cta"
+                data-action-kind="create"
+                data-action-label="Ajouter une tâche"
+                data-ui-tooltip="Ajouter une tâche"
+                aria-label="Ajouter une tâche dans ${escapeHtml(col.label)}"
+                onclick="event.stopPropagation(); openProjectTaskCreateModalWithStatus('${col.key}')"
+              >
+                <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">add</span>
+                <span class="taskmda-action-label">Ajouter</span>
+              </button>
             </div>
             <div class="space-y-3">${cards}</div>
           </div>
@@ -21336,190 +21916,100 @@
     // MODULE 7: APPLICATION LIFECYCLE
     // ============================================================================
 
+    const appInitRuntime = window.TaskMDAAppInit?.createModule
+      ? window.TaskMDAAppInit.createModule({
+          checkDependencies,
+          initTheme,
+          debugLog,
+          showLoading,
+          initDatabase,
+          refreshGlobalTaxonomyCache,
+          initializeCurrentUser,
+          refreshGlobalMessageHiddenGroupsForCurrentUser,
+          upsertDirectoryUser,
+          refreshDirectoryFromKnownSources,
+          loadAppBrandingConfig,
+          loadViewOptions,
+          loadUxMetrics,
+          updateUserInfo,
+          loadNotifications,
+          loadNotifiedEventIds,
+          loadReminderMemory,
+          renderNotifications,
+          saveEncryptedConfig,
+          showMainContent,
+          startIconButtonTitleObserver,
+          showDashboard,
+          updateSyncStatus,
+          tryConnectSavedFolder,
+          isFileSystemSupported,
+          showToast,
+          showSetupError,
+          selectSharedFolder,
+          askCollaborativeReload,
+          connectSharedFolderHandle,
+          disconnectSharedFolder,
+          closeMobileSidebar,
+          toggleNotificationsPanel,
+          stopPolling,
+          stopDueReminders,
+          stopBackupReminders,
+          showRecoveryKeyInstructions,
+          state: {
+            getCurrentUser: () => currentUser,
+            setCurrentUser: (value) => {
+              currentUser = value;
+            },
+            setNotifiedCollaboratorEventIds: (value) => {
+              notifiedCollaboratorEventIds = value;
+            },
+            setDueReminderMemory: (value) => {
+              dueReminderMemory = value;
+            },
+            resetSessionState: () => {
+              currentProjectId = null;
+              currentProjectState = null;
+              currentProjectEvents = [];
+              editingTaskId = null;
+              editingStandaloneTaskId = null;
+              editingMessageId = null;
+              projectDetailMode = 'work';
+              activeProjectView = 'list';
+            }
+          }
+        })
+      : null;
+
     async function initApp() {
-      debugLog('Initializing NEXUS MDA...');
-
-      try {
-        showLoading(true);
-
-        // Load encrypted config if exists
-        if (window.TaskMDACrypto && window.TaskMDACrypto.isUnlocked()) {
-          const encryptedData = await window.TaskMDACrypto.loadEncryptedData();
-          if (encryptedData && encryptedData.config) {
-            // Restore user config
-            if (encryptedData.config.userId) {
-              localStorage.setItem('userId', encryptedData.config.userId);
-            }
-            if (encryptedData.config.clientId) {
-              localStorage.setItem('clientId', encryptedData.config.clientId);
-            }
-          }
-        }
-
-        // Init database
-        await initDatabase();
-        await refreshGlobalTaxonomyCache();
-
-        // Init user
-        currentUser = await initializeCurrentUser();
-        refreshGlobalMessageHiddenGroupsForCurrentUser();
-        await upsertDirectoryUser({
-          userId: currentUser.userId,
-          name: currentUser.name,
-          source: 'current_user',
-          lastSeenAt: Date.now()
-        });
-        await refreshDirectoryFromKnownSources();
-        if (window.TaskMDACrypto && window.TaskMDACrypto.isUnlocked()) {
-          const encryptedData = await window.TaskMDACrypto.loadEncryptedData();
-          if (encryptedData && encryptedData.config && encryptedData.config.userName) {
-            currentUser.name = encryptedData.config.userName;
-          }
-        }
-        await loadAppBrandingConfig({ ensureRemote: false });
-        await loadViewOptions();
-        await loadUxMetrics();
-        updateUserInfo();
-        loadNotifications();
-        notifiedCollaboratorEventIds = loadNotifiedEventIds();
-        dueReminderMemory = loadReminderMemory();
-        renderNotifications();
-
-        // Save encrypted config after initialization
-        await saveEncryptedConfig();
-        showMainContent();
-        startIconButtonTitleObserver();
-        showDashboard();
-        updateSyncStatus('disconnected');
-        await tryConnectSavedFolder();
-        if (!isFileSystemSupported()) {
-          showToast('File System Access API non supporte: visibilité privée uniquement');
-        }
-        showLoading(false);
-        debugLog('App initialized');
+      if (appInitRuntime?.initApp) {
+        await appInitRuntime.initApp();
         return;
-
-        // Check File System API support
-        if (!isFileSystemSupported()) {
-          showSetupError('❌ File System Access API non supporté. Utilisez Chrome 86+ ou Edge 86+.');
-          showLoading(false);
-          return;
-        }
-
-        showMainContent();
-        showDashboard();
-        updateSyncStatus('disconnected');
-        await tryConnectSavedFolder();
-        if (!isFileSystemSupported()) {
-          showToast('File System Access API non supporte: visibilité privée uniquement');
-        }
-        showLoading(false);
-
-        debugLog('App initialized');
-      } catch (error) {
-        console.error('❌ Init error:', error);
-        showSetupError(`Erreur: ${error.message}`);
-        showLoading(false);
       }
+      console.error('TaskMDAAppInit module not available');
     }
 
     async function handleSelectFolder() {
-      try {
-        showLoading(true);
-
-        const handle = await selectSharedFolder();
-        const shouldReload = askCollaborativeReload('liaison manuelle');
-        await connectSharedFolderHandle(handle, true, { rebuildLocal: shouldReload });
-        showLoading(false);
+      if (appInitRuntime?.handleSelectFolder) {
+        await appInitRuntime.handleSelectFolder();
         return;
-        sharedFolderHandle = handle;
-
-        // Découvrir et charger tous les projets existants
-        await discoverAndLoadExistingProjects();
-
-        // Démarrer le polling pour les nouveaux événements
-        if (!isPolling) {
-          startPolling();
-        }
-
-        updateSyncStatus('connected');
-        showMainContent();
-        await refreshStats();
-        await renderProjects();
-
-        showToast('✅ Connecté au dossier partagé');
-        addNotification('Connexion', 'Dossier partage connecte', null);
-        showLoading(false);
-      } catch (error) {
-        // L'utilisateur a fermé le sélecteur: ce n'est pas une erreur applicative.
-        if (error?.name === 'AbortError') {
-          console.info('Sélection de dossier annulée par l’utilisateur.');
-          showToast('Sélection du dossier annulée');
-          showLoading(false);
-          return;
-        }
-
-        console.error('Error:', error);
-        showToast(`Erreur dossier partage: ${error.message}`);
-        showLoading(false);
       }
+      console.error('TaskMDAAppInit module not available');
     }
 
     async function handleContinueWithoutFolder() {
-      try {
-        await disconnectSharedFolder();
+      if (appInitRuntime?.handleContinueWithoutFolder) {
+        await appInitRuntime.handleContinueWithoutFolder();
         return;
-        sharedFolderHandle = null;
-        stopPolling();
-        updateSyncStatus('disconnected');
-        showMainContent();
-        await refreshStats();
-        await renderProjects();
-        showToast('Visibilité privée activée (sans dossier partagé)');
-      } catch (error) {
-        console.error('Error:', error);
-        showToast(`Erreur deconnexion dossier: ${error.message}`);
       }
+      console.error('TaskMDAAppInit module not available');
     }
 
     async function handleLogout() {
-      if (!confirm('Se déconnecter de l’application maintenant ?')) return;
-      try {
-        closeMobileSidebar();
-        toggleNotificationsPanel(false);
-        stopPolling();
-        stopDueReminders();
-        stopBackupReminders();
-        currentProjectId = null;
-        currentProjectState = null;
-        currentProjectEvents = [];
-        editingTaskId = null;
-        editingStandaloneTaskId = null;
-        editingMessageId = null;
-        projectDetailMode = 'work';
-        activeProjectView = 'list';
-
-        if (window.TaskMDACrypto) {
-          if (typeof window.TaskMDACrypto.lock === 'function') {
-            window.TaskMDACrypto.lock();
-          }
-          window.TaskMDACrypto.showLockScreen('unlock');
-          const lockBtn = document.getElementById('lockBtn');
-          if (lockBtn) {
-            lockBtn.onclick = () => {
-              window.TaskMDACrypto.submitPassword(async () => {
-                await initApp();
-              });
-            };
-          }
-        }
-
-        document.getElementById('setup-screen')?.classList.add('hidden');
-        document.getElementById('main-content')?.classList.add('hidden');
-      } catch (error) {
-        console.error('Logout error:', error);
-        showToast(`Erreur déconnexion: ${error.message}`);
+      if (appInitRuntime?.handleLogout) {
+        await appInitRuntime.handleLogout();
+        return;
       }
+      console.error('TaskMDAAppInit module not available');
     }
 
     async function deleteIndexedDbByName(dbName) {
@@ -21589,9 +22079,111 @@
     document.getElementById('sidebar-link-folder')?.addEventListener('click', handleSelectFolder);
     document.getElementById('btn-user-logout')?.addEventListener('click', handleLogout);
     document.getElementById('sidebar-logout')?.addEventListener('click', handleLogout);
-    document.getElementById('btn-back-to-dashboard').addEventListener('click', async () => {
-      await showProjectsWorkspace();
-    });
+    if (window.TaskMDAProjectsUI?.bind) {
+      window.TaskMDAProjectsUI.bind({
+        getProjectsFilters: () => projectsFilters,
+        setProjectsFilters: (next) => { projectsFilters = next; },
+        setProjectsPage: (next) => { projectsPage = next; },
+        setGlobalTasksPage: (next) => { globalTasksPage = next; },
+        setGlobalTasksViewMode: (next) => { globalTasksViewMode = next; },
+        setTasksPage: (next) => { tasksPage = next; },
+        showProjectsWorkspace,
+        setProjectsViewMode,
+        renderProjects,
+        syncProjectsFilterControls,
+        showGlobalWorkspace,
+        closeMobileSidebar,
+        renderGlobalTasks,
+        syncThemePickerSelectionFromInput,
+        isProjectWorkspace: () => workspaceMode === 'project',
+        getCurrentProjectState: () => currentProjectState,
+        renderTasks,
+        renderKanban,
+        renderGantt,
+        renderTimeline,
+        resolveViewWithLock,
+        toggleGlobalTasksInlineCalendar,
+        trackUxMetric,
+        updateGlobalTasksViewButtons
+      });
+    }
+    if (window.TaskMDACommsUI?.bind) {
+      window.TaskMDACommsUI.bind({
+        showGlobalWorkspace,
+        closeMobileSidebar,
+        publishGlobalFeedPost,
+        publishGlobalFeedDigestFromFiles,
+        insertMentionTokenInGlobalFeed,
+        renderGlobalFeed,
+        resolveViewWithLock,
+        updateGlobalFeedMentionCounter,
+        setFeedSortMode: (value) => {
+          globalFeedSortMode = value;
+        },
+        setFeedFilterMode: (value) => {
+          globalFeedFilterMode = value;
+        },
+        renderGlobalDocs,
+        trackUxMetric,
+        addStandaloneDocuments,
+        renderGlobalMessages,
+        initialGlobalMessageContactsRenderLimit: GLOBAL_MESSAGE_CONTACTS_INITIAL_BATCH,
+        setGlobalMessageContactsRenderLimit: (value) => {
+          globalMessageContactsRenderLimit = value;
+        },
+        handleGlobalMessageContactsScroll,
+        handleGlobalMessageThreadScroll,
+        selectAllGlobalMessageRecipients,
+        clearGlobalMessageRecipients,
+        openGlobalMessageGroupChannelFromCatalog,
+        sendGlobalMessage,
+        deleteGlobalConversation
+      });
+    }
+    if (window.TaskMDAAdminUI?.bind) {
+      window.TaskMDAAdminUI.bind({
+        showGlobalWorkspace,
+        closeMobileSidebar,
+        setRgpdViewMode: (value) => {
+          rgpdViewMode = value;
+        },
+        getRgpdFilters: () => rgpdFilters,
+        setRgpdFilters: (next) => {
+          rgpdFilters = next;
+        },
+        setRgpdSelectedActivityId: (value) => {
+          rgpdSelectedActivityId = value;
+        },
+        renderRgpdWorkspace,
+        createManualRgpdActivity,
+        runRgpdDetectionAndDrafts,
+        exportRgpdJson,
+        exportRgpdCsv,
+        saveSelectedRgpdActivity,
+        deleteSelectedRgpdActivity,
+        showToast,
+        setupWorkflowRgpdBridgeObserver,
+        ensureRgpdActivityForSourceRef,
+        promptAndLinkRgpdActivity,
+        refreshContextualRgpdCards,
+        isRgpdWorkspaceActive: () => globalWorkspaceView === 'rgpd',
+        saveAppBrandingFromSettings,
+        resetAllLocalTestData,
+        assignAppAdminFromSettings,
+        setGlobalSettingsTab,
+        toggleGlobalSettingsHelp: () => {
+          globalSettingsHelpOpen = !globalSettingsHelpOpen;
+          renderGlobalSettingsHelpBox();
+        },
+        handleViewOptionsChange,
+        handleViewOptionsClick,
+        setProfanityFilterMode,
+        createGlobalThemeFromSettings,
+        createGlobalGroupFromSettings,
+        createProjectRoleFromSettings,
+        createSoftwareVersionEntry
+      });
+    }
     document.getElementById('btn-edit-project')?.addEventListener('click', () => openEditProjectModal());
     document.getElementById('btn-delete-project')?.addEventListener('click', () => deleteCurrentProject());
     document.getElementById('btn-toggle-project-description')?.addEventListener('click', () => {
@@ -21639,277 +22231,14 @@
       showDashboard();
       closeMobileSidebar();
     });
-    document.getElementById('nav-projects')?.addEventListener('click', async (e) => {
-      e.preventDefault();
-      await showProjectsWorkspace();
-      closeMobileSidebar();
-    });
-    document.getElementById('projects-view-grid')?.addEventListener('click', async () => {
-      await setProjectsViewMode('grid');
-    });
-    document.getElementById('projects-view-list')?.addEventListener('click', async () => {
-      await setProjectsViewMode('list');
-    });
-    const rerenderDashboardProjectsFromFilters = async () => {
-      projectsPage = 1;
-      await renderProjects();
-    };
-    document.getElementById('projects-filter-query')?.addEventListener('input', async () => {
-      projectsFilters.query = String(document.getElementById('projects-filter-query')?.value || '');
-      await rerenderDashboardProjectsFromFilters();
-    });
-    document.getElementById('projects-filter-theme-known')?.addEventListener('change', async () => {
-      const value = String(document.getElementById('projects-filter-theme-known')?.value || '').trim();
-      projectsFilters.theme = value;
-      await rerenderDashboardProjectsFromFilters();
-    });
-    document.getElementById('projects-filter-status')?.addEventListener('change', async () => {
-      projectsFilters.status = String(document.getElementById('projects-filter-status')?.value || 'all');
-      await rerenderDashboardProjectsFromFilters();
-    });
-    document.getElementById('projects-filter-sharing')?.addEventListener('change', async () => {
-      projectsFilters.sharing = String(document.getElementById('projects-filter-sharing')?.value || 'all');
-      await rerenderDashboardProjectsFromFilters();
-    });
-    document.getElementById('projects-filter-ownership')?.addEventListener('change', async () => {
-      projectsFilters.ownership = String(document.getElementById('projects-filter-ownership')?.value || 'all');
-      await rerenderDashboardProjectsFromFilters();
-    });
-    document.getElementById('projects-filter-sort')?.addEventListener('change', async () => {
-      projectsFilters.sort = String(document.getElementById('projects-filter-sort')?.value || 'recent');
-      await rerenderDashboardProjectsFromFilters();
-    });
-    document.getElementById('projects-filter-reset')?.addEventListener('click', async () => {
-      projectsFilters = { query: '', theme: '', status: 'all', sharing: 'all', ownership: 'all', sort: 'recent' };
-      syncProjectsFilterControls();
-      await rerenderDashboardProjectsFromFilters();
-    });
     document.getElementById('btn-open-feed-from-dashboard-news')?.addEventListener('click', async () => {
       await showGlobalWorkspace('feed');
-      closeMobileSidebar();
-    });
-    document.getElementById('nav-tasks')?.addEventListener('click', async (e) => {
-      e.preventDefault();
-      await showGlobalWorkspace('tasks');
-      closeMobileSidebar();
-    });
-    document.getElementById('nav-workflow')?.addEventListener('click', async (e) => {
-      e.preventDefault();
-      await showGlobalWorkspace('workflow');
       closeMobileSidebar();
     });
     document.getElementById('nav-calendar')?.addEventListener('click', async (e) => {
       e.preventDefault();
       await showGlobalWorkspace('calendar');
       closeMobileSidebar();
-    });
-    document.getElementById('nav-docs')?.addEventListener('click', async (e) => {
-      e.preventDefault();
-      await showGlobalWorkspace('docs');
-      closeMobileSidebar();
-    });
-    document.getElementById('nav-messages')?.addEventListener('click', async (e) => {
-      e.preventDefault();
-      await showGlobalWorkspace('messages');
-      closeMobileSidebar();
-    });
-    document.getElementById('nav-feed')?.addEventListener('click', async (e) => {
-      e.preventDefault();
-      await showGlobalWorkspace('feed');
-      closeMobileSidebar();
-    });
-    document.getElementById('nav-rgpd')?.addEventListener('click', async (e) => {
-      e.preventDefault();
-      await showGlobalWorkspace('rgpd');
-      closeMobileSidebar();
-    });
-    document.getElementById('nav-settings')?.addEventListener('click', async (e) => {
-      e.preventDefault();
-      await showGlobalWorkspace('settings');
-      closeMobileSidebar();
-    });
-    document.getElementById('rgpd-tab-records')?.addEventListener('click', async () => {
-      rgpdViewMode = 'records';
-      await renderRgpdWorkspace();
-    });
-    document.getElementById('rgpd-tab-activities')?.addEventListener('click', async () => {
-      rgpdViewMode = 'activities';
-      await renderRgpdWorkspace();
-    });
-    document.getElementById('rgpd-tab-drafts')?.addEventListener('click', async () => {
-      rgpdViewMode = 'drafts';
-      await renderRgpdWorkspace();
-    });
-    document.getElementById('rgpd-tab-controls')?.addEventListener('click', async () => {
-      rgpdViewMode = 'controls';
-      await renderRgpdWorkspace();
-    });
-    document.getElementById('rgpd-tab-journal')?.addEventListener('click', async () => {
-      rgpdViewMode = 'journal';
-      await renderRgpdWorkspace();
-    });
-    document.getElementById('rgpd-search-input')?.addEventListener('input', async () => {
-      rgpdFilters.query = String(document.getElementById('rgpd-search-input')?.value || '');
-      await renderRgpdWorkspace();
-    });
-    document.getElementById('rgpd-status-filter')?.addEventListener('change', async () => {
-      rgpdFilters.status = String(document.getElementById('rgpd-status-filter')?.value || 'all');
-      await renderRgpdWorkspace();
-    });
-    document.getElementById('rgpd-risk-filter')?.addEventListener('change', async () => {
-      rgpdFilters.risk = String(document.getElementById('rgpd-risk-filter')?.value || 'all');
-      await renderRgpdWorkspace();
-    });
-    document.getElementById('rgpd-filters-reset')?.addEventListener('click', async () => {
-      rgpdFilters = { query: '', status: 'all', risk: 'all' };
-      const q = document.getElementById('rgpd-search-input');
-      const s = document.getElementById('rgpd-status-filter');
-      const r = document.getElementById('rgpd-risk-filter');
-      if (q) q.value = '';
-      if (s) s.value = 'all';
-      if (r) r.value = 'all';
-      await renderRgpdWorkspace();
-    });
-    document.getElementById('rgpd-new-btn')?.addEventListener('click', async () => {
-      await createManualRgpdActivity();
-      showToast('Nouvelle activité RGPD créée');
-    });
-    document.getElementById('rgpd-detect-btn')?.addEventListener('click', async () => {
-      const summary = await runRgpdDetectionAndDrafts();
-      showToast(`Détection RGPD terminée: ${summary.created} activité(s) créée(s), ${summary.assessed} évaluation(s).`);
-      await renderRgpdWorkspace();
-    });
-    document.getElementById('rgpd-export-json-btn')?.addEventListener('click', async () => {
-      await exportRgpdJson();
-      showToast('Export RGPD JSON généré');
-    });
-    document.getElementById('rgpd-export-csv-btn')?.addEventListener('click', async () => {
-      await exportRgpdCsv();
-      showToast('Export RGPD CSV généré');
-    });
-    document.getElementById('rgpd-list')?.addEventListener('click', async (event) => {
-      const target = event?.target instanceof HTMLElement ? event.target.closest('[data-rgpd-open]') : null;
-      if (!(target instanceof HTMLElement)) return;
-      const id = String(target.getAttribute('data-rgpd-open') || '').trim();
-      if (!id) return;
-      rgpdSelectedActivityId = id;
-      await renderRgpdWorkspace();
-    });
-    document.getElementById('rgpd-detail-save-btn')?.addEventListener('click', async () => {
-      await saveSelectedRgpdActivity();
-      showToast('Fiche RGPD enregistrée');
-    });
-    document.getElementById('rgpd-detail-validate-btn')?.addEventListener('click', async () => {
-      await saveSelectedRgpdActivity({ statusOverride: 'validated' });
-      showToast('Fiche RGPD validée');
-    });
-    document.getElementById('rgpd-detail-archive-btn')?.addEventListener('click', async () => {
-      await saveSelectedRgpdActivity({ statusOverride: 'archived' });
-      showToast('Fiche RGPD archivée');
-    });
-    document.getElementById('rgpd-detail-delete-btn')?.addEventListener('click', async () => {
-      await deleteSelectedRgpdActivity();
-      showToast('Fiche RGPD supprimée');
-    });
-    setupWorkflowRgpdBridgeObserver();
-    document.addEventListener('click', async (event) => {
-      const actionBtn = event?.target instanceof HTMLElement
-        ? event.target.closest('[data-rgpd-context-action]')
-        : null;
-      if (!(actionBtn instanceof HTMLElement)) return;
-      const action = String(actionBtn.getAttribute('data-rgpd-context-action') || '').trim();
-      if (action === 'open') {
-        const id = String(actionBtn.getAttribute('data-rgpd-activity-id') || '').trim();
-        if (!id) return;
-        rgpdSelectedActivityId = id;
-        await showGlobalWorkspace('rgpd');
-        await renderRgpdWorkspace();
-        return;
-      }
-      const sourceRef = {
-        entityType: String(actionBtn.getAttribute('data-rgpd-source-type') || '').trim(),
-        entityId: String(actionBtn.getAttribute('data-rgpd-source-id') || '').trim(),
-        label: String(actionBtn.getAttribute('data-rgpd-source-label') || '').trim()
-      };
-      if (!sourceRef.entityType || !sourceRef.entityId) return;
-      if (action === 'generate') {
-        const activity = await ensureRgpdActivityForSourceRef(sourceRef, { title: sourceRef.label || 'Source contextuelle' });
-        if (activity?.id) {
-          rgpdSelectedActivityId = activity.id;
-          showToast('Fiche RGPD générée ou déjà liée');
-        } else {
-          showToast('Impossible de générer la fiche RGPD');
-        }
-        await refreshContextualRgpdCards();
-        if (globalWorkspaceView === 'rgpd') await renderRgpdWorkspace();
-        return;
-      }
-      if (action === 'link') {
-        const activity = await promptAndLinkRgpdActivity(sourceRef);
-        if (activity?.id) {
-          rgpdSelectedActivityId = activity.id;
-          showToast('Fiche RGPD liée');
-          await refreshContextualRgpdCards();
-          if (globalWorkspaceView === 'rgpd') await renderRgpdWorkspace();
-        } else {
-          showToast('Aucune fiche RGPD sélectionnée');
-        }
-      }
-    });
-    document.getElementById('btn-global-feed-post')?.addEventListener('click', async () => {
-      await publishGlobalFeedPost();
-    });
-    document.getElementById('btn-global-feed-digest')?.addEventListener('click', () => {
-      const input = document.getElementById('global-feed-digest-files');
-      input?.click();
-    });
-    document.getElementById('global-feed-digest-files')?.addEventListener('change', async (event) => {
-      const files = event?.target?.files;
-      await publishGlobalFeedDigestFromFiles(files);
-      if (event?.target) event.target.value = '';
-    });
-    document.getElementById('btn-global-feed-insert-mention')?.addEventListener('click', () => {
-      insertMentionTokenInGlobalFeed();
-    });
-    document.getElementById('global-feed-search')?.addEventListener('input', () => {
-      renderGlobalFeed();
-    });
-    document.getElementById('global-feed-sort')?.addEventListener('change', (e) => {
-      globalFeedSortMode = String(e?.target?.value || 'desc') === 'asc' ? 'asc' : 'desc';
-      renderGlobalFeed();
-    });
-    document.getElementById('global-feed-filter-all')?.addEventListener('click', () => {
-      globalFeedFilterMode = resolveViewWithLock('globalFeed', 'all', 'all');
-      renderGlobalFeed();
-    });
-    document.getElementById('global-feed-filter-auto')?.addEventListener('click', () => {
-      globalFeedFilterMode = resolveViewWithLock('globalFeed', 'auto', 'all');
-      renderGlobalFeed();
-    });
-    document.getElementById('global-feed-filter-manual')?.addEventListener('click', () => {
-      globalFeedFilterMode = resolveViewWithLock('globalFeed', 'manual', 'all');
-      renderGlobalFeed();
-    });
-    document.getElementById('global-feed-filter-mentions')?.addEventListener('click', () => {
-      globalFeedFilterMode = resolveViewWithLock('globalFeed', 'mentions', 'all');
-      renderGlobalFeed();
-    });
-    document.getElementById('global-feed-filter-project-refs')?.addEventListener('click', () => {
-      globalFeedFilterMode = resolveViewWithLock('globalFeed', 'project-refs', 'all');
-      renderGlobalFeed();
-    });
-    document.getElementById('global-feed-filter-task-refs')?.addEventListener('click', () => {
-      globalFeedFilterMode = resolveViewWithLock('globalFeed', 'task-refs', 'all');
-      renderGlobalFeed();
-    });
-    document.getElementById('global-feed-input')?.addEventListener('input', () => {
-      updateGlobalFeedMentionCounter();
-    });
-    document.getElementById('global-feed-input')?.addEventListener('keydown', async (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-        e.preventDefault();
-        await publishGlobalFeedPost();
-      }
     });
 
     document.getElementById('search-input')?.addEventListener('input', async (e) => {
@@ -21991,93 +22320,6 @@
       if (wrap.contains(e.target)) return;
       hideHeaderSearchResults();
     });
-    document.getElementById('global-task-search')?.addEventListener('input', () => {
-      globalTasksPage = 1;
-      renderGlobalTasks();
-    });
-    document.getElementById('global-task-status')?.addEventListener('change', () => {
-      globalTasksPage = 1;
-      renderGlobalTasks();
-    });
-    document.getElementById('global-task-theme')?.addEventListener('input', () => {
-      syncThemePickerSelectionFromInput('global-task-theme-known', 'global-task-theme');
-      globalTasksPage = 1;
-      renderGlobalTasks();
-    });
-    document.getElementById('global-task-theme-known')?.addEventListener('change', () => {
-      const value = String(document.getElementById('global-task-theme-known')?.value || '');
-      const input = document.getElementById('global-task-theme');
-      if (input) input.value = value;
-      globalTasksPage = 1;
-      renderGlobalTasks();
-    });
-    const rerenderProjectTasksFromFilters = () => {
-      if (workspaceMode !== 'project' || !currentProjectState) return;
-      tasksPage = 1;
-      const visibleTasks = (currentProjectState.tasks || []).filter(t => !t.archivedAt);
-      renderTasks(visibleTasks);
-      renderKanban(visibleTasks);
-      renderGantt(visibleTasks);
-      renderTimeline(visibleTasks);
-    };
-    document.getElementById('project-task-search')?.addEventListener('input', rerenderProjectTasksFromFilters);
-    document.getElementById('project-task-status')?.addEventListener('change', rerenderProjectTasksFromFilters);
-    document.getElementById('project-task-theme-filter')?.addEventListener('input', () => {
-      syncThemePickerSelectionFromInput('project-task-theme-known', 'project-task-theme-filter');
-      rerenderProjectTasksFromFilters();
-    });
-    document.getElementById('project-task-theme-known')?.addEventListener('change', () => {
-      const value = String(document.getElementById('project-task-theme-known')?.value || '');
-      const input = document.getElementById('project-task-theme-filter');
-      if (input) input.value = value;
-      rerenderProjectTasksFromFilters();
-    });
-    document.getElementById('global-tasks-view-cards')?.addEventListener('click', () => {
-      globalTasksViewMode = resolveViewWithLock('globalTasks', 'cards', 'cards');
-      localStorage.setItem('taskmda_global_tasks_view', globalTasksViewMode);
-      toggleGlobalTasksInlineCalendar(false);
-      globalTasksPage = 1;
-      trackUxMetric('switchGlobalTasksView');
-      renderGlobalTasks();
-    });
-    document.getElementById('global-tasks-view-list')?.addEventListener('click', () => {
-      globalTasksViewMode = resolveViewWithLock('globalTasks', 'list', 'cards');
-      localStorage.setItem('taskmda_global_tasks_view', globalTasksViewMode);
-      toggleGlobalTasksInlineCalendar(false);
-      globalTasksPage = 1;
-      trackUxMetric('switchGlobalTasksView');
-      renderGlobalTasks();
-    });
-    document.getElementById('global-tasks-view-kanban')?.addEventListener('click', () => {
-      globalTasksViewMode = resolveViewWithLock('globalTasks', 'kanban', 'cards');
-      localStorage.setItem('taskmda_global_tasks_view', globalTasksViewMode);
-      toggleGlobalTasksInlineCalendar(false);
-      trackUxMetric('switchGlobalTasksView');
-      renderGlobalTasks();
-    });
-    document.getElementById('global-tasks-view-timeline')?.addEventListener('click', () => {
-      globalTasksViewMode = resolveViewWithLock('globalTasks', 'timeline', 'cards');
-      localStorage.setItem('taskmda_global_tasks_view', globalTasksViewMode);
-      toggleGlobalTasksInlineCalendar(false);
-      trackUxMetric('switchGlobalTasksView');
-      renderGlobalTasks();
-    });
-    document.getElementById('global-tasks-view-calendar')?.addEventListener('click', async () => {
-      globalTasksViewMode = resolveViewWithLock('globalTasks', 'calendar', 'cards');
-      localStorage.setItem('taskmda_global_tasks_view', globalTasksViewMode);
-      toggleGlobalTasksInlineCalendar(true);
-      trackUxMetric('switchGlobalTasksView');
-      await renderGlobalTasks();
-      updateGlobalTasksViewButtons();
-    });
-    document.getElementById('global-tasks-view-archives')?.addEventListener('click', async () => {
-      globalTasksViewMode = resolveViewWithLock('globalTasks', 'archives', 'cards');
-      localStorage.setItem('taskmda_global_tasks_view', globalTasksViewMode);
-      toggleGlobalTasksInlineCalendar(false);
-      trackUxMetric('switchGlobalTasksView');
-      await renderGlobalTasks();
-      updateGlobalTasksViewButtons();
-    });
     document.getElementById('global-calendar-search')?.addEventListener('input', () => renderGlobalCalendar());
     document.getElementById('global-calendar-month')?.addEventListener('change', () => {
       globalCalendarSelectedDay = null;
@@ -22105,6 +22347,18 @@
       globalCalendarSelectedDay = toYmd(now);
       renderGlobalCalendar();
     });
+    document.getElementById('btn-open-global-calendar-item-modal')?.addEventListener('click', () => {
+      resetStandaloneCalendarForm();
+      openGlobalCalendarItemModal(globalCalendarSelectedDay || toYmd(new Date()));
+    });
+    document.getElementById('btn-close-calendar-item-form')?.addEventListener('click', () => {
+      resetStandaloneCalendarForm();
+      closeGlobalCalendarItemModal();
+    });
+    document.getElementById('btn-cancel-calendar-item-form')?.addEventListener('click', () => {
+      resetStandaloneCalendarForm();
+      closeGlobalCalendarItemModal();
+    });
     document.getElementById('btn-global-calendar-add')?.addEventListener('click', addStandaloneCalendarItem);
     document.getElementById('global-calendar-reset')?.addEventListener('click', () => {
       document.getElementById('global-calendar-search').value = '';
@@ -22114,53 +22368,6 @@
       resetStandaloneCalendarForm();
       globalCalendarSelectedDay = null;
       renderGlobalCalendar();
-    });
-    document.getElementById('global-doc-search')?.addEventListener('input', () => renderGlobalDocs());
-    document.getElementById('global-doc-theme')?.addEventListener('input', () => renderGlobalDocs());
-    document.getElementById('global-doc-reset')?.addEventListener('click', () => {
-      document.getElementById('global-doc-search').value = '';
-      document.getElementById('global-doc-theme').value = '';
-      document.getElementById('global-doc-files').value = '';
-      document.getElementById('global-doc-mode').value = 'private';
-      renderGlobalDocs();
-    });
-    document.getElementById('btn-global-doc-add')?.addEventListener('click', () => {
-      trackUxMetric('openNewDocGlobal');
-      addStandaloneDocuments();
-    });
-    document.getElementById('global-message-contact-search')?.addEventListener('input', async () => {
-      globalMessageContactsRenderLimit = GLOBAL_MESSAGE_CONTACTS_INITIAL_BATCH;
-      await renderGlobalMessages();
-    });
-    document.getElementById('global-message-contacts-list')?.addEventListener('scroll', async (event) => {
-      await handleGlobalMessageContactsScroll(event);
-    });
-    document.getElementById('global-message-thread')?.addEventListener('scroll', async (event) => {
-      await handleGlobalMessageThreadScroll(event);
-    });
-    document.getElementById('btn-global-message-select-all')?.addEventListener('click', async () => {
-      await selectAllGlobalMessageRecipients();
-    });
-    document.getElementById('btn-global-message-clear-selection')?.addEventListener('click', async () => {
-      await clearGlobalMessageRecipients();
-    });
-    document.getElementById('btn-global-message-open-group-channel')?.addEventListener('click', async () => {
-      const select = document.getElementById('global-message-group-channel-select');
-      const groupKey = String(select?.value || '').trim();
-      if (!groupKey) return;
-      await openGlobalMessageGroupChannelFromCatalog(groupKey);
-    });
-    document.getElementById('btn-global-send-message')?.addEventListener('click', async () => {
-      await sendGlobalMessage();
-    });
-    document.getElementById('btn-global-delete-conversation')?.addEventListener('click', async () => {
-      await deleteGlobalConversation();
-    });
-    document.getElementById('global-message-input')?.addEventListener('keydown', async (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-        e.preventDefault();
-        await sendGlobalMessage();
-      }
     });
     document.getElementById('btn-close-doc-binding')?.addEventListener('click', () => {
       closeDocumentBindingModal();
@@ -22269,9 +22476,6 @@
         }
       }
     });
-    document.getElementById('btn-save-app-branding')?.addEventListener('click', async () => {
-      await saveAppBrandingFromSettings(false);
-    });
     document.getElementById('app-chrome-bg-light-color')?.addEventListener('input', (e) => {
       const input = document.getElementById('app-chrome-bg-light-input');
       const value = String(e?.target?.value || '').trim();
@@ -22296,24 +22500,7 @@
       if (!colorInput || !value) return;
       colorInput.value = colorToHex(normalizeChromeBackgroundColor(value, DEFAULT_APP_BRANDING.chromeBgDark), '#0f1525');
     });
-    document.getElementById('btn-reset-app-branding')?.addEventListener('click', async () => {
-      await saveAppBrandingFromSettings(true);
-    });
-    document.getElementById('btn-reset-test-data')?.addEventListener('click', async () => {
-      await resetAllLocalTestData();
-    });
-    document.getElementById('btn-assign-app-admin')?.addEventListener('click', assignAppAdminFromSettings);
-    document.getElementById('global-settings-tab-branding')?.addEventListener('click', () => setGlobalSettingsTab('branding'));
-    document.getElementById('global-settings-tab-themes')?.addEventListener('click', () => setGlobalSettingsTab('themes'));
-    document.getElementById('global-settings-tab-groups')?.addEventListener('click', () => setGlobalSettingsTab('groups'));
-    document.getElementById('global-settings-tab-roles')?.addEventListener('click', () => setGlobalSettingsTab('roles'));
-    document.getElementById('global-settings-tab-software')?.addEventListener('click', () => setGlobalSettingsTab('software'));
-    document.getElementById('global-settings-tab-views')?.addEventListener('click', () => setGlobalSettingsTab('views'));
-    document.getElementById('btn-global-settings-help')?.addEventListener('click', () => {
-      globalSettingsHelpOpen = !globalSettingsHelpOpen;
-      renderGlobalSettingsHelpBox();
-    });
-    const handleViewOptionsChange = async (e) => {
+    async function handleViewOptionsChange(e) {
       const target = e.target;
       if (!target) return;
       if (!isAppAdmin()) {
@@ -22340,6 +22527,14 @@
         renderViewOptionsMatrix(true);
         return;
       }
+      if (target.classList.contains('view-option-icon-tooltips')) {
+        const next = deepClone(viewOptions || DEFAULT_VIEW_OPTIONS);
+        next.ui = next.ui || {};
+        next.ui.iconTooltips = !!target.checked;
+        await saveViewOptions(next);
+        renderViewOptionsMatrix(true);
+        return;
+      }
       if (target.classList.contains('view-option-default')) {
         const sectionKey = String(target.getAttribute('data-view-section') || '').trim();
         const defaultTab = String(target.value || '').trim();
@@ -22361,8 +22556,18 @@
         }
         return;
       }
-    };
-    const handleViewOptionsClick = async (e) => {
+      if (target.classList.contains('view-option-workflow-actions-shape')) {
+        const next = deepClone(viewOptions || DEFAULT_VIEW_OPTIONS);
+        next.ui = next.ui || {};
+        next.ui.workflowActionButtonsShape = normalizeWorkflowActionButtonsShape(target.value);
+        await saveViewOptions(next);
+        if (workflowRuntime && workspaceMode === 'global' && globalWorkspaceView === 'workflow') {
+          await workflowRuntime.render().catch(() => null);
+        }
+        return;
+      }
+    }
+    async function handleViewOptionsClick(e) {
       const resetBtn = e.target?.closest?.('[data-view-kpi-reset]');
       if (resetBtn) {
         if (!isAppAdmin()) {
@@ -22389,51 +22594,7 @@
       await saveViewOptions(next);
       renderViewOptionsMatrix(true);
       showToast(`Preset applique: ${VIEW_ROLE_PRESETS[presetKey].label}`);
-    };
-    document.getElementById('view-options-matrix')?.addEventListener('change', handleViewOptionsChange);
-    document.getElementById('view-options-summary')?.addEventListener('change', handleViewOptionsChange);
-    document.getElementById('view-option-workflow-actions-mode')?.addEventListener('change', handleViewOptionsChange);
-    document.getElementById('view-options-matrix')?.addEventListener('click', handleViewOptionsClick);
-    document.getElementById('view-options-summary')?.addEventListener('click', handleViewOptionsClick);
-    document.getElementById('profanity-filter-mode-select')?.addEventListener('change', (e) => {
-      const nextMode = String(e?.target?.value || '').trim();
-      if (!nextMode) return;
-      setProfanityFilterMode(nextMode);
-    });
-    document.getElementById('btn-global-theme-add')?.addEventListener('click', createGlobalThemeFromSettings);
-    document.getElementById('btn-global-group-add')?.addEventListener('click', createGlobalGroupFromSettings);
-    document.getElementById('btn-global-role-add')?.addEventListener('click', createProjectRoleFromSettings);
-    document.getElementById('btn-software-add')?.addEventListener('click', createSoftwareVersionEntry);
-    document.getElementById('global-theme-name-input')?.addEventListener('keydown', async (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        await createGlobalThemeFromSettings();
-      }
-    });
-    document.getElementById('global-group-name-input')?.addEventListener('keydown', async (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        await createGlobalGroupFromSettings();
-      }
-    });
-    document.getElementById('global-role-name-input')?.addEventListener('keydown', async (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        await createProjectRoleFromSettings();
-      }
-    });
-    document.getElementById('software-name-input')?.addEventListener('keydown', async (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        await createSoftwareVersionEntry();
-      }
-    });
-    document.getElementById('software-version-input')?.addEventListener('keydown', async (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        await createSoftwareVersionEntry();
-      }
-    });
+    }
     document.getElementById('btn-add-member')?.addEventListener('click', addProjectMember);
     document.getElementById('member-name-input')?.addEventListener('keydown', async (e) => {
       if (e.key === 'Enter') {
@@ -22907,14 +23068,10 @@
 
     // Task modal
     document.getElementById('btn-add-task').addEventListener('click', () => {
-      trackUxMetric('openNewTaskProject');
-      standaloneTaskMode = false;
-      openTaskModal();
+      openProjectTaskCreateModalWithStatus('todo');
     });
     document.getElementById('btn-global-add-task')?.addEventListener('click', () => {
-      trackUxMetric('openNewTaskGlobal');
-      standaloneTaskMode = true;
-      openTaskModal();
+      openGlobalTaskCreateModalWithStatus('todo');
     });
 
     document.getElementById('btn-cancel-task').addEventListener('click', async () => {
@@ -22922,6 +23079,7 @@
       document.getElementById('modal-new-task').classList.add('hidden');
       editingTaskId = null;
       editingStandaloneTaskId = null;
+      pendingTaskStatusPrefill = null;
       standaloneTaskMode = false;
       const standaloneModeInput = document.getElementById('task-standalone-mode');
       if (standaloneModeInput) standaloneModeInput.value = 'private';
@@ -23405,6 +23563,8 @@
         closeGlobalConversationDeleteModal();
         document.getElementById('modal-app-help')?.classList.add('hidden');
         closeGlobalTaskDetails();
+        resetStandaloneCalendarForm();
+        closeGlobalCalendarItemModal();
         toggleNotificationsPanel(false);
         toggleEmojiPicker(false);
         editingTaskId = null;
@@ -23435,6 +23595,10 @@
     });
     registerSafeBackdropClose('modal-calendar-info-details', async () => {
       await closeStandaloneCalendarDetails();
+    });
+    registerSafeBackdropClose('modal-calendar-item-form', () => {
+      resetStandaloneCalendarForm();
+      closeGlobalCalendarItemModal();
     });
     registerSafeBackdropClose('modal-doc-binding', () => {
       closeDocumentBindingModal();
@@ -24133,58 +24297,11 @@
     // ============================================================================
 
     function startApp() {
-      initTheme();
-      if (!checkDependencies()) {
+      if (appInitRuntime?.startApp) {
+        appInitRuntime.startApp();
         return;
       }
-
-      // Initialize crypto UI
-      if (window.TaskMDACrypto) {
-        window.TaskMDACrypto.initCryptoUI();
-        window.addEventListener('taskmda-crypto-recovered', async () => {
-          await initApp();
-        });
-
-        // Check if encrypted data exists
-        const hasSalt = window.TaskMDACrypto.hasSalt();
-
-        if (hasSalt) {
-          // User has already set a password - show unlock screen
-          window.TaskMDACrypto.showLockScreen('unlock');
-
-          // Setup unlock button
-          const lockBtn = document.getElementById('lockBtn');
-          if (lockBtn) {
-            lockBtn.onclick = () => {
-              window.TaskMDACrypto.submitPassword(async (result) => {
-                // Password verified, initialize app
-                await initApp();
-              });
-            };
-          }
-        } else {
-          // First time - create password
-          window.TaskMDACrypto.showLockScreen('create');
-
-          // Setup create button
-          const lockBtn = document.getElementById('lockBtn');
-          if (lockBtn) {
-            lockBtn.onclick = () => {
-              window.TaskMDACrypto.submitPassword(async (result) => {
-                if (result.isNewUser) {
-                  showRecoveryKeyInstructions(result.recoveryCode || '', 'Clé de récupération initiale');
-                  // New password created, initialize app
-                  await initApp();
-                }
-              });
-            };
-          }
-        }
-      } else {
-        // Crypto module not available, start without encryption
-        console.warn('⚠️ Crypto module not loaded, starting without encryption');
-        initApp();
-      }
+      console.error('TaskMDAAppInit module not available');
     }
 
     // Démarrer l'application

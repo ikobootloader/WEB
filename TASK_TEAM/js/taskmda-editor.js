@@ -597,6 +597,9 @@
       if (emojiButton) {
         emojiButton.setAttribute('aria-label', 'Inserer un emoji');
         emojiButton.setAttribute('title', 'Inserer un emoji');
+        if (!String(emojiButton.textContent || '').trim()) {
+          emojiButton.textContent = '🙂';
+        }
       }
       projectDescriptionQuillEditors.set(editorId, quill);
       return quill;

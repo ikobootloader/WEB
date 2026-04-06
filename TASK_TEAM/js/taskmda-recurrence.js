@@ -84,8 +84,32 @@
     if (!dateStr || typeof dateStr !== 'string') return false;
     const match = /^\d{4}-\d{2}-\d{2}$/.test(dateStr);
     if (!match) return false;
-    const date = new Date(dateStr + 'T00:00:00Z');
-    return !isNaN(date.getTime());
+    const [y, m, d] = dateStr.split('-').map(v => parseInt(v, 10));
+    const date = new Date(Date.UTC(y, m - 1, d));
+    if (isNaN(date.getTime())) return false;
+    return date.getUTCFullYear() === y
+      && date.getUTCMonth() === (m - 1)
+      && date.getUTCDate() === d;
+  }
+
+  function resolveMaxIterations(config, startDate) {
+    const MIN_ITERATIONS = 1000;
+    const DEFAULT_ITERATIONS = 5000;
+    const MAX_ITERATIONS_CAP = 200000;
+    const safeStart = startDate instanceof Date ? startDate : new Date();
+
+    if (config?.endType === 'count') {
+      const count = Math.max(1, Number.parseInt(String(config.endCount || 1), 10) || 1);
+      return Math.min(MAX_ITERATIONS_CAP, Math.max(MIN_ITERATIONS, count * 370));
+    }
+
+    if (config?.endType === 'until' && isValidISODate(config.endDate)) {
+      const endDate = new Date(config.endDate + 'T00:00:00Z');
+      const days = Math.max(1, Math.ceil((endDate.getTime() - safeStart.getTime()) / 86400000) + 2);
+      return Math.min(MAX_ITERATIONS_CAP, Math.max(MIN_ITERATIONS, days));
+    }
+
+    return DEFAULT_ITERATIONS;
   }
 
   /**
@@ -104,14 +128,12 @@
 
     const occurrences = [];
     const startDate = new Date(config.startDate + 'T00:00:00Z');
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
 
     let currentDate = new Date(startDate);
     let count = 0;
 
     // Limite de sécurité pour éviter les boucles infinies
-    const MAX_ITERATIONS = 500;
+    const MAX_ITERATIONS = resolveMaxIterations(config, startDate);
     let iterations = 0;
 
     while (iterations < MAX_ITERATIONS) {
@@ -130,7 +152,7 @@
       }
 
       // Vérifier si la date courante correspond aux critères
-      if (isOccurrenceMatch(currentDate, config, startDate)) {
+      if (isOccurrenceMatch(currentDate, config)) {
         occurrences.push(formatDateISO(currentDate));
         count++;
       }
@@ -142,7 +164,7 @@
     return occurrences;
   }
 
-  function isOccurrenceMatch(currentDate, config, startDate) {
+  function isOccurrenceMatch(currentDate, config) {
     if (config.frequency === 'weekly') {
       return isWeeklyMatch(currentDate, config);
     } else if (config.frequency === 'monthly') {
