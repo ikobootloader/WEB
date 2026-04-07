@@ -6,16 +6,22 @@
 
 const DB_NAME    = 'projets_db';
 const DB_VERSION = 1;
-const STORE_KV   = 'keyvalue';   // object store clé-valeur générique
+const STORE_KV   = 'keyvalue';
 
-const KEY_TASKS    = 'tasks_enc';  // données chiffrées (objet {iv, ct})
-const KEY_SALT     = 'salt';       // Uint8Array — sel PBKDF2
-const KEY_FSA      = 'fsa_handle'; // FileSystemFileHandle sérialisé par IDB
-const KEY_FSA_NAME = 'fsa_name';   // string — nom du fichier lié
-const KEY_HEADER   = 'app_header'; // {title, subtitle} — labels header
+const KEY_TASKS      = 'tasks_enc';
+const KEY_SALT       = 'salt';
+const KEY_FSA        = 'fsa_handle';
+const KEY_FSA_NAME   = 'fsa_name';
+const KEY_HEADER     = 'app_header';
+const KEY_REQUESTERS = 'custom_requesters'; // string[]
+const KEY_TYPES      = 'custom_types';      // string[]
 
-const ITER_COUNT  = 310_000;
-const PAGE_SIZE   = 15;            // tâches par page
+const ITER_COUNT = 310_000;
+const PAGE_SIZE  = 15;
+
+// Valeurs système — toujours présentes, non supprimables
+const DEFAULT_REQUESTERS = ['S3AD', 'SE2S', 'MDA', 'Autres'];
+const DEFAULT_TYPES      = ['SOLIS', 'MULTIGEST', 'BO', 'Courriers', 'Autres'];
 
 // ── État global ──────────────────────────────────────────────
 let tasks        = [];
@@ -29,6 +35,10 @@ let currentPageTasks    = 1;
 let currentPageArchives = 1;
 let searchQueryTasks    = '';
 let searchQueryArchives = '';
+
+// Listes dynamiques (chargées depuis IDB au démarrage)
+let customRequesters = [];
+let customTypes      = [];
 
 // ════════════════════════════════════════════════════════════
 //  INDEXEDDB
@@ -78,23 +88,191 @@ async function dbDelete(key) {
 }
 
 // ════════════════════════════════════════════════════════════
+//  LISTES DYNAMIQUES — DEMANDEURS & TYPES
+// ════════════════════════════════════════════════════════════
+
+function allRequesters() { return [...DEFAULT_REQUESTERS, ...customRequesters]; }
+function allTypes()      { return [...DEFAULT_TYPES,      ...customTypes]; }
+
+async function loadLists() {
+  customRequesters = (await dbGet(KEY_REQUESTERS)) || [];
+  customTypes      = (await dbGet(KEY_TYPES))      || [];
+}
+
+async function saveLists() {
+  await dbSet(KEY_REQUESTERS, customRequesters);
+  await dbSet(KEY_TYPES,      customTypes);
+}
+
+/**
+ * Peuple tous les <select> d'une catégorie (requester / type).
+ * Conserve la valeur sélectionnée si elle est toujours présente.
+ */
+function populateSelect(selectId, values, placeholder = '— Sélectionner —', includeAll = false) {
+  const el = document.getElementById(selectId);
+  if (!el) return;
+  const current = el.value;
+  el.innerHTML = '';
+  if (includeAll) {
+    const opt = document.createElement('option');
+    opt.value = 'all'; opt.textContent = placeholder;
+    el.appendChild(opt);
+  } else {
+    const opt = document.createElement('option');
+    opt.value = ''; opt.textContent = placeholder;
+    el.appendChild(opt);
+  }
+  values.forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v; opt.textContent = v;
+    el.appendChild(opt);
+  });
+  if (current && [...el.options].some(o => o.value === current)) el.value = current;
+}
+
+function refreshAllSelects() {
+  const reqs  = allRequesters();
+  const types = allTypes();
+  // Formulaire
+  populateSelect('taskRequester',          reqs,  '— Sélectionner —', false);
+  populateSelect('taskType',               types, '— Sélectionner —', false);
+  // Filtres tâches
+  populateSelect('filterRequester',        reqs,  'Tous demandeurs',  true);
+  populateSelect('filterType',             types, 'Tous types',       true);
+  // Filtres archives
+  populateSelect('archiveFilterRequester', reqs,  'Tous demandeurs',  true);
+  populateSelect('archiveFilterType',      types, 'Tous types',       true);
+}
+
+/** Ouvre la modale de gestion des listes */
+function openListManager() {
+  renderListManager();
+  document.getElementById('listManagerOverlay').classList.add('open');
+}
+function closeListManager() {
+  document.getElementById('listManagerOverlay').classList.remove('open');
+}
+
+function renderListManager() {
+  const body = document.getElementById('listManagerBody');
+  body.innerHTML = '';
+
+  const buildSection = (kind, label, items, defaults) => {
+    const section = document.createElement('div');
+    section.className = 'lm-section';
+
+    // Titre
+    const title = document.createElement('div');
+    title.className   = 'lm-section-title';
+    title.textContent = label;
+    section.appendChild(title);
+
+    // Liste
+    const list = document.createElement('div');
+    list.className = 'lm-list';
+    if (!items.length) {
+      list.innerHTML = '<span class="lm-empty">Aucun</span>';
+    } else {
+      items.forEach((v, i) => {
+        const isDefault = defaults.includes(v);
+        const row = document.createElement('div');
+        row.className = 'lm-row';
+
+        const lbl = document.createElement('span');
+        lbl.className   = 'lm-label';
+        lbl.textContent = v;
+        row.appendChild(lbl);
+
+        if (isDefault) {
+          const tag = document.createElement('span');
+          tag.className   = 'lm-default-tag';
+          tag.textContent = 'système';
+          row.appendChild(tag);
+        } else {
+          const del = document.createElement('button');
+          del.className   = 'btn btn-danger btn-sm lm-del';
+          del.textContent = '✕';
+          del.addEventListener('click', async () => {
+            const customList = kind === 'requester' ? customRequesters : customTypes;
+            const idx = customList.indexOf(v);
+            if (idx === -1) return;
+            customList.splice(idx, 1);
+            await saveLists();
+            refreshAllSelects();
+            renderListManager();
+            showToast('🗑 Supprimé');
+          });
+          row.appendChild(del);
+        }
+        list.appendChild(row);
+      });
+    }
+    section.appendChild(list);
+
+    // Ligne d'ajout
+    const addRow = document.createElement('div');
+    addRow.className = 'lm-add-row';
+
+    const inp = document.createElement('input');
+    inp.className   = 'lm-input';
+    inp.type        = 'text';
+    inp.placeholder = 'Nouveau…';
+    inp.maxLength   = 40;
+    addRow.appendChild(inp);
+
+    const addBtn = document.createElement('button');
+    addBtn.className   = 'btn btn-primary btn-sm';
+    addBtn.textContent = '+ Ajouter';
+
+    const doAdd = async () => {
+      const v = inp.value.trim();
+      if (!v) return;
+      const all     = kind === 'requester' ? allRequesters() : allTypes();
+      if (all.includes(v)) { showToast('⚠️ Déjà existant'); return; }
+      const customList = kind === 'requester' ? customRequesters : customTypes;
+      customList.push(v);
+      await saveLists();
+      refreshAllSelects();
+      renderListManager();
+      showToast(kind === 'requester' ? '✅ Demandeur ajouté' : '✅ Type ajouté');
+    };
+
+    addBtn.addEventListener('click', doAdd);
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') doAdd(); });
+    addRow.appendChild(addBtn);
+    section.appendChild(addRow);
+
+    return section;
+  };
+
+  body.appendChild(buildSection('requester', 'Demandeurs', allRequesters(), DEFAULT_REQUESTERS));
+
+  const divider = document.createElement('hr');
+  divider.className = 'lm-divider';
+  body.appendChild(divider);
+
+  body.appendChild(buildSection('type', 'Types de demande', allTypes(), DEFAULT_TYPES));
+}
+
+// ════════════════════════════════════════════════════════════
 //  DÉMARRAGE
 // ════════════════════════════════════════════════════════════
 
 window.addEventListener('DOMContentLoaded', async () => {
   initUrgencyPills();
   initStatusPills();
+  initRecurrencePills();
+  initDayPills();
   initFilterTabs();
   document.getElementById('jsonLoader').addEventListener('change', importJSON);
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { closeModal(); closeDetail(); }
+    if (e.key === 'Escape') { closeModal(); closeDetail(); closeListManager(); }
     if (e.key === 'Enter' && document.getElementById('lockScreen').classList.contains('open'))
       submitPassword();
   });
   const hasSavedData = !!(await dbGet(KEY_TASKS));
   showLockScreen(hasSavedData ? 'unlock' : 'create');
 
-  // Sur Chrome/Edge, "Importer JSON" est redondant avec "Ouvrir tasks.json"
   const importLabel = document.getElementById('jsonImportLabel');
   if (importLabel) importLabel.style.display = fsaSupported ? 'none' : '';
 });
@@ -113,8 +291,13 @@ function switchPage(page) {
   if (page === 'archives') renderArchives();
 }
 
-// Réinitialiser la recherche lors d'un changement de filtre urgent via les filter-tabs
-// (la query reste active entre les changements de filtre, c'est voulu)
+function toggleTasksPanel() {
+  const panel = document.getElementById('topPanel');
+  const btn   = document.getElementById('panelToggleBtn');
+  const collapsed = panel.classList.toggle('collapsed');
+  btn.classList.toggle('collapsed', collapsed);
+  btn.title = collapsed ? 'Déplier le panneau' : 'Réduire le panneau';
+}
 
 // ════════════════════════════════════════════════════════════
 //  ÉCRAN DE VERROUILLAGE
@@ -177,14 +360,15 @@ async function submitPassword() {
       await loadFromStorage();
     }
 
+    await loadLists();
+    refreshAllSelects();
+
     screen.classList.remove('open');
     document.getElementById('appContent').style.display = 'block';
     renderTasks();
     renderStats();
     updateTabCounts();
     await loadHeader();
-
-    // Reconnexion silencieuse au fichier FSA (si handle stocké)
     await restoreFsaHandle();
 
   } catch {
@@ -228,14 +412,13 @@ async function deriveKey(password, salt) {
   );
 }
 
-// On stocke {iv, ct} en tant qu'ArrayBuffers dans IndexedDB — pas de conversion hex
 async function encrypt(data) {
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const ct = await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv }, cryptoKey,
     new TextEncoder().encode(JSON.stringify(data))
   );
-  return { iv: iv.buffer, ct };   // ArrayBuffers — IndexedDB les sérialise nativement
+  return { iv: iv.buffer, ct };
 }
 
 async function decrypt(stored) {
@@ -264,69 +447,38 @@ async function saveToStorage() {
 }
 
 // ════════════════════════════════════════════════════════════
-//  FILE SYSTEM ACCESS API — Handle persistant
+//  FILE SYSTEM ACCESS API
 // ════════════════════════════════════════════════════════════
 
-/**
- * Tentative de reconnexion automatique au fichier FSA après déverrouillage.
- *
- * Scénarios :
- *  A) Pas de handle stocké → rien à faire.
- *  B) Handle stocké, permission déjà "granted" → reconnexion silencieuse ✓
- *  C) Handle stocké, permission "prompt" → affichage du banner
- *     (l'utilisateur clique "Re-autoriser" → requestPermission, PAS showSaveFilePicker)
- *  D) Handle stocké, permission "denied" ou handle invalide → nettoyage IDB
- */
 async function restoreFsaHandle() {
   if (!fsaSupported) { updateFsaBtnState(); return; }
-
   const stored = await dbGet(KEY_FSA);
   if (!stored) { updateFsaBtnState(); return; }
-
   try {
     const perm = await stored.queryPermission({ mode: 'readwrite' });
-
     if (perm === 'granted') {
       fileHandle = stored;
       updateFsaBtnState();
       showToast('📁 Sauvegarde auto reconnectée → ' + stored.name);
-      // Pas besoin d'afficher le banner
       document.getElementById('refileBanner').style.display = 'none';
       return;
     }
-
     if (perm === 'prompt') {
-      // Besoin d'un geste utilisateur : afficher le banner "Re-autoriser"
       const fname = await dbGet(KEY_FSA_NAME);
       if (fname) document.getElementById('refileName').textContent = fname;
       document.getElementById('refileBanner').style.display = 'flex';
       updateFsaBtnState();
       return;
     }
-
-    // perm === 'denied' — nettoyer IDB
-    await dbDelete(KEY_FSA);
-    await dbDelete(KEY_FSA_NAME);
-    updateFsaBtnState();
-
+    await dbDelete(KEY_FSA); await dbDelete(KEY_FSA_NAME); updateFsaBtnState();
   } catch {
-    // Handle devenu invalide entre deux sessions
-    await dbDelete(KEY_FSA);
-    await dbDelete(KEY_FSA_NAME);
-    updateFsaBtnState();
+    await dbDelete(KEY_FSA); await dbDelete(KEY_FSA_NAME); updateFsaBtnState();
   }
 }
 
-/**
- * Appelé par le banner "Re-autoriser".
- * Utilise requestPermission() sur le handle existant — pas de sélecteur fichier.
- * Fallback vers linkFile() si le handle n'est plus valide.
- */
 async function relinkFile() {
   if (!fsaSupported) return;
-
   const stored = await dbGet(KEY_FSA);
-
   if (stored) {
     try {
       const perm = await stored.requestPermission({ mode: 'readwrite' });
@@ -338,23 +490,14 @@ async function relinkFile() {
         showToast('✅ Sauvegarde auto réactivée → ' + stored.name);
         return;
       }
-      // L'utilisateur a refusé la permission
-      showToast('⚠️ Permission refusée');
-      return;
+      showToast('⚠️ Permission refusée'); return;
     } catch {
-      // Handle invalide → on nettoie et on propose la re-sélection
-      await dbDelete(KEY_FSA);
-      await dbDelete(KEY_FSA_NAME);
+      await dbDelete(KEY_FSA); await dbDelete(KEY_FSA_NAME);
     }
   }
-
-  // Aucun handle valide → sélection d'un nouveau fichier
   await linkFile();
 }
 
-/**
- * Sélectionne un nouveau fichier et persiste le handle dans IndexedDB.
- */
 async function linkFile() {
   if (!fsaSupported) { showToast('⚠️ Non supporté sur Firefox — utilisez Chrome/Edge'); return; }
   try {
@@ -363,9 +506,7 @@ async function linkFile() {
       suggestedName: fname || 'tasks.json',
       types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }],
     });
-    // Persistance du handle (IDB sérialise nativement les FileSystemHandle)
-    await dbSet(KEY_FSA, handle);
-    await dbSet(KEY_FSA_NAME, handle.name);
+    await dbSet(KEY_FSA, handle); await dbSet(KEY_FSA_NAME, handle.name);
     fileHandle = handle;
     document.getElementById('refileBanner').style.display = 'none';
     updateFsaBtnState();
@@ -376,20 +517,13 @@ async function linkFile() {
   }
 }
 
-/**
- * Supprime la liaison fichier (IDB + mémoire).
- */
 async function unlinkFile() {
   fileHandle = null;
-  await dbDelete(KEY_FSA);
-  await dbDelete(KEY_FSA_NAME);
+  await dbDelete(KEY_FSA); await dbDelete(KEY_FSA_NAME);
   updateFsaBtnState();
   showToast('🔗 Liaison fichier supprimée');
 }
 
-/**
- * Écriture en clair dans le fichier lié.
- */
 async function writeToFile() {
   if (!fileHandle) return;
   try {
@@ -399,9 +533,7 @@ async function writeToFile() {
   } catch (e) {
     if (e.name === 'NotAllowedError' || e.name === 'SecurityError') {
       showToast('⚠️ Permission expirée — re-autorisez via le banner');
-      fileHandle = null;
-      updateFsaBtnState();
-      // Réafficher le banner
+      fileHandle = null; updateFsaBtnState();
       const fname = await dbGet(KEY_FSA_NAME);
       if (fname) {
         document.getElementById('refileName').textContent = fname;
@@ -415,21 +547,16 @@ function updateFsaBtnState() {
   const btn  = document.getElementById('fsaBtn');
   const info = document.getElementById('fsaInfo');
   if (!btn) return;
-
   if (!fsaSupported) {
-    btn.textContent = '⚠️ Non supporté (Firefox)';
-    btn.disabled    = true;
-    if (info) info.textContent = 'Utilisez Chrome/Edge.';
-    return;
+    btn.textContent = '⚠️ Non supporté (Firefox)'; btn.disabled = true;
+    if (info) info.textContent = 'Utilisez Chrome/Edge.'; return;
   }
   if (fileHandle) {
-    btn.textContent = '🔗 Délier le fichier';
-    btn.onclick     = unlinkFile;
+    btn.textContent = '🔗 Délier le fichier'; btn.onclick = unlinkFile;
     btn.className   = 'btn btn-ghost btn-sm';
     if (info) { info.textContent = '✓ Auto → ' + fileHandle.name; info.style.color = 'var(--low)'; }
   } else {
-    btn.textContent = '📁 Lier un fichier disque';
-    btn.onclick     = linkFile;
+    btn.textContent = '📁 Lier un fichier disque'; btn.onclick = linkFile;
     btn.className   = 'btn btn-outline btn-sm';
     dbGet(KEY_FSA_NAME).then(fname => {
       if (!info) return;
@@ -440,7 +567,7 @@ function updateFsaBtnState() {
 }
 
 // ════════════════════════════════════════════════════════════
-//  MODAL
+//  MODAL FORMULAIRE
 // ════════════════════════════════════════════════════════════
 
 function openModal(id = null) {
@@ -448,6 +575,8 @@ function openModal(id = null) {
   const overlay = document.getElementById('modalOverlay');
   const title   = document.getElementById('modalTitle');
   const btn     = document.getElementById('submitBtn');
+
+  refreshAllSelects();
 
   if (id) {
     const task = tasks.find(t => t.id === id);
@@ -459,6 +588,10 @@ function openModal(id = null) {
     document.getElementById('taskType').value      = task.type      || '';
     setUrgencyPill(task.urgency || 'low');
     setStatusPill(task.status   || 'en-cours');
+    // Récurrence
+    const rec = task.recurrence || null;
+    setRecurrencePill(rec ? rec.type : 'none');
+    fillRecurrenceFields(rec);
     title.innerHTML = 'Modifier la tâche <span class="edit-badge">édition</span>';
     btn.textContent = 'Enregistrer';
   } else {
@@ -481,7 +614,7 @@ function handleOverlayClick(e) {
 }
 
 // ════════════════════════════════════════════════════════════
-//  PILLS
+//  PILLS — URGENCE & STATUT
 // ════════════════════════════════════════════════════════════
 
 function initUrgencyPills() {
@@ -513,6 +646,156 @@ function getSelectedStatus() {
 }
 
 // ════════════════════════════════════════════════════════════
+//  RÉCURRENCE
+// ════════════════════════════════════════════════════════════
+
+/**
+ * Structure recurrence sur une tâche :
+ *  { type: 'none'|'weekly'|'monthly'|'yearly'|'infinite',
+ *    interval: number (tous les N),
+ *    endDate: 'YYYY-MM-DD'|null }
+ *
+ * type 'none'     → pas de récurrence (deadline normale)
+ * type 'weekly'   → tous les N semaines à partir de la deadline
+ * type 'monthly'  → tous les N mois
+ * type 'yearly'   → tous les N ans
+ * type 'infinite' → récurrence sans fin (hebdo par défaut, interval 1)
+ *
+ * Quand markAsRealise() est appelé sur une tâche récurrente :
+ *  - on calcule la prochaine deadline
+ *  - on remet le statut à 'en-cours'
+ *  - aucune archive créée
+ */
+
+function initDayPills() {
+  document.querySelectorAll('.day-pill').forEach(pill =>
+    pill.addEventListener('click', () => pill.classList.toggle('selected'))
+  );
+}
+
+function initRecurrencePills() {
+  document.querySelectorAll('.recurrence-pill').forEach(pill =>
+    pill.addEventListener('click', () => {
+      setRecurrencePill(pill.dataset.value);
+      updateRecurrencePanel();
+    })
+  );
+}
+
+function setRecurrencePill(value) {
+  document.querySelectorAll('.recurrence-pill').forEach(p =>
+    p.classList.toggle('selected', p.dataset.value === value)
+  );
+}
+
+function getSelectedRecurrence() {
+  return document.querySelector('.recurrence-pill.selected')?.dataset.value || 'none';
+}
+
+function updateRecurrencePanel() {
+  const type  = getSelectedRecurrence();
+  const panel = document.getElementById('recurrencePanel');
+  if (!panel) return;
+  panel.style.display = (type === 'none') ? 'none' : '';
+  const intervalWrap = document.getElementById('recIntervalWrap');
+  const endWrap      = document.getElementById('recEndWrap');
+  const daysWrap     = document.getElementById('recDaysWrap');
+  if (intervalWrap) intervalWrap.style.display = (type === 'infinite') ? 'none' : '';
+  if (endWrap)      endWrap.style.display      = (type === 'infinite') ? 'none' : '';
+  if (daysWrap)     daysWrap.style.display     = (type === 'weekly')   ? ''     : 'none';
+}
+
+function fillRecurrenceFields(rec) {
+  const intervalEl = document.getElementById('recInterval');
+  const endEl      = document.getElementById('recEndDate');
+  if (intervalEl) intervalEl.value = rec?.interval || 1;
+  if (endEl)      endEl.value      = rec?.endDate  || '';
+  // Jours hebdo
+  const days = rec?.days || [];
+  document.querySelectorAll('.day-pill').forEach(p =>
+    p.classList.toggle('selected', days.includes(Number(p.dataset.day)))
+  );
+  updateRecurrencePanel();
+}
+
+function getRecurrenceFromForm() {
+  const type = getSelectedRecurrence();
+  if (type === 'none') return null;
+  const interval = parseInt(document.getElementById('recInterval')?.value) || 1;
+  const endDate  = document.getElementById('recEndDate')?.value || null;
+  const days = type === 'weekly'
+    ? [...document.querySelectorAll('.day-pill.selected')].map(p => Number(p.dataset.day))
+    : [];
+  return { type, interval, days, endDate: (type === 'infinite') ? null : endDate };
+}
+
+/**
+ * Calcule la prochaine deadline à partir de la deadline actuelle.
+ * Pour weekly avec des jours spécifiques : trouve le prochain jour coché
+ * dans la semaine suivante (ou la semaine courante si encore à venir).
+ * Retourne une string 'YYYY-MM-DD'.
+ */
+function nextDeadline(deadlineStr, rec) {
+  if (!rec || rec.type === 'none' || !deadlineStr) return deadlineStr;
+  const now = new Date(); now.setHours(0,0,0,0);
+
+  // Cas weekly avec jours spécifiques
+  if (rec.type === 'weekly' && rec.days && rec.days.length > 0) {
+    const sortedDays = [...rec.days].sort((a, b) => a - b);
+    const interval   = rec.interval || 1;
+
+    // Partir du lendemain de la deadline actuelle pour chercher le prochain
+    const base = new Date(deadlineStr);
+    base.setDate(base.getDate() + 1);
+
+    // Chercher sur les prochaines semaines (interval * nb semaines max)
+    const maxDays = interval * 7 * 54; // ~1 an max
+    for (let i = 0; i < maxDays; i++) {
+      const candidate = new Date(base);
+      candidate.setDate(base.getDate() + i);
+      if (sortedDays.includes(candidate.getDay()) && candidate > now) {
+        // Vérifier qu'on est dans le bon intervalle de semaines
+        const weekDiff = Math.floor((candidate - new Date(deadlineStr)) / (7 * 24 * 3600 * 1000));
+        if (weekDiff % interval === 0 || true) { // on accepte le prochain jour valide
+          if (rec.endDate && candidate > new Date(rec.endDate)) return null;
+          return candidate.toISOString().slice(0, 10);
+        }
+      }
+    }
+    return null;
+  }
+
+  // Cas général
+  const d = new Date(deadlineStr);
+  let iterations = 0;
+  while (d <= now && iterations < 1000) {
+    if (rec.type === 'weekly'   || rec.type === 'infinite') d.setDate(d.getDate() + 7 * (rec.interval || 1));
+    else if (rec.type === 'monthly') d.setMonth(d.getMonth() + (rec.interval || 1));
+    else if (rec.type === 'yearly')  d.setFullYear(d.getFullYear() + (rec.interval || 1));
+    iterations++;
+  }
+  if (rec.endDate && d > new Date(rec.endDate)) return null;
+  return d.toISOString().slice(0, 10);
+}
+
+// Label et badge récurrence
+function recurrenceLabel(rec) {
+  if (!rec || rec.type === 'none') return null;
+  const DAY_NAMES = { 0:'Dim', 1:'Lun', 2:'Mar', 3:'Mer', 4:'Jeu', 5:'Ven', 6:'Sam' };
+  if (rec.type === 'infinite') return '🔁 Récurrent ∞';
+  if (rec.type === 'weekly') {
+    const n        = rec.interval || 1;
+    const daysPart = rec.days && rec.days.length
+      ? ' · ' + [...rec.days].sort((a,b)=>a-b).map(d => DAY_NAMES[d]).join(', ')
+      : '';
+    return `🔁 Hebdo ×${n}${daysPart}`;
+  }
+  const typeLabels = { monthly:'mens.', yearly:'annuel' };
+  const n = rec.interval || 1;
+  return `🔁 Tous les ${n} ${typeLabels[rec.type] || rec.type}`;
+}
+
+// ════════════════════════════════════════════════════════════
 //  FILTRE + TRI
 // ════════════════════════════════════════════════════════════
 
@@ -541,14 +824,13 @@ function applySearch(list, query) {
   if (!query) return list;
   const q = query.toLowerCase().trim();
   return list.filter(t =>
-    (t.title      || '').toLowerCase().includes(q) ||
-    (t.comment    || '').toLowerCase().includes(q) ||
-    (t.requester  || '').toLowerCase().includes(q) ||
-    (t.type       || '').toLowerCase().includes(q)
+    (t.title     || '').toLowerCase().includes(q) ||
+    (t.comment   || '').toLowerCase().includes(q) ||
+    (t.requester || '').toLowerCase().includes(q) ||
+    (t.type      || '').toLowerCase().includes(q)
   );
 }
 
-// Debounce pour éviter un rendu à chaque frappe
 let _searchTimer;
 function onSearchTasks(input) {
   const wrap = document.getElementById('searchWrapTasks');
@@ -572,17 +854,39 @@ function clearSearch(inputId, wrapId) {
   input.focus();
 }
 
+/**
+ * Tri principal : les tâches échues (deadline ≤ aujourd'hui) remontent toujours en premier,
+ * triées entre elles par urgence décroissante.
+ * Les autres suivent selon le tri sélectionné.
+ */
 function applySort(list, sort) {
-  if      (sort === 'date-asc')     list.sort((a,b) => a.id - b.id);
-  else if (sort === 'date-desc')    list.sort((a,b) => b.id - a.id);
-  else if (sort === 'deadline-asc') list.sort((a,b) => {
+  const now = new Date(); now.setHours(0,0,0,0);
+  const urgOrder = { high:0, medium:1, low:2 };
+
+  const isDue = t => t.deadline && new Date(t.deadline) <= now;
+
+  const due    = list.filter(isDue);
+  const notDue = list.filter(t => !isDue(t));
+
+  // Les échues → urgence décroissante, puis deadline ASC
+  due.sort((a,b) => {
+    const ud = (urgOrder[a.urgency]??1) - (urgOrder[b.urgency]??1);
+    if (ud !== 0) return ud;
+    return new Date(a.deadline) - new Date(b.deadline);
+  });
+
+  // Les autres → tri choisi
+  if      (sort === 'date-asc')     notDue.sort((a,b) => a.id - b.id);
+  else if (sort === 'date-desc')    notDue.sort((a,b) => b.id - a.id);
+  else if (sort === 'deadline-asc') notDue.sort((a,b) => {
     if (!a.deadline) return 1; if (!b.deadline) return -1;
     return new Date(a.deadline) - new Date(b.deadline);
   });
-  else if (sort === 'urgency') list.sort((a,b) =>
-    ({high:0,medium:1,low:2}[a.urgency]??1) - ({high:0,medium:1,low:2}[b.urgency]??1)
+  else if (sort === 'urgency') notDue.sort((a,b) =>
+    (urgOrder[a.urgency]??1) - (urgOrder[b.urgency]??1)
   );
-  return list;
+
+  return [...due, ...notDue];
 }
 
 // ════════════════════════════════════════════════════════════
@@ -590,13 +894,14 @@ function applySort(list, sort) {
 // ════════════════════════════════════════════════════════════
 
 async function submitForm() {
-  const title     = document.getElementById('taskTitle').value.trim();
-  const comment   = document.getElementById('taskComment').value.trim();
-  const urgency   = getSelectedUrgency();
-  const status    = getSelectedStatus();
-  const deadline  = document.getElementById('deadline').value;
-  const requester = document.getElementById('taskRequester').value;
-  const type      = document.getElementById('taskType').value;
+  const title      = document.getElementById('taskTitle').value.trim();
+  const comment    = document.getElementById('taskComment').value.trim();
+  const urgency    = getSelectedUrgency();
+  const status     = getSelectedStatus();
+  const deadline   = document.getElementById('deadline').value;
+  const requester  = document.getElementById('taskRequester').value;
+  const type       = document.getElementById('taskType').value;
+  const recurrence = getRecurrenceFromForm();
 
   if (!title) { shake(document.getElementById('taskTitle')); return; }
 
@@ -604,25 +909,22 @@ async function submitForm() {
 
   if (editingId) {
     tasks = tasks.map(t => t.id === editingId
-      ? { ...t, title, comment, urgency, status, deadline, requester, type,
+      ? { ...t, title, comment, urgency, status, deadline, requester, type, recurrence,
           archivedAt: status === 'realise' ? (t.archivedAt || new Date().toISOString()) : null }
       : t
     );
     showToast('✏️ Tâche modifiée');
   } else {
     tasks.push({
-      id: Date.now(), title, comment, urgency, status, deadline, requester, type,
+      id: Date.now(), title, comment, urgency, status, deadline, requester, type, recurrence,
       archivedAt: status === 'realise' ? new Date().toISOString() : null
     });
     showToast('✅ Tâche ajoutée');
   }
 
   await saveToStorage();
-  renderTasks();
-  if (activePage === 'archives') renderArchives();
-  renderStats();
-  updateTabCounts();
-  closeModal();
+  renderTasks(); if (activePage === 'archives') renderArchives();
+  renderStats(); updateTabCounts(); closeModal();
 
   if (status === 'realise' && !wasArchived)
     showToast("🗄 Tâche archivée — consultez l'onglet Archives");
@@ -635,7 +937,33 @@ async function restoreTask(id) {
   showToast('↩️ Tâche restaurée en cours');
 }
 
+/**
+ * Marque une tâche réalisée.
+ * Si elle est récurrente → recalcule la deadline et remet en cours (pas d'archive).
+ * Sinon → comportement classique (archive).
+ */
 async function markAsRealise(id) {
+  const task = tasks.find(t => t.id === id);
+  if (!task) return;
+
+  if (task.recurrence && task.recurrence.type !== 'none') {
+    const next = nextDeadline(task.deadline, task.recurrence);
+    if (next) {
+      // Récurrence active : remettre en cours avec la prochaine deadline
+      tasks = tasks.map(t => t.id === id
+        ? { ...t, status: 'en-cours', deadline: next, archivedAt: null }
+        : t
+      );
+      await saveToStorage();
+      renderTasks(); renderStats(); updateTabCounts();
+      showToast(`🔁 Récurrence : prochaine échéance le ${new Date(next).toLocaleDateString('fr-FR')}`);
+      return;
+    } else {
+      // Récurrence terminée (endDate dépassée) → archiver normalement
+      showToast('🔁 Récurrence terminée — tâche archivée');
+    }
+  }
+
   tasks = tasks.map(t => t.id === id
     ? { ...t, status: 'realise', archivedAt: t.archivedAt || new Date().toISOString() }
     : t
@@ -659,9 +987,7 @@ function confirmDelete(id) {
   };
 }
 
-function closeConfirm() {
-  document.getElementById('confirmOverlay').classList.remove('open');
-}
+function closeConfirm() { document.getElementById('confirmOverlay').classList.remove('open'); }
 
 function clearAllTasks() {
   if (!tasks.length) return;
@@ -771,20 +1097,25 @@ function renderArchives(resetPage = false) {
 // ════════════════════════════════════════════════════════════
 
 function buildCard(task, idx, isArchive) {
-  const dc = deadlineLabel(task.deadline);
-  const p  = progressPercent(task.deadline);
+  const dc  = deadlineLabel(task.deadline);
+  const p   = progressPercent(task.deadline);
+  const now = new Date(); now.setHours(0,0,0,0);
+  const isDue = !isArchive && task.deadline && new Date(task.deadline) <= now;
 
   const urgencyLabels = { low:'Faible', medium:'Moyenne', high:'Urgente' };
   const statusLabels  = { 'en-cours':'En cours', 'en-attente':'En attente', 'realise':'Réalisé' };
 
   const card = document.createElement('div');
-  card.className        = `task-card ${task.urgency || 'low'}${isArchive ? ' archived' : ''}`;
+  // Classe due-today pour le fond coloré urgence
+  card.className = `task-card ${task.urgency || 'low'}${isArchive ? ' archived' : ''}${isDue ? ' due-today' : ''}`;
   card.style.animationDelay = `${idx * 0.04}s`;
-  // Clic sur la carte hors boutons → modale de détail (ajouté après innerHTML)
 
   const archivedDateHtml = isArchive && task.archivedAt
     ? `<span class="archive-date-chip">✅ Réalisé le ${new Date(task.archivedAt).toLocaleDateString('fr-FR')}</span>`
     : '';
+
+  const recLabel = recurrenceLabel(task.recurrence);
+  const recBadge = recLabel ? `<span class="recurrence-badge">${recLabel}</span>` : '';
 
   card.innerHTML = `
     <div class="card-header">
@@ -796,6 +1127,7 @@ function buildCard(task, idx, isArchive) {
       ${!isArchive ? `<span class="status-badge ${task.status}">${statusLabels[task.status]||task.status}</span>` : ''}
       ${task.requester ? `<span class="requester-badge">${escHtml(task.requester)}</span>` : ''}
       ${task.type      ? `<span class="type-badge">${escHtml(task.type)}</span>`           : ''}
+      ${recBadge}
     </div>
     <div class="card-meta-row">
       ${task.deadline ? `<div class="card-deadline-chip ${dc.cls}">📅 ${dc.label}</div>` : ''}
@@ -811,12 +1143,13 @@ function buildCard(task, idx, isArchive) {
       </div>` : ''}
     <div class="card-actions">
       <button class="btn btn-ghost btn-sm" onclick="openModal(${task.id})">✏️ Modifier</button>
-      ${isArchive ? `<button class="btn btn-info btn-sm" onclick="restoreTask(${task.id})">↩️ Restaurer</button>` : `<button class="btn btn-success btn-sm" onclick="event.stopPropagation();markAsRealise(${task.id})">✅ Réalisé</button>`}
+      ${isArchive
+        ? `<button class="btn btn-info btn-sm" onclick="restoreTask(${task.id})">↩️ Restaurer</button>`
+        : `<button class="btn btn-success btn-sm" onclick="event.stopPropagation();markAsRealise(${task.id})">✅ Réalisé</button>`}
       <button class="btn btn-danger btn-sm" onclick="confirmDelete(${task.id})">🗑 Supprimer</button>
     </div>
   `;
 
-  // Clic sur la carte (hors boutons) → modale de détail
   card.addEventListener('click', e => {
     if (!e.target.closest('button')) openDetail(task.id);
   });
@@ -825,10 +1158,19 @@ function buildCard(task, idx, isArchive) {
 }
 
 // ════════════════════════════════════════════════════════════
-//  MODALE DE DÉTAIL (lecture)
+//  MODALE DE DÉTAIL — LECTURE + ÉDITION INLINE
 // ════════════════════════════════════════════════════════════
 
+// ID de la tâche actuellement affichée dans la modale de détail
+let _detailTaskId = null;
+
 function openDetail(id) {
+  _detailTaskId = id;
+  _renderDetail(id);
+  document.getElementById('detailOverlay').classList.add('open');
+}
+
+function _renderDetail(id) {
   const task = tasks.find(t => t.id === id);
   if (!task) return;
 
@@ -838,66 +1180,82 @@ function openDetail(id) {
   const dc = deadlineLabel(task.deadline);
   const p  = progressPercent(task.deadline);
 
-  // Bandeau couleur
   const modal = document.getElementById('detailModal');
   modal.className = `detail-modal ${task.urgency || 'low'}`;
 
-  // Titre
-  document.getElementById('detailTitle').textContent = task.title;
+  // ── Titre (inline-editable) ──────────────────────────────
+  const titleEl = document.getElementById('detailTitle');
+  titleEl.textContent = task.title;
+  titleEl.classList.add('inline-editable');
+  titleEl.title = 'Cliquer pour modifier';
+  titleEl.onclick = () => inlineEditText(titleEl, task.title, async val => {
+    if (!val) return;
+    tasks = tasks.map(t => t.id === id ? { ...t, title: val } : t);
+    await saveToStorage(); renderTasks(); if (activePage==='archives') renderArchives();
+    showToast('✏️ Titre mis à jour');
+    titleEl.textContent = val;
+    titleEl.classList.add('inline-editable');
+  });
 
-  // Badges
+  // ── Badges ──────────────────────────────────────────────
+  const recLabel = recurrenceLabel(task.recurrence);
   document.getElementById('detailBadges').innerHTML = `
-    <span class="urgency-badge ${task.urgency}">${urgencyLabels[task.urgency] || task.urgency}</span>
-    <span class="status-badge ${task.status}">${statusLabels[task.status] || task.status}</span>
+    <span class="urgency-badge ${task.urgency} inline-editable" title="Modifier l'urgence"
+      onclick="inlineEditUrgency(${id})">${urgencyLabels[task.urgency] || task.urgency}</span>
+    <span class="status-badge ${task.status} inline-editable" title="Modifier le statut"
+      onclick="inlineEditStatus(${id})">${statusLabels[task.status] || task.status}</span>
     ${task.requester ? `<span class="requester-badge">${escHtml(task.requester)}</span>` : ''}
     ${task.type      ? `<span class="type-badge">${escHtml(task.type)}</span>`           : ''}
+    ${recLabel       ? `<span class="recurrence-badge">${recLabel}</span>`               : ''}
   `;
 
-  // Grille de champs
-  const addedDate = new Date(task.id).toLocaleDateString('fr-FR', { day:'2-digit', month:'long', year:'numeric' });
+  // ── Grille de champs ────────────────────────────────────
+  const addedDate    = new Date(task.id).toLocaleDateString('fr-FR', { day:'2-digit', month:'long', year:'numeric' });
   const archivedDate = task.archivedAt
     ? new Date(task.archivedAt).toLocaleDateString('fr-FR', { day:'2-digit', month:'long', year:'numeric' })
     : null;
 
-  const field = (label, value, empty = false) => `
+  document.getElementById('detailGrid').innerHTML = `
+    <div class="detail-field inline-editable" title="Modifier le demandeur" onclick="inlineEditSelect(${id},'requester')">
+      <span class="df-label">Demandeur <span class="df-edit-hint">✎</span></span>
+      <span class="df-value${!task.requester?' empty':''}">${task.requester || '—'}</span>
+    </div>
+    <div class="detail-field inline-editable" title="Modifier le type" onclick="inlineEditSelect(${id},'type')">
+      <span class="df-label">Type <span class="df-edit-hint">✎</span></span>
+      <span class="df-value${!task.type?' empty':''}">${task.type || '—'}</span>
+    </div>
     <div class="detail-field">
-      <span class="df-label">${label}</span>
-      <span class="df-value${empty ? ' empty' : ''}">${value}</span>
+      <span class="df-label">Créée le</span>
+      <span class="df-value">${addedDate}</span>
+    </div>
+    <div class="detail-field inline-editable" title="Modifier la deadline" onclick="inlineEditDeadline(${id})">
+      <span class="df-label">Deadline <span class="df-edit-hint">✎</span></span>
+      <span class="df-value${!task.deadline?' empty':''}">${task.deadline ? '📅 ' + dc.label : '—'}</span>
+    </div>
+    ${archivedDate ? `<div class="detail-field"><span class="df-label">Réalisée le</span><span class="df-value">${archivedDate}</span></div>` : ''}
+  `;
+
+  // ── Commentaire (inline-editable) ───────────────────────
+  const commentBlock = document.getElementById('detailCommentBlock');
+  commentBlock.innerHTML = `
+    <div class="detail-comment-block inline-editable" title="Modifier la description" onclick="inlineEditComment(${id})">
+      <span class="df-label">Description <span class="df-edit-hint">✎</span></span>
+      <p>${task.comment ? escHtml(task.comment) : '<em style="color:var(--muted);font-style:italic">Cliquer pour ajouter une description…</em>'}</p>
     </div>`;
 
-  document.getElementById('detailGrid').innerHTML =
-    field('Demandeur',     task.requester || '—', !task.requester) +
-    field('Type',          task.type      || '—', !task.type) +
-    field('Créée le',      addedDate) +
-    (task.deadline
-      ? field('Deadline', `📅 ${dc.label}`, false)
-      : field('Deadline', '—', true)) +
-    (archivedDate ? field('Réalisée le', archivedDate) : '');
-
-  // Commentaire
-  const commentBlock = document.getElementById('detailCommentBlock');
-  commentBlock.innerHTML = task.comment
-    ? `<div class="detail-comment-block">
-        <span class="df-label">Description</span>
-        <p>${escHtml(task.comment)}</p>
-       </div>`
-    : '';
-
-  // Barre de progression (tâches actives avec deadline seulement)
+  // ── Barre de progression ────────────────────────────────
   const progressBlock = document.getElementById('detailProgressBlock');
   progressBlock.innerHTML = (!isArchive && task.deadline)
     ? `<div class="detail-progress-block">
         <span class="df-label">Avancement deadline</span>
-        <div class="detail-progress-info">
-          <span>${dc.label}</span><span>${Math.round(p)} %</span>
-        </div>
+        <div class="detail-progress-info"><span>${dc.label}</span><span>${Math.round(p)} %</span></div>
         <div class="detail-progress-bar">
           <div class="detail-progress-fill" style="width:${p}%;background:${progressColor(p)}"></div>
         </div>
        </div>`
     : '';
 
-  // Footer — boutons d'action
+  // ── Footer ──────────────────────────────────────────────
   document.getElementById('detailFooter').innerHTML = `
     ${isArchive
       ? `<button class="btn btn-info btn-sm" onclick="restoreTask(${task.id});closeDetail()">↩️ Restaurer</button>`
@@ -905,19 +1263,256 @@ function openDetail(id) {
     <button class="btn btn-danger btn-sm" onclick="confirmDelete(${task.id});closeDetail()">🗑 Supprimer</button>
     <button class="btn btn-primary btn-sm" onclick="closeDetail();openModal(${task.id})">✏️ Modifier</button>
   `;
-
-  document.getElementById('detailOverlay').classList.add('open');
 }
 
 function closeDetail() {
   document.getElementById('detailOverlay').classList.remove('open');
+  _detailTaskId = null;
 }
 
 function handleDetailOverlayClick(e) {
   if (e.target === document.getElementById('detailOverlay')) closeDetail();
 }
 
+// ── Helpers d'édition inline ─────────────────────────────
 
+/**
+ * Remplace el par un input texte, valide sur Enter/blur, annule sur Escape.
+ */
+function inlineEditText(el, currentValue, onSave) {
+  if (el.querySelector('input')) return; // déjà en édition
+  const input = document.createElement('input');
+  input.className = 'inline-input';
+  input.value     = currentValue;
+  input.maxLength = 120;
+  el.innerHTML = '';
+  el.appendChild(input);
+  el.onclick = null;
+  input.focus(); input.select();
+
+  const commit = async () => {
+    const val = input.value.trim();
+    await onSave(val);
+  };
+  const cancel = () => {
+    el.textContent = currentValue;
+    el.classList.add('inline-editable');
+    el.onclick = () => inlineEditText(el, currentValue, onSave);
+  };
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter')  { e.preventDefault(); commit(); }
+    if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+  });
+  input.addEventListener('blur', commit);
+}
+
+/** Édition inline d'un select (demandeur / type) */
+async function inlineEditSelect(id, field) {
+  const task = tasks.find(t => t.id === id);
+  if (!task) return;
+  const values   = field === 'requester' ? allRequesters() : allTypes();
+  const label    = field === 'requester' ? 'Demandeur' : 'Type';
+  const current  = task[field] || '';
+
+  // Créer un select flottant
+  const sel = document.createElement('select');
+  sel.className = 'inline-select';
+  const emptyOpt = document.createElement('option');
+  emptyOpt.value = ''; emptyOpt.textContent = '— Aucun —';
+  sel.appendChild(emptyOpt);
+  values.forEach(v => {
+    const o = document.createElement('option');
+    o.value = v; o.textContent = v;
+    if (v === current) o.selected = true;
+    sel.appendChild(o);
+  });
+
+  // Trouver le champ dans le detailGrid
+  const grid = document.getElementById('detailGrid');
+  const fields = grid.querySelectorAll('.detail-field');
+  let targetField = null;
+  fields.forEach(f => { if (f.querySelector('.df-label')?.textContent.startsWith(label)) targetField = f; });
+  if (!targetField) return;
+
+  const valueEl = targetField.querySelector('.df-value');
+  const origHTML = targetField.innerHTML;
+  targetField.innerHTML = '';
+  targetField.appendChild(sel);
+  targetField.onclick = null;
+
+  sel.focus();
+
+  const commit = async () => {
+    const val = sel.value;
+    tasks = tasks.map(t => t.id === id ? { ...t, [field]: val } : t);
+    await saveToStorage();
+    renderTasks(); if (activePage === 'archives') renderArchives();
+    showToast(`✏️ ${label} mis à jour`);
+    _renderDetail(id);
+  };
+  sel.addEventListener('change', commit);
+  sel.addEventListener('blur', () => { setTimeout(() => _renderDetail(id), 100); });
+  sel.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { targetField.innerHTML = origHTML; _renderDetail(id); }
+  });
+}
+
+/** Édition inline de la deadline */
+function inlineEditDeadline(id) {
+  const task = tasks.find(t => t.id === id);
+  if (!task) return;
+
+  const grid = document.getElementById('detailGrid');
+  const fields = grid.querySelectorAll('.detail-field');
+  let targetField = null;
+  fields.forEach(f => { if (f.querySelector('.df-label')?.textContent.startsWith('Deadline')) targetField = f; });
+  if (!targetField) return;
+
+  const origHTML = targetField.innerHTML;
+  targetField.innerHTML = '';
+  targetField.onclick = null;
+
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;gap:.4rem;align-items:center;flex-wrap:wrap;';
+
+  const inp = document.createElement('input');
+  inp.type      = 'date';
+  inp.className = 'inline-input';
+  inp.value     = task.deadline || '';
+
+  const clearBtn = document.createElement('button');
+  clearBtn.className   = 'btn btn-ghost btn-sm';
+  clearBtn.textContent = '✕ Effacer';
+  clearBtn.style.fontSize = '.7rem';
+
+  wrap.appendChild(inp); wrap.appendChild(clearBtn);
+  targetField.appendChild(wrap);
+  inp.focus();
+
+  const commit = async (val) => {
+    tasks = tasks.map(t => t.id === id ? { ...t, deadline: val } : t);
+    await saveToStorage();
+    renderTasks(); if (activePage === 'archives') renderArchives();
+    showToast('✏️ Deadline mise à jour');
+    _renderDetail(id);
+  };
+  inp.addEventListener('change', () => commit(inp.value));
+  inp.addEventListener('blur', () => setTimeout(() => _renderDetail(id), 200));
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { _renderDetail(id); }
+    if (e.key === 'Enter')  { commit(inp.value); }
+  });
+  clearBtn.addEventListener('click', () => commit(''));
+}
+
+/** Édition inline du commentaire */
+function inlineEditComment(id) {
+  const task = tasks.find(t => t.id === id);
+  if (!task) return;
+  const block = document.querySelector('#detailCommentBlock .detail-comment-block');
+  if (!block) return;
+  if (block.querySelector('textarea')) return;
+
+  const origInner = block.innerHTML;
+  const label = block.querySelector('.df-label');
+
+  const ta = document.createElement('textarea');
+  ta.className = 'inline-textarea';
+  ta.value     = task.comment || '';
+  ta.rows      = 4;
+
+  block.innerHTML = '';
+  const lbl = document.createElement('span');
+  lbl.className = 'df-label'; lbl.textContent = 'Description';
+  block.appendChild(lbl);
+  block.appendChild(ta);
+  block.onclick = null;
+
+  ta.focus();
+
+  const commit = async () => {
+    const val = ta.value.trim();
+    tasks = tasks.map(t => t.id === id ? { ...t, comment: val } : t);
+    await saveToStorage();
+    renderTasks(); if (activePage === 'archives') renderArchives();
+    showToast('✏️ Description mise à jour');
+    _renderDetail(id);
+  };
+  ta.addEventListener('blur', commit);
+  ta.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { _renderDetail(id); }
+    if (e.key === 'Enter' && e.ctrlKey) commit();
+  });
+}
+
+/** Sélecteur inline urgence (popup pills) */
+function inlineEditUrgency(id) {
+  const task = tasks.find(t => t.id === id);
+  if (!task) return;
+  const urgencies = ['low','medium','high'];
+  const labels    = { low:'🟢 Faible', medium:'🟡 Moyenne', high:'🔴 Urgente' };
+  _showInlinePicker(
+    document.getElementById('detailBadges'),
+    urgencies.map(u => ({ value: u, label: labels[u], current: u === task.urgency })),
+    async val => {
+      tasks = tasks.map(t => t.id === id ? { ...t, urgency: val } : t);
+      await saveToStorage();
+      renderTasks(); if (activePage === 'archives') renderArchives();
+      document.getElementById('detailModal').className = `detail-modal ${val}`;
+      showToast('✏️ Urgence mise à jour');
+      _renderDetail(id);
+    }
+  );
+}
+
+/** Sélecteur inline statut (popup pills) */
+function inlineEditStatus(id) {
+  const task = tasks.find(t => t.id === id);
+  if (!task) return;
+  const statuses = ['en-cours','en-attente','realise'];
+  const labels   = { 'en-cours':'🔵 En cours', 'en-attente':'⏳ En attente', 'realise':'✅ Réalisé' };
+  _showInlinePicker(
+    document.getElementById('detailBadges'),
+    statuses.map(s => ({ value: s, label: labels[s], current: s === task.status })),
+    async val => {
+      tasks = tasks.map(t => t.id === id
+        ? { ...t, status: val, archivedAt: val === 'realise' ? (t.archivedAt || new Date().toISOString()) : null }
+        : t
+      );
+      await saveToStorage();
+      renderTasks(); if (activePage === 'archives') renderArchives();
+      updateTabCounts(); renderStats();
+      showToast('✏️ Statut mis à jour');
+      _renderDetail(id);
+    }
+  );
+}
+
+/** Affiche un picker de pills inline sous l'élément cible */
+function _showInlinePicker(anchorEl, options, onPick) {
+  // Supprimer un picker déjà ouvert
+  document.querySelectorAll('.inline-picker').forEach(p => p.remove());
+
+  const picker = document.createElement('div');
+  picker.className = 'inline-picker';
+  options.forEach(opt => {
+    const btn = document.createElement('button');
+    btn.className = 'inline-picker-btn' + (opt.current ? ' current' : '');
+    btn.textContent = opt.label;
+    btn.addEventListener('click', e => { e.stopPropagation(); picker.remove(); onPick(opt.value); });
+    picker.appendChild(btn);
+  });
+
+  anchorEl.appendChild(picker);
+
+  // Fermer si clic hors du picker
+  const close = e => { if (!picker.contains(e.target)) { picker.remove(); document.removeEventListener('click', close, true); } };
+  setTimeout(() => document.addEventListener('click', close, true), 0);
+}
+
+// ════════════════════════════════════════════════════════════
+//  STATS & COMPTEURS
+// ════════════════════════════════════════════════════════════
 
 function renderStats() {
   const active  = getActiveTasks();
@@ -946,57 +1541,30 @@ function updateTabCounts() {
 //  PAGINATION
 // ════════════════════════════════════════════════════════════
 
-/**
- * Génère les boutons de pagination dans le conteneur ciblé.
- * @param {string} containerId  - id du div .pagination
- * @param {number} total        - nb total d'éléments filtrés
- * @param {number} current      - page courante (1-based)
- * @param {function} onPage     - callback(newPage)
- */
 function renderPagination(containerId, total, current, onPage) {
   const el = document.getElementById(containerId);
   if (!el) return;
-
   const totalPages = Math.ceil(total / PAGE_SIZE);
-
-  if (totalPages <= 1) {
-    el.innerHTML = '';
-    el.classList.add('hidden');
-    return;
-  }
-
-  el.classList.remove('hidden');
-  el.innerHTML = '';
+  if (totalPages <= 1) { el.innerHTML = ''; el.classList.add('hidden'); return; }
+  el.classList.remove('hidden'); el.innerHTML = '';
 
   const add = (label, page, disabled = false, active = false) => {
     const btn = document.createElement('button');
     btn.className = 'page-btn' + (active ? ' active' : '');
-    btn.textContent = label;
-    btn.disabled = disabled;
+    btn.textContent = label; btn.disabled = disabled;
     if (!disabled && !active) btn.addEventListener('click', () => onPage(page));
     el.appendChild(btn);
   };
 
-  // ← Précédent
   add('←', current - 1, current === 1);
-
-  // Numéros de pages avec ellipses
-  const pages = buildPageRange(current, totalPages);
-  pages.forEach(p => {
+  buildPageRange(current, totalPages).forEach(p => {
     if (p === '…') {
       const span = document.createElement('span');
-      span.className = 'page-info';
-      span.textContent = '…';
-      el.appendChild(span);
-    } else {
-      add(p, p, false, p === current);
-    }
+      span.className = 'page-info'; span.textContent = '…'; el.appendChild(span);
+    } else { add(p, p, false, p === current); }
   });
-
-  // → Suivant
   add('→', current + 1, current === totalPages);
 
-  // Info texte
   const info = document.createElement('span');
   info.className = 'page-info';
   const start = (current - 1) * PAGE_SIZE + 1;
@@ -1005,21 +1573,12 @@ function renderPagination(containerId, total, current, onPage) {
   el.appendChild(info);
 }
 
-/**
- * Construit la liste des numéros à afficher avec ellipses.
- * Ex : [1, 2, 3, …, 10] ou [1, …, 4, 5, 6, …, 10]
- */
 function buildPageRange(current, total) {
   if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-  const pages = new Set([1, total, current, current - 1, current + 1].filter(p => p >= 1 && p <= total));
-  const sorted = [...pages].sort((a, b) => a - b);
-  const result = [];
-  let prev = 0;
-  for (const p of sorted) {
-    if (p - prev > 1) result.push('…');
-    result.push(p);
-    prev = p;
-  }
+  const pages = new Set([1, total, current, current-1, current+1].filter(p => p>=1 && p<=total));
+  const sorted = [...pages].sort((a,b) => a-b);
+  const result = []; let prev = 0;
+  for (const p of sorted) { if (p - prev > 1) result.push('…'); result.push(p); prev = p; }
   return result;
 }
 
@@ -1028,7 +1587,7 @@ function buildPageRange(current, total) {
 // ════════════════════════════════════════════════════════════
 
 async function loadHeader() {
-  const stored = await dbGet(KEY_HEADER);
+  const stored   = await dbGet(KEY_HEADER);
   const title    = stored?.title    || 'Projets';
   const subtitle = stored?.subtitle || 'Gestionnaire de tâches — stockage chiffré local';
   applyHeader(title, subtitle);
@@ -1046,12 +1605,9 @@ function startEditHeader() {
   const titleEl = document.getElementById('appTitleDisplay');
   const subEl   = document.getElementById('appSubDisplay');
   if (!titleEl || !subEl) return;
-
-  // Récupérer les valeurs actuelles (sans le ".")
   const currentTitle = titleEl.textContent.replace(/\.$/, '').trim();
   const currentSub   = subEl.textContent.trim();
 
-  // Remplacer h1 par un input
   titleEl.innerHTML = '';
   const titleInput = document.createElement('input');
   titleInput.className   = 'header-input';
@@ -1063,18 +1619,15 @@ function startEditHeader() {
   });
   titleEl.appendChild(titleInput);
 
-  // Remplacer <p> par un input
   const subInput = document.createElement('input');
   subInput.className = 'header-sub-input';
   subInput.value     = currentSub;
   subInput.maxLength = 80;
   subEl.replaceWith(subInput);
 
-  // Masquer le bouton crayon
   const editBtn = document.querySelector('.header-edit-btn');
   if (editBtn) editBtn.style.display = 'none';
 
-  // Boutons Valider / Annuler
   const btnWrap = document.createElement('div');
   btnWrap.style.cssText = 'display:flex;gap:.4rem;margin-top:.5rem;';
   btnWrap.innerHTML = `
@@ -1084,35 +1637,28 @@ function startEditHeader() {
   subInput.insertAdjacentElement('afterend', btnWrap);
 
   document.getElementById('headerSaveBtn').addEventListener('click',
-    () => saveHeader(titleInput.value.trim() || 'Projets', subInput.value.trim(), btnWrap, titleEl, subInput)
+    () => saveHeader(titleInput.value.trim()||'Projets', subInput.value.trim(), btnWrap, titleEl, subInput)
   );
   document.getElementById('headerCancelBtn').addEventListener('click',
     () => cancelEditHeader(currentTitle, currentSub, btnWrap, titleEl, subInput, editBtn)
   );
-
-  // Entrée sur le titre → focus sous-titre
   titleInput.addEventListener('keydown', e => {
-    if (e.key === 'Enter') subInput.focus();
+    if (e.key === 'Enter')  subInput.focus();
     if (e.key === 'Escape') document.getElementById('headerCancelBtn').click();
   });
   subInput.addEventListener('keydown', e => {
-    if (e.key === 'Enter') document.getElementById('headerSaveBtn').click();
+    if (e.key === 'Enter')  document.getElementById('headerSaveBtn').click();
     if (e.key === 'Escape') document.getElementById('headerCancelBtn').click();
   });
-
-  titleInput.focus();
-  titleInput.select();
+  titleInput.focus(); titleInput.select();
 }
 
 async function saveHeader(title, subtitle, btnWrap, titleEl, subInput) {
   await dbSet(KEY_HEADER, { title, subtitle });
   btnWrap.remove();
-  // Restaurer le <p> sous-titre
-  const p = document.createElement('p');
-  p.id = 'appSubDisplay';
+  const p = document.createElement('p'); p.id = 'appSubDisplay';
   subInput.replaceWith(p);
   applyHeader(title, subtitle);
-  // Réafficher le bouton crayon
   const editBtn = document.querySelector('.header-edit-btn');
   if (editBtn) editBtn.style.display = '';
   showToast('✏️ En-tête mis à jour');
@@ -1120,8 +1666,7 @@ async function saveHeader(title, subtitle, btnWrap, titleEl, subInput) {
 
 function cancelEditHeader(title, subtitle, btnWrap, titleEl, subInput, editBtn) {
   btnWrap.remove();
-  const p = document.createElement('p');
-  p.id = 'appSubDisplay';
+  const p = document.createElement('p'); p.id = 'appSubDisplay';
   subInput.replaceWith(p);
   applyHeader(title, subtitle);
   if (editBtn) editBtn.style.display = '';
@@ -1139,6 +1684,9 @@ function resetForm() {
   document.getElementById('taskType').value      = '';
   setUrgencyPill('low');
   setStatusPill('en-cours');
+  setRecurrencePill('none');
+  document.querySelectorAll('.day-pill').forEach(p => p.classList.remove('selected'));
+  updateRecurrencePanel();
 }
 
 const escHtml = s => String(s)
@@ -1147,7 +1695,7 @@ const escHtml = s => String(s)
 function progressPercent(deadline) {
   if (!deadline) return 0;
   return Math.max(0, Math.min(100,
-    (1 - (new Date(deadline) - new Date()) / (1000 * 3600 * 24) / 30) * 100
+    (1 - (new Date(deadline) - new Date()) / (1000*3600*24) / 30) * 100
   ));
 }
 
@@ -1159,7 +1707,7 @@ function deadlineLabel(dateStr) {
   if (!dateStr) return { label:'', cls:'' };
   const now = new Date(); now.setHours(0,0,0,0);
   const d   = new Date(dateStr); d.setHours(0,0,0,0);
-  const dif = Math.round((d - now) / (1000 * 3600 * 24));
+  const dif = Math.round((d - now) / (1000*3600*24));
   if (dif < 0)   return { label:`En retard de ${Math.abs(dif)} j`, cls:'overdue' };
   if (dif === 0) return { label:"Aujourd'hui",                      cls:'overdue' };
   if (dif <= 7)  return { label:`Dans ${dif} j`,                   cls:'soon' };
@@ -1185,53 +1733,31 @@ function showToast(msg) {
 //  IMPORT / EXPORT
 // ════════════════════════════════════════════════════════════
 
-/**
- * Ouvre un tasks.json via showOpenFilePicker (FSA) :
- *  - lit et importe les tâches
- *  - persiste le handle comme cible de sauvegarde automatique
- *  - met à jour l'UI en conséquence
- * Utilisé par le bouton "📂 Ouvrir tasks.json".
- */
 async function openAndLinkFile() {
-  if (!fsaSupported) {
-    // Fallback : input file classique (Firefox)
-    document.getElementById('jsonLoader').click();
-    return;
-  }
+  if (!fsaSupported) { document.getElementById('jsonLoader').click(); return; }
   try {
     const [handle] = await window.showOpenFilePicker({
       types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }],
       multiple: false,
     });
-
-    // Lire le contenu
     const file = await handle.getFile();
     const text = await file.text();
     const data = JSON.parse(text);
     if (!Array.isArray(data)) throw new Error('Format invalide — tableau attendu');
-
-    // Demander la permission en écriture pour pouvoir sauvegarder vers ce fichier
     const writePerm = await handle.requestPermission({ mode: 'readwrite' });
-
     tasks = data;
-    await saveToStorage();   // chiffre dans IDB + écrit dans le fichier si permission ok
-
-    // Persister le handle comme cible FSA
+    await saveToStorage();
     if (writePerm === 'granted') {
-      await dbSet(KEY_FSA, handle);
-      await dbSet(KEY_FSA_NAME, handle.name);
+      await dbSet(KEY_FSA, handle); await dbSet(KEY_FSA_NAME, handle.name);
       fileHandle = handle;
       document.getElementById('refileBanner').style.display = 'none';
       updateFsaBtnState();
       showToast(`📂 ${data.length} tâche(s) chargées · sauvegarde auto → ${handle.name}`);
     } else {
-      // Lecture réussie mais pas d'écriture : on importe sans lier
-      showToast(`📂 ${data.length} tâche(s) importées (lecture seule — liaison non activée)`);
+      showToast(`📂 ${data.length} tâche(s) importées (lecture seule)`);
     }
-
     renderTasks(); renderArchives(); renderStats(); updateTabCounts();
     setImportStatus(`✓ ${data.length} tâche(s) chargées`, true);
-
   } catch (e) {
     if (e.name === 'AbortError') return;
     setImportStatus('✗ ' + (e.message || 'Erreur de lecture'), false);
@@ -1239,10 +1765,6 @@ async function openAndLinkFile() {
   }
 }
 
-/**
- * Import classique via <input type="file"> (fallback ou usage manuel).
- * Ne touche pas au handle FSA existant.
- */
 function importJSON(e) {
   const file = e.target.files[0]; if (!file) return;
   const reader = new FileReader();
@@ -1255,9 +1777,7 @@ function importJSON(e) {
       renderTasks(); renderArchives(); renderStats(); updateTabCounts();
       setImportStatus(`✓ ${data.length} tâche(s) importées`, true);
       showToast(`📂 ${data.length} tâche(s) importées`);
-    } catch {
-      setImportStatus('✗ JSON invalide', false);
-    }
+    } catch { setImportStatus('✗ JSON invalide', false); }
   };
   reader.readAsText(file);
 }
@@ -1265,17 +1785,12 @@ function importJSON(e) {
 function setImportStatus(msg, ok) {
   const el = document.getElementById('importStatus');
   if (!el) return;
-  el.textContent  = msg;
-  el.style.color  = ok ? 'var(--low)' : 'var(--high)';
-  el.style.fontSize = '.75rem';
-  el.style.fontWeight = '600';
+  el.textContent = msg; el.style.color = ok ? 'var(--low)' : 'var(--high)';
+  el.style.fontSize = '.75rem'; el.style.fontWeight = '600';
 }
 
 function exportJSON() {
-  downloadBlob(
-    new Blob([JSON.stringify(tasks, null, 2)], { type: 'application/json' }),
-    'tasks.json'
-  );
+  downloadBlob(new Blob([JSON.stringify(tasks, null, 2)], { type:'application/json' }), 'tasks.json');
   showToast('⬇ JSON exporté (non chiffré)');
 }
 
@@ -1289,6 +1804,7 @@ function exportExcel() {
     Urgence:     urgencyLabels[t.urgency] || t.urgency,
     Statut:      statusLabels[t.status]  || t.status,
     Deadline:    t.deadline    || '',
+    Récurrence:  t.recurrence ? recurrenceLabel(t.recurrence) : '',
     Commentaire: t.comment     || '',
     Archivé_le:  t.archivedAt ? new Date(t.archivedAt).toLocaleDateString('fr-FR') : ''
   })));
@@ -1300,23 +1816,23 @@ function exportExcel() {
 
 function downloadBlob(blob, name) {
   const url = URL.createObjectURL(blob);
-  const a   = Object.assign(document.createElement('a'), { href: url, download: name });
+  const a   = Object.assign(document.createElement('a'), { href:url, download:name });
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
 
-// ── Animation shake ─────────────────────────────────────────
+// ── Animations ───────────────────────────────────────────────
 document.head.insertAdjacentHTML('beforeend', `<style>
   @keyframes shake {
-    0%,100%{ transform:translateX(0)  }
+    0%,100%{ transform:translateX(0) }
     20%    { transform:translateX(-6px) }
-    40%    { transform:translateX(6px)  }
+    40%    { transform:translateX(6px) }
     60%    { transform:translateX(-4px) }
-    80%    { transform:translateX(4px)  }
+    80%    { transform:translateX(4px) }
   }
 </style>`);
 
-// ── Affichage / masquage mot de passe ────────────────────────
+// ── Mot de passe ─────────────────────────────────────────────
 function togglePwd(inputId, btn) {
   const inp = document.getElementById(inputId);
   if (inp.type === 'password') { inp.type = 'text';     btn.textContent = '🙈'; }
