@@ -84,7 +84,7 @@
   function defaultLayout(now) {
     return {
       id: 'main',
-      activeView: 'map',
+      activeView: 'organigram',
       filters: {
         query: '',
         serviceId: 'all',
@@ -134,7 +134,15 @@
       draggingMap: null,
       draggingOrganigram: null,
       procedureQuill: null,
-      activeView: 'map',
+      activeView: 'organigram',
+      activeGroup: 'structure',
+      lastViewByGroup: {
+        structure: 'organigram',
+        processes: 'processes',
+        pilotage: 'tasks',
+        referentiels: 'procedures',
+        supervision: 'analytics'
+      },
       query: '',
       serviceFilter: 'all',
       groupFilter: 'all',
@@ -275,6 +283,83 @@
       governance: 'workflow-view-governance',
       journal: 'workflow-view-journal'
     };
+
+    const WORKFLOW_GROUPS = {
+      structure: {
+        label: 'Structure',
+        icon: 'apartment',
+        views: ['map', 'organization', 'organigram', 'agents'],
+        defaultView: 'organigram'
+      },
+      processes: {
+        label: 'Processus',
+        icon: 'hub',
+        views: ['processes', 'templates'],
+        defaultView: 'processes'
+      },
+      pilotage: {
+        label: 'Pilotage',
+        icon: 'assignment',
+        views: ['tasks', 'kanban', 'timeline'],
+        defaultView: 'tasks'
+      },
+      referentiels: {
+        label: 'R\u00e9f\u00e9rentiels',
+        icon: 'library_books',
+        views: ['procedures', 'software', 'contingency'],
+        defaultView: 'procedures'
+      },
+      supervision: {
+        label: 'Supervision',
+        icon: 'monitoring',
+        views: ['analytics', 'governance', 'journal'],
+        defaultView: 'analytics'
+      }
+    };
+
+    function groupForView(viewKey) {
+      const safeKey = String(viewKey || '').trim();
+      const entry = Object.entries(WORKFLOW_GROUPS).find(([, grp]) => grp.views.includes(safeKey));
+      return entry ? entry[0] : 'structure';
+    }
+
+    function groupLabel(groupKey) {
+      return WORKFLOW_GROUPS[groupKey]?.label || '';
+    }
+
+    function updateGroupTabsUI(activeGroupKey) {
+      const groupsContainer = document.querySelector('#global-workflow-section .workflow-group-tabs');
+      if (groupsContainer) {
+        groupsContainer.querySelectorAll('.workflow-group-tab').forEach(btn => {
+          const g = String(btn.getAttribute('data-wf-group') || '').trim();
+          btn.classList.toggle('is-active', g === activeGroupKey);
+        });
+      }
+      const subTabsContainer = document.querySelector('#global-workflow-section .workflow-sub-tabs');
+      if (subTabsContainer) {
+        subTabsContainer.querySelectorAll('.workflow-view-tab').forEach(btn => {
+          const g = String(btn.getAttribute('data-wf-group') || '').trim();
+          btn.classList.toggle('wf-sub-hidden', g !== activeGroupKey);
+        });
+      }
+    }
+
+    function filterQuickAddByGroup(activeGroupKey) {
+      const menu = document.getElementById('workflow-quick-add-menu');
+      if (!menu) return;
+      const items = menu.querySelectorAll('.workflow-quick-add-item[data-wf-add-group]');
+      items.forEach(item => {
+        const itemGroup = String(item.getAttribute('data-wf-add-group') || '').trim();
+        item.style.display = itemGroup === activeGroupKey ? '' : 'none';
+      });
+      const columns = menu.querySelectorAll('.workflow-quick-add-column[data-wf-add-column]');
+      columns.forEach(col => {
+        const colGroups = String(col.getAttribute('data-wf-add-column') || '').split(',').map(s => s.trim());
+        const hasVisible = Array.from(col.querySelectorAll('.workflow-quick-add-item[data-wf-add-group]'))
+          .some(item => item.style.display !== 'none');
+        col.style.display = hasVisible ? '' : 'none';
+      });
+    }
 
     const TASK_STATUS_OPTIONS = ['todo', 'in_progress', 'blocked', 'ready_for_review', 'done', 'approved'];
     const TASK_APPROVAL_OPTIONS = ['pending', 'approved', 'rejected'];
@@ -1607,7 +1692,7 @@ ${reviews.map((row)=>`<tr><td>${esc(row.reviewDate || '-')}</td><td>${esc(row.ne
     }
 
     function setView(nextView) {
-      let safe = viewIds[nextView] ? nextView : 'map';
+      let safe = viewIds[nextView] ? nextView : 'organigram';
       const requestedBtn = document.getElementById(viewIds[safe] || '');
       if (requestedBtn && requestedBtn.classList.contains('hidden')) {
         const fallbackEntry = Object.entries(viewIds).find(([, id]) => {
@@ -1617,22 +1702,34 @@ ${reviews.map((row)=>`<tr><td>${esc(row.reviewDate || '-')}</td><td>${esc(row.ne
         safe = fallbackEntry ? fallbackEntry[0] : safe;
       }
       state.activeView = safe;
+      const resolvedGroup = groupForView(safe);
+      state.activeGroup = resolvedGroup;
+      state.lastViewByGroup[resolvedGroup] = safe;
       Object.entries(viewIds).forEach(([key, id]) => {
         const btn = document.getElementById(id);
         if (!btn) return;
         btn.classList.toggle('is-active', key === safe);
       });
+      updateGroupTabsUI(resolvedGroup);
       persistLayout().catch(() => null);
       updateToolbarVisibility();
       render();
     }
 
+    function setGroup(groupKey) {
+      const grp = WORKFLOW_GROUPS[groupKey];
+      if (!grp) return;
+      const lastView = state.lastViewByGroup[groupKey] || grp.defaultView;
+      setView(lastView);
+    }
+
     function updateToolbarVisibility() {
       const quickAdd = refs.quickAdd || document.querySelector('#global-workflow-section .workflow-quick-add');
       if (quickAdd) {
-        const hideInAdd = ['analytics', 'governance', 'journal'];
-        quickAdd.classList.toggle('hidden', hideInAdd.includes(state.activeView));
+        const hideInAdd = ['supervision'];
+        quickAdd.classList.toggle('hidden', hideInAdd.includes(state.activeGroup));
       }
+      filterQuickAddByGroup(state.activeGroup);
     }
 
     async function persistLayout() {
@@ -3733,7 +3830,10 @@ ${reviews.map((row)=>`<tr><td>${esc(row.reviewDate || '-')}</td><td>${esc(row.ne
 
     function renderBreadcrumbs() {
       if (!refs.breadcrumbs) return;
-      const crumbs = ['Workflow', viewLabel(state.activeView)];
+      const grpLabel = groupLabel(state.activeGroup);
+      const crumbs = grpLabel
+        ? ['Workflow', grpLabel, viewLabel(state.activeView)]
+        : ['Workflow', viewLabel(state.activeView)];
       if (state.selectedType && state.selectedId) {
         const item = getItem(state.selectedType, state.selectedId);
         if (item) {
@@ -10346,6 +10446,15 @@ ${clone.outerHTML}
 
       Object.entries(viewIds).forEach(([key, id]) => {
         document.getElementById(id)?.addEventListener('click', () => setView(key));
+      });
+
+      document.querySelectorAll('#global-workflow-section .workflow-group-tab[data-wf-group]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const groupKey = String(btn.getAttribute('data-wf-group') || '').trim();
+          if (groupKey && WORKFLOW_GROUPS[groupKey]) {
+            setGroup(groupKey);
+          }
+        });
       });
 
       refs.search?.addEventListener('input', () => {

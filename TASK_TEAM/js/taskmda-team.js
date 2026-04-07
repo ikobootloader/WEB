@@ -1133,7 +1133,7 @@
     const DEFAULT_APP_BRANDING = Object.freeze({
       appName: 'NEXUS MDA',
       appSubtitle: 'Espace collaboratif MDA',
-      chromeBgLight: 'rgb(217 218 221)',
+      chromeBgLight: 'rgb(236 239 248)',
       chromeBgDark: 'rgb(15 21 37)'
     });
 
@@ -1229,7 +1229,7 @@
       return probe.style.color ? value : fallback;
     }
 
-    function colorToHex(value, fallback = '#d9dadd') {
+    function colorToHex(value, fallback = '#eceff8') {
       const input = String(value || '').trim();
       const hex = input.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
       if (hex) {
@@ -1975,12 +1975,16 @@
           organization: { label: 'Organisation', buttonId: 'workflow-view-organization' },
           organigram: { label: 'Organigramme', buttonId: 'workflow-view-organigram' },
           agents: { label: 'Agents', buttonId: 'workflow-view-agents' },
+          processes: { label: 'Processus', buttonId: 'workflow-view-processes' },
+          templates: { label: 'Modèles', buttonId: 'workflow-view-templates' },
           tasks: { label: 'Tâches', buttonId: 'workflow-view-tasks' },
           kanban: { label: 'Kanban', buttonId: 'workflow-view-kanban' },
           timeline: { label: 'Timeline', buttonId: 'workflow-view-timeline' },
           procedures: { label: 'Procédures', buttonId: 'workflow-view-procedures' },
           software: { label: 'Logiciels métiers', buttonId: 'workflow-view-software' },
           contingency: { label: 'Contingence', buttonId: 'workflow-view-contingency' },
+          analytics: { label: 'Analyse', buttonId: 'workflow-view-analytics' },
+          governance: { label: 'Gouvernance', buttonId: 'workflow-view-governance' },
           journal: { label: 'Journal', buttonId: 'workflow-view-journal' }
         }
       },
@@ -2019,7 +2023,7 @@
         globalHub: { defaultTab: 'tasks', tabs: { tasks: true, workflow: true, calendar: true, docs: true, messages: true, feed: true, rgpd: true, settings: true } },
         globalTasks: { defaultTab: 'cards', tabs: { cards: true, calendar: true, list: true, kanban: true, timeline: true, archives: true } },
         project: { defaultTab: 'cards', tabs: { overview: true, cards: true, list: true, kanban: true, gantt: true, timeline: true, docs: true, chat: true, activity: true, archives: true } },
-        workflow: { defaultTab: 'organigram', tabs: { map: true, organization: true, organigram: true, agents: true, tasks: true, kanban: true, timeline: true, procedures: true, software: true, contingency: true, journal: true } },
+        workflow: { defaultTab: 'organigram', tabs: { map: true, organization: true, organigram: true, agents: true, processes: true, templates: true, tasks: true, kanban: true, timeline: true, procedures: true, software: true, contingency: true, analytics: true, governance: true, journal: true } },
         globalCalendar: { defaultTab: 'grid', tabs: { grid: true, list: true } },
         globalFeed: { defaultTab: 'all', tabs: { all: true, mentions: true, auto: true, manual: true, 'project-refs': true, 'task-refs': true } },
         globalSettings: { defaultTab: 'branding', tabs: { branding: true, themes: true, groups: true, roles: true, views: true } }
@@ -2054,7 +2058,7 @@
       globalHub: ['tasks', 'workflow', 'calendar', 'docs', 'messages', 'feed', 'rgpd', 'settings'],
       globalTasks: ['cards', 'kanban', 'timeline'],
       project: ['overview', 'cards', 'kanban', 'timeline'],
-      workflow: ['organigram', 'organization'],
+      workflow: ['organigram', 'organization', 'processes', 'tasks'],
       globalCalendar: ['grid'],
       globalFeed: ['all', 'mentions'],
       globalSettings: ['branding', 'themes', 'groups', 'roles', 'views']
@@ -2715,7 +2719,7 @@
         ? [root]
         : Array.from(root.querySelectorAll(modalSelectors));
       modalNodes.forEach((modal) => {
-        const labels = modal.querySelectorAll('label, .workflow-form-label');
+        const labels = modal.querySelectorAll('label, .workflow-form-label, .global-calendar-item-modal-label');
         labels.forEach((label) => {
           if (!(label instanceof HTMLElement)) return;
           if (label.dataset.modalIconDecorated === '1') return;
@@ -2850,7 +2854,7 @@
     function ensureViewSectionIntegrity(sectionKey, sectionOptions) {
       const meta = VIEW_SECTION_META[sectionKey];
       const safe = sectionOptions && typeof sectionOptions === 'object' ? sectionOptions : {};
-      const result = { defaultTab: '', tabs: {} };
+      const result = { defaultTab: '', tabs: {}, pinned: {} };
       const keys = Object.keys(meta?.tabs || {});
       keys.forEach((tabKey) => {
         result.tabs[tabKey] = safe.tabs?.[tabKey] !== false;
@@ -2858,7 +2862,20 @@
       const enabledKeys = keys.filter((tabKey) => result.tabs[tabKey]);
       if (enabledKeys.length === 0 && keys.length > 0) {
         result.tabs[keys[0]] = true;
+        enabledKeys.push(keys[0]);
       }
+      
+      const hasPinnedState = safe.pinned && typeof safe.pinned === 'object';
+      keys.forEach((tabKey) => {
+        if (hasPinnedState && tabKey in safe.pinned) {
+          result.pinned[tabKey] = Boolean(safe.pinned[tabKey]);
+        } else {
+          // Default behavior: first 4 enabled tabs are pinned, rest are unpinned
+          const enabledIndex = enabledKeys.indexOf(tabKey);
+          result.pinned[tabKey] = enabledIndex >= 0 && enabledIndex < 4;
+        }
+      });
+
       const enabledAfterFix = keys.filter((tabKey) => result.tabs[tabKey]);
       const requestedDefault = String(safe.defaultTab || '');
       result.defaultTab = enabledAfterFix.includes(requestedDefault) ? requestedDefault : (enabledAfterFix[0] || keys[0] || '');
@@ -3008,11 +3025,10 @@
     }
 
     const TAB_OVERFLOW_CONFIG = [
-      { listId: 'global-tasks-view-tabs', maxVisible: 4, controlClass: 'project-view-tab' },
-      { listId: 'project-view-tabs-wrap', maxVisible: 4, controlClass: 'project-view-tab' },
-      { listId: 'workflow-view-tabs-list', maxVisible: 4, controlClass: 'workflow-view-tab' },
-      { listId: 'global-feed-filter-tabs', maxVisible: 4, controlClass: 'feed-filter-btn' },
-      { listId: 'global-settings-tabs-list', maxVisible: 4, controlClass: 'project-view-tab' }
+      { listId: 'global-tasks-view-tabs', maxVisible: 4, controlClass: 'project-view-tab', sectionKey: 'globalTasks' },
+      { listId: 'project-view-tabs-wrap', maxVisible: 4, controlClass: 'project-view-tab', sectionKey: 'project' },
+      { listId: 'global-feed-filter-tabs', maxVisible: 4, controlClass: 'feed-filter-btn', sectionKey: 'globalFeed' },
+      { listId: 'global-settings-tabs-list', maxVisible: 4, controlClass: 'project-view-tab', sectionKey: 'globalSettings' }
     ];
 
     function closeAllTabOverflowMenus() {
@@ -3023,7 +3039,7 @@
       });
     }
 
-    function refreshSingleTabOverflow(listEl, maxVisible = 4, controlClass = 'project-view-tab') {
+    function refreshSingleTabOverflow(listEl, maxVisible = 4, controlClass = 'project-view-tab', sectionKey = null) {
       if (!listEl) return;
       Array.from(listEl.children).forEach((child) => {
         if (!(child instanceof HTMLElement)) return;
@@ -3035,10 +3051,33 @@
       const controls = Array.from(listEl.querySelectorAll(':scope > button'))
         .filter((btn) => !btn.classList.contains('tab-overflow-control'))
         .filter((btn) => !btn.classList.contains('hidden'));
-      if (controls.length <= maxVisible) return;
 
-      const direct = controls.slice(0, maxVisible);
-      const overflow = controls.slice(maxVisible);
+      let direct = [];
+      let overflow = [];
+      
+      const metaTabs = sectionKey ? VIEW_SECTION_META[sectionKey]?.tabs : null;
+      const pinnedState = sectionKey ? viewOptions?.sections?.[sectionKey]?.pinned : null;
+
+      controls.forEach((btn) => {
+        let isPinned = false;
+        if (metaTabs && pinnedState) {
+          const tabEntry = Object.entries(metaTabs).find(([_, meta]) => meta.buttonId === btn.id);
+          if (tabEntry) {
+            isPinned = pinnedState[tabEntry[0]] !== false;
+          } else {
+            isPinned = true;
+          }
+        } else {
+          // Fallback legacy behavior: push first maxVisible elements
+          isPinned = direct.length < maxVisible;
+        }
+        
+        if (isPinned) direct.push(btn);
+        else overflow.push(btn);
+      });
+
+      if (overflow.length === 0) return;
+
       overflow.forEach((btn) => btn.classList.add('tab-overflow-hidden'));
 
       const wrap = document.createElement('div');
@@ -3142,7 +3181,7 @@
     function refreshManagedTabOverflow() {
       TAB_OVERFLOW_CONFIG.forEach((entry) => {
         const listEl = document.getElementById(entry.listId);
-        refreshSingleTabOverflow(listEl, entry.maxVisible, entry.controlClass);
+        refreshSingleTabOverflow(listEl, entry.maxVisible, entry.controlClass, entry.sectionKey);
       });
     }
 
@@ -3258,11 +3297,19 @@
         const defaultTab = getDefaultTab(sectionKey);
         const tabRows = Object.entries(sectionMeta.tabs).map(([tabKey, tabMeta]) => {
           const checked = isTabEnabled(sectionKey, tabKey) ? 'checked' : '';
+          const isPinned = Boolean(viewOptions?.sections?.[sectionKey]?.pinned?.[tabKey]);
+          const pinClass = isPinned ? 'text-blue-600' : 'text-slate-400 opacity-50 hover:opacity-100';
+          const pinTitle = isPinned ? 'Détacher (envoyer dans Plus)' : 'Épingler sur la barre';
           return `
-            <label class="flex items-center gap-2 cursor-pointer hover:bg-white/80 p-2 rounded-lg${disabledClass}">
-              <input type="checkbox" class="view-option-checkbox w-4 h-4" data-view-section="${escapeHtml(sectionKey)}" data-view-tab="${escapeHtml(tabKey)}" ${checked} ${disabledAttr}>
-              <span class="text-sm text-slate-700 font-medium">${escapeHtml(tabMeta.label)}</span>
-            </label>
+            <div class="flex items-center gap-1 hover:bg-white/80 p-1 rounded-lg${disabledClass}">
+              <label class="flex items-center gap-2 cursor-pointer flex-1 min-w-0">
+                <input type="checkbox" class="view-option-checkbox w-4 h-4 shrink-0" data-view-section="${escapeHtml(sectionKey)}" data-view-tab="${escapeHtml(tabKey)}" ${checked} ${disabledAttr}>
+                <span class="text-sm text-slate-700 font-medium truncate">${escapeHtml(tabMeta.label)}</span>
+              </label>
+              <button type="button" class="view-option-pin-btn p-1 flex items-center justify-center rounded hover:bg-slate-200 transition-colors ${pinClass}" data-view-section="${escapeHtml(sectionKey)}" data-view-tab="${escapeHtml(tabKey)}" title="${pinTitle}" ${disabledAttr}>
+                <span class="material-symbols-outlined text-[16px]">${isPinned ? 'push_pin' : 'keep_off'}</span>
+              </button>
+            </div>
           `;
         }).join('');
         const selectOptions = Object.entries(sectionMeta.tabs)
@@ -4901,7 +4948,7 @@
         appChromeBgLightInput.disabled = !canManageBranding;
       }
       if (appChromeBgLightColorInput) {
-        appChromeBgLightColorInput.value = colorToHex(branding.chromeBgLight, '#d9dadd');
+        appChromeBgLightColorInput.value = colorToHex(branding.chromeBgLight, '#eceff8');
         appChromeBgLightColorInput.disabled = !canManageBranding;
       }
       if (appChromeBgDarkInput) {
@@ -22682,7 +22729,7 @@
       const colorInput = document.getElementById('app-chrome-bg-light-color');
       const value = String(e?.target?.value || '').trim();
       if (!colorInput || !value) return;
-      colorInput.value = colorToHex(normalizeChromeBackgroundColor(value, DEFAULT_APP_BRANDING.chromeBgLight), '#d9dadd');
+      colorInput.value = colorToHex(normalizeChromeBackgroundColor(value, DEFAULT_APP_BRANDING.chromeBgLight), '#eceff8');
     });
     document.getElementById('app-chrome-bg-dark-color')?.addEventListener('input', (e) => {
       const input = document.getElementById('app-chrome-bg-dark-input');
@@ -22773,6 +22820,25 @@
       }
     }
     async function handleViewOptionsClick(e) {
+      const pinBtn = e.target?.closest?.('.view-option-pin-btn');
+      if (pinBtn) {
+        if (!isAppAdmin()) {
+          showToast('Action reservee a l admin application');
+          await renderGlobalSettings();
+          return;
+        }
+        const sectionInfo = String(pinBtn.getAttribute('data-view-section') || '').trim();
+        const tabInfo = String(pinBtn.getAttribute('data-view-tab') || '').trim();
+        if (sectionInfo && tabInfo) {
+          const next = normalizeViewOptions(viewOptions);
+          const currentPinned = Boolean(next.sections[sectionInfo]?.pinned?.[tabInfo]);
+          next.sections[sectionInfo].pinned[tabInfo] = !currentPinned;
+          await saveViewOptions(next);
+          renderViewOptionsMatrix(true);
+          updateAppChrome();
+        }
+        return;
+      }
       const resetBtn = e.target?.closest?.('[data-view-kpi-reset]');
       if (resetBtn) {
         if (!isAppAdmin()) {

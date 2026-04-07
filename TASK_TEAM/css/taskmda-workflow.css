@@ -145,7 +145,7 @@
 .workflow-toolbar-main {
   width: 100%;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 0.55rem;
   flex-wrap: nowrap;
@@ -154,7 +154,11 @@
 .workflow-toolbar-main .workflow-quick-actions {
   margin-left: auto;
   flex: 0 0 auto;
-  align-self: center;
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 5px;
 }
 
 .workflow-head.workflow-head-actions-moved {
@@ -164,18 +168,129 @@
 
 .workflow-view-tabs {
   display: flex;
-  flex-wrap: wrap;
-  overflow: visible !important;
+  flex-wrap: nowrap;
+  overflow-x: auto !important;
   position: relative;
   z-index: 1;
   flex: 1 1 auto;
   min-width: 0;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(100, 116, 139, 0.55) transparent;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
   padding: 5px;
   border-radius: 14px;
   background: linear-gradient(180deg, #f2f4fb, #eaedf7);
   box-shadow: inset 0 0 0 1px rgba(101, 115, 141, 0.14);
+}
+
+.workflow-view-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+/* 2-level navigation override */
+.workflow-view-tabs.workflow-nav-2level {
+  flex-direction: column;
+  gap: 5px;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+/* Group tabs (Level 1) */
+.workflow-group-tabs {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  gap: 4px;
+  padding: 5px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #f2f4fb, #eaedf7);
+  box-shadow: inset 0 0 0 1px rgba(101, 115, 141, 0.14);
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.workflow-group-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.workflow-group-tab {
+  flex: 1 1 0;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid transparent;
+  border-radius: 0.65rem;
+  min-height: 38px;
+  color: #334155;
+  background: transparent;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 0.42rem 0.72rem;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.16s ease, color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.workflow-group-tab .tab-icon {
+  font-size: 1.1rem;
+}
+
+.workflow-group-tab:hover {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(101, 115, 141, 0.2);
+  color: #0f172a;
+}
+
+.workflow-group-tab.is-active {
+  background: var(--primary) !important;
+  color: #fff !important;
+  border-color: transparent !important;
+  box-shadow: 0 2px 8px rgba(0, 43, 107, 0.18);
+}
+
+/* Sub-tabs (Level 2) */
+.workflow-sub-tabs {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  gap: 3px;
+  padding: 4px 5px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(101, 115, 141, 0.12);
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.workflow-sub-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.workflow-sub-tabs .workflow-view-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.workflow-sub-tabs .workflow-view-tab.wf-sub-hidden {
+  display: none !important;
+}
+
+@media (max-width: 768px) {
+  .workflow-group-tabs {
+    gap: 3px;
+  }
+  .workflow-group-tab {
+    font-size: 0.72rem;
+    padding: 0.36rem 0.42rem;
+    min-height: 34px;
+  }
+  .workflow-group-tab .tab-icon {
+    font-size: 0.95rem;
+  }
 }
 
 .workflow-view-tab {
@@ -300,7 +415,9 @@
 }
 
 .workflow-form-label {
-  display: block;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
   font-size: 0.75rem;
   font-weight: 700;
   color: #64748b;

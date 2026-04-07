@@ -1,7 +1,7 @@
 :root {
   --topbar-height: 78px;
-  --app-chrome-bg-light: rgb(236 239 248);
-  --app-chrome-bg-dark: rgb(15 21 37);
+  --app-chrome-bg-light: rgb(236, 239, 248);
+  --app-chrome-bg-dark: rgb(15, 21, 37);
   --app-chrome-bg: var(--app-chrome-bg-light);
   --app-chrome-divider: rgba(101, 115, 141, 0.24);
   --app-chrome-nav-text: #334155;
@@ -141,6 +141,15 @@ html.dark {
   --border-subtle: 218 28% 40%;
   --shadow-ambient: 0 12px 34px rgba(0, 0, 0, 0.42);
   color-scheme: dark;
+}
+
+/* Utilities */
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 * {
@@ -1911,13 +1920,12 @@ html[data-wf-action-buttons="text"] .card-quick-btn .taskmda-action-icon {
 #global-calendar-view-list {
   display: inline-flex;
   align-items: center;
-  gap: 0;
+  gap: 6px;
 }
 
 .tab-icon {
   font-size: 1rem;
   line-height: 1;
-  margin-right: 0.35rem;
   flex-shrink: 0;
   vertical-align: middle;
   font-variation-settings: 'wght' 400;
@@ -2036,12 +2044,17 @@ html[data-tab-icons="off"] .tab-icon {
   gap: 14px;
 }
 
-.project-work-nav {
+.project-work-nav,
+.global-tasks-nav {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   column-gap: 12px;
   row-gap: 8px;
+}
+
+.global-tasks-nav {
+  margin-bottom: 12px;
 }
 
 .project-work-nav > #project-view-tabs-wrap {
@@ -2451,6 +2464,40 @@ html[data-wf-action-buttons="icon"] #btn-add-task:focus-visible {
   box-shadow: 0 8px 18px rgba(0, 43, 107, 0.24) !important;
 }
 
+html[data-wf-action-buttons="icon"] #btn-add-project-documents {
+  width: 40px !important;
+  min-width: 40px !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  padding: 0 !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 0 !important;
+  border: 1px solid var(--primary) !important;
+  background: var(--primary) !important;
+  color: #ffffff !important;
+  box-shadow: 0 6px 14px rgba(0, 43, 107, 0.18) !important;
+}
+
+html[data-wf-action-buttons="icon"] #btn-add-project-documents .taskmda-action-label {
+  display: none !important;
+}
+
+html[data-wf-action-buttons="icon"] #btn-add-project-documents .material-symbols-outlined,
+html[data-wf-action-buttons="icon"] #btn-add-project-documents .taskmda-action-icon {
+  font-size: 23px !important;
+  line-height: 1;
+}
+
+html[data-wf-action-buttons="icon"] #btn-add-project-documents:hover,
+html[data-wf-action-buttons="icon"] #btn-add-project-documents:focus-visible {
+  border-color: #173b73 !important;
+  background: #0a377f !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 18px rgba(0, 43, 107, 0.24) !important;
+}
+
 html[data-wf-action-buttons="icon"] #btn-global-add-task {
   width: 44px !important;
   min-width: 44px !important;
@@ -2556,13 +2603,12 @@ html[data-wf-action-buttons="icon"] .kanban-col-add-btn:focus-visible {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08) !important;
 }
 
-html[data-wf-action-buttons="icon"] .taskmda-create-cta:not(#btn-add-task):not(#btn-global-add-task):not(#btn-open-global-calendar-item-modal):not(#btn-global-doc-add):not(.kanban-col-add-btn) {
+html[data-wf-action-buttons="icon"] .taskmda-create-cta:not(#btn-add-task):not(#btn-global-add-task):not(#btn-open-global-calendar-item-modal):not(#btn-global-doc-add):not(.kanban-col-add-btn):not(#btn-add-project-documents) {
   width: 34px !important;
   min-width: 34px !important;
   height: 34px !important;
   min-height: 34px !important;
   padding: 0 !important;
-  border-radius: 999px !important;
   display: inline-flex !important;
   align-items: center;
   justify-content: center;
@@ -2573,12 +2619,12 @@ html[data-wf-action-buttons="icon"] .taskmda-create-cta:not(#btn-add-task):not(#
   box-shadow: none !important;
 }
 
-html[data-wf-action-buttons="icon"] .taskmda-create-cta:not(#btn-add-task):not(#btn-global-add-task):not(#btn-open-global-calendar-item-modal):not(#btn-global-doc-add):not(.kanban-col-add-btn) .taskmda-action-label {
+html[data-wf-action-buttons="icon"] .taskmda-create-cta:not(#btn-add-task):not(#btn-global-add-task):not(#btn-open-global-calendar-item-modal):not(#btn-global-doc-add):not(.kanban-col-add-btn):not(#btn-add-project-documents) .taskmda-action-label {
   display: none !important;
 }
 
-html[data-wf-action-buttons="icon"] .taskmda-create-cta:not(#btn-add-task):not(#btn-global-add-task):not(#btn-open-global-calendar-item-modal):not(#btn-global-doc-add):not(.kanban-col-add-btn) .material-symbols-outlined,
-html[data-wf-action-buttons="icon"] .taskmda-create-cta:not(#btn-add-task):not(#btn-global-add-task):not(#btn-open-global-calendar-item-modal):not(#btn-global-doc-add):not(.kanban-col-add-btn) .taskmda-action-icon {
+html[data-wf-action-buttons="icon"] .taskmda-create-cta:not(#btn-add-task):not(#btn-global-add-task):not(#btn-open-global-calendar-item-modal):not(#btn-global-doc-add):not(.kanban-col-add-btn):not(#btn-add-project-documents) .material-symbols-outlined,
+html[data-wf-action-buttons="icon"] .taskmda-create-cta:not(#btn-add-task):not(#btn-global-add-task):not(#btn-open-global-calendar-item-modal):not(#btn-global-doc-add):not(.kanban-col-add-btn):not(#btn-add-project-documents) .taskmda-action-icon {
   font-size: 20px !important;
   line-height: 1;
 }
@@ -4111,16 +4157,16 @@ html.dark .global-kanban-col-count {
 }
 
 .modal-field-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
   color: #1f2937;
 }
 
 .modal-label-with-icon {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
 }
 
 .modal-field-icon {
@@ -5509,7 +5555,6 @@ html[data-wf-action-buttons="icon"] .taskmda-modal-close-btn,
 html[data-wf-action-buttons="icon"] .rgpd-open-btn,
 html[data-wf-action-buttons="icon"] button[data-rgpd-context-action],
 html[data-wf-action-buttons="icon"] button[id^="rgpd-"][id$="-btn"] {
-  border-radius: 999px !important;
   border-width: 1px;
   transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
 }
@@ -5600,21 +5645,21 @@ html[data-wf-action-buttons="icon"] [data-action-kind="danger"]:hover {
   color: #9f1239 !important;
 }
 
-html[data-wf-action-buttons="icon"][data-wf-action-shape="rect"] .task-action-btn,
-html[data-wf-action-buttons="icon"][data-wf-action-shape="rect"] .workspace-action-inline,
-html[data-wf-action-buttons="icon"][data-wf-action-shape="rect"] .card-quick-btn,
-html[data-wf-action-buttons="icon"][data-wf-action-shape="rect"] .workflow-card-action-btn,
-html[data-wf-action-buttons="icon"][data-wf-action-shape="rect"] .workflow-btn-light,
-html[data-wf-action-buttons="icon"][data-wf-action-shape="rect"] .workflow-btn-danger,
-html[data-wf-action-buttons="icon"][data-wf-action-shape="rect"] .workflow-btn-link-root,
-html[data-wf-action-buttons="icon"][data-wf-action-shape="rect"] #workflow-quick-add-toggle,
-html[data-wf-action-buttons="icon"][data-wf-action-shape="rect"] #workflow-filters-toggle,
-html[data-wf-action-buttons="icon"][data-wf-action-shape="rect"] .taskmda-modal-close-btn,
-html[data-wf-action-buttons="icon"][data-wf-action-shape="rect"] .rgpd-open-btn,
-html[data-wf-action-buttons="icon"][data-wf-action-shape="rect"] button[data-rgpd-context-action],
-html[data-wf-action-buttons="icon"][data-wf-action-shape="rect"] button[id^="rgpd-"][id$="-btn"],
-html[data-wf-action-buttons="icon"][data-wf-action-shape="rect"] .taskmda-create-cta,
-html[data-wf-action-buttons="icon"][data-wf-action-shape="rect"] .global-cal-day-add {
+html[data-wf-action-shape="rect"] .task-action-btn,
+html[data-wf-action-shape="rect"] .workspace-action-inline,
+html[data-wf-action-shape="rect"] .card-quick-btn,
+html[data-wf-action-shape="rect"] .workflow-card-action-btn,
+html[data-wf-action-shape="rect"] .workflow-btn-light,
+html[data-wf-action-shape="rect"] .workflow-btn-danger,
+html[data-wf-action-shape="rect"] .workflow-btn-link-root,
+html[data-wf-action-shape="rect"] #workflow-quick-add-toggle,
+html[data-wf-action-shape="rect"] #workflow-filters-toggle,
+html[data-wf-action-shape="rect"] .taskmda-modal-close-btn,
+html[data-wf-action-shape="rect"] .rgpd-open-btn,
+html[data-wf-action-shape="rect"] button[data-rgpd-context-action],
+html[data-wf-action-shape="rect"] button[id^="rgpd-"][id$="-btn"],
+html[data-wf-action-shape="rect"] .taskmda-create-cta,
+html[data-wf-action-shape="rect"] .global-cal-day-add {
   border-radius: 10px !important;
 }
 
@@ -5662,21 +5707,21 @@ html[data-wf-action-buttons="icon"][data-wf-action-shape="rect"] .global-cal-day
   background: #0a377f !important;
 }
 
-html[data-wf-action-buttons="icon"][data-wf-action-shape="round"] .task-action-btn,
-html[data-wf-action-buttons="icon"][data-wf-action-shape="round"] .workspace-action-inline,
-html[data-wf-action-buttons="icon"][data-wf-action-shape="round"] .card-quick-btn,
-html[data-wf-action-buttons="icon"][data-wf-action-shape="round"] .workflow-card-action-btn,
-html[data-wf-action-buttons="icon"][data-wf-action-shape="round"] .workflow-btn-light,
-html[data-wf-action-buttons="icon"][data-wf-action-shape="round"] .workflow-btn-danger,
-html[data-wf-action-buttons="icon"][data-wf-action-shape="round"] .workflow-btn-link-root,
-html[data-wf-action-buttons="icon"][data-wf-action-shape="round"] #workflow-quick-add-toggle,
-html[data-wf-action-buttons="icon"][data-wf-action-shape="round"] #workflow-filters-toggle,
-html[data-wf-action-buttons="icon"][data-wf-action-shape="round"] .taskmda-modal-close-btn,
-html[data-wf-action-buttons="icon"][data-wf-action-shape="round"] .rgpd-open-btn,
-html[data-wf-action-buttons="icon"][data-wf-action-shape="round"] button[data-rgpd-context-action],
-html[data-wf-action-buttons="icon"][data-wf-action-shape="round"] button[id^="rgpd-"][id$="-btn"],
-html[data-wf-action-buttons="icon"][data-wf-action-shape="round"] .taskmda-create-cta,
-html[data-wf-action-buttons="icon"][data-wf-action-shape="round"] .global-cal-day-add {
+html[data-wf-action-shape="round"] .task-action-btn,
+html[data-wf-action-shape="round"] .workspace-action-inline,
+html[data-wf-action-shape="round"] .card-quick-btn,
+html[data-wf-action-shape="round"] .workflow-card-action-btn,
+html[data-wf-action-shape="round"] .workflow-btn-light,
+html[data-wf-action-shape="round"] .workflow-btn-danger,
+html[data-wf-action-shape="round"] .workflow-btn-link-root,
+html[data-wf-action-shape="round"] #workflow-quick-add-toggle,
+html[data-wf-action-shape="round"] #workflow-filters-toggle,
+html[data-wf-action-shape="round"] .taskmda-modal-close-btn,
+html[data-wf-action-shape="round"] .rgpd-open-btn,
+html[data-wf-action-shape="round"] button[data-rgpd-context-action],
+html[data-wf-action-shape="round"] button[id^="rgpd-"][id$="-btn"],
+html[data-wf-action-shape="round"] .taskmda-create-cta,
+html[data-wf-action-shape="round"] .global-cal-day-add {
   border-radius: 999px !important;
 }
 
@@ -5684,6 +5729,7 @@ html[data-wf-action-buttons="icon"][data-wf-action-shape="round"] #btn-add-task,
 html[data-wf-action-buttons="icon"][data-wf-action-shape="round"] #btn-global-add-task,
 html[data-wf-action-buttons="icon"][data-wf-action-shape="round"] #btn-open-global-calendar-item-modal,
 html[data-wf-action-buttons="icon"][data-wf-action-shape="round"] #btn-global-doc-add,
+html[data-wf-action-buttons="icon"][data-wf-action-shape="round"] #btn-add-project-documents,
 html[data-wf-action-buttons="icon"][data-wf-action-shape="round"] .kanban-col-add-btn {
   width: 32px !important;
   min-width: 32px !important;
@@ -9077,12 +9123,12 @@ html.dark .view-preset-btn:hover:not(:disabled) {
   }
 
   .project-view-tabs {
-    flex-wrap: wrap;
-    overflow: visible;
-    scroll-snap-type: none;
-    padding-bottom: 6px;
-    scrollbar-width: none;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    padding-bottom: 4px;
     -ms-overflow-style: none;
+    scrollbar-width: none;
   }
 
   .project-view-tabs::-webkit-scrollbar {
@@ -9093,14 +9139,26 @@ html.dark .view-preset-btn:hover:not(:disabled) {
 @media (max-width: 639px) {
   .project-view-tabs {
     flex-wrap: nowrap;
-    overflow: visible !important;
+    overflow-x: auto !important;
     scroll-snap-type: x proximity;
-    scrollbar-width: none;
     -ms-overflow-style: none;
+    scrollbar-width: none;
   }
 
   .project-view-tabs::-webkit-scrollbar {
     display: none;
+  }
+
+  .project-work-nav,
+  .global-tasks-nav {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .project-work-nav-controls {
+    justify-content: flex-start;
   }
 }
 
@@ -9459,5 +9517,4 @@ html.dark .global-feed-editor:hover::-webkit-scrollbar-thumb {
 .carousel-indicator.active {
   width: 24px;
   border-radius: 4px;
-  background: var(--primary);
 }
