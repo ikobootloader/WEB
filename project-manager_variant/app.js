@@ -697,19 +697,23 @@ function updateRecurrencePanel() {
   const panel = document.getElementById('recurrencePanel');
   if (!panel) return;
   panel.style.display = (type === 'none') ? 'none' : '';
-  const intervalWrap = document.getElementById('recIntervalWrap');
-  const endWrap      = document.getElementById('recEndWrap');
-  const daysWrap     = document.getElementById('recDaysWrap');
-  if (intervalWrap) intervalWrap.style.display = (type === 'infinite') ? 'none' : '';
-  if (endWrap)      endWrap.style.display      = (type === 'infinite') ? 'none' : '';
-  if (daysWrap)     daysWrap.style.display     = (type === 'weekly')   ? ''     : 'none';
+  const daysWrap  = document.getElementById('recDaysWrap');
+  const endWrap   = document.getElementById('recEndWrap');
+  const noEndChk  = document.getElementById('recNoEnd');
+  if (daysWrap) daysWrap.style.display = (type === 'weekly') ? '' : 'none';
+  // Masquer le champ date de fin si "sans fin" est coché
+  if (endWrap && noEndChk) endWrap.style.display = noEndChk.checked ? 'none' : '';
 }
 
 function fillRecurrenceFields(rec) {
   const intervalEl = document.getElementById('recInterval');
   const endEl      = document.getElementById('recEndDate');
+  const noEndChk   = document.getElementById('recNoEnd');
   if (intervalEl) intervalEl.value = rec?.interval || 1;
-  if (endEl)      endEl.value      = rec?.endDate  || '';
+  // "sans fin" si type infinite (ancien format) ou endDate absent
+  const isNoEnd = rec ? (rec.type === 'infinite' || !rec.endDate) : false;
+  if (noEndChk) noEndChk.checked = isNoEnd;
+  if (endEl)    endEl.value      = (!isNoEnd && rec?.endDate) ? rec.endDate : '';
   // Jours hebdo
   const days = rec?.days || [];
   document.querySelectorAll('.day-pill').forEach(p =>
@@ -721,57 +725,53 @@ function fillRecurrenceFields(rec) {
 function getRecurrenceFromForm() {
   const type = getSelectedRecurrence();
   if (type === 'none') return null;
-  const interval = parseInt(document.getElementById('recInterval')?.value) || 1;
-  const endDate  = document.getElementById('recEndDate')?.value || null;
+  const interval  = parseInt(document.getElementById('recInterval')?.value) || 1;
+  const noEnd     = document.getElementById('recNoEnd')?.checked ?? false;
+  const endDate   = noEnd ? null : (document.getElementById('recEndDate')?.value || null);
   const days = type === 'weekly'
     ? [...document.querySelectorAll('.day-pill.selected')].map(p => Number(p.dataset.day))
     : [];
-  return { type, interval, days, endDate: (type === 'infinite') ? null : endDate };
+  return { type, interval, days, endDate };
 }
 
 /**
  * Calcule la prochaine deadline à partir de la deadline actuelle.
- * Pour weekly avec des jours spécifiques : trouve le prochain jour coché
- * dans la semaine suivante (ou la semaine courante si encore à venir).
- * Retourne une string 'YYYY-MM-DD'.
+ * Pour weekly avec des jours spécifiques : trouve le prochain jour coché.
+ * Rétrocompat : type 'infinite' (ancien format) traité comme weekly sans fin.
+ * Retourne une string 'YYYY-MM-DD', ou null si récurrence terminée.
  */
 function nextDeadline(deadlineStr, rec) {
   if (!rec || rec.type === 'none' || !deadlineStr) return deadlineStr;
   const now = new Date(); now.setHours(0,0,0,0);
 
-  // Cas weekly avec jours spécifiques
-  if (rec.type === 'weekly' && rec.days && rec.days.length > 0) {
-    const sortedDays = [...rec.days].sort((a, b) => a - b);
-    const interval   = rec.interval || 1;
+  // Rétrocompat : type 'infinite' → hebdo sans fin
+  const type     = rec.type === 'infinite' ? 'weekly' : rec.type;
+  const interval = rec.interval || 1;
 
-    // Partir du lendemain de la deadline actuelle pour chercher le prochain
+  // Cas weekly avec jours spécifiques
+  if (type === 'weekly' && rec.days && rec.days.length > 0) {
+    const sortedDays = [...rec.days].sort((a, b) => a - b);
     const base = new Date(deadlineStr);
     base.setDate(base.getDate() + 1);
-
-    // Chercher sur les prochaines semaines (interval * nb semaines max)
     const maxDays = interval * 7 * 54; // ~1 an max
     for (let i = 0; i < maxDays; i++) {
       const candidate = new Date(base);
       candidate.setDate(base.getDate() + i);
       if (sortedDays.includes(candidate.getDay()) && candidate > now) {
-        // Vérifier qu'on est dans le bon intervalle de semaines
-        const weekDiff = Math.floor((candidate - new Date(deadlineStr)) / (7 * 24 * 3600 * 1000));
-        if (weekDiff % interval === 0 || true) { // on accepte le prochain jour valide
-          if (rec.endDate && candidate > new Date(rec.endDate)) return null;
-          return candidate.toISOString().slice(0, 10);
-        }
+        if (rec.endDate && candidate > new Date(rec.endDate)) return null;
+        return candidate.toISOString().slice(0, 10);
       }
     }
     return null;
   }
 
-  // Cas général
+  // Cas général (weekly sans jours, monthly, yearly)
   const d = new Date(deadlineStr);
   let iterations = 0;
   while (d <= now && iterations < 1000) {
-    if (rec.type === 'weekly'   || rec.type === 'infinite') d.setDate(d.getDate() + 7 * (rec.interval || 1));
-    else if (rec.type === 'monthly') d.setMonth(d.getMonth() + (rec.interval || 1));
-    else if (rec.type === 'yearly')  d.setFullYear(d.getFullYear() + (rec.interval || 1));
+    if      (type === 'weekly')  d.setDate(d.getDate() + 7 * interval);
+    else if (type === 'monthly') d.setMonth(d.getMonth() + interval);
+    else if (type === 'yearly')  d.setFullYear(d.getFullYear() + interval);
     iterations++;
   }
   if (rec.endDate && d > new Date(rec.endDate)) return null;
@@ -782,17 +782,19 @@ function nextDeadline(deadlineStr, rec) {
 function recurrenceLabel(rec) {
   if (!rec || rec.type === 'none') return null;
   const DAY_NAMES = { 0:'Dim', 1:'Lun', 2:'Mar', 3:'Mer', 4:'Jeu', 5:'Ven', 6:'Sam' };
-  if (rec.type === 'infinite') return '🔁 Récurrent ∞';
+  const endSuffix = rec.endDate ? ` → ${new Date(rec.endDate).toLocaleDateString('fr-FR')}` : ' ∞';
+  // Rétrocompat : type 'infinite' (ancien format)
+  if (rec.type === 'infinite') return '🔁 Hebdo ×1 ∞';
   if (rec.type === 'weekly') {
     const n        = rec.interval || 1;
     const daysPart = rec.days && rec.days.length
       ? ' · ' + [...rec.days].sort((a,b)=>a-b).map(d => DAY_NAMES[d]).join(', ')
       : '';
-    return `🔁 Hebdo ×${n}${daysPart}`;
+    return `🔁 Hebdo ×${n}${daysPart}${endSuffix}`;
   }
   const typeLabels = { monthly:'mens.', yearly:'annuel' };
   const n = rec.interval || 1;
-  return `🔁 Tous les ${n} ${typeLabels[rec.type] || rec.type}`;
+  return `🔁 Tous les ${n} ${typeLabels[rec.type] || rec.type}${endSuffix}`;
 }
 
 // ════════════════════════════════════════════════════════════
@@ -1686,6 +1688,8 @@ function resetForm() {
   setStatusPill('en-cours');
   setRecurrencePill('none');
   document.querySelectorAll('.day-pill').forEach(p => p.classList.remove('selected'));
+  const noEndChk = document.getElementById('recNoEnd');
+  if (noEndChk) noEndChk.checked = false;
   updateRecurrencePanel();
 }
 

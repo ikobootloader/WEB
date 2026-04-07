@@ -883,7 +883,6 @@
         <button class="recurrence-pill" data-value="weekly">📅 Hebdo</button>
         <button class="recurrence-pill" data-value="monthly">📅 Mensuel</button>
         <button class="recurrence-pill" data-value="yearly">📅 Annuel</button>
-        <button class="recurrence-pill" data-value="infinite">🔁 Infini</button>
       </div>
       <div id="recurrencePanel">
         <div class="form-row">
@@ -895,6 +894,13 @@
             <label>Date de fin (optionnel)</label>
             <input id="recEndDate" type="date">
           </div>
+        </div>
+        <div style="margin-top:.6rem;display:flex;align-items:center;gap:.5rem;">
+          <input type="checkbox" id="recNoEnd" style="width:auto;accent-color:var(--accent);cursor:pointer;"
+            onchange="updateRecurrencePanel()">
+          <label for="recNoEnd" style="text-transform:none;letter-spacing:0;font-size:.82rem;color:var(--muted);cursor:pointer;margin:0;">
+            Sans date de fin (récurrence infinie)
+          </label>
         </div>
         <!-- Jours de la semaine — visible uniquement en mode hebdo -->
         <div id="recDaysWrap" style="display:none; margin-top:.6rem;">
