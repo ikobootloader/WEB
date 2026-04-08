@@ -4016,10 +4016,11 @@ html.dark .global-kanban-col-count {
 }
 
 .taskmda-modal-close-btn-injected {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  z-index: 2;
+  position: absolute !important;
+  top: 1.5rem !important;
+  right: 1.5rem !important;
+  left: auto !important;
+  z-index: 100 !important;
 }
 
 .task-detail-modal-panel {

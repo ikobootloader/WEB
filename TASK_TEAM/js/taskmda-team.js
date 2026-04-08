@@ -2820,7 +2820,7 @@
         injectedBtn.addEventListener('click', () => {
           modal.classList.add('hidden');
         });
-        panel.appendChild(injectedBtn);
+        panel.prepend(injectedBtn);
         modal.dataset.modalCloseInjected = '1';
       });
       scheduleActionButtonsDecorate();
@@ -19153,9 +19153,9 @@
             <div class="task-card-participants">${participantsHtml}</div>
             <div class="task-card-actions task-hover-actions flex items-center gap-3">
               ${canEditTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); convertTaskToProject('${buildGlobalTaskRef({ sourceType: 'project', sourceProjectId: currentProjectId, taskId: task.taskId })}')" class="task-action-btn task-action-btn-subtle">Convertir en projet</button>` : ''}
-              <button onclick="event.stopPropagation(); sendTaskStatusEmail('${task.taskId}', false)" class="task-action-btn task-action-btn-subtle">Email statut</button>
-              ${task.status === 'termine' ? `<button onclick="event.stopPropagation(); sendTaskStatusEmail('${task.taskId}', true)" class="task-action-btn task-action-btn-subtle">Email achevée</button>` : ''}
-              ${canChangeTaskStatus(task, currentProjectState) ? `<button onclick="event.stopPropagation(); toggleTaskStatus('${task.taskId}')" class="task-action-btn task-action-btn-subtle">Changer statut</button>` : ''}
+              <button onclick="event.stopPropagation(); sendTaskStatusEmail('${task.taskId}', false)" class="task-action-btn task-action-btn-subtle"><span class="material-symbols-outlined">mail</span> Email statut</button>
+              ${task.status === 'termine' ? `<button onclick="event.stopPropagation(); sendTaskStatusEmail('${task.taskId}', true)" class="task-action-btn task-action-btn-subtle"><span class="material-symbols-outlined">mark_email_read</span> Email achevée</button>` : ''}
+              ${canChangeTaskStatus(task, currentProjectState) ? `<button onclick="event.stopPropagation(); toggleTaskStatus('${task.taskId}')" class="task-action-btn task-action-btn-subtle"><span class="material-symbols-outlined">published_with_changes</span> Changer statut</button>` : ''}
             </div>
           </div>
           ${lockHint}
