@@ -744,6 +744,11 @@ function nextDeadline(deadlineStr, rec) {
   if (!rec || rec.type === 'none' || !deadlineStr) return deadlineStr;
   const now = new Date(); now.setHours(0,0,0,0);
 
+  // Helper : construire une Date locale depuis 'YYYY-MM-DD'
+  const localDate = s => { const [y,m,d] = s.split('-'); return new Date(+y, +m-1, +d); };
+  // Helper : formater une Date locale en 'YYYY-MM-DD'
+  const toYMD = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+
   // Rétrocompat : type 'infinite' → hebdo sans fin
   const type     = rec.type === 'infinite' ? 'weekly' : rec.type;
   const interval = rec.interval || 1;
@@ -751,22 +756,22 @@ function nextDeadline(deadlineStr, rec) {
   // Cas weekly avec jours spécifiques
   if (type === 'weekly' && rec.days && rec.days.length > 0) {
     const sortedDays = [...rec.days].sort((a, b) => a - b);
-    const base = new Date(deadlineStr);
+    const base = localDate(deadlineStr);
     base.setDate(base.getDate() + 1);
     const maxDays = interval * 7 * 54; // ~1 an max
     for (let i = 0; i < maxDays; i++) {
       const candidate = new Date(base);
       candidate.setDate(base.getDate() + i);
-      if (sortedDays.includes(candidate.getDay()) && candidate > now) {
-        if (rec.endDate && candidate > new Date(rec.endDate)) return null;
-        return candidate.toISOString().slice(0, 10);
+      if (sortedDays.includes(candidate.getDay()) && candidate >= now) {
+        if (rec.endDate && candidate > localDate(rec.endDate)) return null;
+        return toYMD(candidate);
       }
     }
     return null;
   }
 
   // Cas général (weekly sans jours, monthly, yearly)
-  const d = new Date(deadlineStr);
+  const d = localDate(deadlineStr);
   let iterations = 0;
   while (d <= now && iterations < 1000) {
     if      (type === 'weekly')  d.setDate(d.getDate() + 7 * interval);
@@ -774,8 +779,8 @@ function nextDeadline(deadlineStr, rec) {
     else if (type === 'yearly')  d.setFullYear(d.getFullYear() + interval);
     iterations++;
   }
-  if (rec.endDate && d > new Date(rec.endDate)) return null;
-  return d.toISOString().slice(0, 10);
+  if (rec.endDate && d > localDate(rec.endDate)) return null;
+  return toYMD(d);
 }
 
 // Label et badge récurrence
@@ -865,16 +870,19 @@ function applySort(list, sort) {
   const now = new Date(); now.setHours(0,0,0,0);
   const urgOrder = { high:0, medium:1, low:2 };
 
-  const isDue = t => t.deadline && new Date(t.deadline) <= now;
+  const isDue = t => isTaskDueToday(t);
 
   const due    = list.filter(isDue);
   const notDue = list.filter(t => !isDue(t));
 
-  // Les échues → urgence décroissante, puis deadline ASC
+  // Les échues / dues aujourd'hui → urgence décroissante, puis deadline ASC
   due.sort((a,b) => {
     const ud = (urgOrder[a.urgency]??1) - (urgOrder[b.urgency]??1);
     if (ud !== 0) return ud;
-    return new Date(a.deadline) - new Date(b.deadline);
+    if (a.deadline && b.deadline) return new Date(a.deadline) - new Date(b.deadline);
+    if (a.deadline) return -1;
+    if (b.deadline) return 1;
+    return 0;
   });
 
   // Les autres → tri choisi
@@ -909,17 +917,35 @@ async function submitForm() {
 
   const wasArchived = editingId && tasks.find(t => t.id === editingId)?.status === 'realise';
 
+  // Si l'utilisateur marque "Réalisé" mais que la tâche est récurrente,
+  // on calcule la prochaine deadline et on force le statut à "en-cours".
+  let effectiveStatus  = status;
+  let effectiveDeadline = deadline;
+  let recurrenceToast  = null;
+
+  if (status === 'realise' && recurrence && recurrence.type !== 'none') {
+    const next = nextDeadline(deadline, recurrence);
+    if (next) {
+      effectiveStatus   = 'en-cours';
+      effectiveDeadline = next;
+      recurrenceToast   = `🔁 Récurrence : prochaine échéance le ${new Date(next).toLocaleDateString('fr-FR')}`;
+    }
+    // Si next === null (récurrence terminée) → on laisse archiver normalement
+  }
+
   if (editingId) {
     tasks = tasks.map(t => t.id === editingId
-      ? { ...t, title, comment, urgency, status, deadline, requester, type, recurrence,
-          archivedAt: status === 'realise' ? (t.archivedAt || new Date().toISOString()) : null }
+      ? { ...t, title, comment, urgency, status: effectiveStatus, deadline: effectiveDeadline,
+          requester, type, recurrence,
+          archivedAt: effectiveStatus === 'realise' ? (t.archivedAt || new Date().toISOString()) : null }
       : t
     );
     showToast('✏️ Tâche modifiée');
   } else {
     tasks.push({
-      id: Date.now(), title, comment, urgency, status, deadline, requester, type, recurrence,
-      archivedAt: status === 'realise' ? new Date().toISOString() : null
+      id: Date.now(), title, comment, urgency, status: effectiveStatus,
+      deadline: effectiveDeadline, requester, type, recurrence,
+      archivedAt: effectiveStatus === 'realise' ? new Date().toISOString() : null
     });
     showToast('✅ Tâche ajoutée');
   }
@@ -928,8 +954,11 @@ async function submitForm() {
   renderTasks(); if (activePage === 'archives') renderArchives();
   renderStats(); updateTabCounts(); closeModal();
 
-  if (status === 'realise' && !wasArchived)
+  if (recurrenceToast) {
+    showToast(recurrenceToast);
+  } else if (effectiveStatus === 'realise' && !wasArchived) {
     showToast("🗄 Tâche archivée — consultez l'onglet Archives");
+  }
 }
 
 async function restoreTask(id) {
@@ -1102,7 +1131,10 @@ function buildCard(task, idx, isArchive) {
   const dc  = deadlineLabel(task.deadline);
   const p   = progressPercent(task.deadline);
   const now = new Date(); now.setHours(0,0,0,0);
-  const isDue = !isArchive && task.deadline && new Date(task.deadline) <= now;
+  const isDue = !isArchive && isTaskDueToday(task);
+
+  // Pour les récurrentes sans deadline mais dues aujourd'hui → chip spécial
+  const isRecDueNoDeadline = !isArchive && !task.deadline && isDue;
 
   const urgencyLabels = { low:'Faible', medium:'Moyenne', high:'Urgente' };
   const statusLabels  = { 'en-cours':'En cours', 'en-attente':'En attente', 'realise':'Réalisé' };
@@ -1119,6 +1151,11 @@ function buildCard(task, idx, isArchive) {
   const recLabel = recurrenceLabel(task.recurrence);
   const recBadge = recLabel ? `<span class="recurrence-badge">${recLabel}</span>` : '';
 
+  // Chip deadline : soit deadline classique, soit "Aujourd'hui" pour récurrence sans deadline
+  const deadlineChipHtml = task.deadline
+    ? `<div class="card-deadline-chip ${dc.cls}">📅 ${dc.label}</div>`
+    : (isRecDueNoDeadline ? `<div class="card-deadline-chip overdue">📅 Aujourd'hui</div>` : '');
+
   card.innerHTML = `
     <div class="card-header">
       <span class="card-index">#${String(idx+1).padStart(2,'0')}</span>
@@ -1132,7 +1169,7 @@ function buildCard(task, idx, isArchive) {
       ${recBadge}
     </div>
     <div class="card-meta-row">
-      ${task.deadline ? `<div class="card-deadline-chip ${dc.cls}">📅 ${dc.label}</div>` : ''}
+      ${deadlineChipHtml}
       ${archivedDateHtml}
     </div>
     ${task.comment ? `<p class="card-comment">${escHtml(task.comment)}</p>` : ''}
@@ -1696,6 +1733,45 @@ function resetForm() {
 const escHtml = s => String(s)
   .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
+/**
+ * Détermine si une tâche est « due aujourd'hui ».
+ * Deux cas :
+ *  1) deadline classique ≤ aujourd'hui
+ *  2) tâche récurrente hebdo sans deadline dont aujourd'hui est un des jours cochés
+ */
+function isTaskDueToday(task) {
+  const now = new Date(); now.setHours(0,0,0,0);
+
+  // Cas 1 — deadline classique (parsing local)
+  if (task.deadline) {
+    const [y,m,d] = task.deadline.split('-');
+    return new Date(+y, +m-1, +d) <= now;
+  }
+
+  // Cas 2 — récurrence sans deadline
+  const rec = task.recurrence;
+  if (!rec || rec.type === 'none') return false;
+
+  // Vérifier que la récurrence n'est pas terminée
+  if (rec.endDate) {
+    const [ey,em,ed] = rec.endDate.split('-');
+    if (new Date(+ey, +em-1, +ed) < now) return false;
+  }
+
+  const type = rec.type === 'infinite' ? 'weekly' : rec.type;
+
+  if (type === 'weekly') {
+    const today = now.getDay(); // 0=Dim … 6=Sam
+    // Si des jours spécifiques sont cochés, vérifier si aujourd'hui en fait partie
+    if (rec.days && rec.days.length > 0) return rec.days.includes(today);
+    // Hebdo sans jours spécifiques → considérer comme due chaque jour
+    return true;
+  }
+
+  // Mensuel / annuel sans deadline : pas de jour de référence → pas de mise en avant
+  return false;
+}
+
 function progressPercent(deadline) {
   if (!deadline) return 0;
   return Math.max(0, Math.min(100,
@@ -1710,7 +1786,8 @@ function progressColor(p) {
 function deadlineLabel(dateStr) {
   if (!dateStr) return { label:'', cls:'' };
   const now = new Date(); now.setHours(0,0,0,0);
-  const d   = new Date(dateStr); d.setHours(0,0,0,0);
+  const [y,m,dd] = dateStr.split('-');
+  const d = new Date(+y, +m-1, +dd);
   const dif = Math.round((d - now) / (1000*3600*24));
   if (dif < 0)   return { label:`En retard de ${Math.abs(dif)} j`, cls:'overdue' };
   if (dif === 0) return { label:"Aujourd'hui",                      cls:'overdue' };
