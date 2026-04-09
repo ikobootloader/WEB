@@ -582,6 +582,7 @@ function openModal(id = null) {
     const task = tasks.find(t => t.id === id);
     if (!task) return;
     document.getElementById('taskTitle').value     = task.title;
+    document.getElementById('taskRef').value       = task.customRef  || '';
     document.getElementById('taskComment').value   = task.comment   || '';
     document.getElementById('deadline').value      = task.deadline  || '';
     document.getElementById('taskRequester').value = task.requester || '';
@@ -741,7 +742,7 @@ function getRecurrenceFromForm() {
  * Retourne une string 'YYYY-MM-DD', ou null si récurrence terminée.
  */
 function nextDeadline(deadlineStr, rec) {
-  if (!rec || rec.type === 'none' || !deadlineStr) return deadlineStr;
+  if (!rec || rec.type === 'none') return deadlineStr;
   const now = new Date(); now.setHours(0,0,0,0);
 
   // Helper : construire une Date locale depuis 'YYYY-MM-DD'
@@ -752,6 +753,36 @@ function nextDeadline(deadlineStr, rec) {
   // Rétrocompat : type 'infinite' → hebdo sans fin
   const type     = rec.type === 'infinite' ? 'weekly' : rec.type;
   const interval = rec.interval || 1;
+
+  // ── Cas sans deadline (récurrence hebdo avec jours spécifiques) ──
+  // On cherche le prochain jour coché à partir de demain.
+  if (!deadlineStr) {
+    if (type === 'weekly' && rec.days && rec.days.length > 0) {
+      const sortedDays = [...rec.days].sort((a, b) => a - b);
+      const base = new Date(now);
+      base.setDate(base.getDate() + 1); // demain
+      for (let i = 0; i < 7 * interval * 54; i++) {
+        const candidate = new Date(base);
+        candidate.setDate(base.getDate() + i);
+        if (sortedDays.includes(candidate.getDay())) {
+          if (rec.endDate && candidate > localDate(rec.endDate)) return null;
+          return toYMD(candidate);
+        }
+      }
+      return null;
+    }
+    // Hebdo sans jours spécifiques et sans deadline → prochain semaine
+    if (type === 'weekly') {
+      const next = new Date(now);
+      next.setDate(next.getDate() + 7 * interval);
+      if (rec.endDate && next > localDate(rec.endDate)) return null;
+      return toYMD(next);
+    }
+    // Mensuel/annuel sans deadline → pas de base pour calculer
+    return null;
+  }
+
+  // ── Cas avec deadline ──
 
   // Cas weekly avec jours spécifiques
   if (type === 'weekly' && rec.days && rec.days.length > 0) {
@@ -834,7 +865,8 @@ function applySearch(list, query) {
     (t.title     || '').toLowerCase().includes(q) ||
     (t.comment   || '').toLowerCase().includes(q) ||
     (t.requester || '').toLowerCase().includes(q) ||
-    (t.type      || '').toLowerCase().includes(q)
+    (t.type      || '').toLowerCase().includes(q) ||
+    (t.customRef || '').toLowerCase().includes(q)
   );
 }
 
@@ -905,6 +937,7 @@ function applySort(list, sort) {
 
 async function submitForm() {
   const title      = document.getElementById('taskTitle').value.trim();
+  const customRef  = document.getElementById('taskRef').value.trim();
   const comment    = document.getElementById('taskComment').value.trim();
   const urgency    = getSelectedUrgency();
   const status     = getSelectedStatus();
@@ -936,7 +969,7 @@ async function submitForm() {
   if (editingId) {
     tasks = tasks.map(t => t.id === editingId
       ? { ...t, title, comment, urgency, status: effectiveStatus, deadline: effectiveDeadline,
-          requester, type, recurrence,
+          requester, type, customRef, recurrence,
           archivedAt: effectiveStatus === 'realise' ? (t.archivedAt || new Date().toISOString()) : null }
       : t
     );
@@ -944,7 +977,7 @@ async function submitForm() {
   } else {
     tasks.push({
       id: Date.now(), title, comment, urgency, status: effectiveStatus,
-      deadline: effectiveDeadline, requester, type, recurrence,
+      deadline: effectiveDeadline, requester, type, customRef, recurrence,
       archivedAt: effectiveStatus === 'realise' ? new Date().toISOString() : null
     });
     showToast('✅ Tâche ajoutée');
@@ -1166,6 +1199,7 @@ function buildCard(task, idx, isArchive) {
       ${!isArchive ? `<span class="status-badge ${task.status}">${statusLabels[task.status]||task.status}</span>` : ''}
       ${task.requester ? `<span class="requester-badge">${escHtml(task.requester)}</span>` : ''}
       ${task.type      ? `<span class="type-badge">${escHtml(task.type)}</span>`           : ''}
+      ${task.customRef ? `<span class="ref-badge">🔖 ${escHtml(task.customRef)}</span>`   : ''}
       ${recBadge}
     </div>
     <div class="card-meta-row">
@@ -1245,6 +1279,7 @@ function _renderDetail(id) {
       onclick="inlineEditStatus(${id})">${statusLabels[task.status] || task.status}</span>
     ${task.requester ? `<span class="requester-badge">${escHtml(task.requester)}</span>` : ''}
     ${task.type      ? `<span class="type-badge">${escHtml(task.type)}</span>`           : ''}
+    ${task.customRef ? `<span class="ref-badge inline-editable" title="Modifier la référence" onclick="inlineEditRef(${id})">🔖 ${escHtml(task.customRef)}</span>` : `<span class="ref-badge" style="opacity:.45;cursor:pointer;" title="Ajouter une référence" onclick="inlineEditRef(${id})">🔖 Ajouter une réf.</span>`}
     ${recLabel       ? `<span class="recurrence-badge">${recLabel}</span>`               : ''}
   `;
 
@@ -1484,6 +1519,41 @@ function inlineEditComment(id) {
   });
 }
 
+/** Édition inline de la référence personnalisée */
+function inlineEditRef(id) {
+  const task = tasks.find(t => t.id === id);
+  if (!task) return;
+  const badges = document.getElementById('detailBadges');
+  // Trouver le badge ref dans les badges
+  const refBadge = [...badges.querySelectorAll('.ref-badge')][0];
+  if (!refBadge) return;
+
+  const origHTML = refBadge.outerHTML;
+  const inp = document.createElement('input');
+  inp.className   = 'inline-input';
+  inp.type        = 'text';
+  inp.value       = task.customRef || '';
+  inp.maxLength   = 40;
+  inp.placeholder = 'Ex : REF-001…';
+  inp.style.cssText = 'font-size:.8rem;font-weight:600;font-family:var(--font-body);width:160px;padding:.25rem .5rem;';
+  refBadge.replaceWith(inp);
+  inp.focus(); inp.select();
+
+  const commit = async () => {
+    const val = inp.value.trim();
+    tasks = tasks.map(t => t.id === id ? { ...t, customRef: val } : t);
+    await saveToStorage();
+    renderTasks(); if (activePage === 'archives') renderArchives();
+    showToast('✏️ Référence mise à jour');
+    _renderDetail(id);
+  };
+  inp.addEventListener('blur', commit);
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter')  { e.preventDefault(); commit(); }
+    if (e.key === 'Escape') { _renderDetail(id); }
+  });
+}
+
 /** Sélecteur inline urgence (popup pills) */
 function inlineEditUrgency(id) {
   const task = tasks.find(t => t.id === id);
@@ -1717,6 +1787,7 @@ function cancelEditHeader(title, subtitle, btnWrap, titleEl, subInput, editBtn) 
 
 function resetForm() {
   document.getElementById('taskTitle').value     = '';
+  document.getElementById('taskRef').value       = '';
   document.getElementById('taskComment').value   = '';
   document.getElementById('deadline').value      = '';
   document.getElementById('taskRequester').value = '';
@@ -1879,6 +1950,7 @@ function exportExcel() {
   const statusLabels  = { 'en-cours':'En cours', 'en-attente':'En attente', 'realise':'Réalisé' };
   const urgencyLabels = { low:'Faible', medium:'Moyenne', high:'Urgente' };
   const ws = XLSX.utils.json_to_sheet(tasks.map(t => ({
+    Référence:   t.customRef    || '',
     Titre:       t.title,
     Demandeur:   t.requester   || '',
     Type:        t.type        || '',
