@@ -14,24 +14,21 @@ Application web de gestion de tâches 100 % locale, sans serveur, avec chiffreme
 6. [Utilisation](#utilisation)
    - [Premier démarrage](#premier-démarrage)
    - [Créer une tâche](#créer-une-tâche)
-   - [Récurrence](#récurrence)
    - [Naviguer & filtrer](#naviguer--filtrer)
-   - [Mise en avant des tâches dues](#mise-en-avant-des-tâches-dues)
    - [Archives](#archives)
-   - [Modale de détail & édition inline](#modale-de-détail--édition-inline)
-   - [Gérer les listes (demandeurs & types)](#gérer-les-listes-demandeurs--types)
    - [Sauvegarde sur disque (FSA)](#sauvegarde-sur-disque-fsa)
    - [Import / Export](#import--export)
    - [Personnaliser l'en-tête](#personnaliser-len-tête)
 7. [Structure des données](#structure-des-données)
 8. [Architecture technique](#architecture-technique)
 9. [Limites connues](#limites-connues)
+10. [Historique des versions](#historique-des-versions)
 
 ---
 
 ## Présentation
 
-Gestionnaire de tâches conçu pour un usage professionnel en environnement administratif. Il permet de suivre des demandes issues de différentes unités organisationnelles (S3AD, SE2S, MDA…) par type d'outil (SOLIS, MULTIGEST, BO, Courriers…).
+Gestionnaire de tâches conçu pour un usage professionnel en environnement administratif. Il permet de suivre des demandes issues de différentes unités organisationnelles (S3AD, SE2S, MDA) par type d'outil (SOLIS, MULTIGEST, BO, Courriers…).
 
 L'application fonctionne entièrement dans le navigateur. **Aucune donnée ne transite sur un réseau.** Tout est stocké localement dans le navigateur, chiffré avec AES-256-GCM, et peut optionnellement être synchronisé vers un fichier JSON sur le disque dur de l'utilisateur.
 
@@ -41,38 +38,26 @@ L'application fonctionne entièrement dans le navigateur. **Aucune donnée ne tr
 
 ### Gestion des tâches
 - Création, modification et suppression de tâches
-- Champs : titre, demandeur, type de demande, description, urgence, statut, deadline, récurrence
+- Champs : titre, demandeur, type de demande, description riche, urgence, statut, deadline
 - 3 niveaux d'urgence : Faible / Moyenne / Haute
 - 3 statuts : En cours / En attente / Réalisé
 - Calcul automatique de l'avancement par rapport à la deadline (barre de progression)
-- Modale de détail avec édition inline de tous les champs (clic sur une carte)
-
-### Récurrence
-- 4 modes : Hebdomadaire / Mensuel / Annuel / Aucune
-- Intervalle configurable (tous les N semaines, mois ou années)
-- Sélection des jours de la semaine pour les récurrences hebdomadaires
-- Date de fin optionnelle ou récurrence infinie
-- Marquer « Réalisé » sur une tâche récurrente recalcule automatiquement la prochaine échéance sans archiver la tâche
-- Les tâches récurrentes hebdomadaires sans deadline sont mises en avant le jour concerné
+- Modale de détail en lecture seule (clic sur une carte)
 
 ### Organisation
 - Filtres combinables : urgence, demandeur, type
 - Barre de recherche plein texte (titre, description, demandeur, type) avec debounce
 - Tri : date d'ajout (croissant/décroissant), deadline, urgence
 - Pagination automatique (15 tâches par page)
-- Les tâches échues ou dues aujourd'hui remontent automatiquement en tête, triées par urgence décroissante
 
 ### Archives
-- Les tâches marquées « Réalisé » sont automatiquement déplacées dans l'onglet Archives (sauf récurrentes actives)
-- Filtres, recherche et tri dédiés aux archives
+- Les tâches marquées « Réalisé » sont automatiquement déplacées dans l'onglet Archives
+- Filtres et tri dédiés aux archives
 - Restauration d'une tâche archivée vers l'état « En cours »
 
 ### Interface
 - Tableau de bord avec compteurs : tâches en cours, urgentes, en attente, en retard, archivées
-- Panneau supérieur repliable (statistiques + barre d'import/actions)
 - En-tête personnalisable (titre et sous-titre, persistés en base)
-- Listes dynamiques : demandeurs et types personnalisables via le gestionnaire de listes (🏷)
-- Mise en avant visuelle des tâches dues : fond coloré gradient selon l'urgence, bordure épaisse, chip « 📅 Aujourd'hui »
 - Design responsive, polices Syne + DM Sans
 - Notifications toast non bloquantes
 - Confirmations avant suppression
@@ -114,8 +99,6 @@ La clé de chiffrement est **dérivée du mot de passe à chaque session** et n'
 | `fsa_handle` | Handle FileSystem (référence au fichier disque, sans contenu) |
 | `fsa_name` | Nom du fichier lié (string) |
 | `app_header` | Titre et sous-titre personnalisés (en clair) |
-| `custom_requesters` | Liste des demandeurs ajoutés par l'utilisateur (string[]) |
-| `custom_types` | Liste des types de demande ajoutés par l'utilisateur (string[]) |
 
 ### Export JSON
 
@@ -134,7 +117,7 @@ Le fichier de sauvegarde automatique sur disque (FSA) est lui aussi en clair —
 | Firefox | ✅ | ❌ (API non supportée) |
 | Safari 15.2+ | ✅ | ❌ (API non supportée) |
 
-> La File System Access API (sauvegarde automatique sur disque) est uniquement disponible sur **Chrome et Edge**. Sur Firefox, toutes les autres fonctionnalités sont opérationnelles ; seule la liaison avec un fichier disque est désactivée (le bouton « ⬆ Importer JSON » apparaît en remplacement).
+> La File System Access API (sauvegarde automatique sur disque) est uniquement disponible sur **Chrome et Edge**. Sur Firefox, toutes les autres fonctionnalités sont opérationnelles ; seule la liaison avec un fichier disque est désactivée.
 
 ---
 
@@ -145,8 +128,7 @@ L'application ne nécessite aucune installation, aucun serveur, aucune dépendan
 ```
 gestionnaire-projets/
 ├── index.html   ← point d'entrée unique
-├── app.js       ← logique applicative complète
-└── README.md    ← ce fichier
+└── app.js       ← logique applicative complète
 ```
 
 **Pour lancer :**
@@ -177,30 +159,14 @@ Lors des sessions suivantes, l'écran demande simplement la saisie du mot de pas
 Cliquer sur **+ Nouvelle tâche** (en haut à droite). Le formulaire propose :
 
 - **Titre** *(obligatoire)*
-- **Demandeur** : S3AD, SE2S, MDA, Autres (+ valeurs personnalisées)
-- **Type de demande** : SOLIS, MULTIGEST, BO, Courriers, Autres (+ valeurs personnalisées)
-- **Description** : champ libre
+- **Demandeur** : S3AD, SE2S, MDA, Autres
+- **Type de demande** : SOLIS, MULTIGEST, BO, Courriers, Autres
+- **Description** : éditeur de texte riche Quill (gras, italique, souligné, barré, listes ordonnées/non ordonnées, liens)
 - **Urgence** : Faible / Moyenne / Haute
 - **Deadline** : date optionnelle
-- **Récurrence** : Aucune / Hebdomadaire / Mensuel / Annuel
 - **Degré de réalisation** : En cours / En attente / Réalisé
 
-Valider avec **Ajouter la tâche**. Une tâche marquée « Réalisé » est directement envoyée dans les archives (sauf si elle est récurrente — voir ci-dessous).
-
-### Récurrence
-
-La récurrence permet de créer des tâches qui se répètent automatiquement. Lors de la création ou modification d'une tâche, sélectionner un mode de récurrence :
-
-- **Hebdomadaire** : possibilité de cocher les jours de la semaine concernés (Lun–Dim). Un intervalle « Tous les N » permet d'espacer les occurrences.
-- **Mensuel** : tous les N mois à partir de la deadline.
-- **Annuel** : tous les N ans à partir de la deadline.
-
-Options supplémentaires : cocher « Sans date de fin » pour une récurrence infinie, ou spécifier une date de fin.
-
-**Comportement à la réalisation :**
-- Cliquer **✅ Réalisé** sur une tâche récurrente active ne l'archive pas. La deadline est automatiquement recalculée vers la prochaine occurrence, et la tâche reste en statut « En cours ».
-- Si la date de fin de récurrence est dépassée, la tâche est archivée normalement.
-- Pour les tâches hebdomadaires sans deadline avec des jours spécifiques, la prochaine occurrence est calculée à partir du prochain jour coché.
+Valider avec **Ajouter la tâche** ou `Entrée`. Une tâche marquée « Réalisé » est directement envoyée dans les archives.
 
 ### Naviguer & filtrer
 
@@ -208,54 +174,21 @@ La toolbar propose plusieurs niveaux de filtrage cumulatifs :
 
 1. **Onglets d'urgence** (Toutes / Urgentes / Moyennes / Faibles)
 2. **Sélecteurs** Demandeur et Type
-3. **Barre de recherche** — porte sur le titre, la description, le demandeur et le type simultanément ; un bouton ✕ apparaît pour effacer la saisie
+3. **Barre de recherche** — porte sur le titre, la description, le demandeur et le type simultanément
 4. **Tri** — Date d'ajout (↑/↓), Deadline, Urgence
 
-Au-delà de 15 tâches affichées, une pagination apparaît automatiquement en bas de liste. La page est réinitialisée lors d'un changement de filtre ou de tri, et conservée lors des opérations CRUD.
+Au-delà de 15 tâches affichées, une pagination apparaît automatiquement en bas de liste.
 
-Le panneau supérieur (statistiques et barre d'import) est repliable via le bouton chevron intégré aux onglets.
-
-### Mise en avant des tâches dues
-
-Les tâches dont la deadline est atteinte ou dépassée sont automatiquement mises en avant :
-
-- **Remontée en tête de liste**, triées par urgence décroissante
-- **Fond coloré gradient** selon le niveau d'urgence (vert/orange/rouge)
-- **Bordure épaisse** et bandeau supérieur renforcé
-- **Chip « 📅 Aujourd'hui »** ou « 📅 En retard de N j »
-
-Ce comportement s'applique également aux **tâches récurrentes hebdomadaires sans deadline** : si aujourd'hui correspond à un des jours cochés, la tâche est mise en avant avec un chip « 📅 Aujourd'hui » même en l'absence de deadline explicite.
+Cliquer sur une carte (hors boutons) ouvre une **modale de détail** en lecture seule avec toutes les informations de la tâche et les boutons d'action en bas à droite.
 
 ### Archives
 
 L'onglet **Archives** regroupe toutes les tâches dont le statut est « Réalisé ». Elles sont triées par date de réalisation par défaut. Il est possible de :
 
 - Filtrer par demandeur et type
-- Rechercher en plein texte
+- Rechercher
 - **Restaurer** une tâche vers l'état « En cours »
 - Supprimer définitivement
-
-### Modale de détail & édition inline
-
-Cliquer sur une carte (hors boutons d'action) ouvre une **modale de détail** affichant toutes les informations de la tâche. Depuis cette modale, chaque champ est modifiable directement :
-
-- **Titre** : cliquer pour éditer en ligne (valider avec Entrée, annuler avec Échap)
-- **Urgence** et **Statut** : cliquer sur le badge pour ouvrir un sélecteur inline
-- **Demandeur** et **Type** : cliquer sur le champ pour afficher un menu déroulant
-- **Deadline** : cliquer pour afficher un champ date avec option d'effacement
-- **Description** : cliquer pour éditer dans un textarea (valider avec Ctrl+Entrée)
-
-Les modifications sont enregistrées immédiatement et les vues se rafraîchissent en temps réel. Les champs éditables sont signalés par un indicateur ✎ au survol.
-
-### Gérer les listes (demandeurs & types)
-
-Le bouton **🏷 Gérer les listes** ouvre une modale de gestion des valeurs de demandeurs et types de demande.
-
-- Les entrées **système** (S3AD, SE2S, MDA, Autres, SOLIS, MULTIGEST, BO, Courriers) sont permanentes et ne peuvent pas être supprimées.
-- L'utilisateur peut **ajouter** de nouvelles entrées personnalisées (40 caractères max).
-- Les entrées personnalisées peuvent être **supprimées** à tout moment.
-- Les modifications se répercutent immédiatement dans tous les sélecteurs (formulaire, filtres tâches, filtres archives).
-- Les listes personnalisées sont persistées dans IndexedDB.
 
 ### Sauvegarde sur disque (FSA)
 
@@ -265,12 +198,10 @@ La sauvegarde automatique sur disque synchronise les tâches (en clair) vers un 
 1. Cliquer sur **📂 Ouvrir tasks.json** pour charger un fichier existant (le fichier est importé ET lié comme cible de sauvegarde).
 2. Ou cliquer sur **📁 Lier un fichier disque** pour créer ou sélectionner un nouveau fichier de destination.
 
-**Sessions suivantes :**
-Le handle du fichier est persisté dans IndexedDB. À l'ouverture, l'application tente une reconnexion silencieuse (`queryPermission`). Si le navigateur requiert une confirmation (état « prompt »), un bandeau orange apparaît en haut de page — un clic sur **📁 Re-lier le fichier** rétablit la connexion sans avoir à re-sélectionner le fichier.
+**Sessions suivantes :**  
+Le handle du fichier est persisté dans IndexedDB. À l'ouverture, l'application tente une reconnexion silencieuse. Si le navigateur requiert une confirmation, un bandeau orange apparaît en haut de page — un clic sur **Re-autoriser** rétablit la connexion sans avoir à re-sélectionner le fichier.
 
 Pour désactiver la sauvegarde automatique : cliquer sur **🔗 Délier le fichier**.
-
-> Sur Firefox, les boutons FSA sont masqués. Le bouton « ⬆ Importer JSON » est affiché en remplacement.
 
 ### Import / Export
 
@@ -279,7 +210,7 @@ Pour désactiver la sauvegarde automatique : cliquer sur **🔗 Délier le fichi
 | Charger un fichier + lier | 📂 Ouvrir tasks.json | JSON | Importe les tâches et lie le fichier comme cible FSA |
 | Import simple | ⬆ Importer JSON *(Firefox)* | JSON | Import sans liaison FSA |
 | Export JSON | ⬇ JSON | JSON | Tâches en clair, toutes colonnes |
-| Export Excel | ⬇ Excel | .xlsx | Colonnes : Titre, Demandeur, Type, Urgence, Statut, Deadline, Récurrence, Commentaire, Archivé le |
+| Export Excel | ⬇ Excel | .xlsx | Colonnes : Titre, Demandeur, Type, Urgence, Statut, Deadline, Commentaire, Archivé le |
 
 ### Personnaliser l'en-tête
 
@@ -297,16 +228,10 @@ Chaque tâche est un objet JSON avec les propriétés suivantes :
   "title":      "Traitement dossier allocataire",
   "requester":  "S3AD",
   "type":       "SOLIS",
-  "comment":    "Vérifier les pièces justificatives manquantes.",
+  "comment":    "<p>Vérifier les <strong>pièces justificatives</strong> manquantes.</p>",
   "urgency":    "high",
   "status":     "en-cours",
   "deadline":   "2025-06-30",
-  "recurrence": {
-    "type":     "weekly",
-    "interval": 1,
-    "days":     [3],
-    "endDate":  null
-  },
   "archivedAt": null
 }
 ```
@@ -315,25 +240,15 @@ Chaque tâche est un objet JSON avec les propriétés suivantes :
 |-------|------|-------------------|
 | `id` | number | Timestamp Unix (ms) — sert d'identifiant unique |
 | `title` | string | Libre |
-| `requester` | string | Valeurs système + valeurs personnalisées, ou `""` |
-| `type` | string | Valeurs système + valeurs personnalisées, ou `""` |
-| `comment` | string | Libre |
+| `requester` | string | `S3AD` · `SE2S` · `MDA` · `Autres` · `""` |
+| `type` | string | `SOLIS` · `MULTIGEST` · `BO` · `Courriers` · `Autres` · `""` |
+| `comment` | string | HTML généré par Quill (ou `""` si vide) |
 | `urgency` | string | `low` · `medium` · `high` |
 | `status` | string | `en-cours` · `en-attente` · `realise` |
 | `deadline` | string | Format ISO `YYYY-MM-DD` ou `""` |
-| `recurrence` | object\|null | Objet récurrence (voir ci-dessous) ou `null` |
 | `archivedAt` | string\|null | ISO 8601 (date de passage en « Réalisé ») ou `null` |
 
-### Objet récurrence
-
-| Champ | Type | Description |
-|-------|------|-------------|
-| `type` | string | `none` · `weekly` · `monthly` · `yearly` · `infinite` (rétrocompat) |
-| `interval` | number | Fréquence : tous les N (semaines, mois ou années) |
-| `days` | number[] | Jours de la semaine (0=Dim … 6=Sam), uniquement pour `weekly` |
-| `endDate` | string\|null | Date de fin ISO `YYYY-MM-DD`, ou `null` pour récurrence infinie |
-
-> Le type `infinite` est un ancien format conservé pour rétrocompatibilité. Il est traité comme `weekly` avec intervalle 1 et sans date de fin.
+> **Rétrocompatibilité** : les tâches créées avant l'introduction de Quill ont un `comment` en texte brut. Elles s'affichent correctement — le texte brut est du HTML valide minimalement.
 
 ---
 
@@ -342,7 +257,6 @@ Chaque tâche est un objet JSON avec les propriétés suivantes :
 ```
 index.html          Markup, CSS intégré, structure des modales
 app.js              Logique complète (pas de framework)
-README.md           Documentation
 ```
 
 ### Dépendances externes
@@ -350,6 +264,7 @@ README.md           Documentation
 | Bibliothèque | Source | Usage |
 |---|---|---|
 | SheetJS (xlsx) | jsDelivr CDN | Export Excel |
+| Quill 2 | jsDelivr CDN | Éditeur de texte riche (description) |
 | Syne + DM Sans | Google Fonts | Typographie |
 
 ### Modules fonctionnels dans app.js
@@ -357,18 +272,16 @@ README.md           Documentation
 | Section | Responsabilité |
 |---------|----------------|
 | IndexedDB | Couche de persistance (`dbGet` / `dbSet` / `dbDelete`) |
-| Listes dynamiques | Gestion des demandeurs et types personnalisables |
 | Crypto | Dérivation de clé PBKDF2, chiffrement/déchiffrement AES-GCM |
 | Stockage | Orchestration lecture/écriture IDB + fichier disque |
 | FSA | Gestion du handle fichier, reconnexion, permissions |
 | Lock screen | Écran de verrouillage, création/vérification mot de passe |
-| Récurrence | `nextDeadline`, `recurrenceLabel`, `isTaskDueToday` |
 | CRUD | Création, modification, suppression, restauration de tâches |
 | Rendu | `renderTasks`, `renderArchives`, `buildCard` |
 | Pagination | `renderPagination`, `buildPageRange` |
 | Recherche | `applySearch`, handlers debounce |
 | Filtres / Tri | `applyFilters`, `applySort`, `initFilterTabs` |
-| Détail & édition inline | `openDetail`, `_renderDetail`, `inlineEdit*` |
+| Détail | Modale de lecture `openDetail` / `closeDetail` |
 | Header | `loadHeader`, `startEditHeader`, `saveHeader` |
 | Import/Export | JSON, Excel, `openAndLinkFile` |
 
@@ -376,6 +289,7 @@ README.md           Documentation
 
 ```
 DOMContentLoaded
+  ├─ Initialisation Quill (éditeur description modale)
   └─ dbGet(KEY_TASKS)
        ├─ null        → showLockScreen('create')   [première utilisation]
        └─ présent     → showLockScreen('unlock')   [sessions suivantes]
@@ -383,9 +297,6 @@ DOMContentLoaded
 submitPassword()
   ├─ mode 'create' → génère sel → deriveKey → saveToStorage
   └─ mode 'unlock' → dbGet(salt) → deriveKey → loadFromStorage → decrypt
-       ├─ loadLists()          → charge demandeurs & types personnalisés
-       ├─ refreshAllSelects()  → peuple tous les <select>
-       ├─ loadHeader()         → restaure titre & sous-titre
        └─ restoreFsaHandle()
             ├─ permission 'granted' → reconnexion silencieuse
             ├─ permission 'prompt'  → affichage banner
@@ -401,4 +312,16 @@ submitPassword()
 - **File System Access API** : non disponible sur Firefox et Safari. Sur ces navigateurs, la sauvegarde automatique sur disque est désactivée ; l'export manuel JSON reste disponible.
 - **Fichier disque en clair** : le fichier `tasks.json` sur disque n'est pas chiffré. Veiller à le stocker dans un emplacement protégé par les droits système si les données sont sensibles.
 - **Multi-onglets** : ouvrir l'application dans plusieurs onglets simultanément peut entraîner des conflits d'écriture dans IndexedDB. Usage mono-onglet recommandé.
-- **Récurrence sans deadline** : les récurrences mensuelles et annuelles nécessitent une deadline initiale pour calculer les occurrences suivantes. Seule la récurrence hebdomadaire avec jours cochés fonctionne sans deadline.
+- **Quill & connexion internet** : l'éditeur Quill est chargé depuis jsDelivr CDN. Une connexion internet est requise au premier chargement (mise en cache ensuite par le navigateur).
+
+---
+
+## Historique des versions
+
+### v2.1 — Éditeur de description riche (Quill)
+- Remplacement du `<textarea>` de description par un éditeur **Quill 2** (thème Snow) dans la modale création/modification
+- Toolbar : gras, italique, souligné, ~~barré~~, listes ordonnées/non ordonnées, lien hypertexte, effacer formatage
+- Édition inline dans la modale de détail : mini-éditeur Quill avec boutons **Valider / Annuler**
+- Stockage du champ `comment` en HTML (rétrocompatible avec les entrées texte brut existantes)
+- Recherche full-text et export XLSX adaptés pour extraire le texte brut depuis le HTML
+- Affichage des descriptions dans les cartes limité à 3 lignes (ellipsis) pour préserver la densité de la grille

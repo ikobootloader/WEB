@@ -47,6 +47,9 @@ let customTypes      = [];
 // Pièces jointes en attente (création, avant que l'id de tâche soit connu)
 let pendingAttachments = []; // File[]
 
+// Instance Quill pour la modale de création/modification
+let quillModal = null;
+
 // ════════════════════════════════════════════════════════════
 //  INDEXEDDB
 // ════════════════════════════════════════════════════════════
@@ -518,6 +521,19 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (e.key === 'Enter' && document.getElementById('lockScreen').classList.contains('open'))
       submitPassword();
   });
+  // ── Initialisation Quill (modale) ───────────────────────────
+  quillModal = new Quill('#taskCommentEditor', {
+    theme: 'snow',
+    placeholder: 'Détails, notes, contexte…',
+    modules: {
+      toolbar: [
+        ['bold', 'italic', 'underline', 'strike'],
+        [{ list: 'ordered' }, { list: 'bullet' }],
+        ['link', 'clean']
+      ]
+    }
+  });
+
   const hasSavedData = !!(await dbGet(KEY_TASKS));
   showLockScreen(hasSavedData ? 'unlock' : 'create');
 
@@ -832,7 +848,9 @@ function openModal(id = null) {
     if (!task) return;
     document.getElementById('taskTitle').value     = task.title;
     document.getElementById('taskRef').value       = task.customRef  || '';
-    document.getElementById('taskComment').value   = task.comment   || '';
+    // Quill : charger le HTML du commentaire
+    quillModal.setContents([]);
+    if (task.comment) quillModal.clipboard.dangerouslyPasteHTML(task.comment);
     document.getElementById('deadline').value      = task.deadline  || '';
     document.getElementById('taskRequester').value = task.requester || '';
     document.getElementById('taskType').value      = task.type      || '';
@@ -1235,13 +1253,18 @@ function applyFilters(list, urgFilter, reqFilter, typeFilter) {
 function applySearch(list, query) {
   if (!query) return list;
   const q = query.toLowerCase().trim();
-  return list.filter(t =>
-    (t.title     || '').toLowerCase().includes(q) ||
-    (t.comment   || '').toLowerCase().includes(q) ||
-    (t.requester || '').toLowerCase().includes(q) ||
-    (t.type      || '').toLowerCase().includes(q) ||
-    (t.customRef || '').toLowerCase().includes(q)
-  );
+  return list.filter(t => {
+    const commentText = t.comment
+      ? (new DOMParser().parseFromString(t.comment, 'text/html').body.textContent || '').toLowerCase()
+      : '';
+    return (
+      (t.title     || '').toLowerCase().includes(q) ||
+      commentText.includes(q) ||
+      (t.requester || '').toLowerCase().includes(q) ||
+      (t.type      || '').toLowerCase().includes(q) ||
+      (t.customRef || '').toLowerCase().includes(q)
+    );
+  });
 }
 
 let _searchTimer;
@@ -1312,7 +1335,9 @@ function applySort(list, sort) {
 async function submitForm() {
   const title      = document.getElementById('taskTitle').value.trim();
   const customRef  = document.getElementById('taskRef').value.trim();
-  const comment    = document.getElementById('taskComment').value.trim();
+  // Lire le HTML Quill ; si vide (seul <p><br></p>), on stocke ''
+  const quillHTML  = quillModal.getSemanticHTML();
+  const comment    = (quillModal.getText().trim() === '') ? '' : quillHTML;
   const urgency    = getSelectedUrgency();
   const status     = getSelectedStatus();
   const deadline   = document.getElementById('deadline').value;
@@ -1599,7 +1624,7 @@ function buildCard(task, idx, isArchive) {
       ${deadlineChipHtml}
       ${archivedDateHtml}
     </div>
-    ${task.comment ? `<p class="card-comment">${escHtml(task.comment)}</p>` : ''}
+    ${task.comment ? `<div class="card-comment-html">${task.comment}</div>` : ''}
     ${!isArchive && task.deadline ? `
       <div class="progress-wrap">
         <div class="progress-info"><span>Avancement deadline</span><span>${Math.round(p)}%</span></div>
@@ -1721,7 +1746,7 @@ function _renderDetail(id) {
   commentBlock.innerHTML = `
     <div class="detail-comment-block inline-editable" title="Modifier la description" onclick="inlineEditComment(${id})">
       <span class="df-label">Description <span class="df-edit-hint">✎</span></span>
-      <p>${task.comment ? escHtml(task.comment) : '<em style="color:var(--muted);font-style:italic">Cliquer pour ajouter une description…</em>'}</p>
+      <div class="detail-comment-html">${task.comment || '<em style="color:var(--muted);font-style:italic">Cliquer pour ajouter une description…</em>'}</div>
     </div>`;
 
   // ── Barre de progression ────────────────────────────────
@@ -1896,38 +1921,65 @@ function inlineEditComment(id) {
   if (!task) return;
   const block = document.querySelector('#detailCommentBlock .detail-comment-block');
   if (!block) return;
-  if (block.querySelector('textarea')) return;
+  if (block.querySelector('.inline-quill-wrap')) return; // déjà ouvert
 
-  const origInner = block.innerHTML;
-  const label = block.querySelector('.df-label');
-
-  const ta = document.createElement('textarea');
-  ta.className = 'inline-textarea';
-  ta.value     = task.comment || '';
-  ta.rows      = 4;
-
-  block.innerHTML = '';
-  const lbl = document.createElement('span');
-  lbl.className = 'df-label'; lbl.textContent = 'Description';
-  block.appendChild(lbl);
-  block.appendChild(ta);
+  // Remplacer le contenu par un éditeur Quill inline
   block.onclick = null;
+  block.classList.remove('inline-editable');
+  block.title = '';
 
-  ta.focus();
+  const lbl = block.querySelector('.df-label');
+  if (lbl) lbl.innerHTML = 'Description';
+
+  // Supprimer l'ancien contenu (sauf le label)
+  [...block.children].forEach(c => { if (!c.classList.contains('df-label')) c.remove(); });
+
+  // Créer le conteneur Quill
+  const wrap = document.createElement('div');
+  wrap.className = 'inline-quill-wrap';
+  const editorDiv = document.createElement('div');
+  wrap.appendChild(editorDiv);
+  block.appendChild(wrap);
+
+  const q = new Quill(editorDiv, {
+    theme: 'snow',
+    placeholder: 'Détails, notes, contexte…',
+    modules: {
+      toolbar: [
+        ['bold', 'italic', 'underline', 'strike'],
+        [{ list: 'ordered' }, { list: 'bullet' }],
+        ['link', 'clean']
+      ]
+    }
+  });
+  if (task.comment) q.clipboard.dangerouslyPasteHTML(task.comment);
+  q.focus();
+
+  // Boutons Valider / Annuler
+  const actions = document.createElement('div');
+  actions.className = 'inline-quill-actions';
+  const btnOk = document.createElement('button');
+  btnOk.className = 'btn btn-primary btn-sm';
+  btnOk.textContent = '✔ Valider';
+  const btnCancel = document.createElement('button');
+  btnCancel.className = 'btn btn-ghost btn-sm';
+  btnCancel.textContent = 'Annuler';
+  actions.appendChild(btnOk);
+  actions.appendChild(btnCancel);
+  block.appendChild(actions);
 
   const commit = async () => {
-    const val = ta.value.trim();
+    const html = q.getSemanticHTML();
+    const val  = q.getText().trim() === '' ? '' : html;
     tasks = tasks.map(t => t.id === id ? { ...t, comment: val } : t);
     await saveToStorage();
     renderTasks(); if (activePage === 'archives') renderArchives();
     showToast('✏️ Description mise à jour');
     _renderDetail(id);
   };
-  ta.addEventListener('blur', commit);
-  ta.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { _renderDetail(id); }
-    if (e.key === 'Enter' && e.ctrlKey) commit();
-  });
+
+  btnOk.addEventListener('click', commit);
+  btnCancel.addEventListener('click', () => _renderDetail(id));
 }
 
 /** Édition inline de la référence personnalisée */
@@ -2199,7 +2251,7 @@ function cancelEditHeader(title, subtitle, btnWrap, titleEl, subInput, editBtn) 
 function resetForm() {
   document.getElementById('taskTitle').value     = '';
   document.getElementById('taskRef').value       = '';
-  document.getElementById('taskComment').value   = '';
+  quillModal.setContents([]);
   document.getElementById('deadline').value      = '';
   document.getElementById('taskRequester').value = '';
   document.getElementById('taskType').value      = '';
@@ -2369,7 +2421,7 @@ function exportExcel() {
     Statut:      statusLabels[t.status]  || t.status,
     Deadline:    t.deadline    || '',
     Récurrence:  t.recurrence ? recurrenceLabel(t.recurrence) : '',
-    Commentaire: t.comment     || '',
+    Commentaire: t.comment ? (new DOMParser().parseFromString(t.comment, 'text/html').body.textContent || '') : '',
     Archivé_le:  t.archivedAt ? new Date(t.archivedAt).toLocaleDateString('fr-FR') : ''
   })));
   const wb = XLSX.utils.book_new();
