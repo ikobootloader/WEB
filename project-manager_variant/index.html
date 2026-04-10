@@ -687,9 +687,99 @@
     font-family:var(--font-body); letter-spacing:.03em;
   }
 
+  /* ── PIÈCES JOINTES DANS LE FORMULAIRE ── */
+  .matt-header {
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:.45rem; gap:.5rem;
+  }
+  .matt-label {
+    font-size:.75rem; font-weight:500; color:var(--muted);
+    display:flex; align-items:center; gap:.35rem;
+  }
+  .matt-list { display:flex; flex-direction:column; gap:.3rem; margin-bottom:.4rem; }
+  .matt-row {
+    display:flex; align-items:center; gap:.45rem;
+    background:var(--surface); border:1px solid var(--border); border-radius:7px;
+    padding:.35rem .65rem;
+  }
+  .matt-name {
+    flex:1; font-size:.8rem; font-weight:500; color:var(--text);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .matt-drop {
+    border:2px dashed var(--border); border-radius:8px;
+    padding:.55rem 1rem; text-align:center;
+    background:var(--surface2); transition:border-color .2s, background .2s;
+    cursor:default;
+  }
+  .matt-drop.drag-over { border-color:var(--accent); background:var(--accent-light); }
+
   /* ── SCROLLBAR ── */
   ::-webkit-scrollbar { width:6px; }
   ::-webkit-scrollbar-thumb { background:#ccc; border-radius:99px; }
+
+  /* ── PIÈCES JOINTES ── */
+  .att-section { margin-bottom:1rem; }
+  .att-header {
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:.55rem; gap:.5rem;
+  }
+  .att-header .df-label { display:flex; align-items:center; gap:.4rem; }
+  .att-count {
+    font-size:.65rem; background:var(--surface2); border:1px solid var(--border);
+    border-radius:99px; padding:.05rem .45rem; color:var(--muted); font-weight:600;
+  }
+  .att-add-btn { cursor:pointer; }
+  .att-add-btn input { display:none; }
+
+  .att-dropzone {
+    border:2px dashed var(--border); border-radius:10px;
+    padding:.7rem 1rem; text-align:center;
+    transition:border-color .2s, background .2s;
+    background:var(--surface2);
+    margin-top:.4rem;
+  }
+  .att-dropzone.drag-over {
+    border-color:var(--accent); background:var(--accent-light);
+  }
+  .att-drop-hint { font-size:.78rem; color:var(--muted); pointer-events:none; }
+
+  .att-list { display:flex; flex-direction:column; gap:.35rem; margin-bottom:.5rem; }
+  .att-row {
+    display:flex; align-items:center; gap:.5rem;
+    background:var(--surface2); border:1px solid var(--border); border-radius:8px;
+    padding:.45rem .75rem;
+  }
+  .att-icon { font-size:1rem; flex-shrink:0; }
+  .att-name {
+    flex:1; font-size:.82rem; font-weight:500; color:var(--text);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .att-size { font-size:.72rem; color:var(--muted); white-space:nowrap; flex-shrink:0; }
+  .att-dl-btn { flex-shrink:0; }
+  .att-rm-btn { flex-shrink:0; }
+
+  /* Badge pièces jointes sur les cartes */
+  .att-badge {
+    font-size:.65rem; font-weight:600; padding:.2rem .5rem; border-radius:99px;
+    white-space:nowrap; flex-shrink:0;
+    background:rgba(37,99,235,.09); color:var(--info);
+    border:1px solid rgba(37,99,235,.2);
+  }
+
+  /* Carte en mode drag-over */
+  .task-card.card-dragover {
+    border-color:var(--accent) !important;
+    box-shadow:0 0 0 3px var(--accent-light), var(--shadow-md);
+    transform:translateY(-2px);
+  }
+  .task-card.card-dragover::after {
+    content:'📎 Déposer ici';
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    background:rgba(240,253,247,.88); border-radius:var(--radius);
+    font-size:.9rem; font-weight:600; color:var(--accent);
+    pointer-events:none;
+  }
 
   @media (max-width:600px) {
     .form-row, .form-row-3 { grid-template-columns:1fr; }
@@ -940,6 +1030,11 @@
       </div>
     </div>
 
+    <div class="form-group">
+      <label>Pièces jointes</label>
+      <div id="modalAttachments"></div>
+    </div>
+
     <div class="form-actions">
       <button class="btn btn-primary btn-full" id="submitBtn" onclick="submitForm()">Ajouter la tâche</button>
       <button class="btn btn-ghost" onclick="closeModal()">Annuler</button>
@@ -962,6 +1057,7 @@
       <div class="detail-grid" id="detailGrid"></div>
       <div id="detailCommentBlock"></div>
       <div id="detailProgressBlock"></div>
+      <div id="detailAttachments"></div>
     </div>
     <div class="detail-footer" id="detailFooter"></div>
   </div>

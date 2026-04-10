@@ -4,9 +4,13 @@
 //  + File System Access API avec handle persistant (IndexedDB)
 // ══════════════════════════════════════════════════════════════
 
-const DB_NAME    = 'projets_db';
-const DB_VERSION = 1;
-const STORE_KV   = 'keyvalue';
+const DB_NAME        = 'projets_db';
+const DB_VERSION     = 2;
+const STORE_KV       = 'keyvalue';
+const STORE_ATT      = 'attachments'; // { id, taskId, name, type, size, iv, ct }
+
+const ATT_MAX_SIZE   = 10 * 1024 * 1024; // 10 Mo par fichier
+const ATT_MAX_COUNT  = 5;                // pièces jointes max par tâche
 
 const KEY_TASKS      = 'tasks_enc';
 const KEY_SALT       = 'salt';
@@ -40,6 +44,9 @@ let searchQueryArchives = '';
 let customRequesters = [];
 let customTypes      = [];
 
+// Pièces jointes en attente (création, avant que l'id de tâche soit connu)
+let pendingAttachments = []; // File[]
+
 // ════════════════════════════════════════════════════════════
 //  INDEXEDDB
 // ════════════════════════════════════════════════════════════
@@ -54,6 +61,11 @@ function openDB() {
       const db = e.target.result;
       if (!db.objectStoreNames.contains(STORE_KV))
         db.createObjectStore(STORE_KV);
+      // v2 — store pièces jointes chiffrées
+      if (!db.objectStoreNames.contains(STORE_ATT)) {
+        const attStore = db.createObjectStore(STORE_ATT, { keyPath: 'id' });
+        attStore.createIndex('taskId', 'taskId', { unique: false });
+      }
     };
     req.onsuccess = e => { _db = e.target.result; resolve(_db); };
     req.onerror   = e => reject(e.target.error);
@@ -85,6 +97,242 @@ async function dbDelete(key) {
     req.onsuccess = () => resolve();
     req.onerror   = e => reject(e.target.error);
   });
+}
+
+// ════════════════════════════════════════════════════════════
+//  PIÈCES JOINTES — INDEXEDDB (store "attachments")
+// ════════════════════════════════════════════════════════════
+
+async function attAdd(record) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(STORE_ATT, 'readwrite').objectStore(STORE_ATT).put(record);
+    req.onsuccess = () => resolve();
+    req.onerror   = e => reject(e.target.error);
+  });
+}
+
+async function attGetByTask(taskId) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const idx = db.transaction(STORE_ATT, 'readonly').objectStore(STORE_ATT).index('taskId');
+    const req = idx.getAll(taskId);
+    req.onsuccess = e => resolve(e.target.result || []);
+    req.onerror   = e => reject(e.target.error);
+  });
+}
+
+async function attDelete(attId) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(STORE_ATT, 'readwrite').objectStore(STORE_ATT).delete(attId);
+    req.onsuccess = () => resolve();
+    req.onerror   = e => reject(e.target.error);
+  });
+}
+
+async function attDeleteAllForTask(taskId) {
+  const records = await attGetByTask(taskId);
+  for (const r of records) await attDelete(r.id);
+}
+
+/** Chiffre un ArrayBuffer et retourne { id, taskId, name, type, size, iv, ct } */
+async function encryptAttachment(taskId, file) {
+  const buffer = await file.arrayBuffer();
+  const iv     = crypto.getRandomValues(new Uint8Array(12));
+  const ct     = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, cryptoKey, buffer);
+  return {
+    id:     `att_${taskId}_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    taskId,
+    name:   file.name,
+    type:   file.type || 'application/octet-stream',
+    size:   file.size,
+    iv:     iv.buffer,
+    ct,
+  };
+}
+
+/** Déchiffre un record et retourne un Blob */
+async function decryptAttachment(record) {
+  const plain = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: new Uint8Array(record.iv) },
+    cryptoKey,
+    record.ct
+  );
+  return new Blob([plain], { type: record.type });
+}
+
+/** Icône selon extension */
+function attIcon(name) {
+  const ext = name.split('.').pop().toLowerCase();
+  const map = {
+    pdf:'📄', doc:'📝', docx:'📝', xls:'📊', xlsx:'📊',
+    ppt:'📊', pptx:'📊', txt:'📄', csv:'📄',
+    png:'🖼', jpg:'🖼', jpeg:'🖼', gif:'🖼', webp:'🖼', svg:'🖼',
+    zip:'🗜', rar:'🗜', '7z':'🗜',
+    mp4:'🎬', avi:'🎬', mov:'🎬',
+    mp3:'🎵', wav:'🎵',
+  };
+  return map[ext] || '📎';
+}
+
+/** Formate une taille en octets */
+function fmtSize(bytes) {
+  if (bytes < 1024)        return bytes + ' o';
+  if (bytes < 1024*1024)   return (bytes/1024).toFixed(1) + ' Ko';
+  return (bytes/(1024*1024)).toFixed(1) + ' Mo';
+}
+
+/**
+ * Traite une liste de File objects à attacher à une tâche.
+ * Vérifie taille et quota, chiffre, stocke dans IDB,
+ * met à jour task.attachments (métadonnées), sauvegarde.
+ */
+async function processAttachFiles(taskId, files) {
+  const task = tasks.find(t => t.id === taskId);
+  if (!task) return;
+
+  const existing = await attGetByTask(taskId);
+  const slot     = ATT_MAX_COUNT - existing.length;
+  if (slot <= 0) { showToast(`⚠️ Limite atteinte (${ATT_MAX_COUNT} pièces jointes max)`); return; }
+
+  let added = 0;
+  let skipped = 0;
+  const fileArr = Array.from(files).slice(0, slot);
+
+  for (const file of fileArr) {
+    if (file.size > ATT_MAX_SIZE) {
+      showToast(`⚠️ ${file.name} trop volumineux (max 10 Mo)`);
+      skipped++;
+      continue;
+    }
+    try {
+      const record = await encryptAttachment(taskId, file);
+      await attAdd(record);
+      // Ajoute les métadonnées dans la tâche (pas le contenu binaire)
+      if (!task.attachments) task.attachments = [];
+      task.attachments.push({ id: record.id, name: record.name, type: record.type, size: record.size });
+      added++;
+    } catch (err) {
+      showToast(`❌ Erreur lors de l'ajout de ${file.name}`);
+    }
+  }
+
+  if (added > 0) {
+    tasks = tasks.map(t => t.id === taskId ? task : t);
+    await saveToStorage();
+    showToast(`📎 ${added} fichier${added>1?'s':''} ajouté${added>1?'s':''}`);
+    // Rafraîchir la modale si ouverte sur cette tâche
+    if (_detailTaskId === taskId) _renderDetail(taskId);
+    renderTasks(); if (activePage === 'archives') renderArchives();
+  }
+  if (files.length > slot) {
+    showToast(`⚠️ Seuls ${slot} fichier${slot>1?'s':''} ont été ajoutés (limite ${ATT_MAX_COUNT})`);
+  }
+}
+
+/** Télécharge une pièce jointe (déchiffrement à la volée) */
+async function downloadAttachment(attId) {
+  const db = await openDB();
+  const record = await new Promise((res, rej) => {
+    const req = db.transaction(STORE_ATT, 'readonly').objectStore(STORE_ATT).get(attId);
+    req.onsuccess = e => res(e.target.result);
+    req.onerror   = e => rej(e.target.error);
+  });
+  if (!record) { showToast('❌ Pièce jointe introuvable'); return; }
+  try {
+    const blob = await decryptAttachment(record);
+    downloadBlob(blob, record.name);
+  } catch {
+    showToast('❌ Erreur de déchiffrement');
+  }
+}
+
+/** Supprime une pièce jointe (IDB + métadonnées tâche) */
+async function removeAttachment(taskId, attId) {
+  await attDelete(attId);
+  const task = tasks.find(t => t.id === taskId);
+  if (task && task.attachments) {
+    task.attachments = task.attachments.filter(a => a.id !== attId);
+    tasks = tasks.map(t => t.id === taskId ? task : t);
+    await saveToStorage();
+  }
+  showToast('🗑 Pièce jointe supprimée');
+  if (_detailTaskId === taskId) _renderDetail(taskId);
+  renderTasks(); if (activePage === 'archives') renderArchives();
+}
+
+/**
+ * Construit le bloc pièces jointes pour la modale de détail.
+ * Rendu asynchrone : injecte le HTML final dans le conteneur cible.
+ */
+async function renderAttachmentsBlock(taskId, container) {
+  const task    = tasks.find(t => t.id === taskId);
+  const attMeta = task?.attachments || [];
+  const count   = attMeta.length;
+
+  container.innerHTML = '';
+
+  // ── En-tête section ──
+  const section = document.createElement('div');
+  section.className = 'att-section';
+
+  const header = document.createElement('div');
+  header.className = 'att-header';
+  header.innerHTML = `
+    <span class="df-label">Pièces jointes <span class="att-count">${count}/${ATT_MAX_COUNT}</span></span>
+  `;
+
+  // Bouton "Ajouter" via input file
+  const addBtn = document.createElement('label');
+  addBtn.className = 'btn btn-ghost btn-sm att-add-btn';
+  addBtn.title     = 'Ajouter des fichiers';
+  addBtn.innerHTML = `<input type="file" multiple style="display:none" class="att-file-input"> 📎 Ajouter`;
+  const fileInput  = addBtn.querySelector('input');
+  fileInput.addEventListener('change', async () => {
+    if (fileInput.files.length) await processAttachFiles(taskId, fileInput.files);
+    fileInput.value = ''; // reset pour permettre le même fichier à nouveau
+  });
+  header.appendChild(addBtn);
+  section.appendChild(header);
+
+  // ── Zone drag & drop ──
+  const dropZone = document.createElement('div');
+  dropZone.className = 'att-dropzone';
+  dropZone.innerHTML = `<span class="att-drop-hint">📂 Glissez vos fichiers ici ou cliquez sur « Ajouter »</span>`;
+
+  dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', e => { dropZone.classList.remove('drag-over'); });
+  dropZone.addEventListener('drop',      async e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const files = e.dataTransfer.files;
+    if (files.length) await processAttachFiles(taskId, files);
+  });
+
+  // ── Liste des fichiers existants ──
+  if (attMeta.length > 0) {
+    const list = document.createElement('div');
+    list.className = 'att-list';
+    attMeta.forEach(att => {
+      const row = document.createElement('div');
+      row.className = 'att-row';
+      row.innerHTML = `
+        <span class="att-icon">${attIcon(att.name)}</span>
+        <span class="att-name" title="${escHtml(att.name)}">${escHtml(att.name)}</span>
+        <span class="att-size">${fmtSize(att.size)}</span>
+        <button class="btn btn-ghost btn-sm att-dl-btn" title="Télécharger">⬇</button>
+        <button class="btn btn-danger btn-sm att-rm-btn" title="Supprimer">✕</button>
+      `;
+      row.querySelector('.att-dl-btn').addEventListener('click', () => downloadAttachment(att.id));
+      row.querySelector('.att-rm-btn').addEventListener('click', () => removeAttachment(taskId, att.id));
+      list.appendChild(row);
+    });
+    section.appendChild(list);
+  }
+
+  section.appendChild(dropZone);
+  container.appendChild(section);
 }
 
 // ════════════════════════════════════════════════════════════
@@ -572,6 +820,7 @@ function updateFsaBtnState() {
 
 function openModal(id = null) {
   editingId = id;
+  pendingAttachments = [];
   const overlay = document.getElementById('modalOverlay');
   const title   = document.getElementById('modalTitle');
   const btn     = document.getElementById('submitBtn');
@@ -595,10 +844,13 @@ function openModal(id = null) {
     fillRecurrenceFields(rec);
     title.innerHTML = 'Modifier la tâche <span class="edit-badge">édition</span>';
     btn.textContent = 'Enregistrer';
+    // Pièces jointes existantes
+    renderModalAttachments(id);
   } else {
     resetForm();
     title.textContent = 'Nouvelle tâche';
     btn.textContent   = 'Ajouter la tâche';
+    renderModalAttachments(null);
   }
 
   overlay.classList.add('open');
@@ -608,10 +860,132 @@ function openModal(id = null) {
 function closeModal() {
   document.getElementById('modalOverlay').classList.remove('open');
   editingId = null;
+  pendingAttachments = [];
 }
 
 function handleOverlayClick(e) {
   if (e.target === document.getElementById('modalOverlay')) closeModal();
+}
+
+// ════════════════════════════════════════════════════════════
+//  PIÈCES JOINTES DANS LE FORMULAIRE
+// ════════════════════════════════════════════════════════════
+
+/**
+ * Rend le bloc pièces jointes dans le formulaire de création/modification.
+ * - taskId null  → mode création : accumule dans pendingAttachments
+ * - taskId défini → mode édition  : attache directement via processAttachFiles
+ */
+async function renderModalAttachments(taskId) {
+  const container = document.getElementById('modalAttachments');
+  if (!container) return;
+  container.innerHTML = '';
+
+  // Métadonnées à afficher
+  let attMeta = [];
+  if (taskId) {
+    const task = tasks.find(t => t.id === taskId);
+    attMeta = task?.attachments || [];
+  } else {
+    // En création : liste des fichiers en attente
+    attMeta = pendingAttachments.map((f, i) => ({
+      id: `pending_${i}`, name: f.name, size: f.size, type: f.type, _pending: true
+    }));
+  }
+
+  const count = attMeta.length;
+  const maxReached = count >= ATT_MAX_COUNT;
+
+  // ── En-tête ──
+  const header = document.createElement('div');
+  header.className = 'matt-header';
+  header.innerHTML = `
+    <span class="matt-label">📎 Pièces jointes <span class="att-count">${count}/${ATT_MAX_COUNT}</span></span>
+  `;
+
+  // Bouton Ajouter (masqué si quota atteint)
+  if (!maxReached) {
+    const addLabel = document.createElement('label');
+    addLabel.className = 'btn btn-ghost btn-sm';
+    addLabel.style.cursor = 'pointer';
+    addLabel.innerHTML = `+ Ajouter <input type="file" multiple style="display:none">`;
+    const inp = addLabel.querySelector('input');
+    inp.addEventListener('change', async () => {
+      if (!inp.files.length) return;
+      if (taskId) {
+        await processAttachFiles(taskId, inp.files);
+        renderModalAttachments(taskId);
+      } else {
+        _addPending(inp.files);
+      }
+      inp.value = '';
+    });
+    header.appendChild(addLabel);
+  }
+  container.appendChild(header);
+
+  // ── Liste des fichiers ──
+  if (attMeta.length > 0) {
+    const list = document.createElement('div');
+    list.className = 'matt-list';
+    attMeta.forEach((att, i) => {
+      const row = document.createElement('div');
+      row.className = 'matt-row';
+      row.innerHTML = `
+        <span class="att-icon">${attIcon(att.name)}</span>
+        <span class="matt-name" title="${escHtml(att.name)}">${escHtml(att.name)}</span>
+        <span class="att-size">${fmtSize(att.size)}</span>
+        <button type="button" class="btn btn-danger btn-sm">✕</button>
+      `;
+      row.querySelector('button').addEventListener('click', async () => {
+        if (att._pending) {
+          pendingAttachments.splice(i, 1);
+          renderModalAttachments(null);
+        } else {
+          await removeAttachment(taskId, att.id);
+          renderModalAttachments(taskId);
+        }
+      });
+      list.appendChild(row);
+    });
+    container.appendChild(list);
+  }
+
+  // ── Zone drop ──
+  const dropZone = document.createElement('div');
+  dropZone.className = 'matt-drop';
+  dropZone.innerHTML = maxReached
+    ? `<span class="att-drop-hint" style="color:var(--medium)">Limite de ${ATT_MAX_COUNT} fichiers atteinte</span>`
+    : `<span class="att-drop-hint">📂 Glissez des fichiers ici</span>`;
+
+  if (!maxReached) {
+    dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+    dropZone.addEventListener('dragleave', ()  => dropZone.classList.remove('drag-over'));
+    dropZone.addEventListener('drop', async e => {
+      e.preventDefault(); dropZone.classList.remove('drag-over');
+      if (!e.dataTransfer.files.length) return;
+      if (taskId) {
+        await processAttachFiles(taskId, e.dataTransfer.files);
+        renderModalAttachments(taskId);
+      } else {
+        _addPending(e.dataTransfer.files);
+      }
+    });
+  }
+  container.appendChild(dropZone);
+}
+
+/** Ajoute des File dans pendingAttachments avec validation taille/quota, puis re-rend */
+function _addPending(files) {
+  const available = ATT_MAX_COUNT - pendingAttachments.length;
+  let added = 0;
+  Array.from(files).slice(0, available).forEach(f => {
+    if (f.size > ATT_MAX_SIZE) { showToast(`⚠️ ${f.name} trop volumineux (max 10 Mo)`); return; }
+    pendingAttachments.push(f);
+    added++;
+  });
+  if (files.length > available) showToast(`⚠️ Limite de ${ATT_MAX_COUNT} fichiers atteinte`);
+  renderModalAttachments(null);
 }
 
 // ════════════════════════════════════════════════════════════
@@ -973,17 +1347,30 @@ async function submitForm() {
           archivedAt: effectiveStatus === 'realise' ? (t.archivedAt || new Date().toISOString()) : null }
       : t
     );
+    await saveToStorage();
+    // Pièces jointes ajoutées dans le formulaire de modification
+    // (processAttachFiles fait son propre save + toast)
+    if (pendingAttachments.length > 0) {
+      await processAttachFiles(editingId, pendingAttachments);
+      pendingAttachments = [];
+    }
     showToast('✏️ Tâche modifiée');
   } else {
+    const newId = Date.now();
     tasks.push({
-      id: Date.now(), title, comment, urgency, status: effectiveStatus,
+      id: newId, title, comment, urgency, status: effectiveStatus,
       deadline: effectiveDeadline, requester, type, customRef, recurrence,
       archivedAt: effectiveStatus === 'realise' ? new Date().toISOString() : null
     });
+    await saveToStorage();
+    // Pièces jointes en attente → maintenant qu'on a l'id, on les attache
+    if (pendingAttachments.length > 0) {
+      await processAttachFiles(newId, pendingAttachments);
+      pendingAttachments = [];
+    }
     showToast('✅ Tâche ajoutée');
   }
 
-  await saveToStorage();
   renderTasks(); if (activePage === 'archives') renderArchives();
   renderStats(); updateTabCounts(); closeModal();
 
@@ -1044,6 +1431,7 @@ function confirmDelete(id) {
   document.getElementById('confirmMsg').textContent   = `Supprimer « ${task.title} » ? Cette action est irréversible.`;
   document.getElementById('confirmOverlay').classList.add('open');
   document.getElementById('confirmYes').onclick = async () => {
+    await attDeleteAllForTask(id);
     tasks = tasks.filter(t => t.id !== id);
     await saveToStorage();
     renderTasks(); renderArchives(); renderStats(); updateTabCounts(); closeConfirm();
@@ -1059,6 +1447,8 @@ function clearAllTasks() {
   document.getElementById('confirmMsg').textContent   = `${tasks.length} tâche(s) seront supprimées définitivement.`;
   document.getElementById('confirmOverlay').classList.add('open');
   document.getElementById('confirmYes').onclick = async () => {
+    // Supprimer toutes les pièces jointes de chaque tâche
+    for (const t of tasks) await attDeleteAllForTask(t.id);
     tasks = [];
     await saveToStorage();
     renderTasks(); renderArchives(); renderStats(); updateTabCounts(); closeConfirm();
@@ -1183,6 +1573,8 @@ function buildCard(task, idx, isArchive) {
 
   const recLabel = recurrenceLabel(task.recurrence);
   const recBadge = recLabel ? `<span class="recurrence-badge">${recLabel}</span>` : '';
+  const attCount = (task.attachments || []).length;
+  const attBadge = attCount > 0 ? `<span class="att-badge">📎 ${attCount}</span>` : '';
 
   // Chip deadline : soit deadline classique, soit "Aujourd'hui" pour récurrence sans deadline
   const deadlineChipHtml = task.deadline
@@ -1201,6 +1593,7 @@ function buildCard(task, idx, isArchive) {
       ${task.type      ? `<span class="type-badge">${escHtml(task.type)}</span>`           : ''}
       ${task.customRef ? `<span class="ref-badge">🔖 ${escHtml(task.customRef)}</span>`   : ''}
       ${recBadge}
+      ${attBadge}
     </div>
     <div class="card-meta-row">
       ${deadlineChipHtml}
@@ -1225,6 +1618,20 @@ function buildCard(task, idx, isArchive) {
 
   card.addEventListener('click', e => {
     if (!e.target.closest('button')) openDetail(task.id);
+  });
+
+  // ── Drag & drop pièces jointes directement sur la carte ──
+  card.addEventListener('dragover', e => {
+    e.preventDefault(); e.stopPropagation();
+    card.classList.add('card-dragover');
+  });
+  card.addEventListener('dragleave', e => {
+    card.classList.remove('card-dragover');
+  });
+  card.addEventListener('drop', async e => {
+    e.preventDefault(); e.stopPropagation();
+    card.classList.remove('card-dragover');
+    if (e.dataTransfer.files.length) await processAttachFiles(task.id, e.dataTransfer.files);
   });
 
   return card;
@@ -1328,6 +1735,10 @@ function _renderDetail(id) {
         </div>
        </div>`
     : '';
+
+  // ── Pièces jointes ───────────────────────────────────────
+  const attContainer = document.getElementById('detailAttachments');
+  if (attContainer) renderAttachmentsBlock(id, attContainer);
 
   // ── Footer ──────────────────────────────────────────────
   document.getElementById('detailFooter').innerHTML = `
