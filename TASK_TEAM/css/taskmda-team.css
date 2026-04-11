@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   --topbar-height: 78px;
   --app-chrome-bg-light: rgb(236, 239, 248);
   --app-chrome-bg-dark: rgb(15, 21, 37);
@@ -5857,7 +5857,6 @@ html[data-wf-action-buttons="icon"] [data-action-kind="danger"]:hover {
   background: #ffe4e6 !important;
   color: #9f1239 !important;
 }
-
 /* Fallbacks pour boutons non decorés */
 html[data-wf-action-buttons="icon"] .task-action-btn-warn:not([data-action-kind]) {
   border-color: #fcd34d !important;
@@ -6446,6 +6445,32 @@ html[data-wf-action-buttons="icon"] .calendar-item-modal-action-btn .taskmda-act
   justify-content: center;
 }
 
+.calendar-toggle-controls-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.calendar-toggle-controls-btn:hover {
+  background: #f8fafc;
+}
+
+.calendar-controls-panel {
+  display: block;
+}
+
+.calendar-controls-panel.is-collapsed {
+  display: none;
+}
+
 .calendar-month-label {
   min-width: 138px;
   text-align: center;
@@ -6468,6 +6493,122 @@ html[data-wf-action-buttons="icon"] .calendar-item-modal-action-btn .taskmda-act
   justify-content: space-between;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.calendar-theme-pin-toolbar {
+  border-top: 1px dashed rgba(101, 115, 141, 0.28);
+  padding-top: 10px;
+}
+
+.calendar-theme-pin-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: #334155;
+  margin-bottom: 6px;
+}
+
+.calendar-theme-pin-counter {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.calendar-theme-pin-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+}
+
+.calendar-theme-actions-menu-wrap {
+  position: relative;
+}
+
+.calendar-theme-actions-toggle-btn {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  background: #f1f5f9;
+  color: #334155;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.calendar-theme-actions-toggle-btn:hover {
+  background: #e2e8f0;
+}
+
+.calendar-theme-actions-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  min-width: 190px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
+  padding: 6px;
+  z-index: 20;
+}
+
+.calendar-theme-actions-menu button {
+  width: 100%;
+  text-align: left;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.calendar-theme-actions-menu button:hover {
+  background: #f1f5f9;
+}
+
+.calendar-theme-pin-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.calendar-theme-pin-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #ffffff;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.calendar-theme-pin-chip input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: #1a428a;
+}
+
+.calendar-theme-pin-unpin {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #475569;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.calendar-theme-pin-unpin:hover {
+  background: #e2e8f0;
 }
 
 @media (min-width: 768px) {
@@ -6595,9 +6736,67 @@ html.dark .calendar-month-label {
   color: #dbe8ff;
 }
 
+html.dark .calendar-toggle-controls-btn {
+  border-color: #41587f;
+  background: #13213c;
+  color: #dbe8ff;
+}
+
+html.dark .calendar-toggle-controls-btn:hover {
+  background: #1b3155;
+}
+
 html.dark .calendar-surface {
   border-color: rgba(138, 161, 202, 0.22);
   background: linear-gradient(180deg, #15213a, #121d35);
+}
+
+html.dark .calendar-theme-pin-toolbar {
+  border-top-color: rgba(138, 161, 202, 0.35);
+}
+
+html.dark .calendar-theme-pin-title {
+  color: #d5e2fb;
+}
+
+html.dark .calendar-theme-pin-counter {
+  color: #9eb1d8;
+}
+
+html.dark .calendar-theme-pin-chip {
+  border-color: #41587f;
+  background: #13213c;
+  color: #dbe8ff;
+}
+
+html.dark .calendar-theme-pin-unpin {
+  border-color: #4b67a1;
+  background: #1a2c4e;
+  color: #bcd3ff;
+}
+
+html.dark .calendar-theme-actions-menu {
+  border-color: #41587f;
+  background: #13213c;
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.32);
+}
+
+html.dark .calendar-theme-actions-toggle-btn {
+  border-color: #41587f;
+  background: #1a2c4e;
+  color: #dbe8ff;
+}
+
+html.dark .calendar-theme-actions-toggle-btn:hover {
+  background: #1f365f;
+}
+
+html.dark .calendar-theme-actions-menu button {
+  color: #dbe8ff;
+}
+
+html.dark .calendar-theme-actions-menu button:hover {
+  background: #1b3155;
 }
 
 html.dark .calendar-day-header {
@@ -6727,6 +6926,19 @@ html.dark .calendar-entry-card-private,
 html.dark .calendar-detail-card-private {
   border-color: #64748b;
   background: linear-gradient(180deg, #334155, #1e293b);
+}
+
+html.dark .global-calendar-year-month,
+html.dark .project-calendar-year-month {
+  border-color: rgba(138, 161, 202, 0.24);
+  background: linear-gradient(180deg, #16233d, #121d35);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.25);
+}
+
+html.dark .global-calendar-year-month-selected,
+html.dark .project-calendar-year-month-selected {
+  border-color: #7aa2ff !important;
+  background: linear-gradient(180deg, #2a3f69, #22375f);
 }
 
 .subtask-progress {
@@ -6927,6 +7139,34 @@ html.dark .calendar-detail-card-private {
   background: #ffffff;
   box-shadow: 0 8px 18px rgba(24, 28, 34, 0.05);
   padding: 16px;
+}
+
+.global-calendar-year-month,
+.project-calendar-year-month {
+  border: 1px solid rgba(101, 115, 141, 0.16);
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff, #f7f9ff);
+  box-shadow: 0 6px 14px rgba(24, 28, 34, 0.04);
+  padding: 10px;
+  text-align: left;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+.global-calendar-year-month:hover,
+.project-calendar-year-month:hover {
+  border-color: #9fb7e6;
+}
+
+.global-calendar-year-month-selected,
+.project-calendar-year-month-selected {
+  border-color: #1a428a !important;
+  background: linear-gradient(180deg, #eef4ff, #e8f0ff);
+  box-shadow: 0 8px 16px rgba(26, 66, 138, 0.12);
+}
+
+.global-calendar-year-month-current,
+.project-calendar-year-month-current {
+  box-shadow: 0 0 0 2px rgba(255, 137, 40, 0.3);
 }
 
 .calendar-entry-card-shared {
@@ -9519,3 +9759,70 @@ html.dark .global-feed-editor:hover::-webkit-scrollbar-thumb {
   width: 24px;
   border-radius: 4px;
 }
+
+/* ============================================================================ */
+/* PROGRESS BAR & URGENCY ENHANCEMENTS */
+/* ============================================================================ */
+
+.task-progress-wrap {
+  margin-top: 12px;
+  margin-bottom: 8px;
+}
+
+.task-progress-bar-bg {
+  height: 6px;
+  background: rgba(100, 116, 139, 0.12);
+  border-radius: 99px;
+  overflow: hidden;
+  position: relative;
+}
+
+.task-progress-bar-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  background: linear-gradient(90deg, var(--primary), var(--primary-container));
+}
+
+.task-progress-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.task-progress-percent {
+  color: var(--primary);
+}
+
+/* Status specific colors for progress */
+.task-progress-overdue .task-progress-bar-fill {
+  background: linear-gradient(90deg, #dc2626, #ef4444);
+}
+.task-progress-today .task-progress-bar-fill {
+  background: linear-gradient(90deg, #d97706, #f59e0b);
+}
+
+/* Focus Mode Highlights */
+.global-task-card.is-focus-priority {
+  border-color: rgba(0, 43, 107, 0.18);
+  box-shadow: 0 8px 20px rgba(0, 43, 107, 0.06);
+}
+
+html.dark .task-progress-bar-bg {
+  background: rgba(138, 161, 202, 0.18);
+}
+
+/* Overdue Task Highlight */
+.is-overdue-card {
+  background-color: #f7e8e8 !important;
+}
+html.dark .is-overdue-card {
+  background-color: #3d1f1f !important;
+}
+

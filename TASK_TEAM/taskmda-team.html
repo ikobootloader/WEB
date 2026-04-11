@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="fr" class="light">
 <head>
   <meta charset="UTF-8">
@@ -235,8 +235,10 @@
 
         <div class="dashboard-bento mb-4">
           <div id="dashboard-stats" class="panel dashboard-glance p-5">
-            <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-4">En un coup d'oeil</p>
-            <div class="space-y-2">
+            <div class="flex items-center justify-between mb-4">
+              <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-0">En un coup d'oeil</p>
+            </div>
+            <div id="dashboard-stats-content" class="space-y-2 overflow-hidden transition-all duration-300">
               <div class="dashboard-stat-row">
                 <div class="dashboard-stat-label">
                   <span class="dashboard-stat-icon dashboard-stat-icon-projects material-symbols-outlined">folder_open</span>
@@ -343,7 +345,7 @@
 
           <div id="projects-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
           <div id="projects-pagination" class="mt-4 flex items-center justify-between gap-3 text-xs text-slate-500"></div>
-          <section id="dashboard-news" class="dashboard-news mt-5 hidden" aria-live="polite">
+          <section id="dashboard-news" class="dashboard-news hidden" aria-live="polite">
             <div class="dashboard-news-head">
               <h3 class="dashboard-news-title">Actualités majeures</h3>
               <button id="btn-open-feed-from-dashboard-news" type="button" class="dashboard-news-link">Voir le fil d'info</button>
@@ -361,14 +363,22 @@
           <div id="global-tasks-section" class="panel p-3 hidden">
             <div class="global-tasks-nav">
               <div id="global-tasks-view-tabs" class="project-view-tabs flex items-center gap-2 text-xs overflow-x-auto" role="tablist" aria-label="Vues des tâches transverses">
+                <button id="global-tasks-view-kanban" role="tab" aria-selected="false" class="project-view-tab px-3 py-1.5 rounded-lg text-slate-700 font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">view_kanban</span> Kanban</button>
                 <button id="global-tasks-view-cards" role="tab" aria-selected="false" class="project-view-tab px-3 py-1.5 rounded-lg text-slate-700 font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">grid_view</span> Cartes</button>
                 <button id="global-tasks-view-calendar" role="tab" aria-selected="false" class="project-view-tab px-3 py-1.5 rounded-lg text-slate-700 font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">event</span> Calendrier</button>
                 <button id="global-tasks-view-list" role="tab" aria-selected="false" class="project-view-tab px-3 py-1.5 rounded-lg text-slate-700 font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">view_list</span> Liste</button>
-                <button id="global-tasks-view-kanban" role="tab" aria-selected="false" class="project-view-tab px-3 py-1.5 rounded-lg text-slate-700 font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">view_kanban</span> Kanban</button>
                 <button id="global-tasks-view-timeline" role="tab" aria-selected="false" class="project-view-tab px-3 py-1.5 rounded-lg text-slate-700 font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">calendar_month</span> Timeline</button>
                 <button id="global-tasks-view-archives" role="tab" aria-selected="false" class="project-view-tab px-3 py-1.5 rounded-lg text-slate-700 font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">archive</span> Archives</button>
               </div>
-              <div class="global-tasks-nav-controls">
+              <div class="global-tasks-nav-controls flex gap-2">
+                <button id="btn-toggle-sort-focus" class="px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm font-semibold inline-flex items-center justify-center gap-2 hover:bg-slate-50 transition-all shadow-sm" title="Alterner le mode de tri: Focus vs Chronologique">
+                  <span id="sort-focus-icon" class="material-symbols-outlined text-base">bolt</span>
+                  <span id="sort-focus-label">Tri: Focus</span>
+                </button>
+                <button id="btn-global-manage-themes" class="px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm font-semibold inline-flex items-center justify-center gap-2 hover:bg-slate-50" title="Gérer le référentiel des thématiques">
+                  <span class="material-symbols-outlined text-base">category</span>
+                  <span class="taskmda-action-label">Thématiques</span>
+                </button>
                 <button id="btn-global-add-task" class="btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold inline-flex items-center justify-center gap-2 taskmda-create-cta" data-action-kind="create" data-action-label="Nouvelle tâche hors projet" aria-label="Nouvelle tâche hors projet">
                   <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">add_circle</span>
                   <span class="taskmda-action-label" id="btn-global-add-task-text">Nouvelle tâche hors projet</span>
@@ -410,28 +420,28 @@
                     <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">add_circle</span>
                     <span class="taskmda-action-label">Ajouter</span>
                   </button>
-                  <div id="workflow-quick-add-menu" class="workflow-quick-add-menu hidden" role="menu" aria-label="Ajouter un element workflow">
+                  <div id="workflow-quick-add-menu" class="workflow-quick-add-menu hidden" role="menu" aria-label="Ajouter un élément workflow">
                     <div class="workflow-quick-add-column" data-wf-add-column="structure">
                       <div class="workflow-quick-add-group-label">Organisation</div>
-                      <button id="btn-workflow-add-community" type="button" class="workflow-quick-add-item" role="menuitem" data-wf-add-group="structure"><span class="material-symbols-outlined">account_tree</span>Nouvelle communaute</button>
+                      <button id="btn-workflow-add-community" type="button" class="workflow-quick-add-item" role="menuitem" data-wf-add-group="structure"><span class="material-symbols-outlined">account_tree</span>Nouvelle communauté</button>
                       <button id="btn-workflow-add-service" type="button" class="workflow-quick-add-item" role="menuitem" data-wf-add-group="structure"><span class="material-symbols-outlined">corporate_fare</span>Nouveau service</button>
                       <button id="btn-workflow-add-group" type="button" class="workflow-quick-add-item" role="menuitem" data-wf-add-group="structure"><span class="material-symbols-outlined">groups</span>Nouveau groupe</button>
                       <button id="btn-workflow-add-agent" type="button" class="workflow-quick-add-item" role="menuitem" data-wf-add-group="structure"><span class="material-symbols-outlined">person_add</span>Nouvel agent</button>
-                      <button id="btn-workflow-add-role" type="button" class="workflow-quick-add-item" role="menuitem" data-wf-add-group="structure"><span class="material-symbols-outlined">badge</span>Nouveau role</button>
+                      <button id="btn-workflow-add-role" type="button" class="workflow-quick-add-item" role="menuitem" data-wf-add-group="structure"><span class="material-symbols-outlined">badge</span>Nouveau rôle</button>
                     </div>
                     
                     <div class="workflow-quick-add-column" data-wf-add-column="processes,pilotage">
-                      <div class="workflow-quick-add-group-label">Operations</div>
+                      <div class="workflow-quick-add-group-label">Opérations</div>
                       <button id="btn-workflow-add-process" type="button" class="workflow-quick-add-item" role="menuitem" data-wf-add-group="processes"><span class="material-symbols-outlined">hub</span>Nouveau processus</button>
-                      <button id="btn-workflow-add-template" type="button" class="workflow-quick-add-item" role="menuitem" data-wf-add-group="processes"><span class="material-symbols-outlined">description</span>Modele de processus</button>
-                      <button id="btn-workflow-add-step" type="button" class="workflow-quick-add-item" role="menuitem" data-wf-add-group="processes"><span class="material-symbols-outlined">ads_click</span>Nouvelle etape</button>
+                      <button id="btn-workflow-add-template" type="button" class="workflow-quick-add-item" role="menuitem" data-wf-add-group="processes"><span class="material-symbols-outlined">description</span>Modèle de processus</button>
+                      <button id="btn-workflow-add-step" type="button" class="workflow-quick-add-item" role="menuitem" data-wf-add-group="processes"><span class="material-symbols-outlined">ads_click</span>Nouvelle étape</button>
                       <button id="btn-workflow-add-flow" type="button" class="workflow-quick-add-item" role="menuitem" data-wf-add-group="processes"><span class="material-symbols-outlined">alt_route</span>Nouveau flux</button>
-                      <button id="btn-workflow-add-task" type="button" class="workflow-quick-add-item" role="menuitem" data-wf-add-group="pilotage"><span class="material-symbols-outlined">assignment_add</span>Nouvelle tache</button>
+                      <button id="btn-workflow-add-task" type="button" class="workflow-quick-add-item" role="menuitem" data-wf-add-group="pilotage"><span class="material-symbols-outlined">assignment_add</span>Nouvelle tâche</button>
                     </div>
                     
                     <div class="workflow-quick-add-column" data-wf-add-column="referentiels">
-                      <div class="workflow-quick-add-group-label">Referentiel</div>
-                      <button id="btn-workflow-add-procedure" type="button" class="workflow-quick-add-item" role="menuitem" data-wf-add-group="referentiels"><span class="material-symbols-outlined">article</span>Nouvelle procedure</button>
+                      <div class="workflow-quick-add-group-label">Référentiel</div>
+                      <button id="btn-workflow-add-procedure" type="button" class="workflow-quick-add-item" role="menuitem" data-wf-add-group="referentiels"><span class="material-symbols-outlined">article</span>Nouvelle procédure</button>
                       <button id="btn-workflow-add-software" type="button" class="workflow-quick-add-item" role="menuitem" data-wf-add-group="referentiels"><span class="material-symbols-outlined">computer</span>Nouveau logiciel</button>
                       <button id="btn-workflow-add-contingency-plan" type="button" class="workflow-quick-add-item" role="menuitem" data-wf-add-group="referentiels"><span class="material-symbols-outlined">emergency_home</span>Plan de contingence</button>
                     </div>
@@ -526,6 +536,7 @@
               <div class="calendar-toolbar-top mb-3">
                 <div class="inline-flex items-center gap-2 text-xs">
                   <button id="global-calendar-view-grid" class="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 font-semibold"><span class="material-symbols-outlined tab-icon">event</span> Vue calendrier</button>
+                  <button id="global-calendar-view-year" class="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 font-semibold"><span class="material-symbols-outlined tab-icon">calendar_month</span> Vue annuelle</button>
                   <button id="global-calendar-view-list" class="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 font-semibold"><span class="material-symbols-outlined tab-icon">view_list</span> Vue liste</button>
                 </div>
                 <div class="calendar-month-nav">
@@ -559,23 +570,57 @@
                     <span class="material-symbols-outlined text-[18px]">chevron_right</span>
                   </button>
                 </div>
+                <span id="global-calendar-period-hint" class="text-xs text-slate-500 font-semibold"></span>
+                <button
+                  id="global-calendar-toggle-controls"
+                  type="button"
+                  class="calendar-toggle-controls-btn"
+                  aria-expanded="true"
+                  aria-controls="global-calendar-controls-panel"
+                  title="Masquer les filtres et outils"
+                >
+                  <span id="global-calendar-toggle-controls-icon" class="material-symbols-outlined" aria-hidden="true">expand_less</span>
+                  <span id="global-calendar-toggle-controls-label">Masquer les filtres</span>
+                </button>
               </div>
-              <div class="calendar-toolbar-main grid grid-cols-1 md:grid-cols-2 gap-2">
-                <input id="global-calendar-search" type="text" placeholder="Recherche par thématique/sujet/projet" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                <select id="global-calendar-month" class="px-3 py-2 border border-slate-300 rounded-lg text-sm"></select>
-              </div>
-              <div class="calendar-toolbar-bottom mt-3">
-                <div class="calendar-legend">
-                  <span class="calendar-legend-chip calendar-legend-chip-shared">Collaborative</span>
-                  <span class="calendar-legend-chip calendar-legend-chip-private">Privée</span>
-                  <span class="calendar-legend-chip calendar-legend-chip-info">Info hors projet</span>
-                  <span class="calendar-legend-chip calendar-legend-chip-task">Date limite tâche</span>
+              <div id="global-calendar-controls-panel" class="calendar-controls-panel">
+                <div class="calendar-toolbar-main grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <input id="global-calendar-search" type="text" placeholder="Recherche par thématique/sujet/projet" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  <select id="global-calendar-month" class="px-3 py-2 border border-slate-300 rounded-lg text-sm"></select>
                 </div>
-                <div id="global-calendar-item-form">
-                  <button id="btn-open-global-calendar-item-modal" type="button" class="calendar-create-trigger taskmda-create-cta" data-action-kind="create" data-action-label="Ajouter info hors projet" aria-label="Ajouter une info hors projet">
-                    <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">add_circle</span>
-                    <span class="taskmda-action-label">Ajouter info hors projet</span>
-                  </button>
+                <div class="calendar-toolbar-bottom mt-3">
+                  <div class="calendar-legend">
+                    <span class="calendar-legend-chip calendar-legend-chip-shared">Collaborative</span>
+                    <span class="calendar-legend-chip calendar-legend-chip-private">Privée</span>
+                    <span class="calendar-legend-chip calendar-legend-chip-info">Info hors projet</span>
+                    <span class="calendar-legend-chip calendar-legend-chip-task">Date limite tâche</span>
+                  </div>
+                  <div id="global-calendar-item-form">
+                    <button id="btn-open-global-calendar-item-modal" type="button" class="calendar-create-trigger taskmda-create-cta" data-action-kind="create" data-action-label="Ajouter info hors projet" aria-label="Ajouter une info hors projet">
+                      <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">add_circle</span>
+                      <span class="taskmda-action-label">Ajouter info hors projet</span>
+                    </button>
+                  </div>
+                </div>
+                <div class="calendar-theme-pin-toolbar mt-3">
+                  <div class="calendar-theme-pin-title">Thématiques épinglées <span id="global-calendar-theme-pin-counter" class="calendar-theme-pin-counter"></span></div>
+                  <div class="calendar-theme-pin-controls">
+                    <select id="global-calendar-theme-pin-select" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                      <option value="">Choisir une thématique à épingler...</option>
+                    </select>
+                    <button id="btn-global-calendar-pin-theme" type="button" class="px-3 py-2 rounded-lg bg-white border border-slate-300 text-slate-700 text-sm font-semibold">Épingler</button>
+                    <div class="calendar-theme-actions-menu-wrap">
+                      <button id="btn-global-calendar-theme-actions-toggle" type="button" class="calendar-theme-actions-toggle-btn" title="Actions des thématiques" aria-label="Actions des thématiques">
+                        <span class="material-symbols-outlined" aria-hidden="true">more_vert</span>
+                      </button>
+                      <div id="global-calendar-theme-actions-menu" class="calendar-theme-actions-menu hidden">
+                        <button type="button" data-calendar-theme-action="check-all">Tout cocher</button>
+                        <button type="button" data-calendar-theme-action="uncheck-all">Tout décocher</button>
+                        <button type="button" data-calendar-theme-action="unpin-all">Tout désépingler</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div id="global-calendar-theme-pins" class="calendar-theme-pin-list mt-2"></div>
                 </div>
               </div>
             </div>
@@ -587,6 +632,10 @@
                 <div id="global-calendar-grid" class="grid grid-cols-7 gap-1 text-xs"></div>
               </div>
               <div id="global-calendar-day-details" class="mt-3 space-y-2"></div>
+            </div>
+            <div id="global-calendar-year-wrap" class="calendar-surface hidden">
+              <div id="global-calendar-year-grid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2"></div>
+              <div id="global-calendar-year-details" class="mt-3 space-y-2"></div>
             </div>
           </div>
 
@@ -603,7 +652,10 @@
                     <span id="global-message-group-badge" class="discussion-channel-badge hidden" aria-live="polite"></span>
                     <div class="flex items-center gap-2">
                       <button id="btn-global-delete-conversation" type="button" class="task-action-btn task-action-btn-danger" data-action-kind="danger">Supprimer la conversation</button>
-                      <button id="btn-global-toggle-emoji-picker" class="task-action-btn task-action-btn-subtle" data-action-kind="manage">Émojis</button>
+                      <button id="btn-global-toggle-emoji-picker" class="task-action-btn task-action-btn-subtle" data-action-kind="default" title="Émojis">
+                        <span class="material-symbols-outlined">sentiment_satisfied</span>
+                        <span class="taskmda-action-label">Émojis</span>
+                      </button>
                     </div>
                   </div>
                   <textarea id="global-message-input" rows="3" placeholder="Écrire un message..." class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"></textarea>
@@ -941,7 +993,7 @@
                     <span class="taskmda-action-label">Ajouter</span>
                   </button>
                 </div>
-                <p class="text-xs text-slate-500 mb-3">Chaque habilitation est rattachee a un niveau technique (Proprietaire, Manager, Membre).</p>
+                <p class="text-xs text-slate-500 mb-3">Chaque habilitation est rattachée à un niveau technique (Propriétaire, Manager, Membre).</p>
                 <div id="global-roles-admin-list" class="space-y-2"></div>
               </div>
               <div class="grid grid-cols-1 gap-4">
@@ -980,7 +1032,7 @@
                   </div>
                 </div>
                 <div class="global-settings-card-software-tips rounded-xl border border-slate-200 bg-slate-50 p-4">
-                  <h4 class="font-bold text-slate-800 mb-3">Conseils d’usage</h4>
+                  <h4 class="font-bold text-slate-800 mb-3">Conseils dâ€™usage</h4>
                   <ul class="text-sm text-slate-600 space-y-2">
                     <li>Utilisez les groupes globaux pour standardiser les attributions entre projets.</li>
                     <li>Gardez les thématiques courtes et stables pour faciliter la recherche.</li>
@@ -1092,7 +1144,7 @@
                 <select id="member-role-input" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
                   <option value="member">Membre</option>
                   <option value="manager">Manager</option>
-                  <option value="owner">Proprietaire</option>
+                  <option value="owner">Propriétaire</option>
                 </select>
                 <button id="btn-add-member" class="btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold">Ajouter membre</button>
               </div>
@@ -1127,7 +1179,7 @@
                       <select id="invite-role-input" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
                         <option value="member">Membre</option>
                         <option value="manager">Manager</option>
-                        <option value="owner">Proprietaire</option>
+                        <option value="owner">Propriétaire</option>
                       </select>
                       <button id="btn-send-invite" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Inviter</button>
                     </div>
@@ -1165,7 +1217,7 @@
                   <h3 class="font-bold text-slate-800">Matrice des permissions</h3>
                   <div id="project-permission-role-badge" class="text-xs font-semibold px-2 py-1 rounded-full bg-slate-100 text-slate-700">Role: -</div>
                 </div>
-                <p class="text-xs text-slate-500 mb-3">Audit rapide des droits par action: Proprietaire, Manager, Membre.</p>
+                <p class="text-xs text-slate-500 mb-3">Audit rapide des droits par action: Propriétaire, Manager, Membre.</p>
                 <div id="project-permission-summary" class="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3"></div>
                 <button id="btn-toggle-permissions-details" class="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold mb-3">Voir le détail des droits</button>
                 <div id="project-permissions-details" class="hidden overflow-x-auto">
@@ -1173,7 +1225,7 @@
                     <thead>
                       <tr class="text-left text-slate-500 border-b border-slate-200">
                         <th class="py-2 pr-3 font-semibold">Action</th>
-                        <th class="py-2 px-2 font-semibold">Proprietaire</th>
+                        <th class="py-2 px-2 font-semibold">Propriétaire</th>
                         <th class="py-2 px-2 font-semibold">Manager</th>
                         <th class="py-2 px-2 font-semibold">Membre</th>
                       </tr>
@@ -1181,7 +1233,7 @@
                     <tbody id="project-permissions-matrix"></tbody>
                   </table>
                 </div>
-                <p class="text-[11px] text-slate-500 mt-3">Note: certaines actions manager sont limitees aux membres (pas d escalation Proprietaire/Manager).</p>
+                <p class="text-[11px] text-slate-500 mt-3">Note: certaines actions manager sont limitées aux membres (pas d’escalade Propriétaire/Manager).</p>
               </div>
             </div>
           </div>
@@ -1191,9 +1243,9 @@
               <aside id="project-work-nav" class="project-work-nav">
                 <div id="project-view-tabs-wrap" class="project-view-tabs flex items-center gap-2 overflow-x-auto" role="tablist" aria-label="Vues du projet">
                   <button id="view-overview" role="tab" aria-controls="project-overview-panel" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">dashboard</span> Aperçu projet</button>
+                  <button id="view-kanban" role="tab" aria-controls="kanban-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">view_kanban</span> Kanban</button>
                   <button id="view-cards" role="tab" aria-controls="task-list-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">grid_view</span> Cartes</button>
                   <button id="view-list" role="tab" aria-controls="task-list-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">view_list</span> Liste</button>
-                  <button id="view-kanban" role="tab" aria-controls="kanban-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">view_kanban</span> Kanban</button>
                   <button id="view-gantt" role="tab" aria-controls="gantt-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">view_timeline</span> Gantt</button>
                   <button id="view-timeline" role="tab" aria-controls="timeline-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">calendar_month</span> Timeline</button>
                   <button id="view-docs" role="tab" aria-controls="documents-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">description</span> Documents</button>
@@ -1263,6 +1315,8 @@
               <div class="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
                 <div class="flex items-center justify-between gap-3 mb-3">
                   <div class="flex items-center gap-2">
+                    <button id="calendar-view-month" class="px-3 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-semibold">Mensuelle</button>
+                    <button id="calendar-view-year" class="px-3 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-semibold">Annuelle</button>
                     <button id="calendar-prev-month" class="px-2 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-semibold" aria-label="Mois précédent">
                       <span class="material-symbols-outlined text-[18px]">chevron_left</span>
                     </button>
@@ -1274,38 +1328,40 @@
                   <p id="calendar-month-label" class="text-sm font-bold text-slate-800"></p>
                 </div>
                 <div id="calendar-grid" class="grid grid-cols-7 gap-1 text-xs"></div>
+                <div id="calendar-year-grid" class="hidden grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2 text-xs"></div>
               </div>
               <div id="calendar-day-agenda" class="mb-4"></div>
+              <div id="calendar-year-agenda" class="mb-4 hidden"></div>
               <div id="timeline-container" class="space-y-3"></div>
                 </div>
                 <div id="documents-section" class="project-view-section hidden">
               <div class="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
                 <div class="project-doc-upload-grid grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
                   <div class="space-y-1 project-doc-drop-col">
-                    <label for="project-doc-files" class="project-doc-step-label text-xs font-semibold text-slate-600"><span class="project-doc-step-badge">1</span><span>Deposer des documents</span></label>
+                    <label for="project-doc-files" class="project-doc-step-label text-xs font-semibold text-slate-600"><span class="project-doc-step-badge">1</span><span>Déposer des documents</span></label>
                     <div class="project-doc-dropzone">
                       <span class="material-symbols-outlined project-doc-drop-icon">cloud_upload</span>
-                      <p class="project-doc-drop-title">Glissez-deposez vos fichiers ici</p>
+                      <p class="project-doc-drop-title">Glissez-déposez vos fichiers ici</p>
                       <p class="project-doc-drop-meta">Taille max: 50 Mo par fichier. Formats: PDF, DOCX, XLSX, PNG, JPG.</p>
-                      <input id="project-doc-files" type="file" multiple class="js-file-drop-input project-doc-files-input px-3 py-2 border border-slate-300 rounded-lg bg-white text-sm" data-drop-label="Deposez vos documents ici (ou cliquez pour selectionner)" data-drop-host=".project-doc-dropzone" data-drop-decor="false">
-                      <p id="project-doc-selected-files" class="project-doc-selected-files">Aucun fichier selectionne</p>
+                      <input id="project-doc-files" type="file" multiple class="js-file-drop-input project-doc-files-input px-3 py-2 border border-slate-300 rounded-lg bg-white text-sm" data-drop-label="Déposez vos documents ici (ou cliquez pour sélectionner)" data-drop-host=".project-doc-dropzone" data-drop-decor="false">
+                      <p id="project-doc-selected-files" class="project-doc-selected-files">Aucun fichier sélectionné</p>
                     </div>
                   </div>
                   <div class="space-y-1">
-                    <label for="project-doc-task-links" class="project-doc-step-label text-xs font-semibold text-slate-600"><span class="project-doc-step-badge">2</span><span>Associer a des taches (optionnel)</span></label>
+                    <label for="project-doc-task-links" class="project-doc-step-label text-xs font-semibold text-slate-600"><span class="project-doc-step-badge">2</span><span>Associer à des tâches (optionnel)</span></label>
                     <div class="project-doc-links-card">
-                      <input id="project-doc-task-filter" type="text" placeholder="Filtrer les taches..." class="project-doc-task-filter px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                      <input id="project-doc-task-filter" type="text" placeholder="Filtrer les tâches..." class="project-doc-task-filter px-3 py-2 border border-slate-300 rounded-lg text-sm">
                       <select id="project-doc-task-links" multiple class="hidden px-3 py-2 border border-slate-300 rounded-lg text-sm min-h-[96px]"></select>
                       <div id="project-doc-task-options" class="project-doc-task-options"></div>
-                      <p id="project-doc-task-selection-count" class="project-doc-task-selection-count">0 tache selectionnee</p>
+                      <p id="project-doc-task-selection-count" class="project-doc-task-selection-count">0 tâche sélectionnée</p>
                     </div>
                     <div class="flex gap-2">
-                      <button id="btn-project-doc-select-all" type="button" class="px-2 py-1 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold">Tout selectionner</button>
-                      <button id="btn-project-doc-clear-selection" type="button" class="px-2 py-1 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold">Tout deselectionner</button>
+                      <button id="btn-project-doc-select-all" type="button" class="px-2 py-1 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold">Tout sélectionner</button>
+                      <button id="btn-project-doc-clear-selection" type="button" class="px-2 py-1 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold">Tout désélectionner</button>
                     </div>
                     <div class="project-doc-tip">
                       <p class="project-doc-tip-title">Astuce</p>
-                      <p class="project-doc-tip-text">Cliquez sur une tache pour la selectionner ou la deselectionner.</p>
+                      <p class="project-doc-tip-text">Cliquez sur une tâche pour la sélectionner ou la désélectionner.</p>
                     </div>
                   </div>
                 </div>
@@ -1356,7 +1412,10 @@
                 <div class="discussion-composer-top">
                   <p class="text-xs text-slate-500">Markdown supporté. Envoi rapide: Ctrl+Entrée</p>
                   <div class="flex items-center gap-2">
-                    <button id="btn-toggle-emoji-picker" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700">Émojis</button>
+                    <button id="btn-toggle-emoji-picker" class="task-action-btn task-action-btn-subtle" data-action-kind="default" title="Émojis">
+                      <span class="material-symbols-outlined">sentiment_satisfied</span>
+                      <span class="taskmda-action-label">Émojis</span>
+                    </button>
                   </div>
                 </div>
                 <textarea id="message-input" rows="3" placeholder="Écrire un message à l'équipe..."
@@ -2134,7 +2193,7 @@
           <label class="block text-sm font-semibold mb-2">Ajouter des documents au projet</label>
           <input id="edit-project-doc-files" type="file" multiple class="js-file-drop-input w-full px-3 py-2 border border-slate-300 rounded-lg bg-white text-sm" data-drop-label="Déposez les documents à ajouter au projet">
           <p id="edit-project-doc-files-summary" class="text-xs text-slate-500 mt-2">Aucun fichier sélectionné</p>
-          <p class="text-[11px] text-slate-500 mt-1">Ces documents seront ajoutés automatiquement dans l’onglet Documents après enregistrement.</p>
+          <p class="text-[11px] text-slate-500 mt-1">Ces documents seront ajoutés automatiquement dans lâ€™onglet Documents après enregistrement.</p>
         </div>
         <div><label class="block text-sm font-semibold mb-2">Statut</label><select id="edit-project-status" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"><option value="en-cours">En cours</option><option value="planifie">Planifié</option><option value="urgent">Urgent</option><option value="termine">Terminé</option></select></div>
         <div>
@@ -2219,6 +2278,7 @@
   <script src="js/taskmda-team.js?v=20260402-01"></script>
 </body>
 </html>
+
 
 
 

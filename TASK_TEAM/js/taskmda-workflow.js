@@ -1652,6 +1652,11 @@ ${reviews.map((row)=>`<tr><td>${esc(row.reviewDate || '-')}</td><td>${esc(row.ne
       return !!(admin || state.permissions.isWorkflowManager);
     }
 
+    function isWorkflowItemLocked(type, id) {
+      if (typeof api.isResourceLocked !== 'function') return false;
+      return api.isResourceLocked(type, id);
+    }
+
     function canValidateWorkflow(process) {
       if (state.permissions.isAdmin || state.permissions.isWorkflowManager) return true;
       const currentRoles = getCurrentUserWorkflowRoleIds();
@@ -6902,7 +6907,13 @@ ${clone.outerHTML}
         fields.push(fieldHtml('Taches liees (csv ids)', 'linkedTaskIds', toCsv(item.linkedTaskIds), 'text'));
       }
 
-      const editable = canEditWorkflow();
+      const isLocked = isWorkflowItemLocked(type, id);
+      const canEdit = canEditWorkflow();
+      const editable = canEdit && !isLocked;
+
+      if (isLocked) {
+        refs.detailTitle.innerHTML += ` <span class="badge badge-error ml-2" title="Ce contenu est verrouillé par un autre utilisateur">VERROUILLÉ</span>`;
+      }
       let crossLinksHtml = '';
       if (type === 'task' || type === 'procedure') {
         const links = forwardWorkflowLinks(type, item);

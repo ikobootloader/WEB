@@ -1,4 +1,4 @@
-    // ============================================================================
+﻿    // ============================================================================
     // TASKMDA TEAM - STANDALONE VERSION
     // Toutes les fonctionnalités event-sourcing dans un seul fichier HTML
     // ============================================================================
@@ -1138,7 +1138,7 @@
     });
 
     const DEFAULT_PROJECT_ROLE_CATALOG = Object.freeze([
-      { roleKey: 'owner', label: 'Proprietaire', baseRole: 'owner', isSystem: true },
+      { roleKey: 'owner', label: 'Propriétaire', baseRole: 'owner', isSystem: true },
       { roleKey: 'manager', label: 'Manager', baseRole: 'manager', isSystem: true },
       { roleKey: 'member', label: 'Membre', baseRole: 'member', isSystem: true }
     ]);
@@ -1188,7 +1188,7 @@
 
     function getBaseProjectRoleLabel(baseRole) {
       const normalized = normalizeProjectRoleBase(baseRole);
-      if (normalized === 'owner') return 'Proprietaire';
+      if (normalized === 'owner') return 'Propriétaire';
       if (normalized === 'manager') return 'Manager';
       return 'Membre';
     }
@@ -1992,6 +1992,7 @@
         label: 'Calendrier transverse',
         tabs: {
           grid: { label: 'Calendrier', buttonId: 'global-calendar-view-grid' },
+          year: { label: 'Annuel', buttonId: 'global-calendar-view-year' },
           list: { label: 'Liste', buttonId: 'global-calendar-view-list' }
         }
       },
@@ -2024,7 +2025,7 @@
         globalTasks: { defaultTab: 'cards', tabs: { cards: true, calendar: true, list: true, kanban: true, timeline: true, archives: true } },
         project: { defaultTab: 'cards', tabs: { overview: true, cards: true, list: true, kanban: true, gantt: true, timeline: true, docs: true, chat: true, activity: true, archives: true } },
         workflow: { defaultTab: 'organigram', tabs: { map: true, organization: true, organigram: true, agents: true, processes: true, templates: true, tasks: true, kanban: true, timeline: true, procedures: true, software: true, contingency: true, analytics: true, governance: true, journal: true } },
-        globalCalendar: { defaultTab: 'grid', tabs: { grid: true, list: true } },
+        globalCalendar: { defaultTab: 'grid', tabs: { grid: true, year: true, list: true } },
         globalFeed: { defaultTab: 'all', tabs: { all: true, mentions: true, auto: true, manual: true, 'project-refs': true, 'task-refs': true } },
         globalSettings: { defaultTab: 'branding', tabs: { branding: true, themes: true, groups: true, roles: true, views: true } }
       },
@@ -2059,7 +2060,7 @@
       globalTasks: ['cards', 'kanban', 'timeline'],
       project: ['overview', 'cards', 'kanban', 'timeline'],
       workflow: ['organigram', 'organization', 'processes', 'tasks'],
-      globalCalendar: ['grid'],
+      globalCalendar: ['grid', 'year'],
       globalFeed: ['all', 'mentions'],
       globalSettings: ['branding', 'themes', 'groups', 'roles', 'views']
     };
@@ -2098,6 +2099,38 @@
 
     function getWorkflowActionButtonsShape() {
       return normalizeWorkflowActionButtonsShape(viewOptions?.ui?.workflowActionButtonsShape);
+    }
+
+    // ----------------------------------------------------------------------------
+    // DASHBOARD SORT MODE
+    // ----------------------------------------------------------------------------
+    let dashboardSortMode = localStorage.getItem('taskmda_dashboard_sort_mode') || 'focus';
+
+    function toggleDashboardSortMode() {
+      dashboardSortMode = dashboardSortMode === 'focus' ? 'chrono' : 'focus';
+      localStorage.setItem('taskmda_dashboard_sort_mode', dashboardSortMode);
+      updateDashboardSortUI();
+      renderGlobalTasks();
+      showToast(`Tri passé en mode ${dashboardSortMode === 'focus' ? 'Focus Aujourd\'hui' : 'Chronologique (Échéance)'}`);
+    }
+
+    function updateDashboardSortUI() {
+      const btn = document.getElementById('btn-toggle-sort-focus');
+      const icon = document.getElementById('sort-focus-icon');
+      const label = document.getElementById('sort-focus-label');
+      if (!btn || !icon || !label) return;
+
+      if (dashboardSortMode === 'focus') {
+        icon.textContent = 'bolt';
+        label.textContent = 'Tri: Focus';
+        btn.classList.add('text-primary', 'border-primary', 'bg-primary/5');
+        btn.classList.remove('text-slate-600', 'border-slate-300', 'bg-white');
+      } else {
+        icon.textContent = 'event';
+        label.textContent = 'Tri: Chrono';
+        btn.classList.remove('text-primary', 'border-primary', 'bg-primary/5');
+        btn.classList.add('text-slate-600', 'border-slate-300', 'bg-white');
+      }
     }
 
     function isIconTooltipsEnabled() {
@@ -2857,7 +2890,12 @@
       const result = { defaultTab: '', tabs: {}, pinned: {} };
       const keys = Object.keys(meta?.tabs || {});
       keys.forEach((tabKey) => {
-        result.tabs[tabKey] = safe.tabs?.[tabKey] !== false;
+        let val = safe.tabs?.[tabKey] !== false;
+        // Forcer la visibilité des rubriques critiques dans la sidebar pour éviter le blocage utilisateur
+        if (sectionKey === 'globalHub' && (tabKey === 'settings' || tabKey === 'dashboard')) {
+          val = true;
+        }
+        result.tabs[tabKey] = val;
       });
       const enabledKeys = keys.filter((tabKey) => result.tabs[tabKey]);
       if (enabledKeys.length === 0 && keys.length > 0) {
@@ -3300,13 +3338,17 @@
           const isPinned = Boolean(viewOptions?.sections?.[sectionKey]?.pinned?.[tabKey]);
           const pinClass = isPinned ? 'text-blue-600' : 'text-slate-400 opacity-50 hover:opacity-100';
           const pinTitle = isPinned ? 'Détacher (envoyer dans Plus)' : 'Épingler sur la barre';
+          const isMandatory = sectionKey === 'globalHub' && (tabKey === 'settings' || tabKey === 'dashboard');
+          const itemDisabledAttr = (disabledAttr || isMandatory) ? 'disabled' : '';
+          const itemPinDisabledAttr = (disabledAttr || isMandatory) ? 'disabled' : '';
+          
           return `
             <div class="flex items-center gap-1 hover:bg-white/80 p-1 rounded-lg${disabledClass}">
-              <label class="flex items-center gap-2 cursor-pointer flex-1 min-w-0">
-                <input type="checkbox" class="view-option-checkbox w-4 h-4 shrink-0" data-view-section="${escapeHtml(sectionKey)}" data-view-tab="${escapeHtml(tabKey)}" ${checked} ${disabledAttr}>
-                <span class="text-sm text-slate-700 font-medium truncate">${escapeHtml(tabMeta.label)}</span>
+              <label class="flex items-center gap-2 cursor-pointer flex-1 min-w-0 ${isMandatory ? 'cursor-not-allowed opacity-70' : ''}">
+                <input type="checkbox" class="view-option-checkbox w-4 h-4 shrink-0" data-view-section="${escapeHtml(sectionKey)}" data-view-tab="${escapeHtml(tabKey)}" ${checked} ${itemDisabledAttr}>
+                <span class="text-sm text-slate-700 font-medium truncate">${escapeHtml(tabMeta.label)} ${isMandatory ? '<span class="text-[10px] text-blue-500 font-bold">(Système)</span>' : ''}</span>
               </label>
-              <button type="button" class="view-option-pin-btn p-1 flex items-center justify-center rounded hover:bg-slate-200 transition-colors ${pinClass}" data-view-section="${escapeHtml(sectionKey)}" data-view-tab="${escapeHtml(tabKey)}" title="${pinTitle}" ${disabledAttr}>
+              <button type="button" class="view-option-pin-btn p-1 flex items-center justify-center rounded hover:bg-slate-200 transition-colors ${pinClass}" data-view-section="${escapeHtml(sectionKey)}" data-view-tab="${escapeHtml(tabKey)}" title="${isMandatory ? 'Obligatoire sur la barre' : pinTitle}" ${itemPinDisabledAttr}>
                 <span class="material-symbols-outlined text-[16px]">${isPinned ? 'push_pin' : 'keep_off'}</span>
               </button>
             </div>
@@ -5209,15 +5251,15 @@
       const query = (globalSearchQuery || '').trim().toLowerCase();
       const targets = currentProjectId
         ? [
-            ['tasks-container', '#tasks-container > div', 'Aucune tache ne correspond a votre recherche'],
-            ['kanban-board', '#kanban-board .kanban-col .bg-white', 'Aucune tache ne correspond a votre recherche'],
-            ['timeline-container', '#timeline-container > div', 'Aucune tache ne correspond a votre recherche'],
-            ['documents-container', '#documents-container > div', 'Aucun document ne correspond a votre recherche'],
-            ['messages-container', '#messages-container > div', 'Aucun message ne correspond a votre recherche'],
-            ['activity-container', '#activity-container > div', 'Aucune activite ne correspond a votre recherche']
+            ['tasks-container', '#tasks-container > div', 'Aucune tâche ne correspond à votre recherche'],
+            ['kanban-board', '#kanban-board .kanban-col .bg-white', 'Aucune tâche ne correspond à votre recherche'],
+            ['timeline-container', '#timeline-container > div', 'Aucune tâche ne correspond à votre recherche'],
+            ['documents-container', '#documents-container > div', 'Aucun document ne correspond à votre recherche'],
+            ['messages-container', '#messages-container > div', 'Aucun message ne correspond à votre recherche'],
+            ['activity-container', '#activity-container > div', 'Aucune activité ne correspond à votre recherche']
           ]
         : [
-            ['projects-container', '#projects-container > div', 'Aucun projet ne correspond a votre recherche']
+            ['projects-container', '#projects-container > div', 'Aucun projet ne correspond à votre recherche']
           ];
 
       targets.forEach(([containerId, selector, emptyText]) => {
@@ -5632,6 +5674,7 @@
         document.getElementById('stat-members').textContent = '1';
       }
     }
+
 
     function loadNotifications() {
       if (window.TaskMDANotifications?.load) {
@@ -6474,7 +6517,7 @@
               </button>
               <button
                 class="card-quick-btn"
-                ${canCreateTask ? '' : 'disabled title="Reserve aux membres autorises"'}
+                ${canCreateTask ? '' : 'disabled title="Réservé aux membres autorisés"'}
                 onclick="event.stopPropagation(); quickAddTaskToProject('${project.projectId}')"
               >
                 <span class="material-symbols-outlined">add_task</span>
@@ -6482,7 +6525,7 @@
               </button>
               <button
                 class="card-quick-btn"
-                ${canEdit ? '' : 'disabled title="Reserve aux Proprietaires/Managers"'}
+                ${canEdit ? '' : 'disabled title="Réservé aux Propriétaires/Managers"'}
                 onclick="event.stopPropagation(); openEditProjectModalFromDashboard('${project.projectId}')"
               >
                 <span class="material-symbols-outlined">edit</span>
@@ -6490,7 +6533,7 @@
               </button>
               <button
                 class="card-quick-btn card-quick-btn-danger"
-                ${canDelete ? '' : 'disabled title="Reserve au Proprietaire"'}
+                ${canDelete ? '' : 'disabled title="Réservé au Propriétaire"'}
                 onclick="event.stopPropagation(); deleteProjectFromDashboard('${project.projectId}')"
               >
                 <span class="material-symbols-outlined">delete</span>
@@ -6758,7 +6801,7 @@
               </button>
               <button
                 class="card-quick-btn"
-                ${canCreateTask ? '' : 'disabled title="Reserve aux membres autorises"'}
+                ${canCreateTask ? '' : 'disabled title="Réservé aux membres autorisés"'}
                 onclick="event.stopPropagation(); quickAddTaskToProject('${project.projectId}')"
               >
                 <span class="material-symbols-outlined">add_task</span>
@@ -6766,7 +6809,7 @@
               </button>
               <button
                 class="card-quick-btn"
-                ${canEdit ? '' : 'disabled title="Reserve aux Proprietaires/Managers"'}
+                ${canEdit ? '' : 'disabled title="Réservé aux Propriétaires/Managers"'}
                 onclick="event.stopPropagation(); openEditProjectModalFromDashboard('${project.projectId}')"
               >
                 <span class="material-symbols-outlined">edit</span>
@@ -6774,7 +6817,7 @@
               </button>
               <button
                 class="card-quick-btn card-quick-btn-danger"
-                ${canDelete ? '' : 'disabled title="Reserve au Proprietaire"'}
+                ${canDelete ? '' : 'disabled title="Réservé au Propriétaire"'}
                 onclick="event.stopPropagation(); deleteProjectFromDashboard('${project.projectId}')"
               >
                 <span class="material-symbols-outlined">delete</span>
@@ -6856,8 +6899,14 @@
       upcoming: false,
       nodue: false
     };
-    let globalCalendarViewMode = 'grid'; // list | grid
+    let globalCalendarViewMode = 'grid'; // list | grid | year
     let globalCalendarSelectedDay = null;
+    let globalCalendarSelectedMonth = null;
+    let globalCalendarPinnedThemes = [];
+    let globalCalendarPinnedThemeChecks = [];
+    let globalCalendarPinsInitialized = false;
+    let globalCalendarControlsExpanded = true;
+    let projectCalendarViewMode = 'month'; // month | year
     let editingGlobalCalendarItemId = null;
     let currentCalendarInfoDetailId = null;
     let currentCalendarInfoDetailItem = null;
@@ -7516,6 +7565,18 @@
       return startDate <= monthEnd && safeEnd >= monthStart;
     }
 
+    function doesCalendarRangeOverlapYear(startDateRaw, endDateRaw, yearValue) {
+      const year = Number(yearValue);
+      if (!Number.isFinite(year)) return false;
+      const yearStart = `${year}-01-01`;
+      const yearEnd = `${year}-12-31`;
+      const startDate = normalizeCalendarYmd(startDateRaw);
+      const endDate = normalizeCalendarYmd(endDateRaw) || startDate;
+      if (!startDate) return false;
+      const safeEnd = endDate && endDate >= startDate ? endDate : startDate;
+      return startDate <= yearEnd && safeEnd >= yearStart;
+    }
+
     function getCalendarRangeDayKeysInMonth(startDateRaw, endDateRaw, monthValue) {
       if (!doesCalendarRangeOverlapMonth(startDateRaw, endDateRaw, monthValue)) return [];
       const month = String(monthValue || '');
@@ -7540,6 +7601,132 @@
       return keys;
     }
 
+    const GLOBAL_CALENDAR_PINNED_THEMES_KEY = 'taskmda_global_calendar_pinned_themes';
+    const GLOBAL_CALENDAR_PINNED_THEME_CHECKS_KEY = 'taskmda_global_calendar_pinned_theme_checks';
+    const GLOBAL_CALENDAR_CONTROLS_EXPANDED_KEY = 'taskmda_global_calendar_controls_expanded';
+
+    function readLocalArray(key) {
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return [];
+        return parsed.map((v) => String(v || '').trim()).filter(Boolean);
+      } catch {
+        return [];
+      }
+    }
+
+    function writeLocalArray(key, values) {
+      try {
+        localStorage.setItem(key, JSON.stringify(Array.from(new Set((values || []).map((v) => String(v || '').trim()).filter(Boolean)))));
+      } catch {
+        // Ignore storage write failures
+      }
+    }
+
+    function normalizeCalendarThemeName(rawTheme) {
+      const name = String(rawTheme || '').trim();
+      return name || 'Général';
+    }
+
+    function normalizeCalendarThemeKey(rawTheme) {
+      return normalizeCatalogKey(normalizeCalendarThemeName(rawTheme));
+    }
+
+    function syncPinnedCalendarThemeState() {
+      const pinnedKeys = new Set(globalCalendarPinnedThemes.map(normalizeCalendarThemeKey));
+      globalCalendarPinnedThemes = globalCalendarPinnedThemes.filter((theme, idx, arr) => {
+        const key = normalizeCalendarThemeKey(theme);
+        return key && arr.findIndex((other) => normalizeCalendarThemeKey(other) === key) === idx;
+      });
+      globalCalendarPinnedThemeChecks = globalCalendarPinnedThemeChecks.filter((theme) => pinnedKeys.has(normalizeCalendarThemeKey(theme)));
+      writeLocalArray(GLOBAL_CALENDAR_PINNED_THEMES_KEY, globalCalendarPinnedThemes);
+      writeLocalArray(GLOBAL_CALENDAR_PINNED_THEME_CHECKS_KEY, globalCalendarPinnedThemeChecks);
+    }
+
+    function isPinnedCalendarThemeChecked(themeName) {
+      const key = normalizeCalendarThemeKey(themeName);
+      return globalCalendarPinnedThemeChecks.some((theme) => normalizeCalendarThemeKey(theme) === key);
+    }
+
+    function renderGlobalCalendarThemePins(availableThemes = []) {
+      const pinsWrap = document.getElementById('global-calendar-theme-pins');
+      const select = document.getElementById('global-calendar-theme-pin-select');
+      const counter = document.getElementById('global-calendar-theme-pin-counter');
+      if (!pinsWrap || !select) return;
+
+      const normalizedAvailable = Array.from(new Set((availableThemes || []).map(normalizeCalendarThemeName)));
+      const allKnown = Array.from(new Set([...normalizedAvailable, ...globalCalendarPinnedThemes.map(normalizeCalendarThemeName)]))
+        .sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+
+      select.innerHTML = `
+        <option value="">Choisir une thématique à épingler...</option>
+        ${allKnown
+          .filter((theme) => !globalCalendarPinnedThemes.some((pinned) => normalizeCalendarThemeKey(pinned) === normalizeCalendarThemeKey(theme)))
+          .map((theme) => `<option value="${escapeHtml(theme)}">${escapeHtml(theme)}</option>`)
+          .join('')}
+      `;
+
+      if (globalCalendarPinnedThemes.length === 0) {
+        pinsWrap.innerHTML = '<p class="text-xs text-slate-500">Aucune thématique épinglée.</p>';
+        if (counter) counter.textContent = '(0/0 actives)';
+        return;
+      }
+      if (counter) {
+        counter.textContent = `(${globalCalendarPinnedThemeChecks.length}/${globalCalendarPinnedThemes.length} actives)`;
+      }
+
+      pinsWrap.innerHTML = globalCalendarPinnedThemes.map((theme) => `
+        <label class="calendar-theme-pin-chip">
+          <input type="checkbox" data-calendar-theme-check="${escapeHtml(theme)}" ${isPinnedCalendarThemeChecked(theme) ? 'checked' : ''}>
+          <span>${escapeHtml(theme)}</span>
+          <button type="button" class="calendar-theme-pin-unpin" data-calendar-theme-unpin="${escapeHtml(theme)}" aria-label="Désépingler ${escapeHtml(theme)}">×</button>
+        </label>
+      `).join('');
+    }
+
+    function initGlobalCalendarPinnedThemesState() {
+      if (globalCalendarPinsInitialized) return;
+      globalCalendarPinnedThemes = readLocalArray(GLOBAL_CALENDAR_PINNED_THEMES_KEY).map(normalizeCalendarThemeName);
+      globalCalendarPinnedThemeChecks = readLocalArray(GLOBAL_CALENDAR_PINNED_THEME_CHECKS_KEY).map(normalizeCalendarThemeName);
+      globalCalendarControlsExpanded = localStorage.getItem(GLOBAL_CALENDAR_CONTROLS_EXPANDED_KEY) !== '0';
+      syncPinnedCalendarThemeState();
+      globalCalendarPinsInitialized = true;
+    }
+
+    function setGlobalCalendarControlsExpanded(expanded, options = {}) {
+      const next = !!expanded;
+      globalCalendarControlsExpanded = next;
+      const panel = document.getElementById('global-calendar-controls-panel');
+      const top = document.querySelector('#global-calendar-section .calendar-toolbar-top');
+      const toggleBtn = document.getElementById('global-calendar-toggle-controls');
+      const toggleIcon = document.getElementById('global-calendar-toggle-controls-icon');
+      const toggleLabel = document.getElementById('global-calendar-toggle-controls-label');
+      if (panel) panel.classList.toggle('is-collapsed', !next);
+      if (top) top.classList.toggle('mb-3', next);
+      if (toggleBtn) {
+        toggleBtn.setAttribute('aria-expanded', next ? 'true' : 'false');
+        toggleBtn.setAttribute('title', next ? 'Masquer les filtres et outils' : 'Afficher les filtres et outils');
+      }
+      if (toggleIcon) toggleIcon.textContent = next ? 'expand_less' : 'expand_more';
+      if (toggleLabel) toggleLabel.textContent = next ? 'Masquer les filtres' : 'Afficher les filtres';
+      if (!options.skipPersist) {
+        try {
+          localStorage.setItem(GLOBAL_CALENDAR_CONTROLS_EXPANDED_KEY, next ? '1' : '0');
+        } catch {
+          // Ignore storage failures
+        }
+      }
+    }
+
+    function toggleGlobalCalendarThemeActionsMenu(forceOpen = null) {
+      const menu = document.getElementById('global-calendar-theme-actions-menu');
+      if (!menu) return;
+      const shouldOpen = typeof forceOpen === 'boolean' ? forceOpen : menu.classList.contains('hidden');
+      menu.classList.toggle('hidden', !shouldOpen);
+    }
+
     function getTaskDueStatus(task) {
       if (!task?.dueDate) return { isDueToday: false, isOverdue: false, daysUntilDue: null };
       
@@ -7558,6 +7745,36 @@
         isOverdue: diffDays < 0 && task.status !== 'termine',
         daysUntilDue: diffDays
       };
+    }
+
+    /**
+     * Calcule le score de priorité "Focus Today" pour une tâche.
+     * Plus le score est élevé, plus la tâche doit être en haut du tableau de bord.
+     */
+    function getTaskFocusPriority(task) {
+      if (task.status === 'termine') return 0;
+      
+      const dueStatus = getTaskDueStatus(task);
+      let score = 0;
+      
+      // 1. État d'urgence critique (En retard > Aujourd'hui)
+      if (dueStatus.isOverdue) score += 1000;
+      if (dueStatus.isDueToday) score += 500;
+      
+      // 2. Niveau d'urgence défini (High > Medium > Low)
+      const urgencyScores = { 'high': 100, 'medium': 50, 'low': 10, 'normal': 50 };
+      score += (urgencyScores[task.urgency] || 50);
+      
+      // 3. Statut d'avancement (En cours > Suspendu > A faire)
+      const statusScores = { 'en-cours': 20, 'suspendu': 10, 'todo': 5 };
+      score += (statusScores[task.status] || 0);
+      
+      // 4. Proximité de l'échéance (si pas déjà en retard ou aujourd'hui)
+      if (dueStatus.daysUntilDue > 0 && dueStatus.daysUntilDue <= 3) {
+        score += (4 - dueStatus.daysUntilDue) * 25; // Bonus pour J+1, J+2, J+3
+      }
+      
+      return score;
     }
 
     function resetWorkspaceScrollTop() {
@@ -7782,7 +7999,7 @@
         },
         roles: {
           title: 'Aide: Habilitations',
-          text: "Les habilitations globales se basent sur les niveaux techniques Proprietaire, Manager et Membre, avec des libelles metier personnalisables."
+          text: "Les habilitations globales se basent sur les niveaux techniques Propriétaire, Manager et Membre, avec des libellés métier personnalisables."
         },
         views: {
           title: 'Aide: Options de vues',
@@ -8483,7 +8700,7 @@
         if (key === 'activity' && !canReadProjectActivity(currentProjectState)) {
           btn.classList.add('opacity-50');
           btn.setAttribute('aria-disabled', 'true');
-          btn.setAttribute('title', 'Reserve aux Proprietaires/Managers');
+          btn.setAttribute('title', 'Réservé aux Propriétaires/Managers');
         } else if (key === 'activity') {
           btn.classList.remove('opacity-50');
           btn.removeAttribute('aria-disabled');
@@ -8981,7 +9198,7 @@
         );
         if (!existingProjectGroup) {
           if (!canManageProjectCollaboration(latestState)) {
-            throw new Error('Seuls Proprietaire/Manager peuvent associer un groupe global au projet.');
+            throw new Error('Seuls Propriétaire/Manager peuvent associer un groupe global au projet.');
           }
           const createdGroupId = uuidv4();
           const createGroupEvent = createEvent(
@@ -9035,7 +9252,7 @@
       const membersToAdd = uniqueMemberIds.filter(userId => !existingMemberIds.has(userId));
       if (membersToAdd.length > 0) {
         if (!canManageProjectCollaboration(latestState)) {
-          throw new Error('Le groupe contient des membres hors projet. Droits Proprietaire/Manager requis pour les ajouter.');
+          throw new Error('Le groupe contient des membres hors projet. Droits Propriétaire/Manager requis pour les ajouter.');
         }
         const memberRows = await resolveUserRowsByIds(membersToAdd);
         const displayById = new Map(memberRows.map(row => [row.userId, row.displayName]));
@@ -9896,7 +10113,7 @@
               <p class="text-xs text-slate-500 mb-2">${doneSubtasks}/${subtasks.length} terminees</p>
               ${subtasks.map(item => `
                 <div class="flex items-center gap-2">
-                  <span class="text-sm ${item.done ? 'text-emerald-600' : 'text-slate-400'}">${item.done ? '☑' : '☐'}</span>
+                  <span class="text-sm ${item.done ? 'text-emerald-600' : 'text-slate-400'}">${item.done ? 'â˜‘' : 'â˜'}</span>
                   <span class="${item.done ? 'line-through text-slate-400' : 'text-slate-700'}">${escapeHtml(item.text)}</span>
                 </div>
               `).join('')}
@@ -10874,7 +11091,7 @@
             <p class="text-xs text-slate-500 mb-2">${doneSubtasks}/${subtasks.length} terminees</p>
             ${subtasks.map(item => `
               <div class="flex items-center gap-2">
-                <span class="text-sm ${item.done ? 'text-emerald-600' : 'text-slate-400'}">${item.done ? '☑' : '☐'}</span>
+                <span class="text-sm ${item.done ? 'text-emerald-600' : 'text-slate-400'}">${item.done ? 'â˜‘' : 'â˜'}</span>
                 <span class="${item.done ? 'line-through text-slate-400' : 'text-slate-700'}">${escapeHtml(item.text)}</span>
               </div>
             `).join('')}
@@ -11022,7 +11239,7 @@
             <p class="text-xs text-slate-500 mb-2">${doneSubtasks}/${subtasks.length} terminees</p>
             ${subtasks.map(item => `
               <div class="flex items-center gap-2">
-                <span class="text-sm ${item.done ? 'text-emerald-600' : 'text-slate-400'}">${item.done ? '☑' : '☐'}</span>
+                <span class="text-sm ${item.done ? 'text-emerald-600' : 'text-slate-400'}">${item.done ? 'â˜‘' : 'â˜'}</span>
                 <span class="${item.done ? 'line-through text-slate-400' : 'text-slate-700'}">${escapeHtml(item.text)}</span>
               </div>
             `).join('')}
@@ -11176,7 +11393,7 @@
       return String(value || '')
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[’‘]/g, "'")
+        .replace(/[â€™â€˜]/g, "'")
         .replace(/[“”]/g, '"')
         .replace(/\u2026/g, '...');
     }
@@ -11194,7 +11411,7 @@
     async function sendInvitationEmail(inviteId) {
       if (!currentProjectId) return;
       if (!canManageProjectCollaboration(currentProjectState)) {
-        showToast('Seuls Proprietaire/Manager peuvent envoyer des invitations');
+        showToast('Seuls Propriétaire/Manager peuvent envoyer des invitations');
         return;
       }
       const state = await getProjectState(currentProjectId);
@@ -11232,7 +11449,7 @@
     async function updateInviteStatus(inviteId, status) {
       if (!currentProjectId || !inviteId) return;
       if (!canManageProjectCollaboration(currentProjectState)) {
-        showToast('Seuls Proprietaire/Manager peuvent mettre a jour les invitations');
+        showToast('Seuls Propriétaire/Manager peuvent mettre à jour les invitations');
         return;
       }
       const normalized = ['pending', 'sent', 'accepted', 'declined'].includes(status) ? status : 'pending';
@@ -11283,7 +11500,7 @@
     async function addProjectInvite() {
       if (!currentProjectId || !currentProjectState) return;
       if (!canManageProjectCollaboration(currentProjectState)) {
-        showToast('Seuls Proprietaire/Manager peuvent inviter');
+        showToast('Seuls Propriétaire/Manager peuvent inviter');
         return;
       }
 
@@ -11393,7 +11610,7 @@
     async function createProjectGroup() {
       if (!currentProjectId || !currentProjectState) return;
       if (!canManageProjectCollaboration(currentProjectState)) {
-        showToast('Seuls Proprietaire/Manager peuvent creer des groupes');
+        showToast('Seuls Propriétaire/Manager peuvent créer des groupes');
         return;
       }
       const nameInput = document.getElementById('group-name-input');
@@ -11490,7 +11707,7 @@
     async function deleteProjectGroup(groupId) {
       if (!currentProjectId || !currentProjectState || !groupId) return;
       if (!canManageProjectCollaboration(currentProjectState)) {
-        showToast('Seuls Proprietaire/Manager peuvent supprimer des groupes');
+        showToast('Seuls Propriétaire/Manager peuvent supprimer des groupes');
         return;
       }
       const groupName = getGroupNameById(currentProjectState, groupId) || 'ce groupe';
@@ -11686,7 +11903,7 @@
     async function addProjectTheme() {
       if (!currentProjectId || !currentProjectState) return;
       if (!canManageProjectCollaboration(currentProjectState)) {
-        showToast('Seuls Proprietaire/Manager peuvent gerer les themes');
+        showToast('Seuls Propriétaire/Manager peuvent gérer les thèmes');
         return;
       }
       const input = document.getElementById('theme-name-input');
@@ -11719,7 +11936,7 @@
     async function removeProjectTheme(theme) {
       if (!currentProjectId || !currentProjectState || !theme) return;
       if (!canManageProjectCollaboration(currentProjectState)) {
-        showToast('Seuls Proprietaire/Manager peuvent gerer les themes');
+        showToast('Seuls Propriétaire/Manager peuvent gérer les thèmes');
         return;
       }
       const event = createEvent(
@@ -12016,14 +12233,14 @@
       }
 
       if (select.disabled || options.length === 0) {
-        container.innerHTML = '<div class="project-doc-task-empty">Aucune tache active a associer.</div>';
+        container.innerHTML = '<div class="project-doc-task-empty">Aucune tâche active à associer.</div>';
         return;
       }
 
       const filtered = options.filter(opt => String(opt.textContent || '').toLowerCase().includes(filter));
       if (filtered.length === 0) {
         detachGlobalKanbanInfiniteScroll();
-        container.innerHTML = '<div class="project-doc-task-empty">Aucune tache ne correspond au filtre.</div>';
+        container.innerHTML = '<div class="project-doc-task-empty">Aucune tâche ne correspond au filtre.</div>';
         return;
       }
 
@@ -12856,13 +13073,13 @@
         const allowed = canEditProjectOverviewInline;
         btnEditProject.disabled = !allowed;
         btnEditProject.classList.toggle('opacity-50', !allowed);
-        btnEditProject.title = allowed ? '' : 'Reserve aux Proprietaires/Managers';
+        btnEditProject.title = allowed ? '' : 'Réservé aux Propriétaires/Managers';
       }
       if (btnDeleteProject) {
         const allowed = canDeleteProjectMeta(state);
         btnDeleteProject.disabled = !allowed;
         btnDeleteProject.classList.toggle('opacity-50', !allowed);
-        btnDeleteProject.title = allowed ? '' : 'Reserve au Proprietaire';
+        btnDeleteProject.title = allowed ? '' : 'Réservé au Propriétaire';
       }
       const projectLockWarning = document.getElementById('project-lock-warning');
       if (projectLockWarning) {
@@ -12888,7 +13105,7 @@
       if (btnSendMessage) {
         btnSendMessage.disabled = !canSendChat;
         btnSendMessage.classList.toggle('opacity-50', !canSendChat);
-        btnSendMessage.title = canSendChat ? '' : 'Reserve aux membres du projet';
+        btnSendMessage.title = canSendChat ? '' : 'Réservé aux membres du projet';
       }
       if (messageInput) {
         messageInput.disabled = !canSendChat;
@@ -12900,7 +13117,7 @@
       if (btnAddProjectDocs) {
         btnAddProjectDocs.disabled = !canSendChat;
         btnAddProjectDocs.classList.toggle('opacity-50', !canSendChat);
-        btnAddProjectDocs.title = canSendChat ? '' : 'Reserve aux membres du projet';
+        btnAddProjectDocs.title = canSendChat ? '' : 'Réservé aux membres du projet';
       }
       if (projectDocFilesInput) projectDocFilesInput.disabled = !canSendChat;
       if (projectDocTaskLinks) projectDocTaskLinks.disabled = !canSendChat || (projectDocTaskLinks.options?.length || 0) === 0;
@@ -13579,7 +13796,7 @@
                   </button>
                 </div>
                 <div id="global-kanban-items-${col.key}" class="global-kanban-items space-y-2 pr-1" data-col-key="${col.key}" data-rendered="${initialCount}">
-                  ${initialCount > 0 ? items.slice(0, initialCount).map(taskCardKanban).join('') : '<p class="text-xs text-slate-400 py-2">Aucune tache</p>'}
+                  ${initialCount > 0 ? items.slice(0, initialCount).map(taskCardKanban).join('') : '<p class="text-xs text-slate-400 py-2">Aucune tâche</p>'}
                 </div>
                 <div class="mt-2 flex items-center justify-between gap-2">
                   <p class="text-[11px] text-slate-500">
@@ -13691,7 +13908,7 @@
                       <span class="text-xs text-slate-500">${group.items.length}</span>
                     </div>
                     <div id="global-timeline-col-items-${group.key}" class="space-y-2 pr-1" data-rendered="${initial}">
-                      ${initial > 0 ? group.items.slice(0, initial).map(taskCard).join('') : '<p class="text-xs text-slate-400 py-2">Aucune tache</p>'}
+                      ${initial > 0 ? group.items.slice(0, initial).map(taskCard).join('') : '<p class="text-xs text-slate-400 py-2">Aucune tâche</p>'}
                     </div>
                     <div class="mt-2 flex items-center justify-between gap-2">
                       <p class="text-[11px] text-slate-500"><span id="global-timeline-col-count-${group.key}">${initial}</span> / ${group.items.length}</p>
@@ -13749,7 +13966,7 @@
                     </button>
                     <div id="global-timeline-list-body-${group.key}" class="${expanded ? 'mt-2' : 'hidden mt-2'}">
                       <div id="global-timeline-list-items-${group.key}" class="space-y-2 pr-1" data-rendered="${initial}">
-                        ${expanded ? (initial > 0 ? group.items.slice(0, initial).map(taskCard).join('') : '<p class="text-xs text-slate-400 py-2">Aucune tache</p>') : ''}
+                        ${expanded ? (initial > 0 ? group.items.slice(0, initial).map(taskCard).join('') : '<p class="text-xs text-slate-400 py-2">Aucune tâche</p>') : ''}
                       </div>
                       <div class="mt-2 flex items-center justify-between gap-2">
                         <p class="text-[11px] text-slate-500"><span id="global-timeline-list-count-${group.key}">${initial}</span> / ${group.items.length}</p>
@@ -13833,24 +14050,28 @@
       const pagination = paginateItems(filtered, globalTasksPage, paginationConfig.globalTasksPerPage);
       globalTasksPage = pagination.currentPage;
       
-      // Trier les tâches: celles à l'échéance/en retard en premier, puis les autres
+      // Trier les tâches
       const itemsWithStatus = pagination.pageItems.map(task => ({
         task,
-        dueStatus: getTaskDueStatus(task)
+        dueStatus: getTaskDueStatus(task),
+        focusScore: getTaskFocusPriority(task)
       }));
       
       const sortedItems = itemsWithStatus.sort((a, b) => {
-        const aIsUrgent = a.dueStatus.isOverdue || a.dueStatus.isDueToday ? 1 : 0;
-        const bIsUrgent = b.dueStatus.isOverdue || b.dueStatus.isDueToday ? 1 : 0;
-        if (aIsUrgent !== bIsUrgent) return bIsUrgent - aIsUrgent; // Urgent d'abord
-        if (a.dueStatus.isOverdue && !b.dueStatus.isOverdue) return -1; // En retard d'abord
-        if (b.dueStatus.isOverdue && !a.dueStatus.isOverdue) return 1;
-        return 0;
+        if (dashboardSortMode === 'focus') {
+          return b.focusScore - a.focusScore;
+        } else {
+          // Chronologique : Date limite asc, puis Priorité desc
+          const timeA = new Date(a.task.dueDate || 0).getTime();
+          const timeB = new Date(b.task.dueDate || 0).getTime();
+          if (timeA !== timeB) return timeA - timeB;
+          return b.focusScore - a.focusScore;
+        }
       });
       
       container.className = `global-task-grid cols-${globalTaskCardsColumns}`;
       const showGlobalTaskCardDescription = globalTaskCardsColumns === 1;
-      container.innerHTML = sortedItems.map(({ task, dueStatus }) => {
+      container.innerHTML = sortedItems.map(({ task, dueStatus, focusScore }) => {
         const taskRef = buildGlobalTaskRef(task);
         let canEdit = task.sourceType === 'standalone';
         let canDelete = task.sourceType === 'standalone';
@@ -13866,9 +14087,10 @@
         let cardBgClass = 'bg-white';
         let cardAccentClass = getTaskUrgencyMeta(task.urgency).accentClass;
         let ringClass = '';
+        let focusClass = focusScore >= 500 ? 'is-focus-priority' : '';
         
         if (dueStatus.isOverdue) {
-          cardBgClass = 'bg-red-50';
+          cardBgClass = 'is-overdue-card';
           cardAccentClass = 'border-l-4 border-l-red-600';
           ringClass = 'ring-2 ring-offset-1 ring-red-400';
         } else if (dueStatus.isDueToday) {
@@ -13881,7 +14103,7 @@
         if (dueStatus.isDueToday && !task._notifiedToday) {
           const assigneeName = getTaskAssigneeName(task, stateByProjectId.get(task.sourceProjectId)) || 'Aucun responsable';
           addNotification(
-            '📌 Tâche à l\'échéance',
+            'ðŸ“Œ Tâche à l\'échéance',
             `${task.title} - Assisté par ${assigneeName}`,
             task.sourceProjectId,
             {
@@ -13895,12 +14117,12 @@
         }
         
         return `
-        <div class="global-task-card global-task-card-modern ${cardAccentClass} rounded-xl border border-slate-200 ${cardBgClass} p-4 cursor-pointer ${ringClass}" onclick="openGlobalTaskDetails('${taskRef}')" role="button" tabindex="0">
+        <div class="global-task-card global-task-card-modern ${cardAccentClass} ${focusClass} rounded-xl border border-slate-200 ${cardBgClass} p-4 cursor-pointer ${ringClass}" onclick="openGlobalTaskDetails('${taskRef}')" role="button" tabindex="0">
           <div class="flex items-start justify-between gap-3">
             <div>
               <div class="flex flex-wrap items-center gap-2 mb-1">
                 ${dueStatus.isOverdue ? '<span class="px-2 py-1 rounded-lg bg-red-200 text-red-800 text-xs font-bold">⚠️ EN RETARD</span>' : ''}
-                ${dueStatus.isDueToday ? '<span class="px-2 py-1 rounded-lg bg-yellow-200 text-yellow-800 text-xs font-bold">📌 AUJOURD\'HUI</span>' : ''}
+                ${dueStatus.isDueToday ? '<span class="px-2 py-1 rounded-lg bg-yellow-200 text-yellow-800 text-xs font-bold">ðŸ“Œ AUJOURD\'HUI</span>' : ''}
                 <span class="${getTaskUrgencyMeta(task.urgency).chipClass}">${getTaskUrgencyMeta(task.urgency).label}</span>
                 ${buildTaskRecurrenceBadgeHtml(task)}
               </div>
@@ -13913,6 +14135,7 @@
             </div>
           </div>
           ${showGlobalTaskCardDescription ? `<p class="text-sm text-slate-600 mt-2">${escapeHtml(task.description || '')}</p>` : ''}
+          ${buildTaskProgressBarHtml(task)}
           ${buildSubtaskProgressHtml(task, true)}
           <div class="mt-2 text-xs text-slate-500 flex flex-wrap gap-3">
             <span>Demande: ${formatDate(task.requestDate)}</span>
@@ -13953,7 +14176,7 @@
 
       if (archived.length === 0) {
         container.className = 'space-y-3';
-        container.innerHTML = '<p class="text-slate-500 text-center py-8">Aucune tache archivee</p>';
+        container.innerHTML = '<p class="text-slate-500 text-center py-8">Aucune tâche archivée</p>';
         return;
       }
 
@@ -14028,21 +14251,28 @@
     };
 
     async function renderGlobalCalendar() {
+      initGlobalCalendarPinnedThemesState();
+      setGlobalCalendarControlsExpanded(globalCalendarControlsExpanded, { skipPersist: true });
       const container = document.getElementById('global-calendar-container');
       const monthInput = document.getElementById('global-calendar-month');
       const monthLabel = document.getElementById('global-calendar-month-label');
       const listWrap = document.getElementById('global-calendar-list-wrap');
       const gridWrap = document.getElementById('global-calendar-grid-wrap');
+      const yearWrap = document.getElementById('global-calendar-year-wrap');
       const grid = document.getElementById('global-calendar-grid');
       const dayDetails = document.getElementById('global-calendar-day-details');
+      const yearGrid = document.getElementById('global-calendar-year-grid');
+      const yearDetails = document.getElementById('global-calendar-year-details');
+      const periodHint = document.getElementById('global-calendar-period-hint');
       const btnViewList = document.getElementById('global-calendar-view-list');
       const btnViewGrid = document.getElementById('global-calendar-view-grid');
-      if (!container || !monthInput || !listWrap || !gridWrap || !grid || !dayDetails) return;
+      const btnViewYear = document.getElementById('global-calendar-view-year');
+      if (!container || !monthInput || !listWrap || !gridWrap || !yearWrap || !grid || !dayDetails || !yearGrid || !yearDetails) return;
 
       if (monthInput.options.length === 0) {
         const base = new Date();
         const options = [];
-        for (let offset = -12; offset <= 12; offset++) {
+        for (let offset = -60; offset <= 60; offset++) {
           const d = new Date(base.getFullYear(), base.getMonth() + offset, 1);
           const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
           const label = d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
@@ -14060,10 +14290,22 @@
         month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
         monthInput.value = month;
       }
+
+      const isList = globalCalendarViewMode === 'list';
+      const isGrid = globalCalendarViewMode === 'grid';
+      const isYear = globalCalendarViewMode === 'year';
+      const selectedYear = Number(String(month).slice(0, 4));
       if (monthLabel) {
         const [yy, mm] = String(month).split('-');
         const d = new Date(Number(yy), Number(mm) - 1, 1);
-        monthLabel.textContent = d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+        monthLabel.textContent = isYear
+          ? d.toLocaleDateString('fr-FR', { year: 'numeric' })
+          : d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+      }
+      if (periodHint) {
+        periodHint.textContent = isYear
+          ? 'Année affichée'
+          : 'Période affichée';
       }
 
       const standaloneItems = await getAllDecrypted('globalCalendarItems', 'id');
@@ -14096,13 +14338,30 @@
         archivedAt: item.archivedAt || null,
         sortDate: getCalendarItemStartDate(item) ? (parseCalendarYmdToDate(getCalendarItemStartDate(item))?.getTime() || 0) : 0
       }));
-      const mixed = [...taskEntries, ...infoEntries]
-        .filter(entry => !entry.archivedAt)
+
+      const allEntries = [...taskEntries, ...infoEntries].filter((entry) => !entry.archivedAt);
+      const availableThemes = allEntries.map((entry) => normalizeCalendarThemeName(entry.theme));
+      renderGlobalCalendarThemePins(availableThemes);
+      const checkedThemeKeys = new Set(globalCalendarPinnedThemeChecks.map(normalizeCalendarThemeKey));
+
+      const mixed = allEntries
         .filter(entry => (
-          entry.entryType === 'info'
-            ? doesCalendarRangeOverlapMonth(entry.startDate, entry.endDate, month)
-            : String(entry.date || '').startsWith(month)
+          isYear
+            ? (
+              entry.entryType === 'info'
+                ? doesCalendarRangeOverlapYear(entry.startDate, entry.endDate, selectedYear)
+                : String(entry.date || '').startsWith(`${selectedYear}-`)
+            )
+            : (
+              entry.entryType === 'info'
+                ? doesCalendarRangeOverlapMonth(entry.startDate, entry.endDate, month)
+                : String(entry.date || '').startsWith(month)
+            )
         ))
+        .filter((entry) => {
+          if (checkedThemeKeys.size === 0) return true;
+          return checkedThemeKeys.has(normalizeCalendarThemeKey(entry.theme));
+        })
         .filter(entry => matchesQuery([
           entry.title,
           entry.description,
@@ -14112,6 +14371,7 @@
           entry.entryType === 'info' ? buildCalendarItemDateLabel(entry) : formatDate(entry.date)
         ], q))
         .sort((a, b) => a.sortDate - b.sortDate);
+
       const isSharedEntry = (entry) => normalizeSharingMode(entry?.sharingMode, 'private') === 'shared';
       const getEntryOpenAction = (entry) => {
         if (entry?.entryType === 'task' && entry?.taskRef) {
@@ -14123,15 +14383,16 @@
         return '';
       };
 
-      const isGrid = globalCalendarViewMode === 'grid';
-      listWrap.classList.toggle('hidden', isGrid);
+      listWrap.classList.toggle('hidden', !isList);
       gridWrap.classList.toggle('hidden', !isGrid);
-      if (btnViewList && btnViewGrid) {
-        btnViewList.classList.toggle('view-tab-active', !isGrid);
+      yearWrap.classList.toggle('hidden', !isYear);
+      if (btnViewList && btnViewGrid && btnViewYear) {
+        btnViewList.classList.toggle('view-tab-active', isList);
         btnViewGrid.classList.toggle('view-tab-active', isGrid);
+        btnViewYear.classList.toggle('view-tab-active', isYear);
       }
 
-      if (!isGrid && mixed.length === 0) {
+      if ((isList || isYear) && mixed.length === 0) {
         container.innerHTML = buildWorkspaceEmptyState({
           icon: 'calendar_month',
           title: 'Aucune échéance pour ces critères',
@@ -14139,6 +14400,8 @@
           ctaLabel: 'Ajouter une information',
           ctaOnclick: 'openGlobalCalendarItemModal()'
         });
+        yearGrid.innerHTML = '';
+        yearDetails.innerHTML = '';
         return;
       }
 
@@ -14157,14 +14420,15 @@
         const startOffset = (firstDay.getDay() + 6) % 7;
         const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
         if (!Number.isFinite(daysInMonth) || daysInMonth <= 0) {
-          grid.innerHTML = '<div class="col-span-7 text-center text-sm text-slate-500 py-4">Mois invalide, reinitialisation appliquee.</div>';
+          grid.innerHTML = '<div class="col-span-7 text-center text-sm text-slate-500 py-4">Mois invalide, réinitialisation appliquée.</div>';
           dayDetails.innerHTML = '';
           return;
         }
+
         const todayKey = toYmd(new Date());
         const monthPrefix = `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
-
         const entriesByDay = new Map();
+
         mixed.forEach(entry => {
           if (entry.entryType === 'info') {
             const keys = getCalendarRangeDayKeysInMonth(entry.startDate, entry.endDate, month);
@@ -14221,6 +14485,7 @@
             </div>
           `;
         }).join('');
+
         grid.innerHTML = `${dayHeaders}${blanks}${dayCells}`;
         grid.querySelectorAll('.global-cal-day').forEach(dayCell => {
           const selectDay = () => {
@@ -14235,6 +14500,7 @@
             }
           });
         });
+
         grid.querySelectorAll('.global-cal-day-add').forEach(addButton => {
           addButton.addEventListener('click', (event) => {
             event.preventDefault();
@@ -14256,13 +14522,14 @@
           });
           return;
         }
+
         dayDetails.innerHTML = selectedEntries.map(entry => `
           <div class="calendar-detail-card ${isSharedEntry(entry) ? 'calendar-detail-card-shared' : 'calendar-detail-card-private'} ${getEntryOpenAction(entry) ? 'cursor-pointer' : ''}" ${getEntryOpenAction(entry) ? `onclick="${getEntryOpenAction(entry)}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();${getEntryOpenAction(entry)};}"` : ''}>
             <div class="flex items-center justify-between gap-2">
               <p class="font-semibold text-slate-800">${escapeHtml(entry.title || 'Element')}</p>
               <span class="inline-flex text-[10px] px-2 py-1 rounded-full font-semibold ${isSharedEntry(entry) ? 'calendar-chip-shared' : 'calendar-chip-private'}">${isSharedEntry(entry) ? 'Collaborative' : 'Privée'}</span>
             </div>
-            <p class="text-xs text-slate-500 mt-1">${escapeHtml(entry.source || 'Hors projet')} - ${escapeHtml(entry.theme || 'General')}</p>
+            <p class="text-xs text-slate-500 mt-1">${escapeHtml(entry.source || 'Hors projet')} - ${escapeHtml(entry.theme || 'Général')}</p>
             <p class="text-xs text-slate-500 mt-1">${escapeHtml(entry.entryType === 'info' ? buildCalendarItemDateLabel(entry) : formatDate(entry.date))}</p>
             <p class="text-sm text-slate-600 mt-1">${escapeHtml(entry.description || '')}</p>
             ${entry.entryType === 'info' && entry.id ? `
@@ -14277,13 +14544,113 @@
         return;
       }
 
+      if (isYear) {
+        const monthEntries = Array.from({ length: 12 }, (_, idx) => ({
+          monthKey: `${selectedYear}-${String(idx + 1).padStart(2, '0')}`,
+          label: new Date(selectedYear, idx, 1).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }),
+          entries: []
+        }));
+        const mapByMonth = new Map(monthEntries.map((bucket) => [bucket.monthKey, bucket]));
+
+        mixed.forEach((entry) => {
+          if (entry.entryType === 'info') {
+            for (let idx = 0; idx < 12; idx++) {
+              const monthKey = `${selectedYear}-${String(idx + 1).padStart(2, '0')}`;
+              if (doesCalendarRangeOverlapMonth(entry.startDate, entry.endDate, monthKey)) {
+                mapByMonth.get(monthKey)?.entries.push(entry);
+              }
+            }
+            return;
+          }
+          const dueKey = String(entry.date || '').slice(0, 7);
+          mapByMonth.get(dueKey)?.entries.push(entry);
+        });
+
+        monthEntries.forEach((bucket) => {
+          bucket.entries.sort((a, b) => a.sortDate - b.sortDate);
+        });
+
+        const now = new Date();
+        const nowMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const firstMonthWithItems = monthEntries.find((bucket) => bucket.entries.length > 0)?.monthKey || `${selectedYear}-01`;
+        if (!globalCalendarSelectedMonth || !String(globalCalendarSelectedMonth).startsWith(`${selectedYear}-`)) {
+          globalCalendarSelectedMonth = nowMonthKey.startsWith(`${selectedYear}-`) ? nowMonthKey : firstMonthWithItems;
+        }
+
+        yearGrid.innerHTML = monthEntries.map((bucket) => {
+          const sharedCount = bucket.entries.filter(isSharedEntry).length;
+          const privateCount = Math.max(0, bucket.entries.length - sharedCount);
+          const isCurrent = bucket.monthKey === nowMonthKey;
+          const isSelected = bucket.monthKey === globalCalendarSelectedMonth;
+          return `
+            <div class="global-calendar-year-month ${isSelected ? 'global-calendar-year-month-selected' : ''} ${isCurrent ? 'global-calendar-year-month-current' : ''}" data-year-month="${bucket.monthKey}" role="button" tabindex="0" aria-label="Mois ${escapeHtml(bucket.label)}">
+              <div class="flex items-center justify-between gap-2">
+                <p class="font-semibold text-slate-800 capitalize">${escapeHtml(bucket.label)}</p>
+                <span class="text-xs text-slate-500">${bucket.entries.length}</span>
+              </div>
+              <div class="mt-2 space-y-1">
+                ${(bucket.entries || []).slice(0, 3).map((entry) => `<div class="calendar-day-item ${isSharedEntry(entry) ? 'calendar-day-item-shared' : 'calendar-day-item-private'}">${escapeHtml(entry.title || '')}</div>`).join('')}
+                ${bucket.entries.length > 3 ? `<div class="calendar-day-more">+${bucket.entries.length - 3}</div>` : ''}
+              </div>
+              <div class="mt-2 flex items-center gap-1 text-[10px]">
+                ${sharedCount > 0 ? `<span class="calendar-mini-chip calendar-mini-chip-shared">Collab ${sharedCount}</span>` : ''}
+                ${privateCount > 0 ? `<span class="calendar-mini-chip calendar-mini-chip-private">Privée ${privateCount}</span>` : ''}
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        yearGrid.querySelectorAll('.global-calendar-year-month').forEach((monthCell) => {
+          const openMonth = () => {
+            const monthKey = String(monthCell.getAttribute('data-year-month') || '');
+            if (!monthKey) return;
+            ensureGlobalCalendarMonthOption(monthInput, Number(monthKey.slice(0, 4)), Number(monthKey.slice(5, 7)) - 1);
+            globalCalendarViewMode = resolveViewWithLock('globalCalendar', 'grid', 'grid');
+            globalCalendarSelectedDay = null;
+            globalCalendarSelectedMonth = monthKey;
+            renderGlobalCalendar();
+          };
+          monthCell.addEventListener('click', openMonth);
+          monthCell.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              openMonth();
+            }
+          });
+        });
+
+        const selectedMonthEntries = monthEntries.find((bucket) => bucket.monthKey === globalCalendarSelectedMonth)?.entries || [];
+        if (selectedMonthEntries.length === 0) {
+          yearDetails.innerHTML = buildWorkspaceEmptyState({
+            icon: 'event_busy',
+            title: `Aucun élément en ${new Date(`${globalCalendarSelectedMonth || `${selectedYear}-01`}-01`).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}`,
+            text: 'Sélectionnez un autre mois ou ajoutez une information.',
+            compact: true
+          });
+          return;
+        }
+
+        yearDetails.innerHTML = selectedMonthEntries.map(entry => `
+          <div class="calendar-detail-card ${isSharedEntry(entry) ? 'calendar-detail-card-shared' : 'calendar-detail-card-private'} ${getEntryOpenAction(entry) ? 'cursor-pointer' : ''}" ${getEntryOpenAction(entry) ? `onclick="${getEntryOpenAction(entry)}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();${getEntryOpenAction(entry)};}"` : ''}>
+            <div class="flex items-center justify-between gap-2">
+              <p class="font-semibold text-slate-800">${escapeHtml(entry.title || 'Element')}</p>
+              <span class="inline-flex text-[10px] px-2 py-1 rounded-full font-semibold ${isSharedEntry(entry) ? 'calendar-chip-shared' : 'calendar-chip-private'}">${isSharedEntry(entry) ? 'Collaborative' : 'Privée'}</span>
+            </div>
+            <p class="text-xs text-slate-500 mt-1">${escapeHtml(entry.source || 'Hors projet')} - ${escapeHtml(entry.theme || 'Général')}</p>
+            <p class="text-xs text-slate-500 mt-1">${escapeHtml(entry.entryType === 'info' ? buildCalendarItemDateLabel(entry) : formatDate(entry.date))}</p>
+            <p class="text-sm text-slate-600 mt-1">${escapeHtml(entry.description || '')}</p>
+          </div>
+        `).join('');
+        return;
+      }
+
       container.innerHTML = mixed.map(entry => `
         <div class="calendar-entry-card ${isSharedEntry(entry) ? 'calendar-entry-card-shared' : 'calendar-entry-card-private'} ${getEntryOpenAction(entry) ? 'cursor-pointer' : ''}" ${getEntryOpenAction(entry) ? `onclick="${getEntryOpenAction(entry)}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();${getEntryOpenAction(entry)};}"` : ''}>
           <div class="flex items-center justify-between gap-2">
             <h4 class="font-semibold text-slate-800">${escapeHtml(entry.title || 'Element')}</h4>
             <span class="text-xs text-slate-500">${escapeHtml(entry.entryType === 'info' ? buildCalendarItemDateLabel(entry) : formatDate(entry.date))}</span>
           </div>
-          <p class="text-xs text-slate-500 mt-1">${escapeHtml(entry.source || 'Hors projet')} • ${escapeHtml(entry.theme || 'General')}</p>
+          <p class="text-xs text-slate-500 mt-1">${escapeHtml(entry.source || 'Hors projet')} - ${escapeHtml(entry.theme || 'Général')}</p>
           <p class="text-sm text-slate-600 mt-1">${escapeHtml(entry.description || '')}</p>
           <div class="mt-2 flex flex-wrap gap-1">
             <span class="inline-flex text-[10px] px-2 py-1 rounded-full ${entry.entryType === 'task' ? 'calendar-chip-task' : 'calendar-chip-info'} font-semibold">
@@ -14301,7 +14668,6 @@
         </div>
       `).join('');
       return;
-
     }
 
     function ensureGlobalCalendarMonthOption(monthInput, year, monthIndex) {
@@ -14318,13 +14684,15 @@
     function shiftGlobalCalendarMonth(offset) {
       const monthInput = document.getElementById('global-calendar-month');
       if (!monthInput) return;
+      const step = globalCalendarViewMode === 'year' ? 12 : 1;
       const current = monthInput.value && /^\d{4}-\d{2}$/.test(monthInput.value)
         ? monthInput.value
         : toYmd(new Date()).slice(0, 7);
       const [y, m] = current.split('-');
-      const d = new Date(Number(y), Number(m) - 1 + Number(offset || 0), 1);
+      const d = new Date(Number(y), Number(m) - 1 + (Number(offset || 0) * step), 1);
       ensureGlobalCalendarMonthOption(monthInput, d.getFullYear(), d.getMonth());
       globalCalendarSelectedDay = null;
+      if (globalCalendarViewMode === 'year') globalCalendarSelectedMonth = null;
       renderGlobalCalendar();
     }
 
@@ -14355,7 +14723,7 @@
           archivedAt: Date.now(),
           updatedAt: Date.now()
         }, 'id');
-        showToast('Tache archivee');
+        showToast('Tâche archivée');
         await renderGlobalTasks();
         await refreshStats();
         return;
@@ -14375,7 +14743,7 @@
       );
       await publishEvent(event);
       if (sharedFolderHandle) await writeEventToSharedFolder(resolved.projectId, event);
-      showToast('Tache archivee');
+      showToast('Tâche archivée');
       if (workspaceMode === 'global') {
         await renderGlobalTasks();
         await refreshStats();
@@ -14908,8 +15276,8 @@
         resetStandaloneCalendarForm();
         closeGlobalCalendarItemModal();
       }
-      showToast('Information archivee');
-      addNotification('Calendrier', 'Information hors projet archivee', null);
+      showToast('Information archivée');
+      addNotification('Calendrier', 'Information hors projet archivée', null);
       await renderGlobalCalendar();
     }
 
@@ -14948,11 +15316,11 @@
         return;
       }
       if ((startTime && !endTime) || (!startTime && endTime)) {
-        showToast('Renseignez l’heure de début et l’heure de fin');
+        showToast('Renseignez lâ€™heure de début et lâ€™heure de fin');
         return;
       }
       if (startDate === endDate && startTime && endTime && endTime <= startTime) {
-        showToast('Sur la même journée, l’heure de fin doit être après l’heure de début');
+        showToast('Sur la même journée, lâ€™heure de fin doit être après lâ€™heure de début');
         return;
       }
       const editId = String(editingGlobalCalendarItemId || '').trim();
@@ -17005,7 +17373,7 @@
         .filter((line) => !forbidden.some((re) => re.test(line)));
       const merged = normalizeDigestText(cleanedLines.join('\n'));
       if (!merged) return '';
-      const letters = (merged.match(/[a-zA-ZÀ-ÿ]/g) || []).length;
+      const letters = (merged.match(/\p{L}/gu) || []).length;
       const ratio = letters / Math.max(merged.length, 1);
       if (ratio < 0.35) return '';
       return merged;
@@ -18010,7 +18378,7 @@
       const message = [
         `Lier une fiche RGPD à: ${ref.label || `${ref.entityType}:${ref.entityId}`}`,
         '',
-        'Saisissez le numéro (1..N) ou l’identifiant RGPD :',
+        'Saisissez le numéro (1..N) ou lâ€™identifiant RGPD :',
         ...preview.map((activity, index) => `${index + 1}. ${activity.title} [${activity.id}]`)
       ].join('\n');
       const choice = window.prompt(message, '1');
@@ -18027,7 +18395,7 @@
       const title = activity?.title || 'Aucune fiche liée';
       const details = activity
         ? `Complétude: ${Math.max(0, Number(activity.completenessScore || 0))}%`
-        : 'Créez ou liez une fiche pour tracer l’impact RGPD.';
+        : 'Créez ou liez une fiche pour tracer lâ€™impact RGPD.';
       return `
         <section class="modal-section-neo rounded-xl border border-blue-200 bg-blue-50/60 p-3">
           <p class="modal-section-title text-sm font-semibold text-slate-700 mb-2">
@@ -18730,6 +19098,21 @@
             currentUserName: () => currentUser?.name || '',
             showToast: (message) => showToast(message),
             canEditWorkflow: () => isAppAdmin(currentUser?.userId),
+            isResourceLocked: (type, id) => {
+              // On utilise un projet virtuel 'glob-wf' pour les verrous workflow
+              // On tente de recuperer le verrou depuis le cache local des verrous applicatifs si disponible
+              // Note: getProjectResourceLock peut prendre null si on a un gestionnaire de verrous transverse
+              const lock = getProjectResourceLock(null, type, id, { scope: 'glob-wf' });
+              if (!lock) return false;
+              return String(lock.ownerUserId || '') !== String(currentUser?.userId || '');
+            },
+            acquireResourceLock: async (type, id, options = {}) => {
+              // On utilise un projet virtuel 'glob-wf' pour les verrous workflow
+              return acquireProjectResourceLock('glob-wf', type, id, options);
+            },
+            releaseResourceLock: async (type, id, lockId) => {
+              return releaseProjectResourceLock('glob-wf', type, id, lockId);
+            },
             getWorkflowActionButtonsMode: () => getWorkflowActionButtonsMode(),
             getSoftwareVersionCatalog: async () => {
               await refreshGlobalTaxonomyCache();
@@ -18869,6 +19252,54 @@
       const done = subtasks.filter(st => Boolean(st?.done)).length;
       const percent = total > 0 ? Math.round((done / total) * 100) : 0;
       return { total, done, percent };
+    }
+
+    /**
+     * Calcule la progression temporelle d'une tâche.
+     * Basé sur le ratio : (Maintenant - Création) / (Échéance - Création)
+     */
+    function calculateTaskProgress(task) {
+      if (!task.dueDate) return 0;
+      const start = task.createdAt || (task.requestDate ? new Date(task.requestDate).getTime() : Date.now() - (7 * 24 * 3600 * 1000));
+      const end = new Date(task.dueDate).getTime();
+      const now = Date.now();
+      
+      if (now >= end) return 100;
+      if (now <= start) return 0;
+      
+      const total = end - start;
+      const elapsed = now - start;
+      return Math.round((elapsed / total) * 100);
+    }
+
+    function buildTaskProgressBarHtml(task) {
+      if (!task.dueDate || task.status === 'termine') return '';
+      
+      const percent = calculateTaskProgress(task);
+      const dueStatus = getTaskDueStatus(task);
+      
+      let statusClass = '';
+      let label = 'Progression temps';
+      
+      if (dueStatus.isOverdue) {
+        statusClass = 'task-progress-overdue';
+        label = 'Temps dépassé';
+      } else if (dueStatus.isDueToday) {
+        statusClass = 'task-progress-today';
+        label = 'Échéance aujourd\'hui';
+      }
+      
+      return `
+        <div class="task-progress-wrap ${statusClass}">
+          <div class="task-progress-label">
+            <span>${label}</span>
+            <span class="task-progress-percent">${percent}%</span>
+          </div>
+          <div class="task-progress-bar-bg">
+            <div class="task-progress-bar-fill" style="width: ${percent}%"></div>
+          </div>
+        </div>
+      `;
     }
 
     function buildSubtaskProgressHtml(task, compact = false) {
@@ -19071,9 +19502,13 @@
           participants.push({ userId: task.createdBy, name: '' });
         }
         const participantsHtml = renderParticipantsStack(participants, 2);
+        
+        const dueStatus = getTaskDueStatus(task);
+        const cardBgClass = dueStatus.isOverdue ? 'is-overdue-card' : 'bg-white';
+        
         if (renderAsList) {
           return `
-        <div id="task-card-${task.taskId}" class="task-list-row rounded-lg bg-white border border-slate-200 p-3 cursor-pointer" onclick="openProjectTaskDetails('${task.taskId}')" role="button" tabindex="0">
+        <div id="task-card-${task.taskId}" class="task-list-row rounded-lg ${cardBgClass} border border-slate-200 p-3 cursor-pointer" onclick="openProjectTaskDetails('${task.taskId}')" role="button" tabindex="0">
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0 flex-1">
               <div class="flex flex-wrap items-center gap-2 mb-1">
@@ -19103,7 +19538,7 @@
       `;
         }
         return `
-        <div id="task-card-${task.taskId}" class="task-list-card task-list-card-modern task-density-${compactLevel} ${urgencyMeta.accentClass} rounded-lg p-4 bg-white cursor-pointer" onclick="openProjectTaskDetails('${task.taskId}')" role="button" tabindex="0">
+        <div id="task-card-${task.taskId}" class="task-list-card task-list-card-modern task-density-${compactLevel} ${urgencyMeta.accentClass} rounded-lg p-4 ${cardBgClass} cursor-pointer" onclick="openProjectTaskDetails('${task.taskId}')" role="button" tabindex="0">
           <div class="flex justify-between items-start mb-2">
             <div>
               <div class="flex flex-wrap items-center gap-2 mb-1">
@@ -19127,6 +19562,7 @@
             </div>
           </div>
           ${showProjectTaskCardDescription ? `<p class="task-card-description text-gray-600 text-sm mb-3">${escapeHtml(task.description || '')}</p>` : ''}
+          ${buildTaskProgressBarHtml(task)}
           <div class="hidden text-xs text-slate-500 flex flex-wrap gap-2 mb-3">
             ${task.theme ? `<span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700">Thème: ${escapeHtml(task.theme)}</span>` : ''}
             ${getTaskGroupName(task, currentProjectState) ? `<span class="px-2 py-1 rounded-full bg-blue-100 text-blue-700">Groupe: ${escapeHtml(getTaskGroupName(task, currentProjectState) || 'N/A')}</span>` : ''}
@@ -19189,7 +19625,7 @@
       container.classList.remove('hidden');
 
       if (archived.length === 0) {
-        container.innerHTML = '<p class="text-sm text-slate-500">Aucune tache archivee.</p>';
+        container.innerHTML = '<p class="text-sm text-slate-500">Aucune tâche archivée.</p>';
         return;
       }
 
@@ -19259,8 +19695,11 @@
         const items = scopedTasks.filter(t => (t.status || 'todo') === col.key);
         const cards = items.length === 0
           ? '<p class="text-sm text-gray-500 text-center py-4">Aucune tâche</p>'
-          : items.map(task => `
-            <div class="kanban-card kanban-card-modern ${getTaskUrgencyMeta(task.urgency).accentClass} bg-white rounded-lg p-3 cursor-grab active:cursor-grabbing" draggable="true" ondragstart="startKanbanDrag(event, '${task.taskId}')" onclick="openProjectTaskDetails('${task.taskId}')" role="button" tabindex="0">
+          : items.map(task => {
+            const dueStatus = getTaskDueStatus(task);
+            const cardBgClass = dueStatus.isOverdue ? 'is-overdue-card' : 'bg-white';
+            return `
+            <div class="kanban-card kanban-card-modern ${getTaskUrgencyMeta(task.urgency).accentClass} ${cardBgClass} rounded-lg p-3 cursor-grab active:cursor-grabbing" draggable="true" ondragstart="startKanbanDrag(event, '${task.taskId}')" onclick="openProjectTaskDetails('${task.taskId}')" role="button" tabindex="0">
               <div class="mb-2 flex items-center justify-between gap-2">
                 <span class="${getTaskUrgencyMeta(task.urgency).chipClass}">${getTaskUrgencyMeta(task.urgency).label}</span>
                 <span class="${getTaskStatusMeta(task.status).chipClass}">${getTaskStatusMeta(task.status).label}</span>
@@ -19284,8 +19723,8 @@
                 ${canEditTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); archiveTask('${task.taskId}')" class="task-action-btn task-action-btn-warn">Archiver</button>` : ''}
                 ${canDeleteTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); deleteTask('${task.taskId}')" class="task-action-btn task-action-btn-danger">Supprimer</button>` : ''}
               </div>
-            </div>
-          `).join('');
+            </div>`;
+          }).join('');
 
         return `
           <div class="kanban-col rounded-xl p-3" data-col="${col.key}" ondragover="allowKanbanDrop(event)" ondrop="dropKanbanTask(event, '${col.key}')">
@@ -19532,10 +19971,12 @@
       }
 
       container.innerHTML = items.map(task => {
+        const dueStatus = getTaskDueStatus(task);
+        const cardBgClass = dueStatus.isOverdue ? 'is-overdue-card' : 'bg-surface-container-low';
         const progress = task.status === 'termine' ? 100 : task.status === 'en-cours' ? 55 : task.status === 'suspendu' ? 30 : 10;
         const isMilestone = task.status === 'termine' || task.urgency === 'high';
         return `
-          <div class="bg-surface-container-low rounded-lg p-4">
+          <div class="${cardBgClass} rounded-lg p-4">
             <div class="flex items-center justify-between mb-2">
               <h4 class="font-semibold">${escapeHtml(task.title)}</h4>
               <div class="flex items-center gap-2">
@@ -19553,18 +19994,33 @@
 
     function renderCalendar(tasks) {
       const grid = document.getElementById('calendar-grid');
+      const yearGrid = document.getElementById('calendar-year-grid');
       const monthLabel = document.getElementById('calendar-month-label');
       const agenda = document.getElementById('calendar-day-agenda');
-      if (!grid || !monthLabel || !agenda) return;
+      const yearAgenda = document.getElementById('calendar-year-agenda');
+      const btnMonth = document.getElementById('calendar-view-month');
+      const btnYear = document.getElementById('calendar-view-year');
+      if (!grid || !yearGrid || !monthLabel || !agenda || !yearAgenda) return;
 
       const year = calendarCursor.getFullYear();
       const month = calendarCursor.getMonth();
+      const isYearMode = projectCalendarViewMode === 'year';
       const firstDay = new Date(year, month, 1);
       const daysInMonth = new Date(year, month + 1, 0).getDate();
       const leading = (firstDay.getDay() + 6) % 7;
       const todayKey = toYmd(new Date());
 
-      monthLabel.textContent = firstDay.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+      monthLabel.textContent = isYearMode
+        ? firstDay.toLocaleDateString('fr-FR', { year: 'numeric' })
+        : firstDay.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+      grid.classList.toggle('hidden', isYearMode);
+      agenda.classList.toggle('hidden', isYearMode);
+      yearGrid.classList.toggle('hidden', !isYearMode);
+      yearAgenda.classList.toggle('hidden', !isYearMode);
+      if (btnMonth && btnYear) {
+        btnMonth.classList.toggle('view-tab-active', !isYearMode);
+        btnYear.classList.toggle('view-tab-active', isYearMode);
+      }
 
       const tasksByDay = new Map();
       (tasks || []).forEach(task => {
@@ -19573,6 +20029,56 @@
         if (!tasksByDay.has(key)) tasksByDay.set(key, []);
         tasksByDay.get(key).push(task);
       });
+
+      if (isYearMode) {
+        const months = Array.from({ length: 12 }, (_, idx) => {
+          const monthKey = `${year}-${String(idx + 1).padStart(2, '0')}`;
+          const monthTasks = (tasks || [])
+            .filter((task) => String(taskDueDateKey(task) || '').startsWith(monthKey))
+            .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+          return {
+            monthKey,
+            label: new Date(year, idx, 1).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }),
+            tasks: monthTasks
+          };
+        });
+        const now = new Date();
+        const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const selectedMonthKey = selectedCalendarDayKey?.slice(0, 7) || (currentMonthKey.startsWith(`${year}-`) ? currentMonthKey : `${year}-01`);
+        yearGrid.innerHTML = months.map((bucket) => `
+          <button type="button" onclick="selectProjectCalendarMonth('${bucket.monthKey}')" class="project-calendar-year-month ${bucket.monthKey === selectedMonthKey ? 'project-calendar-year-month-selected' : ''} ${bucket.monthKey === currentMonthKey ? 'project-calendar-year-month-current' : ''}">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-sm font-semibold text-slate-800 capitalize">${escapeHtml(bucket.label)}</span>
+              <span class="text-xs text-slate-500">${bucket.tasks.length}</span>
+            </div>
+            <div class="mt-2 space-y-1">
+              ${bucket.tasks.slice(0, 3).map((task) => `<div class="calendar-day-item calendar-day-item-private">${escapeHtml(task.title || '')}</div>`).join('')}
+              ${bucket.tasks.length > 3 ? `<div class="calendar-day-more">+${bucket.tasks.length - 3}</div>` : ''}
+            </div>
+          </button>
+        `).join('');
+
+        const selectedMonthTasks = months.find((bucket) => bucket.monthKey === selectedMonthKey)?.tasks || [];
+        yearAgenda.innerHTML = `
+          <div class="rounded-xl border border-slate-200 bg-white p-3">
+            <div class="flex items-center justify-between gap-2 mb-2">
+              <p class="text-sm font-bold text-slate-800">${new Date(`${selectedMonthKey}-01`).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}</p>
+              <button onclick="openProjectCalendarMonthView('${selectedMonthKey}')" class="px-2 py-1 text-[10px] rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">Ouvrir en vue mensuelle</button>
+            </div>
+            ${
+              selectedMonthTasks.length === 0
+                ? '<p class="text-sm text-slate-500">Aucune tâche planifiée ce mois.</p>'
+                : `<div class="space-y-2">${selectedMonthTasks.map(task => `
+                    <div class="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+                      <p class="text-sm font-semibold text-slate-800">${escapeHtml(task.title)}</p>
+                      <p class="text-xs text-slate-500">${escapeHtml(formatDate(task.dueDate))}</p>
+                    </div>
+                  `).join('')}</div>`
+            }
+          </div>
+        `;
+        return;
+      }
 
       const headers = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
         .map(day => `<div class="text-center font-semibold text-slate-500 py-1">${day}</div>`)
@@ -19642,6 +20148,27 @@
       renderTimeline(currentProjectState?.tasks || []);
     }
 
+    function selectProjectCalendarMonth(monthKey) {
+      const key = String(monthKey || '').trim();
+      if (!/^\d{4}-\d{2}$/.test(key)) return;
+      selectedCalendarDayKey = `${key}-01`;
+      renderCalendar(currentProjectState?.tasks || []);
+    }
+
+    function openProjectCalendarMonthView(monthKey) {
+      const key = String(monthKey || '').trim();
+      if (/^\d{4}-\d{2}$/.test(key)) {
+        const year = Number(key.slice(0, 4));
+        const month = Number(key.slice(5, 7)) - 1;
+        calendarCursor = new Date(year, month, 1);
+        selectedCalendarDayKey = `${key}-01`;
+      }
+      projectCalendarViewMode = 'month';
+      calendarDayFilterEnabled = false;
+      renderCalendar(currentProjectState?.tasks || []);
+      renderTimeline(currentProjectState?.tasks || []);
+    }
+
     function clearCalendarDayFilter() {
       calendarDayFilterEnabled = false;
       renderCalendar(currentProjectState?.tasks || []);
@@ -19649,6 +20176,8 @@
     }
 
     window.selectCalendarDay = selectCalendarDay;
+    window.selectProjectCalendarMonth = selectProjectCalendarMonth;
+    window.openProjectCalendarMonthView = openProjectCalendarMonthView;
     window.clearCalendarDayFilter = clearCalendarDayFilter;
     window.openNotification = openNotification;
 
@@ -22224,6 +22753,7 @@
       : null;
 
     async function initApp() {
+      initDashboardStatsCollapse();
       if (appInitRuntime?.initApp) {
         await appInitRuntime.initApp();
         return;
@@ -22317,6 +22847,14 @@
       document.getElementById('modal-app-help')?.classList.add('hidden');
     });
     document.getElementById('btn-sidebar-collapse')?.addEventListener('click', toggleSidebarCollapsed);
+    
+    // UI Global Dashboard & Tasks
+    document.getElementById('btn-toggle-sort-focus')?.addEventListener('click', () => {
+      toggleDashboardSortMode();
+    });
+    updateDashboardSortUI();
+
+    document.getElementById('btn-global-manage-themes')?.addEventListener('click', showGlobalThemeManagementModal);
     document.getElementById('btn-link-folder')?.addEventListener('click', handleSelectFolder);
     document.getElementById('btn-unlink-folder')?.addEventListener('click', handleContinueWithoutFolder);
     document.getElementById('sidebar-link-folder')?.addEventListener('click', handleSelectFolder);
@@ -22566,6 +23104,7 @@
     document.getElementById('global-calendar-search')?.addEventListener('input', () => renderGlobalCalendar());
     document.getElementById('global-calendar-month')?.addEventListener('change', () => {
       globalCalendarSelectedDay = null;
+      globalCalendarSelectedMonth = null;
       renderGlobalCalendar();
     });
     document.getElementById('global-calendar-view-list')?.addEventListener('click', () => {
@@ -22574,6 +23113,86 @@
     });
     document.getElementById('global-calendar-view-grid')?.addEventListener('click', () => {
       globalCalendarViewMode = resolveViewWithLock('globalCalendar', 'grid', 'grid');
+      renderGlobalCalendar();
+    });
+    document.getElementById('global-calendar-view-year')?.addEventListener('click', () => {
+      globalCalendarViewMode = resolveViewWithLock('globalCalendar', 'year', 'grid');
+      globalCalendarSelectedMonth = null;
+      renderGlobalCalendar();
+    });
+    document.getElementById('global-calendar-toggle-controls')?.addEventListener('click', () => {
+      initGlobalCalendarPinnedThemesState();
+      setGlobalCalendarControlsExpanded(!globalCalendarControlsExpanded);
+    });
+    document.getElementById('btn-global-calendar-pin-theme')?.addEventListener('click', () => {
+      initGlobalCalendarPinnedThemesState();
+      const select = document.getElementById('global-calendar-theme-pin-select');
+      if (!select) return;
+      const picked = normalizeCalendarThemeName(select.value);
+      if (!picked) return;
+      if (!globalCalendarPinnedThemes.some((theme) => normalizeCalendarThemeKey(theme) === normalizeCalendarThemeKey(picked))) {
+        globalCalendarPinnedThemes.push(picked);
+      }
+      if (!globalCalendarPinnedThemeChecks.some((theme) => normalizeCalendarThemeKey(theme) === normalizeCalendarThemeKey(picked))) {
+        globalCalendarPinnedThemeChecks.push(picked);
+      }
+      syncPinnedCalendarThemeState();
+      renderGlobalCalendar();
+    });
+    document.getElementById('btn-global-calendar-theme-actions-toggle')?.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleGlobalCalendarThemeActionsMenu();
+    });
+    document.getElementById('global-calendar-theme-actions-menu')?.addEventListener('click', (event) => {
+      const btn = event.target?.closest?.('[data-calendar-theme-action]');
+      if (!btn) return;
+      event.preventDefault();
+      const action = String(btn.getAttribute('data-calendar-theme-action') || '').trim();
+      initGlobalCalendarPinnedThemesState();
+      if (action === 'check-all') {
+        globalCalendarPinnedThemeChecks = [...globalCalendarPinnedThemes];
+      } else if (action === 'uncheck-all') {
+        globalCalendarPinnedThemeChecks = [];
+      } else if (action === 'unpin-all') {
+        globalCalendarPinnedThemes = [];
+        globalCalendarPinnedThemeChecks = [];
+      }
+      syncPinnedCalendarThemeState();
+      toggleGlobalCalendarThemeActionsMenu(false);
+      renderGlobalCalendar();
+    });
+    document.addEventListener('click', (event) => {
+      const wrap = event.target?.closest?.('.calendar-theme-actions-menu-wrap');
+      if (wrap) return;
+      toggleGlobalCalendarThemeActionsMenu(false);
+    });
+    document.getElementById('global-calendar-theme-pins')?.addEventListener('change', (event) => {
+      initGlobalCalendarPinnedThemesState();
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement) || target.type !== 'checkbox') return;
+      const themeName = normalizeCalendarThemeName(target.getAttribute('data-calendar-theme-check') || '');
+      if (!themeName) return;
+      if (target.checked) {
+        if (!globalCalendarPinnedThemeChecks.some((theme) => normalizeCalendarThemeKey(theme) === normalizeCalendarThemeKey(themeName))) {
+          globalCalendarPinnedThemeChecks.push(themeName);
+        }
+      } else {
+        globalCalendarPinnedThemeChecks = globalCalendarPinnedThemeChecks.filter((theme) => normalizeCalendarThemeKey(theme) !== normalizeCalendarThemeKey(themeName));
+      }
+      syncPinnedCalendarThemeState();
+      renderGlobalCalendar();
+    });
+    document.getElementById('global-calendar-theme-pins')?.addEventListener('click', (event) => {
+      initGlobalCalendarPinnedThemesState();
+      const btn = event.target?.closest?.('[data-calendar-theme-unpin]');
+      if (!btn) return;
+      event.preventDefault();
+      const themeName = normalizeCalendarThemeName(btn.getAttribute('data-calendar-theme-unpin') || '');
+      if (!themeName) return;
+      globalCalendarPinnedThemes = globalCalendarPinnedThemes.filter((theme) => normalizeCalendarThemeKey(theme) !== normalizeCalendarThemeKey(themeName));
+      globalCalendarPinnedThemeChecks = globalCalendarPinnedThemeChecks.filter((theme) => normalizeCalendarThemeKey(theme) !== normalizeCalendarThemeKey(themeName));
+      syncPinnedCalendarThemeState();
       renderGlobalCalendar();
     });
     document.getElementById('global-calendar-prev-month')?.addEventListener('click', () => {
@@ -22588,6 +23207,7 @@
       const now = new Date();
       ensureGlobalCalendarMonthOption(monthInput, now.getFullYear(), now.getMonth());
       globalCalendarSelectedDay = toYmd(now);
+      globalCalendarSelectedMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
       renderGlobalCalendar();
     });
     document.getElementById('btn-open-global-calendar-item-modal')?.addEventListener('click', () => {
@@ -22610,6 +23230,7 @@
       document.getElementById('global-calendar-month').value = month;
       resetStandaloneCalendarForm();
       globalCalendarSelectedDay = null;
+      globalCalendarSelectedMonth = null;
       renderGlobalCalendar();
     });
     document.getElementById('btn-close-doc-binding')?.addEventListener('click', () => {
@@ -23339,9 +23960,9 @@
         const createProjectDocInput = document.getElementById('project-create-doc-files');
         if (createProjectDocInput) createProjectDocInput.value = '';
         updateCreateProjectDocFilesSummary();
-        const modeText = sharingMode === 'private' ? 'privé' : 'partagé et chiffré E2E';
-        showToast(`✅ Projet ${modeText} créé !`);
-        addNotification('Projet', `Projet ${name} cree (${sharingMode})`, projectId);
+      const modeText = sharingMode === 'private' ? 'privé' : 'partagé et chiffré E2E';
+      showToast(`✅ Projet ${modeText} créé !`);
+      addNotification('Projet', `Projet ${name} créé (${sharingMode})`, projectId);
         showLoading(false);
 
         // Ouvrir automatiquement le projet créé
@@ -23956,34 +24577,34 @@
     document.getElementById('project-task-view-4')?.addEventListener('click', () => setProjectTaskCardsColumns(4));
     // Fonction pour remplir le select de sélection de groupe en messagerie
     async function populateGlobalMessageGroupChannelSelect() {
-      console.log('🔍 [populateGlobalMessageGroupChannelSelect] START');
+      console.log('[populateGlobalMessageGroupChannelSelect] START');
       const select = document.getElementById('global-message-group-channel-select');
       if (!select) {
-        console.error('❌ Select element not found!');
+        console.error('Select element not found');
         return;
       }
-      console.log('✅ Select element found');
+      console.log('Select element found');
 
       const me = String(currentUser?.userId || '').trim();
-      console.log('👤 Current user ID:', me);
+      console.log('Current user ID:', me);
       if (!me) {
         select.innerHTML = '<option value="">-- Sélectionner un groupe --</option>';
-        console.log('⚠️ No current user, aborting');
+        console.log('No current user, aborting');
         return;
       }
 
-      console.log('📚 globalGroupCatalog length:', (globalGroupCatalog || []).length);
-      console.log('📚 globalGroupCatalog:', globalGroupCatalog);
+      console.log('globalGroupCatalog length:', (globalGroupCatalog || []).length);
+      console.log('globalGroupCatalog:', globalGroupCatalog);
 
       // Récupérer tous les projets accessibles pour vérifier lesquels sont publics
       const allProjects = await getAllProjects();
-      console.log('📁 All projects count:', allProjects.length);
+      console.log('All projects count:', allProjects.length);
       const publicProjectIds = new Set(
         allProjects
           .filter(p => normalizeProjectReadAccess(p?.readAccess) === 'public')
           .map(p => p.projectId)
       );
-      console.log('🌍 Public project IDs:', Array.from(publicProjectIds));
+      console.log('Public project IDs:', Array.from(publicProjectIds));
 
       // Filtrer les groupes selon la logique :
       // 1. Groupes dont l'utilisateur est membre
@@ -23997,14 +24618,14 @@
           const isFromPublicProject = group.projectId && publicProjectIds.has(group.projectId);
 
           const willShow = isMember || isFromReferentiels || isFromPublicProject;
-          console.log(`  Group "${group.name}": isMember=${isMember}, isFromRef=${isFromReferentiels}, isFromPub=${isFromPublicProject} → ${willShow ? '✅ SHOW' : '❌ HIDE'}`);
+          console.log(`  Group "${group.name}": isMember=${isMember}, isFromRef=${isFromReferentiels}, isFromPub=${isFromPublicProject} -> ${willShow ? 'SHOW' : 'HIDE'}`);
 
           // Accepter si : membre OU groupe référentiel OU projet public
           return willShow;
         })
         .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'fr'));
 
-      console.log(`✨ Visible groups: ${visibleGroups.length}`, visibleGroups.map(g => g.name));
+      console.log(`Visible groups: ${visibleGroups.length}`, visibleGroups.map(g => g.name));
 
       const memberGroups = visibleGroups;  // Pour compatibilité avec le code existant
 
@@ -24020,7 +24641,7 @@
           label += ' (global)';
         }
         const option = `<option value="${escapeHtml(group.groupKey)}">${label}</option>`;
-        console.log(`  📝 HTML: ${option}`);
+        console.log(`  ðŸ“ HTML: ${option}`);
         return option;
       });
 
@@ -24029,13 +24650,13 @@
         ...htmlOptions
       ].join('\n');
 
-      console.log('📄 Final HTML to insert:');
+      console.log('ðŸ“„ Final HTML to insert:');
       console.log(finalHTML);
 
       select.innerHTML = finalHTML;
 
       console.log('✅ Select updated. Options count:', select.options.length);
-      console.log('🔍 [populateGlobalMessageGroupChannelSelect] END');
+      console.log('ðŸ” [populateGlobalMessageGroupChannelSelect] END');
     }
 
     document.getElementById('btn-project-subnav-horizontal')?.addEventListener('click', () => setProjectSubnavLayout('horizontal'));
@@ -24060,7 +24681,7 @@
       await renderActivity(currentProjectEvents);
     });
 
-    const orderedViews = ['overview', 'cards', 'list', 'kanban', 'gantt', 'timeline', 'docs', 'chat', 'activity', 'archives'];
+    const orderedViews = ['overview', 'kanban', 'cards', 'list', 'gantt', 'timeline', 'docs', 'chat', 'activity', 'archives'];
     orderedViews.forEach((viewKey, idx) => {
       const btn = document.getElementById(`view-${viewKey === 'docs' ? 'docs' : viewKey}`);
       if (!btn) return;
@@ -24105,14 +24726,30 @@
       timelineFilter = 'overdue';
       renderTimeline(currentProjectState?.tasks || []);
     });
+    document.getElementById('calendar-view-month')?.addEventListener('click', () => {
+      projectCalendarViewMode = 'month';
+      calendarDayFilterEnabled = false;
+      renderCalendar(currentProjectState?.tasks || []);
+      renderTimeline(currentProjectState?.tasks || []);
+    });
+    document.getElementById('calendar-view-year')?.addEventListener('click', () => {
+      projectCalendarViewMode = 'year';
+      calendarDayFilterEnabled = false;
+      renderCalendar(currentProjectState?.tasks || []);
+      renderTimeline(currentProjectState?.tasks || []);
+    });
     document.getElementById('calendar-prev-month')?.addEventListener('click', () => {
-      calendarCursor = new Date(calendarCursor.getFullYear(), calendarCursor.getMonth() - 1, 1);
+      calendarCursor = projectCalendarViewMode === 'year'
+        ? new Date(calendarCursor.getFullYear() - 1, calendarCursor.getMonth(), 1)
+        : new Date(calendarCursor.getFullYear(), calendarCursor.getMonth() - 1, 1);
       calendarDayFilterEnabled = false;
       renderCalendar(currentProjectState?.tasks || []);
       renderTimeline(currentProjectState?.tasks || []);
     });
     document.getElementById('calendar-next-month')?.addEventListener('click', () => {
-      calendarCursor = new Date(calendarCursor.getFullYear(), calendarCursor.getMonth() + 1, 1);
+      calendarCursor = projectCalendarViewMode === 'year'
+        ? new Date(calendarCursor.getFullYear() + 1, calendarCursor.getMonth(), 1)
+        : new Date(calendarCursor.getFullYear(), calendarCursor.getMonth() + 1, 1);
       calendarDayFilterEnabled = false;
       renderCalendar(currentProjectState?.tasks || []);
       renderTimeline(currentProjectState?.tasks || []);
@@ -24599,6 +25236,153 @@
     }
 
     debugLog('NEXUS MDA loaded');
+
+    async function showGlobalThemeManagementModal() {
+      await refreshGlobalTaxonomyCache();
+      const themes = globalThemeCatalog || [];
+      
+      const content = `
+        <div class="p-4">
+          <p class="text-sm text-slate-500 mb-4">Gérez les thématiques transverses utilisées pour classer vos tâches hors projet et filtrer le tableau de bord.</p>
+          
+          <div class="mb-4">
+            <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Ajouter une thématique</label>
+            <div class="flex gap-2">
+              <input type="text" id="new-global-theme-input" class="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm" placeholder="Nom de la thématique...">
+              <button id="btn-add-global-theme-action" class="btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold">Ajouter</button>
+            </div>
+          </div>
+
+          <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Thématiques existantes</label>
+          <div id="global-theme-modal-list" class="space-y-2 max-h-[40vh] overflow-y-auto pr-2">
+            ${themes.length === 0 ? '<p class="text-sm text-slate-400 text-center py-4">Aucune thématique définie.</p>' : themes.map(t => `
+              <div class="flex items-center justify-between p-2 rounded-lg border border-slate-200 bg-slate-50">
+                <span class="text-sm font-medium text-slate-700">${escapeHtml(t.name)}</span>
+                <button onclick="confirmDeleteGlobalTheme('${escapeHtml(t.themeKey)}', '${escapeHtml(t.name)}')" class="p-1 text-slate-400 hover:text-red-600">
+                  <span class="material-symbols-outlined text-base">delete</span>
+                </button>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+
+      showModal({
+        title: 'Référentiel des Thématiques',
+        content,
+        maxWidth: 'max-w-md',
+        actions: [
+          { label: 'Fermer', onClick: (m) => m.close(), secondary: true }
+        ]
+      });
+
+      document.getElementById('btn-add-global-theme-action')?.addEventListener('click', async () => {
+        const input = document.getElementById('new-global-theme-input');
+        const name = input?.value.trim();
+        if (!name) return;
+        await upsertGlobalTheme(name);
+        showToast(`Thématique "${name}" ajoutée`);
+        closeModal();
+        showGlobalThemeManagementModal();
+      });
+      
+      document.getElementById('new-global-theme-input')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') document.getElementById('btn-add-global-theme-action')?.click();
+      });
+    }
+
+    async function confirmDeleteGlobalTheme(key, name) {
+      const confirmed = await showConfirm(`Supprimer la thématique "${name}" ?`, 
+        "Cela la retirera des suggestions futures. Les tâches existantes conserveront cet intitulé.", 
+        "Supprimer", "danger");
+      
+      if (confirmed) {
+        await deleteGlobalTheme(key);
+        showToast(`Thématique "${name}" supprimée`);
+        closeModal();
+        showGlobalThemeManagementModal();
+      }
+    }
+
+    // ============================================================================
+    // MODAL HELPERS (GENERIC)
+    // ============================================================================
+
+    function showModal(options = {}) {
+      closeModal();
+      const modalId = `modal-dyn-${uuidv4()}`;
+      const modalHtml = `
+        <div id="${modalId}" class="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div class="bg-white rounded-2xl shadow-2xl w-full ${options.maxWidth || 'max-w-lg'} overflow-hidden transform animate-in zoom-in-95 duration-200">
+            <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <h3 class="text-lg font-bold text-slate-800">${escapeHtml(options.title || 'Information')}</h3>
+              <button onclick="closeModal()" class="p-2 rounded-full hover:bg-slate-200 text-slate-400 hover:text-slate-600 transition-colors">
+                <span class="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div class="modal-body max-h-[75vh] overflow-y-auto">
+              ${options.content || ''}
+            </div>
+            ${options.actions ? `
+              <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+                ${options.actions.map((action, idx) => `
+                  <button id="${modalId}-action-${idx}" class="px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+                    action.secondary 
+                      ? 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50' 
+                      : (action.danger ? 'bg-red-600 text-white hover:bg-red-700 shadow-lg shadow-red-200' : 'bg-primary text-white hover:bg-primary-container shadow-lg shadow-blue-200')
+                  }">
+                    ${escapeHtml(action.label)}
+                  </button>
+                `).join('')}
+              </div>
+            ` : ''}
+          </div>
+        </div>
+      `;
+      document.body.insertAdjacentHTML('beforeend', modalHtml);
+      
+      if (options.actions) {
+        options.actions.forEach((action, idx) => {
+          document.getElementById(`${modalId}-action-${idx}`)?.addEventListener('click', () => {
+            if (action.onClick) action.onClick({ close: closeModal });
+            else closeModal();
+          });
+        });
+      }
+
+      // Fermeture par clic sur le fond
+      document.getElementById(modalId).addEventListener('click', (e) => {
+        if (e.target.id === modalId) closeModal();
+      });
+    }
+
+    function closeModal() {
+      const modals = document.querySelectorAll('[id^="modal-dyn-"]');
+      modals.forEach(m => m.remove());
+    }
+
+    async function showConfirm(title, message, confirmLabel = 'Confirmer', type = 'primary') {
+      return new Promise((resolve) => {
+        showModal({
+          title,
+          maxWidth: 'max-w-md',
+          content: `
+            <div class="p-6 text-center">
+              <div class="w-16 h-16 rounded-full ${type === 'danger' ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'} mx-auto mb-4 flex items-center justify-center">
+                <span class="material-symbols-outlined text-3xl">${type === 'danger' ? 'warning' : 'help'}</span>
+              </div>
+              <p class="text-slate-600">${escapeHtml(message)}</p>
+            </div>
+          `,
+          actions: [
+            { label: 'Annuler', secondary: true, onClick: (m) => { m.close(); resolve(false); } },
+            { label: confirmLabel, danger: type === 'danger', onClick: (m) => { m.close(); resolve(true); } }
+          ]
+        });
+      });
+    }
+
+
 
 
 
