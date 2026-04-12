@@ -45,6 +45,7 @@
     const DB_NAME = 'taskmda-team-standalone';
     const DB_VERSION = 18; // + module contingence workflow
     const LOCAL_RESET_TS_KEY = 'taskmda_last_local_reset_ts';
+    const USER_ID_HISTORY_KEY = 'taskmda_user_id_history';
     const DATA_EXPORT_STORES = {
       events: 'eventId',
       processedEvents: 'eventId',
@@ -97,6 +98,62 @@
       rgpdExports: 'id'
     };
     let dbInstance = null;
+    let currentUserIdAliases = new Set();
+
+    function normalizeUserIdList(values) {
+      return Array.from(new Set((Array.isArray(values) ? values : [])
+        .map((value) => String(value || '').trim())
+        .filter(Boolean)));
+    }
+
+    function loadUserIdHistory() {
+      try {
+        return normalizeUserIdList(JSON.parse(localStorage.getItem(USER_ID_HISTORY_KEY) || '[]'));
+      } catch (_) {
+        return [];
+      }
+    }
+
+    function saveUserIdHistory(values) {
+      const normalized = normalizeUserIdList(values);
+      localStorage.setItem(USER_ID_HISTORY_KEY, JSON.stringify(normalized));
+      return normalized;
+    }
+
+    function rememberUserId(userId) {
+      const id = String(userId || '').trim();
+      if (!id) return [];
+      const merged = saveUserIdHistory([...loadUserIdHistory(), id]);
+      currentUserIdAliases = new Set([...currentUserIdAliases, ...merged, id]);
+      return merged;
+    }
+
+    function getCurrentUserIdAliases(userId = getCurrentUserId()) {
+      const primary = String(userId || '').trim();
+      const aliases = new Set(loadUserIdHistory());
+      for (const candidate of currentUserIdAliases) {
+        const normalized = String(candidate || '').trim();
+        if (normalized) aliases.add(normalized);
+      }
+      if (primary) aliases.add(primary);
+      return aliases;
+    }
+
+    async function refreshCurrentUserIdAliases() {
+      const aliases = getCurrentUserIdAliases(currentUser?.userId || getCurrentUserId());
+      try {
+        const users = await getAllDecrypted('users', 'userId');
+        for (const user of users || []) {
+          const id = String(user?.userId || '').trim();
+          if (id) aliases.add(id);
+        }
+      } catch (error) {
+        console.warn('Unable to refresh user id aliases:', error);
+      }
+      const merged = saveUserIdHistory(Array.from(aliases));
+      currentUserIdAliases = new Set(merged);
+      return currentUserIdAliases;
+    }
 
     async function initDatabase() {
       if (!dbInstance) {
@@ -481,6 +538,7 @@
 
     const corruptEncryptedRowsReported = new Set();
     const corruptEncryptedRowsCleanupQueued = new Set();
+    const CRYPTO_AUTO_PURGE_SKIP_STORES = new Set(['localState', 'events', 'users', 'sharedKeys']);
     const cryptoCleanupSummary = {
       detectedByStore: new Map(),
       purgedByStore: new Map(),
@@ -519,6 +577,9 @@
         const detected = Number(cryptoCleanupSummary.detectedByStore.get(safeStore) || 0) + 1;
         cryptoCleanupSummary.detectedByStore.set(safeStore, detected);
         scheduleCryptoCleanupSummaryLog();
+      }
+      if (CRYPTO_AUTO_PURGE_SKIP_STORES.has(safeStore)) {
+        return;
       }
       if (corruptEncryptedRowsCleanupQueued.has(marker)) return;
       corruptEncryptedRowsCleanupQueued.add(marker);
@@ -1030,16 +1091,21 @@
     function hasProjectAccess(state, userId = getCurrentUserId()) {
       if (!state || !state.project || state.project.deletedAt) return false;
       const members = Array.isArray(state.members) ? state.members : [];
+      const aliasIds = getCurrentUserIdAliases(userId);
       const normalizedMode = normalizeSharingMode(state.project.sharingMode, 'private');
       const readAccess = normalizeProjectReadAccess(
         state.project.readAccess,
         normalizedMode === 'private' ? 'private' : 'members'
       );
-      const isMember = members.some(m => m.userId === userId);
+      const isMember = members.some((m) => aliasIds.has(String(m?.userId || '').trim()));
       if (isMember) return true;
-      if (state.project.createdBy && state.project.createdBy === userId) return true;
+      if (state.project.createdBy && aliasIds.has(String(state.project.createdBy || '').trim())) return true;
       if (members.length === 0 && !state.project.createdBy) return true; // compatibilité anciens jeux de données
-      if (normalizedMode === 'private') return false;
+      if (normalizedMode === 'private') {
+        // Politique local-first: les projets privés restent visibles pour l'utilisateur local,
+        // y compris quand le dossier collectif est connecté.
+        return true;
+      }
       if (readAccess === 'public') return true;
       return false;
     }
@@ -1070,13 +1136,77 @@
     async function getAllProjects() {
       try {
         const states = await getAllDecrypted('localState', 'projectId');
-        return states
-          .filter(s => s && s.project && !s.project.deletedAt)
-          .filter(s => hasProjectAccess(s))
-          .map(s => s.project);
+        const validStates = (states || [])
+          .filter(s => s && s.project && !s.project.deletedAt);
+        const accessibleStates = validStates.filter(s => hasProjectAccess(s));
+        if (accessibleStates.length > 0) {
+          return accessibleStates.map(s => s.project);
+        }
+
+        // Filet de sécurité hard: ne jamais masquer tous les projets locaux
+        // après passage en mode "Connecté" si des états projet existent.
+        if (validStates.length > 0) {
+          console.warn('[Projects] Access filter returned 0, fallback to local states', {
+            total: validStates.length,
+            connected: Boolean(sharedFolderHandle)
+          });
+          return validStates.map((state) => state.project);
+        }
+
+        return [];
       } catch (error) {
         console.error('Error getting projects:', error);
         return [];
+      }
+    }
+
+    async function recoverLocalProjectsFromEvents() {
+      try {
+        const states = await getAllDecrypted('localState', 'projectId');
+        const existingProjectIds = new Set(
+          (states || [])
+            .map((state) => String(state?.project?.projectId || state?.projectId || '').trim())
+            .filter(Boolean)
+        );
+        const events = await getAllDecrypted('events', 'eventId');
+        if (!Array.isArray(events) || events.length === 0) {
+          return { scanned: 0, rebuilt: 0 };
+        }
+
+        const byProjectId = new Map();
+        for (const event of events) {
+          const projectId = String(event?.projectId || '').trim();
+          if (!projectId) continue;
+          if (!byProjectId.has(projectId)) byProjectId.set(projectId, []);
+          byProjectId.get(projectId).push(event);
+        }
+
+        let rebuilt = 0;
+        let scanned = 0;
+        for (const [projectId, projectEvents] of byProjectId.entries()) {
+          scanned += 1;
+          if (existingProjectIds.has(projectId)) continue;
+          const ordered = (projectEvents || []).slice().sort((a, b) => Number(a?.timestamp || 0) - Number(b?.timestamp || 0));
+          const hasCreateProject = ordered.some((event) => event?.type === EventTypes.CREATE_PROJECT);
+          if (!hasCreateProject) continue;
+
+          await deleteFromStore('localState', projectId);
+          for (const event of ordered) {
+            await applyEventToState(event);
+          }
+
+          const rebuiltState = await getProjectState(projectId, { ignoreAccessCheck: true });
+          if (rebuiltState?.project && !rebuiltState.project.deletedAt) {
+            rebuilt += 1;
+            continue;
+          }
+          await deleteFromStore('localState', projectId);
+        }
+
+        return { scanned, rebuilt };
+      } catch (error) {
+        console.warn('Local project recovery from events failed:', error);
+        return { scanned: 0, rebuilt: 0, error: String(error?.message || error) };
       }
     }
 
@@ -1114,6 +1244,7 @@
         userId = uuidv4();
         localStorage.setItem('userId', userId);
       }
+      rememberUserId(userId);
 
       let user = await getDecrypted('users', userId, 'userId');
 
@@ -1126,6 +1257,8 @@
         };
         await putEncrypted('users', user, 'userId');
       }
+
+      rememberUserId(user.userId);
 
       return user;
     }
@@ -1651,12 +1784,29 @@
 
           // Traiter tous les événements dans l'ordre chronologique
           if (shouldRebuildLocal) {
-            const db = getDatabase();
-            await deleteFromStore('localState', projectId);
-            for (const event of events) {
-              await applyEventToState(event);
-              await maybeNotifyCollaboratorEvent(event);
-              knownEventIds.add(event.eventId);
+            const existingStateBeforeRebuild = await getProjectState(projectId, { ignoreAccessCheck: true });
+            const hasCreateProjectEvent = events.some((event) => event?.type === EventTypes.CREATE_PROJECT);
+            // Ne jamais supprimer l'état local sans base reconstructible.
+            if (events.length > 0 && hasCreateProjectEvent) {
+              await deleteFromStore('localState', projectId);
+              for (const event of events) {
+                await applyEventToState(event);
+                await maybeNotifyCollaboratorEvent(event);
+                knownEventIds.add(event.eventId);
+              }
+              const rebuiltState = await getProjectState(projectId, { ignoreAccessCheck: true });
+              if (!rebuiltState?.project) {
+                if (existingStateBeforeRebuild?.project) {
+                  await putEncrypted('localState', existingStateBeforeRebuild, 'projectId');
+                }
+                console.warn('Rebuild produced incomplete state, local snapshot restored:', projectId);
+              }
+            } else {
+              if (events.length > 0 && !hasCreateProjectEvent) {
+                console.warn('Rebuild skipped: missing CREATE_PROJECT event in shared history:', projectId);
+              } else {
+                console.warn('Rebuild skipped for project without readable shared events:', projectId);
+              }
             }
           } else {
             for (const event of events) {
@@ -1730,8 +1880,7 @@
 
           const refreshedState = await getProjectState(projectId, { ignoreAccessCheck: true });
           if (refreshedState && !hasProjectAccess(refreshedState)) {
-            const db = getDatabase();
-            await deleteFromStore('localState', projectId);
+            console.warn('Project loaded from shared folder is currently not accessible for this user, keeping local state:', projectId);
           }
         }
 
@@ -1823,8 +1972,9 @@
           updateFolderButtons();
           return false;
         }
-        const shouldReload = askCollaborativeReload('reconnexion automatique');
-        await connectSharedFolderHandle(savedHandle, false, { rebuildLocal: shouldReload });
+        // En reconnexion automatique, ne pas reconstruire le local par défaut.
+        // La reconstruction complète reste possible via liaison manuelle.
+        await connectSharedFolderHandle(savedHandle, false, { rebuildLocal: false });
         return true;
       } catch (error) {
         console.warn('Saved folder re-connection failed:', error);
@@ -2022,15 +2172,15 @@
     const DEFAULT_VIEW_OPTIONS = {
       sections: {
         globalHub: { defaultTab: 'tasks', tabs: { tasks: true, workflow: true, calendar: true, docs: true, messages: true, feed: true, rgpd: true, settings: true } },
-        globalTasks: { defaultTab: 'cards', tabs: { cards: true, calendar: true, list: true, kanban: true, timeline: true, archives: true } },
-        project: { defaultTab: 'cards', tabs: { overview: true, cards: true, list: true, kanban: true, gantt: true, timeline: true, docs: true, chat: true, activity: true, archives: true } },
+        globalTasks: { defaultTab: 'kanban', tabs: { cards: true, calendar: true, list: true, kanban: true, timeline: true, archives: true } },
+        project: { defaultTab: 'kanban', tabs: { overview: true, cards: true, list: true, kanban: true, gantt: true, timeline: true, docs: true, chat: true, activity: true, archives: true } },
         workflow: { defaultTab: 'organigram', tabs: { map: true, organization: true, organigram: true, agents: true, processes: true, templates: true, tasks: true, kanban: true, timeline: true, procedures: true, software: true, contingency: true, analytics: true, governance: true, journal: true } },
         globalCalendar: { defaultTab: 'grid', tabs: { grid: true, year: true, list: true } },
         globalFeed: { defaultTab: 'all', tabs: { all: true, mentions: true, auto: true, manual: true, 'project-refs': true, 'task-refs': true } },
         globalSettings: { defaultTab: 'branding', tabs: { branding: true, themes: true, groups: true, roles: true, views: true } }
       },
       ui: {
-        workflowActionButtons: 'icon_text',
+        workflowActionButtons: 'icon',
         iconTooltips: true,
         tabIcons: true,
         workflowActionButtonsShape: 'rect'
@@ -2084,7 +2234,7 @@
     function normalizeWorkflowActionButtonsMode(rawMode) {
       const mode = String(rawMode || '').trim().toLowerCase();
       if (mode === 'text' || mode === 'icon' || mode === 'icon_text') return mode;
-      return 'icon_text';
+      return 'icon';
     }
 
     function normalizeWorkflowActionButtonsShape(rawShape) {
@@ -3529,6 +3679,48 @@
       updateBackgroundSyncStatus('queued', sharedWriteQueue.length);
       processSharedWriteQueue();
       return true;
+    }
+
+    async function syncProjectBootstrapToSharedSpace(projectId, sharedKeyHex, events = []) {
+      if (!sharedFolderHandle || !projectId) return;
+      try {
+        await registerProject(projectId);
+        if (sharedKeyHex) {
+          await writeProjectSharedKeyToFolder(projectId, sharedKeyHex);
+        }
+        const queue = Array.isArray(events) ? events.filter((evt) => evt?.eventId) : [];
+        for (const event of queue) {
+          await writeEventToSharedFolder(projectId, event);
+        }
+        if (!isPolling) {
+          startPolling();
+        }
+      } catch (error) {
+        console.error('Shared bootstrap sync failed:', error);
+        addNotification('Synchronisation', 'Projet créé localement, synchronisation collective en attente', projectId);
+      }
+    }
+
+    async function syncProjectEventsToSharedSpace(projectId, events = [], options = {}) {
+      if (!sharedFolderHandle || !projectId) return;
+      const state = await getProjectState(projectId, { ignoreAccessCheck: true });
+      if (normalizeSharingMode(state?.project?.sharingMode, 'private') !== 'shared') return;
+      const queue = Array.isArray(events) ? events.filter((evt) => evt?.eventId) : [];
+      if (queue.length === 0) return;
+      try {
+        if (options.ensureRegistered === true || !projectFolders.has(projectId)) {
+          await registerProject(projectId);
+        }
+        for (const event of queue) {
+          writeEventToSharedFolder(projectId, event);
+        }
+        if (!isPolling) {
+          startPolling();
+        }
+      } catch (error) {
+        console.error('Shared events sync failed:', error);
+        addNotification('Synchronisation', 'Mise a jour locale effectuee, synchronisation collective en attente', projectId);
+      }
     }
 
     async function readEventsFromSharedFolder(projectId, onlyNew = true) {
@@ -5244,10 +5436,10 @@
         return;
       }
       await renderProjects();
-      applyLiveSearchFilter();
     }
 
     function applyLiveSearchFilter() {
+      if (!currentProjectId) return;
       const query = (globalSearchQuery || '').trim().toLowerCase();
       const targets = currentProjectId
         ? [
@@ -5258,9 +5450,7 @@
             ['messages-container', '#messages-container > div', 'Aucun message ne correspond à votre recherche'],
             ['activity-container', '#activity-container > div', 'Aucune activité ne correspond à votre recherche']
           ]
-        : [
-            ['projects-container', '#projects-container > div', 'Aucun projet ne correspond à votre recherche']
-          ];
+        : [];
 
       targets.forEach(([containerId, selector, emptyText]) => {
         const container = document.getElementById(containerId);
@@ -6434,10 +6624,13 @@
     let carouselCurrentPage = 1;
     let carouselAllProjects = [];
     let carouselStateByProjectId = null;
+    let carouselTotalProjectsCount = 0;
+    let renderProjectsRequestSeq = 0;
 
-    function renderProjectsCarousel(projects, stateByProjectId) {
+    function renderProjectsCarousel(projects, stateByProjectId, totalCount = projects.length) {
       carouselAllProjects = projects;
       carouselStateByProjectId = stateByProjectId;
+      carouselTotalProjectsCount = Math.max(0, Number(totalCount) || 0);
       carouselCurrentPage = 1;
       updateCarouselPage();
     }
@@ -6445,7 +6638,13 @@
     function updateCarouselPage() {
       const track = document.getElementById('projects-carousel-track');
       const indicators = document.getElementById('projects-carousel-indicators');
+      const countLabel = document.getElementById('projects-carousel-count');
       if (!track || !indicators) return;
+      const visibleCount = carouselAllProjects.length;
+      const totalCount = Math.max(visibleCount, carouselTotalProjectsCount || 0);
+      if (countLabel) {
+        countLabel.textContent = `${visibleCount} visible${visibleCount > 1 ? 's' : ''} sur ${totalCount} projet${totalCount > 1 ? 's' : ''}`;
+      }
 
       const isListView = projectsViewMode === 'list';
       const itemsPerPage = isListView ? 1 : 3;
@@ -6588,8 +6787,16 @@
     }
 
     async function renderProjects() {
+      if (window.TaskMDACrypto && typeof window.TaskMDACrypto.isUnlocked === 'function' && !window.TaskMDACrypto.isUnlocked()) {
+        return;
+      }
+      const requestSeq = ++renderProjectsRequestSeq;
+      const isStale = () => requestSeq !== renderProjectsRequestSeq;
+
       await refreshKnownUsersCache();
+      if (isStale()) return;
       const projects = await getAllProjects();
+      if (isStale()) return;
       const projectsWithDescriptionMeta = projects.map((project) => {
         const descriptionPlain = getProjectDescriptionPlainText(project.description || '');
         return {
@@ -6603,10 +6810,14 @@
       const paginationContainer = document.getElementById('projects-pagination');
       const filterCount = document.getElementById('projects-filter-count');
       const filterRow = document.getElementById('projects-filter-row');
+      const projectsAddIconBtn = document.getElementById('btn-projects-add');
       const dashboardTitle = document.getElementById('dashboard-title');
+      const carousel = document.getElementById('projects-carousel');
+      const dashboardNewsPanel = document.getElementById('dashboard-news');
       const shouldShowProjectsList = workspaceMode === 'dashboard';
       const isDashboardHome = !!dashboardTitle?.classList.contains('hidden');
       const isListView = projectsViewMode === 'list';
+      if (projectsAddIconBtn) projectsAddIconBtn.classList.toggle('hidden', isDashboardHome);
       if (filterRow) filterRow.classList.toggle('hidden', isDashboardHome);
       if (filterCount) filterCount.classList.toggle('hidden', isDashboardHome);
       container.className = isListView
@@ -6619,13 +6830,14 @@
           return [project.projectId, state];
         })
       );
+      if (isStale()) return;
       const stateByProjectId = new Map(allProjectStates);
       const projectThemes = collectProjectThemeNames(projectsWithDescriptionMeta, stateByProjectId);
       fillProjectThemeSelect('projects-filter-theme-known', projectThemes, 'Thématiques existantes...');
       syncProjectsFilterControls();
       const cardsQueryRaw = isDashboardHome ? '' : String(projectsFilters.query || '');
       const cardsQuery = cardsQueryRaw.trim();
-      const combinedCardsQuery = isDashboardHome ? String(globalSearchQuery || '').trim() : `${globalSearchQuery} ${cardsQueryRaw}`.trim();
+      const combinedCardsQuery = cardsQuery;
       const themeFilterKey = isDashboardHome ? '' : normalizeCatalogKey(projectsFilters.theme || '');
       const statusFilter = isDashboardHome ? 'all' : String(projectsFilters.status || 'all');
       const sharingFilter = isDashboardHome ? 'all' : String(projectsFilters.sharing || 'all');
@@ -6694,6 +6906,7 @@
       }
 
       if (projectsWithDescriptionMeta.length === 0) {
+        if (carousel) carousel.classList.add('hidden');
         projectsList.classList.toggle('hidden', !shouldShowProjectsList);
         container.className = 'grid grid-cols-1';
         container.innerHTML = `
@@ -6714,27 +6927,33 @@
           filterCount.classList.toggle('projects-filter-count-active', hasActiveProjectFilters);
         }
         await renderDashboardNews();
+        if (isStale()) return;
         return;
       }
 
       projectsList.classList.toggle('hidden', !shouldShowProjectsList);
       if (sortedProjects.length === 0) {
+        if (carousel) carousel.classList.add('hidden');
         container.innerHTML = '<p class="text-slate-500 text-center py-8">Aucun projet ne correspond à la recherche</p>';
         await renderDashboardNews();
+        if (isStale()) return;
         return;
       }
 
       // Sur le dashboard (sans filtres), afficher un carousel avec les 9 derniers projets
-      const carousel = document.getElementById('projects-carousel');
       if (isDashboardHome && !hasActiveProjectFilters) {
         const recentProjects = sortedProjects.slice(0, 9);
         if (carousel) {
-          renderProjectsCarousel(recentProjects, stateByProjectId);
+          renderProjectsCarousel(recentProjects, stateByProjectId, sortedProjects.length);
           carousel.classList.remove('hidden');
         }
-        if (container) container.classList.add('hidden');
+        if (container) {
+          container.classList.add('hidden');
+          container.innerHTML = '';
+        }
         if (paginationContainer) paginationContainer.innerHTML = '';
         await renderDashboardNews();
+        if (isStale()) return;
         return;
       } else {
         if (carousel) carousel.classList.add('hidden');
@@ -6857,7 +7076,7 @@
     let projectSettingsTab = 'members'; // members | collab | permissions
     let projectSubnavLayout = localStorage.getItem('taskmda_project_subnav_layout') === 'vertical' ? 'vertical' : 'horizontal';
     let projectPermissionDetailsOpen = false;
-    let activeProjectView = 'list';
+    let activeProjectView = 'kanban';
     let projectTaskPresentationMode = localStorage.getItem('taskmda_project_task_presentation') === 'list' ? 'list' : 'cards';
     let editingTaskId = null;
     let draggedTaskId = null;
@@ -6891,7 +7110,7 @@
     let dueReminderMemory = {};
     let browserNotifPermissionChecked = false;
     let standaloneTaskMode = false;
-    let globalTasksViewMode = localStorage.getItem('taskmda_global_tasks_view') || 'cards'; // cards | list | kanban | timeline
+    let globalTasksViewMode = localStorage.getItem('taskmda_global_tasks_view') || 'kanban'; // cards | list | kanban | timeline
     let globalTimelineDisplayMode = localStorage.getItem('taskmda_global_timeline_mode') === 'list' ? 'list' : 'columns'; // columns | list
     let globalTimelineExpandedGroups = {
       overdue: false,
@@ -7368,9 +7587,7 @@
       if (!projectId) return;
       const event = createEvent(type, projectId, currentUser.userId, payload);
       await publishEvent(event);
-      if (sharedFolderHandle) {
-        await writeEventToSharedFolder(projectId, event);
-      }
+      if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(projectId, [event]); }
     }
 
     async function acquireProjectResourceLock(projectId, resourceType, resourceId, options = {}) {
@@ -8635,7 +8852,7 @@
       const previousView = activeProjectView;
       const previousPresentation = projectTaskPresentationMode;
       if (isViewOverridesLocked()) {
-        const lockedProjectDefault = resolveViewWithLock('project', view, 'cards');
+        const lockedProjectDefault = resolveViewWithLock('project', view, 'kanban');
         if (lockedProjectDefault === 'cards' || lockedProjectDefault === 'list') {
           projectTaskPresentationMode = lockedProjectDefault;
           view = 'list';
@@ -9208,7 +9425,7 @@
             { groupId: createdGroupId, name: groupContext.groupName, description: groupContext.groupDescription || '' }
           );
           await publishEvent(createGroupEvent);
-          if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, createGroupEvent);
+          if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [createGroupEvent]);
           latestState = await getProjectState(currentProjectId, { ignoreAccessCheck: true });
           existingProjectGroup = (latestState?.groups || []).find(group => group.groupId === createdGroupId)
             || (latestState?.groups || []).find(group => normalizeCatalogKey(group.name) === normalizeCatalogKey(groupContext.groupName));
@@ -9234,7 +9451,7 @@
             { groupId, name: groupContext.groupName, memberUserIds: mergedLinkedMemberIds }
           );
           await publishEvent(createUserGroupEvent);
-          if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, createUserGroupEvent);
+          if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [createUserGroupEvent]);
         } else if (mergedLinkedMemberIds.length !== linkedMemberIds.length) {
           const updateUserGroupEvent = createEvent(
             EventTypes.UPDATE_USER_GROUP,
@@ -9243,7 +9460,7 @@
             { groupId: linkedUserGroup.groupId, changes: { memberUserIds: mergedLinkedMemberIds, name: groupContext.groupName } }
           );
           await publishEvent(updateUserGroupEvent);
-          if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, updateUserGroupEvent);
+          if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [updateUserGroupEvent]);
         }
         latestState = await getProjectState(currentProjectId, { ignoreAccessCheck: true });
       }
@@ -9268,7 +9485,7 @@
             }
           );
           await publishEvent(addMemberEvent);
-          if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, addMemberEvent);
+          if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [addMemberEvent]);
         }
         latestState = await getProjectState(currentProjectId, { ignoreAccessCheck: true });
       }
@@ -9709,6 +9926,43 @@
         .filter(item => item.text);
     }
 
+    function canToggleTaskDetailSubtasks(task = currentGlobalTaskDetailTask, resolved = currentGlobalTaskDetailResolved) {
+      if (!task) return false;
+      if (resolved?.sourceType === 'standalone') return true;
+      return canChangeTaskStatus(task, resolved?.state);
+    }
+
+    function renderTaskDetailSubtasks(el, task = currentGlobalTaskDetailTask, options = {}) {
+      if (!el) return;
+      const subtasks = normalizeTaskSubtasks(task);
+      const doneSubtasks = subtasks.filter((item) => item.done).length;
+      const taskRef = String(options.taskRef || currentGlobalTaskDetailRef || '');
+      const canToggle = options.canToggle !== undefined
+        ? !!options.canToggle
+        : canToggleTaskDetailSubtasks(task, options.resolved || currentGlobalTaskDetailResolved);
+      if (!subtasks.length) {
+        el.innerHTML = '<p class="text-slate-500">Aucune sous-tâche.</p>';
+        return;
+      }
+      el.innerHTML = `
+        <p class="text-xs text-slate-500 mb-2">${doneSubtasks}/${subtasks.length} terminées</p>
+        ${subtasks.map((item) => `
+          <label class="flex items-center gap-2" data-task-detail-subtask-row="1">
+            <input
+              class="subtask-checkbox"
+              type="checkbox"
+              data-task-detail-subtask-toggle="1"
+              data-task-ref="${escapeHtml(taskRef)}"
+              data-subtask-id="${escapeHtml(item.id)}"
+              ${item.done ? 'checked' : ''}
+              ${canToggle ? '' : 'disabled'}
+            >
+            <span class="${item.done ? 'line-through text-slate-400' : 'text-slate-700'}">${escapeHtml(item.text)}</span>
+          </label>
+        `).join('')}
+      `;
+    }
+
     function closeGlobalTaskDetails() {
       const modal = document.getElementById('modal-global-task-details');
       if (!modal) return;
@@ -9832,9 +10086,7 @@
           { taskId: resolved.task.taskId, changes }
         );
         await publishEvent(event);
-        if (sharedFolderHandle) {
-          await writeEventToSharedFolder(resolved.projectId, event);
-        }
+        if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(resolved.projectId, [event]); }
       }
       taskDetailInlineLastSavedValues.set(saveKey, currentSig);
       currentGlobalTaskDetailTask = {
@@ -9932,7 +10184,7 @@
           { taskId: resolved.task.taskId, changes }
         );
         await publishEvent(event);
-        if (sharedFolderHandle) await writeEventToSharedFolder(resolved.projectId, event);
+        if (sharedFolderHandle) void syncProjectEventsToSharedSpace(resolved.projectId, [event]);
       }
       currentGlobalTaskDetailTask = {
         ...(currentGlobalTaskDetailTask || {}),
@@ -10002,7 +10254,7 @@
           { taskId: resolved.task.taskId, changes }
         );
         await publishEvent(event);
-        if (sharedFolderHandle) await writeEventToSharedFolder(resolved.projectId, event);
+        if (sharedFolderHandle) void syncProjectEventsToSharedSpace(resolved.projectId, [event]);
 
         if (Array.isArray(payload.linkedProjectDocIds)) {
           const state = await getProjectState(resolved.projectId);
@@ -10023,7 +10275,7 @@
               { docId: doc.docId, changes: { linkedTaskIds: nextLinkedTaskIds } }
             );
             await publishEvent(updateDocEvent);
-            if (sharedFolderHandle) await writeEventToSharedFolder(resolved.projectId, updateDocEvent);
+            if (sharedFolderHandle) void syncProjectEventsToSharedSpace(resolved.projectId, [updateDocEvent]);
           }
         }
       }
@@ -10059,12 +10311,69 @@
           { taskId: resolved.task.taskId, changes }
         );
         await publishEvent(event);
-        if (sharedFolderHandle) {
-          await writeEventToSharedFolder(resolved.projectId, event);
-        }
+        if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(resolved.projectId, [event]); }
       }
       taskDetailInlineLastSavedValues.set(saveKey, currentSig);
       return normalizedValue;
+    }
+
+    async function toggleTaskDetailSubtaskChecked(taskRef, subtaskId, done) {
+      const safeTaskRef = String(taskRef || '').trim();
+      const safeSubtaskId = String(subtaskId || '').trim();
+      if (!safeTaskRef || !safeSubtaskId) return false;
+      const resolved = await resolveGlobalTaskFromRef(safeTaskRef);
+      if (!resolved?.task) return false;
+
+      const canToggle = canToggleTaskDetailSubtasks(resolved.task, resolved);
+      if (!canToggle) {
+        showToast('Action non autorisee');
+        return false;
+      }
+
+      const currentSubtasks = normalizeTaskSubtasks(resolved.task);
+      const nextSubtasks = currentSubtasks.map((item) => (
+        item.id === safeSubtaskId ? { ...item, done: !!done } : item
+      ));
+
+      if (resolved.sourceType === 'standalone') {
+        await putEncrypted('globalTasks', {
+          ...resolved.task,
+          subtasks: nextSubtasks,
+          updatedAt: Date.now()
+        }, 'id');
+      } else {
+        if (!ensureProjectResourceUnlockedForAction(resolved.state, LOCK_SCOPE_TASK, resolved.task.taskId, 'Mise a jour sous-tache').ok) {
+          return false;
+        }
+        const event = createEvent(
+          EventTypes.UPDATE_TASK,
+          resolved.projectId,
+          currentUser.userId,
+          {
+            taskId: resolved.task.taskId,
+            changes: { subtasks: nextSubtasks }
+          }
+        );
+        await publishEvent(event);
+        if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(resolved.projectId, [event]); }
+      }
+
+      if (currentGlobalTaskDetailRef === safeTaskRef) {
+        currentGlobalTaskDetailTask = {
+          ...(currentGlobalTaskDetailTask || {}),
+          subtasks: nextSubtasks,
+          updatedAt: Date.now()
+        };
+        if (currentGlobalTaskDetailResolved?.sourceType === 'project' && currentGlobalTaskDetailResolved?.task) {
+          currentGlobalTaskDetailResolved.task = {
+            ...currentGlobalTaskDetailResolved.task,
+            subtasks: nextSubtasks,
+            updatedAt: Date.now()
+          };
+        }
+        refreshTaskDetailInlineDisplay('subtasks', getTaskDetailInlineFieldValue(currentGlobalTaskDetailTask, 'subtasks'));
+      }
+      return true;
     }
 
     function decorateTaskDetailEditableElement(el, field) {
@@ -10104,21 +10413,10 @@
       if (field === 'subtasks') {
         const el = document.getElementById('global-task-detail-subtasks');
         if (el) {
-          const subtasks = normalizeTaskSubtasks(currentGlobalTaskDetailTask || {});
-          const doneSubtasks = subtasks.filter(item => item.done).length;
-          if (!subtasks.length) {
-            el.innerHTML = '<p class="text-slate-500">Aucune sous-tache.</p>';
-          } else {
-            el.innerHTML = `
-              <p class="text-xs text-slate-500 mb-2">${doneSubtasks}/${subtasks.length} terminees</p>
-              ${subtasks.map(item => `
-                <div class="flex items-center gap-2">
-                  <span class="text-sm ${item.done ? 'text-emerald-600' : 'text-slate-400'}">${item.done ? 'â˜‘' : 'â˜'}</span>
-                  <span class="${item.done ? 'line-through text-slate-400' : 'text-slate-700'}">${escapeHtml(item.text)}</span>
-                </div>
-              `).join('')}
-            `;
-          }
+          renderTaskDetailSubtasks(el, currentGlobalTaskDetailTask, {
+            taskRef: currentGlobalTaskDetailRef,
+            resolved: currentGlobalTaskDetailResolved
+          });
           decorateTaskDetailEditableElement(el, 'subtasks');
         }
         return;
@@ -10685,10 +10983,26 @@
         const rawTarget = event.target;
         const clickTarget = rawTarget instanceof Element ? rawTarget : null;
         if (clickTarget?.closest('a[data-inline-ignore], a[href]')) return;
+        if (clickTarget?.closest('[data-task-detail-subtask-row="1"]')) return;
         const trigger = clickTarget?.closest('[data-inline-task-field]');
         if (!trigger) return;
         if (trigger.querySelector('.task-detail-inline-editor-wrap')) return;
         startTaskDetailInlineEdit(trigger);
+      });
+      modal.addEventListener('change', (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLInputElement)) return;
+        if (target.dataset.taskDetailSubtaskToggle !== '1') return;
+        const taskRef = String(target.dataset.taskRef || '');
+        const subtaskId = String(target.dataset.subtaskId || '');
+        toggleTaskDetailSubtaskChecked(taskRef, subtaskId, !!target.checked)
+          .then((ok) => {
+            if (!ok) target.checked = !target.checked;
+          })
+          .catch((error) => {
+            console.error('task detail subtask toggle failed', error);
+            target.checked = !target.checked;
+          });
       });
       modal.addEventListener('keydown', (event) => {
         const target = event.target instanceof Element ? event.target : null;
@@ -10952,15 +11266,13 @@
           await publishEvent(createTaskEvent);
 
           if (sharingMode === 'shared') {
-            await registerProject(projectId);
-            if (sharedKeyHex) await writeProjectSharedKeyToFolder(projectId, sharedKeyHex);
-            if (sharedFolderHandle) {
-              await writeEventToSharedFolder(projectId, createProjectEvent);
-              await writeEventToSharedFolder(projectId, addOwnerEvent);
-              if (createGroupEvent) await writeEventToSharedFolder(projectId, createGroupEvent);
-              await writeEventToSharedFolder(projectId, createTaskEvent);
-              if (!isPolling) startPolling();
-            }
+            const bootstrapEvents = [
+              createProjectEvent,
+              addOwnerEvent,
+              ...(createGroupEvent ? [createGroupEvent] : []),
+              createTaskEvent
+            ];
+            void syncProjectBootstrapToSharedSpace(projectId, sharedKeyHex, bootstrapEvents);
           }
 
           if (archiveSourceTask) {
@@ -10981,9 +11293,7 @@
                 }
               );
               await publishEvent(archiveEvent);
-              if (sharedFolderHandle) {
-                await writeEventToSharedFolder(sourceProjectId, archiveEvent);
-              }
+              if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(sourceProjectId, [archiveEvent]); }
             } else {
               await putEncrypted('globalTasks', {
                 ...task,
@@ -11055,9 +11365,8 @@
       const sourceTheme = String(task.theme || 'General');
       const assigneeNames = getTaskAssigneeName(task, state) || 'Aucun responsable';
       const groupName = getTaskGroupName(task, state) || task.groupName || 'Aucun groupe';
-      const subtasks = normalizeTaskSubtasks(task);
-      const doneSubtasks = subtasks.filter(item => item.done).length;
       const attachments = Array.isArray(task.attachments) ? task.attachments : [];
+      const canToggleSubtasks = canToggleTaskDetailSubtasks(task, resolved);
 
       if (titleEl) titleEl.textContent = task.title || 'Tache';
       if (subtitleEl) {
@@ -11084,19 +11393,7 @@
         recurrenceWrapEl.classList.remove('hidden');
       }
       if (subtasksEl) {
-        if (subtasks.length === 0) {
-          subtasksEl.innerHTML = '<p class="text-slate-500">Aucune sous-tache.</p>';
-        } else {
-          subtasksEl.innerHTML = `
-            <p class="text-xs text-slate-500 mb-2">${doneSubtasks}/${subtasks.length} terminees</p>
-            ${subtasks.map(item => `
-              <div class="flex items-center gap-2">
-                <span class="text-sm ${item.done ? 'text-emerald-600' : 'text-slate-400'}">${item.done ? 'â˜‘' : 'â˜'}</span>
-                <span class="${item.done ? 'line-through text-slate-400' : 'text-slate-700'}">${escapeHtml(item.text)}</span>
-              </div>
-            `).join('')}
-          `;
-        }
+        renderTaskDetailSubtasks(subtasksEl, task, { taskRef, canToggle: canToggleSubtasks, resolved });
       }
       if (attachmentsEl) {
         if (attachments.length === 0) {
@@ -11201,11 +11498,15 @@
       const sourceTheme = String(task.theme || 'General');
       const assigneeNames = getTaskAssigneeName(task, state) || 'Aucun responsable';
       const groupName = getTaskGroupName(task, state) || task.groupName || 'Aucun groupe';
-      const subtasks = normalizeTaskSubtasks(task);
-      const doneSubtasks = subtasks.filter(item => item.done).length;
       const attachments = Array.isArray(task.attachments) ? task.attachments : [];
       const linkedDocs = (state.documents || []).filter(doc => (doc.linkedTaskIds || []).includes(taskId));
       const sharingMode = task.sharingMode || state?.project?.sharingMode || 'shared';
+      const canToggleSubtasks = canToggleTaskDetailSubtasks(task, {
+        sourceType: 'project',
+        state,
+        task,
+        projectId: currentProjectId
+      });
 
       if (titleEl) titleEl.textContent = task.title || 'Tache';
       if (subtitleEl) {
@@ -11232,19 +11533,16 @@
         recurrenceWrapEl.classList.remove('hidden');
       }
       if (subtasksEl) {
-        if (subtasks.length === 0) {
-          subtasksEl.innerHTML = '<p class="text-slate-500">Aucune sous-tache.</p>';
-        } else {
-          subtasksEl.innerHTML = `
-            <p class="text-xs text-slate-500 mb-2">${doneSubtasks}/${subtasks.length} terminees</p>
-            ${subtasks.map(item => `
-              <div class="flex items-center gap-2">
-                <span class="text-sm ${item.done ? 'text-emerald-600' : 'text-slate-400'}">${item.done ? 'â˜‘' : 'â˜'}</span>
-                <span class="${item.done ? 'line-through text-slate-400' : 'text-slate-700'}">${escapeHtml(item.text)}</span>
-              </div>
-            `).join('')}
-          `;
-        }
+        renderTaskDetailSubtasks(subtasksEl, task, {
+          taskRef: buildGlobalTaskRef({ sourceType: 'project', sourceProjectId: currentProjectId, taskId: task.taskId }),
+          canToggle: canToggleSubtasks,
+          resolved: {
+            sourceType: 'project',
+            state,
+            task,
+            projectId: currentProjectId
+          }
+        });
       }
       if (attachmentsEl) {
         const allItems = [
@@ -11442,7 +11740,7 @@
         { inviteId, changes: { status: 'sent', lastSentAt: Date.now() } }
       );
       await publishEvent(event);
-      if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+      if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [event]);
       await showProjectDetail(currentProjectId);
     }
 
@@ -11466,7 +11764,7 @@
         { inviteId, changes: { status: normalized } }
       );
       await publishEvent(event);
-      if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+      if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [event]);
       if (normalized === 'accepted' && invite) {
         const users = await getAllDecrypted('users', 'userId');
         let user = users.find(u => normalizeSearch(u.name) === normalizeSearch(invite.displayName));
@@ -11490,7 +11788,7 @@
             { userId: user.userId, role: invite.role || 'member', displayName: user.name }
           );
           await publishEvent(memberEvent);
-          if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, memberEvent);
+          if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [memberEvent]);
         }
       }
       showToast(`Invitation marquée: ${normalized}`);
@@ -11549,7 +11847,7 @@
         }
       );
       await publishEvent(event);
-      if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+      if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [event]);
 
       if (nameInput) nameInput.value = '';
       if (emailInput) emailInput.value = '';
@@ -11644,7 +11942,7 @@
           { groupId, changes: { name, description } }
         );
         await publishEvent(event);
-        if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+        if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [event]);
       } else {
         const event = createEvent(
           EventTypes.CREATE_GROUP,
@@ -11653,7 +11951,7 @@
           { groupId, name, description }
         );
         await publishEvent(event);
-        if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+        if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [event]);
       }
       const existingUserGroup = (currentProjectState.userGroups || []).find(g =>
         g.groupId === groupId || normalizeSearch(g.name) === normalizeSearch(editGroup?.name || name)
@@ -11666,7 +11964,7 @@
           { groupId: existingUserGroup.groupId, changes: { memberUserIds: [...new Set(selectedIds)], name, description } }
         );
         await publishEvent(eventUserGroupUpdate);
-        if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, eventUserGroupUpdate);
+        if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [eventUserGroupUpdate]);
       } else {
         const eventUserGroupCreate = createEvent(
           EventTypes.CREATE_USER_GROUP,
@@ -11675,7 +11973,7 @@
           { groupId, name, memberUserIds: [...new Set(selectedIds)] }
         );
         await publishEvent(eventUserGroupCreate);
-        if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, eventUserGroupCreate);
+        if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [eventUserGroupCreate]);
       }
       const refreshedAfterGroupSave = await getProjectState(currentProjectId, { ignoreAccessCheck: true });
       const savedGroup = (refreshedAfterGroupSave?.groups || []).find(g => g.groupId === groupId)
@@ -11720,7 +12018,7 @@
         { groupId }
       );
       await publishEvent(event);
-      if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+      if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [event]);
       const linkedUserGroups = (currentProjectState.userGroups || []).filter(g =>
         g.groupId === groupId || normalizeSearch(g.name) === normalizeSearch(groupName)
       );
@@ -11732,7 +12030,7 @@
           { groupId: userGroup.groupId }
         );
         await publishEvent(userGroupDeleteEvent);
-        if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, userGroupDeleteEvent);
+        if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [userGroupDeleteEvent]);
       }
       showToast('Groupe supprimé');
       await showProjectDetail(currentProjectId);
@@ -11893,7 +12191,7 @@
             { groupId: group.groupId, name: group.name, memberUserIds: [...new Set(selectedIds)] }
           );
       await publishEvent(event);
-      if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+      if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [event]);
       showToast('Membres du groupe mis à jour');
       await showProjectDetail(currentProjectId);
     }
@@ -11925,7 +12223,7 @@
         { theme }
       );
       await publishEvent(event);
-      if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+      if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [event]);
       await upsertGlobalTheme(theme);
       await refreshGlobalTaxonomyCache();
       if (input) input.value = '';
@@ -11946,7 +12244,7 @@
         { theme }
       );
       await publishEvent(event);
-      if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+      if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [event]);
       showToast('Thématique retirée');
       await showProjectDetail(currentProjectId);
     }
@@ -12357,9 +12655,7 @@
         { userId: user.userId, role, displayName: user.name }
       );
       await publishEvent(event);
-      if (sharedFolderHandle) {
-        await writeEventToSharedFolder(currentProjectId, event);
-      }
+      if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(currentProjectId, [event]); }
 
       input.value = '';
       showToast('Membre ajouté');
@@ -12396,13 +12692,7 @@
         { userId }
       );
       await publishEvent(event);
-      if (sharedFolderHandle) {
-        const synced = await writeEventToSharedFolder(currentProjectId, event);
-        if (!synced) {
-          showToast('Projet supprime localement, mais synchro dossier en echec');
-          addNotification('Synchronisation', 'Suppression projet non synchronisee dans le dossier partage', projectId);
-        }
-      }
+      if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [event], { ensureRegistered: true });
       showToast('Membre retiré');
       addNotification('Membre', 'Un membre a ete retire du projet', currentProjectId);
       await showProjectDetail(currentProjectId);
@@ -12446,7 +12736,7 @@
         { groupId: uuidv4(), name, memberUserIds: selectedIds }
       );
       await publishEvent(event);
-      if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+      if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [event]);
       if (nameInput) nameInput.value = '';
       showToast('Groupe utilisateurs cree');
       await showProjectDetail(currentProjectId);
@@ -12472,7 +12762,7 @@
         { groupId: selectedUserGroupId, changes: { memberUserIds: [...new Set(selectedIds)] } }
       );
       await publishEvent(event);
-      if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+      if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [event]);
       showToast('Groupe utilisateurs mis a jour');
       await showProjectDetail(currentProjectId);
     }
@@ -12493,7 +12783,7 @@
         { groupId }
       );
       await publishEvent(event);
-      if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+      if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [event]);
       if (selectedUserGroupId === groupId) selectedUserGroupId = null;
       showToast('Groupe utilisateurs supprime');
       await showProjectDetail(currentProjectId);
@@ -12700,13 +12990,17 @@
       const hasMedia = descEl.querySelector('img, iframe, video, embed, object') !== null;
       const isDescriptionEmpty = !plain && !hasMedia;
       descEl.classList.toggle('project-description-empty', isDescriptionEmpty);
-      const imagesCount = descEl.querySelectorAll('img').length;
-      const shouldCollapse = plain.length > 360 || imagesCount > 1 || plain.split('\n').length >= 5;
-      descEl.classList.toggle('is-collapsed', shouldCollapse && !projectDescriptionExpanded);
-      toggleBtn.classList.toggle('hidden', !shouldCollapse);
-      if (shouldCollapse) {
-        toggleBtn.textContent = projectDescriptionExpanded ? 'Voir moins' : 'Afficher tout';
+      descEl.classList.remove('is-collapsed');
+
+      if (isDescriptionEmpty) {
+        descEl.classList.add('hidden');
+        toggleBtn.classList.add('hidden');
+        return;
       }
+
+      descEl.classList.toggle('hidden', !projectDescriptionExpanded);
+      toggleBtn.classList.remove('hidden');
+      toggleBtn.textContent = projectDescriptionExpanded ? 'Masquer la description' : 'Afficher la description';
     }
 
     function resetProjectInlineEditingState() {
@@ -12780,9 +13074,7 @@
         { changes }
       );
       await publishEvent(event);
-      if (sharedFolderHandle) {
-        await writeEventToSharedFolder(projectId, event);
-      }
+      if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(projectId, [event]); }
 
       if (currentProjectState?.project && currentProjectState.project.projectId === projectId) {
         currentProjectState = {
@@ -13045,8 +13337,17 @@
       renderProjectDescription(state.project.description || '');
       document.getElementById('project-date').textContent = new Date(state.project.createdAt).toLocaleDateString('fr-FR');
       const projectMembersCountEl = document.getElementById('project-members-count');
+      const projectMembersIconEl = document.getElementById('project-members-icon');
       if (projectMembersCountEl) {
         projectMembersCountEl.innerHTML = renderProjectMembersSummary(state, 3);
+      }
+      if (projectMembersIconEl) {
+        const memberIds = new Set((state?.members || [])
+          .map((member) => String(member?.userId || '').trim())
+          .filter(Boolean));
+        const hasCreatedByFallback = !memberIds.size && String(state?.project?.createdBy || '').trim();
+        const displayedMembersCount = memberIds.size + (hasCreatedByFallback ? 1 : 0);
+        projectMembersIconEl.classList.toggle('hidden', displayedMembersCount > 0);
       }
       const visibleTasks = (state.tasks || []).filter(t => !t.archivedAt);
       document.getElementById('project-kpi-tasks').textContent = String(visibleTasks.length);
@@ -13233,10 +13534,8 @@
         currentUser.userId,
         { changes }
       );
+      const sharedSyncEvents = [event];
       await publishEvent(event);
-      if (sharedFolderHandle) {
-        await writeEventToSharedFolder(currentProjectId, event);
-      }
       const refreshedState = await getProjectState(currentProjectId, { ignoreAccessCheck: true });
       await syncDescriptionImagesAsProjectDocs(currentProjectId, refreshedState, changes.description);
       let addedGroupsCount = 0;
@@ -13252,9 +13551,7 @@
           { groupId: uuidv4(), name: group.name, description: group.description || '' }
         );
         await publishEvent(addGroupEvent);
-        if (sharedFolderHandle) {
-          await writeEventToSharedFolder(currentProjectId, addGroupEvent);
-        }
+        sharedSyncEvents.push(addGroupEvent);
         addedGroupsCount += 1;
       }
       for (const file of editProjectDocuments) {
@@ -13270,10 +13567,11 @@
           }
         );
         await publishEvent(addDocEvent);
-        if (sharedFolderHandle) {
-          await writeEventToSharedFolder(currentProjectId, addDocEvent);
-        }
+        sharedSyncEvents.push(addDocEvent);
         addedDocsCount += 1;
+      }
+      if (sharedFolderHandle && state.project?.sharingMode === 'shared') {
+        void syncProjectEventsToSharedSpace(currentProjectId, sharedSyncEvents, { ensureRegistered: true });
       }
       await releaseActiveProjectEditLock();
       document.getElementById('modal-edit-project').classList.add('hidden');
@@ -13328,8 +13626,8 @@
         { reason: 'manual_delete' }
       );
       await publishEvent(event);
-      if (sharedFolderHandle) {
-        await writeEventToSharedFolder(currentProjectId, event);
+      if (sharedFolderHandle && state.project?.sharingMode === 'shared') {
+        void syncProjectEventsToSharedSpace(currentProjectId, [event], { ensureRegistered: true });
       }
       addNotification('Projet', 'Projet supprimé', projectId);
       showToast('Projet supprimé');
@@ -13489,11 +13787,26 @@
       applyLiveSearchFilter();
     }
 
+    function triggerWorkspaceRevealAnimation(elementIds = []) {
+      (Array.isArray(elementIds) ? elementIds : []).forEach((id) => {
+        const el = document.getElementById(String(id || '').trim());
+        if (!el || el.classList.contains('hidden')) return;
+        el.classList.remove('workspace-reveal-enter');
+        // Force reflow so animation can replay on repeated switches.
+        void el.offsetWidth;
+        el.classList.add('workspace-reveal-enter');
+        setTimeout(() => {
+          el.classList.remove('workspace-reveal-enter');
+        }, 150);
+      });
+    }
+
     async function getAllProjectStates() {
       const states = await getAllDecrypted('localState', 'projectId');
-      return (states || [])
-        .filter(s => s && s.project && !s.project.deletedAt)
-        .filter(s => hasProjectAccess(s));
+      const validStates = (states || [])
+        .filter(s => s && s.project && !s.project.deletedAt);
+      const accessibleStates = validStates.filter(s => hasProjectAccess(s));
+      return accessibleStates.length > 0 ? accessibleStates : validStates;
     }
 
     async function getGlobalTasksList() {
@@ -14742,7 +15055,7 @@
         { taskId: resolved.task.taskId, changes: { status: 'termine', archivedAt: Date.now() } }
       );
       await publishEvent(event);
-      if (sharedFolderHandle) await writeEventToSharedFolder(resolved.projectId, event);
+      if (sharedFolderHandle) void syncProjectEventsToSharedSpace(resolved.projectId, [event]);
       showToast('Tâche archivée');
       if (workspaceMode === 'global') {
         await renderGlobalTasks();
@@ -14777,7 +15090,7 @@
         { taskId: resolved.task.taskId, changes: { archivedAt: null } }
       );
       await publishEvent(event);
-      if (sharedFolderHandle) await writeEventToSharedFolder(resolved.projectId, event);
+      if (sharedFolderHandle) void syncProjectEventsToSharedSpace(resolved.projectId, [event]);
       showToast('Tache restauree');
       if (workspaceMode === 'global') {
         await renderGlobalTasks();
@@ -14814,7 +15127,7 @@
         { taskId: resolved.task.taskId }
       );
       await publishEvent(event);
-      if (sharedFolderHandle) await writeEventToSharedFolder(resolved.projectId, event);
+      if (sharedFolderHandle) void syncProjectEventsToSharedSpace(resolved.projectId, [event]);
       showToast('Tache supprimee');
       if (workspaceMode === 'global') {
         await renderGlobalTasks();
@@ -15725,7 +16038,7 @@
             }
           );
           await publishEvent(createEventDoc);
-          if (sharedFolderHandle) await writeEventToSharedFolder(targetProjectId, createEventDoc);
+          if (sharedFolderHandle) void syncProjectEventsToSharedSpace(targetProjectId, [createEventDoc]);
           await deleteFromStore('globalDocs', doc.id);
           if (!silent) showToast('Document rattaché au projet');
           changed = true;
@@ -15778,7 +16091,7 @@
               }
             );
             await publishEvent(createEventDoc);
-            if (sharedFolderHandle) await writeEventToSharedFolder(targetProjectId, createEventDoc);
+            if (sharedFolderHandle) void syncProjectEventsToSharedSpace(targetProjectId, [createEventDoc]);
             nextBindingId = `${targetProjectId}:project-doc:${newDocId}`;
           }
 
@@ -15789,7 +16102,7 @@
             { docId: doc.docId }
           );
           await publishEvent(deleteEventDoc);
-          if (sharedFolderHandle) await writeEventToSharedFolder(doc.sourceProjectId, deleteEventDoc);
+          if (sharedFolderHandle) void syncProjectEventsToSharedSpace(doc.sourceProjectId, [deleteEventDoc]);
           if (!silent) showToast(targetProjectId ? 'Document déplacé / mis à jour' : 'Document détaché hors projet');
           changed = true;
         }
@@ -15868,7 +16181,7 @@
           { docId: doc.docId }
         );
         await publishEvent(event);
-        if (sharedFolderHandle) await writeEventToSharedFolder(doc.sourceProjectId, event);
+        if (sharedFolderHandle) void syncProjectEventsToSharedSpace(doc.sourceProjectId, [event]);
         showToast('Document projet supprimé');
         addNotification('Documents', 'Document de projet supprimé', doc.sourceProjectId);
         await renderGlobalDocs();
@@ -15881,7 +16194,7 @@
         showToast('Tâche source introuvable');
         return;
       }
-      if (!canEditTaskInProject(task, state)) {
+      if (!canChangeTaskStatus(task, state)) {
         showToast('Action non autorisee');
         return;
       }
@@ -15895,7 +16208,7 @@
         { taskId: doc.taskId, changes: { attachments } }
       );
       await publishEvent(event);
-      if (sharedFolderHandle) await writeEventToSharedFolder(doc.sourceProjectId, event);
+      if (sharedFolderHandle) void syncProjectEventsToSharedSpace(doc.sourceProjectId, [event]);
       showToast('Pièce jointe supprimée');
       addNotification('Documents', 'Pièce jointe de projet supprimée', doc.sourceProjectId);
       await renderGlobalDocs();
@@ -18398,28 +18711,54 @@
         : 'Créez ou liez une fiche pour tracer lâ€™impact RGPD.';
       return `
         <section class="modal-section-neo rounded-xl border border-blue-200 bg-blue-50/60 p-3">
-          <p class="modal-section-title text-sm font-semibold text-slate-700 mb-2">
-            <span class="material-symbols-outlined" aria-hidden="true">policy</span>
-            <span>Impact RGPD</span>
-          </p>
-          <div class="flex flex-wrap items-center justify-between gap-2">
-            <div class="min-w-0">
-              <p class="text-sm font-semibold text-slate-800">${escapeHtml(title)}</p>
-              <p class="text-xs text-slate-600 mt-1">${escapeHtml(details)}</p>
-            </div>
-            <div class="flex flex-wrap items-center gap-1">
-              <span class="inline-flex text-[10px] px-2 py-1 rounded-full font-semibold ${statusMeta.cls}">${escapeHtml(statusMeta.label)}</span>
-              <span class="inline-flex text-[10px] px-2 py-1 rounded-full font-semibold ${riskMeta.cls}">${escapeHtml(riskMeta.label)}</span>
-            </div>
+          <div class="flex items-center justify-between cursor-pointer" onclick="toggleRgpdImpactCard(this)">
+            <p class="modal-section-title text-sm font-semibold text-slate-700 mb-0">
+              <span class="material-symbols-outlined" aria-hidden="true">policy</span>
+              <span>Impact RGPD</span>
+            </p>
+            <button type="button" class="rgpd-toggle-btn text-slate-500 hover:text-slate-700 transition-transform" aria-label="Afficher/Masquer">
+              <span class="material-symbols-outlined text-lg">expand_more</span>
+            </button>
           </div>
-          <div class="mt-3 flex flex-wrap gap-2">
-            <button type="button" class="px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-semibold" data-rgpd-context-action="generate" data-rgpd-source-type="${escapeHtml(ref.entityType)}" data-rgpd-source-id="${escapeHtml(ref.entityId)}" data-rgpd-source-label="${escapeHtml(ref.label)}">Générer fiche RGPD</button>
-            <button type="button" class="px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-semibold" data-rgpd-context-action="link" data-rgpd-source-type="${escapeHtml(ref.entityType)}" data-rgpd-source-id="${escapeHtml(ref.entityId)}" data-rgpd-source-label="${escapeHtml(ref.label)}">Lier fiche RGPD</button>
-            ${activity ? `<button type="button" class="px-3 py-1.5 rounded-lg border border-blue-200 bg-white text-blue-700 text-xs font-semibold" data-rgpd-context-action="open" data-rgpd-activity-id="${escapeHtml(activity.id)}">Ouvrir fiche</button>` : ''}
+          <div class="rgpd-impact-content hidden mt-2">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div class="min-w-0">
+                <p class="text-sm font-semibold text-slate-800">${escapeHtml(title)}</p>
+                <p class="text-xs text-slate-600 mt-1">${escapeHtml(details)}</p>
+              </div>
+              <div class="flex flex-wrap items-center gap-1">
+                <span class="inline-flex text-[10px] px-2 py-1 rounded-full font-semibold ${statusMeta.cls}">${escapeHtml(statusMeta.label)}</span>
+                <span class="inline-flex text-[10px] px-2 py-1 rounded-full font-semibold ${riskMeta.cls}">${escapeHtml(riskMeta.label)}</span>
+              </div>
+            </div>
+            <div class="mt-3 flex flex-wrap gap-2">
+              <button type="button" class="px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-semibold" data-rgpd-context-action="generate" data-rgpd-source-type="${escapeHtml(ref.entityType)}" data-rgpd-source-id="${escapeHtml(ref.entityId)}" data-rgpd-source-label="${escapeHtml(ref.label)}">Générer fiche RGPD</button>
+              <button type="button" class="px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-semibold" data-rgpd-context-action="link" data-rgpd-source-type="${escapeHtml(ref.entityType)}" data-rgpd-source-id="${escapeHtml(ref.entityId)}" data-rgpd-source-label="${escapeHtml(ref.label)}">Lier fiche RGPD</button>
+              ${activity ? `<button type="button" class="px-3 py-1.5 rounded-lg border border-blue-200 bg-white text-blue-700 text-xs font-semibold" data-rgpd-context-action="open" data-rgpd-activity-id="${escapeHtml(activity.id)}">Ouvrir fiche</button>` : ''}
+            </div>
           </div>
         </section>
       `;
     }
+
+    function toggleRgpdImpactCard(headerElement) {
+      const section = headerElement.closest('section');
+      if (!section) return;
+      const content = section.querySelector('.rgpd-impact-content');
+      const toggleBtn = section.querySelector('.rgpd-toggle-btn');
+      if (!content || !toggleBtn) return;
+
+      const isHidden = content.classList.contains('hidden');
+      content.classList.toggle('hidden', !isHidden);
+
+      // Rotation de l'icône
+      const icon = toggleBtn.querySelector('.material-symbols-outlined');
+      if (icon) {
+        icon.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+      }
+    }
+
+    window.toggleRgpdImpactCard = toggleRgpdImpactCard;
 
     async function renderProjectRgpdImpactCard(project) {
       const container = document.getElementById('project-rgpd-impact');
@@ -19169,7 +19508,7 @@
       }
       const previousWorkspaceView = globalWorkspaceView;
       if (view === 'tasks') {
-        const lockedTasksMode = resolveViewWithLock('globalTasks', globalTasksViewMode, 'cards');
+        const lockedTasksMode = resolveViewWithLock('globalTasks', globalTasksViewMode, 'kanban');
         if (lockedTasksMode && globalTasksViewMode !== lockedTasksMode) {
           globalTasksViewMode = lockedTasksMode;
           localStorage.setItem('taskmda_global_tasks_view', globalTasksViewMode);
@@ -19601,7 +19940,7 @@
               <div class="mt-2 space-y-1.5">
               ${task.subtasks.map(st => `
                 <label class="subtask-item">
-                  <input class="subtask-checkbox" type="checkbox" ${st.done ? 'checked' : ''} ${canEditTaskInProject(task, currentProjectState) ? '' : 'disabled'} onclick="event.stopPropagation()" onchange="toggleSubtask('${task.taskId}','${st.id}', this.checked)">
+                  <input class="subtask-checkbox" type="checkbox" ${st.done ? 'checked' : ''} ${canChangeTaskStatus(task, currentProjectState) ? '' : 'disabled'} onclick="event.stopPropagation()" onchange="toggleSubtask('${task.taskId}','${st.id}', this.checked)">
                   <span class="subtask-label ${st.done ? 'subtask-label-done' : ''}">${escapeHtml(st.label)}</span>
                 </label>
               `).join('')}
@@ -19656,7 +19995,7 @@
       const state = await getProjectState(currentProjectId);
       const task = (state?.tasks || []).find(t => t.taskId === taskId);
       if (!task) return;
-      if (!canEditTaskInProject(task, state)) {
+      if (!canChangeTaskStatus(task, state)) {
         showToast('Action non autorisee');
         return;
       }
@@ -19672,9 +20011,7 @@
         }
       );
       await publishEvent(event);
-      if (sharedFolderHandle) {
-        await writeEventToSharedFolder(currentProjectId, event);
-      }
+      if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(currentProjectId, [event]); }
       showToast('Tache restauree');
       await showProjectDetail(currentProjectId);
     }
@@ -20219,9 +20556,7 @@
         { taskId: resolved.task.taskId, changes: { status: targetStatus } }
       );
       await publishEvent(eventUpdate);
-      if (sharedFolderHandle) {
-        await writeEventToSharedFolder(resolved.projectId, eventUpdate);
-      }
+      if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(resolved.projectId, [eventUpdate]); }
       return true;
     }
 
@@ -20286,9 +20621,7 @@
       );
 
       await publishEvent(eventUpdate);
-      if (sharedFolderHandle) {
-        await writeEventToSharedFolder(currentProjectId, eventUpdate);
-      }
+      if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(currentProjectId, [eventUpdate]); }
       showToast('✅ Tâche déplacée');
       await showProjectDetail(currentProjectId);
     }
@@ -20588,7 +20921,7 @@
         if (!Object.keys(changes).length) return;
         const event = createEvent(EventTypes.UPDATE_DOCUMENT, ctx.projectId, currentUser.userId, { docId: doc.docId, changes });
         await publishEvent(event);
-        if (sharedFolderHandle) await writeEventToSharedFolder(ctx.projectId, event);
+        if (sharedFolderHandle) void syncProjectEventsToSharedSpace(ctx.projectId, [event]);
         currentDocPreviewContext.doc = { ...currentDocPreviewContext.doc, ...changes };
       } else if ((sourceType === 'project' || sourceType === 'task-attachment') && field === 'name') {
         const state = await getProjectState(ctx.projectId, { ignoreAccessCheck: true });
@@ -20602,7 +20935,7 @@
           changes: { attachments }
         });
         await publishEvent(event);
-        if (sharedFolderHandle) await writeEventToSharedFolder(ctx.projectId, event);
+        if (sharedFolderHandle) void syncProjectEventsToSharedSpace(ctx.projectId, [event]);
         currentDocPreviewContext.doc = { ...currentDocPreviewContext.doc, name: attachments[idx].name };
       } else {
         return;
@@ -21580,7 +21913,7 @@
 
           const delEvent = createEvent(EventTypes.DELETE_DOCUMENT, ctx.projectId, currentUser.userId, { docId: existing.docId });
           await publishEvent(delEvent);
-          if (sharedFolderHandle) await writeEventToSharedFolder(ctx.projectId, delEvent);
+          if (sharedFolderHandle) void syncProjectEventsToSharedSpace(ctx.projectId, [delEvent]);
           const createEventDoc = createEvent(EventTypes.CREATE_DOCUMENT, ctx.projectId, currentUser.userId, {
             docId: updated.docId,
             name: updated.name,
@@ -21593,7 +21926,7 @@
             linkedTaskIds: Array.isArray(updated.linkedTaskIds) ? [...updated.linkedTaskIds] : []
           });
           await publishEvent(createEventDoc);
-          if (sharedFolderHandle) await writeEventToSharedFolder(ctx.projectId, createEventDoc);
+          if (sharedFolderHandle) void syncProjectEventsToSharedSpace(ctx.projectId, [createEventDoc]);
 
           showToast('Document projet mis à jour');
           closeDocumentEditorModal();
@@ -21651,7 +21984,7 @@
             changes: { attachments }
           });
           await publishEvent(event);
-          if (sharedFolderHandle) await writeEventToSharedFolder(ctx.projectId, event);
+          if (sharedFolderHandle) void syncProjectEventsToSharedSpace(ctx.projectId, [event]);
 
           showToast('Pièce jointe mise à jour');
           closeDocumentEditorModal();
@@ -22160,6 +22493,10 @@
           safeAvatarInlineStyle(identity.avatarDataUrl, stringToColor(identity.userId || identity.name || String(idx)))
         }">${escapeHtml(getInitials(identity.name))}</span>`;
         const timeLabel = new Date(msg.timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        const contentRaw = String(msg.content || '');
+        const displayContent = msg.editedAt
+          ? contentRaw.replace(/\n?\s*\(modifi(?:e|é)\)\s*$/i, '').trimEnd()
+          : contentRaw;
 
         return `
           <div id="message-item-${msg.messageId}" class="discussion-message-row ${mine ? 'is-mine' : 'is-other'}">
@@ -22180,13 +22517,15 @@
                     </div>
                   </div>
                 ` : `
-                  <div class="markdown-content">${renderSafeMarkdown(msg.content)}</div>
+                  <div class="markdown-content">${renderSafeMarkdown(displayContent)}</div>
                   ${renderMessageAttachments(msg.attachments)}
-            <div class="discussion-message-actions mt-2 flex items-center gap-2 text-xs">
-              ${canEditProjectMessage(msg, currentProjectState) ? `<button onclick="startEditMessage('${msg.messageId}')" class="workspace-action-inline" data-action-kind="edit">Editer</button>` : ''}
-              ${canDeleteProjectMessage(msg, currentProjectState) ? `<button onclick="deleteMessage('${msg.messageId}')" class="workspace-action-inline" data-action-kind="danger">Supprimer</button>` : ''}
-            </div>
+                  <div class="discussion-message-actions mt-2 flex items-center gap-2 text-xs">
+                    ${canEditProjectMessage(msg, currentProjectState) ? `<button onclick="startEditMessage('${msg.messageId}')" class="workspace-action-inline" data-action-kind="edit">Editer</button>` : ''}
+                    ${canDeleteProjectMessage(msg, currentProjectState) ? `<button onclick="deleteMessage('${msg.messageId}')" class="workspace-action-inline" data-action-kind="danger">Supprimer</button>` : ''}
+                  </div>
                 `}
+              </div>
+                </div>
               </div>
             </div>
           </div>
@@ -22228,9 +22567,7 @@
 
       await runWithLoading(async () => {
         await publishEvent(event);
-        if (sharedFolderHandle) {
-          await writeEventToSharedFolder(currentProjectId, event);
-        }
+        if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(currentProjectId, [event]); }
       });
 
       showToast('✅ Statut mis à jour');
@@ -22282,9 +22619,7 @@
       );
 
       await publishEvent(event);
-      if (sharedFolderHandle) {
-        await writeEventToSharedFolder(currentProjectId, event);
-      }
+      if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(currentProjectId, [event]); }
       showToast('✅ Tâche supprimée');
       addNotification('Tache', 'Une tache a ete supprimee', currentProjectId, {
         targetView: 'list',
@@ -22320,9 +22655,7 @@
         }
       );
       await publishEvent(event);
-      if (sharedFolderHandle) {
-        await writeEventToSharedFolder(currentProjectId, event);
-      }
+      if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(currentProjectId, [event]); }
       showToast('✅ Tâche archivée');
       await showProjectDetail(currentProjectId);
     }
@@ -22332,7 +22665,7 @@
       const state = await getProjectState(currentProjectId);
       const task = state.tasks.find(t => t.taskId === taskId);
       if (!task) return;
-      if (!canEditTaskInProject(task, state)) {
+      if (!canChangeTaskStatus(task, state)) {
         showToast('Action non autorisee');
         return;
       }
@@ -22346,7 +22679,7 @@
       );
 
       await publishEvent(event);
-      if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+      if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [event]);
       await showProjectDetail(currentProjectId);
     }
 
@@ -22370,7 +22703,7 @@
         { taskId, changes: { attachments } }
       );
       await publishEvent(event);
-      if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+      if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [event]);
       showToast('✅ Document supprimé');
       await showProjectDetail(currentProjectId);
     }
@@ -22446,7 +22779,11 @@
 
     async function syncDescriptionImagesAsProjectDocs(projectId, state, descriptionHtml) {
       if (!projectId || !state?.project) return;
-      if (sharedFolderHandle && !projectFolders.get(projectId)) {
+      if (
+        sharedFolderHandle
+        && normalizeSharingMode(state?.project?.sharingMode, 'private') === 'shared'
+        && !projectFolders.get(projectId)
+      ) {
         await registerProject(projectId);
       }
       const extracted = extractDescriptionImageDocs(descriptionHtml);
@@ -22466,7 +22803,7 @@
             { docId: matched.docId }
           );
           await publishEvent(deleteEvent);
-          if (sharedFolderHandle) await writeEventToSharedFolder(projectId, deleteEvent);
+          if (sharedFolderHandle) void syncProjectEventsToSharedSpace(projectId, [deleteEvent]);
         }
 
         const createEventDoc = createEvent(
@@ -22487,7 +22824,7 @@
           }
         );
         await publishEvent(createEventDoc);
-        if (sharedFolderHandle) await writeEventToSharedFolder(projectId, createEventDoc);
+        if (sharedFolderHandle) void syncProjectEventsToSharedSpace(projectId, [createEventDoc]);
       }
 
       for (const previous of existing) {
@@ -22500,7 +22837,7 @@
           { docId: previous.docId }
         );
         await publishEvent(deleteEvent);
-        if (sharedFolderHandle) await writeEventToSharedFolder(projectId, deleteEvent);
+        if (sharedFolderHandle) void syncProjectEventsToSharedSpace(projectId, [deleteEvent]);
       }
     }
 
@@ -22536,7 +22873,7 @@
           }
         );
         await publishEvent(event);
-        if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+        if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [event]);
       }
       const input = document.getElementById('project-doc-files');
       if (input) input.value = '';
@@ -22567,7 +22904,7 @@
         { docId }
       );
       await publishEvent(event);
-      if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+      if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [event]);
       showToast('Document supprime');
       await showProjectDetail(currentProjectId);
     }
@@ -22619,7 +22956,7 @@
         { messageId, content: trimmed }
       );
       await publishEvent(event);
-      if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+      if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [event]);
       editingMessageId = null;
       editingMessageDraft = '';
       showToast('✅ Message modifié');
@@ -22649,7 +22986,7 @@
         { messageId }
       );
       await publishEvent(event);
-      if (sharedFolderHandle) await writeEventToSharedFolder(currentProjectId, event);
+      if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [event]);
       if (editingMessageId === messageId) {
         editingMessageId = null;
         editingMessageDraft = '';
@@ -22670,10 +23007,13 @@
       if (!window.TaskMDACrypto || !window.TaskMDACrypto.isUnlocked()) {
         return; // Crypto not available or not unlocked
       }
+      const currentId = String(getCurrentUserId() || '').trim();
+      const userIdHistory = rememberUserId(currentId);
 
       const dataToEncrypt = {
         config: {
-          userId: getCurrentUserId(),
+          userId: currentId,
+          userIdHistory,
           clientId: getCurrentClientId(),
           userName: currentUser ? currentUser.name : ''
         },
@@ -22697,6 +23037,8 @@
           initDatabase,
           refreshGlobalTaxonomyCache,
           initializeCurrentUser,
+          recoverLocalProjectsFromEvents,
+          refreshCurrentUserIdAliases,
           refreshGlobalMessageHiddenGroupsForCurrentUser,
           upsertDirectoryUser,
           refreshDirectoryFromKnownSources,
@@ -22747,6 +23089,12 @@
               editingMessageId = null;
               projectDetailMode = 'work';
               activeProjectView = 'list';
+              globalSearchQuery = '';
+              headerSearchResults = [];
+              headerSearchActiveIndex = -1;
+              const searchInput = document.getElementById('search-input');
+              if (searchInput) searchInput.value = '';
+              hideHeaderSearchResults();
             }
           }
         })
@@ -23929,28 +24277,15 @@
           await publishEvent(event);
         }
 
-        // Register for sync ET write to shared folder uniquement si partagé
+        // Synchronisation espace collectif: en arrière-plan, sans bloquer la création locale.
         if (sharingMode === 'shared') {
-          await registerProject(projectId);
-          if (sharedKeyHex) {
-            await writeProjectSharedKeyToFolder(projectId, sharedKeyHex);
-          }
-
-          if (sharedFolderHandle) {
-            await writeEventToSharedFolder(projectId, createProjectEvent);
-            await writeEventToSharedFolder(projectId, addMemberEvent);
-            for (const event of createGroupEvents) {
-              await writeEventToSharedFolder(projectId, event);
-            }
-            for (const event of createProjectDocumentEvents) {
-              await writeEventToSharedFolder(projectId, event);
-            }
-
-            // Start polling if not already started
-            if (!isPolling) {
-              startPolling();
-            }
-          }
+          const bootstrapEvents = [
+            createProjectEvent,
+            addMemberEvent,
+            ...createGroupEvents,
+            ...createProjectDocumentEvents
+          ];
+          void syncProjectBootstrapToSharedSpace(projectId, sharedKeyHex, bootstrapEvents);
         }
 
         await refreshStats();
@@ -23963,10 +24298,10 @@
       const modeText = sharingMode === 'private' ? 'privé' : 'partagé et chiffré E2E';
       showToast(`✅ Projet ${modeText} créé !`);
       addNotification('Projet', `Projet ${name} créé (${sharingMode})`, projectId);
-        showLoading(false);
 
         // Ouvrir automatiquement le projet créé
         await showProjectDetail(projectId);
+        showLoading(false);
       } catch (error) {
         console.error('Error:', error);
         showToast('❌ Erreur lors de la création du projet');
@@ -24277,9 +24612,7 @@
 
       await runWithLoading(async () => {
         await publishEvent(event);
-        if (sharedFolderHandle) {
-          await writeEventToSharedFolder(currentProjectId, event);
-        }
+        if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(currentProjectId, [event]); }
       });
 
       await releaseActiveTaskEditLock();
@@ -25193,9 +25526,7 @@
 
       await runWithLoading(async () => {
         await publishEvent(event);
-        if (sharedFolderHandle) {
-          await writeEventToSharedFolder(currentProjectId, event);
-        }
+        if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(currentProjectId, [event]); }
       });
       addNotification('Message', attachments.length > 0 ? 'Message envoye avec pieces jointes' : 'Nouveau message envoye', currentProjectId, {
         targetType: 'message',
@@ -25381,6 +25712,7 @@
         });
       });
     }
+
 
 
 

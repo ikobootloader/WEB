@@ -50,6 +50,11 @@
 
         const currentUser = await opts.initializeCurrentUser?.();
         setCurrentUser(currentUser);
+        const recoveryStats = await opts.recoverLocalProjectsFromEvents?.();
+        if ((recoveryStats?.rebuilt || 0) > 0) {
+          opts.showToast?.(`${recoveryStats.rebuilt} projet(s) restauré(s) localement`);
+        }
+        await opts.refreshCurrentUserIdAliases?.();
         opts.refreshGlobalMessageHiddenGroupsForCurrentUser?.();
         await opts.upsertDirectoryUser?.({
           userId: currentUser?.userId,
@@ -64,6 +69,24 @@
             currentUser.name = encryptedData.config.userName;
             setCurrentUser(currentUser);
           }
+          const encryptedHistory = Array.isArray(encryptedData?.config?.userIdHistory)
+            ? encryptedData.config.userIdHistory
+            : [];
+          if (encryptedHistory.length > 0) {
+            try {
+              const existing = JSON.parse(localStorage.getItem('taskmda_user_id_history') || '[]');
+              const merged = Array.from(new Set([...(Array.isArray(existing) ? existing : []), ...encryptedHistory]
+                .map((id) => String(id || '').trim())
+                .filter(Boolean)));
+              localStorage.setItem('taskmda_user_id_history', JSON.stringify(merged));
+            } catch (_) {
+              localStorage.setItem(
+                'taskmda_user_id_history',
+                JSON.stringify(Array.from(new Set(encryptedHistory.map((id) => String(id || '').trim()).filter(Boolean))))
+              );
+            }
+          }
+          await opts.refreshCurrentUserIdAliases?.();
         }
         await opts.loadAppBrandingConfig?.({ ensureRemote: false });
         await opts.loadViewOptions?.();
@@ -199,4 +222,3 @@
     createModule
   };
 }(window));
-
