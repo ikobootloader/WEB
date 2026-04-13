@@ -5383,6 +5383,46 @@
         .join('');
     }
 
+    async function createGlobalGroupFromProjectCreateModal() {
+      const nameInput = document.getElementById('project-group-preset-name-input');
+      const descInput = document.getElementById('project-group-preset-description-input');
+      const select = document.getElementById('project-group-presets');
+      const name = String(nameInput?.value || '').trim();
+      const description = String(descInput?.value || '').trim();
+      if (!name) {
+        showToast('Nom de groupe requis');
+        nameInput?.focus?.();
+        return;
+      }
+      const groupKey = normalizeCatalogKey(name);
+      if (!groupKey) {
+        showToast('Nom de groupe invalide');
+        nameInput?.focus?.();
+        return;
+      }
+
+      const selectedKeys = new Set(
+        Array.from(select?.selectedOptions || [])
+          .map((opt) => String(opt.value || '').trim())
+          .filter(Boolean)
+      );
+
+      await runWithLoading(async () => {
+        await upsertGlobalGroup({ name, description, memberUserIds: [] });
+        await refreshGlobalTaxonomyCache();
+      });
+
+      selectedKeys.add(groupKey);
+      await populateProjectGroupPresetOptions('project-group-presets', Array.from(selectedKeys));
+      if (select) {
+        const option = Array.from(select.options || []).find((opt) => String(opt.value || '').trim() === groupKey);
+        if (option) option.selected = true;
+      }
+      if (nameInput) nameInput.value = '';
+      if (descInput) descInput.value = '';
+      showToast('Groupe global ajouté et sélectionné');
+    }
+
     async function syncProjectTaxonomyToGlobal(state) {
       if (!state?.project) return;
       const themes = state.themes || [];
@@ -6571,14 +6611,14 @@
           // Visuel par défaut pour la Une quand il n'y a pas d'image
           const firstLetter = headline.charAt(0).toUpperCase() || 'A';
           const gradients = [
-            'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-            'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-            'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
-            'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-            'linear-gradient(135deg, #30cfd0 0%, #330867 100%)',
-            'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
-            'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)'
+            'linear-gradient(135deg, #1e3a8a 0%, #3730a3 100%)',
+            'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+            'linear-gradient(135deg, #064e3b 0%, #065f46 100%)',
+            'linear-gradient(135deg, #0c4a6e 0%, #075985 100%)',
+            'linear-gradient(135deg, #7c2d12 0%, #92400e 100%)',
+            'linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%)',
+            'linear-gradient(135deg, #0f766e 0%, #0d9488 100%)',
+            'linear-gradient(135deg, #4c1d95 0%, #5b21b6 100%)'
           ];
           // Sélectionner un gradient basé sur le hash du titre pour cohérence
           const gradientIndex = Math.abs(headline.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % gradients.length;
@@ -6795,7 +6835,9 @@
 
       await refreshKnownUsersCache();
       if (isStale()) return;
-      const projects = await getAllProjects();
+      const allProjects = await getAllProjects();
+      // Filtrer les projets archivés (ils sont affichés dans la vue Archives)
+      const projects = allProjects.filter(p => !p.archivedAt);
       if (isStale()) return;
       const projectsWithDescriptionMeta = projects.map((project) => {
         const descriptionPlain = getProjectDescriptionPlainText(project.description || '');
@@ -6807,9 +6849,14 @@
       });
       const container = document.getElementById('projects-container');
       const projectsList = document.getElementById('projects-list');
+      const projectsToolbarPanel = document.getElementById('projects-toolbar-panel');
+      const projectsCardsPanel = document.getElementById('projects-cards-panel');
+      const projectsListHead = document.getElementById('projects-list-head');
+      const archivesSection = document.getElementById('projects-archives-section');
       const paginationContainer = document.getElementById('projects-pagination');
       const filterCount = document.getElementById('projects-filter-count');
       const filterRow = document.getElementById('projects-filter-row');
+      const projectsToolbarActions = document.getElementById('projects-toolbar-actions');
       const projectsAddIconBtn = document.getElementById('btn-projects-add');
       const dashboardTitle = document.getElementById('dashboard-title');
       const carousel = document.getElementById('projects-carousel');
@@ -6817,6 +6864,18 @@
       const shouldShowProjectsList = workspaceMode === 'dashboard';
       const isDashboardHome = !!dashboardTitle?.classList.contains('hidden');
       const isListView = projectsViewMode === 'list';
+      if (projectsToolbarPanel) {
+        projectsToolbarPanel.classList.toggle('panel', !isDashboardHome);
+        projectsToolbarPanel.classList.toggle('p-3', !isDashboardHome);
+      }
+      if (projectsCardsPanel) {
+        projectsCardsPanel.classList.toggle('panel', !isDashboardHome);
+        projectsCardsPanel.classList.toggle('p-3', !isDashboardHome);
+      }
+      if (archivesSection) archivesSection.classList.add('hidden');
+      if (projectsListHead) projectsListHead.classList.remove('hidden');
+      if (container) container.classList.remove('hidden');
+      if (projectsToolbarActions) projectsToolbarActions.classList.toggle('hidden', isDashboardHome);
       if (projectsAddIconBtn) projectsAddIconBtn.classList.toggle('hidden', isDashboardHome);
       if (filterRow) filterRow.classList.toggle('hidden', isDashboardHome);
       if (filterCount) filterCount.classList.toggle('hidden', isDashboardHome);
@@ -8134,17 +8193,46 @@
     function updateProjectsViewButtons() {
       const gridBtn = document.getElementById('projects-view-grid');
       const listBtn = document.getElementById('projects-view-list');
+      const archivesBtn = document.getElementById('projects-view-archives');
       if (!gridBtn || !listBtn) return;
       gridBtn.classList.toggle('view-tab-active', projectsViewMode === 'grid');
       listBtn.classList.toggle('view-tab-active', projectsViewMode === 'list');
+      if (archivesBtn) archivesBtn.classList.toggle('view-tab-active', projectsViewMode === 'archives');
     }
 
     async function setProjectsViewMode(mode) {
-      const next = mode === 'list' ? 'list' : 'grid';
-      projectsViewMode = next;
-      localStorage.setItem('taskmda_projects_view', next);
-      updateProjectsViewButtons();
-      await renderProjects();
+      // Supporter les modes: grid, list, archives
+      if (mode === 'archives') {
+        projectsViewMode = 'archives';
+        updateProjectsViewButtons();
+        await renderProjectsArchives();
+      } else {
+        const next = mode === 'list' ? 'list' : 'grid';
+        projectsViewMode = next;
+        localStorage.setItem('taskmda_projects_view', next);
+        updateProjectsViewButtons();
+
+        // Masquer la section archives
+        const archivesSection = document.getElementById('projects-archives-section');
+        const projectsListHead = document.getElementById('projects-list-head');
+        const projectsContainer = document.getElementById('projects-container');
+        if (archivesSection) archivesSection.classList.add('hidden');
+
+        // Afficher la liste normale et ses éléments
+        const projectsList = document.getElementById('projects-list');
+        const paginationContainer = document.getElementById('projects-pagination');
+        const carousel = document.getElementById('projects-carousel');
+        const newsSection = document.getElementById('dashboard-news');
+
+        if (projectsList) projectsList.classList.remove('hidden');
+        if (projectsListHead) projectsListHead.classList.remove('hidden');
+        if (projectsContainer) projectsContainer.classList.remove('hidden');
+        if (paginationContainer) paginationContainer.classList.remove('hidden');
+        if (carousel) carousel.classList.remove('hidden');
+        if (newsSection) newsSection.classList.remove('hidden');
+
+        await renderProjects();
+      }
     }
 
     async function setTasksPage(page) {
@@ -12844,7 +12932,7 @@
         standaloneModeWrap.classList.toggle('hidden', !standaloneTaskMode);
       }
       if (metadataWrap) {
-        metadataWrap.classList.toggle('hidden', standaloneTaskMode);
+        metadataWrap.classList.remove('hidden');
       }
       if (groupAssignWrap) {
         groupAssignWrap.classList.toggle('hidden', standaloneTaskMode);
@@ -13394,6 +13482,16 @@
         }
       }
 
+      // Gérer l'affichage des boutons archiver/restaurer
+      const btnArchive = document.getElementById('btn-archive-project');
+      const btnRestore = document.getElementById('btn-restore-project');
+
+      if (btnArchive && btnRestore) {
+        const isArchived = !!state.project.archivedAt;
+        btnArchive.classList.toggle('hidden', isArchived);
+        btnRestore.classList.toggle('hidden', !isArchived);
+      }
+
       currentProjectState = state;
       initProjectInlineEditing(canEditProjectOverviewInline);
       const canSendChat = canSendProjectMessage(state);
@@ -13484,6 +13582,10 @@
         state.project.readAccess,
         normalizeSharingMode(state.project.sharingMode, 'private') === 'private' ? 'private' : 'members'
       ) === 'public' ? 'public' : 'private';
+      const editSharingMode = normalizeSharingMode(state.project.sharingMode, 'private');
+      updateProjectEditSharingUi(editSharingMode);
+      const editPassphraseInput = document.getElementById('edit-project-passphrase');
+      if (editPassphraseInput) editPassphraseInput.value = '';
       await populateProjectGroupPresetOptions('edit-project-group-presets', (state.groups || []).map(g => g.name));
       document.getElementById('modal-edit-project').classList.remove('hidden');
       document.getElementById('edit-project-name').focus();
@@ -13518,12 +13620,41 @@
         showToast('Le nom du projet est requis');
         return;
       }
+      const previousSharingMode = normalizeSharingMode(state.project?.sharingMode, 'private');
+      const nextSharingMode = String(document.getElementById('edit-project-sharing-mode-select')?.value || '').trim() === 'shared'
+        ? 'shared'
+        : 'private';
+      const modePassphrase = String(document.getElementById('edit-project-passphrase')?.value || '').trim();
       const changes = {
         name,
         description: getProjectDescriptionHtmlForStorage('edit-project-description-editor', 'edit-project-description'),
         status: document.getElementById('edit-project-status').value || 'en-cours',
-        readAccess: (document.getElementById('edit-project-read-access')?.value || 'private') === 'public' ? 'public' : 'private'
+        readAccess: (document.getElementById('edit-project-read-access')?.value || 'private') === 'public' ? 'public' : 'private',
+        sharingMode: nextSharingMode,
+        joinPassphrase: nextSharingMode === 'shared'
+          ? (modePassphrase || state.project?.joinPassphrase || null)
+          : null
       };
+      let sharedKeyHex = null;
+      const switchedToShared = previousSharingMode !== 'shared' && nextSharingMode === 'shared';
+      if (nextSharingMode === 'shared') {
+        let sharedKeyData = await getDecrypted('sharedKeys', currentProjectId, 'projectId');
+        if (!sharedKeyData?.sharedKey) {
+          const sharedKey = modePassphrase
+            ? await window.TaskMDACrypto.deriveSharedKeyFromPassphrase(modePassphrase, currentProjectId)
+            : await window.TaskMDACrypto.generateSharedKey();
+          sharedKeyHex = await window.TaskMDACrypto.exportSharedKey(sharedKey);
+          sharedKeyData = {
+            projectId: currentProjectId,
+            sharedKey: sharedKeyHex,
+            passphrase: modePassphrase || null,
+            createdAt: Date.now()
+          };
+          await putEncrypted('sharedKeys', sharedKeyData, 'projectId');
+        } else {
+          sharedKeyHex = String(sharedKeyData.sharedKey || '').trim() || null;
+        }
+      }
       const selectedGlobalGroups = readSelectedGlobalGroups('edit-project-group-presets');
       const editProjectDocuments = await readEditProjectDocumentFiles();
       const existingGroupKeys = new Set((state.groups || []).map(g => normalizeCatalogKey(g.name)));
@@ -13570,13 +13701,20 @@
         sharedSyncEvents.push(addDocEvent);
         addedDocsCount += 1;
       }
-      if (sharedFolderHandle && state.project?.sharingMode === 'shared') {
-        void syncProjectEventsToSharedSpace(currentProjectId, sharedSyncEvents, { ensureRegistered: true });
+      if (sharedFolderHandle && nextSharingMode === 'shared') {
+        if (switchedToShared) {
+          const allProjectEvents = await getProjectEvents(currentProjectId);
+          void syncProjectBootstrapToSharedSpace(currentProjectId, sharedKeyHex, allProjectEvents);
+        } else {
+          void syncProjectEventsToSharedSpace(currentProjectId, sharedSyncEvents, { ensureRegistered: true });
+        }
       }
       await releaseActiveProjectEditLock();
       document.getElementById('modal-edit-project').classList.add('hidden');
       const editProjectDocInput = document.getElementById('edit-project-doc-files');
       if (editProjectDocInput) editProjectDocInput.value = '';
+      const editPassphraseInput = document.getElementById('edit-project-passphrase');
+      if (editPassphraseInput) editPassphraseInput.value = '';
       updateEditProjectDocFilesSummary();
       showToast('Projet mis à jour');
       if (addedGroupsCount > 0) {
@@ -13689,6 +13827,253 @@
             `${currentUser?.name || 'Equipe projet'}`
           ].join('\n');
       openMailto({ to: recipients, subject, body });
+    }
+
+    // ====================================================================
+    // FONCTIONS D'ARCHIVAGE DE PROJETS
+    // ====================================================================
+
+    /**
+     * Archive un projet
+     */
+    async function archiveProject(projectId) {
+      if (!projectId) return false;
+
+      const confirmed = window.confirm('Archiver ce projet ?\n\nLe projet sera masqué de la liste principale mais restera accessible dans les archives.');
+      if (!confirmed) return false;
+
+      const state = await getDecrypted('localState', projectId, 'projectId');
+      if (!state || !state.project) {
+        showToast('❌ Projet introuvable');
+        return false;
+      }
+
+      state.project.archivedAt = Date.now();
+      state.project.archivedBy = currentUser?.userId || null;
+
+      await putEncrypted('localState', state, 'projectId');
+
+      showToast('✅ Projet archivé avec succès');
+
+      // Si on est sur la page de détail du projet, retourner à la liste
+      if (workspaceMode === 'project' && currentProjectId === projectId) {
+        showDashboard();
+      } else {
+        // Recharger la liste des projets
+        await renderProjects();
+      }
+
+      return true;
+    }
+
+    /**
+     * Restaure un projet archivé
+     */
+    async function restoreProject(projectId) {
+      if (!projectId) return false;
+
+      const confirmed = window.confirm('Restaurer ce projet ?\n\nLe projet redeviendra visible dans la liste principale.');
+      if (!confirmed) return false;
+
+      const state = await getDecrypted('localState', projectId, 'projectId');
+      if (!state || !state.project) {
+        showToast('❌ Projet introuvable');
+        return false;
+      }
+
+      delete state.project.archivedAt;
+      delete state.project.archivedBy;
+
+      await putEncrypted('localState', state, 'projectId');
+
+      showToast('✅ Projet restauré avec succès');
+
+      // Si on est sur la page de détail du projet, recharger
+      if (workspaceMode === 'project' && currentProjectId === projectId) {
+        await showProjectDetail(projectId);
+      } else {
+        // Recharger la liste des projets
+        if (projectsViewMode === 'archives') {
+          await renderProjectsArchives();
+        } else {
+          await renderProjects();
+        }
+      }
+
+      return true;
+    }
+
+    /**
+     * Affiche la section des projets archivés
+     */
+    async function renderProjectsArchives() {
+      const section = document.getElementById('projects-archives-section');
+      const container = document.getElementById('projects-archives-container');
+      const emptyState = document.getElementById('projects-archives-empty');
+      const countEl = document.getElementById('projects-archives-count');
+      const projectsList = document.getElementById('projects-list');
+      const projectsListHead = document.getElementById('projects-list-head');
+      const projectsContainer = document.getElementById('projects-container');
+      const carousel = document.getElementById('projects-carousel');
+      const newsSection = document.getElementById('dashboard-news');
+      const paginationContainer = document.getElementById('projects-pagination');
+      const filterCount = document.getElementById('projects-filter-count');
+      const filterRow = document.getElementById('projects-filter-row');
+
+      if (!section || !container) return;
+
+      // Conserver le conteneur racine visible: la section archives est imbriquée dedans.
+      if (projectsList) projectsList.classList.remove('hidden');
+      if (projectsListHead) projectsListHead.classList.add('hidden');
+      if (projectsContainer) projectsContainer.classList.add('hidden');
+      if (carousel) carousel.classList.add('hidden');
+      if (newsSection) newsSection.classList.add('hidden');
+      if (paginationContainer) paginationContainer.classList.add('hidden');
+      if (filterCount) filterCount.classList.add('hidden');
+      if (filterRow) filterRow.classList.add('hidden');
+
+      // Afficher la section archives
+      section.classList.remove('hidden');
+
+      // Récupérer tous les projets archivés
+      const allStates = await getAllDecrypted('localState', 'projectId') || [];
+      const archivedProjects = allStates
+        .filter(s => s && s.project && s.project.archivedAt && !s.project.deletedAt)
+        .map(s => s.project);
+
+      // Mettre à jour le compteur
+      if (countEl) {
+        const count = archivedProjects.length;
+        countEl.textContent = `${count} projet${count !== 1 ? 's' : ''} archivé${count !== 1 ? 's' : ''}`;
+      }
+
+      if (archivedProjects.length === 0) {
+        container.innerHTML = '';
+        if (emptyState) emptyState.classList.remove('hidden');
+        return;
+      }
+
+      if (emptyState) emptyState.classList.add('hidden');
+
+      // Trier par date d'archivage (plus récents en premier)
+      archivedProjects.sort((a, b) => (b.archivedAt || 0) - (a.archivedAt || 0));
+
+      // Récupérer l'état de chaque projet
+      const stateByProjectId = new Map();
+      for (const project of archivedProjects) {
+        const state = await getProjectState(project.projectId);
+        if (state) {
+          stateByProjectId.set(project.projectId, state);
+        }
+      }
+
+      // Générer le HTML
+      container.innerHTML = archivedProjects.map(project => {
+        const state = stateByProjectId.get(project.projectId);
+        const isPrivate = project.sharingMode === 'private';
+        const icon = isPrivate ? 'lock' : 'groups';
+        const badge = isPrivate
+          ? '<span class="workspace-chip workspace-chip-private">PRIVE</span>'
+          : '<span class="workspace-chip workspace-chip-shared">PARTAGE</span>';
+
+        const visibleTasks = (state?.tasks || []).filter(t => !t.archivedAt);
+        const completedTasks = visibleTasks.filter(t => t.status === 'termine');
+        const progress = visibleTasks.length > 0
+          ? Math.round((completedTasks.length / visibleTasks.length) * 100)
+          : 0;
+        const progressClass = progress === 100 ? 'bg-emerald-500' : 'bg-primary';
+        const progressStyle = `width: ${progress}%`;
+
+        const archivedDate = new Date(project.archivedAt).toLocaleDateString('fr-FR');
+
+        // Participants
+        const memberIds = new Set((state?.members || [])
+          .map((member) => String(member?.userId || '').trim())
+          .filter(Boolean));
+        const hasCreatedByFallback = !memberIds.size && String(project?.createdBy || '').trim();
+        const displayedMembersCount = memberIds.size + (hasCreatedByFallback ? 1 : 0);
+        const participantsHtml = displayedMembersCount > 0
+          ? `<span class="material-symbols-outlined text-[18px]">group</span>`
+          : '';
+        const creatorTooltip = displayedMembersCount > 0
+          ? `${displayedMembersCount} membre${displayedMembersCount > 1 ? 's' : ''}`
+          : 'Aucun membre';
+
+        return `
+          <div class="project-card workspace-card-shell rounded-xl border transition-all cursor-pointer" data-project-id="${escapeHtml(project.projectId)}" onclick="showProjectDetail('${escapeHtml(project.projectId)}')">
+            <div class="flex items-start justify-between gap-2 mb-2">
+              <div class="flex items-center gap-2">
+                <span class="material-symbols-outlined text-slate-400">${icon}</span>
+                ${badge}
+                <span class="inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded-full font-semibold bg-amber-100 text-amber-700">
+                  <span class="material-symbols-outlined text-[12px]">archive</span>
+                  <span>Archivé le ${escapeHtml(archivedDate)}</span>
+                </span>
+              </div>
+              <button class="card-quick-btn card-quick-btn-success" onclick="event.stopPropagation(); restoreProject('${escapeHtml(project.projectId)}')" title="Restaurer le projet">
+                <span class="material-symbols-outlined">unarchive</span>
+              </button>
+            </div>
+            <h3 class="workspace-card-title text-lg font-bold text-gray-900 mb-2">${escapeHtml(project.name)}</h3>
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2 text-sm text-gray-500">
+                <span class="material-symbols-outlined text-lg">calendar_today</span>
+                <span>${new Date(project.createdAt).toLocaleDateString('fr-FR')}</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span title="${escapeHtml(creatorTooltip)}" aria-label="${escapeHtml(creatorTooltip)}">${participantsHtml}</span>
+                <span class="text-[11px] font-semibold text-slate-500">${isPrivate ? 'Visibilité privée' : 'Visibilité collaborative'}</span>
+              </div>
+            </div>
+            <div class="mt-4 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+              <div class="h-full rounded-full ${progressClass}" style="${progressStyle}"></div>
+            </div>
+            <div class="mt-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">${progress}% complété</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    /**
+     * Initialise les event listeners pour l'archivage
+     */
+    function initProjectArchives() {
+      // Boutons de vue
+      const gridBtn = document.getElementById('projects-view-grid');
+      const listBtn = document.getElementById('projects-view-list');
+      const archivesBtn = document.getElementById('projects-view-archives');
+
+      if (gridBtn) {
+        gridBtn.addEventListener('click', () => setProjectsViewMode('grid'));
+      }
+
+      if (listBtn) {
+        listBtn.addEventListener('click', () => setProjectsViewMode('list'));
+      }
+
+      if (archivesBtn) {
+        archivesBtn.addEventListener('click', () => setProjectsViewMode('archives'));
+      }
+
+      // Boutons d'archivage/restauration dans la vue détail
+      const btnArchive = document.getElementById('btn-archive-project');
+      const btnRestore = document.getElementById('btn-restore-project');
+
+      if (btnArchive) {
+        btnArchive.addEventListener('click', async () => {
+          if (currentProjectId) {
+            await archiveProject(currentProjectId);
+          }
+        });
+      }
+
+      if (btnRestore) {
+        btnRestore.addEventListener('click', async () => {
+          if (currentProjectId) {
+            await restoreProject(currentProjectId);
+          }
+        });
+      }
     }
 
     async function sendTaskStatusEmail(taskId, doneOnly = false) {
@@ -23902,6 +24287,37 @@
     });
 
     // Project creation
+    function updateProjectCreateModeBadge(modeValue = 'private') {
+      const badge = document.getElementById('project-create-mode-badge');
+      if (!badge) return;
+      const isShared = String(modeValue || '').trim() === 'shared';
+      badge.textContent = isShared ? 'Projet collaboratif E2E' : 'Projet privé';
+      badge.classList.toggle('bg-slate-100', !isShared);
+      badge.classList.toggle('text-slate-700', !isShared);
+      badge.classList.toggle('bg-emerald-100', isShared);
+      badge.classList.toggle('text-emerald-800', isShared);
+    }
+
+    function updateProjectEditModeBadge(modeValue = 'private') {
+      const badge = document.getElementById('project-edit-mode-badge');
+      if (!badge) return;
+      const isShared = String(modeValue || '').trim() === 'shared';
+      badge.textContent = isShared ? 'Projet collaboratif E2E' : 'Projet privé';
+      badge.classList.toggle('bg-slate-100', !isShared);
+      badge.classList.toggle('text-slate-700', !isShared);
+      badge.classList.toggle('bg-emerald-100', isShared);
+      badge.classList.toggle('text-emerald-800', isShared);
+    }
+
+    function updateProjectEditSharingUi(modeValue = 'private') {
+      const nextMode = String(modeValue || '').trim() === 'shared' ? 'shared' : 'private';
+      const sharingSelect = document.getElementById('edit-project-sharing-mode-select');
+      if (sharingSelect) sharingSelect.value = nextMode;
+      const passphraseSection = document.getElementById('edit-project-passphrase-section');
+      if (passphraseSection) passphraseSection.classList.toggle('hidden', nextMode !== 'shared');
+      updateProjectEditModeBadge(nextMode);
+    }
+
     document.getElementById('btn-create-project').addEventListener('click', async () => {
       trackUxMetric('openNewProject');
       document.getElementById('modal-new-project').classList.remove('hidden');
@@ -23914,6 +24330,19 @@
       updateCreateProjectDocFilesSummary();
       document.getElementById('project-status').value = 'en-cours';
       document.getElementById('project-read-access').value = 'private';
+      const sharingModeSelect = document.getElementById('project-sharing-mode-select');
+      if (sharingModeSelect) sharingModeSelect.value = 'private';
+      updateProjectCreateModeBadge('private');
+      const passphraseSection = document.getElementById('passphrase-section');
+      if (passphraseSection) passphraseSection.classList.add('hidden');
+      const passphraseInput = document.getElementById('project-passphrase');
+      if (passphraseInput) passphraseInput.value = '';
+      const themesInput = document.getElementById('project-themes-input');
+      if (themesInput) themesInput.value = '';
+      const createPresetName = document.getElementById('project-group-preset-name-input');
+      const createPresetDesc = document.getElementById('project-group-preset-description-input');
+      if (createPresetName) createPresetName.value = '';
+      if (createPresetDesc) createPresetDesc.value = '';
       await populateProjectGroupPresetOptions('project-group-presets');
       document.getElementById('project-name').focus();
     });
@@ -23923,12 +24352,42 @@
       const createProjectDocInput = document.getElementById('project-create-doc-files');
       if (createProjectDocInput) createProjectDocInput.value = '';
       updateCreateProjectDocFilesSummary();
+      const passphraseInput = document.getElementById('project-passphrase');
+      if (passphraseInput) passphraseInput.value = '';
+      const themesInput = document.getElementById('project-themes-input');
+      if (themesInput) themesInput.value = '';
+      const createPresetName = document.getElementById('project-group-preset-name-input');
+      const createPresetDesc = document.getElementById('project-group-preset-description-input');
+      if (createPresetName) createPresetName.value = '';
+      if (createPresetDesc) createPresetDesc.value = '';
+    });
+
+    document.getElementById('btn-add-project-group-preset')?.addEventListener('click', async () => {
+      await createGlobalGroupFromProjectCreateModal();
+    });
+    document.getElementById('project-group-preset-name-input')?.addEventListener('keydown', async (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      await createGlobalGroupFromProjectCreateModal();
+    });
+
+    document.getElementById('project-sharing-mode-select')?.addEventListener('change', (e) => {
+      const nextMode = String(e?.target?.value || '').trim() === 'shared' ? 'shared' : 'private';
+      document.querySelectorAll('input[name="sharing-mode"]').forEach((radio) => {
+        radio.checked = radio.value === nextMode;
+      });
+      updateProjectCreateModeBadge(nextMode);
+      const passphraseSection = document.getElementById('passphrase-section');
+      if (passphraseSection) passphraseSection.classList.toggle('hidden', nextMode !== 'shared');
     });
 
     // Toggle passphrase section based on sharing mode
     document.querySelectorAll('input[name="sharing-mode"]').forEach(radio => {
       radio.addEventListener('change', (e) => {
+        const sharingModeSelect = document.getElementById('project-sharing-mode-select');
         const passphraseSection = document.getElementById('passphrase-section');
+        updateProjectCreateModeBadge(e.target.value);
+        if (sharingModeSelect) sharingModeSelect.value = e.target.value === 'shared' ? 'shared' : 'private';
         if (e.target.value === 'shared') {
           passphraseSection.classList.remove('hidden');
         } else {
@@ -24126,9 +24585,19 @@
       document.getElementById('modal-edit-project').classList.add('hidden');
       const editProjectDocInput = document.getElementById('edit-project-doc-files');
       if (editProjectDocInput) editProjectDocInput.value = '';
+      const editPassphraseInput = document.getElementById('edit-project-passphrase');
+      if (editPassphraseInput) editPassphraseInput.value = '';
       updateEditProjectDocFilesSummary();
     });
     document.getElementById('btn-save-edit-project')?.addEventListener('click', saveProjectEdits);
+    document.getElementById('edit-project-sharing-mode-select')?.addEventListener('change', (e) => {
+      const nextMode = String(e?.target?.value || '').trim() === 'shared' ? 'shared' : 'private';
+      updateProjectEditSharingUi(nextMode);
+      if (nextMode !== 'shared') {
+        const editPassphraseInput = document.getElementById('edit-project-passphrase');
+        if (editPassphraseInput) editPassphraseInput.value = '';
+      }
+    });
 
     document.getElementById('btn-save-user-name').addEventListener('click', async () => {
       const newName = document.getElementById('edit-user-name-input').value.trim();
@@ -24190,12 +24659,26 @@
         return;
       }
       const selectedGlobalGroups = readSelectedGlobalGroups('project-group-presets');
+      const themeSeedsRaw = String(document.getElementById('project-themes-input')?.value || '');
+      const seenThemeKeys = new Set();
+      const initialThemes = themeSeedsRaw
+        .split(/\n|,/g)
+        .map((value) => String(value || '').trim())
+        .filter(Boolean)
+        .filter((themeName) => {
+          const key = normalizeCatalogKey(themeName);
+          if (!key || seenThemeKeys.has(key)) return false;
+          seenThemeKeys.add(key);
+          return true;
+        });
 
       try {
         showLoading(true);
 
         const projectId = `project-${Date.now()}`;
-        const sharingMode = document.querySelector('input[name="sharing-mode"]:checked').value;
+        const sharingMode = String(document.getElementById('project-sharing-mode-select')?.value || '').trim() === 'shared'
+          ? 'shared'
+          : (document.querySelector('input[name="sharing-mode"]:checked')?.value === 'shared' ? 'shared' : 'private');
         const passphrase = document.getElementById('project-passphrase').value.trim();
 
         let sharedKey = null;
@@ -24259,6 +24742,18 @@
         for (const event of createGroupEvents) {
           await publishEvent(event);
         }
+        const addThemeEvents = initialThemes.map((theme) => createEvent(
+          EventTypes.ADD_THEME,
+          projectId,
+          currentUser.userId,
+          { theme }
+        ));
+        for (const event of addThemeEvents) {
+          await publishEvent(event);
+        }
+        for (const theme of initialThemes) {
+          await upsertGlobalTheme(theme);
+        }
         const stateAfterCreate = await getProjectState(projectId, { ignoreAccessCheck: true });
         await syncDescriptionImagesAsProjectDocs(projectId, stateAfterCreate, createProjectEvent.payload.description || '');
         const createProjectDocuments = await readCreateProjectDocumentFiles();
@@ -24283,6 +24778,7 @@
             createProjectEvent,
             addMemberEvent,
             ...createGroupEvents,
+            ...addThemeEvents,
             ...createProjectDocumentEvents
           ];
           void syncProjectBootstrapToSharedSpace(projectId, sharedKeyHex, bootstrapEvents);
@@ -24358,6 +24854,9 @@
     document.getElementById('task-group')?.addEventListener('change', async () => {
       if (standaloneTaskMode || !currentProjectState?.project) return;
       await refreshTaskGroupSelectionPreview(currentProjectState);
+    });
+    document.getElementById('btn-open-task-theme-manager')?.addEventListener('click', async () => {
+      await showGlobalThemeManagementModal();
     });
 
     document.getElementById('btn-save-task').addEventListener('click', async () => {
@@ -24796,6 +25295,8 @@
         document.getElementById('modal-edit-user-name').classList.add('hidden');
         pendingProfilePhotoDirty = false;
         document.getElementById('modal-edit-project').classList.add('hidden');
+        const editProjectPassphraseInput = document.getElementById('edit-project-passphrase');
+        if (editProjectPassphraseInput) editProjectPassphraseInput.value = '';
         editProjectFromDashboard = false;
         await closeDocumentPreview();
         closeDocumentBindingModal();
@@ -24861,6 +25362,8 @@
       document.getElementById('modal-edit-project')?.classList.add('hidden');
       const editProjectDocInput = document.getElementById('edit-project-doc-files');
       if (editProjectDocInput) editProjectDocInput.value = '';
+      const editPassphraseInput = document.getElementById('edit-project-passphrase');
+      if (editPassphraseInput) editPassphraseInput.value = '';
       updateEditProjectDocFilesSummary();
     });
 
@@ -25321,6 +25824,7 @@
 
     initFileDropInputs();
     initProjectDescriptionEditors();
+    initProjectArchives();
 
     document.getElementById('activity-filter-type')?.addEventListener('change', async (e) => {
       activityFilters.type = e.target.value;
@@ -25601,10 +26105,7 @@
       showModal({
         title: 'Référentiel des Thématiques',
         content,
-        maxWidth: 'max-w-md',
-        actions: [
-          { label: 'Fermer', onClick: (m) => m.close(), secondary: true }
-        ]
+        maxWidth: 'max-w-md'
       });
 
       document.getElementById('btn-add-global-theme-action')?.addEventListener('click', async () => {

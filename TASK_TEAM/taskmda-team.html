@@ -280,80 +280,111 @@
         </div>
 
         <div id="projects-list" class="mt-1 hidden">
-          <div class="flex items-center justify-between gap-3 mb-4">
-            <p class="text-xs text-slate-400">Tous les projets accessibles (privés assignés + publics).</p>
-            <div class="flex items-center gap-2">
-              <button id="btn-projects-add" type="button" class="btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold inline-flex items-center justify-center gap-2 taskmda-create-cta" onclick="document.getElementById('btn-create-project')?.click()" aria-label="Nouveau projet" title="Nouveau projet" data-action-kind="create" data-action-label="Nouveau projet">
-                <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">add_circle</span>
-                <span class="taskmda-action-label" id="btn-projects-add-text">Nouveau projet</span>
+          <div id="projects-toolbar-panel" class="mb-3">
+            <div id="projects-list-head" class="flex items-center justify-between gap-3 mb-4">
+              <p class="text-xs text-slate-400">Tous les projets accessibles (privés assignés + publics).</p>
+              <div id="projects-toolbar-actions" class="flex items-center gap-2">
+                <button id="btn-projects-add" type="button" class="btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold inline-flex items-center justify-center gap-2 taskmda-create-cta" onclick="document.getElementById('btn-create-project')?.click()" aria-label="Nouveau projet" title="Nouveau projet" data-action-kind="create" data-action-label="Nouveau projet">
+                  <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">add_circle</span>
+                  <span class="taskmda-action-label" id="btn-projects-add-text">Nouveau projet</span>
+                </button>
+                <div id="projects-view-controls" class="inline-flex items-center gap-1 rounded-xl bg-slate-100 p-1">
+                  <button id="projects-view-grid" class="p-2 rounded-lg text-slate-600" title="Vue grille" aria-label="Vue grille">
+                    <span class="material-symbols-outlined text-[20px]">grid_view</span>
+                  </button>
+                  <button id="projects-view-list" class="p-2 rounded-lg text-slate-600" title="Vue liste" aria-label="Vue liste">
+                    <span class="material-symbols-outlined text-[20px]">view_list</span>
+                  </button>
+                  <button id="projects-view-archives" class="p-2 rounded-lg text-slate-600" title="Archives" aria-label="Projets archivés">
+                    <span class="material-symbols-outlined text-[20px]">archive</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div id="projects-filter-row" class="mb-2 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-7 gap-2">
+              <input id="projects-filter-query" type="search" placeholder="Recherche globale des cartes projet" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+              <select id="projects-filter-theme-known" class="px-3 py-2 border border-slate-300 rounded-lg text-sm" title="Choisir parmi les thématiques existantes">
+                <option value="">Thématiques existantes...</option>
+              </select>
+              <select id="projects-filter-status" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                <option value="all">Tous les statuts</option>
+                <option value="en-cours">En cours</option>
+                <option value="planifie">Planifié</option>
+                <option value="urgent">Urgent</option>
+                <option value="termine">Terminé</option>
+              </select>
+              <select id="projects-filter-sharing" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                <option value="all">Tous les modes</option>
+                <option value="shared">Collaborative</option>
+                <option value="private">Privée</option>
+              </select>
+              <select id="projects-filter-ownership" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                <option value="all">Tous les projets</option>
+                <option value="mine">Mes projets</option>
+                <option value="team">Projets d'équipe</option>
+              </select>
+              <select id="projects-filter-sort" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                <option value="recent">Tri: plus récents</option>
+                <option value="oldest">Tri: plus anciens</option>
+                <option value="name-asc">Tri: nom A → Z</option>
+                <option value="name-desc">Tri: nom Z → A</option>
+                <option value="status">Tri: statut</option>
+              </select>
+              <button id="projects-filter-reset" class="task-action-btn task-action-btn-subtle" data-action-kind="default" aria-label="Réinitialiser les filtres">
+                <span class="material-symbols-outlined taskmda-action-icon">restart_alt</span>
               </button>
-              <div class="inline-flex items-center gap-1 rounded-xl bg-slate-100 p-1">
-                <button id="projects-view-grid" class="p-2 rounded-lg text-slate-600" title="Vue grille" aria-label="Vue grille">
-                  <span class="material-symbols-outlined text-[20px]">grid_view</span>
-                </button>
-                <button id="projects-view-list" class="p-2 rounded-lg text-slate-600" title="Vue liste" aria-label="Vue liste">
-                  <span class="material-symbols-outlined text-[20px]">view_list</span>
-                </button>
-              </div>
             </div>
-          </div>
-          <div id="projects-filter-row" class="mb-2 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-7 gap-2">
-            <input id="projects-filter-query" type="search" placeholder="Recherche globale des cartes projet" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-            <select id="projects-filter-theme-known" class="px-3 py-2 border border-slate-300 rounded-lg text-sm" title="Choisir parmi les thématiques existantes">
-              <option value="">Thématiques existantes...</option>
-            </select>
-            <select id="projects-filter-status" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-              <option value="all">Tous les statuts</option>
-              <option value="en-cours">En cours</option>
-              <option value="planifie">Planifié</option>
-              <option value="urgent">Urgent</option>
-              <option value="termine">Terminé</option>
-            </select>
-            <select id="projects-filter-sharing" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-              <option value="all">Tous les modes</option>
-              <option value="shared">Collaborative</option>
-              <option value="private">Privée</option>
-            </select>
-            <select id="projects-filter-ownership" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-              <option value="all">Tous les projets</option>
-              <option value="mine">Mes projets</option>
-              <option value="team">Projets d'équipe</option>
-            </select>
-            <select id="projects-filter-sort" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-              <option value="recent">Tri: plus récents</option>
-              <option value="oldest">Tri: plus anciens</option>
-              <option value="name-asc">Tri: nom A → Z</option>
-              <option value="name-desc">Tri: nom Z → A</option>
-              <option value="status">Tri: statut</option>
-            </select>
-            <button id="projects-filter-reset" class="px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold">Réinitialiser</button>
-          </div>
-          <div id="projects-filter-count" class="mb-4 text-xs text-slate-500 font-semibold">0 résultat sur 0 projet</div>
-
-          <!-- Carousel pour le dashboard -->
-          <div id="projects-carousel" class="projects-carousel hidden">
-            <div class="projects-carousel-header">
-              <div class="projects-carousel-title-wrap">
-                <h3 class="projects-carousel-title">Derniers projets créés</h3>
-                <p id="projects-carousel-count" class="projects-carousel-count" aria-live="polite"></p>
-              </div>
-              <div class="projects-carousel-controls">
-                <button id="carousel-prev" class="carousel-nav-btn" aria-label="Projet précédent">
-                  <span class="material-symbols-outlined">chevron_left</span>
-                </button>
-                <button id="carousel-next" class="carousel-nav-btn" aria-label="Projet suivant">
-                  <span class="material-symbols-outlined">chevron_right</span>
-                </button>
-              </div>
-            </div>
-            <div class="projects-carousel-container">
-              <div id="projects-carousel-track" class="projects-carousel-track"></div>
-            </div>
-            <div id="projects-carousel-indicators" class="projects-carousel-indicators"></div>
+            <div id="projects-filter-count" class="text-xs text-slate-500 font-semibold">0 résultat sur 0 projet</div>
           </div>
 
-          <div id="projects-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
-          <div id="projects-pagination" class="mt-4 flex items-center justify-between gap-3 text-xs text-slate-500"></div>
+          <div id="projects-cards-panel">
+            <!-- Carousel pour le dashboard -->
+            <div id="projects-carousel" class="projects-carousel hidden">
+              <div class="projects-carousel-header">
+                <div class="projects-carousel-title-wrap">
+                  <h3 class="projects-carousel-title">Derniers projets créés</h3>
+                  <p id="projects-carousel-count" class="projects-carousel-count" aria-live="polite"></p>
+                </div>
+                <div class="projects-carousel-controls">
+                  <button id="carousel-prev" class="carousel-nav-btn" aria-label="Projet précédent">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                  </button>
+                  <button id="carousel-next" class="carousel-nav-btn" aria-label="Projet suivant">
+                    <span class="material-symbols-outlined">chevron_right</span>
+                  </button>
+                </div>
+              </div>
+              <div class="projects-carousel-container">
+                <div id="projects-carousel-track" class="projects-carousel-track"></div>
+              </div>
+              <div id="projects-carousel-indicators" class="projects-carousel-indicators"></div>
+            </div>
+
+            <div id="projects-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+            <div id="projects-pagination" class="mt-4 flex items-center justify-between gap-3 text-xs text-slate-500"></div>
+
+            <section id="projects-archives-section" class="hidden mt-6">
+              <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-3">
+                  <button onclick="setProjectsViewMode('grid')" class="task-action-btn task-action-btn-subtle inline-flex items-center gap-1" title="Retour aux projets">
+                    <span class="material-symbols-outlined text-[20px]">arrow_back</span>
+                  </button>
+                  <h3 class="section-title text-xl font-extrabold">Projets archivés</h3>
+                </div>
+                <span id="projects-archives-count" class="text-sm text-slate-500 font-semibold">0 projet archivé</span>
+              </div>
+              <div id="projects-archives-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+              <div id="projects-archives-empty" class="hidden text-center py-12 text-slate-500">
+                <span class="material-symbols-outlined text-5xl mb-2 opacity-50">archive</span>
+                <p class="text-sm mb-4">Aucun projet archivé</p>
+                <button onclick="setProjectsViewMode('grid')" class="task-action-btn task-action-btn-primary inline-flex items-center gap-2">
+                  <span class="material-symbols-outlined text-[18px]">arrow_back</span>
+                  <span>Retour aux projets</span>
+                </button>
+              </div>
+            </section>
+          </div>
+
           <section id="dashboard-news" class="dashboard-news hidden" aria-live="polite">
             <div class="dashboard-news-head">
               <h3 class="dashboard-news-title">Actualités majeures</h3>
@@ -690,8 +721,14 @@
                 <h4 class="discussion-side-title">Agents connus</h4>
                 <input id="global-message-contact-search" type="text" placeholder="Rechercher un agent..." class="px-3 py-2 border border-slate-300 rounded-lg text-sm mb-2">
                 <div class="discussion-recipient-actions mb-2">
-                  <button id="btn-global-message-select-all" type="button" class="discussion-recipient-btn workspace-action-inline" data-action-kind="manage">Tout sélectionner</button>
-                  <button id="btn-global-message-clear-selection" type="button" class="discussion-recipient-btn workspace-action-inline" data-action-kind="manage">Tout désélectionner</button>
+                  <button id="btn-global-message-select-all" type="button" class="discussion-recipient-btn workspace-action-inline" data-action-kind="manage">
+                    <span class="material-symbols-outlined text-base">done_all</span>
+                    <span>Tout sélectionner</span>
+                  </button>
+                  <button id="btn-global-message-clear-selection" type="button" class="discussion-recipient-btn workspace-action-inline" data-action-kind="manage">
+                    <span class="material-symbols-outlined text-base">clear_all</span>
+                    <span>Tout désélectionner</span>
+                  </button>
                 </div>
                 <div class="discussion-recipient-actions mb-2">
                   <select id="global-message-group-channel-select" class="px-3 py-2 border border-slate-300 rounded-lg text-sm flex-1">
@@ -1065,6 +1102,14 @@
               <h2 id="project-title" class="section-title text-3xl font-extrabold mb-2"></h2>
                 <div class="flex items-center gap-2 flex-wrap">
                 <button id="btn-edit-project" class="task-action-btn" data-action-kind="edit">Modifier</button>
+                <button id="btn-archive-project" class="task-action-btn task-action-btn-warn hidden" data-action-kind="warn">
+                  <span class="material-symbols-outlined">archive</span>
+                  <span>Archiver</span>
+                </button>
+                <button id="btn-restore-project" class="task-action-btn task-action-btn-success hidden" data-action-kind="success">
+                  <span class="material-symbols-outlined">unarchive</span>
+                  <span>Restaurer</span>
+                </button>
                 <button id="btn-delete-project" class="task-action-btn task-action-btn-danger" data-action-kind="danger">Supprimer</button>
                 <button id="btn-email-project-status" class="task-action-btn task-action-btn-subtle" data-action-kind="notify"><span class="material-symbols-outlined">mail</span> Email statut projet</button>
                 <button id="btn-email-project-complete" class="task-action-btn task-action-btn-subtle" data-action-kind="notify"><span class="material-symbols-outlined">mark_email_read</span> Email projet achevé</button>
@@ -1512,7 +1557,10 @@
 
   <div id="modal-new-project" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
     <div class="bg-white rounded-2xl p-6 sm:p-8 max-w-4xl w-full mx-auto my-2 sm:my-4 max-h-[92vh] overflow-y-auto overscroll-contain">
-      <h3 class="section-title text-2xl font-extrabold mb-3">Nouveau projet</h3>
+      <div class="flex items-center justify-between gap-3 mb-3">
+        <h3 class="section-title text-2xl font-extrabold">Nouveau projet</h3>
+        <span id="project-create-mode-badge" class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">Projet privé</span>
+      </div>
       <div class="space-y-4">
         <div><label class="block text-sm font-semibold mb-2">Nom du projet *</label><input id="project-name" type="text" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"></div>
         <div class="project-editor-wrap">
@@ -1539,6 +1587,14 @@
         </div>
         <div><label class="block text-sm font-semibold mb-2">Statut</label><select id="project-status" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"><option value="en-cours">En cours</option><option value="planifie">Planifié</option><option value="urgent">Urgent</option><option value="termine">Terminé</option></select></div>
         <div>
+          <label class="block text-sm font-semibold mb-2">Mode du projet</label>
+          <select id="project-sharing-mode-select" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+            <option value="private">Privé (solo)</option>
+            <option value="shared">Collaboratif E2E (partagé)</option>
+          </select>
+          <p class="text-[11px] text-slate-500 mt-1">Choisissez ici si le projet est individuel ou collaboratif.</p>
+        </div>
+        <div>
           <label class="block text-sm font-semibold mb-2">Visibilité lecture</label>
           <select id="project-read-access" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
             <option value="private">Privé (membres uniquement)</option>
@@ -1546,9 +1602,24 @@
           </select>
         </div>
         <div>
+          <label class="block text-sm font-semibold mb-2">Thématiques initiales (optionnel)</label>
+          <textarea id="project-themes-input" rows="2" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Ex: RH, Budget, Juridique"></textarea>
+          <p class="text-[11px] text-slate-500 mt-1">Séparez par virgule ou retour à la ligne.</p>
+        </div>
+        <div>
           <label class="block text-sm font-semibold mb-2">Associer des groupes globaux</label>
           <select id="project-group-presets" multiple class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary min-h-[96px]"></select>
           <p class="text-[11px] text-slate-500 mt-1">Optionnel. Les groupes sélectionnés seront ajoutés au projet dès la création.</p>
+          <div class="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <p class="text-xs font-semibold text-slate-700 mb-2">Créer un groupe global à la volée</p>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+              <input id="project-group-preset-name-input" type="text" placeholder="Nom du groupe global" class="px-3 py-2 border border-slate-300 rounded-lg text-sm md:col-span-1">
+              <input id="project-group-preset-description-input" type="text" placeholder="Description (optionnelle)" class="px-3 py-2 border border-slate-300 rounded-lg text-sm md:col-span-1">
+              <button id="btn-add-project-group-preset" type="button" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold taskmda-create-cta md:col-span-1" data-action-kind="create" data-action-label="Ajouter groupe global">
+                Ajouter le groupe
+              </button>
+            </div>
+          </div>
         </div>
         <div class="space-y-2">
           <label class="block text-sm font-semibold mb-1">Documents initiaux (optionnel)</label>
@@ -1558,7 +1629,7 @@
           </div>
           <p class="text-[11px] text-slate-500">Ces documents seront ajoutés automatiquement dans l'onglet Documents du projet après création.</p>
         </div>
-        <div>
+        <div class="hidden">
           <label class="block text-sm font-semibold mb-2">Type de projet</label>
           <label class="flex items-center gap-2 p-3 rounded-lg border border-slate-300"><input type="radio" name="sharing-mode" value="private" checked> <span>Privé (solo)</span></label>
           <label class="flex items-center gap-2 p-3 rounded-lg border border-slate-300 mt-2"><input type="radio" name="sharing-mode" value="shared"> <span>Partagé (collaboratif E2E)</span></label>
@@ -1631,7 +1702,13 @@
         <div><label class="modal-field-label block text-sm font-semibold mb-2"><span class="material-symbols-outlined modal-field-icon" aria-hidden="true">priority_high</span><span>Urgence</span></label><select id="task-urgency" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"><option value="low">Basse</option><option value="medium">Moyenne</option><option value="high">Haute</option></select></div>
         <div id="task-project-metadata-wrap">
           <label class="modal-field-label block text-sm font-semibold mb-2"><span class="material-symbols-outlined modal-field-icon" aria-hidden="true">sell</span><span>Thématique</span></label>
-          <input id="task-theme" type="text" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Sujet principal de la tâche">
+          <div class="flex gap-2">
+            <input id="task-theme" type="text" class="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Sujet principal de la tâche">
+            <button id="btn-open-task-theme-manager" type="button" class="task-action-btn task-action-btn-subtle" data-action-kind="manage" title="Gérer les thématiques">
+              <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">tune</span>
+              <span class="taskmda-action-label">Thématiques</span>
+            </button>
+          </div>
         </div>
         <div id="task-standalone-mode-wrap" class="hidden">
           <label class="modal-field-label block text-sm font-semibold mb-2"><span class="material-symbols-outlined modal-field-icon" aria-hidden="true">handshake</span><span>Visibilité hors projet</span></label>
@@ -2218,6 +2295,21 @@
           <label class="block text-sm font-semibold mb-2">Associer des groupes globaux</label>
           <select id="edit-project-group-presets" multiple class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary min-h-[96px]"></select>
           <p class="text-[11px] text-slate-500 mt-1">Les groupes sélectionnés seront ajoutés au projet (sans supprimer les groupes existants).</p>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <label class="block text-sm font-semibold mb-2">Mode de collaboration</label>
+          <div class="flex flex-wrap items-center gap-3">
+            <select id="edit-project-sharing-mode-select" class="w-full sm:w-auto min-w-[260px] px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+              <option value="private">Projet privé (solo)</option>
+              <option value="shared">Projet collaboratif E2E</option>
+            </select>
+            <span id="project-edit-mode-badge" class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">Projet privé</span>
+          </div>
+          <div id="edit-project-passphrase-section" class="hidden mt-3">
+            <label class="block text-sm font-semibold mb-2">Phrase secrète (optionnelle)</label>
+            <input id="edit-project-passphrase" type="text" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Utilisée seulement si vous passez en collaboratif">
+          </div>
+          <p class="text-[11px] text-slate-500 mt-2">Vous pouvez passer un projet existant de privé à collaboratif sans le recréer.</p>
         </div>
       </div>
       <div class="flex gap-4 mt-6">
