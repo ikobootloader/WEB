@@ -129,13 +129,15 @@
         <ul class="list-disc pl-5 space-y-1">
           <li>Tableau de bord avec accès rapide, statistiques et démarrage projet.</li>
           <li>Gestion de projets (solo/collaboratif), membres, groupes, thématiques et permissions.</li>
+          <li>Vue Projets harmonisée en panneaux (filtres/actions séparés des cartes), avec mode Archives stabilisé.</li>
           <li>Pilotage des tâches: Cartes, Liste, Kanban, Timeline, Calendrier, Archives + conversion tâche en projet.</li>
           <li>Tâches récurrentes (hebdo/mensuelle/annuelle) avec intervalle et fin configurable.</li>
           <li>Documents: dépôt, association aux tâches, recherche, filtrage, suppression et éditeur intégré.</li>
           <li>Calendrier transverse (projets + hors projet) avec informations éditables.</li>
           <li>Messagerie projet et hors projet, notifications, mentions et recherche globale.</li>
-          <li>Fil d information transverse (posts manuels + activités automatiques + digestion documentaire).</li>
-          <li>Workflow complet: Carte, Organisation, Organigramme, Agents, Processus, Modèles de processus, Tâches, Kanban, Timeline, Procédures, Logiciels, Analyse, Gouvernance, Journal.</li>
+          <li>Messagerie hors projet: panneau "Agents connus" réductible (toggle) et barre de saisie modernisée (emoji + envoi).</li>
+          <li>Fil d information transverse (posts manuels + activités automatiques + digestion documentaire), avec bloc "Nouveau post d'information" replié par défaut.</li>
+          <li>Workflow complet: Carte, Organisation, Organigramme, Agents, Processus, Modèles de processus, Tâches, Kanban, Timeline, KPI, Procédures, Logiciels, Analyse, Gouvernance, Journal.</li>
           <li>Carte métier enrichie: zoom/pan, auto-layout, mini-carte interactive, export PNG et export PDF.</li>
           <li>Concepteur de processus: bibliothèque de blocs d étapes, ajout rapide, duplication, réordonnancement et reliage automatique des flux.</li>
           <li>Concepteur de flux (graphe): création de branches non-linéaires (décision, parallèle, exception), branche oui/non et bascule mode linéaire.</li>
@@ -143,6 +145,7 @@
           <li>Édition visuelle rapide: clic nœud pour composer source/cible, clic arête pour charger un flux dans le formulaire d édition.</li>
           <li>Sélection multiple de flux: multi-select, sélection Ctrl/Shift/Cmd, suppression groupée et application groupée du type de flux.</li>
           <li>Mode drag-link: activer le mode liaison puis glisser d un nœud source vers un nœud cible pour créer un flux.</li>
+          <li>Pilotage KPI (Workflow): cartes de synthèse + répartitions par statut/priorité + charge par agent.</li>
           <li>Gouvernance workflow: validations multi-niveaux (mode standard ou séquentiel), quorum par niveau, alertes bloquantes et exports JSON/CSV.</li>
           <li>Gouvernance des droits: séparation soumission/édition et validation, avec contrôles par rôles approbateurs sur les niveaux de validation.</li>
           <li>Modèles de processus: création depuis processus, instanciation, publication/archivage, versioning et variantes de modèle.</li>
@@ -154,6 +157,7 @@
           <li>Workflow: les logiciels métiers intègrent directement le suivi des versions dans leur fiche.</li>
           <li>Profil et sécurité: email/photo, export/import JSON, export CSV, changement mot de passe, clé de récupération.</li>
           <li>Mode sombre, responsive design, synchronisation collaborative sans serveur (FSA) et chiffrement local.</li>
+          <li>Onglet "Plus (x)": menu complémentaire épinglé au clic (toggle), sans ouverture au survol.</li>
         </ul>
         <p class="text-xs text-slate-500 border-t border-slate-200 pt-3">Application créée par Frédérick MURAT - licence MIT - 2026</p>
       </div>
@@ -282,7 +286,7 @@
         <div id="projects-list" class="mt-1 hidden">
           <div id="projects-toolbar-panel" class="mb-3">
             <div id="projects-list-head" class="flex items-center justify-between gap-3 mb-4">
-              <p class="text-xs text-slate-400">Tous les projets accessibles (privés assignés + publics).</p>
+              <p class="text-xs text-slate-400 projects-toolbar-caption">Tous les projets accessibles (privés assignés + publics).</p>
               <div id="projects-toolbar-actions" class="flex items-center gap-2">
                 <button id="btn-projects-add" type="button" class="btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold inline-flex items-center justify-center gap-2 taskmda-create-cta" onclick="document.getElementById('btn-create-project')?.click()" aria-label="Nouveau projet" title="Nouveau projet" data-action-kind="create" data-action-label="Nouveau projet">
                   <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">add_circle</span>
@@ -301,38 +305,45 @@
                 </div>
               </div>
             </div>
-            <div id="projects-filter-row" class="mb-2 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-7 gap-2">
-              <input id="projects-filter-query" type="search" placeholder="Recherche globale des cartes projet" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-              <select id="projects-filter-theme-known" class="px-3 py-2 border border-slate-300 rounded-lg text-sm" title="Choisir parmi les thématiques existantes">
-                <option value="">Thématiques existantes...</option>
-              </select>
-              <select id="projects-filter-status" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                <option value="all">Tous les statuts</option>
-                <option value="en-cours">En cours</option>
-                <option value="planifie">Planifié</option>
-                <option value="urgent">Urgent</option>
-                <option value="termine">Terminé</option>
-              </select>
-              <select id="projects-filter-sharing" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                <option value="all">Tous les modes</option>
-                <option value="shared">Collaborative</option>
-                <option value="private">Privée</option>
-              </select>
-              <select id="projects-filter-ownership" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                <option value="all">Tous les projets</option>
-                <option value="mine">Mes projets</option>
-                <option value="team">Projets d'équipe</option>
-              </select>
-              <select id="projects-filter-sort" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                <option value="recent">Tri: plus récents</option>
-                <option value="oldest">Tri: plus anciens</option>
-                <option value="name-asc">Tri: nom A → Z</option>
-                <option value="name-desc">Tri: nom Z → A</option>
-                <option value="status">Tri: statut</option>
-              </select>
-              <button id="projects-filter-reset" class="task-action-btn task-action-btn-subtle" data-action-kind="default" aria-label="Réinitialiser les filtres">
-                <span class="material-symbols-outlined taskmda-action-icon">restart_alt</span>
-              </button>
+            <div id="projects-filter-row" class="projects-filter-layout mb-2">
+              <div class="projects-filter-search-row">
+                <label class="projects-filter-search-wrap" for="projects-filter-query">
+                  <span class="material-symbols-outlined projects-filter-search-icon" aria-hidden="true">search</span>
+                  <input id="projects-filter-query" type="search" placeholder="Recherche globale" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                </label>
+              </div>
+              <div class="projects-filter-controls-row">
+                <select id="projects-filter-theme-known" class="px-3 py-2 border border-slate-300 rounded-lg text-sm" title="Choisir parmi les thématiques existantes">
+                  <option value="">Thématiques existantes...</option>
+                </select>
+                <select id="projects-filter-status" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  <option value="all">Tous les statuts</option>
+                  <option value="en-cours">En cours</option>
+                  <option value="planifie">Planifié</option>
+                  <option value="urgent">Urgent</option>
+                  <option value="termine">Terminé</option>
+                </select>
+                <select id="projects-filter-sharing" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  <option value="all">Tous les modes</option>
+                  <option value="shared">Collaborative</option>
+                  <option value="private">Privée</option>
+                </select>
+                <select id="projects-filter-ownership" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  <option value="all">Tous les projets</option>
+                  <option value="mine">Mes projets</option>
+                  <option value="team">Projets d'équipe</option>
+                </select>
+                <select id="projects-filter-sort" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  <option value="recent">Tri: plus récents</option>
+                  <option value="oldest">Tri: plus anciens</option>
+                  <option value="name-asc">Tri: nom A → Z</option>
+                  <option value="name-desc">Tri: nom Z → A</option>
+                  <option value="status">Tri: statut</option>
+                </select>
+                <button id="projects-filter-reset" class="task-action-btn task-action-btn-subtle projects-filter-reset-btn" data-action-kind="default" aria-label="Réinitialiser les filtres" title="Réinitialiser les filtres">
+                  <span class="material-symbols-outlined taskmda-action-icon">restart_alt</span>
+                </button>
+              </div>
             </div>
             <div id="projects-filter-count" class="text-xs text-slate-500 font-semibold">0 résultat sur 0 projet</div>
           </div>
@@ -521,6 +532,7 @@
                   <button id="workflow-view-tasks" class="workflow-view-tab" type="button" data-wf-group="pilotage"><span class="material-symbols-outlined tab-icon">assignment</span> Tâches</button>
                   <button id="workflow-view-kanban" class="workflow-view-tab" type="button" data-wf-group="pilotage"><span class="material-symbols-outlined tab-icon">view_kanban</span> Kanban</button>
                   <button id="workflow-view-timeline" class="workflow-view-tab" type="button" data-wf-group="pilotage"><span class="material-symbols-outlined tab-icon">calendar_month</span> Timeline</button>
+                  <button id="workflow-view-kpi" class="workflow-view-tab" type="button" data-wf-group="pilotage"><span class="material-symbols-outlined tab-icon">monitoring</span> KPI</button>
                   <button id="workflow-view-procedures" class="workflow-view-tab" type="button" data-wf-group="referentiels"><span class="material-symbols-outlined tab-icon">article</span> Procédures</button>
                   <button id="workflow-view-software" class="workflow-view-tab" type="button" data-wf-group="referentiels"><span class="material-symbols-outlined tab-icon">computer</span> Logiciels métiers</button>
                   <button id="workflow-view-contingency" class="workflow-view-tab" type="button" data-wf-group="referentiels"><span class="material-symbols-outlined tab-icon">emergency_home</span> Contingence</button>
@@ -1147,8 +1159,7 @@
           </div> <!-- end project-overview-panel -->
 
           <div class="panel p-3 mb-3">
-            <div class="project-mode-context-label">Navigation du projet</div>
-            <div class="project-detail-mode-tabs mt-2">
+            <div class="project-detail-mode-tabs">
               <button id="project-mode-work" class="project-mode-tab view-tab-active"><span class="material-symbols-outlined tab-icon">work</span> Espace de travail</button>
               <button id="project-mode-settings" class="project-mode-tab"><span class="material-symbols-outlined tab-icon">settings</span> Configuration</button>
             </div>
@@ -1564,7 +1575,12 @@
     <div class="bg-white rounded-2xl p-6 sm:p-8 max-w-4xl w-full mx-auto my-2 sm:my-4 max-h-[92vh] overflow-y-auto overscroll-contain">
       <div class="flex items-center justify-between gap-3 mb-3">
         <h3 class="section-title text-2xl font-extrabold">Nouveau projet</h3>
-        <span id="project-create-mode-badge" class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">Projet privé</span>
+        <div class="project-create-head-right">
+          <span id="project-create-mode-badge" class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">Projet privé</span>
+          <button id="btn-close-new-project" type="button" class="taskmda-modal-close-btn project-create-close-btn" data-action-kind="close" data-action-label="Fermer" aria-label="Fermer">
+            <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">close</span>
+          </button>
+        </div>
       </div>
       <div class="space-y-4">
         <div><label class="block text-sm font-semibold mb-2">Nom du projet *</label><input id="project-name" type="text" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"></div>

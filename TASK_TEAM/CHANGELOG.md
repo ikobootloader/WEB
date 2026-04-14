@@ -2,6 +2,35 @@
 
 ## Version actuelle - Avril 2026
 
+### Mise a jour incrementale - Avril 2026 (UX/UI + Workflow KPI)
+
+- Projets:
+  - harmonisation de la vue `Projets` en panneaux separes (zone overview/filtres/actions + zone cartes).
+  - fiabilisation du mode `Archives` (bascule, retour dashboard -> projets, etat d affichage).
+  - ajustements visuels des cartes (barre top, coherence panel et filtres).
+- Projet detail:
+  - corrections de visibilite des actions contextuelles (ex: `Restaurer` uniquement pour les archives).
+  - harmonisation des fonds `#project-overview-panel` et `#project-work-panel` selon les styles demandes.
+- Sidebar/header:
+  - integration visuelle du bloc marque dans la sidebar.
+  - sidebar etendue sur toute la hauteur de page.
+- Fil d info:
+  - bloc `Nouveau post d'information` remonte au-dessus du fil et de la recherche.
+  - bloc replie par defaut, depliage a la demande.
+- Messagerie:
+  - panneau `Agents connus` en mode toggle (ouvrir/reduire).
+  - ajustement des proportions (panneau agents + zone conversation).
+  - barre d envoi modernisee avec bouton `Envoyer` rectangulaire a bords arrondis.
+- Onglet `Plus (x)`:
+  - menu complementaire epingle au clic.
+  - fermeture au second clic.
+  - suppression de l ouverture au survol.
+- Workflow:
+  - ajout de la vue `KPI` dans `Pilotage`.
+  - KPI: synthese volume, completion, bloquees, a valider, en cours, priorite haute.
+  - KPI: repartitions par statut/priorite + charge par agent (top 8).
+  - styles dedies clairs/sombres (`css/taskmda-workflow.css`).
+
 ### ✨ Nouvelles fonctionnalités
 #### Workflow (MVP integre)
 - Ajout de la rubrique principale `Workflow` dans la navigation.

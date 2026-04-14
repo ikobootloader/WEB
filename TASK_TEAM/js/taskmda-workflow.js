@@ -276,6 +276,7 @@
       tasks: 'workflow-view-tasks',
       kanban: 'workflow-view-kanban',
       timeline: 'workflow-view-timeline',
+      kpi: 'workflow-view-kpi',
       procedures: 'workflow-view-procedures',
       software: 'workflow-view-software',
       contingency: 'workflow-view-contingency',
@@ -300,7 +301,7 @@
       pilotage: {
         label: 'Pilotage',
         icon: 'assignment',
-        views: ['tasks', 'kanban', 'timeline'],
+        views: ['tasks', 'kanban', 'timeline', 'kpi'],
         defaultView: 'tasks'
       },
       referentiels: {
@@ -3691,6 +3692,21 @@ ${reviews.map((row)=>`<tr><td>${esc(row.reviewDate || '-')}</td><td>${esc(row.ne
       return key || 'todo';
     }
 
+    function normalizeTaskPriority(priority) {
+      const safe = String(priority || '').trim().toLowerCase();
+      if (safe === 'high' || safe === 'urgent' || safe === 'critical') return 'high';
+      if (safe === 'low') return 'low';
+      if (safe === 'medium') return 'medium';
+      return 'other';
+    }
+
+    function taskPriorityLabel(priority) {
+      if (priority === 'high') return 'Haute';
+      if (priority === 'medium') return 'Moyenne';
+      if (priority === 'low') return 'Basse';
+      return 'Autre';
+    }
+
     function applyFilters(items, resolver) {
       const q = normalize(state.query);
       return (items || []).filter((item) => {
@@ -3824,6 +3840,7 @@ ${reviews.map((row)=>`<tr><td>${esc(row.reviewDate || '-')}</td><td>${esc(row.ne
       if (viewKey === 'tasks') return 'Taches';
       if (viewKey === 'kanban') return 'Kanban';
       if (viewKey === 'timeline') return 'Timeline';
+      if (viewKey === 'kpi') return 'KPI';
       if (viewKey === 'procedures') return 'Procedures';
       if (viewKey === 'software') return 'Logiciels metiers';
       if (viewKey === 'contingency') return 'Contingence';
@@ -6134,6 +6151,124 @@ ${clone.outerHTML}
       `;
     }
 
+    function renderKpiView() {
+      const maps = getMaps();
+      const scopedTasks = filterTasksByStatus(applyFilters(state.collections.tasks, (item) => ({
+        serviceId: item.serviceId,
+        groupId: item.groupId,
+        agentId: item.ownerAgentId
+      })));
+
+      if (!scopedTasks.length) {
+        refs.content.innerHTML = '<div class="workflow-empty">Aucune tache workflow pour calculer les KPI</div>';
+        return;
+      }
+
+      const statusOrder = ['todo', 'in_progress', 'blocked', 'ready_for_review', 'done', 'approved'];
+      const statusCounts = new Map(statusOrder.map((key) => [key, 0]));
+      const priorityCounts = new Map([
+        ['high', 0],
+        ['medium', 0],
+        ['low', 0],
+        ['other', 0]
+      ]);
+      const ownerCounts = new Map();
+
+      scopedTasks.forEach((task) => {
+        const statusKey = TASK_STATUS_OPTIONS.includes(String(task.status || '')) ? String(task.status) : 'todo';
+        statusCounts.set(statusKey, Number(statusCounts.get(statusKey) || 0) + 1);
+
+        const priorityKey = normalizeTaskPriority(task.priority);
+        priorityCounts.set(priorityKey, Number(priorityCounts.get(priorityKey) || 0) + 1);
+
+        const ownerId = String(task.ownerAgentId || '').trim();
+        const ownerName = maps.agentById.get(ownerId)?.displayName || 'Non assigne';
+        ownerCounts.set(ownerName, Number(ownerCounts.get(ownerName) || 0) + 1);
+      });
+
+      const total = scopedTasks.length;
+      const doneApprovedCount = Number(statusCounts.get('done') || 0) + Number(statusCounts.get('approved') || 0);
+      const blockedCount = Number(statusCounts.get('blocked') || 0);
+      const reviewCount = Number(statusCounts.get('ready_for_review') || 0);
+      const inProgressCount = Number(statusCounts.get('in_progress') || 0);
+      const highPriorityCount = Number(priorityCounts.get('high') || 0);
+      const completionRate = Math.round((doneApprovedCount / Math.max(1, total)) * 100);
+
+      const statusRows = statusOrder.map((key) => ({
+        key,
+        label: taskStatusLabel(key),
+        count: Number(statusCounts.get(key) || 0)
+      }));
+      const priorityRows = ['high', 'medium', 'low', 'other'].map((key) => ({
+        key,
+        label: taskPriorityLabel(key),
+        count: Number(priorityCounts.get(key) || 0)
+      }));
+      const ownerRows = Array.from(ownerCounts.entries())
+        .map(([owner, count]) => ({ owner, count: Number(count || 0) }))
+        .sort((a, b) => b.count - a.count || a.owner.localeCompare(b.owner, 'fr'))
+        .slice(0, 8);
+
+      const maxStatus = Math.max(1, ...statusRows.map((row) => row.count));
+      const maxPriority = Math.max(1, ...priorityRows.map((row) => row.count));
+      const maxOwner = Math.max(1, ...ownerRows.map((row) => row.count));
+
+      const statusHtml = statusRows.map((row) => `
+        <div class="workflow-kpi-line">
+          <div class="workflow-kpi-line-head">
+            <span>${esc(row.label)}</span>
+            <strong>${esc(String(row.count))}</strong>
+          </div>
+          <div class="workflow-kpi-bar"><span style="width:${Math.round((row.count / maxStatus) * 100)}%"></span></div>
+        </div>
+      `).join('');
+
+      const priorityHtml = priorityRows.map((row) => `
+        <div class="workflow-kpi-line">
+          <div class="workflow-kpi-line-head">
+            <span>${esc(row.label)}</span>
+            <strong>${esc(String(row.count))}</strong>
+          </div>
+          <div class="workflow-kpi-bar"><span style="width:${Math.round((row.count / maxPriority) * 100)}%"></span></div>
+        </div>
+      `).join('');
+
+      const ownerHtml = ownerRows.map((row) => `
+        <div class="workflow-kpi-line">
+          <div class="workflow-kpi-line-head">
+            <span>${esc(row.owner)}</span>
+            <strong>${esc(String(row.count))}</strong>
+          </div>
+          <div class="workflow-kpi-bar"><span style="width:${Math.round((row.count / maxOwner) * 100)}%"></span></div>
+        </div>
+      `).join('');
+
+      refs.content.innerHTML = `
+        <section class="workflow-kpi-grid">
+          <article class="workflow-card workflow-kpi-card"><p class="workflow-card-title">Total taches</p><p class="workflow-kpi-value">${esc(String(total))}</p></article>
+          <article class="workflow-card workflow-kpi-card"><p class="workflow-card-title">Completion</p><p class="workflow-kpi-value">${esc(String(completionRate))}%</p></article>
+          <article class="workflow-card workflow-kpi-card"><p class="workflow-card-title">Bloquees</p><p class="workflow-kpi-value">${esc(String(blockedCount))}</p></article>
+          <article class="workflow-card workflow-kpi-card"><p class="workflow-card-title">A valider</p><p class="workflow-kpi-value">${esc(String(reviewCount))}</p></article>
+          <article class="workflow-card workflow-kpi-card"><p class="workflow-card-title">En cours</p><p class="workflow-kpi-value">${esc(String(inProgressCount))}</p></article>
+          <article class="workflow-card workflow-kpi-card"><p class="workflow-card-title">Priorite haute</p><p class="workflow-kpi-value">${esc(String(highPriorityCount))}</p></article>
+        </section>
+        <section class="workflow-kpi-panels">
+          <article class="workflow-card workflow-kpi-panel">
+            <p class="workflow-card-title">Repartition par statut</p>
+            <div class="workflow-kpi-list">${statusHtml}</div>
+          </article>
+          <article class="workflow-card workflow-kpi-panel">
+            <p class="workflow-card-title">Repartition par priorite</p>
+            <div class="workflow-kpi-list">${priorityHtml}</div>
+          </article>
+          <article class="workflow-card workflow-kpi-panel">
+            <p class="workflow-card-title">Charge par agent (top 8)</p>
+            <div class="workflow-kpi-list">${ownerHtml || '<div class="workflow-empty">Aucune affectation agent</div>'}</div>
+          </article>
+        </section>
+      `;
+    }
+
     function renderJournalView() {
       const auditRows = (state.collections.audit || [])
         .slice()
@@ -6170,6 +6305,7 @@ ${clone.outerHTML}
       else if (state.activeView === 'tasks') renderTasksView();
       else if (state.activeView === 'kanban') renderKanbanView();
       else if (state.activeView === 'timeline') renderTimelineView();
+      else if (state.activeView === 'kpi') renderKpiView();
       else if (state.activeView === 'procedures') renderProceduresView();
       else if (state.activeView === 'software') renderSoftwareView();
       else if (state.activeView === 'contingency') renderContingencyView();
@@ -10414,6 +10550,7 @@ ${clone.outerHTML}
             'tasks': 'task',
             'kanban': 'task',
             'timeline': 'task',
+            'kpi': 'task',
             'procedures': 'procedure',
             'software': 'software',
             'contingency': 'contingency-plan'
@@ -11209,4 +11346,3 @@ ${clone.outerHTML}
     createModule
   };
 }(window));
-

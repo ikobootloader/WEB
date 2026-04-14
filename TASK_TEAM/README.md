@@ -9,20 +9,45 @@ Nom d interface par defaut: `NEXUS MDA`.
 2. Deverrouiller (ou creer) le mot de passe local.
 3. Optionnel: lier un dossier partage pour la synchronisation collaborative.
 
+## Mises a jour recentes (Avril 2026)
+
+- Rubrique `Projets` harmonisee en panneaux:
+  - panneau `project-overview-panel` (resume + actions + filtres),
+  - panneau `project-work-panel` (cartes projets / pagination),
+  - gestion robuste du mode `Archives` (ouverture/fermeture sans artefacts d affichage au retour depuis le dashboard).
+- Barre latérale et en tete:
+  - integration visuelle du bloc marque (`NEXUS MDA`) dans la sidebar,
+  - sidebar etendue sur toute la verticale de la page.
+- Rubrique `Fil d info`:
+  - bloc `Nouveau post d information` place au-dessus du flux et replie par defaut.
+- Rubrique `Messagerie`:
+  - panneau `Agents connus` reductible (toggle),
+  - barre de composition ajustee (emoji + envoi), bouton `Envoyer` au style rectangulaire arrondi.
+- Rubrique `Workflow`:
+  - onglet `KPI` ajoute dans `Pilotage` (cards de synthese + repartitions statut/priorite + charge par agent).
+- Onglet `Plus (x)`:
+  - menu complementaire epingle au clic (toggle), plus d ouverture au simple survol.
+
 ## Etat actuel
 
 - Architecture front locale, multi fichiers:
   - `taskmda-team.html`
   - `taskmda-team.css`
+  - `taskmda-workflow.css`
   - `taskmda-team.js`
+  - `taskmda-app-init.js`
+  - `taskmda-projects-ui.js`
+  - `taskmda-comms-ui.js`
+  - `taskmda-admin-ui.js`
   - `taskmda-editor.js` (module editeur projet: Quill, media, emoji, formatage)
   - `taskmda-crypto.js`
   - `taskmda-ui.js`
   - `taskmda-theme.js`
   - `taskmda-notifications.js`
+  - `taskmda-recurrence.js` + `taskmda-recurrence-ui.js`
   - `taskmda-tasks.js`
   - `taskmda-social.js` (templates UI messagerie/fil d info)
-  - `taskmda-workflow.js` (module Workflow: carte, organisation, agents, taches, procedures, logiciels)
+  - `taskmda-workflow.js` + `taskmda-workflow-store.js` + `taskmda-workflow-graph.js` + `taskmda-workflow-ui.js`
 - Persistance: IndexedDB (event sourcing + etat local projete).
 - Synchronisation: dossier partage (File System Access API), sans backend.
   - Le dossier lie est memorise (IndexedDB) et tente une reconnexion automatique au demarrage si permission valide.
@@ -71,7 +96,7 @@ Nom d interface par defaut: `NEXUS MDA`.
   - exports JSON/CSV,
   - liaison contextuelle `Impact RGPD` depuis Workflow / Projet / Tache (generer, lier, ouvrir fiche).
 - `Workflow`: rubrique transverse dediee a l organisation metier:
-  - vues `Carte`, `Organisation`, `Organigramme`, `Agents`, `Processus`, `Modeles de processus`, `Taches`, `Kanban`, `Timeline`, `Procedures`, `Logiciels metiers`, `Contingence`, `Analyse`, `Gouvernance`, `Journal`
+  - vues `Carte`, `Organisation`, `Organigramme`, `Agents`, `Processus`, `Modeles de processus`, `Taches`, `Kanban`, `Timeline`, `KPI`, `Procedures`, `Logiciels metiers`, `Contingence`, `Analyse`, `Gouvernance`, `Journal`
   - carte metier: zoom/pan, auto-layout, mini-carte interactive, export PNG et export PDF
   - concepteur de processus: edition par blocs d etapes (ajout rapide, duplication, reordonnancement, reliage automatique des flux)
   - concepteur de flux: mode graphe non-lineaire (branches decision/parallele/exception, branche oui/non, bascule lineaire)
@@ -138,6 +163,7 @@ Nom d interface par defaut: `NEXUS MDA`.
 ### Communication
 - Notifications internes (centre cloche).
 - Messagerie directe hors projet entre agents connus.
+- Panneau `Agents connus` reductible (toggle) dans la messagerie.
 - Emails preformates via `mailto:` (projet, tache, invitation, cloture).
 
 ### Profil, sauvegarde et securite
@@ -210,6 +236,10 @@ Nom d interface par defaut: `NEXUS MDA`.
 - Reduction des logs runtime: `console.log` passe par debug gate.
   - Activer: `localStorage.setItem('taskmda_debug','1')`
 - Decoupage modulaire progressif:
+  - Initialisation applicative: `taskmda-app-init.js`
+  - UI Projets: `taskmda-projects-ui.js`
+  - UI Communication: `taskmda-comms-ui.js`
+  - UI Administration: `taskmda-admin-ui.js`
   - Editeur projet (Quill): `taskmda-editor.js`
   - Orchestration app/synchronisation: `taskmda-team.js`
   - UI: `taskmda-ui.js`

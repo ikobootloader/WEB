@@ -1214,7 +1214,7 @@ html.dark #global-tasks-view-tabs .project-view-tab.view-tab-active {
 }
 
 html.dark .project-detail-mode-tabs {
-  background: #1a2744;
+  background: linear-gradient(180deg, #1a2744, #16223c);
 }
 
 html.dark .project-mode-tab {
@@ -1749,6 +1749,7 @@ html.dark .project-admin-block {
 .project-card {
   background: var(--ui-card-bg);
   border: 1px solid var(--ui-card-border);
+  border-top: 3px solid #ff9b40;
   box-shadow: var(--ui-card-shadow);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
@@ -1765,10 +1766,203 @@ html.dark .project-admin-block {
   color: #1d4ed8;
 }
 
+/* Projets: connecter toolbar + cartes en un seul bloc visuel */
+#projects-list #projects-toolbar-panel.panel {
+  margin-bottom: 0 !important;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom: 0;
+}
+
+#projects-list #projects-cards-panel.panel {
+  margin-top: 0 !important;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.projects-toolbar-caption {
+  font-size: 0.96rem;
+  color: #8a9ab3 !important;
+  font-weight: 600;
+}
+
+#projects-toolbar-actions {
+  gap: 10px;
+}
+
+#btn-projects-add {
+  min-width: 46px;
+  width: 46px;
+  height: 46px;
+  padding: 0 !important;
+  border-radius: 14px !important;
+  border: 1px solid #a8c2f1 !important;
+  background: #eef4ff !important;
+  color: #2563eb !important;
+  box-shadow: none !important;
+}
+
+#btn-projects-add #btn-projects-add-text {
+  display: none;
+}
+
+#projects-view-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  border-radius: 14px;
+  background: #eef2f8;
+  padding: 5px;
+}
+
+#projects-view-controls > button {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+}
+
+#projects-view-controls > button:not(:last-child) {
+  border-right: 1px solid rgba(148, 163, 184, 0.32);
+}
+
+#projects-filter-row.projects-filter-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.projects-filter-search-row {
+  width: 100%;
+}
+
+.projects-filter-search-wrap {
+  width: 100%;
+  min-height: 50px;
+  border: 1px solid #cfd6e4;
+  border-radius: 16px;
+  background: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+}
+
+.projects-filter-search-icon {
+  color: #64748b;
+  font-size: 30px;
+  line-height: 1;
+}
+
+#projects-filter-query {
+  width: 100%;
+  border: 0 !important;
+  background: transparent !important;
+  font-size: 1.02rem;
+  font-weight: 600;
+  color: #334155;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+
+#projects-filter-query::placeholder {
+  color: #90a0b7;
+}
+
+#projects-filter-query:focus {
+  outline: none;
+}
+
+.projects-filter-controls-row {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.projects-filter-controls-row select {
+  min-height: 50px;
+  border-radius: 14px;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.projects-filter-reset-btn {
+  display: inline-flex !important;
+  width: 50px;
+  min-width: 50px;
+  height: 50px;
+  padding: 0 !important;
+  justify-content: center;
+  align-items: center;
+  border-radius: 14px !important;
+}
+
+html.dark #projects-view-controls {
+  background: #1a2744;
+}
+
+html.dark #btn-projects-add {
+  border-color: #4d6799 !important;
+  background: #1a2a49 !important;
+  color: #8fb7ff !important;
+}
+
+html.dark .projects-filter-search-wrap {
+  border-color: #3b5079;
+  background: #13203a;
+}
+
+html.dark .projects-filter-search-icon {
+  color: #9eb0cf;
+}
+
+html.dark #projects-filter-query {
+  color: #dce8ff;
+}
+
+html.dark #projects-filter-query::placeholder {
+  color: #8ea2c8;
+}
+
+@media (max-width: 1280px) {
+  .projects-filter-controls-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  }
+}
+
+@media (max-width: 900px) {
+  .projects-filter-controls-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  }
+}
+
+@media (max-width: 640px) {
+  #projects-list-head {
+    flex-wrap: wrap;
+  }
+
+  #projects-toolbar-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .projects-filter-controls-row {
+    grid-template-columns: 1fr;
+  }
+
+  .projects-filter-reset-btn {
+    justify-self: end;
+  }
+}
+
 .workspace-card-shell {
   border: 1px solid var(--ui-card-border);
   border-radius: 14px;
   background: var(--ui-card-bg-soft);
+}
+
+.workspace-card-shell.project-card {
+  border-top: 3px solid #ff9b40;
 }
 
 .workspace-card-title {
@@ -3435,7 +3629,7 @@ html.dark #project-work-panel .activity-card {
   gap: 6px;
   padding: 4px;
   border-radius: 12px;
-  background: #eef2ff;
+  background: linear-gradient(180deg, #f2f4fb, #eaedf7);
 }
 
 .project-mode-context-label {
@@ -4144,6 +4338,21 @@ html.dark .global-kanban-col-count {
   right: 1.5rem !important;
   left: auto !important;
   z-index: 100 !important;
+}
+
+.project-create-head-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.project-create-close-btn {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  padding: 0 !important;
+  border-radius: 12px;
 }
 
 .task-detail-modal-panel {
@@ -5200,25 +5409,25 @@ html.dark .dashboard-news-empty {
 .task-accent-high::before,
 .task-accent-medium::before,
 .task-accent-low::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 10px;
-  bottom: 10px;
-  width: 4px;
-  border-radius: 999px;
+  content: none !important;
 }
 
-.task-accent-high::before {
-  background: #dc2626;
+.task-list-card-modern.task-accent-high,
+.global-task-card-modern.task-accent-high,
+.kanban-card-modern.task-accent-high {
+  border-left: 4px solid #dc2626 !important;
 }
 
-.task-accent-medium::before {
-  background: #1d4ed8;
+.task-list-card-modern.task-accent-medium,
+.global-task-card-modern.task-accent-medium,
+.kanban-card-modern.task-accent-medium {
+  border-left: 4px solid #1d4ed8 !important;
 }
 
-.task-accent-low::before {
-  background: #059669;
+.task-list-card-modern.task-accent-low,
+.global-task-card-modern.task-accent-low,
+.kanban-card-modern.task-accent-low {
+  border-left: 4px solid #059669 !important;
 }
 
 .task-status-chip,

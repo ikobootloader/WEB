@@ -24403,7 +24403,7 @@
       document.getElementById('project-name').focus();
     });
 
-    document.getElementById('btn-cancel-project').addEventListener('click', () => {
+    function closeNewProjectModal() {
       document.getElementById('modal-new-project').classList.add('hidden');
       const createProjectDocInput = document.getElementById('project-create-doc-files');
       if (createProjectDocInput) createProjectDocInput.value = '';
@@ -24416,6 +24416,13 @@
       const createPresetDesc = document.getElementById('project-group-preset-description-input');
       if (createPresetName) createPresetName.value = '';
       if (createPresetDesc) createPresetDesc.value = '';
+    }
+
+    document.getElementById('btn-cancel-project').addEventListener('click', () => {
+      closeNewProjectModal();
+    });
+    document.getElementById('btn-close-new-project')?.addEventListener('click', () => {
+      closeNewProjectModal();
     });
 
     document.getElementById('btn-add-project-group-preset')?.addEventListener('click', async () => {
