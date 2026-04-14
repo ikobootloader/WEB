@@ -687,59 +687,58 @@
                 </div>
                 <div id="global-message-thread" class="discussion-messages hidden"></div>
                 <div class="discussion-composer mt-3">
-                  <div class="discussion-composer-top">
-                    <p id="global-message-target-label" class="text-sm text-slate-600">Destinataire: Canal général (tous les agents connus)</p>
-                    <span id="global-message-group-badge" class="discussion-channel-badge hidden" aria-live="polite"></span>
-                    <div class="flex items-center gap-2">
-                      <button id="btn-global-delete-conversation" type="button" class="task-action-btn task-action-btn-danger" data-action-kind="danger">Supprimer la conversation</button>
+                  <div class="discussion-composer-strip">
+                    <div class="discussion-composer-strip-target">
+                      <p id="global-message-target-label" class="text-sm text-slate-600">Destinataire: Canal général (tous les agents connus)</p>
+                      <span id="global-message-group-badge" class="discussion-channel-badge hidden" aria-live="polite"></span>
+                    </div>
+                    <button id="btn-global-delete-conversation" type="button" class="task-action-btn task-action-btn-danger" data-action-kind="danger">Supprimer la conversation</button>
+                  </div>
+                  <div class="discussion-composer-input-row">
+                    <textarea id="global-message-input" rows="1" placeholder="Taper un message..." class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"></textarea>
+                    <div class="discussion-composer-actions">
                       <button id="btn-global-toggle-emoji-picker" class="task-action-btn task-action-btn-subtle" data-action-kind="default" title="Émojis">
                         <span class="material-symbols-outlined">sentiment_satisfied</span>
                         <span class="taskmda-action-label">Émojis</span>
                       </button>
+                      <button id="btn-global-send-message" class="btn-primary discussion-send-btn text-white font-semibold rounded-lg" aria-label="Envoyer le message hors projet" title="Envoyer">
+                        <span class="material-symbols-outlined">send</span>
+                      </button>
                     </div>
                   </div>
-                  <textarea id="global-message-input" rows="3" placeholder="Écrire un message..." class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"></textarea>
                   <div id="global-emoji-picker-panel" class="hidden emoji-picker-panel" aria-label="Sélecteur d'émojis"></div>
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    <input
-                      id="global-message-files"
-                      type="file"
-                      multiple
-                      class="js-file-drop-input w-full px-3 py-2 border border-slate-300 rounded-lg bg-slate-50 text-sm"
-                      data-drop-label="Déposez des fichiers pour ce message"
-                    >
-                    <div id="global-message-files-list" class="text-xs text-slate-500 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">Aucun fichier sélectionné</div>
-                  </div>
-                  <div class="discussion-composer-actions">
-                    <button id="btn-global-send-message" class="btn-primary discussion-send-btn text-white font-semibold rounded-lg" aria-label="Envoyer le message hors projet" title="Envoyer">
-                      <span class="material-symbols-outlined">send</span>
-                    </button>
-                  </div>
                 </div>
               </section>
               <aside class="discussion-side">
-                <h4 class="discussion-side-title">Agents connus</h4>
-                <input id="global-message-contact-search" type="text" placeholder="Rechercher un agent..." class="px-3 py-2 border border-slate-300 rounded-lg text-sm mb-2">
-                <div class="discussion-recipient-actions mb-2">
-                  <button id="btn-global-message-select-all" type="button" class="discussion-recipient-btn workspace-action-inline" data-action-kind="manage">
-                    <span class="material-symbols-outlined text-base">done_all</span>
-                    <span>Tout sélectionner</span>
-                  </button>
-                  <button id="btn-global-message-clear-selection" type="button" class="discussion-recipient-btn workspace-action-inline" data-action-kind="manage">
-                    <span class="material-symbols-outlined text-base">clear_all</span>
-                    <span>Tout désélectionner</span>
+                <div class="discussion-side-head">
+                  <h4 class="discussion-side-title">Agents connus</h4>
+                  <button id="btn-toggle-global-message-sidebar" type="button" class="discussion-side-toggle-btn" aria-expanded="true" aria-controls="global-message-discovery-body" title="Réduire la découverte des groupes">
+                    <span id="global-message-sidebar-toggle-icon" class="material-symbols-outlined">chevron_right</span>
                   </button>
                 </div>
-                <div class="discussion-recipient-actions mb-2">
-                  <select id="global-message-group-channel-select" class="px-3 py-2 border border-slate-300 rounded-lg text-sm flex-1">
-                    <option value="">Canal de groupe (groupes existants)</option>
-                  </select>
-                  <button id="btn-global-message-open-group-channel" type="button" class="discussion-recipient-btn workspace-action-inline" data-action-kind="open">Ouvrir</button>
-                </div>
-                <div id="global-message-contacts-list" class="discussion-members-list">
-                  <div class="workspace-empty-state workspace-empty-state-compact">
-                    <span class="workspace-empty-icon material-symbols-outlined" aria-hidden="true">group_off</span>
-                    <p class="workspace-empty-title">Aucun agent connu</p>
+                <div id="global-message-discovery-body" class="discussion-side-body">
+                  <input id="global-message-contact-search" type="text" placeholder="Rechercher un agent..." class="px-3 py-2 border border-slate-300 rounded-lg text-sm mb-2">
+                  <div class="discussion-recipient-actions mb-2">
+                    <button id="btn-global-message-select-all" type="button" class="discussion-recipient-btn workspace-action-inline" data-action-kind="manage">
+                      <span class="material-symbols-outlined text-base">done_all</span>
+                      <span>Tout sélectionner</span>
+                    </button>
+                    <button id="btn-global-message-clear-selection" type="button" class="discussion-recipient-btn workspace-action-inline" data-action-kind="manage">
+                      <span class="material-symbols-outlined text-base">clear_all</span>
+                      <span>Tout désélectionner</span>
+                    </button>
+                  </div>
+                  <div class="discussion-recipient-actions mb-2">
+                    <select id="global-message-group-channel-select" class="px-3 py-2 border border-slate-300 rounded-lg text-sm flex-1">
+                      <option value="">Canal de groupe (groupes existants)</option>
+                    </select>
+                    <button id="btn-global-message-open-group-channel" type="button" class="discussion-recipient-btn workspace-action-inline" data-action-kind="open">Ouvrir</button>
+                  </div>
+                  <div id="global-message-contacts-list" class="discussion-members-list">
+                    <div class="workspace-empty-state workspace-empty-state-compact">
+                      <span class="workspace-empty-icon material-symbols-outlined" aria-hidden="true">group_off</span>
+                      <p class="workspace-empty-title">Aucun agent connu</p>
+                    </div>
                   </div>
                 </div>
               </aside>

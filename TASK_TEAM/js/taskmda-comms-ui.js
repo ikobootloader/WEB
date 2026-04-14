@@ -24,6 +24,20 @@
         setGlobalFeedComposerCollapsed(false, options || {});
       }
     };
+    const setGlobalMessageDiscoveryCollapsed = (collapsed) => {
+      const section = document.getElementById('global-messages-section');
+      const toggleBtn = document.getElementById('btn-toggle-global-message-sidebar');
+      const icon = document.getElementById('global-message-sidebar-toggle-icon');
+      const isCollapsed = Boolean(collapsed);
+      section?.classList.toggle('is-discovery-collapsed', isCollapsed);
+      if (toggleBtn) {
+        toggleBtn.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+        toggleBtn.setAttribute('title', isCollapsed ? 'Afficher la découverte des groupes' : 'Réduire la découverte des groupes');
+      }
+      if (icon) {
+        icon.textContent = isCollapsed ? 'chevron_left' : 'chevron_right';
+      }
+    };
 
     function bindGlobalNav(buttonId, view) {
       document.getElementById(buttonId)?.addEventListener('click', async (e) => {
@@ -141,6 +155,15 @@
       const groupKey = String(select?.value || '').trim();
       if (!groupKey) return;
       await opts.openGlobalMessageGroupChannelFromCatalog?.(groupKey);
+    });
+    const globalMessageSidebarStorageKey = 'taskmda_global_message_sidebar_collapsed';
+    const initialGlobalMessageSidebarCollapsed = String(localStorage.getItem(globalMessageSidebarStorageKey) || '') === '1';
+    setGlobalMessageDiscoveryCollapsed(initialGlobalMessageSidebarCollapsed);
+    document.getElementById('btn-toggle-global-message-sidebar')?.addEventListener('click', () => {
+      const section = document.getElementById('global-messages-section');
+      const nextCollapsed = !section?.classList.contains('is-discovery-collapsed');
+      setGlobalMessageDiscoveryCollapsed(nextCollapsed);
+      localStorage.setItem(globalMessageSidebarStorageKey, nextCollapsed ? '1' : '0');
     });
     document.getElementById('btn-global-send-message')?.addEventListener('click', async () => {
       await opts.sendGlobalMessage?.();

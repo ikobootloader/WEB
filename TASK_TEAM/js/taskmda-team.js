@@ -3219,9 +3219,12 @@
       { listId: 'global-settings-tabs-list', maxVisible: 4, controlClass: 'project-view-tab', sectionKey: 'globalSettings' }
     ];
 
-    function closeAllTabOverflowMenus() {
+    function closeAllTabOverflowMenus(options = {}) {
+      const force = Boolean(options?.force);
       document.querySelectorAll('.tab-overflow-wrap.is-open').forEach((wrap) => {
+        if (!force && wrap.classList.contains('is-pinned-open')) return;
         wrap.classList.remove('is-open');
+        wrap.classList.remove('is-pinned-open');
         const trigger = wrap.querySelector('.tab-overflow-control');
         trigger?.setAttribute?.('aria-expanded', 'false');
       });
@@ -3300,20 +3303,23 @@
           closeTimer = null;
         }
       };
-      const openMenu = () => {
+      const openMenu = (pinned = false) => {
         cancelClose();
         if (!wrap.classList.contains('is-open')) {
-          closeAllTabOverflowMenus();
+          closeAllTabOverflowMenus({ force: true });
           wrap.classList.add('is-open');
-          trigger.setAttribute('aria-expanded', 'true');
         }
+        wrap.classList.toggle('is-pinned-open', Boolean(pinned));
+        trigger.setAttribute('aria-expanded', 'true');
       };
       const closeMenu = () => {
         cancelClose();
         wrap.classList.remove('is-open');
+        wrap.classList.remove('is-pinned-open');
         trigger.setAttribute('aria-expanded', 'false');
       };
       const scheduleClose = () => {
+        if (wrap.classList.contains('is-pinned-open')) return;
         cancelClose();
         closeTimer = setTimeout(() => {
           closeMenu();
@@ -3322,8 +3328,11 @@
       trigger.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        if (wrap.classList.contains('is-open')) closeMenu();
-        else openMenu();
+        if (wrap.classList.contains('is-open') && wrap.classList.contains('is-pinned-open')) {
+          closeMenu();
+          return;
+        }
+        openMenu(true);
       });
       trigger.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
@@ -3333,17 +3342,18 @@
         }
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          if (wrap.classList.contains('is-open')) closeMenu();
-          else openMenu();
+          if (wrap.classList.contains('is-open') && wrap.classList.contains('is-pinned-open')) {
+            closeMenu();
+            return;
+          }
+          openMenu(true);
         }
       });
-      wrap.addEventListener('mouseenter', () => openMenu());
       wrap.addEventListener('mouseleave', (e) => {
         const related = e.relatedTarget;
         if (related instanceof Node && wrap.contains(related)) return;
         scheduleClose();
       });
-      wrap.addEventListener('focusin', () => openMenu());
       wrap.addEventListener('focusout', (e) => {
         const related = e.relatedTarget;
         if (related instanceof Node && wrap.contains(related)) return;

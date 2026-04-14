@@ -2322,3 +2322,82 @@ html.dark .workflow-chip-warning {
   color: #ffd8bf;
   border-color: rgba(251, 146, 60, 0.4);
 }
+
+/* Workflow spacing harmonization */
+.workflow-breadcrumbs {
+  padding: 0.5rem 0.72rem;
+}
+
+.workflow-card {
+  padding: 0.86rem;
+}
+
+.workflow-map-col {
+  padding: 0.78rem;
+}
+
+.workflow-map-links-col {
+  padding: 0.68rem 0.74rem;
+}
+
+.workflow-detail-body {
+  padding: 0.95rem;
+}
+
+/* Workflow dark-mode harmonization */
+html.dark #global-workflow-section {
+  border-color: rgba(138, 161, 202, 0.3);
+  background: linear-gradient(180deg, #0f1d35, #0d182d) !important;
+}
+
+html.dark #global-workflow-section .workflow-toolbar {
+  border: 1px solid rgba(138, 161, 202, 0.2);
+  border-radius: 12px;
+  padding: 0.5rem;
+  background: linear-gradient(180deg, rgba(22, 33, 58, 0.9), rgba(17, 28, 50, 0.86));
+}
+
+html.dark .workflow-group-tabs {
+  background: linear-gradient(180deg, #1a2744, #16223c);
+  box-shadow: inset 0 0 0 1px rgba(138, 161, 202, 0.2);
+}
+
+html.dark .workflow-group-tab {
+  color: #b8c9e6;
+}
+
+html.dark .workflow-group-tab:hover {
+  background: rgba(138, 161, 202, 0.14);
+  border-color: rgba(138, 161, 202, 0.24);
+  color: #e8f0ff;
+}
+
+html.dark .workflow-sub-tabs {
+  background: rgba(20, 33, 58, 0.88);
+  border-color: rgba(138, 161, 202, 0.24);
+}
+
+html.dark .workflow-content {
+  border: 1px solid rgba(138, 161, 202, 0.2);
+  border-radius: 12px;
+  padding: 0.55rem;
+  background: linear-gradient(180deg, rgba(18, 30, 54, 0.72), rgba(15, 26, 47, 0.72));
+}
+
+html.dark .workflow-btn-light {
+  border-color: rgba(138, 161, 202, 0.38);
+  background: #1a2744;
+  color: #dce8ff;
+}
+
+html.dark .workflow-btn-light:hover {
+  border-color: rgba(122, 162, 255, 0.52);
+  background: #22365b;
+  color: #eef4ff;
+}
+
+html.dark .workflow-btn-danger {
+  border-color: rgba(244, 114, 182, 0.4);
+  background: #3c1f2b;
+  color: #fda4af;
+}

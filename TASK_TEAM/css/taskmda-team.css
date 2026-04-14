@@ -1680,7 +1680,8 @@ html.dark .header-search-item-badge {
 }
 
 html.dark #project-overview-panel {
-  background: #f8f8f6 !important;
+  background: #0f1d35 !important;
+  border-color: rgba(138, 161, 202, 0.28) !important;
 }
 
 #project-kpis > div {
@@ -1705,6 +1706,12 @@ html.dark #project-overview-panel {
   background: rgba(255, 255, 255, 0.72);
   border-radius: 14px;
   padding: 14px;
+}
+
+html.dark .project-collab-block,
+html.dark .project-admin-block {
+  background: rgba(26, 39, 68, 0.88);
+  border: 1px solid rgba(138, 161, 202, 0.22);
 }
 
 .project-sequential-nav {
@@ -2041,11 +2048,6 @@ html[data-tab-icons="off"] .tab-icon {
 }
 
 .tab-overflow-wrap.is-open .tab-overflow-menu {
-  display: grid;
-}
-
-.tab-overflow-wrap:hover .tab-overflow-menu,
-.tab-overflow-wrap:focus-within .tab-overflow-menu {
   display: grid;
 }
 
@@ -3416,6 +3418,18 @@ html.dark #project-work-panel.project-work-focus-fallback {
   background: #ffffff;
 }
 
+html.dark #project-work-panel #archived-tasks-section {
+  background: linear-gradient(180deg, #132342, #101d35);
+  border-color: rgba(138, 161, 202, 0.26) !important;
+}
+
+html.dark #project-work-panel .task-list-card,
+html.dark #project-work-panel .doc-card,
+html.dark #project-work-panel .activity-card {
+  background: #162541 !important;
+  border-color: rgba(138, 161, 202, 0.24) !important;
+}
+
 .project-detail-mode-tabs {
   display: inline-flex;
   gap: 6px;
@@ -3510,7 +3524,8 @@ html.dark #project-work-panel.project-work-focus-fallback {
 }
 
 html.dark #project-work-panel {
-  background: #f8f8f6 !important;
+  background: #0f1d35 !important;
+  border-color: rgba(138, 161, 202, 0.28) !important;
 }
 
 .empty-state-card {
@@ -4849,11 +4864,11 @@ textarea:focus {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  border: none;
+  border: 1px solid rgba(148, 163, 184, 0.24);
   border-bottom: 1px solid rgba(148, 163, 184, 0.26);
-  background: transparent;
-  padding: 0 0 1rem 0;
-  border-radius: 0;
+  background: rgba(255, 255, 255, 0.38);
+  padding: 8px 10px 12px;
+  border-radius: 12px;
 }
 
 .dashboard-news-item:last-child {
@@ -4862,10 +4877,10 @@ textarea:focus {
 
 .dashboard-news-item-hero {
   grid-row: span 3;
-  border-bottom: none;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.26);
   border-right: 1px solid rgba(148, 163, 184, 0.26);
-  padding-right: 1.5rem;
-  padding-bottom: 0;
+  padding-right: 1.2rem;
+  padding-bottom: 10px;
 }
 
 @media (max-width: 1024px) {
@@ -7933,6 +7948,41 @@ html.dark .doc-editor-tabulator-wrap .tabulator .tabulator-header {
   white-space: nowrap;
 }
 
+.discussion-side-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.discussion-side-toggle-btn {
+  width: 34px;
+  height: 34px;
+  border: 1px solid #c9d7ec;
+  border-radius: 10px;
+  background: #f8fbff;
+  color: #2f4d79;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+
+.discussion-side-toggle-btn:hover {
+  background: #e9f1ff;
+  border-color: #9fbde4;
+  color: #153b73;
+}
+
+.discussion-side-toggle-btn .material-symbols-outlined {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.discussion-side-body {
+  display: block;
+}
+
 .discussion-side-title {
   display: flex;
   align-items: center;
@@ -8141,6 +8191,145 @@ html.dark .doc-editor-tabulator-wrap .tabulator .tabulator-header {
   border-radius: 12px;
 }
 
+#global-messages-section .discussion-layout {
+  grid-template-columns: minmax(0, 1fr) minmax(210px, 0.5fr);
+}
+
+#global-messages-section .discussion-main {
+  min-height: 500px;
+  max-height: min(68vh, 760px);
+}
+
+#global-messages-section .discussion-side {
+  min-width: 210px;
+}
+
+#global-messages-section .discussion-composer {
+  border-top: 1px solid rgba(101, 115, 141, 0.16);
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+}
+
+#global-messages-section .discussion-composer-strip {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.8);
+}
+
+#global-messages-section .discussion-composer-strip-target {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+#global-messages-section #global-message-target-label {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #334155;
+}
+
+#global-messages-section #btn-global-delete-conversation {
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 11px;
+}
+
+#global-messages-section .discussion-composer-input-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+#global-messages-section #global-message-input {
+  flex: 1;
+  border: 0;
+  border-radius: 10px;
+  min-height: 44px;
+  max-height: 132px;
+  padding: 8px 10px;
+  background: transparent;
+  box-shadow: none;
+  resize: vertical;
+}
+
+#global-messages-section #global-message-input:focus {
+  box-shadow: none;
+  outline: none;
+}
+
+#global-messages-section .discussion-composer-actions {
+  grid-column: auto;
+  grid-row: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+#global-messages-section #btn-global-toggle-emoji-picker {
+  border: 0;
+  background: transparent;
+  color: #64748b;
+  min-width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  padding: 0;
+}
+
+#global-messages-section #btn-global-toggle-emoji-picker .taskmda-action-label {
+  display: none;
+}
+
+#global-messages-section #btn-global-toggle-emoji-picker .material-symbols-outlined {
+  font-size: 22px;
+}
+
+#global-messages-section .discussion-send-btn {
+  width: auto;
+  min-width: 46px;
+  height: 40px;
+  padding: 0 12px !important;
+  border-radius: 12px;
+}
+
+#global-messages-section .discussion-composer #global-emoji-picker-panel {
+  border-top: 1px solid rgba(203, 213, 225, 0.65);
+  margin-top: 0;
+  border-radius: 0;
+  padding: 8px 10px;
+}
+
+#global-messages-section.is-discovery-collapsed .discussion-layout {
+  grid-template-columns: minmax(0, 1fr) 58px;
+}
+
+#global-messages-section.is-discovery-collapsed .discussion-side {
+  min-width: 58px;
+  padding: 12px 8px;
+}
+
+#global-messages-section.is-discovery-collapsed .discussion-side-head {
+  justify-content: center;
+}
+
+#global-messages-section.is-discovery-collapsed .discussion-side-title,
+#global-messages-section.is-discovery-collapsed .discussion-side-body {
+  display: none;
+}
+
 html.dark .discussion-layout {
   border-color: rgba(138, 161, 202, 0.24);
   background: linear-gradient(180deg, #131f37, #101a2f);
@@ -8160,6 +8349,18 @@ html.dark .discussion-side-title,
 html.dark .discussion-author,
 html.dark .discussion-member-name {
   color: #e6efff;
+}
+
+html.dark .discussion-side-toggle-btn {
+  border-color: #37527f;
+  background: #1b2d4a;
+  color: #bfd0ed;
+}
+
+html.dark .discussion-side-toggle-btn:hover {
+  border-color: #5f83bb;
+  background: #243a5f;
+  color: #e8f1ff;
 }
 
 html.dark .discussion-member-channel-subtitle {
@@ -8224,6 +8425,24 @@ html.dark .discussion-channel-badge {
   border-color: #2f6b63;
   background: #143633;
   color: #97f3dd;
+}
+
+html.dark #global-messages-section .discussion-composer {
+  background: #15213a;
+  border-top-color: rgba(138, 161, 202, 0.22);
+}
+
+html.dark #global-messages-section .discussion-composer-strip {
+  border-bottom-color: rgba(138, 161, 202, 0.24);
+}
+
+html.dark #global-messages-section #global-message-target-label {
+  color: #c8d9f5;
+  background: transparent;
+}
+
+html.dark #global-messages-section #btn-global-toggle-emoji-picker {
+  color: #a7bddf;
 }
 
 html.dark #btn-global-delete-conversation {
@@ -8331,6 +8550,31 @@ html.dark .discussion-member-item.is-active:focus-visible {
 
   html.dark .discussion-side {
     border-top-color: rgba(138, 161, 202, 0.24);
+  }
+
+  #global-messages-section .discussion-composer-strip {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  #global-messages-section .discussion-composer-input-row {
+    align-items: center;
+  }
+
+  #global-messages-section.is-discovery-collapsed .discussion-layout {
+    grid-template-columns: 1fr;
+  }
+
+  #global-messages-section.is-discovery-collapsed .discussion-side {
+    min-width: 100%;
+  }
+
+  #global-messages-section.is-discovery-collapsed .discussion-side-body {
+    display: none;
+  }
+
+  #global-messages-section.is-discovery-collapsed .discussion-side-title {
+    display: flex;
   }
 }
 
