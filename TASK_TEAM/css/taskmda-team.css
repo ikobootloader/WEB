@@ -1662,11 +1662,11 @@ html.dark .header-search-item-badge {
 }
 
 #project-overview-panel {
-  background: #ebcca9 !important;
+  background: #f8f8f6 !important;
 }
 
 html.dark #project-overview-panel {
-  background: #ebcca9 !important;
+  background: #f8f8f6 !important;
 }
 
 #project-kpis > div {
@@ -3492,11 +3492,11 @@ html.dark #project-work-panel.project-work-focus-fallback {
 
 #project-work-panel {
   margin-top: 8px;
-  background: #045ada91;
+  background: #f8f8f6 !important;
 }
 
 html.dark #project-work-panel {
-  background: #045ada91 !important;
+  background: #f8f8f6 !important;
 }
 
 .empty-state-card {
