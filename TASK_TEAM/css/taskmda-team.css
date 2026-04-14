@@ -425,13 +425,14 @@ html.dark .feed-mention {
 }
 
 .feed-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
+  display: flex;
+  flex-direction: column;
   gap: 14px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .feed-stream {
+  order: 2;
   min-width: 0;
 }
 
@@ -577,12 +578,12 @@ html.dark .feed-mention {
 }
 
 .feed-composer-panel {
-  position: sticky;
-  top: 88px;
+  order: 1;
+  position: static;
   backdrop-filter: blur(8px);
   box-shadow: 0 10px 22px rgba(17, 35, 79, 0.08);
-  max-height: calc(100vh - 106px);
-  overflow: auto;
+  max-height: none;
+  overflow: visible;
 }
 
 .feed-composer-head {
@@ -590,6 +591,18 @@ html.dark .feed-mention {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+.feed-composer-toggle-btn {
+  border: 1px solid #d7dfef;
+}
+
+.feed-composer-panel.is-collapsed .feed-composer-body {
+  display: none;
+}
+
+.feed-composer-panel.is-collapsed {
+  padding-bottom: 12px;
 }
 
 .feed-mention-row {
@@ -628,7 +641,8 @@ html.dark .feed-mention {
 
 @media (max-width: 1200px) {
   .feed-layout {
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-direction: column;
   }
   .feed-composer-panel {
     position: static;

@@ -12,6 +12,18 @@
     const setFeedFilterMode = (value) => {
       if (typeof opts.setFeedFilterMode === 'function') opts.setFeedFilterMode(value);
     };
+    const setGlobalFeedComposerCollapsed = (collapsed, options) => {
+      if (typeof opts.setGlobalFeedComposerCollapsed === 'function') {
+        opts.setGlobalFeedComposerCollapsed(collapsed, options || {});
+      }
+    };
+    const openGlobalFeedComposerForNewPost = (options) => {
+      if (typeof opts.openGlobalFeedComposerForNewPost === 'function') {
+        opts.openGlobalFeedComposerForNewPost(options || {});
+      } else {
+        setGlobalFeedComposerCollapsed(false, options || {});
+      }
+    };
 
     function bindGlobalNav(buttonId, view) {
       document.getElementById(buttonId)?.addEventListener('click', async (e) => {
@@ -29,7 +41,14 @@
       await opts.publishGlobalFeedPost?.();
     });
 
+    document.getElementById('btn-toggle-global-feed-composer')?.addEventListener('click', () => {
+      const btn = document.getElementById('btn-toggle-global-feed-composer');
+      const expanded = String(btn?.getAttribute('aria-expanded') || 'false') === 'true';
+      setGlobalFeedComposerCollapsed(expanded, { focusEditor: expanded });
+    });
+
     document.getElementById('btn-global-feed-digest')?.addEventListener('click', () => {
+      openGlobalFeedComposerForNewPost({ focusEditor: false });
       const input = document.getElementById('global-feed-digest-files');
       input?.click();
     });
@@ -41,6 +60,7 @@
     });
 
     document.getElementById('btn-global-feed-insert-mention')?.addEventListener('click', () => {
+      openGlobalFeedComposerForNewPost({ focusEditor: true });
       opts.insertMentionTokenInGlobalFeed?.();
     });
 

@@ -7283,6 +7283,7 @@
     let globalFeedFilterMode = 'all'; // all | auto | manual | mentions | project-refs | task-refs
     let globalFeedSortMode = 'desc'; // desc | asc
     let globalFeedMentionCatalogCache = null;
+    let globalFeedComposerCollapsed = true;
     const GLOBAL_MESSAGE_READ_STORAGE_KEY = 'taskmda_global_message_reads_v1';
     let globalMessageReadMap = loadGlobalMessageReadMap();
     let globalMessageHiddenGroupChannels = loadGlobalMessageHiddenGroupChannels();
@@ -17901,6 +17902,40 @@
 
     let editingGlobalFeedPostId = null;
 
+    function setGlobalFeedComposerCollapsed(collapsed, options = {}) {
+      const panel = document.querySelector('.feed-composer-panel');
+      const body = document.getElementById('global-feed-composer-body');
+      const toggleBtn = document.getElementById('btn-toggle-global-feed-composer');
+      const toggleIcon = document.getElementById('global-feed-composer-toggle-icon');
+      const toggleLabel = document.getElementById('global-feed-composer-toggle-label');
+      if (!panel || !body || !toggleBtn) return;
+      const shouldCollapse = Boolean(collapsed);
+      globalFeedComposerCollapsed = shouldCollapse;
+      panel.classList.toggle('is-collapsed', shouldCollapse);
+      toggleBtn.setAttribute('aria-expanded', shouldCollapse ? 'false' : 'true');
+      if (toggleIcon) toggleIcon.textContent = shouldCollapse ? 'edit_square' : 'expand_less';
+      if (toggleLabel) toggleLabel.textContent = shouldCollapse ? 'Rédiger' : 'Replier';
+      toggleBtn.title = shouldCollapse ? 'Rédiger un post' : 'Replier le formulaire';
+      if (shouldCollapse && panel.classList.contains('composer-fullscreen') && options.keepFullscreen !== true) {
+        toggleGlobalFeedComposerFullscreen();
+      }
+      if (!shouldCollapse && options.focusEditor === true) {
+        const quill = projectDescriptionQuillEditors.get('global-feed-editor');
+        if (quill) {
+          quill.focus();
+          const len = Math.max(0, quill.getLength() - 1);
+          quill.setSelection(len, 0, 'user');
+        } else {
+          document.getElementById('global-feed-input')?.focus();
+        }
+      }
+    }
+
+    function openGlobalFeedComposerForNewPost(options = {}) {
+      const shouldFocus = options.focusEditor !== false;
+      setGlobalFeedComposerCollapsed(false, { focusEditor: shouldFocus });
+    }
+
     function toggleGlobalFeedComposerFullscreen() {
       const panel = document.querySelector('.feed-composer-panel');
       const icon = document.getElementById('global-feed-fullscreen-icon');
@@ -17947,6 +17982,7 @@
       if (mentionSelect) mentionSelect.value = '';
       
       updateGlobalFeedMentionCounter();
+      setGlobalFeedComposerCollapsed(true);
     }
 
     async function startEditGlobalFeedPost(postId) {
@@ -17957,6 +17993,7 @@
         return;
       }
       editingGlobalFeedPostId = postId;
+      setGlobalFeedComposerCollapsed(false);
       document.getElementById('global-feed-composer-title').textContent = "Édition du post";
       document.getElementById('global-feed-post-btn-label').textContent = "Mettre à jour";
       document.getElementById('global-feed-post-btn-icon').textContent = "save";
@@ -18372,6 +18409,7 @@
         writeGlobalFeedPostToSharedFolder(post);
       }
       showToast('Post publie');
+      setGlobalFeedComposerCollapsed(true);
     }
 
     async function openGlobalFeedReference(type, refId) {
@@ -18449,6 +18487,11 @@
       const list = document.getElementById('global-feed-list');
       const searchInput = document.getElementById('global-feed-search');
       if (!list) return;
+      if (editingGlobalFeedPostId) {
+        setGlobalFeedComposerCollapsed(false);
+      } else {
+        setGlobalFeedComposerCollapsed(globalFeedComposerCollapsed);
+      }
       const mentionCatalog = await populateGlobalFeedComposerContext();
       if (mentionCatalog) globalFeedMentionCatalogCache = mentionCatalog;
       const query = String(searchInput?.value || '').trim();
@@ -18489,7 +18532,7 @@
           title: 'Aucun élément pour ces critères',
           text: 'Publiez une première information ou élargissez les filtres du fil.',
           ctaLabel: 'Rédiger un post',
-          ctaOnclick: "focusElementById('global-feed-input')"
+          ctaOnclick: "openGlobalFeedComposerForNewPost()"
         });
         return;
       }
@@ -18574,6 +18617,7 @@
     window.startEditGlobalFeedPost = startEditGlobalFeedPost;
     window.cancelEditGlobalFeedPost = cancelEditGlobalFeedPost;
     window.deleteGlobalFeedPost = deleteGlobalFeedPost;
+    window.openGlobalFeedComposerForNewPost = openGlobalFeedComposerForNewPost;
 
     async function sendGlobalMessage() {
       const input = document.getElementById('global-message-input');
@@ -23628,6 +23672,8 @@
         publishGlobalFeedPost,
         publishGlobalFeedDigestFromFiles,
         insertMentionTokenInGlobalFeed,
+        setGlobalFeedComposerCollapsed,
+        openGlobalFeedComposerForNewPost,
         renderGlobalFeed,
         resolveViewWithLock,
         updateGlobalFeedMentionCounter,

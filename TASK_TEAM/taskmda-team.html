@@ -748,6 +748,73 @@
 
           <div id="global-feed-section" class="panel p-3 hidden">
             <div class="feed-layout">
+              <aside class="feed-composer-panel rounded-xl border border-slate-200 bg-slate-50 p-4 is-collapsed">
+                <div class="feed-composer-head">
+                  <h4 id="global-feed-composer-title" class="font-bold text-slate-800">Nouveau post d'information</h4>
+                  <button id="btn-toggle-global-feed-composer" type="button" class="feed-composer-toggle-btn px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold inline-flex items-center gap-1.5" aria-expanded="false" aria-controls="global-feed-composer-body">
+                    <span id="global-feed-composer-toggle-icon" class="material-symbols-outlined text-[18px]">edit_square</span>
+                    <span id="global-feed-composer-toggle-label">Rédiger</span>
+                  </button>
+                </div>
+                <div id="global-feed-composer-body" class="feed-composer-body">
+                  <div class="flex items-center gap-2 mt-2 mb-2">
+                    <span id="global-feed-mention-counter" class="feed-mention-counter" aria-live="polite">0 mention détectée</span>
+                    <button type="button" onclick="toggleGlobalFeedComposerFullscreen()" class="p-1 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-700 transition" title="Plein écran">
+                      <span id="global-feed-fullscreen-icon" class="material-symbols-outlined text-[18px]">open_in_full</span>
+                    </button>
+                  </div>
+                  <div class="flex justify-start mt-1 mb-3">
+                    <button id="btn-global-feed-digest" class="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold flex items-center gap-2" type="button">
+                      <span class="material-symbols-outlined text-[18px]">description</span>
+                      <span>Digérer document</span>
+                    </button>
+                  </div>
+                  <div class="project-editor-wrap border border-slate-300 rounded-xl bg-white overflow-hidden">
+                    <div class="project-editor-toolbar project-editor-toolbar-fallback">
+                      <button type="button" class="project-editor-btn" data-editor-target="global-feed-editor" data-editor-action="bold" title="Gras"><span class="material-symbols-outlined">format_bold</span></button>
+                      <button type="button" class="project-editor-btn" data-editor-target="global-feed-editor" data-editor-action="italic" title="Italique"><span class="material-symbols-outlined">format_italic</span></button>
+                      <button type="button" class="project-editor-btn project-editor-btn-text" data-editor-target="global-feed-editor" data-editor-action="h1" title="Titre 1">H1</button>
+                      <button type="button" class="project-editor-btn project-editor-btn-text" data-editor-target="global-feed-editor" data-editor-action="h2" title="Titre 2">H2</button>
+                      <button type="button" class="project-editor-btn project-editor-btn-text" data-editor-target="global-feed-editor" data-editor-action="h3" title="Titre 3">H3</button>
+                      <button type="button" class="project-editor-btn" data-editor-target="global-feed-editor" data-editor-action="ul" title="Liste"><span class="material-symbols-outlined">format_list_bulleted</span></button>
+                      <button type="button" class="project-editor-btn" data-editor-target="global-feed-editor" data-editor-action="ol" title="Liste numérotée"><span class="material-symbols-outlined">format_list_numbered</span></button>
+                      <button type="button" class="project-editor-btn" data-editor-target="global-feed-editor" data-editor-action="emoji" title="Emoji"><span class="material-symbols-outlined">sentiment_satisfied</span></button>
+                      <button type="button" class="project-editor-btn" data-editor-target="global-feed-editor" data-editor-file-input="global-feed-image-input" data-editor-action="image" title="Insérer image"><span class="material-symbols-outlined">image</span></button>
+                      <button type="button" class="project-editor-btn" data-editor-target="global-feed-editor" data-editor-action="video" title="Insérer vidéo"><span class="material-symbols-outlined">smart_display</span></button>
+                      <button type="button" class="project-editor-btn" data-editor-target="global-feed-editor" data-editor-action="align-left" title="Aligner à gauche"><span class="material-symbols-outlined">format_align_left</span></button>
+                      <button type="button" class="project-editor-btn" data-editor-target="global-feed-editor" data-editor-action="align-center" title="Centrer"><span class="material-symbols-outlined">format_align_center</span></button>
+                      <button type="button" class="project-editor-btn" data-editor-target="global-feed-editor" data-editor-action="align-right" title="Aligner à droite"><span class="material-symbols-outlined">format_align_right</span></button>
+                    </div>
+                    <div id="global-feed-editor" class="global-feed-editor project-description-editor" contenteditable="true" aria-label="Editeur feed" style="min-height: 120px;"></div>
+                    <textarea id="global-feed-input" rows="5" class="hidden"></textarea>
+                    <input id="global-feed-image-input" type="file" accept="image/*" multiple class="hidden">
+                  </div>
+                  <div class="grid grid-cols-1 gap-2 mt-3">
+                    <div class="feed-mention-row flex items-center gap-2">
+                      <select id="global-feed-mention-select" class="px-3 py-2 border border-slate-300 rounded-lg text-sm flex-1"></select>
+                      <button id="btn-global-feed-insert-mention" class="feed-mention-insert-btn px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold">Insérer @mention</button>
+                    </div>
+                    <p class="text-xs text-slate-500">Les agents mentionnés reçoivent une notification automatique.</p>
+                    <select id="global-feed-project-ref" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                      <option value="">Référence projet (optionnel)</option>
+                    </select>
+                    <select id="global-feed-task-ref" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                      <option value="">Référence tâche (optionnel)</option>
+                    </select>
+                    <select id="global-feed-calendar-ref" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                      <option value="">Référence info calendrier (optionnel)</option>
+                    </select>
+                  </div>
+                  <div class="flex justify-end gap-2 mt-3">
+                    <button id="btn-global-feed-cancel" class="px-4 py-2 rounded-lg bg-slate-200 text-slate-700 text-sm font-semibold hidden" onclick="cancelEditGlobalFeedPost()">Annuler</button>
+                    <button id="btn-global-feed-post" class="btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold flex items-center gap-2">
+                      <span id="global-feed-post-btn-icon" class="material-symbols-outlined text-[18px]">send</span>
+                      <span id="global-feed-post-btn-label">Publier</span>
+                    </button>
+                  </div>
+                  <input id="global-feed-digest-files" type="file" class="hidden" accept=".eml,.msg,.txt,.md,.html,.htm,.pdf,.doc,.docx,.odt,.rtf" multiple>
+                </div>
+              </aside>
               <section class="feed-stream">
                 <div class="feed-toolbar rounded-xl border border-slate-200 bg-slate-50 p-3 mb-3">
                   <div class="feed-toolbar-top">
@@ -771,67 +838,6 @@
                   <p class="text-slate-500 text-center py-8">Aucun post pour le moment.</p>
                 </div>
               </section>
-              <aside class="feed-composer-panel rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <div class="feed-composer-head">
-                  <h4 id="global-feed-composer-title" class="font-bold text-slate-800 mb-2">Nouveau post d'information</h4>
-                  <div class="flex items-center gap-2 mb-2">
-                    <span id="global-feed-mention-counter" class="feed-mention-counter" aria-live="polite">0 mention détectée</span>
-                    <button type="button" onclick="toggleGlobalFeedComposerFullscreen()" class="p-1 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-700 transition" title="Plein écran">
-                      <span id="global-feed-fullscreen-icon" class="material-symbols-outlined text-[18px]">open_in_full</span>
-                    </button>
-                  </div>
-                </div>
-                <div class="flex justify-start mt-1 mb-3">
-                  <button id="btn-global-feed-digest" class="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold flex items-center gap-2" type="button">
-                    <span class="material-symbols-outlined text-[18px]">description</span>
-                    <span>Digérer document</span>
-                  </button>
-                </div>
-                <div class="project-editor-wrap border border-slate-300 rounded-xl bg-white overflow-hidden">
-                  <div class="project-editor-toolbar project-editor-toolbar-fallback">
-                    <button type="button" class="project-editor-btn" data-editor-target="global-feed-editor" data-editor-action="bold" title="Gras"><span class="material-symbols-outlined">format_bold</span></button>
-                    <button type="button" class="project-editor-btn" data-editor-target="global-feed-editor" data-editor-action="italic" title="Italique"><span class="material-symbols-outlined">format_italic</span></button>
-                    <button type="button" class="project-editor-btn project-editor-btn-text" data-editor-target="global-feed-editor" data-editor-action="h1" title="Titre 1">H1</button>
-                    <button type="button" class="project-editor-btn project-editor-btn-text" data-editor-target="global-feed-editor" data-editor-action="h2" title="Titre 2">H2</button>
-                    <button type="button" class="project-editor-btn project-editor-btn-text" data-editor-target="global-feed-editor" data-editor-action="h3" title="Titre 3">H3</button>
-                    <button type="button" class="project-editor-btn" data-editor-target="global-feed-editor" data-editor-action="ul" title="Liste"><span class="material-symbols-outlined">format_list_bulleted</span></button>
-                    <button type="button" class="project-editor-btn" data-editor-target="global-feed-editor" data-editor-action="ol" title="Liste numérotée"><span class="material-symbols-outlined">format_list_numbered</span></button>
-                    <button type="button" class="project-editor-btn" data-editor-target="global-feed-editor" data-editor-action="emoji" title="Emoji"><span class="material-symbols-outlined">sentiment_satisfied</span></button>
-                    <button type="button" class="project-editor-btn" data-editor-target="global-feed-editor" data-editor-file-input="global-feed-image-input" data-editor-action="image" title="Insérer image"><span class="material-symbols-outlined">image</span></button>
-                    <button type="button" class="project-editor-btn" data-editor-target="global-feed-editor" data-editor-action="video" title="Insérer vidéo"><span class="material-symbols-outlined">smart_display</span></button>
-                    <button type="button" class="project-editor-btn" data-editor-target="global-feed-editor" data-editor-action="align-left" title="Aligner à gauche"><span class="material-symbols-outlined">format_align_left</span></button>
-                    <button type="button" class="project-editor-btn" data-editor-target="global-feed-editor" data-editor-action="align-center" title="Centrer"><span class="material-symbols-outlined">format_align_center</span></button>
-                    <button type="button" class="project-editor-btn" data-editor-target="global-feed-editor" data-editor-action="align-right" title="Aligner à droite"><span class="material-symbols-outlined">format_align_right</span></button>
-                  </div>
-                  <div id="global-feed-editor" class="global-feed-editor project-description-editor" contenteditable="true" aria-label="Editeur feed" style="min-height: 120px;"></div>
-                  <textarea id="global-feed-input" rows="5" class="hidden"></textarea>
-                  <input id="global-feed-image-input" type="file" accept="image/*" multiple class="hidden">
-                </div>
-                <div class="grid grid-cols-1 gap-2 mt-3">
-                  <div class="feed-mention-row flex items-center gap-2">
-                    <select id="global-feed-mention-select" class="px-3 py-2 border border-slate-300 rounded-lg text-sm flex-1"></select>
-                    <button id="btn-global-feed-insert-mention" class="feed-mention-insert-btn px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold">Insérer @mention</button>
-                  </div>
-                  <p class="text-xs text-slate-500">Les agents mentionnés reçoivent une notification automatique.</p>
-                  <select id="global-feed-project-ref" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                    <option value="">Référence projet (optionnel)</option>
-                  </select>
-                  <select id="global-feed-task-ref" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                    <option value="">Référence tâche (optionnel)</option>
-                  </select>
-                  <select id="global-feed-calendar-ref" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                    <option value="">Référence info calendrier (optionnel)</option>
-                  </select>
-                </div>
-                <div class="flex justify-end gap-2 mt-3">
-                  <button id="btn-global-feed-cancel" class="px-4 py-2 rounded-lg bg-slate-200 text-slate-700 text-sm font-semibold hidden" onclick="cancelEditGlobalFeedPost()">Annuler</button>
-                  <button id="btn-global-feed-post" class="btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold flex items-center gap-2">
-                    <span id="global-feed-post-btn-icon" class="material-symbols-outlined text-[18px]">send</span>
-                    <span id="global-feed-post-btn-label">Publier</span>
-                  </button>
-                </div>
-                <input id="global-feed-digest-files" type="file" class="hidden" accept=".eml,.msg,.txt,.md,.html,.htm,.pdf,.doc,.docx,.odt,.rtf" multiple>
-              </aside>
             </div>
           </div>
 
