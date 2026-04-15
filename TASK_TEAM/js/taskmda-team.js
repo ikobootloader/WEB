@@ -7160,6 +7160,8 @@
     let projectDescriptionExpanded = false;
     let emojiPickerOpen = false;
     let globalEmojiPickerOpen = false;
+    let projectMessageFilesPanelOpen = false;
+    let globalMessageFilesPanelOpen = false;
     let messageFilters = { query: '', onlyMine: false };
     let globalSearchQuery = '';
     let projectsFilters = { query: '', theme: '', status: 'all', sharing: 'all', ownership: 'all', sort: 'recent' };
@@ -13509,6 +13511,8 @@
       const btnSendMessage = document.getElementById('btn-send-message');
       const messageInput = document.getElementById('message-input');
       const messageFiles = document.getElementById('message-files');
+      const btnToggleEmojiPicker = document.getElementById('btn-toggle-emoji-picker');
+      const btnToggleMessageFiles = document.getElementById('btn-toggle-message-files');
       const btnAddProjectDocs = document.getElementById('btn-add-project-documents');
       const projectDocFilesInput = document.getElementById('project-doc-files');
       const projectDocTaskLinks = document.getElementById('project-doc-task-links');
@@ -13518,11 +13522,26 @@
         btnSendMessage.title = canSendChat ? '' : 'Réservé aux membres du projet';
       }
       if (messageInput) {
-        messageInput.disabled = !canSendChat;
-        messageInput.placeholder = canSendChat ? 'Tapez votre message...' : 'Lecture seule (droits insuffisants)';
+        if ('disabled' in messageInput) messageInput.disabled = !canSendChat;
+        if (messageInput.isContentEditable || messageInput.getAttribute('contenteditable') !== null) {
+          messageInput.setAttribute('contenteditable', canSendChat ? 'true' : 'false');
+          messageInput.setAttribute('aria-disabled', canSendChat ? 'false' : 'true');
+        }
+        setDiscussionInputPlaceholder(messageInput, canSendChat ? 'Tapez votre message...' : 'Lecture seule (droits insuffisants)');
       }
       if (messageFiles) {
         messageFiles.disabled = !canSendChat;
+      }
+      if (!canSendChat) {
+        toggleProjectMessageFilesPanel(false);
+      }
+      if (btnToggleEmojiPicker) {
+        btnToggleEmojiPicker.disabled = !canSendChat;
+        btnToggleEmojiPicker.classList.toggle('opacity-50', !canSendChat);
+      }
+      if (btnToggleMessageFiles) {
+        btnToggleMessageFiles.disabled = !canSendChat;
+        btnToggleMessageFiles.classList.toggle('opacity-50', !canSendChat);
       }
       if (btnAddProjectDocs) {
         btnAddProjectDocs.disabled = !canSendChat;
@@ -17280,7 +17299,7 @@
             : parseGroupConversationMemberIds(globalMessageActiveGroupConversationId));
           const groupLabel = formatGlobalMessageNamedGroupLabel(members, activeChannel?.label || '');
           targetLabel.textContent = `Destinataire: ${groupLabel}`;
-          input.placeholder = `Ecrire dans ${groupLabel}...`;
+          setDiscussionInputPlaceholder(input, `Ecrire dans ${groupLabel}...`);
           if (groupBadge) {
             groupBadge.textContent = groupLabel;
             groupBadge.classList.remove('hidden');
@@ -17291,24 +17310,24 @@
           if (selectedIds.length > 1) {
             const groupLabel = formatGlobalMessageNamedGroupLabel(selectedIds);
             targetLabel.textContent = `Destinataire: ${groupLabel}`;
-            input.placeholder = `Ecrire dans ${groupLabel}...`;
+            setDiscussionInputPlaceholder(input, `Ecrire dans ${groupLabel}...`);
             if (groupBadge) {
               groupBadge.textContent = groupLabel;
               groupBadge.classList.remove('hidden');
             }
           } else {
             targetLabel.textContent = `Destinataire: ${label}`;
-            input.placeholder = `Ecrire un message prive a ${label}...`;
+            setDiscussionInputPlaceholder(input, `Ecrire un message prive a ${label}...`);
             groupBadge?.classList.add('hidden');
           }
         } else if (isBroadcastView) {
           targetLabel.textContent = 'Destinataire: Canal general (tous les agents connus)';
-          input.placeholder = 'Ecrire un message pour tous les agents connus...';
+          setDiscussionInputPlaceholder(input, 'Ecrire un message pour tous les agents connus...');
           groupBadge?.classList.add('hidden');
         } else {
           const targetIdentity = resolveKnownUserIdentity(globalMessagePeerUserId, allContacts.find(c => c.userId === globalMessagePeerUserId)?.name || '');
           targetLabel.textContent = `Destinataire: ${targetIdentity.name}`;
-          input.placeholder = `Ecrire un message prive a ${targetIdentity.name}...`;
+          setDiscussionInputPlaceholder(input, `Ecrire un message prive a ${targetIdentity.name}...`);
           groupBadge?.classList.add('hidden');
         }
       }
@@ -17365,6 +17384,7 @@
           author: identityName,
           timeLabel,
           content: msg.content || '',
+          contentHtml: sanitizeProjectDescriptionHtml(msg.contentHtml || ''),
           attachmentsHtml: renderMessageAttachments(msg.attachments),
           editedLabel: msg.editedAt ? '(modifié)' : '',
           editorHtml,
@@ -18636,8 +18656,9 @@
       const selectedTarget = String(globalMessagePeerUserId || '').trim();
       const isBroadcast = !selectedTarget || selectedTarget === GLOBAL_MESSAGE_BROADCAST_TARGET;
       if (!input) return;
-      const rawContent = String(input.value || '').trim();
+      const rawContent = getDiscussionInputPlainText(input);
       const content = applyProfanityFilterToText(rawContent);
+      const contentHtml = getDiscussionInputHtml(input);
       let attachments = [];
       try {
         attachments = await runWithLoading(async () => readMessageFiles('global-message-files'));
@@ -18645,7 +18666,7 @@
         showToast(`❌ ${error.message}`);
         return;
       }
-      if (!content && attachments.length === 0) return;
+      if (!content && !contentHtml && attachments.length === 0) return;
       const senderUserId = String(currentUser?.userId || '');
       const senderName = String(currentUser?.name || fallbackDirectoryName(currentUser?.userId || ''));
       const selectedRecipients = Array.from(globalMessageRecipientUserIds || [])
@@ -18716,6 +18737,7 @@
           toUserIds: target.toUserIds,
           toName: target.toName,
           content,
+          contentHtml,
           attachments,
           createdAt: nowTs,
           updatedAt: nowTs,
@@ -18727,8 +18749,9 @@
           writeGlobalMessageToSharedFolder(message);
         }
       }
-      input.value = '';
+      clearDiscussionInput(input);
       toggleGlobalEmojiPicker(false);
+      toggleGlobalMessageFilesPanel(false);
       if (filesInput) filesInput.value = '';
       if (filesList) filesList.textContent = 'Aucun fichier sélectionné';
       if (selectedRecipients.length > 0) {
@@ -22856,7 +22879,7 @@
       if (messageFilters.query.trim()) {
         const q = messageFilters.query.trim().toLowerCase();
         filtered = filtered.filter(msg => {
-          return [msg.content, msg.authorName].some(v => String(v || '').toLowerCase().includes(q));
+          return [msg.content, msg.contentHtml, msg.authorName].some(v => String(v || '').toLowerCase().includes(q));
         });
       }
       if (messageFilters.onlyMine && currentUser?.userId) {
@@ -22873,7 +22896,9 @@
         return;
       }
 
-      container.innerHTML = filtered.map(msg => `
+      container.innerHTML = filtered.map(msg => {
+        const contentHtml = sanitizeProjectDescriptionHtml(msg.contentHtml || '');
+        return `
         <div id="message-item-${msg.messageId}" class="border-l-4 border-primary pl-4 py-2">
           <div class="flex items-center gap-2 mb-1">
             <span class="font-semibold text-sm">${escapeHtml(msg.authorName || 'Utilisateur')}</span>
@@ -22889,7 +22914,7 @@
               </div>
             </div>
           ` : `
-            <div class="markdown-content text-gray-700">${renderSafeMarkdown(msg.content)}</div>
+            <div class="markdown-content text-gray-700">${contentHtml || renderSafeMarkdown(msg.content)}</div>
             ${renderMessageAttachments(msg.attachments)}
             <div class="discussion-message-actions mt-1 flex items-center gap-2 text-xs">
               ${canEditProjectMessage(msg, currentProjectState) ? `<button onclick="startEditMessage('${msg.messageId}')" class="workspace-action-inline" data-action-kind="edit">Éditer</button>` : ''}
@@ -22897,7 +22922,8 @@
             </div>
           `}
         </div>
-      `).join('');
+      `;
+      }).join('');
 
       // Scroll to bottom
       container.scrollTop = container.scrollHeight;
@@ -22911,7 +22937,7 @@
       let filtered = [...allMessages];
       if (messageFilters.query.trim()) {
         const q = messageFilters.query.trim().toLowerCase();
-        filtered = filtered.filter(msg => [msg.content, msg.authorName].some(v => String(v || '').toLowerCase().includes(q)));
+        filtered = filtered.filter(msg => [msg.content, msg.contentHtml, msg.authorName].some(v => String(v || '').toLowerCase().includes(q)));
       }
       if (messageFilters.onlyMine && currentUser?.userId) {
         filtered = filtered.filter(msg => msg.author === currentUser.userId);
@@ -22933,6 +22959,7 @@
         }">${escapeHtml(getInitials(identity.name))}</span>`;
         const timeLabel = new Date(msg.timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
         const contentRaw = String(msg.content || '');
+        const contentHtml = sanitizeProjectDescriptionHtml(msg.contentHtml || '');
         const displayContent = msg.editedAt
           ? contentRaw.replace(/\n?\s*\(modifi(?:e|é)\)\s*$/i, '').trimEnd()
           : contentRaw;
@@ -22956,7 +22983,7 @@
                     </div>
                   </div>
                 ` : `
-                  <div class="markdown-content">${renderSafeMarkdown(displayContent)}</div>
+                  <div class="markdown-content">${contentHtml || renderSafeMarkdown(displayContent)}</div>
                   ${renderMessageAttachments(msg.attachments)}
                   <div class="discussion-message-actions mt-2 flex items-center gap-2 text-xs">
                     ${canEditProjectMessage(msg, currentProjectState) ? `<button onclick="startEditMessage('${msg.messageId}')" class="workspace-action-inline" data-action-kind="edit">Editer</button>` : ''}
@@ -25271,13 +25298,18 @@
       await deleteStandaloneCalendarItem(targetId);
     });
 
-    document.getElementById('message-input').addEventListener('keypress', async (e) => {
+    document.getElementById('message-input').addEventListener('keydown', async (e) => {
       if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         await sendMessage();
       }
     });
-    document.getElementById('message-input')?.setAttribute('placeholder', "Ecrire un message a l'equipe...");
+    {
+      const projectComposerInput = document.getElementById('message-input');
+      if (projectComposerInput) {
+        setDiscussionInputPlaceholder(projectComposerInput, "Ecrire un message a l'equipe...");
+      }
+    }
 
     let lastPasteTs = 0;
     const modalBackdropPointerState = new Map();
@@ -25288,6 +25320,11 @@
 
     document.addEventListener('keydown', async (e) => {
       const key = String(e.key || '').toLowerCase();
+      if (key === 'escape' && !document.getElementById('modal-message-image-preview')?.classList.contains('hidden')) {
+        e.preventDefault();
+        closeMessageImagePreview();
+        return;
+      }
       const quickModalOpen = !document.getElementById('quick-command-modal')?.classList.contains('hidden');
       if (key === 'escape' && quickModalOpen) {
         e.preventDefault();
@@ -25666,15 +25703,41 @@
         clearTimeout(messageMarkdownDebounceTimer);
       }
       messageMarkdownDebounceTimer = setTimeout(() => {
-        const current = document.getElementById('message-input')?.value || '';
+        const current = getDiscussionInputPlainText(document.getElementById('message-input'));
         // Conversion markdown "a chaud" (sans zone de preview visible)
         messageRenderedDraftHtml = renderSafeMarkdown(current);
       }, 280);
+    });
+    document.getElementById('message-input')?.addEventListener('paste', async (e) => {
+      const files = Array.from(e.clipboardData?.files || []);
+      if (!files.length) return;
+      const input = e.currentTarget;
+      const inserted = await insertImageFilesIntoDiscussionInput(input, files);
+      if (inserted > 0) {
+        e.preventDefault();
+        showToast(`${inserted} image(s) inseree(s) dans le message`);
+      }
+    });
+    document.getElementById('message-input')?.addEventListener('drop', async (e) => {
+      const files = Array.from(e.dataTransfer?.files || []);
+      if (!files.length) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const input = e.currentTarget;
+      const inserted = await insertImageFilesIntoDiscussionInput(input, files);
+      if (inserted > 0) {
+        showToast(`${inserted} image(s) inseree(s) dans le message`);
+      }
     });
     document.getElementById('btn-toggle-emoji-picker')?.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
       toggleEmojiPicker();
+    });
+    document.getElementById('btn-toggle-message-files')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleProjectMessageFilesPanel();
     });
     document.getElementById('emoji-picker-panel')?.addEventListener('click', (e) => {
       const button = e.target.closest('[data-emoji]');
@@ -25691,11 +25754,59 @@
       e.stopPropagation();
       toggleGlobalEmojiPicker();
     });
+    document.getElementById('btn-global-toggle-message-files')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleGlobalMessageFilesPanel();
+    });
     document.getElementById('global-emoji-picker-panel')?.addEventListener('click', (e) => {
       const button = e.target.closest('[data-emoji]');
       if (!button) return;
       const input = document.getElementById('global-message-input');
       insertTextAtCursor(input, button.dataset.emoji || '');
+    });
+    document.getElementById('global-message-input')?.addEventListener('paste', async (e) => {
+      const files = Array.from(e.clipboardData?.files || []);
+      if (!files.length) return;
+      const input = e.currentTarget;
+      const inserted = await insertImageFilesIntoDiscussionInput(input, files);
+      if (inserted > 0) {
+        e.preventDefault();
+        showToast(`${inserted} image(s) inseree(s) dans le message`);
+      }
+    });
+    document.getElementById('global-message-input')?.addEventListener('drop', async (e) => {
+      const files = Array.from(e.dataTransfer?.files || []);
+      if (!files.length) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const input = e.currentTarget;
+      const inserted = await insertImageFilesIntoDiscussionInput(input, files);
+      if (inserted > 0) {
+        showToast(`${inserted} image(s) inseree(s) dans le message`);
+      }
+    });
+    document.getElementById('messages-container')?.addEventListener('click', (e) => {
+      const img = e.target?.closest?.('.markdown-content img');
+      if (!img) return;
+      const src = String(img.getAttribute('src') || '').trim();
+      if (!src) return;
+      e.preventDefault();
+      openMessageImagePreview(src, img.getAttribute('alt') || 'Image message');
+    });
+    document.getElementById('global-message-thread')?.addEventListener('click', (e) => {
+      const img = e.target?.closest?.('.markdown-content img');
+      if (!img) return;
+      const src = String(img.getAttribute('src') || '').trim();
+      if (!src) return;
+      e.preventDefault();
+      openMessageImagePreview(src, img.getAttribute('alt') || 'Image message');
+    });
+    document.getElementById('btn-close-message-image-preview')?.addEventListener('click', () => {
+      closeMessageImagePreview();
+    });
+    registerSafeBackdropClose('modal-message-image-preview', () => {
+      closeMessageImagePreview();
     });
     document.addEventListener('click', (e) => {
       const target = e.target;
@@ -25713,12 +25824,30 @@
       toggleEmojiPicker(false);
     });
     document.addEventListener('click', (e) => {
+      if (!projectMessageFilesPanelOpen) return;
+      const target = e.target;
+      const panel = document.getElementById('message-files-panel');
+      const trigger = document.getElementById('btn-toggle-message-files');
+      const composer = document.getElementById('project-discussion-composer');
+      if (panel?.contains(target) || trigger?.contains(target) || composer?.contains(target)) return;
+      toggleProjectMessageFilesPanel(false);
+    });
+    document.addEventListener('click', (e) => {
       if (!globalEmojiPickerOpen) return;
       const target = e.target;
       const panel = document.getElementById('global-emoji-picker-panel');
       const trigger = document.getElementById('btn-global-toggle-emoji-picker');
       if (panel?.contains(target) || trigger?.contains(target)) return;
       toggleGlobalEmojiPicker(false);
+    });
+    document.addEventListener('click', (e) => {
+      if (!globalMessageFilesPanelOpen) return;
+      const target = e.target;
+      const panel = document.getElementById('global-message-files-panel');
+      const trigger = document.getElementById('btn-global-toggle-message-files');
+      const composer = document.querySelector('#global-messages-section .discussion-composer');
+      if (panel?.contains(target) || trigger?.contains(target) || composer?.contains(target)) return;
+      toggleGlobalMessageFilesPanel(false);
     });
     document.addEventListener('click', (e) => {
       const button = e.target.closest('#project-editor-emoji-panel [data-emoji]');
@@ -25960,22 +26089,133 @@
     async function readMessageFiles(inputId = 'message-files') {
       const input = document.getElementById(inputId);
       const files = Array.from(input?.files || []);
-      const maxFileSize = 3 * 1024 * 1024;
+      const maxFileSize = 10 * 1024 * 1024;
 
       const attachments = [];
+      const rejected = [];
       for (const file of files) {
         if (file.size > maxFileSize) {
-          throw new Error(`Le fichier "${file.name}" dépasse 3 Mo`);
+          rejected.push(`"${file.name}" depasse 10 Mo`);
+          continue;
         }
-        const data = await fileToDataUrl(file);
-        attachments.push({
-          name: file.name,
-          size: file.size,
-          type: file.type || 'application/octet-stream',
-          data
-        });
+        try {
+          const rawData = await fileToDataUrl(file);
+          const optimized = await optimizeMessageAttachment(file, rawData);
+          attachments.push({
+            name: optimized.name,
+            size: optimized.size,
+            type: optimized.type,
+            data: optimized.data
+          });
+        } catch (error) {
+          rejected.push(`"${file.name}" est illisible`);
+        }
+      }
+      if (rejected.length > 0) {
+        const suffix = rejected.length > 1 ? ` (+${rejected.length - 1})` : '';
+        showToast(`⚠ Piece jointe ignoree: ${rejected[0]}${suffix}`);
       }
       return attachments;
+    }
+
+    function renameFileExtension(name, extensionWithDot) {
+      const safeName = String(name || 'image').trim();
+      const ext = String(extensionWithDot || '.jpg').trim() || '.jpg';
+      const dot = safeName.lastIndexOf('.');
+      if (dot <= 0) return `${safeName}${ext}`;
+      return `${safeName.slice(0, dot)}${ext}`;
+    }
+
+    async function optimizeMessageAttachment(file, rawDataUrl) {
+      const fallback = {
+        name: String(file?.name || 'piece-jointe'),
+        size: Number(file?.size || 0),
+        type: String(file?.type || 'application/octet-stream') || 'application/octet-stream',
+        data: rawDataUrl
+      };
+      const isImage = /^image\//i.test(String(file?.type || ''));
+      if (!isImage) return fallback;
+
+      const optimized = await resizeImageDataUrl(rawDataUrl, {
+        maxWidth: 1280,
+        maxHeight: 1280,
+        quality: 0.82,
+        outputType: 'image/jpeg'
+      });
+      if (!optimized) return fallback;
+
+      return {
+        name: renameFileExtension(fallback.name, '.jpg'),
+        size: estimateDataUrlBytes(optimized),
+        type: 'image/jpeg',
+        data: optimized
+      };
+    }
+
+    function resizeImageDataUrl(dataUrl, options = {}) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const srcW = Number(img.naturalWidth || img.width || 0);
+            const srcH = Number(img.naturalHeight || img.height || 0);
+            if (!srcW || !srcH) {
+              resolve(dataUrl);
+              return;
+            }
+            const maxW = Math.max(1, Number(options.maxWidth || 1280));
+            const maxH = Math.max(1, Number(options.maxHeight || 1280));
+            const scale = Math.min(1, maxW / srcW, maxH / srcH);
+            const targetW = Math.max(1, Math.round(srcW * scale));
+            const targetH = Math.max(1, Math.round(srcH * scale));
+            const canvas = document.createElement('canvas');
+            canvas.width = targetW;
+            canvas.height = targetH;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+              resolve(dataUrl);
+              return;
+            }
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(img, 0, 0, targetW, targetH);
+            const outputType = String(options.outputType || 'image/jpeg');
+            const quality = Math.max(0.5, Math.min(0.95, Number(options.quality || 0.82)));
+            resolve(canvas.toDataURL(outputType, quality));
+          } catch (error) {
+            resolve(dataUrl);
+          }
+        };
+        img.onerror = () => resolve(dataUrl);
+        img.src = dataUrl;
+      });
+    }
+
+    function buildInlineMessageImageHtml(dataUrl, altText = 'image') {
+      const safeSrc = String(dataUrl || '').trim();
+      if (!safeSrc) return '';
+      const safeAlt = escapeHtml(String(altText || 'image').slice(0, 120));
+      return `<p><img src="${safeSrc}" alt="${safeAlt}" class="desc-img-align-center discussion-inline-image" data-desc-image-width="58" style="width:58%;max-width:100%;height:auto"></p>`;
+    }
+
+    async function insertImageFilesIntoDiscussionInput(input, files) {
+      if (!input || !input.isContentEditable) return 0;
+      const list = Array.from(files || []).filter((file) => /^image\//i.test(String(file?.type || '')));
+      if (!list.length) return 0;
+      let inserted = 0;
+      for (const file of list) {
+        try {
+          const rawData = await fileToDataUrl(file);
+          const optimized = await optimizeMessageAttachment(file, rawData);
+          const imageHtml = buildInlineMessageImageHtml(optimized?.data || rawData, file.name || 'image');
+          if (!imageHtml) continue;
+          insertHtmlAtCursor(input, imageHtml);
+          inserted += 1;
+        } catch (error) {
+          // ignore a single image failure to preserve the rest
+        }
+      }
+      return inserted;
     }
 
     function fileToDataUrl(file) {
@@ -25989,6 +26229,24 @@
 
     function insertTextAtCursor(input, text) {
       if (!input) return;
+      if (input.isContentEditable) {
+        input.focus();
+        const selection = window.getSelection();
+        if (selection && selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          range.deleteContents();
+          const node = document.createTextNode(String(text || ''));
+          range.insertNode(node);
+          range.setStartAfter(node);
+          range.setEndAfter(node);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        } else {
+          input.appendChild(document.createTextNode(String(text || '')));
+        }
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        return;
+      }
       const start = typeof input.selectionStart === 'number' ? input.selectionStart : input.value.length;
       const end = typeof input.selectionEnd === 'number' ? input.selectionEnd : input.value.length;
       const before = input.value.slice(0, start);
@@ -25999,6 +26257,89 @@
       input.selectionEnd = nextPos;
       input.dispatchEvent(new Event('input', { bubbles: true }));
       input.focus();
+    }
+
+    function setDiscussionInputPlaceholder(input, text) {
+      if (!input) return;
+      const value = String(text || '').trim();
+      if (input.isContentEditable) {
+        input.setAttribute('data-placeholder', value || 'Taper un message...');
+      } else {
+        input.placeholder = value || 'Taper un message...';
+      }
+    }
+
+    function getDiscussionInputPlainText(input) {
+      if (!input) return '';
+      if (input.isContentEditable) {
+        return String(input.textContent || '').replace(/\u00a0/g, ' ').trim();
+      }
+      return String(input.value || '').trim();
+    }
+
+    function getDiscussionInputHtml(input) {
+      if (!input) return '';
+      const raw = input.isContentEditable ? String(input.innerHTML || '') : plainTextToRichHtml(String(input.value || ''));
+      return sanitizeProjectDescriptionHtml(raw || '');
+    }
+
+    function clearDiscussionInput(input) {
+      if (!input) return;
+      if (input.isContentEditable) {
+        input.innerHTML = '';
+      } else {
+        input.value = '';
+      }
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    function openMessageImagePreview(src, altText = '') {
+      const modal = document.getElementById('modal-message-image-preview');
+      const image = document.getElementById('message-image-preview-img');
+      if (!modal || !image) return;
+      const safeSrc = String(src || '').trim();
+      if (!safeSrc) return;
+      image.setAttribute('src', safeSrc);
+      image.setAttribute('alt', String(altText || 'Aperçu image message').trim() || 'Aperçu image message');
+      modal.classList.remove('hidden');
+      document.body.classList.add('overflow-hidden');
+    }
+
+    function closeMessageImagePreview() {
+      const modal = document.getElementById('modal-message-image-preview');
+      const image = document.getElementById('message-image-preview-img');
+      if (!modal || !image) return;
+      modal.classList.add('hidden');
+      image.setAttribute('src', '');
+      document.body.classList.remove('overflow-hidden');
+    }
+
+    function insertHtmlAtCursor(editable, html) {
+      if (!editable || !editable.isContentEditable) return;
+      editable.focus();
+      const selection = window.getSelection();
+      if (!selection) return;
+      let range = null;
+      if (selection.rangeCount > 0) {
+        range = selection.getRangeAt(0);
+      } else {
+        range = document.createRange();
+        range.selectNodeContents(editable);
+        range.collapse(false);
+      }
+      range.deleteContents();
+      const template = document.createElement('template');
+      template.innerHTML = String(html || '');
+      const fragment = template.content;
+      const last = fragment.lastChild;
+      range.insertNode(fragment);
+      if (last) {
+        range.setStartAfter(last);
+        range.setEndAfter(last);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+      editable.dispatchEvent(new Event('input', { bubbles: true }));
     }
 
     // Project editor / Quill module moved to taskmda-editor.js
@@ -26029,6 +26370,21 @@
       }
     }
 
+    function toggleProjectMessageFilesPanel(forceOpen) {
+      const panel = document.getElementById('message-files-panel');
+      const toggle = document.getElementById('btn-toggle-message-files');
+      if (!panel) return;
+      const nextOpen = typeof forceOpen === 'boolean' ? forceOpen : !projectMessageFilesPanelOpen;
+      projectMessageFilesPanelOpen = nextOpen;
+      panel.classList.toggle('hidden', !nextOpen);
+      if (toggle) {
+        toggle.classList.toggle('bg-primary', nextOpen);
+        toggle.classList.toggle('text-white', nextOpen);
+        toggle.classList.toggle('bg-slate-100', !nextOpen);
+        toggle.classList.toggle('text-slate-700', !nextOpen);
+      }
+    }
+
     function renderGlobalEmojiPicker() {
       const panel = document.getElementById('global-emoji-picker-panel');
       if (!panel || panel.dataset.ready === '1') return;
@@ -26056,6 +26412,21 @@
       }
     }
 
+    function toggleGlobalMessageFilesPanel(forceOpen) {
+      const panel = document.getElementById('global-message-files-panel');
+      const toggle = document.getElementById('btn-global-toggle-message-files');
+      if (!panel) return;
+      const nextOpen = typeof forceOpen === 'boolean' ? forceOpen : !globalMessageFilesPanelOpen;
+      globalMessageFilesPanelOpen = nextOpen;
+      panel.classList.toggle('hidden', !nextOpen);
+      if (toggle) {
+        toggle.classList.toggle('bg-primary', nextOpen);
+        toggle.classList.toggle('text-white', nextOpen);
+        toggle.classList.toggle('bg-slate-100', !nextOpen);
+        toggle.classList.toggle('text-slate-700', !nextOpen);
+      }
+    }
+
     async function sendMessage() {
       if (!currentProjectId) return;
       const state = await getProjectState(currentProjectId);
@@ -26067,7 +26438,8 @@
       const input = document.getElementById('message-input');
       const filesInput = document.getElementById('message-files');
       const filesList = document.getElementById('message-files-list');
-      const content = applyProfanityFilterToText(input.value.trim());
+      const content = applyProfanityFilterToText(getDiscussionInputPlainText(input));
+      const contentHtml = getDiscussionInputHtml(input);
       messageRenderedDraftHtml = renderSafeMarkdown(content);
       let attachments = [];
 
@@ -26078,7 +26450,7 @@
         return;
       }
 
-      if (!content && attachments.length === 0) return;
+      if (!content && !contentHtml && attachments.length === 0) return;
 
       const event = createEvent(
         EventTypes.SEND_MESSAGE,
@@ -26086,6 +26458,7 @@
         currentUser.userId,
         {
           content: content,
+          contentHtml,
           authorName: currentUser.name,
           attachments
         }
@@ -26102,8 +26475,9 @@
         linkLabel: 'Ouvrir le message'
       });
 
-      input.value = '';
+      clearDiscussionInput(input);
       toggleEmojiPicker(false);
+      toggleProjectMessageFilesPanel(false);
       if (filesInput) filesInput.value = '';
       if (filesList) filesList.textContent = 'Aucun fichier sélectionné';
       messageRenderedDraftHtml = '';

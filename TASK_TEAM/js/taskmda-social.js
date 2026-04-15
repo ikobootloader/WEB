@@ -159,7 +159,7 @@
               ${item?.editedLabel ? `<span class="discussion-edited">${escapeHtml(item.editedLabel)}</span>` : ''}
             </div>
             <div class="discussion-bubble ${item?.mine ? 'is-mine' : 'is-other'}">
-              ${item?.editorHtml || `<div class="markdown-content">${renderMarkdown(item?.content || '')}</div>`}
+              ${item?.editorHtml || `<div class="markdown-content">${item?.contentHtml || renderMarkdown(item?.content || '')}</div>`}
               ${item?.editorHtml ? '' : (item?.attachmentsHtml || '')}
               ${item?.footerActionsHtml || ''}
             </div>

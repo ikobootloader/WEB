@@ -7701,6 +7701,7 @@ html.dark .project-calendar-year-month-selected {
 .discussion-message-meta {
   display: flex;
   align-items: center;
+  flex-wrap: nowrap;
   gap: 0.5rem;
   margin-bottom: 0.375rem;
   padding-left: 0.25rem;
@@ -7708,17 +7709,22 @@ html.dark .project-calendar-year-month-selected {
 }
 
 .discussion-author {
+  display: inline-block;
+  flex: 0 1 auto;
   font-size: 12px;
   font-weight: 700;
   color: #334155;
-  line-height: 0.95;
-  max-width: 96px;
-  white-space: normal;
-  overflow-wrap: anywhere;
+  line-height: 1.1;
+  max-width: 240px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .discussion-time,
 .discussion-edited {
+  flex: 0 0 auto;
+  white-space: nowrap;
   font-size: 10px;
   font-weight: 500;
   color: #94a3b8;
@@ -8471,7 +8477,9 @@ html.dark .doc-editor-tabulator-wrap .tabulator .tabulator-header {
   padding: 8px 10px;
   background: transparent;
   box-shadow: none;
-  resize: vertical;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 #global-messages-section #global-message-input:focus {
@@ -8519,6 +8527,222 @@ html.dark .doc-editor-tabulator-wrap .tabulator .tabulator-header {
   margin-top: 0;
   border-radius: 0;
   padding: 8px 10px;
+}
+
+#discussion-section .discussion-composer {
+  border-top: 1px solid rgba(101, 115, 141, 0.16);
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+}
+
+#discussion-section .discussion-composer-strip {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.8);
+}
+
+#discussion-section .discussion-composer-strip-target {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+#discussion-section .discussion-composer-input-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+#discussion-section #message-input {
+  flex: 1;
+  border: 0;
+  border-radius: 10px;
+  min-height: 44px;
+  max-height: 132px;
+  padding: 8px 10px;
+  background: transparent;
+  box-shadow: none;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+#discussion-section #message-input:focus {
+  box-shadow: none;
+  outline: none;
+}
+
+.discussion-rich-input:empty::before {
+  content: attr(data-placeholder);
+  color: #94a3b8;
+  pointer-events: none;
+}
+
+.discussion-rich-input p {
+  margin: 0 0 0.35rem;
+}
+
+.discussion-rich-input p:last-child {
+  margin-bottom: 0;
+}
+
+.discussion-inline-image {
+  display: block;
+  max-width: min(100%, 320px);
+  max-height: 220px;
+  border-radius: 10px;
+  margin: 0.35rem 0;
+  object-fit: cover;
+  cursor: zoom-in;
+}
+
+#messages-container .markdown-content img,
+#global-message-thread .markdown-content img {
+  cursor: zoom-in !important;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+
+#messages-container .markdown-content img:hover,
+#global-message-thread .markdown-content img:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.16);
+  border-color: rgba(37, 99, 235, 0.45);
+}
+
+.message-image-preview-shell {
+  border: 1px solid rgba(203, 213, 225, 0.45);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.35);
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.message-image-preview-img {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  max-height: calc(100vh - 130px);
+  object-fit: contain;
+  border-radius: 10px;
+}
+
+#discussion-section .discussion-composer-actions {
+  grid-column: auto;
+  grid-row: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+#discussion-section #btn-toggle-emoji-picker,
+#discussion-section #btn-toggle-message-files {
+  border: 0;
+  background: transparent;
+  color: #64748b;
+  min-width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  padding: 0;
+}
+
+#discussion-section #btn-toggle-emoji-picker .taskmda-action-label,
+#discussion-section #btn-toggle-message-files .taskmda-action-label {
+  display: none;
+}
+
+#discussion-section #btn-toggle-emoji-picker .material-symbols-outlined,
+#discussion-section #btn-toggle-message-files .material-symbols-outlined {
+  font-size: 22px;
+}
+
+#discussion-section .discussion-send-btn {
+  width: auto;
+  min-width: 46px;
+  height: 40px;
+  padding: 0 12px !important;
+  border-radius: 12px;
+}
+
+#discussion-section .discussion-composer #emoji-picker-panel {
+  border-top: 1px solid rgba(203, 213, 225, 0.65);
+  margin-top: 0;
+  border-radius: 0;
+  padding: 8px 10px;
+}
+
+#discussion-section .discussion-files-panel {
+  border-top: 1px solid rgba(203, 213, 225, 0.65);
+  padding: 10px 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 320px);
+  gap: 8px;
+}
+
+#discussion-section .discussion-files-dropzone {
+  min-width: 0;
+}
+
+#discussion-section #message-files {
+  min-height: 40px;
+}
+
+#discussion-section #message-files-list {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+}
+
+#global-messages-section #btn-global-toggle-message-files {
+  border: 0;
+  background: transparent;
+  color: #64748b;
+  min-width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  padding: 0;
+}
+
+#global-messages-section #btn-global-toggle-message-files .taskmda-action-label {
+  display: none;
+}
+
+#global-messages-section #btn-global-toggle-message-files .material-symbols-outlined {
+  font-size: 22px;
+}
+
+#global-messages-section .discussion-files-panel {
+  border-top: 1px solid rgba(203, 213, 225, 0.65);
+  padding: 10px 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 320px);
+  gap: 8px;
+}
+
+#global-messages-section .discussion-files-dropzone {
+  min-width: 0;
+}
+
+#global-messages-section #global-message-files {
+  min-height: 40px;
+}
+
+#global-messages-section #global-message-files-list {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
 }
 
 #global-messages-section.is-discovery-collapsed .discussion-layout {
@@ -8645,6 +8869,59 @@ html.dark #global-messages-section .discussion-composer-strip {
   border-bottom-color: rgba(138, 161, 202, 0.24);
 }
 
+html.dark #discussion-section .discussion-composer {
+  background: #15213a;
+  border-top-color: rgba(138, 161, 202, 0.22);
+}
+
+html.dark #discussion-section .discussion-composer-strip {
+  border-bottom-color: rgba(138, 161, 202, 0.24);
+}
+
+html.dark #discussion-section #message-input {
+  color: #e8f0ff;
+}
+
+html.dark .discussion-rich-input:empty::before {
+  color: #6f87b0;
+}
+
+html.dark .message-image-preview-shell {
+  border-color: rgba(138, 161, 202, 0.3);
+  background: rgba(7, 16, 34, 0.72);
+}
+
+html.dark #discussion-section #btn-toggle-emoji-picker,
+html.dark #discussion-section #btn-toggle-message-files {
+  color: #a7bddf;
+}
+
+html.dark #discussion-section .discussion-files-panel {
+  border-top-color: rgba(51, 71, 105, 0.7);
+}
+
+html.dark #discussion-section #message-files,
+html.dark #discussion-section #message-files-list {
+  border-color: #334769;
+  background: rgba(15, 28, 52, 0.9);
+  color: #a9b6cf;
+}
+
+html.dark #global-messages-section #btn-global-toggle-message-files {
+  color: #a7bddf;
+}
+
+html.dark #global-messages-section .discussion-files-panel {
+  border-top-color: rgba(51, 71, 105, 0.7);
+}
+
+html.dark #global-messages-section #global-message-files,
+html.dark #global-messages-section #global-message-files-list {
+  border-color: #334769;
+  background: rgba(15, 28, 52, 0.9);
+  color: #a9b6cf;
+}
+
 html.dark #global-messages-section #global-message-target-label {
   color: #c8d9f5;
   background: transparent;
@@ -8768,6 +9045,23 @@ html.dark .discussion-member-item.is-active:focus-visible {
 
   #global-messages-section .discussion-composer-input-row {
     align-items: center;
+  }
+
+  #discussion-section .discussion-composer-strip {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  #discussion-section .discussion-composer-input-row {
+    align-items: center;
+  }
+
+  #discussion-section .discussion-files-panel {
+    grid-template-columns: 1fr;
+  }
+
+  #global-messages-section .discussion-files-panel {
+    grid-template-columns: 1fr;
   }
 
   #global-messages-section.is-discovery-collapsed .discussion-layout {
