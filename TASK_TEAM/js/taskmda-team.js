@@ -929,7 +929,16 @@
         case EventTypes.UPDATE_MESSAGE:
           state.messages = state.messages.map(m =>
             m.messageId === event.payload.messageId
-              ? { ...m, content: event.payload.content, editedAt: event.timestamp }
+              ? {
+                  ...m,
+                  ...(event.payload.changes && typeof event.payload.changes === 'object'
+                    ? event.payload.changes
+                    : { content: event.payload.content }),
+                  editedAt: (
+                    (event.payload.changes && typeof event.payload.changes === 'object' && Object.prototype.hasOwnProperty.call(event.payload.changes, 'content'))
+                    || typeof event.payload.content === 'string'
+                  ) ? event.timestamp : m.editedAt
+                }
               : m
           );
           break;
@@ -7155,6 +7164,8 @@
     let calendarDayFilterEnabled = false;
     let editingMessageId = null;
     let editingMessageDraft = '';
+    let projectMessageReplyTarget = null;
+    let projectReactionPickerMessageId = '';
     let messageMarkdownDebounceTimer = null;
     let messageRenderedDraftHtml = '';
     let projectDescriptionExpanded = false;
@@ -7256,6 +7267,7 @@
     const GLOBAL_MESSAGE_THREAD_INITIAL_BATCH = 40;
     const GLOBAL_MESSAGE_THREAD_BATCH_SIZE = 32;
     const GLOBAL_MESSAGE_BROADCAST_LABEL = 'Canal général (tous les agents connus)';
+    const MESSAGE_REACTION_EMOJIS = ['👍', '❤️', '😂', '🎉', '😮', '😢'];
     const PROFANITY_FILTER_MODE_STORAGE_KEY = 'taskmda_profanity_mode_v1';
     const PROFANITY_FILTER_DEFAULT_MODE = 'convert';
     const PROFANITY_FILTER_MODES = new Set(['off', 'remove', 'convert', 'encrypt']);
@@ -7285,6 +7297,8 @@
     let globalMessageThreadRenderLimit = GLOBAL_MESSAGE_THREAD_INITIAL_BATCH;
     let editingGlobalMessageId = null;
     let editingGlobalMessageDraft = '';
+    let globalMessageReplyTarget = null;
+    let globalReactionPickerMessageId = '';
     let pendingGlobalConversationDelete = null;
     let knownGlobalMessageIds = new Set();
     let knownGlobalPostIds = new Set();
@@ -16979,7 +16993,16 @@
             toUserIds: normalizedRecipientIds,
             toName: String(msg.toName || ''),
             content: String(msg.content || ''),
+            contentHtml: sanitizeProjectDescriptionHtml(msg.contentHtml || ''),
             attachments: Array.isArray(msg.attachments) ? msg.attachments : [],
+            replyTo: msg.replyTo && typeof msg.replyTo === 'object'
+              ? {
+                  messageId: String(msg.replyTo.messageId || '').trim(),
+                  authorName: String(msg.replyTo.authorName || '').trim(),
+                  excerpt: String(msg.replyTo.excerpt || '').trim()
+                }
+              : null,
+            reactions: normalizeMessageReactions(msg.reactions),
             createdAt: incomingCreatedAt,
             editedAt: Number(msg.editedAt || 0) || undefined,
             deletedAt: Number(msg.deletedAt || 0) || undefined,
@@ -17186,6 +17209,15 @@
       const activeItems = visibleMessages
         .filter((msg) => String(msg.conversationId || '') === activeConversationId)
         .sort((a, b) => Number(a.createdAt || 0) - Number(b.createdAt || 0));
+      if (globalMessageReplyTarget?.messageId) {
+        const stillExists = activeItems.some((msg) => String(msg?.messageId || '') === String(globalMessageReplyTarget.messageId));
+        if (!stillExists) globalMessageReplyTarget = null;
+      }
+      if (globalReactionPickerMessageId) {
+        const stillExists = activeItems.some((msg) => String(msg?.messageId || '') === String(globalReactionPickerMessageId));
+        if (!stillExists) globalReactionPickerMessageId = '';
+      }
+      updateGlobalReplyComposerUi();
       if (activeConversationId && activeItems.length > 0) {
         markGlobalConversationRead(activeConversationId, activeItems);
       }
@@ -17358,7 +17390,7 @@
         const mine = String(msg.fromUserId || '') === String(currentUser?.userId || '');
         const identity = resolveKnownUserIdentity(msg.fromUserId, msg.fromName || '');
         const identityName = mine ? (currentUser?.name || identity.name || 'Vous') : (identity.name || fallbackDirectoryName(msg.fromUserId));
-        const timeLabel = new Date(Number(msg.createdAt || Date.now())).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        const timeLabel = formatMessageDateTime(Number(msg.createdAt || Date.now()));
         const isEditing = mine && editingGlobalMessageId === String(msg.messageId || '');
         const editorHtml = isEditing
           ? `
@@ -17371,11 +17403,38 @@
             </div>
           `
           : '';
-        const footerActionsHtml = mine && !isEditing
+        const safeMsgId = escapeHtml(String(msg.messageId || ''));
+        const replyBtn = `
+          <button
+            onclick="setGlobalMessageReply('${safeMsgId}')"
+            class="workspace-action-inline discussion-action-icon-btn"
+            data-action-kind="manage"
+            title="Repondre"
+            aria-label="Repondre"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">reply</span>
+          </button>
+        `;
+        const reactBtn = `
+          <button
+            onclick="toggleGlobalReactionPicker('${safeMsgId}')"
+            class="workspace-action-inline discussion-action-icon-btn discussion-react-trigger-btn"
+            data-action-kind="default"
+            title="Reagir"
+            aria-label="Reagir"
+          >
+            <span class="taskmda-action-icon" aria-hidden="true">👍</span>
+            <span class="taskmda-action-label">Reagir</span>
+          </button>
+        `;
+        const pickerOpen = String(globalReactionPickerMessageId || '') === String(msg.messageId || '');
+        const footerActionsHtml = !isEditing
           ? `
-            <div class="discussion-message-actions mt-2 flex items-center gap-2 text-xs">
-              <button onclick="startEditGlobalMessage('${escapeHtml(String(msg.messageId || ''))}')" class="workspace-action-inline" data-action-kind="edit">Editer</button>
-              <button onclick="deleteGlobalMessage('${escapeHtml(String(msg.messageId || ''))}')" class="workspace-action-inline" data-action-kind="danger">Supprimer</button>
+            <div class="discussion-message-actions flex items-center gap-2 text-xs">
+              ${replyBtn}
+              ${reactBtn}
+              ${mine ? `<button onclick="startEditGlobalMessage('${escapeHtml(String(msg.messageId || ''))}')" class="workspace-action-inline" data-action-kind="edit">Editer</button>` : ''}
+              ${mine ? `<button onclick="deleteGlobalMessage('${escapeHtml(String(msg.messageId || ''))}')" class="workspace-action-inline" data-action-kind="danger">Supprimer</button>` : ''}
             </div>
           `
           : '';
@@ -17385,7 +17444,11 @@
           timeLabel,
           content: msg.content || '',
           contentHtml: sanitizeProjectDescriptionHtml(msg.contentHtml || ''),
+          replyContextHtml: renderMessageReplyContext(msg.replyTo),
           attachmentsHtml: renderMessageAttachments(msg.attachments),
+          reactionsHtml: renderGlobalMessageReactions(msg.messageId, msg.reactions),
+          reactionPickerHtml: renderGlobalReactionPicker(msg.messageId, msg.reactions, pickerOpen),
+          messageRowId: `global-message-item-${String(msg.messageId || '')}`,
           editedLabel: msg.editedAt ? '(modifié)' : '',
           editorHtml,
           footerActionsHtml,
@@ -18659,6 +18722,7 @@
       const rawContent = getDiscussionInputPlainText(input);
       const content = applyProfanityFilterToText(rawContent);
       const contentHtml = getDiscussionInputHtml(input);
+      const replyTo = getGlobalReplyPayload();
       let attachments = [];
       try {
         attachments = await runWithLoading(async () => readMessageFiles('global-message-files'));
@@ -18739,6 +18803,8 @@
           content,
           contentHtml,
           attachments,
+          replyTo,
+          reactions: {},
           createdAt: nowTs,
           updatedAt: nowTs,
           source: sharedFolderHandle ? 'shared' : 'local'
@@ -18754,6 +18820,7 @@
       toggleGlobalMessageFilesPanel(false);
       if (filesInput) filesInput.value = '';
       if (filesList) filesList.textContent = 'Aucun fichier sélectionné';
+      clearGlobalMessageReply();
       if (selectedRecipients.length > 0) {
         globalMessageRecipientUserIds = new Set();
       }
@@ -18843,7 +18910,78 @@
         editingGlobalMessageId = null;
         editingGlobalMessageDraft = '';
       }
+      if (String(globalMessageReplyTarget?.messageId || '') === id) {
+        clearGlobalMessageReply();
+      }
       showToast('Message supprimé');
+      await renderGlobalMessages({ keepThreadAnchor: true });
+    }
+
+    async function setGlobalMessageReply(messageId) {
+      const id = String(messageId || '').trim();
+      if (!id) return;
+      const msg = await getDecrypted('globalMessages', id, 'messageId');
+      if (!msg || msg.deletedAt) return;
+      globalMessageReplyTarget = {
+        messageId: id,
+        authorName: String(msg.fromName || fallbackDirectoryName(msg.fromUserId)),
+        excerpt: getMessagePlainSnippet(msg)
+      };
+      updateGlobalReplyComposerUi();
+      document.getElementById('global-message-input')?.focus();
+      ensureMessageRowActionsVisible('global-message-thread', `global-message-item-${id}`);
+    }
+
+    function clearGlobalMessageReply() {
+      globalMessageReplyTarget = null;
+      updateGlobalReplyComposerUi();
+    }
+
+    async function toggleGlobalReactionPicker(messageId) {
+      const id = String(messageId || '').trim();
+      if (!id) return;
+      globalReactionPickerMessageId = (globalReactionPickerMessageId === id) ? '' : id;
+      await renderGlobalMessages({ keepThreadAnchor: true });
+      if (globalReactionPickerMessageId) {
+        ensureMessageRowActionsVisible('global-message-thread', `global-message-item-${id}`);
+      }
+    }
+
+    async function toggleGlobalMessageReaction(messageId, emoji) {
+      const id = String(messageId || '').trim();
+      const reactionEmoji = String(emoji || '').trim();
+      if (!id || !reactionEmoji) return;
+      const existing = await getDecrypted('globalMessages', id, 'messageId');
+      if (!existing || existing.deletedAt) return;
+      const userId = String(currentUser?.userId || '').trim();
+      if (!userId) return;
+      if (!isGlobalMessageVisibleForUser(existing, userId)) return;
+      const nextReactions = normalizeMessageReactions(existing.reactions);
+      const hadSameReaction = Array.isArray(nextReactions[reactionEmoji]) && nextReactions[reactionEmoji].includes(userId);
+      Object.keys(nextReactions).forEach((key) => {
+        const cleaned = (nextReactions[key] || []).filter((idValue) => String(idValue || '').trim() !== userId);
+        if (cleaned.length > 0) {
+          nextReactions[key] = cleaned;
+        } else {
+          delete nextReactions[key];
+        }
+      });
+      if (!hadSameReaction) {
+        const current = new Set(Array.isArray(nextReactions[reactionEmoji]) ? nextReactions[reactionEmoji] : []);
+        current.add(userId);
+        nextReactions[reactionEmoji] = Array.from(current);
+      }
+      const nowTs = Date.now();
+      const updated = {
+        ...existing,
+        reactions: nextReactions,
+        updatedAt: nowTs
+      };
+      await putEncrypted('globalMessages', updated, 'messageId');
+      if (sharedFolderHandle) {
+        await writeGlobalMessageToSharedFolder(updated);
+      }
+      globalReactionPickerMessageId = '';
       await renderGlobalMessages({ keepThreadAnchor: true });
     }
 
@@ -18914,6 +19052,12 @@
         editingGlobalMessageId = null;
         editingGlobalMessageDraft = '';
       }
+      if (globalMessageReplyTarget?.messageId) {
+        const idsSet = new Set(messageIds);
+        if (idsSet.has(String(globalMessageReplyTarget.messageId || '').trim())) {
+          clearGlobalMessageReply();
+        }
+      }
       showToast(sharedFolderHandle
         ? 'Conversation supprimee localement. Synchronisation collective en arriere-plan.'
         : 'Conversation supprimee.');
@@ -18931,6 +19075,10 @@
     window.saveEditedGlobalMessage = saveEditedGlobalMessage;
     window.cancelEditGlobalMessage = cancelEditGlobalMessage;
     window.deleteGlobalMessage = deleteGlobalMessage;
+    window.setGlobalMessageReply = setGlobalMessageReply;
+    window.clearGlobalMessageReply = clearGlobalMessageReply;
+    window.toggleGlobalReactionPicker = toggleGlobalReactionPicker;
+    window.toggleGlobalMessageReaction = toggleGlobalMessageReaction;
     window.deleteGlobalConversation = deleteGlobalConversation;
 
     const RGPD_DETECTION_KEYWORDS = [
@@ -22809,6 +22957,253 @@
       `;
     }
 
+    function ensureMessageRowActionsVisible(containerId, rowId, options = {}) {
+      const container = document.getElementById(String(containerId || '').trim());
+      const row = document.getElementById(String(rowId || '').trim());
+      if (!container || !row) return;
+      const smooth = options?.smooth !== false;
+      requestAnimationFrame(() => {
+        const cRect = container.getBoundingClientRect();
+        const rRect = row.getBoundingClientRect();
+        const bottomOverflow = rRect.bottom - cRect.bottom;
+        const topOverflow = cRect.top - rRect.top;
+        if (bottomOverflow > -6) {
+          container.scrollTo({
+            top: container.scrollTop + Math.max(0, bottomOverflow) + 70,
+            behavior: smooth ? 'smooth' : 'auto'
+          });
+        } else if (topOverflow > 0) {
+          container.scrollTo({
+            top: Math.max(0, container.scrollTop - topOverflow - 20),
+            behavior: smooth ? 'smooth' : 'auto'
+          });
+        }
+      });
+    }
+
+    function formatMessageDateTime(value) {
+      const timestamp = Number(value || 0);
+      if (!Number.isFinite(timestamp) || timestamp <= 0) return '';
+      return new Date(timestamp).toLocaleString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
+    function getMessagePlainSnippet(msg, maxLen = 90) {
+      const html = sanitizeProjectDescriptionHtml(msg?.contentHtml || '');
+      let source = '';
+      if (html) {
+        const tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        source = String(tmp.textContent || '');
+      } else {
+        source = String(msg?.content || '');
+      }
+      const collapsed = source.replace(/\s+/g, ' ').trim();
+      if (!collapsed) return '(message)';
+      if (collapsed.length <= maxLen) return collapsed;
+      return `${collapsed.slice(0, Math.max(12, maxLen - 1)).trimEnd()}…`;
+    }
+
+    function normalizeMessageReactions(reactions) {
+      const out = {};
+      if (!reactions || typeof reactions !== 'object') return out;
+      Object.entries(reactions).forEach(([emoji, userIds]) => {
+        const safeEmoji = String(emoji || '').trim();
+        if (!safeEmoji) return;
+        const uniqueIds = Array.from(new Set(
+          (Array.isArray(userIds) ? userIds : [])
+            .map((id) => String(id || '').trim())
+            .filter(Boolean)
+        ));
+        if (uniqueIds.length > 0) out[safeEmoji] = uniqueIds;
+      });
+      return out;
+    }
+
+    function getUserReactionEmoji(reactions, userId) {
+      const uid = String(userId || '').trim();
+      if (!uid) return '';
+      const normalized = normalizeMessageReactions(reactions);
+      const found = Object.entries(normalized).find(([, userIds]) => Array.isArray(userIds) && userIds.includes(uid));
+      return found ? String(found[0] || '') : '';
+    }
+
+    function renderMessageReplyContext(replyTo) {
+      if (!replyTo?.messageId) return '';
+      const author = escapeHtml(String(replyTo.authorName || 'Message').trim() || 'Message');
+      const excerpt = escapeHtml(String(replyTo.excerpt || '').trim() || '(message)');
+      return `
+        <div class="discussion-reply-context" title="${excerpt}">
+          <span class="material-symbols-outlined">reply</span>
+          <div class="discussion-reply-context-text">
+            <p class="discussion-reply-context-author">${author}</p>
+            <p class="discussion-reply-context-excerpt">${excerpt}</p>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderProjectMessageReactions(messageId, reactions) {
+      const normalized = normalizeMessageReactions(reactions);
+      const entries = Object.entries(normalized);
+      if (entries.length === 0) return '';
+      const currentUserId = String(currentUser?.userId || '').trim();
+      return `
+        <div class="discussion-reactions">
+          ${entries.map(([emoji, userIds]) => {
+            const count = Array.isArray(userIds) ? userIds.length : 0;
+            const mine = Array.isArray(userIds) && userIds.includes(currentUserId);
+            const userNames = resolveReactionUserNames(userIds, 'project');
+            const usersFull = userNames.join(', ');
+            return `
+              <button
+                type="button"
+                class="discussion-reaction-chip ${mine ? 'is-mine' : ''}"
+                onclick="toggleProjectMessageReaction('${escapeHtml(String(messageId || ''))}', '${escapeHtml(emoji)}')"
+                title="${count} reaction(s)"
+                aria-label="${escapeHtml(`${emoji} ${count} reaction(s) - ${usersFull || 'aucun nom disponible'}`)}"
+              >
+                <span class="discussion-reaction-emoji" title="${escapeHtml(usersFull || `${count} reaction(s)`)}">${escapeHtml(emoji)}</span>
+                <span class="discussion-reaction-count">${count}</span>
+              </button>
+            `;
+          }).join('')}
+        </div>
+      `;
+    }
+
+    function renderGlobalMessageReactions(messageId, reactions) {
+      const normalized = normalizeMessageReactions(reactions);
+      const entries = Object.entries(normalized);
+      if (entries.length === 0) return '';
+      const currentUserId = String(currentUser?.userId || '').trim();
+      return `
+        <div class="discussion-reactions">
+          ${entries.map(([emoji, userIds]) => {
+            const count = Array.isArray(userIds) ? userIds.length : 0;
+            const mine = Array.isArray(userIds) && userIds.includes(currentUserId);
+            const userNames = resolveReactionUserNames(userIds, 'global');
+            const usersFull = userNames.join(', ');
+            return `
+              <button
+                type="button"
+                class="discussion-reaction-chip ${mine ? 'is-mine' : ''}"
+                onclick="toggleGlobalMessageReaction('${escapeHtml(String(messageId || ''))}', '${escapeHtml(emoji)}')"
+                title="${count} reaction(s)"
+                aria-label="${escapeHtml(`${emoji} ${count} reaction(s) - ${usersFull || 'aucun nom disponible'}`)}"
+              >
+                <span class="discussion-reaction-emoji" title="${escapeHtml(usersFull || `${count} reaction(s)`)}">${escapeHtml(emoji)}</span>
+                <span class="discussion-reaction-count">${count}</span>
+              </button>
+            `;
+          }).join('')}
+        </div>
+      `;
+    }
+
+    function resolveReactionUserName(userId, scope = 'project') {
+      const id = String(userId || '').trim();
+      if (!id) return '';
+      if (id === String(currentUser?.userId || '').trim()) {
+        return String(currentUser?.name || fallbackDirectoryName(id));
+      }
+      if (scope === 'project') {
+        const member = (currentProjectState?.members || []).find((row) => String(row?.userId || '').trim() === id);
+        if (member?.displayName) return String(member.displayName);
+        const fromMessages = (currentProjectState?.messages || []).find((row) => String(row?.author || '').trim() === id && String(row?.authorName || '').trim());
+        if (fromMessages?.authorName) return String(fromMessages.authorName);
+      }
+      const known = knownUsersCache.get(id);
+      if (known?.name) return String(known.name);
+      return fallbackDirectoryName(id);
+    }
+
+    function resolveReactionUserNames(userIds, scope = 'project') {
+      return Array.from(new Set(
+        (Array.isArray(userIds) ? userIds : [])
+          .map((id) => resolveReactionUserName(id, scope))
+          .map((name) => String(name || '').trim())
+          .filter(Boolean)
+      ));
+    }
+
+    function renderProjectReactionPicker(messageId, reactions, isOpen = false) {
+      const id = escapeHtml(String(messageId || ''));
+      const selectedEmoji = getUserReactionEmoji(reactions, currentUser?.userId);
+      return `
+        <div class="discussion-reaction-picker ${isOpen ? 'is-open' : ''}">
+          ${MESSAGE_REACTION_EMOJIS.map((emoji) => `
+            <button type="button" class="discussion-reaction-pick-btn ${selectedEmoji === emoji ? 'is-selected' : ''}" onclick="toggleProjectMessageReaction('${id}', '${escapeHtml(emoji)}')" title="Réagir ${escapeHtml(emoji)}">${escapeHtml(emoji)}</button>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    function renderGlobalReactionPicker(messageId, reactions, isOpen = false) {
+      const id = escapeHtml(String(messageId || ''));
+      const selectedEmoji = getUserReactionEmoji(reactions, currentUser?.userId);
+      return `
+        <div class="discussion-reaction-picker ${isOpen ? 'is-open' : ''}">
+          ${MESSAGE_REACTION_EMOJIS.map((emoji) => `
+            <button type="button" class="discussion-reaction-pick-btn ${selectedEmoji === emoji ? 'is-selected' : ''}" onclick="toggleGlobalMessageReaction('${id}', '${escapeHtml(emoji)}')" title="Réagir ${escapeHtml(emoji)}">${escapeHtml(emoji)}</button>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    function updateProjectReplyComposerUi() {
+      const wrap = document.getElementById('project-message-reply-context');
+      const text = document.getElementById('project-message-reply-context-text');
+      if (!wrap || !text) return;
+      if (!projectMessageReplyTarget) {
+        wrap.classList.add('hidden');
+        text.textContent = '';
+        return;
+      }
+      const author = String(projectMessageReplyTarget.authorName || 'Message').trim() || 'Message';
+      const excerpt = String(projectMessageReplyTarget.excerpt || '').trim() || '(message)';
+      text.textContent = `${author} · ${excerpt}`;
+      wrap.classList.remove('hidden');
+    }
+
+    function updateGlobalReplyComposerUi() {
+      const wrap = document.getElementById('global-message-reply-context');
+      const text = document.getElementById('global-message-reply-context-text');
+      if (!wrap || !text) return;
+      if (!globalMessageReplyTarget) {
+        wrap.classList.add('hidden');
+        text.textContent = '';
+        return;
+      }
+      const author = String(globalMessageReplyTarget.authorName || 'Message').trim() || 'Message';
+      const excerpt = String(globalMessageReplyTarget.excerpt || '').trim() || '(message)';
+      text.textContent = `${author} · ${excerpt}`;
+      wrap.classList.remove('hidden');
+    }
+
+    function getProjectReplyPayload() {
+      if (!projectMessageReplyTarget?.messageId) return null;
+      return {
+        messageId: String(projectMessageReplyTarget.messageId),
+        authorName: String(projectMessageReplyTarget.authorName || '').trim(),
+        excerpt: String(projectMessageReplyTarget.excerpt || '').trim()
+      };
+    }
+
+    function getGlobalReplyPayload() {
+      if (!globalMessageReplyTarget?.messageId) return null;
+      return {
+        messageId: String(globalMessageReplyTarget.messageId),
+        authorName: String(globalMessageReplyTarget.authorName || '').trim(),
+        excerpt: String(globalMessageReplyTarget.excerpt || '').trim()
+      };
+    }
+
     function renderDiscussionMembersPanel(messages) {
       const listEl = document.getElementById('discussion-members-list');
       const countEl = document.getElementById('discussion-members-count');
@@ -22875,6 +23270,15 @@
       if (!container) return;
 
       const allMessages = [...(messages || [])];
+      if (projectMessageReplyTarget?.messageId) {
+        const stillExists = allMessages.some((msg) => String(msg?.messageId || '') === String(projectMessageReplyTarget.messageId));
+        if (!stillExists) projectMessageReplyTarget = null;
+      }
+      if (projectReactionPickerMessageId) {
+        const stillExists = allMessages.some((msg) => String(msg?.messageId || '') === String(projectReactionPickerMessageId));
+        if (!stillExists) projectReactionPickerMessageId = '';
+      }
+      updateProjectReplyComposerUi();
       let filtered = [...allMessages];
       if (messageFilters.query.trim()) {
         const q = messageFilters.query.trim().toLowerCase();
@@ -22957,12 +23361,39 @@
         const avatarHtml = `<span class="discussion-avatar" style="${
           safeAvatarInlineStyle(identity.avatarDataUrl, stringToColor(identity.userId || identity.name || String(idx)))
         }">${escapeHtml(getInitials(identity.name))}</span>`;
-        const timeLabel = new Date(msg.timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        const timeLabel = formatMessageDateTime(msg.timestamp);
         const contentRaw = String(msg.content || '');
         const contentHtml = sanitizeProjectDescriptionHtml(msg.contentHtml || '');
         const displayContent = msg.editedAt
           ? contentRaw.replace(/\n?\s*\(modifi(?:e|é)\)\s*$/i, '').trimEnd()
           : contentRaw;
+        const safeMessageId = escapeHtml(String(msg.messageId || ''));
+        const replyContextHtml = renderMessageReplyContext(msg.replyTo);
+        const reactionsHtml = renderProjectMessageReactions(msg.messageId, msg.reactions);
+        const pickerOpen = String(projectReactionPickerMessageId || '') === String(msg.messageId || '');
+        const replyBtn = `
+          <button
+            onclick="setProjectMessageReply('${safeMessageId}')"
+            class="workspace-action-inline discussion-action-icon-btn"
+            data-action-kind="manage"
+            title="Repondre"
+            aria-label="Repondre"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">reply</span>
+          </button>
+        `;
+        const reactBtn = `
+          <button
+            onclick="toggleProjectReactionPicker('${safeMessageId}')"
+            class="workspace-action-inline discussion-action-icon-btn discussion-react-trigger-btn"
+            data-action-kind="default"
+            title="Reagir"
+            aria-label="Reagir"
+          >
+            <span class="taskmda-action-icon" aria-hidden="true">👍</span>
+            <span class="taskmda-action-label">Reagir</span>
+          </button>
+        `;
 
         return `
           <div id="message-item-${msg.messageId}" class="discussion-message-row ${mine ? 'is-mine' : 'is-other'}">
@@ -22983,11 +23414,16 @@
                     </div>
                   </div>
                 ` : `
+                  ${replyContextHtml}
                   <div class="markdown-content">${contentHtml || renderSafeMarkdown(displayContent)}</div>
                   ${renderMessageAttachments(msg.attachments)}
-                  <div class="discussion-message-actions mt-2 flex items-center gap-2 text-xs">
-                    ${canEditProjectMessage(msg, currentProjectState) ? `<button onclick="startEditMessage('${msg.messageId}')" class="workspace-action-inline" data-action-kind="edit">Editer</button>` : ''}
-                    ${canDeleteProjectMessage(msg, currentProjectState) ? `<button onclick="deleteMessage('${msg.messageId}')" class="workspace-action-inline" data-action-kind="danger">Supprimer</button>` : ''}
+                  ${reactionsHtml}
+                  ${renderProjectReactionPicker(msg.messageId, msg.reactions, pickerOpen)}
+                  <div class="discussion-message-actions flex items-center gap-2 text-xs">
+                    ${replyBtn}
+                    ${reactBtn}
+                    ${canEditProjectMessage(msg, currentProjectState) ? `<button onclick="startEditMessage('${safeMessageId}')" class="workspace-action-inline" data-action-kind="edit">Editer</button>` : ''}
+                    ${canDeleteProjectMessage(msg, currentProjectState) ? `<button onclick="deleteMessage('${safeMessageId}')" class="workspace-action-inline" data-action-kind="danger">Supprimer</button>` : ''}
                   </div>
                 `}
               </div>
@@ -23375,6 +23811,78 @@
       await showProjectDetail(currentProjectId);
     }
 
+    function setProjectMessageReply(messageId) {
+      const id = String(messageId || '').trim();
+      if (!id || !currentProjectState) return;
+      const msg = (currentProjectState.messages || []).find((row) => String(row?.messageId || '') === id);
+      if (!msg) return;
+      projectMessageReplyTarget = {
+        messageId: id,
+        authorName: String(msg.authorName || fallbackDirectoryName(msg.author || '')),
+        excerpt: getMessagePlainSnippet(msg)
+      };
+      updateProjectReplyComposerUi();
+      document.getElementById('message-input')?.focus();
+      ensureMessageRowActionsVisible('messages-container', `message-item-${id}`);
+    }
+
+    function clearProjectMessageReply() {
+      projectMessageReplyTarget = null;
+      updateProjectReplyComposerUi();
+    }
+
+    function toggleProjectReactionPicker(messageId) {
+      const id = String(messageId || '').trim();
+      if (!id) return;
+      projectReactionPickerMessageId = (projectReactionPickerMessageId === id) ? '' : id;
+      if (currentProjectState) {
+        renderMessages(currentProjectState.messages || []);
+        if (projectReactionPickerMessageId) {
+          ensureMessageRowActionsVisible('messages-container', `message-item-${id}`);
+        }
+      }
+    }
+
+    async function toggleProjectMessageReaction(messageId, emoji) {
+      const id = String(messageId || '').trim();
+      const reactionEmoji = String(emoji || '').trim();
+      if (!id || !reactionEmoji || !currentProjectId) return;
+      const state = await getProjectState(currentProjectId);
+      if (!state?.project || !canSendProjectMessage(state)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const msg = (state.messages || []).find((row) => String(row?.messageId || '') === id);
+      if (!msg) return;
+      const userId = String(currentUser?.userId || '').trim();
+      if (!userId) return;
+      const nextReactions = normalizeMessageReactions(msg.reactions);
+      const hadSameReaction = Array.isArray(nextReactions[reactionEmoji]) && nextReactions[reactionEmoji].includes(userId);
+      Object.keys(nextReactions).forEach((key) => {
+        const cleaned = (nextReactions[key] || []).filter((idValue) => String(idValue || '').trim() !== userId);
+        if (cleaned.length > 0) {
+          nextReactions[key] = cleaned;
+        } else {
+          delete nextReactions[key];
+        }
+      });
+      if (!hadSameReaction) {
+        const current = new Set(Array.isArray(nextReactions[reactionEmoji]) ? nextReactions[reactionEmoji] : []);
+        current.add(userId);
+        nextReactions[reactionEmoji] = Array.from(current);
+      }
+      const event = createEvent(
+        EventTypes.UPDATE_MESSAGE,
+        currentProjectId,
+        currentUser.userId,
+        { messageId: id, changes: { reactions: nextReactions } }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [event]);
+      projectReactionPickerMessageId = '';
+      await showProjectDetail(currentProjectId);
+    }
+
     function startEditMessage(messageId) {
       if (!currentProjectState) return;
       const msg = (currentProjectState.messages || []).find(m => m.messageId === messageId);
@@ -23457,6 +23965,9 @@
         editingMessageId = null;
         editingMessageDraft = '';
       }
+      if (String(projectMessageReplyTarget?.messageId || '') === String(messageId || '')) {
+        clearProjectMessageReply();
+      }
       showToast('✅ Message supprimé');
       addNotification('Message', 'Un message a ete supprime', currentProjectId, {
         targetView: 'chat',
@@ -23464,6 +23975,54 @@
       });
       await showProjectDetail(currentProjectId);
     }
+
+    async function deleteProjectConversation() {
+      if (!currentProjectId) return;
+      const state = await getProjectState(currentProjectId);
+      if (!state?.project) return;
+      const allMessages = Array.isArray(state.messages) ? state.messages : [];
+      if (allMessages.length === 0) {
+        showToast('Aucun message à supprimer');
+        return;
+      }
+      const targets = allMessages.filter((msg) => canDeleteProjectMessage(msg, state));
+      if (targets.length === 0) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const noun = targets.length > 1 ? 'messages' : 'message';
+      if (!confirm(`Supprimer ${targets.length} ${noun} de cette conversation ?`)) return;
+      await runWithLoading(async () => {
+        for (const msg of targets) {
+          const event = createEvent(
+            EventTypes.DELETE_MESSAGE,
+            currentProjectId,
+            currentUser.userId,
+            { messageId: msg.messageId }
+          );
+          await publishEvent(event);
+          if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [event]);
+        }
+      });
+      if (editingMessageId) {
+        editingMessageId = null;
+        editingMessageDraft = '';
+      }
+      clearProjectMessageReply();
+      projectReactionPickerMessageId = '';
+      if (targets.length < allMessages.length) {
+        showToast(`${targets.length} message(s) supprimé(s) (droits limités)`);
+      } else {
+        showToast('Conversation supprimée');
+      }
+      await showProjectDetail(currentProjectId);
+    }
+
+    window.setProjectMessageReply = setProjectMessageReply;
+    window.clearProjectMessageReply = clearProjectMessageReply;
+    window.toggleProjectReactionPicker = toggleProjectReactionPicker;
+    window.toggleProjectMessageReaction = toggleProjectMessageReaction;
+    window.deleteProjectConversation = deleteProjectConversation;
 
     // ============================================================================
     // MODULE 6.5: ENCRYPTED DATA PERSISTENCE
@@ -25224,6 +25783,9 @@
     document.getElementById('btn-send-message').addEventListener('click', async () => {
       await sendMessage();
     });
+    document.getElementById('btn-delete-project-conversation')?.addEventListener('click', async () => {
+      await deleteProjectConversation();
+    });
     document.getElementById('btn-close-global-task-details')?.addEventListener('click', () => {
       closeGlobalTaskDetails();
     });
@@ -25805,6 +26367,12 @@
     document.getElementById('btn-close-message-image-preview')?.addEventListener('click', () => {
       closeMessageImagePreview();
     });
+    document.getElementById('btn-clear-project-message-reply')?.addEventListener('click', () => {
+      clearProjectMessageReply();
+    });
+    document.getElementById('btn-clear-global-message-reply')?.addEventListener('click', () => {
+      clearGlobalMessageReply();
+    });
     registerSafeBackdropClose('modal-message-image-preview', () => {
       closeMessageImagePreview();
     });
@@ -25822,6 +26390,27 @@
       const trigger = document.getElementById('btn-toggle-emoji-picker');
       if (panel?.contains(target) || trigger?.contains(target)) return;
       toggleEmojiPicker(false);
+    });
+    document.addEventListener('click', (e) => {
+      const target = e.target;
+      const clickedReactionUi = !!target?.closest?.('.discussion-reaction-picker, .discussion-react-trigger-btn');
+      if (clickedReactionUi) return;
+      let changed = false;
+      if (projectReactionPickerMessageId) {
+        projectReactionPickerMessageId = '';
+        if (currentProjectState) {
+          renderMessages(currentProjectState.messages || []);
+        }
+        changed = true;
+      }
+      if (globalReactionPickerMessageId) {
+        globalReactionPickerMessageId = '';
+        void renderGlobalMessages({ keepThreadAnchor: true });
+        changed = true;
+      }
+      if (changed) {
+        // no-op: UI refresh already dispatched
+      }
     });
     document.addEventListener('click', (e) => {
       if (!projectMessageFilesPanelOpen) return;
@@ -26015,6 +26604,8 @@
     document.getElementById('edit-project-doc-files')?.addEventListener('change', updateEditProjectDocFilesSummary);
 
     initFileDropInputs();
+    updateProjectReplyComposerUi();
+    updateGlobalReplyComposerUi();
     initProjectDescriptionEditors();
     initProjectArchives();
 
@@ -26440,6 +27031,7 @@
       const filesList = document.getElementById('message-files-list');
       const content = applyProfanityFilterToText(getDiscussionInputPlainText(input));
       const contentHtml = getDiscussionInputHtml(input);
+      const replyTo = getProjectReplyPayload();
       messageRenderedDraftHtml = renderSafeMarkdown(content);
       let attachments = [];
 
@@ -26460,7 +27052,9 @@
           content: content,
           contentHtml,
           authorName: currentUser.name,
-          attachments
+          attachments,
+          replyTo,
+          reactions: {}
         }
       );
 
@@ -26480,6 +27074,7 @@
       toggleProjectMessageFilesPanel(false);
       if (filesInput) filesInput.value = '';
       if (filesList) filesList.textContent = 'Aucun fichier sélectionné';
+      clearProjectMessageReply();
       messageRenderedDraftHtml = '';
       if (messageMarkdownDebounceTimer) {
         clearTimeout(messageMarkdownDebounceTimer);

@@ -142,6 +142,7 @@
       return '';
     }
     return items.map((item) => {
+      const rowIdAttr = item?.messageRowId ? ` id="${escapeHtml(item.messageRowId)}"` : '';
       const avatar = renderAvatar({
         className: 'discussion-avatar',
         avatarDataUrl: item?.avatarDataUrl || '',
@@ -150,7 +151,7 @@
         escapeHtml
       });
       return `
-        <div class="discussion-message-row ${item?.mine ? 'is-mine' : 'is-other'}">
+        <div${rowIdAttr} class="discussion-message-row ${item?.mine ? 'is-mine' : 'is-other'}">
           ${avatar}
           <div class="discussion-message-wrap">
             <div class="discussion-message-meta">
@@ -159,8 +160,13 @@
               ${item?.editedLabel ? `<span class="discussion-edited">${escapeHtml(item.editedLabel)}</span>` : ''}
             </div>
             <div class="discussion-bubble ${item?.mine ? 'is-mine' : 'is-other'}">
-              ${item?.editorHtml || `<div class="markdown-content">${item?.contentHtml || renderMarkdown(item?.content || '')}</div>`}
+              ${item?.editorHtml || `
+                ${item?.replyContextHtml || ''}
+                <div class="markdown-content">${item?.contentHtml || renderMarkdown(item?.content || '')}</div>
+              `}
               ${item?.editorHtml ? '' : (item?.attachmentsHtml || '')}
+              ${item?.editorHtml ? '' : (item?.reactionsHtml || '')}
+              ${item?.editorHtml ? '' : (item?.reactionPickerHtml || '')}
               ${item?.footerActionsHtml || ''}
             </div>
           </div>

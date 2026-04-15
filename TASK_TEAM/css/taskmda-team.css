@@ -172,6 +172,10 @@ body {
   overflow-x: hidden;
 }
 
+html:not(.dark) select {
+  background-color: #f8fafe !important;
+}
+
 .app-shell,
 .content,
 .workspace {
@@ -6321,6 +6325,8 @@ html[data-wf-action-buttons="icon"] [data-action-kind="danger"]:hover {
 }
 
 .discussion-message-actions {
+  margin-top: 0 !important;
+  flex-wrap: wrap;
   max-height: 0;
   opacity: 0;
   overflow: hidden;
@@ -6334,6 +6340,205 @@ html[data-wf-action-buttons="icon"] [data-action-kind="danger"]:hover {
   border-radius: 999px;
   padding: 2px 8px;
   font-weight: 700;
+}
+
+.discussion-action-icon-btn {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  font-size: 18px;
+}
+
+.discussion-action-icon-btn .material-symbols-outlined {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.discussion-action-icon-btn .taskmda-action-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.discussion-reaction-picker {
+  display: flex;
+  align-items: center;
+  align-content: flex-start;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 0;
+  max-width: 100%;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transform: translateY(-2px);
+  transition: max-height 0.2s ease, opacity 0.18s ease, transform 0.18s ease;
+}
+
+.discussion-reaction-pick-btn {
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 999px;
+  background: #f8fafc;
+  min-width: 26px;
+  height: 24px;
+  padding: 0 6px;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.discussion-reaction-pick-btn:hover {
+  background: #eef2ff;
+  border-color: #93c5fd;
+}
+
+.discussion-reaction-pick-btn.is-selected {
+  border-color: #1d4ed8;
+  background: #dbeafe;
+  box-shadow: 0 0 0 2px rgba(29, 78, 216, 0.16);
+}
+
+.discussion-reactions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.discussion-reaction-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  border-radius: 999px;
+  background: #ffffff;
+  color: #334155;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.discussion-reaction-emoji {
+  font-size: 17px;
+  line-height: 1;
+}
+
+.discussion-reaction-count {
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.discussion-reaction-users {
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+  max-width: 160px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.discussion-reaction-chip.is-mine {
+  border-color: #1d4ed8;
+  background: #dbeafe;
+  color: #0f2f75;
+  box-shadow: 0 0 0 2px rgba(29, 78, 216, 0.16);
+  transform: translateY(-1px);
+}
+
+.discussion-reply-context {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 8px;
+  border-left: 3px solid rgba(59, 130, 246, 0.45);
+  background: rgba(226, 232, 240, 0.55);
+  border-radius: 10px;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+}
+
+.discussion-reply-context .material-symbols-outlined {
+  font-size: 16px;
+  color: #3b82f6;
+  line-height: 1.1;
+}
+
+.discussion-reply-context-text {
+  min-width: 0;
+}
+
+.discussion-reply-context-author {
+  font-size: 11px;
+  font-weight: 700;
+  color: #1e3a8a;
+  line-height: 1.1;
+}
+
+.discussion-reply-context-excerpt {
+  font-size: 11px;
+  color: #475569;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.discussion-reply-composer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 12px;
+  background: #f8fafc;
+  padding: 7px 10px;
+}
+
+.discussion-reply-composer.hidden {
+  display: none;
+}
+
+.discussion-reply-composer-text {
+  min-width: 0;
+}
+
+.discussion-reply-composer-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  line-height: 1.1;
+}
+
+.discussion-reply-composer-value {
+  font-size: 12px;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.discussion-reply-composer-close {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 8px;
+  background: #ffffff;
+  color: #64748b;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.discussion-reply-composer-close:hover {
+  border-color: #93c5fd;
+  color: #1d4ed8;
 }
 
 .discussion-bubble {
@@ -6359,7 +6564,16 @@ html[data-wf-action-buttons="icon"] [data-action-kind="danger"]:hover {
 
 .discussion-message-row:hover .discussion-message-actions,
 .discussion-message-row:focus-within .discussion-message-actions {
-  max-height: 42px;
+  margin-top: 8px !important;
+  max-height: 96px;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.discussion-reaction-picker.is-open {
+  margin-top: 6px;
+  max-height: 120px;
   opacity: 1;
   pointer-events: auto;
   transform: translateY(0);
@@ -7629,10 +7843,10 @@ html.dark .project-calendar-year-month-selected {
 .discussion-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 10px 14px 14px;
+  padding: 10px 14px 84px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
   min-height: 320px;
   scrollbar-width: thin;
   scrollbar-color: rgba(71, 85, 105, 0.35) transparent;
@@ -7701,7 +7915,7 @@ html.dark .project-calendar-year-month-selected {
 .discussion-message-meta {
   display: flex;
   align-items: center;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 0.5rem;
   margin-bottom: 0.375rem;
   padding-left: 0.25rem;
@@ -7736,7 +7950,7 @@ html.dark .project-calendar-year-month-selected {
   width: fit-content;
   max-width: 100%;
   border-radius: 18px;
-  padding: 10px 16px;
+  padding: 8px 14px;
   line-height: 1.45;
   font-size: 0.95rem;
   box-shadow: none;
@@ -7751,7 +7965,7 @@ html.dark .project-calendar-year-month-selected {
 .discussion-bubble.is-mine {
   background-color: rgb(37 99 235 / 1);
   color: rgb(255 255 255 / 1);
-  padding: 0.625rem 1rem;
+  padding: 0.5rem 0.9rem;
   border-radius: 1rem;
   border-top-right-radius: 0;
   box-shadow:
@@ -7768,6 +7982,28 @@ html.dark .project-calendar-year-month-selected {
 .discussion-bubble.is-mine .text-primary,
 .discussion-bubble.is-mine .text-rose-600 {
   color: #e7efff !important;
+}
+
+.discussion-bubble .markdown-content p {
+  margin: 0 0 0.3rem;
+}
+
+.discussion-bubble .markdown-content p:last-child {
+  margin-bottom: 0;
+}
+
+html[data-wf-action-buttons="icon"] .discussion-action-icon-btn .taskmda-action-label {
+  display: none !important;
+}
+
+html[data-wf-action-buttons="icon"] .discussion-action-icon-btn .taskmda-action-icon {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  font-size: 18px;
+  line-height: 1;
 }
 
 .discussion-bubble textarea {
@@ -8884,6 +9120,70 @@ html.dark #discussion-section #message-input {
 
 html.dark .discussion-rich-input:empty::before {
   color: #6f87b0;
+}
+
+html.dark .discussion-reply-context {
+  border-left-color: rgba(110, 163, 255, 0.7);
+  background: rgba(36, 58, 95, 0.7);
+}
+
+html.dark .discussion-reply-context .material-symbols-outlined {
+  color: #93c5fd;
+}
+
+html.dark .discussion-reply-context-author {
+  color: #dbeafe;
+}
+
+html.dark .discussion-reply-context-excerpt {
+  color: #a7bddf;
+}
+
+html.dark .discussion-reply-composer {
+  border-color: rgba(69, 99, 145, 0.6);
+  background: #142441;
+}
+
+html.dark .discussion-reply-composer-label {
+  color: #9bb2d7;
+}
+
+html.dark .discussion-reply-composer-value {
+  color: #e5efff;
+}
+
+html.dark .discussion-reply-composer-close {
+  border-color: #456391;
+  background: #1b3155;
+  color: #a7bddf;
+}
+
+html.dark .discussion-reaction-pick-btn,
+html.dark .discussion-reaction-chip {
+  border-color: #456391;
+  background: #142441;
+  color: #dbe8ff;
+}
+
+html.dark .discussion-reaction-users {
+  color: #9bb2d7;
+}
+
+html.dark .discussion-reaction-pick-btn.is-selected {
+  border-color: #7eb0ff;
+  background: #234374;
+  box-shadow: 0 0 0 2px rgba(126, 176, 255, 0.2);
+}
+
+html.dark .discussion-reaction-pick-btn:hover {
+  background: #1f3558;
+}
+
+html.dark .discussion-reaction-chip.is-mine {
+  border-color: #7eb0ff;
+  background: #2a4f87;
+  color: #ffffff;
+  box-shadow: 0 0 0 2px rgba(126, 176, 255, 0.2);
 }
 
 html.dark .message-image-preview-shell {

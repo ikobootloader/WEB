@@ -706,6 +706,15 @@
                     </div>
                     <button id="btn-global-delete-conversation" type="button" class="task-action-btn task-action-btn-danger" data-action-kind="danger">Supprimer la conversation</button>
                   </div>
+                    <div id="global-message-reply-context" class="discussion-reply-composer hidden">
+                      <div class="discussion-reply-composer-text">
+                        <p class="discussion-reply-composer-label">Réponse à</p>
+                        <p id="global-message-reply-context-text" class="discussion-reply-composer-value"></p>
+                      </div>
+                      <button id="btn-clear-global-message-reply" type="button" class="discussion-reply-composer-close" aria-label="Annuler la réponse" title="Annuler la réponse">
+                        <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                      </button>
+                    </div>
                     <div class="discussion-composer-input-row">
                     <div id="global-message-input" class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary discussion-rich-input" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="Taper un message..."></div>
                       <div class="discussion-composer-actions">
@@ -1494,6 +1503,16 @@
                       <div class="discussion-composer-strip-target">
                         <p class="text-sm text-slate-500">Réponse aux participants du projet.</p>
                       </div>
+                      <button id="btn-delete-project-conversation" type="button" class="task-action-btn task-action-btn-danger" data-action-kind="danger">Supprimer la conversation</button>
+                    </div>
+                    <div id="project-message-reply-context" class="discussion-reply-composer hidden">
+                      <div class="discussion-reply-composer-text">
+                        <p class="discussion-reply-composer-label">Réponse à</p>
+                        <p id="project-message-reply-context-text" class="discussion-reply-composer-value"></p>
+                      </div>
+                      <button id="btn-clear-project-message-reply" type="button" class="discussion-reply-composer-close" aria-label="Annuler la réponse" title="Annuler la réponse">
+                        <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                      </button>
                     </div>
                     <div class="discussion-composer-input-row">
                       <div id="message-input" class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary discussion-rich-input" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="Taper un message..."></div>
