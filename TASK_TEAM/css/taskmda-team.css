@@ -1680,7 +1680,7 @@ html.dark .header-search-item-badge {
 }
 
 #project-overview-panel {
-  background: #f8f8f6 !important;
+  background: #f8fafe !important;
 }
 
 html.dark #project-overview-panel {
@@ -7819,8 +7819,9 @@ html.dark .project-calendar-year-month-selected {
 .discussion-main {
   display: flex;
   flex-direction: column;
-  min-height: 660px;
-  max-height: min(82vh, 920px);
+  min-height: 500px;
+  max-height: min(68vh, 760px);
+  overflow-y: auto;
 }
 
 .discussion-day-separator {

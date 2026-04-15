@@ -26974,6 +26974,14 @@
         toggle.classList.toggle('bg-slate-100', !nextOpen);
         toggle.classList.toggle('text-slate-700', !nextOpen);
       }
+      if (nextOpen) {
+        const discussionMain = panel.closest('.discussion-main');
+        if (discussionMain) {
+          setTimeout(() => {
+            discussionMain.scrollTop = discussionMain.scrollHeight;
+          }, 50);
+        }
+      }
     }
 
     function renderGlobalEmojiPicker() {
@@ -27015,6 +27023,14 @@
         toggle.classList.toggle('text-white', nextOpen);
         toggle.classList.toggle('bg-slate-100', !nextOpen);
         toggle.classList.toggle('text-slate-700', !nextOpen);
+      }
+      if (nextOpen) {
+        const discussionMain = panel.closest('.discussion-main');
+        if (discussionMain) {
+          setTimeout(() => {
+            discussionMain.scrollTop = discussionMain.scrollHeight;
+          }, 50);
+        }
       }
     }
 

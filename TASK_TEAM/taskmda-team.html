@@ -1137,10 +1137,6 @@
               <h2 id="project-title" class="section-title text-3xl font-extrabold mb-2"></h2>
                 <div class="flex items-center gap-2 flex-wrap">
                 <button id="btn-edit-project" class="task-action-btn" data-action-kind="edit">Modifier</button>
-                <button id="btn-archive-project" class="task-action-btn task-action-btn-warn hidden" data-action-kind="warn">
-                  <span class="material-symbols-outlined">archive</span>
-                  <span>Archiver</span>
-                </button>
                 <button id="btn-restore-project" class="task-action-btn task-action-btn-success hidden" data-action-kind="success">
                   <span class="material-symbols-outlined">unarchive</span>
                   <span>Restaurer</span>
@@ -1148,6 +1144,10 @@
                 <button id="btn-delete-project" class="task-action-btn task-action-btn-danger" data-action-kind="danger">Supprimer</button>
                 <button id="btn-email-project-status" class="task-action-btn task-action-btn-subtle" data-action-kind="notify"><span class="material-symbols-outlined">mail</span> Email statut projet</button>
                 <button id="btn-email-project-complete" class="task-action-btn task-action-btn-subtle" data-action-kind="notify"><span class="material-symbols-outlined">mark_email_read</span> Email projet achevé</button>
+                <button id="btn-archive-project" class="task-action-btn task-action-btn-warn hidden" data-action-kind="warn">
+                  <span class="material-symbols-outlined">archive</span>
+                  <span>Archiver</span>
+                </button>
                 </div>
             </div>
             <div class="flex items-center gap-4 text-sm text-slate-500 mb-3">
@@ -1492,7 +1492,9 @@
                   <input id="chat-filter-mine" type="checkbox">
                   <span>Mes messages uniquement</span>
                 </label>
-                <button id="chat-filter-reset" class="px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold">Réinitialiser</button>
+                <button id="chat-filter-reset" class="task-action-btn task-action-btn-subtle" data-action-kind="default" aria-label="Réinitialiser les filtres" title="Réinitialiser les filtres">
+                  <span class="material-symbols-outlined taskmda-action-icon">restart_alt</span>
+                </button>
               </div>
               <div class="discussion-layout">
                 <section class="discussion-main">
