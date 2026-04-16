@@ -25469,6 +25469,172 @@
       openGlobalTaskCreateModalWithStatus('todo');
     });
 
+    // Import tasks button
+    document.getElementById('btn-global-import-tasks')?.addEventListener('click', () => {
+      document.getElementById('global-import-tasks-file')?.click();
+    });
+
+    document.getElementById('global-import-tasks-file')?.addEventListener('change', async (e) => {
+      const file = e.target?.files?.[0];
+      if (!file) return;
+
+      try {
+        const content = await file.text();
+        const data = JSON.parse(content);
+        await importTasksFromJSON(data);
+        e.target.value = ''; // Reset input
+      } catch (error) {
+        showToast(`❌ Erreur d'import: ${error.message}`);
+        e.target.value = '';
+      }
+    });
+
+    async function importTasksFromJSON(data) {
+      if (!data) {
+        throw new Error('Fichier JSON vide ou invalide');
+      }
+
+      // Detect format: array = project_manager_variant or Nexus MDA export
+      const tasks = Array.isArray(data) ? data : (data.tasks || []);
+      if (tasks.length === 0) {
+        showToast('⚠️ Aucune tâche à importer');
+        return;
+      }
+
+      let imported = 0;
+      let skipped = 0;
+
+      for (const taskData of tasks) {
+        try {
+          // Detect if it's project_manager_variant format
+          const isVariantFormat = taskData.requester || taskData.type || taskData.customRef ||
+                                   (taskData.status && ['en-cours', 'en-attente', 'realise'].includes(taskData.status));
+
+          let nexusTask;
+          if (isVariantFormat) {
+            // Convert from project_manager_variant to Nexus MDA format
+            nexusTask = convertVariantTaskToNexus(taskData);
+          } else {
+            // Already in Nexus format or compatible
+            nexusTask = normalizeNexusTask(taskData);
+          }
+
+          // Check if task already exists (by id or title + createdAt)
+          const existing = await getDecrypted('globalTasks', nexusTask.id, 'id');
+          if (existing) {
+            skipped++;
+            continue;
+          }
+
+          await putEncrypted('globalTasks', nexusTask, 'id');
+          imported++;
+        } catch (error) {
+          console.error('Error importing task:', error, taskData);
+          skipped++;
+        }
+      }
+
+      if (imported > 0) {
+        await renderGlobalTasks();
+        await refreshStats();
+      }
+
+      showToast(`✅ Import terminé: ${imported} tâche(s) importée(s)${skipped > 0 ? `, ${skipped} ignorée(s)` : ''}`);
+    }
+
+    function convertVariantTaskToNexus(variantTask) {
+      // Map project_manager_variant format to Nexus MDA format
+      const statusMap = {
+        'en-cours': 'en-cours',
+        'en-attente': 'suspendu',
+        'realise': 'termine'
+      };
+
+      const urgencyMap = {
+        'low': 'low',
+        'medium': 'medium',
+        'high': 'high'
+      };
+
+      // Extract plain text from HTML comment
+      let description = '';
+      if (variantTask.comment) {
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = variantTask.comment;
+        description = tempDiv.textContent || tempDiv.innerText || '';
+      }
+
+      // Convert recurrence format if present
+      let recurring = null;
+      if (variantTask.recurrence) {
+        recurring = {
+          type: variantTask.recurrence.type, // weekly, monthly, yearly
+          interval: variantTask.recurrence.interval || 1,
+          days: variantTask.recurrence.days || [],
+          endType: variantTask.recurrence.endDate ? 'date' : 'never',
+          endDate: variantTask.recurrence.endDate || null
+        };
+      }
+
+      const nexusTask = {
+        id: uuidv4(), // Generate new UUID
+        title: variantTask.title || 'Tâche importée',
+        assignee: variantTask.requester || '',
+        assigneeUserId: null,
+        assignees: variantTask.requester ? [{ userId: null, name: variantTask.requester, email: '' }] : [],
+        description: description,
+        descriptionHtml: variantTask.comment || '',
+        requestDate: null,
+        dueDate: variantTask.deadline || null,
+        status: statusMap[variantTask.status] || 'todo',
+        urgency: urgencyMap[variantTask.urgency] || 'medium',
+        subtasks: [],
+        attachments: variantTask.attachments || [],
+        theme: variantTask.type || 'Importé',
+        groupId: null,
+        groupName: null,
+        sharingMode: 'private',
+        recurring: recurring,
+        createdAt: variantTask.id || Date.now(), // Use original id as createdAt if numeric
+        updatedAt: Date.now(),
+        archivedAt: variantTask.archivedAt || (variantTask.status === 'realise' ? Date.now() : null)
+      };
+
+      // Add customRef as metadata if present
+      if (variantTask.customRef) {
+        nexusTask.metadata = { customRef: variantTask.customRef };
+      }
+
+      return nexusTask;
+    }
+
+    function normalizeNexusTask(taskData) {
+      // Ensure required fields are present
+      return {
+        id: taskData.id || uuidv4(),
+        title: taskData.title || 'Tâche importée',
+        assignee: taskData.assignee || '',
+        assigneeUserId: taskData.assigneeUserId || null,
+        assignees: taskData.assignees || [],
+        description: taskData.description || '',
+        descriptionHtml: taskData.descriptionHtml || '',
+        requestDate: taskData.requestDate || null,
+        dueDate: taskData.dueDate || null,
+        status: taskData.status || 'todo',
+        urgency: taskData.urgency || 'medium',
+        subtasks: taskData.subtasks || [],
+        attachments: taskData.attachments || [],
+        theme: taskData.theme || 'Général',
+        groupId: taskData.groupId || null,
+        groupName: taskData.groupName || null,
+        sharingMode: taskData.sharingMode || 'private',
+        recurring: taskData.recurring || null,
+        createdAt: taskData.createdAt || Date.now(),
+        updatedAt: taskData.updatedAt || Date.now(),
+        archivedAt: taskData.archivedAt || null
+      };
+    }
+
     document.getElementById('btn-cancel-task').addEventListener('click', async () => {
       await releaseActiveTaskEditLock();
       document.getElementById('modal-new-task').classList.add('hidden');

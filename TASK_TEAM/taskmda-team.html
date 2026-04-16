@@ -430,6 +430,11 @@
                   <span class="material-symbols-outlined text-base">category</span>
                   <span class="taskmda-action-label">Thématiques</span>
                 </button>
+                <button id="btn-global-import-tasks" class="px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm font-semibold inline-flex items-center justify-center gap-2 hover:bg-slate-50" title="Importer des tâches depuis un fichier JSON" data-action-kind="default" aria-label="Importer des tâches">
+                  <span class="material-symbols-outlined text-base taskmda-action-icon">upload_file</span>
+                  <span class="taskmda-action-label">Importer</span>
+                </button>
+                <input type="file" id="global-import-tasks-file" accept="application/json,.json" class="hidden" aria-label="Sélectionner fichier JSON à importer" />
                 <button id="btn-global-add-task" class="btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold inline-flex items-center justify-center gap-2 taskmda-create-cta" data-action-kind="create" data-action-label="Nouvelle tâche hors projet" aria-label="Nouvelle tâche hors projet">
                   <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">add_circle</span>
                   <span class="taskmda-action-label" id="btn-global-add-task-text">Nouvelle tâche hors projet</span>
