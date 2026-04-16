@@ -6755,63 +6755,64 @@
         const creatorTooltip = `Projet cree par ${projectCreatorName}`;
 
         return `
-          <div class="project-card workspace-card-shell project-card-interactive rounded-xl p-6 cursor-pointer ${isListView ? 'project-card-list' : ''}" onclick="showProjectDetail('${project.projectId}')">
-            <div class="flex items-start justify-between mb-2 gap-3">
-              <h4 class="workspace-card-title text-xl font-bold font-headline flex items-center gap-2">
-                <span class="material-symbols-outlined text-primary text-lg">${icon}</span>
-                <span>${project.name}</span>
-              </h4>
-              <div class="flex items-center gap-1">${badge}${statusBadge}</div>
+          <div class="project-card workspace-card-shell project-card-interactive rounded-xl cursor-pointer ${isListView ? 'project-card-list' : ''}" onclick="showProjectDetail('${project.projectId}')">
+            <div class="project-card-header">
+              <span class="material-symbols-outlined text-slate-400">lock</span>
+              <div class="project-card-badges">${badge}${statusBadge}</div>
             </div>
-            ${isListView ? `<p class="workspace-card-subtitle text-sm mb-4 line-clamp-2">${escapeHtml(project._descriptionCard || 'Aucune description')}</p>` : ''}
-            <div class="card-hover-actions">
-              <button
-                class="card-quick-btn card-quick-btn-primary"
-                onclick="event.stopPropagation(); showProjectDetail('${project.projectId}')"
-                title="Ouvrir le projet"
-              >
-                <span class="material-symbols-outlined">open_in_new</span>
-                <span>Ouvrir</span>
-              </button>
-              <button
-                class="card-quick-btn"
-                ${canCreateTask ? '' : 'disabled title="Réservé aux membres autorisés"'}
-                onclick="event.stopPropagation(); quickAddTaskToProject('${project.projectId}')"
-              >
-                <span class="material-symbols-outlined">add_task</span>
-                <span>Nouvelle tâche</span>
-              </button>
-              <button
-                class="card-quick-btn"
-                ${canEdit ? '' : 'disabled title="Réservé aux Propriétaires/Managers"'}
-                onclick="event.stopPropagation(); openEditProjectModalFromDashboard('${project.projectId}')"
-              >
-                <span class="material-symbols-outlined">edit</span>
-                <span>Modifier</span>
-              </button>
-              <button
-                class="card-quick-btn card-quick-btn-danger"
-                ${canDelete ? '' : 'disabled title="Réservé au Propriétaire"'}
-                onclick="event.stopPropagation(); deleteProjectFromDashboard('${project.projectId}')"
-              >
-                <span class="material-symbols-outlined">delete</span>
-                <span>Supprimer</span>
-              </button>
-            </div>
-            <div class="flex items-center justify-between gap-2">
-              <div class="flex items-center gap-2 text-sm text-gray-500">
-                <span class="material-symbols-outlined text-lg">calendar_today</span>
-                <span>${new Date(project.createdAt).toLocaleDateString('fr-FR')}</span>
+            <div class="project-card-body">
+              <h4 class="workspace-card-title text-lg font-bold font-headline mb-3">${project.name}</h4>
+              <div class="flex items-center justify-between gap-3 mb-3">
+                <div class="flex items-center gap-2 text-sm text-slate-600">
+                  <span class="material-symbols-outlined text-base">calendar_today</span>
+                  <span>${new Date(project.createdAt).toLocaleDateString('fr-FR')}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span title="${escapeHtml(creatorTooltip)}" aria-label="${escapeHtml(creatorTooltip)}">${participantsHtml}</span>
+                  <span class="text-xs font-medium text-slate-600">${isPrivate ? 'Visibilité privée' : 'Visibilité collaborative'}</span>
+                </div>
               </div>
-              <div class="flex items-center gap-2">
-                <span title="${escapeHtml(creatorTooltip)}" aria-label="${escapeHtml(creatorTooltip)}">${participantsHtml}</span>
-                <span class="text-[11px] font-semibold text-slate-500">${isPrivate ? 'Visibilité privée' : 'Visibilité collaborative'}</span>
+              <div class="card-hover-actions">
+                <button
+                  class="card-quick-btn card-quick-btn-primary"
+                  onclick="event.stopPropagation(); showProjectDetail('${project.projectId}')"
+                  title="Ouvrir le projet"
+                >
+                  <span class="material-symbols-outlined">open_in_new</span>
+                  <span>Ouvrir</span>
+                </button>
+                <button
+                  class="card-quick-btn"
+                  ${canCreateTask ? '' : 'disabled title="Réservé aux membres autorisés"'}
+                  onclick="event.stopPropagation(); quickAddTaskToProject('${project.projectId}')"
+                >
+                  <span class="material-symbols-outlined">add_task</span>
+                  <span>Nouvelle tâche</span>
+                </button>
+                <button
+                  class="card-quick-btn"
+                  ${canEdit ? '' : 'disabled title="Réservé aux Propriétaires/Managers"'}
+                  onclick="event.stopPropagation(); openEditProjectModalFromDashboard('${project.projectId}')"
+                >
+                  <span class="material-symbols-outlined">edit</span>
+                  <span>Modifier</span>
+                </button>
+                <button
+                  class="card-quick-btn card-quick-btn-danger"
+                  ${canDelete ? '' : 'disabled title="Réservé au Propriétaire"'}
+                  onclick="event.stopPropagation(); deleteProjectFromDashboard('${project.projectId}')"
+                >
+                  <span class="material-symbols-outlined">delete</span>
+                  <span>Supprimer</span>
+                </button>
               </div>
             </div>
-            <div class="mt-4 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-              <div class="h-full rounded-full ${progressClass}"></div>
+            <div class="project-card-footer">
+              <div class="project-progress-bar">
+                <div class="project-progress-fill ${progressClass}"></div>
+              </div>
+              <div class="project-status-label">${status}</div>
             </div>
-            <div class="mt-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">${status}</div>
           </div>
         `;
       }).join('');
@@ -7078,63 +7079,64 @@
         const creatorTooltip = `Projet cree par ${projectCreatorName}`;
 
         return `
-          <div class="project-card workspace-card-shell project-card-interactive rounded-xl p-6 cursor-pointer ${isListView ? 'project-card-list' : ''}" onclick="showProjectDetail('${project.projectId}')">
-            <div class="flex items-start justify-between mb-2 gap-3">
-              <h4 class="workspace-card-title text-xl font-bold font-headline flex items-center gap-2">
-                <span class="material-symbols-outlined text-primary text-lg">${icon}</span>
-                <span>${project.name}</span>
-              </h4>
-              <div class="flex items-center gap-1">${badge}${statusBadge}</div>
+          <div class="project-card workspace-card-shell project-card-interactive rounded-xl cursor-pointer ${isListView ? 'project-card-list' : ''}" onclick="showProjectDetail('${project.projectId}')">
+            <div class="project-card-header">
+              <span class="material-symbols-outlined text-slate-400">lock</span>
+              <div class="project-card-badges">${badge}${statusBadge}</div>
             </div>
-            ${isListView ? `<p class="workspace-card-subtitle text-sm mb-4 line-clamp-2">${escapeHtml(project._descriptionCard || 'Aucune description')}</p>` : ''}
-            <div class="card-hover-actions">
-              <button
-                class="card-quick-btn card-quick-btn-primary"
-                onclick="event.stopPropagation(); showProjectDetail('${project.projectId}')"
-                title="Ouvrir le projet"
-              >
-                <span class="material-symbols-outlined">open_in_new</span>
-                <span>Ouvrir</span>
-              </button>
-              <button
-                class="card-quick-btn"
-                ${canCreateTask ? '' : 'disabled title="Réservé aux membres autorisés"'}
-                onclick="event.stopPropagation(); quickAddTaskToProject('${project.projectId}')"
-              >
-                <span class="material-symbols-outlined">add_task</span>
-                <span>Nouvelle tâche</span>
-              </button>
-              <button
-                class="card-quick-btn"
-                ${canEdit ? '' : 'disabled title="Réservé aux Propriétaires/Managers"'}
-                onclick="event.stopPropagation(); openEditProjectModalFromDashboard('${project.projectId}')"
-              >
-                <span class="material-symbols-outlined">edit</span>
-                <span>Modifier</span>
-              </button>
-              <button
-                class="card-quick-btn card-quick-btn-danger"
-                ${canDelete ? '' : 'disabled title="Réservé au Propriétaire"'}
-                onclick="event.stopPropagation(); deleteProjectFromDashboard('${project.projectId}')"
-              >
-                <span class="material-symbols-outlined">delete</span>
-                <span>Supprimer</span>
-              </button>
-            </div>
-            <div class="flex items-center justify-between gap-2">
-              <div class="flex items-center gap-2 text-sm text-gray-500">
-                <span class="material-symbols-outlined text-lg">calendar_today</span>
-                <span>${new Date(project.createdAt).toLocaleDateString('fr-FR')}</span>
+            <div class="project-card-body">
+              <h4 class="workspace-card-title text-lg font-bold font-headline mb-3">${project.name}</h4>
+              <div class="flex items-center justify-between gap-3 mb-3">
+                <div class="flex items-center gap-2 text-sm text-slate-600">
+                  <span class="material-symbols-outlined text-base">calendar_today</span>
+                  <span>${new Date(project.createdAt).toLocaleDateString('fr-FR')}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span title="${escapeHtml(creatorTooltip)}" aria-label="${escapeHtml(creatorTooltip)}">${participantsHtml}</span>
+                  <span class="text-xs font-medium text-slate-600">${isPrivate ? 'Visibilité privée' : 'Visibilité collaborative'}</span>
+                </div>
               </div>
-              <div class="flex items-center gap-2">
-                <span title="${escapeHtml(creatorTooltip)}" aria-label="${escapeHtml(creatorTooltip)}">${participantsHtml}</span>
-                <span class="text-[11px] font-semibold text-slate-500">${isPrivate ? 'Visibilité privée' : 'Visibilité collaborative'}</span>
+              <div class="card-hover-actions">
+                <button
+                  class="card-quick-btn card-quick-btn-primary"
+                  onclick="event.stopPropagation(); showProjectDetail('${project.projectId}')"
+                  title="Ouvrir le projet"
+                >
+                  <span class="material-symbols-outlined">open_in_new</span>
+                  <span>Ouvrir</span>
+                </button>
+                <button
+                  class="card-quick-btn"
+                  ${canCreateTask ? '' : 'disabled title="Réservé aux membres autorisés"'}
+                  onclick="event.stopPropagation(); quickAddTaskToProject('${project.projectId}')"
+                >
+                  <span class="material-symbols-outlined">add_task</span>
+                  <span>Nouvelle tâche</span>
+                </button>
+                <button
+                  class="card-quick-btn"
+                  ${canEdit ? '' : 'disabled title="Réservé aux Propriétaires/Managers"'}
+                  onclick="event.stopPropagation(); openEditProjectModalFromDashboard('${project.projectId}')"
+                >
+                  <span class="material-symbols-outlined">edit</span>
+                  <span>Modifier</span>
+                </button>
+                <button
+                  class="card-quick-btn card-quick-btn-danger"
+                  ${canDelete ? '' : 'disabled title="Réservé au Propriétaire"'}
+                  onclick="event.stopPropagation(); deleteProjectFromDashboard('${project.projectId}')"
+                >
+                  <span class="material-symbols-outlined">delete</span>
+                  <span>Supprimer</span>
+                </button>
               </div>
             </div>
-            <div class="mt-4 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-              <div class="h-full rounded-full ${progressClass}"></div>
+            <div class="project-card-footer">
+              <div class="project-progress-bar">
+                <div class="project-progress-fill ${progressClass}"></div>
+              </div>
+              <div class="project-status-label">${status}</div>
             </div>
-            <div class="mt-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">${status}</div>
           </div>
         `;
       }).join('');
@@ -16115,7 +16117,7 @@
           title: 'Aucun document trouvé',
           text: 'Importez un document transverse ou modifiez vos filtres.',
           ctaLabel: 'Ajouter un document',
-          ctaOnclick: "document.getElementById('btn-global-doc-add')?.click()"
+          ctaOnclick: "(function(){const btn=document.getElementById('btn-toggle-docs-upload');const card=btn?.closest('.docs-upload-card');if(btn&&btn.getAttribute('aria-expanded')==='false'){btn.click();if(card){card.classList.add('highlight-flash');setTimeout(()=>card.classList.remove('highlight-flash'),1200);}}window.scrollTo({top:0,behavior:'smooth'});})()"
         });
         return;
       }

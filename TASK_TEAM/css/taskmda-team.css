@@ -1756,6 +1756,81 @@ html.dark .project-admin-block {
   border-top: 3px solid #ff9b40;
   box-shadow: var(--ui-card-shadow);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.project-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 1rem 1rem 0.5rem 1rem;
+}
+
+.project-card-header .material-symbols-outlined {
+  font-size: 1.25rem;
+}
+
+.project-card-badges {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.project-card-body {
+  flex: 1;
+  padding: 0 1rem 0.75rem 1rem;
+  gap: 0.75rem;
+}
+
+.project-card-footer {
+  padding: 0rem 1rem 1rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: rgba(0, 0, 0, 0.01);
+}
+
+.project-progress-bar {
+  width: 100%;
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.project-progress-fill {
+  height: 100%;
+  background: #3b82f6;
+  border-radius: 9999px;
+  transition: width 0.3s ease;
+}
+
+.project-progress-fill.progress-low {
+  background: #ef4444;
+}
+
+.project-progress-fill.progress-medium {
+  background: #f59e0b;
+}
+
+.project-progress-fill.progress-high {
+  background: #10b981;
+}
+
+.project-progress-fill.progress-complete {
+  background: #22c55e;
+}
+
+.project-status-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .projects-filter-count-active {
@@ -6757,7 +6832,6 @@ html[data-wf-action-buttons="icon"] [data-action-kind="danger"]:hover {
 @media (hover: hover) and (min-width: 768px) {
   .project-card-interactive {
     position: relative;
-    padding-bottom: 56px;
   }
 
   .project-card-interactive .card-hover-actions {
@@ -9605,6 +9679,23 @@ html[data-wf-action-buttons="icon"] #btn-global-doc-add:focus-visible {
 .docs-search-card {
   background: #f8fafc;
   border-color: #e2e8f0;
+  transition: background-color 0.6s ease;
+}
+
+@keyframes docs-upload-highlight {
+  0% {
+    background: #f8fafc;
+  }
+  50% {
+    background: #dbeafe;
+  }
+  100% {
+    background: #f8fafc;
+  }
+}
+
+.docs-upload-card.highlight-flash {
+  animation: docs-upload-highlight 1.2s ease-in-out;
 }
 
 .docs-icon-circle {
@@ -9653,6 +9744,22 @@ html.dark .docs-upload-card,
 html.dark .docs-search-card {
   background: #0f1d35;
   border-color: rgba(138, 161, 202, 0.28);
+}
+
+@keyframes docs-upload-highlight-dark {
+  0% {
+    background: #0f1d35;
+  }
+  50% {
+    background: #1e3a5f;
+  }
+  100% {
+    background: #0f1d35;
+  }
+}
+
+html.dark .docs-upload-card.highlight-flash {
+  animation: docs-upload-highlight-dark 1.2s ease-in-out;
 }
 
 html.dark .docs-dropzone-border {
