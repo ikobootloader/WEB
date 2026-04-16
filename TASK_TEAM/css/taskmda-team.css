@@ -3040,6 +3040,16 @@ html[data-wf-action-buttons="icon"] .taskmda-create-cta:not(#btn-add-task):not(#
   box-shadow: none;
 }
 
+#global-tasks-view-tabs .project-view-tab {
+  font-size: 0.875rem;
+}
+
+#global-calendar-view-grid,
+#global-calendar-view-year,
+#global-calendar-view-list {
+  font-size: 0.875rem;
+}
+
 #project-work-panel .project-view-tab:focus-visible {
   outline: 2px solid rgba(26, 66, 138, 0.38);
   outline-offset: 1px;
@@ -4857,7 +4867,7 @@ select,
 textarea {
   background: var(--ui-field-bg);
   color: var(--ui-field-text);
-  border-color: var(--ui-field-border) !important;
+  border-color: #999999 !important;
   transition: border-color 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease;
 }
 
@@ -9588,6 +9598,119 @@ html[data-wf-action-buttons="icon"] #btn-global-doc-add:focus-visible {
   background: #0a377f !important;
   color: #ffffff !important;
   box-shadow: 0 8px 18px rgba(0, 43, 107, 0.24) !important;
+}
+
+/* Nouveaux styles Documents */
+.docs-upload-card,
+.docs-search-card {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.docs-icon-circle {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.docs-dropzone-border {
+  border: 2px dashed #cbd5e1;
+  background: #ffffff;
+}
+
+.docs-results-container {
+  min-height: 200px;
+  border: 2px dashed #e2e8f0;
+  border-radius: 12px;
+  padding: 32px;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.docs-results-container.has-results {
+  border-style: solid;
+  border-width: 1px;
+  padding: 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+#global-doc-files-label {
+  color: #64748b;
+}
+
+html.dark .docs-upload-card,
+html.dark .docs-search-card {
+  background: #0f1d35;
+  border-color: rgba(138, 161, 202, 0.28);
+}
+
+html.dark .docs-dropzone-border {
+  border-color: rgba(138, 161, 202, 0.3);
+  background: #15213a;
+}
+
+html.dark .docs-results-container {
+  border-color: rgba(138, 161, 202, 0.24);
+  background: #15213a;
+}
+
+html.dark #global-doc-files-label {
+  color: #94a3b8;
+}
+
+.global-doc-drop-host.is-drag-over {
+  border-color: #1a428a;
+  background: #eaf1ff;
+  box-shadow: inset 0 0 0 1px rgba(26, 66, 138, 0.22);
+}
+
+html.dark .global-doc-drop-host.is-drag-over {
+  border-color: #7aa2ff;
+  background: rgba(122, 162, 255, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(122, 162, 255, 0.35);
+}
+
+.docs-header-toggle {
+  padding: 0;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.docs-header-toggle:hover {
+  background: rgba(226, 232, 240, 0.5);
+  border-radius: 8px;
+}
+
+.docs-header-toggle .material-symbols-outlined {
+  font-size: 24px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.docs-header-toggle h3 {
+  margin: 0;
+}
+
+html.dark .docs-header-toggle:hover {
+  background: rgba(148, 163, 184, 0.15);
+}
+
+html.dark .docs-header-toggle .material-symbols-outlined {
+  color: #94a3b8;
 }
 
 .project-doc-upload-grid {

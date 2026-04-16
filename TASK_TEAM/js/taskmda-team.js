@@ -16109,6 +16109,7 @@
         .filter(doc => !themeFilter.trim() || matchesQuery([doc.theme], themeFilter));
 
       if (filtered.length === 0) {
+        container.classList.remove('has-results');
         container.innerHTML = buildWorkspaceEmptyState({
           icon: 'description',
           title: 'Aucun document trouvé',
@@ -16118,6 +16119,8 @@
         });
         return;
       }
+
+      container.classList.add('has-results');
 
       container.innerHTML = filtered.map(doc => `
           <div class="doc-card workspace-card-shell bg-surface-container-low rounded-xl p-4">
@@ -16680,6 +16683,8 @@
 
       if (filesInput) filesInput.value = '';
       if (modeInput) modeInput.value = 'private';
+      const label = document.getElementById('global-doc-files-label');
+      if (label) label.textContent = 'Aucun fichier choisi';
       });
       showToast('Documents hors projet ajoutés');
       addNotification('Documents', `${files.length} document(s) hors projet ajouté(s)`, null);

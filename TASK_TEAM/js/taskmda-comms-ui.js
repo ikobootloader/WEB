@@ -132,6 +132,34 @@
       opts.addStandaloneDocuments?.();
     });
 
+    document.getElementById('global-doc-files')?.addEventListener('change', (e) => {
+      const files = e.target?.files || [];
+      const label = document.getElementById('global-doc-files-label');
+      if (label) {
+        if (files.length === 0) {
+          label.textContent = 'Aucun fichier choisi';
+        } else if (files.length === 1) {
+          label.textContent = files[0].name;
+        } else {
+          label.textContent = `${files.length} fichiers sélectionnés`;
+        }
+      }
+    });
+
+    document.getElementById('btn-toggle-docs-upload')?.addEventListener('click', () => {
+      const body = document.getElementById('docs-upload-body');
+      const btn = document.getElementById('btn-toggle-docs-upload');
+      const icon = document.getElementById('docs-upload-toggle-icon');
+      if (!body || !btn) return;
+      const isExpanded = btn.getAttribute('aria-expanded') === 'true';
+      btn.setAttribute('aria-expanded', isExpanded ? 'false' : 'true');
+      btn.setAttribute('title', isExpanded ? 'Développer' : 'Réduire');
+      body.classList.toggle('hidden', isExpanded);
+      if (icon) {
+        icon.textContent = isExpanded ? 'expand_more' : 'expand_less';
+      }
+    });
+
     document.getElementById('global-message-contact-search')?.addEventListener('input', async () => {
       if (typeof opts.setGlobalMessageContactsRenderLimit === 'function') {
         opts.setGlobalMessageContactsRenderLimit(opts.initialGlobalMessageContactsRenderLimit || 0);

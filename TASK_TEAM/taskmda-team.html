@@ -968,24 +968,55 @@
           </div>
 
             <div id="global-docs-section" class="panel p-3 hidden">
-              <div class="mb-4 grid grid-cols-1 md:grid-cols-3 gap-2 global-doc-toolbar">
-                <p class="md:col-span-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Recherche</p>
-                <input id="global-doc-search" type="text" placeholder="Recherche document/projet/thématique" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                <input id="global-doc-theme" type="text" placeholder="Thématique (hors projet)" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                <div class="global-doc-drop-host md:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-2 mt-1">
-                <select id="global-doc-mode" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                  <option value="private">Privée</option>
-                  <option value="shared">Collaborative</option>
-                </select>
-                <input id="global-doc-files" type="file" multiple class="js-file-drop-input px-3 py-2 border border-slate-300 rounded-lg bg-slate-50 text-sm" data-drop-host=".global-doc-drop-host" data-drop-label="Deposez des documents hors projet ici">
-                <button id="btn-global-doc-add" class="btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold taskmda-create-cta" data-action-kind="create" data-action-label="Ajouter document hors projet" aria-label="Ajouter document hors projet">
-                  <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">add_circle</span>
-                  <span class="taskmda-action-label">Ajouter doc hors projet</span>
+              <!-- Section Charger un document -->
+              <div class="docs-upload-card mb-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <button id="btn-toggle-docs-upload" type="button" class="docs-header-toggle flex items-center justify-between gap-3 mb-3 w-full" aria-expanded="false" aria-controls="docs-upload-body" title="Développer">
+                  <div class="flex items-center gap-3">
+                    <div class="docs-icon-circle">
+                      <span class="material-symbols-outlined text-white">folder</span>
+                    </div>
+                    <h3 class="text-lg font-bold text-slate-800">Charger un document</h3>
+                  </div>
+                  <span id="docs-upload-toggle-icon" class="material-symbols-outlined text-slate-500">expand_more</span>
                 </button>
+                <div id="docs-upload-body" class="global-doc-drop-host docs-dropzone-border rounded-lg p-4 mb-3 hidden">
+                  <div class="grid grid-cols-1 md:grid-cols-[auto_1fr_auto] gap-3 items-center mb-3">
+                    <label for="global-doc-files" class="btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold cursor-pointer inline-flex items-center gap-2">
+                      <span class="material-symbols-outlined text-[18px]">add_circle</span>
+                      <span>Sélect. fichiers</span>
+                    </label>
+                    <input id="global-doc-files" type="file" multiple class="hidden js-file-drop-input" data-drop-host=".global-doc-drop-host" data-drop-label="Deposez des documents hors projet ici" data-drop-decor="false">
+                    <span id="global-doc-files-label" class="text-sm text-slate-500">Aucun fichier choisi</span>
+                    <select id="global-doc-mode" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                      <option value="private">Privée</option>
+                      <option value="shared">Collaborative</option>
+                    </select>
+                  </div>
+                  <p class="text-sm text-slate-500 mb-3">Déposez des documents hors projet ici...</p>
+                  <div class="text-right">
+                    <button id="btn-global-doc-add" class="btn-primary px-5 py-2 rounded-lg text-white text-sm font-semibold inline-flex items-center gap-2">
+                      <span class="material-symbols-outlined text-[18px]">upload</span>
+                      <span>Charger le document</span>
+                    </button>
+                  </div>
                 </div>
-                <button id="global-doc-reset" class="px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold">Réinitialiser</button>
-            </div>
-            <div id="global-docs-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+              </div>
+
+              <!-- Section Rechercher des documents -->
+              <div class="docs-search-card rounded-xl border border-slate-200 bg-slate-50 p-4 mb-4">
+                <div class="flex items-center gap-3 mb-3">
+                  <div class="docs-icon-circle">
+                    <span class="material-symbols-outlined text-white">search</span>
+                  </div>
+                  <h3 class="text-lg font-bold text-slate-800">Rechercher des documents</h3>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3 mb-3">
+                  <input id="global-doc-search" type="text" placeholder="Recherche document/projet/thématique" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  <input id="global-doc-theme" type="text" placeholder="Thématique (hors projet)" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  <button id="global-doc-reset" class="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold whitespace-nowrap">Réinitialiser</button>
+                </div>
+                <div id="global-docs-container" class="docs-results-container"></div>
+              </div>
           </div>
 
         <div id="global-settings-section" class="panel p-3 hidden">
