@@ -2235,6 +2235,42 @@ function bindEvents() {
     });
   }
 
+  // Import depuis Paramètres
+  const settingsImportFile = document.getElementById("settingsImportFile");
+  const settingsImportBtn = document.getElementById("settingsImportBtn");
+
+  if (settingsImportFile) {
+    settingsImportFile.addEventListener("change", async () => {
+      showError("");
+      const file = settingsImportFile.files?.[0];
+      if (!file) return;
+      try {
+        const raw = await readFileText(file);
+        const { plans } = parseImportPayload(raw);
+        const existingIds = new Set(state.plans.map((p) => p.id));
+        const updateCount = plans.filter((p) => existingIds.has(p.id)).length;
+        const summary = {
+          total: plans.length,
+          updateCount,
+          newCount: plans.length - updateCount
+        };
+        state.pendingImport = { plans, fileName: file.name };
+        renderImportPreview(summary);
+      } catch (err) {
+        showError(String(err.message || err));
+        cancelImport();
+      } finally {
+        settingsImportFile.value = "";
+      }
+    });
+  }
+
+  if (settingsImportBtn) {
+    settingsImportBtn.addEventListener("click", () => {
+      settingsImportFile?.click();
+    });
+  }
+
   // FSA buttons
   if (el.fsaLinkBtn) {
     el.fsaLinkBtn.addEventListener("click", async () => {

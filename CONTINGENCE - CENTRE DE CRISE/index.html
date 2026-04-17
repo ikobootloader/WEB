@@ -711,6 +711,18 @@
                   <span>Exporter PDF (Tous)</span>
                 </button>
               </div>
+
+              <div class="card" style="padding: var(--spacing-4); background: var(--surface-container-highest); border: 1px solid var(--outline-variant);">
+                <h4 class="title-lg" style="margin-bottom: var(--spacing-2);">Importer une Sauvegarde</h4>
+                <p class="body-lg text-muted" style="margin-bottom: var(--spacing-3);">
+                  Restaure des plans depuis un fichier JSON exporté précédemment. Vous pourrez choisir entre fusionner ou remplacer les données existantes.
+                </p>
+                <button class="btn btn-secondary" id="settingsImportBtn">
+                  <span class="material-symbols-outlined">upload</span>
+                  <span>Importer Données (JSON)</span>
+                </button>
+                <input type="file" id="settingsImportFile" accept="application/json" class="hidden">
+              </div>
             </div>
           </div>
         </div>
