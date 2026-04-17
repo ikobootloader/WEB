@@ -5669,6 +5669,65 @@ html.dark .dashboard-news-empty {
   display: inline;
 }
 
+/* Boutons icônes uniquement dans la rubrique Tâches */
+#btn-toggle-sort-focus #sort-focus-label,
+#btn-global-manage-themes .taskmda-action-label,
+#btn-global-import-tasks .taskmda-action-label {
+  display: none !important;
+}
+
+#btn-toggle-sort-focus,
+#btn-global-manage-themes,
+#btn-global-import-tasks {
+  position: relative;
+  min-width: 44px;
+  width: 44px;
+  height: 44px;
+  padding: 0 !important;
+  justify-content: center;
+}
+
+#btn-toggle-sort-focus #sort-focus-icon,
+#btn-global-manage-themes .material-symbols-outlined,
+#btn-global-import-tasks .material-symbols-outlined {
+  font-size: 20px;
+}
+
+/* Tooltips pour les boutons icônes de la rubrique Tâches */
+#btn-toggle-sort-focus[data-ui-tooltip]::after,
+#btn-global-manage-themes[data-ui-tooltip]::after,
+#btn-global-import-tasks[data-ui-tooltip]::after {
+  content: attr(data-ui-tooltip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  transform: translateX(-50%) translateY(4px) scale(0.98);
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 1200;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #1f2937;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(148, 163, 184, 0.55);
+  border-radius: 10px;
+  padding: 6px 9px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+#btn-toggle-sort-focus[data-ui-tooltip]:hover::after,
+#btn-toggle-sort-focus[data-ui-tooltip]:focus-visible::after,
+#btn-global-manage-themes[data-ui-tooltip]:hover::after,
+#btn-global-manage-themes[data-ui-tooltip]:focus-visible::after,
+#btn-global-import-tasks[data-ui-tooltip]:hover::after,
+#btn-global-import-tasks[data-ui-tooltip]:focus-visible::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0) scale(1);
+}
+
 .workspace-action-inline:hover {
   border-color: var(--ui-action-hover-border);
   color: var(--ui-action-hover-text);

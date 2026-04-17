@@ -422,15 +422,15 @@
                 <button id="global-tasks-view-archives" role="tab" aria-selected="false" class="project-view-tab px-3 py-1.5 rounded-lg text-slate-700 font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">archive</span> Archives</button>
               </div>
               <div class="global-tasks-nav-controls flex gap-2">
-                <button id="btn-toggle-sort-focus" class="px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm font-semibold inline-flex items-center justify-center gap-2 hover:bg-slate-50 transition-all shadow-sm" title="Alterner le mode de tri: Focus vs Chronologique">
+                <button id="btn-toggle-sort-focus" class="px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm font-semibold inline-flex items-center justify-center gap-2 hover:bg-slate-50 transition-all shadow-sm" data-action-kind="default" data-ui-tooltip="Tri: Focus / Chronologique">
                   <span id="sort-focus-icon" class="material-symbols-outlined text-base">bolt</span>
                   <span id="sort-focus-label">Tri: Focus</span>
                 </button>
-                <button id="btn-global-manage-themes" class="px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm font-semibold inline-flex items-center justify-center gap-2 hover:bg-slate-50" title="Gérer le référentiel des thématiques">
+                <button id="btn-global-manage-themes" class="px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm font-semibold inline-flex items-center justify-center gap-2 hover:bg-slate-50" data-action-kind="default" data-ui-tooltip="Thématiques">
                   <span class="material-symbols-outlined text-base">category</span>
                   <span class="taskmda-action-label">Thématiques</span>
                 </button>
-                <button id="btn-global-import-tasks" class="px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm font-semibold inline-flex items-center justify-center gap-2 hover:bg-slate-50" title="Importer des tâches depuis un fichier JSON" data-action-kind="default" aria-label="Importer des tâches">
+                <button id="btn-global-import-tasks" class="px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm font-semibold inline-flex items-center justify-center gap-2 hover:bg-slate-50" data-ui-tooltip="Importer des tâches" data-action-kind="default" aria-label="Importer des tâches">
                   <span class="material-symbols-outlined text-base taskmda-action-icon">upload_file</span>
                   <span class="taskmda-action-label">Importer</span>
                 </button>
