@@ -123,6 +123,77 @@
       opts.renderGlobalTasks?.();
     });
 
+    const updateGlobalTaskUrgencyToggleState = () => {
+      const toggle = document.getElementById('global-task-urgency-toggle');
+      if (!toggle) return;
+      const checks = Array.from(document.querySelectorAll('input[data-global-task-urgency]'));
+      const checkedCount = checks.filter((input) => input instanceof HTMLInputElement && input.checked).length;
+      const totalCount = checks.length || 3;
+      const label = checkedCount === totalCount
+        ? 'Filtrer par urgence'
+        : `Filtrer par urgence (${checkedCount}/${totalCount})`;
+      toggle.setAttribute('data-ui-tooltip', label);
+      toggle.setAttribute('aria-label', label);
+    };
+
+    const setGlobalTaskUrgencyPanelOpen = (open) => {
+      const panel = document.getElementById('global-task-urgency-panel');
+      const toggle = document.getElementById('global-task-urgency-toggle');
+      if (!panel || !toggle) return;
+      panel.classList.toggle('hidden', !open);
+      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    };
+
+    document.getElementById('global-task-urgency-toggle')?.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const panel = document.getElementById('global-task-urgency-panel');
+      const isOpen = panel ? !panel.classList.contains('hidden') : false;
+      setGlobalTaskUrgencyPanelOpen(!isOpen);
+    });
+
+    document.getElementById('global-task-urgency-panel')?.addEventListener('click', (event) => {
+      event.stopPropagation();
+    });
+
+    Array.from(document.querySelectorAll('input[data-global-task-urgency]')).forEach((input) => {
+      input.addEventListener('change', () => {
+        const checks = Array.from(document.querySelectorAll('input[data-global-task-urgency]'));
+        const checked = checks.filter((item) => item instanceof HTMLInputElement && item.checked);
+        if (checked.length === 0 && input instanceof HTMLInputElement) {
+          input.checked = true;
+        }
+        updateGlobalTaskUrgencyToggleState();
+        setGlobalTasksPage(1);
+        opts.renderGlobalTasks?.();
+      });
+    });
+
+    document.addEventListener('click', () => {
+      setGlobalTaskUrgencyPanelOpen(false);
+    });
+
+    updateGlobalTaskUrgencyToggleState();
+
+    document.getElementById('global-task-filter-reset')?.addEventListener('click', () => {
+      const searchInput = document.getElementById('global-task-search');
+      const statusInput = document.getElementById('global-task-status');
+      const themeInput = document.getElementById('global-task-theme');
+      const knownThemeInput = document.getElementById('global-task-theme-known');
+      const urgencyChecks = Array.from(document.querySelectorAll('input[data-global-task-urgency]'));
+      if (searchInput) searchInput.value = '';
+      if (statusInput) statusInput.value = 'all';
+      if (themeInput) themeInput.value = '';
+      if (knownThemeInput) knownThemeInput.value = '';
+      urgencyChecks.forEach((input) => {
+        if (input instanceof HTMLInputElement) input.checked = true;
+      });
+      setGlobalTaskUrgencyPanelOpen(false);
+      updateGlobalTaskUrgencyToggleState();
+      setGlobalTasksPage(1);
+      opts.renderGlobalTasks?.();
+    });
+
     const rerenderProjectTasksFromFilters = () => {
       if (!opts.isProjectWorkspace?.()) return;
       const currentProjectState = opts.getCurrentProjectState?.();
@@ -176,4 +247,3 @@
     bind
   };
 }(window));
-

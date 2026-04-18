@@ -61,16 +61,41 @@
       setGlobalFeedComposerCollapsed(expanded, { focusEditor: expanded });
     });
 
+    document.getElementById('global-feed-composer-head-trigger')?.addEventListener('click', (event) => {
+      if (event?.target?.closest?.('#btn-toggle-global-feed-composer')) return;
+      const btn = document.getElementById('btn-toggle-global-feed-composer');
+      const expanded = String(btn?.getAttribute('aria-expanded') || 'false') === 'true';
+      setGlobalFeedComposerCollapsed(expanded, { focusEditor: expanded });
+    });
+
+    document.getElementById('global-feed-composer-head-trigger')?.addEventListener('keydown', (event) => {
+      const key = String(event?.key || '');
+      if (key !== 'Enter' && key !== ' ') return;
+      event.preventDefault();
+      const btn = document.getElementById('btn-toggle-global-feed-composer');
+      const expanded = String(btn?.getAttribute('aria-expanded') || 'false') === 'true';
+      setGlobalFeedComposerCollapsed(expanded, { focusEditor: expanded });
+    });
+
     document.getElementById('btn-global-feed-digest')?.addEventListener('click', () => {
       openGlobalFeedComposerForNewPost({ focusEditor: false });
       const input = document.getElementById('global-feed-digest-files');
+      const chosenMode = typeof opts.pickGlobalFeedDigestImportMode === 'function'
+        ? opts.pickGlobalFeedDigestImportMode()
+        : 'compact';
+      if (chosenMode !== 'compact' && chosenMode !== 'full') return;
+      if (input) input.dataset.importDigestView = chosenMode;
       input?.click();
     });
 
     document.getElementById('global-feed-digest-files')?.addEventListener('change', async (event) => {
       const files = event?.target?.files;
-      await opts.publishGlobalFeedDigestFromFiles?.(files);
-      if (event?.target) event.target.value = '';
+      const digestView = String(event?.target?.dataset?.importDigestView || '').toLowerCase();
+      await opts.publishGlobalFeedDigestFromFiles?.(files, { digestView });
+      if (event?.target) {
+        event.target.value = '';
+        delete event.target.dataset.importDigestView;
+      }
     });
 
     document.getElementById('btn-global-feed-insert-mention')?.addEventListener('click', () => {

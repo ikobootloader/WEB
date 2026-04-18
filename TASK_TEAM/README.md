@@ -77,6 +77,7 @@ Nom d interface par defaut: `NEXUS MDA`.
 - Conversion d une tache (projet ou hors projet) en nouveau projet.
 - Pagination projets et taches.
 - Rubrique transverse `Taches`: vues cartes/liste/kanban/timeline + onglet `Calendrier`.
+- Effet visuel de completion: au passage d une tache a `termine`, un emoji `pouce leve` s anime sur la carte (envol + estompe), avec declenchement centralise sur les transitions de statut.
 
 ### Vues transverses
 - `Taches`: consolidation tous projets + hors projet.
@@ -89,6 +90,13 @@ Nom d interface par defaut: `NEXUS MDA`.
   - digestion documentaire locale (`.eml/.txt/.md/.html/.pdf/.doc/.docx/.odt/.rtf`) vers post resume.
 - Recherche globale dans le header (navigation directe vers projet/tache/document/message/canal).
 - `Referentiels`: administration globale des thematiques, groupes et registre versions logicielles.
+  - onglet `Annuaire ESMS` dedie a la recherche live PA/PH (lecture seule) via FINESS public, avec ouverture fiche ViaTrajectoire.
+  - enrichissement optionnel via endpoint FHIR Annuaire Sante (endpoint + cle API configurables).
+  - normalisation endpoint gateway (`/fhir` -> `/fhir/v2`) et garde-fous anti-spam en cas d erreurs HTTP `400/401/403`.
+  - bloc de configuration API repliable/depliable (toggle) avec memoire locale de l etat.
+  - mode `Audit divergences` FINESS vs FHIR avec badge par ligne, detail au clic et statuts `OK`, `Proche`, `Incomplet`, `Different`.
+  - heuristique de proximite semantique pour limiter les faux positifs (casse, accents, complements d adresse).
+  - recommandation d adresse enrichie dans l audit avec action `Utiliser l adresse enrichie` quand pertinent.
 - `RGPD`: registre de traitements et pilotage conformite:
   - vues `Registre`, `Activites`, `Brouillons detectes`, `Controles`, `Journal`,
   - creation/edition/validation/archivage de fiches,
@@ -176,7 +184,7 @@ Nom d interface par defaut: `NEXUS MDA`.
 ## Base de donnees
 
 - DB: `taskmda-team-standalone`
-- Version schema: `DB_VERSION = 16`
+- Version schema: `DB_VERSION = 18`
 - Stores:
   - `events`
   - `processedEvents`

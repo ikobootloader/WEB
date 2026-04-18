@@ -545,6 +545,107 @@ html.dark .feed-mention {
   color: #334155;
 }
 
+.feed-digest-compact-note {
+  margin-top: 0.5rem;
+  font-size: 0.78rem;
+  color: #536789;
+}
+
+.feed-digest-pdf-page {
+  border: 1px solid #dbe4f4;
+  border-radius: 10px;
+  background: #f8fbff;
+  padding: 0.55rem 0.65rem;
+  margin-top: 0.45rem;
+}
+
+.feed-digest-pdf-page h4 {
+  margin: 0 0 0.25rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #1f3762;
+}
+
+.feed-digest-pdf-links {
+  margin-top: 0.45rem;
+}
+
+.feed-digest-pdf-links summary {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #486089;
+  cursor: pointer;
+}
+
+.feed-digest-pdf-links ul {
+  margin: 0.35rem 0 0;
+  padding-left: 1rem;
+}
+
+.feed-digest-pdf-links a {
+  color: #1f4ea3;
+  text-decoration: underline;
+  word-break: break-all;
+}
+
+.feed-digest-pdf-page a[href^="#feed-digest-pdf-"] {
+  color: #1f4ea3;
+  text-decoration: underline;
+  font-weight: 700;
+}
+
+.feed-digest-pdf-footnotes {
+  margin-top: 0.5rem;
+  border: 1px dashed #c8d6ef;
+  border-radius: 10px;
+  background: #f8fbff;
+  padding: 0.45rem 0.55rem;
+}
+
+.feed-digest-pdf-footnotes summary {
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #4a618b;
+}
+
+.feed-digest-pdf-footnotes ul {
+  margin: 0.35rem 0 0;
+  padding-left: 1rem;
+}
+
+.feed-digest-mail-html {
+  border: 1px solid #dbe4f4;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 0.65rem;
+  max-height: 34rem;
+  overflow: auto;
+}
+
+.feed-digest-plain-content {
+  border: 1px solid #dbe4f4;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #334155;
+  padding: 0.65rem;
+  line-height: 1.5;
+}
+
+.feed-digest-meta-box {
+  margin-top: 0.7rem;
+  border: 1px dashed #bfd0ea;
+  border-radius: 10px;
+  background: #f5f9ff;
+  padding: 0.5rem 0.65rem;
+}
+
+.feed-digest-meta-box p {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #475a7e;
+}
+
 .feed-digest-excerpt {
   white-space: pre-wrap;
   word-break: break-word;
@@ -595,6 +696,19 @@ html.dark .feed-mention {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  cursor: pointer;
+  border-radius: 10px;
+  padding: 2px 4px;
+  transition: background-color 0.18s ease;
+}
+
+.feed-composer-head:hover {
+  background: rgba(26, 66, 138, 0.05);
+}
+
+.feed-composer-head:focus-visible {
+  outline: 2px solid rgba(26, 66, 138, 0.35);
+  outline-offset: 1px;
 }
 
 .feed-composer-toggle-btn {
@@ -698,6 +812,14 @@ html.dark .feed-composer-panel {
   background: linear-gradient(180deg, #16213a, #121a2e) !important;
 }
 
+html.dark .feed-composer-head:hover {
+  background: rgba(122, 162, 255, 0.14);
+}
+
+html.dark .feed-composer-head:focus-visible {
+  outline-color: rgba(122, 162, 255, 0.5);
+}
+
 html.dark .feed-mention-counter {
   border-color: rgba(143, 166, 212, 0.35);
   background: #15203a;
@@ -718,6 +840,60 @@ html.dark .feed-item {
 
 html.dark .feed-item-body {
   color: #d3e1fb;
+}
+
+html.dark .feed-digest-compact-note {
+  color: #a9bcde;
+}
+
+html.dark .feed-digest-pdf-page {
+  border-color: rgba(143, 166, 212, 0.3);
+  background: #15203a;
+}
+
+html.dark .feed-digest-pdf-page h4 {
+  color: #d4e5ff;
+}
+
+html.dark .feed-digest-pdf-links summary {
+  color: #bcd0f2;
+}
+
+html.dark .feed-digest-pdf-links a {
+  color: #a9c9ff;
+}
+
+html.dark .feed-digest-pdf-page a[href^="#feed-digest-pdf-"] {
+  color: #a9c9ff;
+}
+
+html.dark .feed-digest-pdf-footnotes {
+  border-color: rgba(143, 166, 212, 0.38);
+  background: rgba(21, 32, 58, 0.75);
+}
+
+html.dark .feed-digest-pdf-footnotes summary {
+  color: #bcd0f2;
+}
+
+html.dark .feed-digest-mail-html {
+  border-color: rgba(143, 166, 212, 0.35);
+  background: #15203a;
+}
+
+html.dark .feed-digest-plain-content {
+  border-color: rgba(143, 166, 212, 0.35);
+  background: #ffffff;
+  color: #334155;
+}
+
+html.dark .feed-digest-meta-box {
+  border-color: rgba(143, 166, 212, 0.42);
+  background: rgba(21, 32, 58, 0.75);
+}
+
+html.dark .feed-digest-meta-box p {
+  color: #bcd0f2;
 }
 
 html.dark .feed-digest-excerpt {
@@ -1522,7 +1698,32 @@ html.dark .taskmda-modal-close-btn:hover {
 }
 
 #global-task-filter-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
   order: 1;
+}
+
+#global-task-filter-row .global-task-filter-fields {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+#global-task-filter-row .global-task-filter-actions {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: stretch;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+#global-task-filter-row .global-task-urgency-wrap {
+  position: relative;
+  width: 44px;
+  min-width: 44px;
 }
 
 #global-task-layout-toolbar {
@@ -3290,7 +3491,8 @@ html[data-wf-action-buttons="icon"] .taskmda-create-cta:not(#btn-add-task):not(#
   background: #ffffff;
   padding: 12px;
   color: #0f172a;
-  line-height: 1.5;
+  font-size: 1.02rem;
+  line-height: 1.62;
 }
 
 .project-description-editor.ql-container {
@@ -3304,7 +3506,8 @@ html[data-wf-action-buttons="icon"] .taskmda-create-cta:not(#btn-add-task):not(#
   overflow: auto;
   padding: 12px;
   color: #0f172a;
-  line-height: 1.5;
+  font-size: 1.02rem;
+  line-height: 1.62;
 }
 
 .project-description-editor.ql-container.ql-snow {
@@ -4693,8 +4896,8 @@ html.dark .global-kanban-col-count {
 
 .task-detail-inline-quill-host .ql-editor {
   min-height: 120px;
-  font-size: 0.94rem;
-  line-height: 1.5;
+  font-size: 1rem;
+  line-height: 1.58;
 }
 
 .task-detail-inline-quill-host .ql-toolbar .ql-picker-label,
@@ -4995,6 +5198,10 @@ textarea:focus {
   display: grid;
   grid-template-columns: minmax(0, 1.7fr) minmax(300px, 1fr);
   gap: 16px;
+}
+
+.dashboard-bento.no-margin-for-global-tasks {
+  margin-bottom: 0 !important;
 }
 
 .dashboard-bento > #dashboard-quick-actions {
@@ -5495,6 +5702,46 @@ html.dark .dashboard-news-empty {
   overflow: hidden;
 }
 
+.task-completion-fx-anchor {
+  position: relative;
+}
+
+.task-completion-fx-emote {
+  position: absolute;
+  right: 14px;
+  bottom: 12px;
+  font-size: 1.3rem;
+  line-height: 1;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(0) translateX(0) scale(0.92);
+  filter: drop-shadow(0 6px 12px rgba(15, 23, 42, 0.25));
+  z-index: 6;
+}
+
+.task-completion-fx-emote.is-active {
+  animation: taskCompletionThumbFly 1650ms cubic-bezier(.18,.72,.22,1) forwards;
+}
+
+@keyframes taskCompletionThumbFly {
+  0% {
+    opacity: 0;
+    transform: translateY(0) translateX(0) scale(0.92);
+  }
+  10% {
+    opacity: 1;
+    transform: translateY(-8px) translateX(calc(var(--task-fx-drift-x, 0px) * 0.2)) scale(1.08);
+  }
+  62% {
+    opacity: 1;
+    transform: translateY(-34px) translateX(calc(var(--task-fx-drift-x, 0px) * 0.72)) scale(1.12);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-68px) translateX(var(--task-fx-drift-x, 0px)) scale(1.14);
+  }
+}
+
 .task-accent-high::before,
 .task-accent-medium::before,
 .task-accent-low::before {
@@ -5671,12 +5918,16 @@ html.dark .dashboard-news-empty {
 
 /* Boutons icônes uniquement dans la rubrique Tâches */
 #btn-toggle-sort-focus #sort-focus-label,
+#global-task-urgency-toggle .taskmda-action-label,
+#global-task-filter-reset .taskmda-action-label,
 #btn-global-manage-themes .taskmda-action-label,
 #btn-global-import-tasks .taskmda-action-label {
   display: none !important;
 }
 
 #btn-toggle-sort-focus,
+#global-task-urgency-toggle,
+#global-task-filter-reset,
 #btn-global-manage-themes,
 #btn-global-import-tasks {
   position: relative;
@@ -5688,6 +5939,8 @@ html.dark .dashboard-news-empty {
 }
 
 #btn-toggle-sort-focus #sort-focus-icon,
+#global-task-urgency-toggle .material-symbols-outlined,
+#global-task-filter-reset .material-symbols-outlined,
 #btn-global-manage-themes .material-symbols-outlined,
 #btn-global-import-tasks .material-symbols-outlined {
   font-size: 20px;
@@ -5695,6 +5948,8 @@ html.dark .dashboard-news-empty {
 
 /* Tooltips pour les boutons icônes de la rubrique Tâches */
 #btn-toggle-sort-focus[data-ui-tooltip]::after,
+#global-task-urgency-toggle[data-ui-tooltip]::after,
+#global-task-filter-reset[data-ui-tooltip]::after,
 #btn-global-manage-themes[data-ui-tooltip]::after,
 #btn-global-import-tasks[data-ui-tooltip]::after {
   content: attr(data-ui-tooltip);
@@ -5720,6 +5975,10 @@ html.dark .dashboard-news-empty {
 
 #btn-toggle-sort-focus[data-ui-tooltip]:hover::after,
 #btn-toggle-sort-focus[data-ui-tooltip]:focus-visible::after,
+#global-task-urgency-toggle[data-ui-tooltip]:hover::after,
+#global-task-urgency-toggle[data-ui-tooltip]:focus-visible::after,
+#global-task-filter-reset[data-ui-tooltip]:hover::after,
+#global-task-filter-reset[data-ui-tooltip]:focus-visible::after,
 #btn-global-manage-themes[data-ui-tooltip]:hover::after,
 #btn-global-manage-themes[data-ui-tooltip]:focus-visible::after,
 #btn-global-import-tasks[data-ui-tooltip]:hover::after,
@@ -6600,7 +6859,7 @@ html[data-wf-action-buttons="icon"] [data-action-kind="danger"]:hover {
   grid-template-columns: 18px minmax(0, 1fr);
   gap: 8px;
   border-left: 3px solid rgba(59, 130, 246, 0.45);
-  background: rgba(226, 232, 240, 0.55);
+  background: rgb(255 255 255);
   border-radius: 10px;
   padding: 6px 8px;
   margin-bottom: 6px;
@@ -10459,6 +10718,17 @@ html.dark .tasks-empty-subtitle {
   order: -1;
 }
 
+.global-settings-tabs-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.global-settings-tabs-row #global-settings-tabs-list {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .global-settings-help-btn {
   position: relative;
   display: inline-flex;
@@ -10600,24 +10870,16 @@ html.dark .view-preset-btn:hover:not(:disabled) {
     align-items: start;
   }
 
-  #global-settings-section .global-settings-card-branding {
-    order: 0;
+  #global-settings-section .global-settings-card-branding,
+  #global-settings-section .global-settings-card-annuaire,
+  #global-settings-section .global-settings-card-themes,
+  #global-settings-section .global-settings-card-groups,
+  #global-settings-section .global-settings-card-roles,
+  #global-settings-section .global-settings-card-views-wrap,
+  #global-settings-section .global-settings-card-views,
+  #global-settings-section .global-settings-card-software,
+  #global-settings-section .global-settings-card-software-tips {
     grid-column: 1 / -1;
-  }
-
-  #global-settings-section .global-settings-card-groups {
-    order: 1;
-    grid-column: 1 / -1;
-  }
-
-  #global-settings-section .global-settings-card-themes {
-    order: 2;
-    grid-column: 1 / 2;
-  }
-
-  #global-settings-section .global-settings-card-software {
-    order: 2;
-    grid-column: 2 / 3;
   }
 }
 
@@ -10952,12 +11214,17 @@ html.dark .view-preset-btn:hover:not(:disabled) {
   }
 
   #global-task-filter-row {
-    grid-template-columns: 1fr !important;
+    flex-direction: column;
     gap: 8px !important;
   }
 
-  #global-task-filter-row > * {
+  #global-task-filter-row .global-task-filter-fields {
+    grid-template-columns: 1fr !important;
+  }
+
+  #global-task-filter-row .global-task-filter-actions {
     width: 100%;
+    justify-content: flex-end;
   }
 
   #global-task-layout-toolbar {

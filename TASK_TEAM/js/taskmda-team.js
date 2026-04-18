@@ -902,19 +902,46 @@
           break;
 
         case EventTypes.CREATE_TASK:
-          state.tasks.push({
+        {
+          const createdTask = {
             taskId: event.payload.taskId || uuidv4(),
             ...event.payload,
             createdBy: event.payload.createdBy || event.author,
             createdAt: event.timestamp
-          });
+          };
+          if (normalizeTaskStatusValue(createdTask.status) === 'termine') {
+            createdTask.completedAt = Number(createdTask.completedAt || event.timestamp) || event.timestamp;
+          } else {
+            delete createdTask.completedAt;
+          }
+          state.tasks.push(createdTask);
+        }
           registerTheme(event.payload?.theme);
           break;
 
         case EventTypes.UPDATE_TASK:
-          state.tasks = state.tasks.map(t =>
-            t.taskId === event.payload.taskId ? { ...t, ...event.payload.changes, updatedAt: event.timestamp } : t
-          );
+          state.tasks = state.tasks.map((t) => {
+            if (t.taskId !== event.payload.taskId) return t;
+            const nextTask = { ...t, ...event.payload.changes, updatedAt: event.timestamp };
+            const nextStatus = normalizeTaskStatusValue(nextTask.status);
+            const prevStatus = normalizeTaskStatusValue(t.status);
+            if (nextStatus === 'termine') {
+              if (prevStatus !== 'termine') {
+                queueTaskCompletionFx({
+                  sourceType: 'project',
+                  projectId: event.projectId,
+                  taskId: nextTask.taskId,
+                  eventTs: event.timestamp
+                });
+                nextTask.completedAt = event.timestamp;
+              } else if (!(Number(nextTask.completedAt || 0) > 0)) {
+                nextTask.completedAt = Number(t.completedAt || event.timestamp) || event.timestamp;
+              }
+            } else {
+              delete nextTask.completedAt;
+            }
+            return nextTask;
+          });
           registerTheme(event.payload?.changes?.theme);
           break;
 
@@ -2173,6 +2200,7 @@
           themes: { label: 'Thématiques', buttonId: 'global-settings-tab-themes' },
           groups: { label: 'Groupes', buttonId: 'global-settings-tab-groups' },
           roles: { label: 'Habilitations', buttonId: 'global-settings-tab-roles' },
+          annuaire: { label: 'Annuaire ESMS', buttonId: 'global-settings-tab-annuaire' },
           views: { label: 'Options de vues', buttonId: 'global-settings-tab-views' }
         }
       }
@@ -2186,13 +2214,25 @@
         workflow: { defaultTab: 'organigram', tabs: { map: true, organization: true, organigram: true, agents: true, processes: true, templates: true, tasks: true, kanban: true, timeline: true, procedures: true, software: true, contingency: true, analytics: true, governance: true, journal: true } },
         globalCalendar: { defaultTab: 'grid', tabs: { grid: true, year: true, list: true } },
         globalFeed: { defaultTab: 'all', tabs: { all: true, mentions: true, auto: true, manual: true, 'project-refs': true, 'task-refs': true } },
-        globalSettings: { defaultTab: 'branding', tabs: { branding: true, themes: true, groups: true, roles: true, views: true } }
+        globalSettings: { defaultTab: 'branding', tabs: { branding: true, themes: true, groups: true, roles: true, annuaire: true, views: true } }
       },
       ui: {
         workflowActionButtons: 'icon',
         iconTooltips: true,
         tabIcons: true,
-        workflowActionButtonsShape: 'rect'
+        workflowActionButtonsShape: 'rect',
+        workspaceWideSections: {
+          dashboard: false,
+          projects: true,
+          tasks: true,
+          workflow: true,
+          calendar: true,
+          docs: true,
+          messages: true,
+          feed: true,
+          rgpd: true,
+          settings: true
+        }
       },
       policy: {
         lockUserOverrides: false
@@ -2224,6 +2264,19 @@
       globalSettings: ['branding', 'themes', 'groups', 'roles', 'views']
     };
 
+    const WORKSPACE_WIDTH_SECTION_META = Object.freeze({
+      dashboard: { label: 'Tableau de bord' },
+      projects: { label: 'Projets' },
+      tasks: { label: 'Taches transverses' },
+      workflow: { label: 'Workflow' },
+      calendar: { label: 'Calendrier transverse' },
+      docs: { label: 'Documents transverses' },
+      messages: { label: 'Messagerie' },
+      feed: { label: "Fil d'info" },
+      rgpd: { label: 'RGPD' },
+      settings: { label: 'Referentiels' }
+    });
+
     const UX_METRICS_DEFAULT = {
       openNewProject: 0,
       openNewTaskProject: 0,
@@ -2252,12 +2305,60 @@
       return 'rect';
     }
 
+    function normalizeWorkspaceWideSections(rawSections = {}) {
+      const normalized = {};
+      Object.keys(WORKSPACE_WIDTH_SECTION_META).forEach((sectionKey) => {
+        normalized[sectionKey] = rawSections?.[sectionKey] === true;
+      });
+      return normalized;
+    }
+
     function getWorkflowActionButtonsMode() {
       return normalizeWorkflowActionButtonsMode(viewOptions?.ui?.workflowActionButtons);
     }
 
     function getWorkflowActionButtonsShape() {
       return normalizeWorkflowActionButtonsShape(viewOptions?.ui?.workflowActionButtonsShape);
+    }
+
+    function isWorkspaceWideEnabledForView(viewKey = '') {
+      const key = String(viewKey || '').trim();
+      if (!key) return false;
+      return viewOptions?.ui?.workspaceWideSections?.[key] === true;
+    }
+
+    function getActiveSidebarNavKey() {
+      const activeLink = document.querySelector('#sidebar .nav-link.active')
+        || document.querySelector('.nav-link.active');
+      const id = String(activeLink?.id || '').trim();
+      const byId = {
+        'nav-dashboard': 'dashboard',
+        'nav-projects': 'projects',
+        'nav-tasks': 'tasks',
+        'nav-workflow': 'workflow',
+        'nav-calendar': 'calendar',
+        'nav-docs': 'docs',
+        'nav-messages': 'messages',
+        'nav-feed': 'feed',
+        'nav-rgpd': 'rgpd',
+        'nav-settings': 'settings'
+      };
+      return byId[id] || '';
+    }
+
+    function applyWorkspaceWidthMode() {
+      const workspace = document.querySelector('.workspace');
+      if (!workspace) return;
+      const sidebarKey = getActiveSidebarNavKey();
+      const sectionKey = workspaceMode === 'global'
+        ? String(globalWorkspaceView || '').trim()
+        : workspaceMode === 'project'
+          ? 'projects'
+          : (sidebarKey || 'dashboard');
+      const shouldUseWideLayout = isWorkspaceWideEnabledForView(sectionKey);
+      workspace.classList.toggle('max-w-7xl', !shouldUseWideLayout);
+      workspace.classList.toggle('mx-auto', !shouldUseWideLayout);
+      workspace.setAttribute('data-workspace-width', shouldUseWideLayout ? 'wide' : 'default');
     }
 
     // ----------------------------------------------------------------------------
@@ -3099,7 +3200,8 @@
         workflowActionButtons: normalizeWorkflowActionButtonsMode(raw?.ui?.workflowActionButtons || defaults?.ui?.workflowActionButtons),
         iconTooltips: raw?.ui?.iconTooltips !== false,
         tabIcons: raw?.ui?.tabIcons !== false,
-        workflowActionButtonsShape: normalizeWorkflowActionButtonsShape(raw?.ui?.workflowActionButtonsShape || defaults?.ui?.workflowActionButtonsShape)
+        workflowActionButtonsShape: normalizeWorkflowActionButtonsShape(raw?.ui?.workflowActionButtonsShape || defaults?.ui?.workflowActionButtonsShape),
+        workspaceWideSections: normalizeWorkspaceWideSections(raw?.ui?.workspaceWideSections || defaults?.ui?.workspaceWideSections)
       };
       next.policy = {
         lockUserOverrides: Boolean(raw?.policy?.lockUserOverrides === true)
@@ -3490,6 +3592,7 @@
       if (workspaceMode === 'global' && globalWorkspaceView === 'settings') {
         renderGlobalSettings().catch(() => null);
       }
+      applyWorkspaceWidthMode();
       refreshManagedTabOverflow();
     }
 
@@ -3499,7 +3602,7 @@
       if (!matrix) return;
       const disabledAttr = isAdmin ? '' : 'disabled';
       const disabledClass = isAdmin ? '' : ' opacity-60';
-      matrix.innerHTML = Object.entries(VIEW_SECTION_META).map(([sectionKey, sectionMeta]) => {
+      const sectionCardsHtml = Object.entries(VIEW_SECTION_META).map(([sectionKey, sectionMeta]) => {
         const enabledTabs = getEnabledTabs(sectionKey);
         const defaultTab = getDefaultTab(sectionKey);
         const tabRows = Object.entries(sectionMeta.tabs).map(([tabKey, tabMeta]) => {
@@ -3538,11 +3641,40 @@
                 </select>
               </label>
             </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1">${tabRows}</div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-1">${tabRows}</div>
             <p class="text-[11px] text-slate-500 mt-2">${enabledTabs.length} onglet(s) actif(s)</p>
           </div>
         `;
       }).join('');
+      const workspaceWideEnabledCount = Object.keys(WORKSPACE_WIDTH_SECTION_META)
+        .filter((sectionKey) => isWorkspaceWideEnabledForView(sectionKey))
+        .length;
+      const workspaceWidthPanelRows = Object.entries(WORKSPACE_WIDTH_SECTION_META).map(([sectionKey, sectionMeta]) => {
+        const checked = isWorkspaceWideEnabledForView(sectionKey) ? 'checked' : '';
+        return `
+          <div class="flex items-center gap-2 hover:bg-white/80 p-1 rounded-lg${disabledClass}">
+            <label class="flex items-center gap-2 cursor-pointer min-w-0">
+              <input type="checkbox" class="view-option-workspace-wide w-4 h-4 shrink-0" data-view-workspace-width="${escapeHtml(sectionKey)}" ${checked} ${disabledAttr}>
+              <span class="text-sm text-slate-700 font-medium truncate">${escapeHtml(sectionMeta.label)}</span>
+            </label>
+          </div>
+        `;
+      }).join('');
+      const workspaceWidthPanelHtml = `
+        <div class="rounded-lg border border-slate-200 bg-white p-3">
+          <div class="flex items-center justify-between gap-2 mb-2">
+            <h5 class="text-sm font-bold text-slate-800">Mode plein écran</h5>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1">${workspaceWidthPanelRows}</div>
+          <p class="text-[11px] text-slate-500 mt-2">${workspaceWideEnabledCount} rubrique(s) en mode pleine largeur</p>
+        </div>
+      `;
+      matrix.innerHTML = `
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-3 items-start">
+          ${sectionCardsHtml}
+          ${workspaceWidthPanelHtml}
+        </div>
+      `;
 
       if (summary) {
         const sectionCount = Object.keys(VIEW_SECTION_META).length;
@@ -3900,6 +4032,7 @@
       setActiveSidebarNav('dashboard');
       startDueReminders();
       startBackupReminders();
+      startTaskAutoArchiveScheduler();
       ensureBrowserNotificationPermission();
     }
 
@@ -5174,6 +5307,22 @@
       const saveBrandingBtn = document.getElementById('btn-save-app-branding');
       const assignAdminBtn = document.getElementById('btn-assign-app-admin');
       const resetBrandingBtn = document.getElementById('btn-reset-app-branding');
+      const viaAnnuaireStatus = document.getElementById('via-annuaire-status');
+      const viaAnnuaireRorEndpointInput = document.getElementById('via-annuaire-ror-endpoint-input');
+      const viaAnnuaireRorApiKeyInput = document.getElementById('via-annuaire-ror-apikey-input');
+      const viaAnnuaireRorSaveBtn = document.getElementById('btn-via-annuaire-ror-save');
+      const viaAnnuaireRorTestBtn = document.getElementById('btn-via-annuaire-ror-test');
+      const viaAnnuaireRorHint = document.getElementById('via-annuaire-ror-hint');
+      const viaAnnuaireLastSync = document.getElementById('via-annuaire-last-sync');
+      const viaAnnuaireSummary = document.getElementById('via-annuaire-summary');
+      const viaAnnuaireConfigToggleBtn = document.getElementById('btn-via-annuaire-config-toggle');
+      const viaAnnuaireLiveDomain = document.getElementById('via-annuaire-live-domain');
+      const viaAnnuaireLiveDepartment = document.getElementById('via-annuaire-live-departement');
+      const viaAnnuaireLiveKeyword = document.getElementById('via-annuaire-live-keyword');
+      const viaAnnuaireLiveSort = document.getElementById('via-annuaire-live-sort');
+      const viaAnnuaireLiveSearchBtn = document.getElementById('btn-via-annuaire-live-search');
+      const viaAnnuaireLivePrevBtn = document.getElementById('btn-via-annuaire-live-prev');
+      const viaAnnuaireLiveNextBtn = document.getElementById('btn-via-annuaire-live-next');
       renderLocalResetInfo();
       if (!themesList || !groupsList || !rolesList) return;
       if (!appBranding) {
@@ -5231,6 +5380,73 @@
       if (roleNameInput) roleNameInput.disabled = !canManageBranding;
       if (roleBaseInput) roleBaseInput.disabled = !canManageBranding;
       if (roleAddBtn) roleAddBtn.disabled = !canManageBranding;
+      await ensureViaAnnuaireRorSettingsLoaded();
+      await syncViaAnnuaireDepartmentsFromApi({ silent: true });
+      const rorEndpoint = getViaAnnuaireRorFhirEndpoint();
+      const rorHasApiKey = hasViaAnnuaireRorApiKey();
+      let endpointInputValue = rorEndpoint;
+      if (!endpointInputValue && !localStorage.getItem(VIA_ANNUAIRE_ROR_PREFILL_ONCE_KEY)) {
+        endpointInputValue = VIA_ANNUAIRE_ROR_FHIR_ENDPOINTS[0] || '';
+        if (endpointInputValue) {
+          localStorage.setItem(VIA_ANNUAIRE_ROR_PREFILL_ONCE_KEY, '1');
+        }
+      }
+      if (viaAnnuaireRorEndpointInput) {
+        viaAnnuaireRorEndpointInput.value = endpointInputValue;
+        viaAnnuaireRorEndpointInput.disabled = !canManageBranding;
+      }
+      if (viaAnnuaireRorApiKeyInput) {
+        viaAnnuaireRorApiKeyInput.value = String(viaAnnuaireRorSettingsCache?.apiKey || '');
+        viaAnnuaireRorApiKeyInput.disabled = !canManageBranding;
+      }
+      if (viaAnnuaireRorSaveBtn) viaAnnuaireRorSaveBtn.disabled = !canManageBranding;
+      if (viaAnnuaireRorTestBtn) viaAnnuaireRorTestBtn.disabled = !canManageBranding;
+      if (viaAnnuaireConfigToggleBtn) viaAnnuaireConfigToggleBtn.disabled = false;
+      setViaAnnuaireConfigExpanded(viaAnnuaireConfigExpanded, { skipPersist: true });
+      if (viaAnnuaireRorHint) {
+        const endpointConfiguredOrPrefilled = !!String(rorEndpoint || endpointInputValue || '').trim();
+        const prefillPendingSave = !rorEndpoint && !!endpointInputValue;
+        viaAnnuaireRorHint.textContent = hasViaAnnuaireRorCredentials()
+          ? (rorHasApiKey
+            ? "Endpoint Annuaire Santé configuré (avec clé API)."
+            : "Endpoint Annuaire Santé configuré (mode sans clé API, si autorisé par le plan).")
+          : (prefillPendingSave
+            ? "Endpoint pré-rempli. Cliquez sur Enregistrer (clé API optionnelle selon le plan)."
+            : `Configuration incomplète: endpoint ${endpointConfiguredOrPrefilled ? 'OK' : 'manquant'}.`);
+      }
+      if (viaAnnuaireLiveDomain) viaAnnuaireLiveDomain.disabled = false;
+      if (viaAnnuaireLiveDepartment) viaAnnuaireLiveDepartment.disabled = false;
+      if (viaAnnuaireLiveKeyword) viaAnnuaireLiveKeyword.disabled = false;
+      if (viaAnnuaireLiveSort) viaAnnuaireLiveSort.disabled = false;
+      if (viaAnnuaireLiveSearchBtn) viaAnnuaireLiveSearchBtn.disabled = !!viaAnnuaireLiveSearchState.loading;
+      if (viaAnnuaireLivePrevBtn) viaAnnuaireLivePrevBtn.disabled = true;
+      if (viaAnnuaireLiveNextBtn) viaAnnuaireLiveNextBtn.disabled = true;
+      if (viaAnnuaireStatus) {
+        const hasRorConfig = hasViaAnnuaireRorCredentials();
+        viaAnnuaireStatus.textContent = !hasRorConfig
+          ? 'Source: FINESS public (Annuaire Santé non configuré)'
+          : (viaAnnuaireRorUnavailable
+            ? `Source: FINESS public (Annuaire Santé indisponible${viaAnnuaireRorUnavailableReason ? `: ${viaAnnuaireRorUnavailableReason}` : ''})`
+            : (rorHasApiKey
+              ? 'Source: FINESS public + Annuaire Santé (best effort, avec clé API)'
+              : 'Source: FINESS public + Annuaire Santé (best effort, mode sans clé API)'));
+        viaAnnuaireStatus.className = !hasRorConfig
+          ? 'text-[11px] font-semibold px-2 py-1 rounded-full bg-slate-100 text-slate-700'
+          : (viaAnnuaireRorUnavailable
+            ? 'text-[11px] font-semibold px-2 py-1 rounded-full bg-amber-100 text-amber-800'
+            : 'text-[11px] font-semibold px-2 py-1 rounded-full bg-emerald-100 text-emerald-700');
+      }
+      if (viaAnnuaireLastSync) {
+        viaAnnuaireLastSync.textContent = viaAnnuaireRuntimeCache.lastDepartmentsSyncAt > 0
+          ? `Dernière mise à jour des départements: ${new Date(viaAnnuaireRuntimeCache.lastDepartmentsSyncAt).toLocaleString('fr-FR')}`
+          : 'Dernière mise à jour des départements: jamais';
+      }
+      if (viaAnnuaireSummary) {
+        viaAnnuaireSummary.textContent = viaAnnuaireLiveSearchState.lastQueryLabel
+          ? `Dernière recherche: ${viaAnnuaireLiveSearchState.lastQueryLabel}`
+          : 'Aucune recherche annuaire lancée.';
+      }
+      renderViaAnnuaireLiveSearchPanel({ keepSelection: true });
       if (appAdminBadge) {
         appAdminBadge.textContent = canManageBranding
           ? `Role: Admin application (${adminName})`
@@ -5350,8 +5566,13 @@
       // Mettre à jour la matrice des options de vues
       const profanityModeSelect = document.getElementById('profanity-filter-mode-select');
       const profanityModeCurrent = document.getElementById('profanity-filter-mode-current');
+      const taskAutoArchiveMonthsInput = document.getElementById('task-auto-archive-months-input');
+      const taskAutoArchiveMonthsCurrent = document.getElementById('task-auto-archive-months-current');
+      const taskAutoArchiveLastRun = document.getElementById('task-auto-archive-last-run');
       const workflowActionsModeSelect = document.getElementById('view-option-workflow-actions-mode');
       const workflowActionsShapeSelect = document.getElementById('view-option-workflow-actions-shape');
+      const taskAutoArchiveSettings = await getTaskAutoArchiveSettings();
+      const taskAutoArchiveMonths = taskAutoArchiveSettings.months;
       renderViewOptionsMatrix(canManageBranding);
       if (workflowActionsModeSelect) {
         workflowActionsModeSelect.value = getWorkflowActionButtonsMode();
@@ -5366,6 +5587,18 @@
       }
       if (profanityModeCurrent) {
         profanityModeCurrent.textContent = `Mode actuel: ${getProfanityFilterMode()}`;
+      }
+      if (taskAutoArchiveMonthsInput) {
+        taskAutoArchiveMonthsInput.value = String(taskAutoArchiveMonths);
+        taskAutoArchiveMonthsInput.disabled = !canManageBranding;
+      }
+      if (taskAutoArchiveMonthsCurrent) {
+        taskAutoArchiveMonthsCurrent.textContent = `Archivage après ${taskAutoArchiveMonths} mois`;
+      }
+      if (taskAutoArchiveLastRun) {
+        taskAutoArchiveLastRun.textContent = taskAutoArchiveSettings.lastRunAt > 0
+          ? `Dernier archivage auto exécuté le : ${new Date(taskAutoArchiveSettings.lastRunAt).toLocaleString('fr-FR')}`
+          : 'Dernier archivage auto exécuté le : jamais';
       }
       
       applyGlobalSettingsTabView();
@@ -5480,6 +5713,7 @@
         if (!link) return;
         link.classList.toggle('active', key === navKey);
       });
+      applyWorkspaceWidthMode();
     }
 
     async function rerenderCurrentContext() {
@@ -6513,6 +6747,1464 @@
       backupReminderInterval = null;
     }
 
+    function normalizeTaskAutoArchiveMonths(value) {
+      const parsed = Number.parseInt(String(value ?? ''), 10);
+      if (!Number.isFinite(parsed)) return TASK_AUTO_ARCHIVE_DEFAULT_MONTHS;
+      return Math.min(TASK_AUTO_ARCHIVE_MAX_MONTHS, Math.max(TASK_AUTO_ARCHIVE_MIN_MONTHS, parsed));
+    }
+
+    function normalizeTaskAutoArchiveSettings(rawValue) {
+      const value = rawValue && typeof rawValue === 'object'
+        ? rawValue
+        : { months: rawValue };
+      const months = normalizeTaskAutoArchiveMonths(value.months);
+      const lastRunAt = Number(value.lastRunAt || 0);
+      return {
+        months,
+        lastRunAt: Number.isFinite(lastRunAt) && lastRunAt > 0 ? lastRunAt : 0
+      };
+    }
+
+    async function getTaskAutoArchiveSettings() {
+      try {
+        const row = await getDecrypted('appSettings', TASK_AUTO_ARCHIVE_SETTINGS_KEY, 'key');
+        return normalizeTaskAutoArchiveSettings(row?.value);
+      } catch (_) {
+        return normalizeTaskAutoArchiveSettings({});
+      }
+    }
+
+    async function getTaskAutoArchiveMonths() {
+      const settings = await getTaskAutoArchiveSettings();
+      return settings.months;
+    }
+
+    async function saveTaskAutoArchiveMonths(monthsValue) {
+      const months = normalizeTaskAutoArchiveMonths(monthsValue);
+      const current = await getTaskAutoArchiveSettings();
+      await putEncrypted('appSettings', {
+        key: TASK_AUTO_ARCHIVE_SETTINGS_KEY,
+        value: {
+          months,
+          lastRunAt: Number(current.lastRunAt || 0) || 0
+        },
+        updatedAt: Date.now()
+      }, 'key');
+      return months;
+    }
+
+    async function setTaskAutoArchiveLastRunAt(timestamp) {
+      const current = await getTaskAutoArchiveSettings();
+      await putEncrypted('appSettings', {
+        key: TASK_AUTO_ARCHIVE_SETTINGS_KEY,
+        value: {
+          months: current.months,
+          lastRunAt: Number(timestamp || 0) || 0
+        },
+        updatedAt: Date.now()
+      }, 'key');
+    }
+
+    async function fetchJsonWithTimeout(url, options = {}, timeoutMs = 18000) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const response = await fetch(url, {
+          ...options,
+          signal: controller.signal,
+          headers: {
+            Accept: 'application/json',
+            ...(options.headers || {})
+          }
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        return await response.json();
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    function buildViaAnnuairePublicApiUrl(params = {}) {
+      const search = new URLSearchParams();
+      search.set('limit', String(Math.max(1, Number(params.limit || VIA_ANNUAIRE_PUBLIC_PAGE_SIZE))));
+      search.set('offset', String(Math.max(0, Number(params.offset || 0))));
+      search.set('order_by', String(params.orderBy || 'rs'));
+      search.set('select', String(params.select || 'nofinesset,rs,com_name,dep_code,dep_name,address,telephone,libmft,libcategetab,categetab,libsph'));
+      if (params.where) search.set('where', String(params.where));
+      if (params.groupBy) search.set('group_by', String(params.groupBy));
+      return `${VIA_ANNUAIRE_PUBLIC_API_ENDPOINT}?${search.toString()}`;
+    }
+
+    async function fetchViaAnnuairePublicApiRecords(params = {}, timeoutMs = 22000) {
+      const url = buildViaAnnuairePublicApiUrl(params);
+      return await fetchJsonWithTimeout(url, { method: 'GET' }, timeoutMs);
+    }
+
+    async function syncViaAnnuaireDepartmentsFromApi(options = {}) {
+      const force = !!options.force;
+      const silent = !!options.silent;
+      const hasCache = Array.isArray(viaAnnuaireRuntimeCache?.departements) && viaAnnuaireRuntimeCache.departements.length > 0;
+      if (hasCache && !force) {
+        return viaAnnuaireRuntimeCache.departements;
+      }
+      try {
+        const payload = await fetchViaAnnuairePublicApiRecords({
+          limit: 120,
+          offset: 0,
+          orderBy: 'dep_code',
+          select: 'dep_code,dep_name',
+          where: 'dep_code is not null',
+          groupBy: 'dep_code,dep_name'
+        }, 20000);
+        const deps = Array.isArray(payload?.results)
+          ? payload.results.map((row) => ({
+              id: normalizeViaAnnuaireDepartmentCode(row?.dep_code),
+              nom: String(row?.dep_name || row?.dep_code || '').trim(),
+              region: ''
+            })).filter((row) => row.id && row.nom)
+          : [];
+        if (deps.length > 0) {
+          const uniqueById = new Map();
+          deps.forEach((dep) => {
+            if (!uniqueById.has(dep.id)) uniqueById.set(dep.id, dep);
+          });
+          viaAnnuaireRuntimeCache = {
+            ...viaAnnuaireRuntimeCache,
+            departements: [...uniqueById.values()],
+            lastDepartmentsSyncAt: Date.now()
+          };
+          return viaAnnuaireRuntimeCache.departements;
+        }
+        throw new Error('Aucun département retourné');
+      } catch (error) {
+        if (!silent) {
+          showToast(`Lecture départements impossible: ${String(error?.message || 'erreur')}`);
+        }
+        viaAnnuaireRuntimeCache = {
+          ...viaAnnuaireRuntimeCache,
+          departements: VIA_ANNUAIRE_FALLBACK_DEPARTEMENTS
+        };
+        return viaAnnuaireRuntimeCache.departements;
+      }
+    }
+
+    function normalizeViaAnnuaireLiveDomain(value) {
+      return String(value || '').trim().toUpperCase() === 'PH' ? 'PH' : 'PA';
+    }
+
+    function normalizeViaAnnuaireDepartmentCode(value) {
+      return String(value || '').trim().toUpperCase();
+    }
+
+    function normalizeViaAnnuaireLiveSortKey(value) {
+      return String(value || '').trim().toLowerCase() === 'city' ? 'city' : 'name';
+    }
+
+    function setViaAnnuaireConfigExpanded(expanded, options = {}) {
+      viaAnnuaireConfigExpanded = !!expanded;
+      if (!options.skipPersist) {
+        localStorage.setItem(VIA_ANNUAIRE_CONFIG_EXPANDED_KEY, viaAnnuaireConfigExpanded ? '1' : '0');
+      }
+      const panel = document.getElementById('via-annuaire-config-panel');
+      const btn = document.getElementById('btn-via-annuaire-config-toggle');
+      if (panel) panel.classList.toggle('hidden', !viaAnnuaireConfigExpanded);
+      if (btn) {
+        btn.innerHTML = viaAnnuaireConfigExpanded
+          ? '<span class="material-symbols-outlined text-[13px]">visibility_off</span><span>Masquer config API</span>'
+          : '<span class="material-symbols-outlined text-[13px]">visibility</span><span>Afficher config API</span>';
+        btn.className = viaAnnuaireConfigExpanded
+          ? 'inline-flex items-center gap-1.5 px-2 py-1 rounded border border-emerald-300 bg-emerald-50 text-emerald-800 text-[11px] font-semibold'
+          : 'inline-flex items-center gap-1.5 px-2 py-1 rounded border border-slate-300 bg-white text-slate-700 text-[11px] font-semibold';
+      }
+    }
+
+    function buildViaAnnuaireLiveResultRef(item) {
+      const source = [
+        String(item?.finess || '').trim(),
+        String(item?.idStructure || '').trim(),
+        String(item?.name || '').trim(),
+        String(item?.city || '').trim()
+      ].filter(Boolean).join('|');
+      return source || `row:${Math.random().toString(36).slice(2, 10)}`;
+    }
+
+    function sortViaAnnuaireLiveResults(rows, sortKey) {
+      const key = normalizeViaAnnuaireLiveSortKey(sortKey);
+      const collator = new Intl.Collator('fr', { sensitivity: 'base', numeric: true });
+      return [...(Array.isArray(rows) ? rows : [])].sort((a, b) => {
+        const aPrimary = key === 'city' ? String(a?.city || '').trim() : String(a?.name || '').trim();
+        const bPrimary = key === 'city' ? String(b?.city || '').trim() : String(b?.name || '').trim();
+        const primaryOrder = collator.compare(aPrimary, bPrimary);
+        if (primaryOrder !== 0) return primaryOrder;
+        const aSecondary = key === 'city' ? String(a?.name || '').trim() : String(a?.city || '').trim();
+        const bSecondary = key === 'city' ? String(b?.name || '').trim() : String(b?.city || '').trim();
+        return collator.compare(aSecondary, bSecondary);
+      });
+    }
+
+    function getViaAnnuaireLiveDepartments() {
+      const runtime = Array.isArray(viaAnnuaireRuntimeCache?.departements)
+        ? viaAnnuaireRuntimeCache.departements.filter((item) => normalizeViaAnnuaireDepartmentCode(item?.id))
+        : [];
+      if (runtime.length > 0) return runtime;
+      return VIA_ANNUAIRE_FALLBACK_DEPARTEMENTS;
+    }
+
+    function buildViaAnnuairePublicFicheUrl(item, domain) {
+      const finess = String(item?.finess || '').trim();
+      if (!finess) return '';
+      const normalizedDomain = normalizeViaAnnuaireLiveDomain(domain);
+      const path = normalizedDomain === 'PH'
+        ? `fiche-etablissement/personnes-situation-handicap/${encodeURIComponent(finess)}`
+        : `fiche-etablissement/personnes-agees/${encodeURIComponent(finess)}`;
+      return `https://usager.viatrajectoire.fr/${path}`;
+    }
+
+    function extractViaAnnuaireRorEmailFromOrganization(org) {
+      if (!org || typeof org !== 'object') return '';
+      const candidates = [];
+      if (Array.isArray(org.telecom)) candidates.push(...org.telecom);
+      if (Array.isArray(org.contact)) {
+        org.contact.forEach((contact) => {
+          if (Array.isArray(contact?.telecom)) candidates.push(...contact.telecom);
+        });
+      }
+      for (const telecom of candidates) {
+        const system = String(telecom?.system || '').trim().toLowerCase();
+        if (system !== 'email') continue;
+        const value = String(telecom?.value || '').trim();
+        if (value) return value;
+      }
+      return '';
+    }
+
+    function extractViaAnnuaireRorEmailFromPayload(payload) {
+      if (!payload || typeof payload !== 'object') return '';
+      const bundleEntries = Array.isArray(payload.entry) ? payload.entry : [];
+      for (const entry of bundleEntries) {
+        const email = extractViaAnnuaireRorEmailFromOrganization(entry?.resource);
+        if (email) return email;
+      }
+      return extractViaAnnuaireRorEmailFromOrganization(payload);
+    }
+
+    function extractViaAnnuaireRorOrganizationFromPayload(payload) {
+      if (!payload || typeof payload !== 'object') return null;
+      if (String(payload.resourceType || '').trim() === 'Organization') return payload;
+      const entries = Array.isArray(payload.entry) ? payload.entry : [];
+      for (const entry of entries) {
+        const resource = entry?.resource;
+        if (resource && String(resource.resourceType || '').trim() === 'Organization') {
+          return resource;
+        }
+      }
+      return null;
+    }
+
+    function extractViaAnnuaireRorTelecomValue(org, system) {
+      const wanted = String(system || '').trim().toLowerCase();
+      if (!wanted || !org || typeof org !== 'object') return '';
+      const values = [];
+      const pushTelecomValues = (items) => {
+        if (!Array.isArray(items)) return;
+        items.forEach((telecom) => {
+          if (String(telecom?.system || '').trim().toLowerCase() !== wanted) return;
+          const value = String(telecom?.value || '').trim();
+          if (value) values.push(value);
+        });
+      };
+      pushTelecomValues(org.telecom);
+      if (Array.isArray(org.contact)) {
+        org.contact.forEach((contact) => pushTelecomValues(contact?.telecom));
+      }
+      return values[0] || '';
+    }
+
+    function normalizeViaAnnuaireComparableText(value) {
+      return String(value || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[.,;:/()'"`’\-]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLowerCase();
+    }
+
+    function normalizeViaAnnuaireComparablePhone(value) {
+      return String(value || '').replace(/[^\d+]/g, '').trim();
+    }
+
+    function normalizeViaAnnuaireComparableEmail(value) {
+      return String(value || '').trim().toLowerCase();
+    }
+
+    function tokenizeViaAnnuaireComparableText(value) {
+      return normalizeViaAnnuaireComparableText(value)
+        .split(' ')
+        .map((token) => token.trim())
+        .filter(Boolean);
+    }
+
+    function computeViaAnnuaireTokenOverlap(leftTokens = [], rightTokens = []) {
+      const a = new Set(leftTokens);
+      const b = new Set(rightTokens);
+      if (!a.size || !b.size) return 0;
+      let common = 0;
+      a.forEach((token) => {
+        if (b.has(token)) common += 1;
+      });
+      return common / Math.max(a.size, b.size);
+    }
+
+    function buildViaAnnuaireRecommendedAddress(localAddress, remoteAddress) {
+      const localRaw = String(localAddress || '').trim();
+      const remoteRaw = String(remoteAddress || '').trim();
+      if (!localRaw || !remoteRaw) return '';
+      const localNorm = normalizeViaAnnuaireComparableText(localRaw);
+      const remoteNorm = normalizeViaAnnuaireComparableText(remoteRaw);
+      if (!localNorm || !remoteNorm) return '';
+      if (localNorm === remoteNorm) return '';
+      const localTokens = tokenizeViaAnnuaireComparableText(localRaw);
+      const remoteTokens = tokenizeViaAnnuaireComparableText(remoteRaw);
+      const overlap = computeViaAnnuaireTokenOverlap(localTokens, remoteTokens);
+      const contains = remoteNorm.includes(localNorm) || localNorm.includes(remoteNorm);
+      const lengthGain = remoteNorm.length - localNorm.length;
+      if ((contains && lengthGain >= 6) || (overlap >= 0.58 && remoteNorm.length > localNorm.length)) {
+        return remoteRaw;
+      }
+      return '';
+    }
+
+    function computeViaAnnuaireDiceSimilarity(left, right) {
+      const a = normalizeViaAnnuaireComparableText(left);
+      const b = normalizeViaAnnuaireComparableText(right);
+      if (!a && !b) return 1;
+      if (!a || !b) return 0;
+      if (a === b) return 1;
+      const grams = (text) => {
+        if (text.length < 2) return [text];
+        const out = [];
+        for (let i = 0; i < text.length - 1; i += 1) out.push(text.slice(i, i + 2));
+        return out;
+      };
+      const gA = grams(a);
+      const gB = grams(b);
+      const counts = new Map();
+      gA.forEach((g) => counts.set(g, (counts.get(g) || 0) + 1));
+      let overlap = 0;
+      gB.forEach((g) => {
+        const c = counts.get(g) || 0;
+        if (c > 0) {
+          overlap += 1;
+          counts.set(g, c - 1);
+        }
+      });
+      return (2 * overlap) / (gA.length + gB.length);
+    }
+
+    function extractViaAnnuaireRorOrganizationAddress(org) {
+      const first = Array.isArray(org?.address) ? org.address.find(Boolean) : null;
+      if (!first || typeof first !== 'object') return '';
+      const line = Array.isArray(first.line) ? first.line.map((v) => String(v || '').trim()).filter(Boolean).join(' ') : '';
+      return String(line || first.text || '').trim();
+    }
+
+    function buildViaAnnuaireRorLookupUrls(finess) {
+      const normalizedFiness = String(finess || '').trim();
+      if (!normalizedFiness) return [];
+      const endpoint = getViaAnnuaireRorFhirEndpoint();
+      if (!endpoint) return [];
+      const buildUrl = (pairs = []) => {
+        const params = new URLSearchParams();
+        pairs.forEach(([key, value]) => {
+          if (!key || !String(value || '').trim()) return;
+          params.set(String(key), String(value));
+        });
+        params.set('_count', '1');
+        return `${endpoint}/Organization?${params.toString()}`;
+      };
+      return [
+        buildUrl([['identifier', normalizedFiness]]),
+        buildUrl([['identifier', `urn:oid:1.2.250.1.71.4.2.2|${normalizedFiness}`]]),
+        buildUrl([['identifier', `https://finess.esante.gouv.fr|${normalizedFiness}`]])
+      ];
+    }
+
+    function normalizeViaAnnuaireRorEndpoint(value) {
+      const raw = String(value || '').trim();
+      if (!raw) return '';
+      if (!/^https?:\/\//i.test(raw)) return '';
+      try {
+        const parsed = new URL(raw);
+        const host = String(parsed.hostname || '').toLowerCase();
+        let path = String(parsed.pathname || '').replace(/\/+$/, '');
+        if (host === 'gateway.api.esante.gouv.fr') {
+          if (!path || path === '/') {
+            path = '/fhir/v2';
+          } else if (path === '/fhir') {
+            path = '/fhir/v2';
+          }
+        }
+        parsed.pathname = path || '/';
+        parsed.search = '';
+        parsed.hash = '';
+        return parsed.toString().replace(/\/+$/, '');
+      } catch (_) {
+        return '';
+      }
+    }
+
+    function normalizeViaAnnuaireRorSettings(rawValue) {
+      const value = rawValue && typeof rawValue === 'object' ? rawValue : {};
+      const endpoint = normalizeViaAnnuaireRorEndpoint(value.endpoint || value.endpoints?.[0] || '');
+      const apiKey = String(value.apiKey || '').trim();
+      return { endpoint, apiKey };
+    }
+
+    async function ensureViaAnnuaireRorSettingsLoaded() {
+      if (viaAnnuaireRorSettingsLoaded) return viaAnnuaireRorSettingsCache;
+      try {
+        const row = await getDecrypted('appSettings', VIA_ANNUAIRE_ROR_SETTINGS_KEY, 'key');
+        viaAnnuaireRorSettingsCache = normalizeViaAnnuaireRorSettings(row?.value);
+      } catch (_) {
+        viaAnnuaireRorSettingsCache = normalizeViaAnnuaireRorSettings({
+          endpoint: VIA_ANNUAIRE_ROR_FHIR_ENDPOINTS[0] || '',
+          apiKey: ''
+        });
+      }
+      viaAnnuaireRorSettingsLoaded = true;
+      return viaAnnuaireRorSettingsCache;
+    }
+
+    async function saveViaAnnuaireRorSettings(nextValue) {
+      const normalized = normalizeViaAnnuaireRorSettings(nextValue);
+      await putEncrypted('appSettings', {
+        key: VIA_ANNUAIRE_ROR_SETTINGS_KEY,
+        value: normalized,
+        updatedAt: Date.now()
+      }, 'key');
+      viaAnnuaireRorSettingsCache = normalized;
+      viaAnnuaireRorSettingsLoaded = true;
+      viaAnnuaireRorUnavailable = false;
+      viaAnnuaireRorUnavailableReason = '';
+      viaAnnuaireRorProbeDone = false;
+      viaAnnuaireRorEmailCache.clear();
+      viaAnnuaireRorOrganizationCache.clear();
+      return normalized;
+    }
+
+    function getViaAnnuaireRorFhirEndpoint() {
+      return normalizeViaAnnuaireRorEndpoint(viaAnnuaireRorSettingsCache?.endpoint);
+    }
+
+    function hasViaAnnuaireRorCredentials() {
+      const endpoint = getViaAnnuaireRorFhirEndpoint();
+      return !!endpoint;
+    }
+
+    function hasViaAnnuaireRorApiKey() {
+      return !!String(viaAnnuaireRorSettingsCache?.apiKey || '').trim();
+    }
+
+    async function testViaAnnuaireRorEndpointReachability(endpoint, apiKey = '') {
+      const target = normalizeViaAnnuaireRorEndpoint(endpoint);
+      if (!target) throw new Error('Endpoint Annuaire Santé vide');
+      const token = String(apiKey || '').trim();
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+      try {
+        const response = await fetch(`${target}/metadata`, {
+          method: 'GET',
+          headers: {
+            Accept: 'application/fhir+json, application/json;q=0.9',
+            ...(token ? { 'ESANTE-API-KEY': token } : {})
+          },
+          signal: controller.signal
+        });
+        if (response.ok) return { ok: true, authRequired: false, status: response.status };
+        if (response.status === 401 || response.status === 403) {
+          return { ok: true, authRequired: true, status: response.status };
+        }
+        throw new Error(`HTTP ${response.status}`);
+      } catch (error) {
+        const message = String(error?.message || 'erreur');
+        if (/failed to fetch|network|cors|load failed|name_not_resolved|dns/i.test(message)) {
+          throw new Error(`Accès réseau/CORS/DNS refusé (${message})`);
+        }
+        throw error;
+      } finally {
+        clearTimeout(timeout);
+      }
+    }
+
+    async function fetchViaAnnuaireRorEmailByFiness(finess) {
+      const normalizedFiness = String(finess || '').trim();
+      if (!normalizedFiness) return '';
+      await ensureViaAnnuaireRorSettingsLoaded();
+      if (viaAnnuaireRorEmailCache.has(normalizedFiness)) {
+        return String(viaAnnuaireRorEmailCache.get(normalizedFiness) || '');
+      }
+      const orgFromCache = viaAnnuaireRorOrganizationCache.get(normalizedFiness);
+      if (orgFromCache && typeof orgFromCache === 'object') {
+        const cachedEmail = extractViaAnnuaireRorTelecomValue(orgFromCache, 'email');
+        viaAnnuaireRorEmailCache.set(normalizedFiness, cachedEmail);
+        return cachedEmail;
+      }
+      if (viaAnnuaireRorUnavailable || !hasViaAnnuaireRorCredentials()) return '';
+      const urls = buildViaAnnuaireRorLookupUrls(normalizedFiness);
+      if (!urls.length) return '';
+      const apiKey = String(viaAnnuaireRorSettingsCache?.apiKey || '').trim();
+      const errors = [];
+      for (const url of urls) {
+        try {
+          const payload = await fetchJsonWithTimeout(url, {
+            method: 'GET',
+            headers: {
+              Accept: 'application/fhir+json, application/json;q=0.9',
+              ...(apiKey ? { 'ESANTE-API-KEY': apiKey } : {})
+            }
+          }, 12000);
+          const org = extractViaAnnuaireRorOrganizationFromPayload(payload);
+          if (org) {
+            viaAnnuaireRorOrganizationCache.set(normalizedFiness, org);
+          }
+          const email = org
+            ? extractViaAnnuaireRorTelecomValue(org, 'email')
+            : extractViaAnnuaireRorEmailFromPayload(payload);
+          if (email) {
+            viaAnnuaireRorEmailCache.set(normalizedFiness, email);
+            return email;
+          }
+        } catch (error) {
+          const message = String(error?.message || 'erreur');
+          errors.push(message);
+          if (/HTTP\s*400/i.test(message)) {
+            viaAnnuaireRorUnavailable = true;
+            viaAnnuaireRorUnavailableReason = 'Requête FHIR refusée (400). Vérifiez endpoint/format attendu.';
+            break;
+          }
+          if (/HTTP\s*(401|403)/i.test(message)) {
+            viaAnnuaireRorUnavailable = true;
+            viaAnnuaireRorUnavailableReason = 'Accès refusé (401/403) par l’endpoint Annuaire Santé';
+            break;
+          }
+        }
+      }
+      const hasFetchError = errors.some((message) => /failed to fetch|network|cors|load failed/i.test(message));
+      if (hasFetchError) {
+        viaAnnuaireRorUnavailable = true;
+        if (!viaAnnuaireRorUnavailableReason) {
+          viaAnnuaireRorUnavailableReason = 'Accès réseau/CORS impossible';
+        }
+      }
+      viaAnnuaireRorEmailCache.set(normalizedFiness, '');
+      return '';
+    }
+
+    async function fetchViaAnnuaireRorOrganizationByFiness(finess) {
+      const normalizedFiness = String(finess || '').trim();
+      if (!normalizedFiness) return null;
+      await ensureViaAnnuaireRorSettingsLoaded();
+      if (viaAnnuaireRorOrganizationCache.has(normalizedFiness)) {
+        return viaAnnuaireRorOrganizationCache.get(normalizedFiness) || null;
+      }
+      if (viaAnnuaireRorUnavailable || !hasViaAnnuaireRorCredentials()) return null;
+      const urls = buildViaAnnuaireRorLookupUrls(normalizedFiness);
+      if (!urls.length) return null;
+      const apiKey = String(viaAnnuaireRorSettingsCache?.apiKey || '').trim();
+      for (const url of urls) {
+        try {
+          const payload = await fetchJsonWithTimeout(url, {
+            method: 'GET',
+            headers: {
+              Accept: 'application/fhir+json, application/json;q=0.9',
+              ...(apiKey ? { 'ESANTE-API-KEY': apiKey } : {})
+            }
+          }, 12000);
+          const org = extractViaAnnuaireRorOrganizationFromPayload(payload);
+          if (org) {
+            viaAnnuaireRorOrganizationCache.set(normalizedFiness, org);
+            const email = extractViaAnnuaireRorTelecomValue(org, 'email');
+            viaAnnuaireRorEmailCache.set(normalizedFiness, email);
+            return org;
+          }
+        } catch (error) {
+          const message = String(error?.message || 'erreur');
+          if (/HTTP\s*400/i.test(message)) {
+            viaAnnuaireRorUnavailable = true;
+            viaAnnuaireRorUnavailableReason = 'Requête FHIR refusée (400). Vérifiez endpoint/format attendu.';
+            break;
+          }
+          if (/HTTP\s*(401|403)/i.test(message)) {
+            viaAnnuaireRorUnavailable = true;
+            viaAnnuaireRorUnavailableReason = 'Accès refusé (401/403) par l’endpoint Annuaire Santé';
+            break;
+          }
+        }
+      }
+      viaAnnuaireRorOrganizationCache.set(normalizedFiness, null);
+      return null;
+    }
+
+    async function ensureViaAnnuaireRorEnrichmentReady() {
+      await ensureViaAnnuaireRorSettingsLoaded();
+      if (!hasViaAnnuaireRorCredentials()) return false;
+      if (viaAnnuaireRorUnavailable) return false;
+      if (viaAnnuaireRorProbeDone) return true;
+      viaAnnuaireRorProbeDone = true;
+      const endpoint = getViaAnnuaireRorFhirEndpoint();
+      const apiKey = String(viaAnnuaireRorSettingsCache?.apiKey || '').trim();
+      try {
+        const probe = await testViaAnnuaireRorEndpointReachability(endpoint, apiKey);
+        if (probe?.authRequired && !apiKey) {
+          viaAnnuaireRorUnavailable = true;
+          viaAnnuaireRorUnavailableReason = 'Authentification requise (clé API manquante)';
+          return false;
+        }
+        viaAnnuaireRorUnavailable = false;
+        viaAnnuaireRorUnavailableReason = '';
+        return true;
+      } catch (error) {
+        const message = String(error?.message || 'erreur');
+        viaAnnuaireRorUnavailable = true;
+        viaAnnuaireRorUnavailableReason = /HTTP\s*(401|403)/i.test(message)
+          ? 'Accès refusé (401/403) par l’endpoint Annuaire Santé'
+          : `Probe endpoint échoué (${message})`;
+        return false;
+      }
+    }
+
+    function buildViaAnnuaireAuditField(label, localValue, remoteValue, normalizer = normalizeViaAnnuaireComparableText, options = {}) {
+      const left = String(localValue || '').trim();
+      const right = String(remoteValue || '').trim();
+      const leftNorm = normalizer(left);
+      const rightNorm = normalizer(right);
+      const leftMissing = !leftNorm;
+      const rightMissing = !rightNorm;
+      if (leftMissing && rightMissing) {
+        return { label, status: 'incomplete', local: left, remote: right, note: 'Absent des deux côtés' };
+      }
+      if (leftMissing || rightMissing) {
+        return { label, status: 'incomplete', local: left, remote: right, note: leftMissing ? 'Manquant FINESS' : 'Manquant API FHIR' };
+      }
+      if (leftNorm === rightNorm) {
+        return { label, status: 'ok', local: left, remote: right, note: 'Conforme' };
+      }
+      const leftTokens = tokenizeViaAnnuaireComparableText(left);
+      const rightTokens = tokenizeViaAnnuaireComparableText(right);
+      const tokenOverlap = computeViaAnnuaireTokenOverlap(leftTokens, rightTokens);
+      const dice = computeViaAnnuaireDiceSimilarity(left, right);
+      const contains = leftNorm.includes(rightNorm) || rightNorm.includes(leftNorm);
+      const closeThreshold = Number(options.closeThreshold || 0);
+      const tokenThreshold = Number(options.tokenThreshold || 0);
+      const allowContains = options.allowContains !== false;
+      const isClose = (allowContains && contains)
+        || (closeThreshold > 0 && dice >= closeThreshold)
+        || (tokenThreshold > 0 && tokenOverlap >= tokenThreshold);
+      if (isClose) {
+        return {
+          label,
+          status: 'close',
+          local: left,
+          remote: right,
+          note: `Proximité détectée (similarité ${(dice * 100).toFixed(0)}%, overlap ${(tokenOverlap * 100).toFixed(0)}%)`
+        };
+      }
+      return { label, status: 'different', local: left, remote: right, note: 'Valeur différente' };
+    }
+
+    function computeViaAnnuaireAuditFromRows(localRow, organization) {
+      const org = organization && typeof organization === 'object' ? organization : null;
+      if (!localRow || !org) {
+        return {
+          status: 'incomplete',
+          summary: 'Données API FHIR indisponibles pour cet établissement.',
+          fields: []
+        };
+      }
+      const remoteName = String(org.name || '').trim();
+      const remoteCity = String((Array.isArray(org.address) ? org.address.find(Boolean)?.city : '') || '').trim();
+      const remoteAddress = extractViaAnnuaireRorOrganizationAddress(org);
+      const remotePhone = extractViaAnnuaireRorTelecomValue(org, 'phone');
+      const remoteEmail = extractViaAnnuaireRorTelecomValue(org, 'email');
+      const fields = [
+        buildViaAnnuaireAuditField('Nom', localRow.name, remoteName, normalizeViaAnnuaireComparableText, { closeThreshold: 0.9, tokenThreshold: 0.8, allowContains: true }),
+        buildViaAnnuaireAuditField('Ville', localRow.city, remoteCity, normalizeViaAnnuaireComparableText, { closeThreshold: 0.84, tokenThreshold: 0.75, allowContains: true }),
+        buildViaAnnuaireAuditField('Adresse', localRow.address, remoteAddress, normalizeViaAnnuaireComparableText, { closeThreshold: 0.72, tokenThreshold: 0.58, allowContains: true }),
+        buildViaAnnuaireAuditField('Téléphone', localRow.phone, remotePhone, normalizeViaAnnuaireComparablePhone),
+        buildViaAnnuaireAuditField('Email', localRow.email, remoteEmail, normalizeViaAnnuaireComparableEmail)
+      ];
+      const recommendedAddress = buildViaAnnuaireRecommendedAddress(localRow.address, remoteAddress);
+      const hasDiff = fields.some((f) => f.status === 'different');
+      const hasIncomplete = fields.some((f) => f.status === 'incomplete');
+      const hasClose = fields.some((f) => f.status === 'close');
+      const status = hasDiff ? 'different' : (hasIncomplete ? 'incomplete' : (hasClose ? 'close' : 'ok'));
+      return {
+        status,
+        summary: status === 'ok'
+          ? 'FINESS et API FHIR cohérents sur les champs comparés.'
+          : (status === 'close'
+            ? 'Écarts mineurs détectés (proximité sémantique), pas de divergence forte.'
+          : (status === 'different'
+            ? 'Divergences détectées entre FINESS et API FHIR.'
+            : 'Comparaison partielle (données manquantes sur au moins un champ).')),
+        fields,
+        recommendedAddress
+      };
+    }
+
+    async function runViaAnnuaireAuditForRows(rows = []) {
+      const items = Array.isArray(rows) ? rows : [];
+      if (!items.length) return;
+      const state = viaAnnuaireLiveSearchState || {};
+      if (!state.auditMode) return;
+      if (!hasViaAnnuaireRorCredentials() || viaAnnuaireRorUnavailable) return;
+      if (state.auditLoading) return;
+      viaAnnuaireLiveSearchState = {
+        ...state,
+        auditLoading: true
+      };
+      renderViaAnnuaireLiveSearchPanel({ keepSelection: true });
+      try {
+        const ready = await ensureViaAnnuaireRorEnrichmentReady();
+        if (!ready) return;
+        const auditByRef = { ...(viaAnnuaireLiveSearchState.auditByRef || {}) };
+        let changed = false;
+        for (const row of items) {
+          if (!row || !row.ref) continue;
+          if (auditByRef[row.ref]?.status) continue;
+          const finess = String(row.finess || '').trim();
+          if (!finess) {
+            auditByRef[row.ref] = {
+              status: 'incomplete',
+              summary: 'FINESS absent: audit impossible.',
+              fields: []
+            };
+            changed = true;
+            continue;
+          }
+          const org = await fetchViaAnnuaireRorOrganizationByFiness(finess);
+          auditByRef[row.ref] = computeViaAnnuaireAuditFromRows(row, org);
+          changed = true;
+        }
+        if (changed) {
+          viaAnnuaireLiveSearchState = {
+            ...viaAnnuaireLiveSearchState,
+            auditByRef
+          };
+        }
+      } finally {
+        viaAnnuaireLiveSearchState = {
+          ...viaAnnuaireLiveSearchState,
+          auditLoading: false
+        };
+        renderViaAnnuaireLiveSearchPanel({ keepSelection: true });
+      }
+    }
+
+    function getViaAnnuaireAuditBadgeMeta(status) {
+      const key = String(status || '').trim();
+      if (key === 'ok') return { label: 'OK', className: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
+      if (key === 'close') return { label: 'Proche', className: 'bg-cyan-100 text-cyan-800 border-cyan-200' };
+      if (key === 'different') return { label: 'Différent', className: 'bg-amber-100 text-amber-900 border-amber-200' };
+      if (key === 'incomplete') return { label: 'Incomplet', className: 'bg-slate-100 text-slate-700 border-slate-200' };
+      if (key === 'error') return { label: 'Erreur', className: 'bg-red-100 text-red-800 border-red-200' };
+      return { label: 'Audit…', className: 'bg-blue-100 text-blue-800 border-blue-200' };
+    }
+
+    function computeViaAnnuaireAuditBreakdown(audit) {
+      const counts = { ok: 0, close: 0, incomplete: 0, different: 0 };
+      const fields = Array.isArray(audit?.fields) ? audit.fields : [];
+      fields.forEach((field) => {
+        const status = String(field?.status || '').trim();
+        if (status === 'ok') counts.ok += 1;
+        else if (status === 'close') counts.close += 1;
+        else if (status === 'incomplete') counts.incomplete += 1;
+        else if (status === 'different') counts.different += 1;
+      });
+      return counts;
+    }
+
+    function toggleViaAnnuaireAuditDetails(refEncoded) {
+      const ref = decodeURIComponent(String(refEncoded || ''));
+      if (!ref) return;
+      const current = String(viaAnnuaireLiveSearchState.openAuditRef || '');
+      viaAnnuaireLiveSearchState = {
+        ...viaAnnuaireLiveSearchState,
+        openAuditRef: current === ref ? '' : ref
+      };
+      renderViaAnnuaireLiveSearchPanel({ keepSelection: true });
+    }
+    window.toggleViaAnnuaireAuditDetails = toggleViaAnnuaireAuditDetails;
+
+    async function applyViaAnnuaireAuditRecommendedAddress(refEncoded) {
+      const ref = decodeURIComponent(String(refEncoded || ''));
+      if (!ref) return;
+      const audit = viaAnnuaireLiveSearchState?.auditByRef?.[ref];
+      const recommendedAddress = String(audit?.recommendedAddress || '').trim();
+      if (!recommendedAddress) return;
+      const updateRowAddress = (row) => {
+        if (!row || String(row.ref || '') !== ref) return row;
+        return {
+          ...row,
+          address: recommendedAddress
+        };
+      };
+      const nextAll = Array.isArray(viaAnnuaireLiveSearchState.allResults)
+        ? viaAnnuaireLiveSearchState.allResults.map(updateRowAddress)
+        : [];
+      const nextResults = Array.isArray(viaAnnuaireLiveSearchState.results)
+        ? viaAnnuaireLiveSearchState.results.map(updateRowAddress)
+        : [];
+      let nextAudit = { ...(viaAnnuaireLiveSearchState.auditByRef || {}) };
+      const row = nextResults.find((item) => String(item?.ref || '') === ref)
+        || nextAll.find((item) => String(item?.ref || '') === ref);
+      if (row) {
+        const finess = String(row.finess || '').trim();
+        const org = finess ? await fetchViaAnnuaireRorOrganizationByFiness(finess) : null;
+        nextAudit[ref] = computeViaAnnuaireAuditFromRows(row, org);
+      }
+      viaAnnuaireLiveSearchState = {
+        ...viaAnnuaireLiveSearchState,
+        allResults: nextAll,
+        results: nextResults,
+        auditByRef: nextAudit
+      };
+      renderViaAnnuaireLiveSearchPanel({ keepSelection: true });
+      showToast('Adresse enrichie appliquée pour cette ligne');
+    }
+
+    async function enrichViaAnnuaireRowsWithRorEmail(rows = []) {
+      const items = Array.isArray(rows) ? rows : [];
+      if (!items.length || viaAnnuaireRorUnavailable) return;
+      const ready = await ensureViaAnnuaireRorEnrichmentReady();
+      if (!ready) {
+        renderViaAnnuaireLiveSearchPanel({ keepSelection: true });
+        return;
+      }
+      let changed = false;
+      for (const item of items) {
+        if (!item || typeof item !== 'object') continue;
+        if (String(item.email || '').trim()) continue;
+        const finess = String(item.finess || '').trim();
+        if (!finess) continue;
+        const email = await fetchViaAnnuaireRorEmailByFiness(finess);
+        if (email && String(item.email || '').trim() !== email) {
+          item.email = email;
+          changed = true;
+        }
+      }
+      if (changed) {
+        renderViaAnnuaireLiveSearchPanel({ keepSelection: true });
+      }
+    }
+
+    function normalizeViaAnnuaireTextForMatch(value) {
+      return String(value || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
+    }
+
+    function matchesViaAnnuaireAnyToken(haystack, tokens = []) {
+      if (!haystack || !tokens.length) return false;
+      return tokens.some((token) => haystack.includes(token));
+    }
+
+    function isViaAnnuaireDomainMatch(item, domain) {
+      const normalizedDomain = normalizeViaAnnuaireLiveDomain(domain);
+      const searchable = normalizeViaAnnuaireTextForMatch([
+        item?.name,
+        item?.category,
+        item?.mode,
+        item?.speciality
+      ].filter(Boolean).join(' '));
+      if (!searchable) return false;
+      const paTokens = [
+        'ehpad', 'personnes agees', 'residence autonomie', 'usld', 'accueil de jour',
+        'ssiad pa', 'hebergement personnes agees', 'maison de retraite'
+      ];
+      const phTokens = [
+        'handicap', 'ime', 'iem', 'mas', 'fam', 'esat', 'sessad', 'samsah',
+        'foyer accueil medicalise', 'foyer de vie', 'institut medico educatif',
+        'deficient', 'polyhandicap'
+      ];
+      if (normalizedDomain === 'PH') {
+        return matchesViaAnnuaireAnyToken(searchable, phTokens);
+      }
+      return matchesViaAnnuaireAnyToken(searchable, paTokens);
+    }
+
+    function readViaAnnuaireLiveSearchInputs() {
+      const domainInput = document.getElementById('via-annuaire-live-domain');
+      const departmentInput = document.getElementById('via-annuaire-live-departement');
+      const keywordInput = document.getElementById('via-annuaire-live-keyword');
+      const sortInput = document.getElementById('via-annuaire-live-sort');
+      return {
+        domain: normalizeViaAnnuaireLiveDomain(domainInput?.value),
+        departmentCode: normalizeViaAnnuaireDepartmentCode(departmentInput?.value),
+        keyword: String(keywordInput?.value || '').trim(),
+        sortKey: normalizeViaAnnuaireLiveSortKey(sortInput?.value)
+      };
+    }
+
+    function renderViaAnnuaireLiveSearchPanel(options = {}) {
+      const domainInput = document.getElementById('via-annuaire-live-domain');
+      const departmentInput = document.getElementById('via-annuaire-live-departement');
+      const keywordInput = document.getElementById('via-annuaire-live-keyword');
+      const sortInput = document.getElementById('via-annuaire-live-sort');
+      const summary = document.getElementById('via-annuaire-summary');
+      const lastSync = document.getElementById('via-annuaire-last-sync');
+      const searchBtn = document.getElementById('btn-via-annuaire-live-search');
+      const prevBtn = document.getElementById('btn-via-annuaire-live-prev');
+      const nextBtn = document.getElementById('btn-via-annuaire-live-next');
+      const auditToggleBtn = document.getElementById('btn-via-annuaire-live-audit-toggle');
+      const meta = document.getElementById('via-annuaire-live-meta');
+      const results = document.getElementById('via-annuaire-live-results');
+      if (!domainInput || !departmentInput || !keywordInput || !sortInput || !searchBtn || !prevBtn || !nextBtn || !meta || !results) return;
+
+      const state = viaAnnuaireLiveSearchState || {};
+      const status = document.getElementById('via-annuaire-status');
+      if (summary) {
+        summary.textContent = state.lastQueryLabel
+          ? `Dernière recherche: ${state.lastQueryLabel}`
+          : 'Aucune recherche annuaire lancée.';
+      }
+      if (status) {
+        const hasRorConfig = hasViaAnnuaireRorCredentials();
+        const rorHasApiKey = hasViaAnnuaireRorApiKey();
+        status.textContent = !hasRorConfig
+          ? 'Source: FINESS public (Annuaire Santé non configuré)'
+          : (viaAnnuaireRorUnavailable
+            ? `Source: FINESS public (Annuaire Santé indisponible${viaAnnuaireRorUnavailableReason ? `: ${viaAnnuaireRorUnavailableReason}` : ''})`
+            : (rorHasApiKey
+              ? 'Source: FINESS public + Annuaire Santé (best effort, avec clé API)'
+              : 'Source: FINESS public + Annuaire Santé (best effort, mode sans clé API)'));
+        status.className = !hasRorConfig
+          ? 'text-[11px] font-semibold px-2 py-1 rounded-full bg-slate-100 text-slate-700'
+          : (viaAnnuaireRorUnavailable
+            ? 'text-[11px] font-semibold px-2 py-1 rounded-full bg-amber-100 text-amber-800'
+            : 'text-[11px] font-semibold px-2 py-1 rounded-full bg-emerald-100 text-emerald-700');
+      }
+      if (lastSync) {
+        lastSync.textContent = viaAnnuaireRuntimeCache.lastDepartmentsSyncAt > 0
+          ? `Dernière mise à jour des départements: ${new Date(viaAnnuaireRuntimeCache.lastDepartmentsSyncAt).toLocaleString('fr-FR')}`
+          : 'Dernière mise à jour des départements: jamais';
+      }
+      const departments = getViaAnnuaireLiveDepartments();
+      const previousDepartment = normalizeViaAnnuaireDepartmentCode(options.keepSelection
+        ? state.departmentCode
+        : (departmentInput.value || state.departmentCode));
+      const departmentOptions = departments
+        .slice()
+        .sort((a, b) => String(a?.id || '').localeCompare(String(b?.id || ''), 'fr'))
+        .map((dep) => {
+          const id = normalizeViaAnnuaireDepartmentCode(dep?.id);
+          const label = String(dep?.nom || dep?.id || '').trim() || id;
+          return `<option value="${escapeHtml(id)}">${escapeHtml(label)}</option>`;
+        });
+      departmentInput.innerHTML = `<option value="">Département...</option>${departmentOptions.join('')}`;
+      if (previousDepartment && departments.some((dep) => normalizeViaAnnuaireDepartmentCode(dep?.id) === previousDepartment)) {
+        departmentInput.value = previousDepartment;
+      } else if (departments.some((dep) => normalizeViaAnnuaireDepartmentCode(dep?.id) === '61')) {
+        departmentInput.value = '61';
+      }
+
+      domainInput.value = normalizeViaAnnuaireLiveDomain(state.domain);
+      keywordInput.value = String(state.keyword || '');
+      sortInput.value = normalizeViaAnnuaireLiveSortKey(state.sortKey);
+
+      const sortedRows = sortViaAnnuaireLiveResults(state.results, state.sortKey);
+      const auditCounts = { ok: 0, close: 0, incomplete: 0, different: 0, pending: 0 };
+      if (state.auditMode) {
+        sortedRows.forEach((row) => {
+          const statusKey = String(state.auditByRef?.[row?.ref]?.status || '').trim();
+          if (statusKey === 'ok') auditCounts.ok += 1;
+          else if (statusKey === 'close') auditCounts.close += 1;
+          else if (statusKey === 'incomplete') auditCounts.incomplete += 1;
+          else if (statusKey === 'different') auditCounts.different += 1;
+          else auditCounts.pending += 1;
+        });
+      }
+      const hasResults = sortedRows.length > 0;
+      const total = Math.max(0, Number(state.total || 0));
+      const pageSize = Math.max(1, Number(state.pageSize || 12));
+      const pageIndex = Math.max(0, Number(state.pageIndex || 0));
+      const start = total === 0 ? 0 : (pageIndex * pageSize) + 1;
+      const end = total === 0 ? 0 : Math.min(total, (pageIndex + 1) * pageSize);
+      const canPrev = pageIndex > 0 && !state.loading;
+      const canNext = end < total && !state.loading;
+      prevBtn.disabled = !canPrev;
+      nextBtn.disabled = !canNext;
+      searchBtn.disabled = !!state.loading;
+      searchBtn.textContent = state.loading ? 'Recherche...' : 'Rechercher';
+      if (auditToggleBtn) {
+        const modeOn = !!state.auditMode;
+        auditToggleBtn.textContent = modeOn ? 'Audit: ON' : 'Audit: OFF';
+        auditToggleBtn.className = modeOn
+          ? 'px-2 py-1 rounded border border-blue-300 bg-blue-50 text-blue-800 text-[11px] font-semibold'
+          : 'px-2 py-1 rounded border border-slate-300 text-slate-700 text-[11px] font-semibold';
+      }
+
+      if (state.loading) {
+        meta.textContent = 'Recherche en cours...';
+      } else if (state.lastError) {
+        meta.textContent = `Erreur: ${state.lastError}`;
+      } else if (total > 0) {
+        const audited = state.auditMode
+          ? Object.keys(state.auditByRef || {}).length
+          : 0;
+        meta.textContent = state.auditMode
+          ? `${state.lastQueryLabel || 'Résultats'} • ${start}-${end} / ${total} • audit ${audited} ligne(s) • OK ${auditCounts.ok} • Proche ${auditCounts.close} • Incomplet ${auditCounts.incomplete}${auditCounts.pending ? ` • En attente ${auditCounts.pending}` : ''}`
+          : `${state.lastQueryLabel || 'Résultats'} • ${start}-${end} / ${total}`;
+      } else {
+        meta.textContent = 'Aucune recherche effectuée.';
+      }
+
+      if (state.loading) {
+        results.innerHTML = '<p class="text-xs text-slate-500 p-3">Interrogation de l\'annuaire en cours...</p>';
+        return;
+      }
+      if (state.lastError) {
+        results.innerHTML = `<p class="text-xs text-red-600 p-3">${escapeHtml(state.lastError)}</p>`;
+        return;
+      }
+      if (!hasResults) {
+        results.innerHTML = '<p class="text-xs text-slate-500 p-3">Aucun établissement trouvé pour cette recherche.</p>';
+        return;
+      }
+
+      results.innerHTML = sortedRows.map((item) => {
+        const audit = state.auditMode ? state.auditByRef?.[item.ref] : null;
+        const auditMeta = getViaAnnuaireAuditBadgeMeta(audit?.status);
+        const auditBreakdown = computeViaAnnuaireAuditBreakdown(audit);
+        const isAuditOpen = state.auditMode && String(state.openAuditRef || '') === String(item.ref || '');
+        const encodedRef = encodeURIComponent(String(item.ref || ''));
+        const name = String(item?.name || '').trim() || 'Établissement sans nom';
+        const subtitleParts = [item?.city, item?.department].filter(Boolean).join(' • ');
+        const address = String(item?.address || '').trim();
+        const tags = [item?.mode, item?.category].filter(Boolean).join(' • ');
+        const details = [item?.finess ? `FINESS ${item.finess}` : '', item?.idStructure ? `ID ${item.idStructure}` : ''].filter(Boolean).join(' • ');
+        const ficheUrl = buildViaAnnuairePublicFicheUrl(item, state.domain);
+        const ficheActionHtml = ficheUrl
+          ? `<a class="inline-flex items-center gap-1 mt-1.5 text-[11px] font-semibold text-blue-700 hover:underline" href="${escapeHtml(ficheUrl)}" target="_blank" rel="noopener noreferrer"><span class="material-symbols-outlined text-[12px]">open_in_new</span>Fiche ViaTrajectoire</a>`
+          : '';
+        return `
+          <div class="p-3 border-b border-slate-100 last:border-b-0 hover:bg-slate-50">
+            <div class="w-full text-left">
+              <p class="text-sm font-semibold text-slate-800">${escapeHtml(name)}</p>
+              ${subtitleParts ? `<p class="text-xs text-slate-600 mt-0.5">${escapeHtml(subtitleParts)}</p>` : ''}
+              ${address ? `<p class="text-xs text-slate-500 mt-0.5">${escapeHtml(address)}</p>` : ''}
+              ${item?.phone ? `<p class="text-xs text-slate-500 mt-0.5"><span class="font-semibold text-slate-600">Téléphone:</span> ${escapeHtml(item.phone)}</p>` : ''}
+              ${item?.email ? `<p class="text-xs text-slate-500 mt-0.5"><span class="font-semibold text-slate-600">Email:</span> ${escapeHtml(item.email)}</p>` : ''}
+              ${state.auditMode ? `
+                <div class="mt-1.5 flex items-center gap-2 flex-wrap">
+                  <button type="button" class="inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[11px] font-semibold via-annuaire-audit-toggle-btn ${auditMeta.className}" data-audit-ref="${escapeHtml(encodedRef)}">
+                    <span class="material-symbols-outlined text-[13px]">rule</span>
+                    ${audit ? `
+                      <span class="inline-flex items-center gap-1">
+                        <span>OK ${auditBreakdown.ok}</span>
+                        <span>•</span>
+                        <span>Proche ${auditBreakdown.close}</span>
+                        <span>•</span>
+                        <span>Incomplet ${auditBreakdown.incomplete}</span>
+                        ${auditBreakdown.different ? `<span>• Différent ${auditBreakdown.different}</span>` : ''}
+                      </span>
+                    ` : escapeHtml(auditMeta.label)}
+                  </button>
+                  ${audit?.summary ? `<span class="text-[11px] text-slate-500">${escapeHtml(audit.summary)}</span>` : ''}
+                </div>
+              ` : ''}
+              ${tags ? `<p class="text-[11px] text-slate-500 mt-1">${escapeHtml(tags)}</p>` : ''}
+              ${details ? `<p class="text-[11px] text-slate-400 mt-1">${escapeHtml(details)}</p>` : ''}
+            </div>
+            ${ficheActionHtml}
+            ${isAuditOpen ? `
+              <div class="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+                <p class="text-[11px] font-semibold text-slate-700 mb-1">Détail audit FINESS vs API FHIR</p>
+                ${audit?.recommendedAddress ? `
+                  <div class="mb-2 p-2 rounded border border-cyan-200 bg-cyan-50 text-[11px] text-cyan-900">
+                    <p class="font-semibold mb-1">Adresse enrichie recommandée</p>
+                    <p>${escapeHtml(audit.recommendedAddress)}</p>
+                    <button type="button" class="mt-1.5 inline-flex items-center gap-1 px-2 py-1 rounded border border-cyan-300 bg-white text-cyan-800 font-semibold via-annuaire-audit-apply-address-btn" data-audit-ref="${escapeHtml(encodedRef)}">
+                      <span class="material-symbols-outlined text-[13px]">auto_fix_high</span>
+                      Utiliser l'adresse enrichie
+                    </button>
+                  </div>
+                ` : ''}
+                ${Array.isArray(audit?.fields) && audit.fields.length > 0
+                  ? `<div class="space-y-1.5">${audit.fields.map((field) => {
+                      const fieldMeta = getViaAnnuaireAuditBadgeMeta(field?.status);
+                      return `
+                        <div class="text-[11px] text-slate-700 border border-slate-200 rounded p-1.5 bg-white">
+                          <div class="flex items-center justify-between gap-2">
+                            <span class="font-semibold">${escapeHtml(field?.label || 'Champ')}</span>
+                            <span class="px-1.5 py-0.5 rounded border ${fieldMeta.className}">${escapeHtml(fieldMeta.label)}</span>
+                          </div>
+                          <div class="mt-1 text-slate-500">FINESS: ${escapeHtml(field?.local || '—')}</div>
+                          <div class="text-slate-500">FHIR: ${escapeHtml(field?.remote || '—')}</div>
+                          ${field?.note ? `<div class="text-slate-400">${escapeHtml(field.note)}</div>` : ''}
+                        </div>
+                      `;
+                    }).join('')}</div>`
+                  : '<p class="text-[11px] text-slate-500">Aucun détail disponible.</p>'}
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }).join('');
+      results.querySelectorAll('.via-annuaire-audit-toggle-btn').forEach((btn) => {
+        btn.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const refEncoded = String(btn.getAttribute('data-audit-ref') || '');
+          toggleViaAnnuaireAuditDetails(refEncoded);
+        });
+      });
+      results.querySelectorAll('.via-annuaire-audit-apply-address-btn').forEach((btn) => {
+        btn.addEventListener('click', async (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const refEncoded = String(btn.getAttribute('data-audit-ref') || '');
+          await applyViaAnnuaireAuditRecommendedAddress(refEncoded);
+        });
+      });
+    }
+
+    function mapViaAnnuaireLiveResultItem(item) {
+      const obj = item && typeof item === 'object' ? item : {};
+      const name = String(
+        obj.rs
+        || obj.rslongue
+        || obj.nom
+        || ''
+      ).trim();
+      const city = String(
+        obj.com_name
+        || obj.commune
+        || obj.ville
+        || ''
+      ).trim();
+      const department = String(
+        obj.dep_name
+        || obj.dep_code
+        || ''
+      ).trim();
+      const address = String(
+        obj.adresse
+        || obj.address
+        || ''
+      ).trim();
+      const mode = String(obj.libmft || '').trim();
+      const category = String(obj.libcategetab || '').trim();
+      const speciality = String(obj.libsph || '').trim();
+      const finess = String(obj.nofinesset || obj.nofinessej || '').trim();
+      const idStructure = String(obj.siret || '').trim();
+      const phone = String(obj.telephone || '').trim();
+      return {
+        name,
+        city,
+        department,
+        departmentCode: normalizeViaAnnuaireDepartmentCode(obj.dep_code),
+        address,
+        mode,
+        category,
+        speciality,
+        finess,
+        idStructure,
+        phone,
+        email: '',
+        ref: buildViaAnnuaireLiveResultRef({ name, city, finess, idStructure })
+      };
+    }
+
+    function filterViaAnnuaireRecordsBySearchInput(items, input) {
+      const domain = normalizeViaAnnuaireLiveDomain(input.domain);
+      const keyword = normalizeViaAnnuaireTextForMatch(input.keyword);
+      return (Array.isArray(items) ? items : []).filter((item) => {
+        if (!isViaAnnuaireDomainMatch(item, domain)) return false;
+        if (!keyword) return true;
+        const haystack = normalizeViaAnnuaireTextForMatch([
+          item?.name,
+          item?.city,
+          item?.address,
+          item?.category,
+          item?.mode,
+          item?.speciality,
+          item?.finess
+        ].filter(Boolean).join(' '));
+        return haystack.includes(keyword);
+      });
+    }
+
+    async function runViaAnnuaireLiveSearch(options = {}) {
+      const fromUi = options.fromUi !== false;
+      const requestedPageIndex = Number.isFinite(Number(options.pageIndex))
+        ? Math.max(0, Number(options.pageIndex))
+        : Math.max(0, Number(viaAnnuaireLiveSearchState.pageIndex || 0));
+      const input = fromUi ? readViaAnnuaireLiveSearchInputs() : {
+        domain: normalizeViaAnnuaireLiveDomain(viaAnnuaireLiveSearchState.domain),
+        departmentCode: normalizeViaAnnuaireDepartmentCode(viaAnnuaireLiveSearchState.departmentCode),
+        keyword: String(viaAnnuaireLiveSearchState.keyword || '').trim(),
+        sortKey: normalizeViaAnnuaireLiveSortKey(viaAnnuaireLiveSearchState.sortKey)
+      };
+      if (!input.departmentCode) {
+        showToast('Sélectionnez un département');
+        return null;
+      }
+      if (!fromUi && Array.isArray(viaAnnuaireLiveSearchState.allResults) && viaAnnuaireLiveSearchState.allResults.length > 0) {
+        const sortedAll = sortViaAnnuaireLiveResults(viaAnnuaireLiveSearchState.allResults, input.sortKey);
+        const pageSize = Math.max(1, Number(viaAnnuaireLiveSearchState.pageSize || 12));
+        const total = sortedAll.length;
+        const maxPageIndex = total > 0 ? Math.max(0, Math.ceil(total / pageSize) - 1) : 0;
+        const safePageIndex = Math.min(requestedPageIndex, maxPageIndex);
+        const startIndex = safePageIndex * pageSize;
+        const paged = sortedAll.slice(startIndex, startIndex + pageSize);
+        viaAnnuaireLiveSearchState = {
+          ...viaAnnuaireLiveSearchState,
+          sortKey: input.sortKey,
+          pageIndex: safePageIndex,
+          allResults: sortedAll,
+          results: paged,
+          total,
+          selectedResultRef: String(paged[0]?.ref || '')
+        };
+        renderViaAnnuaireLiveSearchPanel({ keepSelection: true });
+        void enrichViaAnnuaireRowsWithRorEmail(paged);
+        void runViaAnnuaireAuditForRows(paged);
+        return paged;
+      }
+      if (!Array.isArray(viaAnnuaireRuntimeCache?.departements) || viaAnnuaireRuntimeCache.departements.length === 0) {
+        await syncViaAnnuaireDepartmentsFromApi({ silent: true });
+      }
+
+      const nextState = {
+        ...viaAnnuaireLiveSearchState,
+        domain: input.domain,
+        departmentCode: input.departmentCode,
+        keyword: input.keyword,
+        sortKey: input.sortKey,
+        pageIndex: requestedPageIndex,
+        allResults: [],
+        results: [],
+        auditByRef: {},
+        openAuditRef: '',
+        total: 0,
+        loading: true,
+        lastError: '',
+        selectedResultRef: fromUi ? '' : String(viaAnnuaireLiveSearchState.selectedResultRef || '')
+      };
+      viaAnnuaireLiveSearchState = nextState;
+      renderViaAnnuaireLiveSearchPanel({ keepSelection: true });
+      try {
+        const scanTarget = Math.max(VIA_ANNUAIRE_PUBLIC_PAGE_SIZE, VIA_ANNUAIRE_PUBLIC_MAX_SCAN);
+        let offset = 0;
+        let scannedCount = 0;
+        const rawRows = [];
+        while (offset < scanTarget) {
+          const payload = await fetchViaAnnuairePublicApiRecords({
+            limit: VIA_ANNUAIRE_PUBLIC_PAGE_SIZE,
+            offset,
+            orderBy: 'rs',
+            select: 'nofinesset,nofinessej,rs,rslongue,address,telephone,dep_code,dep_name,com_name,libmft,libcategetab,categetab,libsph,siret',
+            where: `dep_code = "${escapeOdsWhereValue(input.departmentCode)}"`
+          }, 25000);
+          const batch = Array.isArray(payload?.results) ? payload.results : [];
+          rawRows.push(...batch);
+          scannedCount += batch.length;
+          if (batch.length < VIA_ANNUAIRE_PUBLIC_PAGE_SIZE) break;
+          if (scannedCount >= scanTarget) break;
+          offset += VIA_ANNUAIRE_PUBLIC_PAGE_SIZE;
+        }
+        const mappedAll = rawRows.map(mapViaAnnuaireLiveResultItem).filter((item) => item.name);
+        const filtered = filterViaAnnuaireRecordsBySearchInput(mappedAll, input);
+        const sortedAll = sortViaAnnuaireLiveResults(filtered, input.sortKey);
+        const pageSize = Math.max(1, Number(nextState.pageSize || 12));
+        const total = sortedAll.length;
+        const maxPageIndex = total > 0 ? Math.max(0, Math.ceil(total / pageSize) - 1) : 0;
+        const safePageIndex = Math.min(requestedPageIndex, maxPageIndex);
+        const startIndex = safePageIndex * pageSize;
+        const paged = sortedAll.slice(startIndex, startIndex + pageSize);
+        const selectedRef = paged.some((item) => String(item?.ref || '') === String(nextState.selectedResultRef || ''))
+          ? String(nextState.selectedResultRef || '')
+          : String(paged[0]?.ref || '');
+        const departmentLabel = getViaAnnuaireLiveDepartments().find((dep) => (
+          normalizeViaAnnuaireDepartmentCode(dep?.id) === input.departmentCode
+        ))?.nom || input.departmentCode;
+        const scanNotice = scannedCount >= scanTarget ? ` (échantillon ${scanTarget})` : '';
+        viaAnnuaireLiveSearchState = {
+          ...nextState,
+          loading: false,
+          pageIndex: safePageIndex,
+          results: paged,
+          allResults: sortedAll,
+          total,
+          selectedResultRef: selectedRef,
+          lastQueryLabel: `${input.domain} • ${departmentLabel}${input.keyword ? ` • ${input.keyword}` : ''}${scanNotice}`
+        };
+        renderViaAnnuaireLiveSearchPanel({ keepSelection: true });
+        void enrichViaAnnuaireRowsWithRorEmail(paged);
+        void runViaAnnuaireAuditForRows(paged);
+        return paged;
+      } catch (error) {
+        const errorMessage = String(error?.message || 'Erreur de recherche');
+        viaAnnuaireLiveSearchState = {
+          ...nextState,
+          loading: false,
+          allResults: [],
+          results: [],
+          total: 0,
+          lastError: errorMessage
+        };
+        renderViaAnnuaireLiveSearchPanel({ keepSelection: true });
+        showToast(`Recherche annuaire impossible: ${errorMessage}`);
+        return null;
+      }
+    }
+
+    function escapeOdsWhereValue(value) {
+      return String(value || '').replace(/"/g, '\\"');
+    }
+
+    function getTaskCompletionTimestamp(task) {
+      if (!task) return 0;
+      const candidates = [
+        Number(task.completedAt || 0),
+        Number(task.statusChangedAt || 0),
+        Number(task.updatedAt || 0),
+        Number(task.createdAt || 0)
+      ];
+      const found = candidates.find((ts) => Number.isFinite(ts) && ts > 0);
+      return found || 0;
+    }
+
+    function shouldAutoArchiveCompletedTask(task, cutoffTs) {
+      if (!task || task.archivedAt) return false;
+      if (normalizeTaskStatusValue(task.status) !== 'termine') return false;
+      const completedTs = getTaskCompletionTimestamp(task);
+      return completedTs > 0 && completedTs <= cutoffTs;
+    }
+
+    function buildTaskAutoArchiveCutoffTs(months, nowTs = Date.now()) {
+      const cutoffDate = new Date(nowTs);
+      cutoffDate.setHours(0, 0, 0, 0);
+      cutoffDate.setMonth(cutoffDate.getMonth() - Math.max(1, months));
+      return cutoffDate.getTime();
+    }
+
+    async function runAutoArchiveCompletedTasks(options = {}) {
+      const force = !!options.force;
+      const silent = options.silent !== false;
+      const nowTs = Date.now();
+      if (taskAutoArchiveBusy) return { skipped: 'busy', archived: 0 };
+      if (!force && (nowTs - taskAutoArchiveLastRunAt) < TASK_AUTO_ARCHIVE_THROTTLE_MS) {
+        return { skipped: 'throttled', archived: 0 };
+      }
+      taskAutoArchiveBusy = true;
+      try {
+        const months = await getTaskAutoArchiveMonths();
+        const cutoffTs = buildTaskAutoArchiveCutoffTs(months, nowTs);
+        let archivedStandalone = 0;
+        let archivedProjectTasks = 0;
+
+        const standaloneTasks = await getAllDecrypted('globalTasks', 'id');
+        for (const task of (standaloneTasks || [])) {
+          if (!shouldAutoArchiveCompletedTask(task, cutoffTs)) continue;
+          await putEncrypted('globalTasks', {
+            ...task,
+            status: 'termine',
+            completedAt: Number(task.completedAt || getTaskCompletionTimestamp(task) || nowTs) || nowTs,
+            archivedAt: nowTs,
+            updatedAt: nowTs
+          }, 'id');
+          archivedStandalone += 1;
+        }
+
+        const syncBucketsByProject = new Map();
+        const projectStates = await getAllProjectStates();
+        for (const state of (projectStates || [])) {
+          const projectId = String(state?.project?.projectId || '').trim();
+          if (!projectId) continue;
+          if (state?.project?.archivedAt || state?.project?.deletedAt) continue;
+          for (const task of (state?.tasks || [])) {
+            if (!shouldAutoArchiveCompletedTask(task, cutoffTs)) continue;
+            const event = createEvent(
+              EventTypes.UPDATE_TASK,
+              projectId,
+              currentUser?.userId || getCurrentUserId(),
+              {
+                taskId: task.taskId,
+                changes: {
+                  status: 'termine',
+                  completedAt: Number(task.completedAt || getTaskCompletionTimestamp(task) || nowTs) || nowTs,
+                  archivedAt: nowTs
+                }
+              }
+            );
+            await publishEvent(event);
+            if (sharedFolderHandle) {
+              if (!syncBucketsByProject.has(projectId)) syncBucketsByProject.set(projectId, []);
+              syncBucketsByProject.get(projectId).push(event);
+            }
+            archivedProjectTasks += 1;
+          }
+        }
+
+        if (sharedFolderHandle && syncBucketsByProject.size > 0) {
+          for (const [projectId, events] of syncBucketsByProject.entries()) {
+            if (!events.length) continue;
+            await syncProjectEventsToSharedSpace(projectId, events);
+          }
+        }
+
+        const archivedTotal = archivedStandalone + archivedProjectTasks;
+        taskAutoArchiveLastRunAt = Date.now();
+        await setTaskAutoArchiveLastRunAt(taskAutoArchiveLastRunAt);
+
+        if (archivedTotal > 0) {
+          if (!silent) {
+            showToast(`Archivage auto: ${archivedTotal} tâche(s) terminée(s) archivées`);
+          }
+          await refreshStats();
+          if (workspaceMode === 'global' && globalWorkspaceView === 'tasks') {
+            await renderGlobalTasks();
+          }
+          if (workspaceMode === 'project' && currentProjectId) {
+            await showProjectDetail(currentProjectId);
+          }
+        }
+        return {
+          archived: archivedTotal,
+          archivedStandalone,
+          archivedProjectTasks,
+          months,
+          lastRunAt: taskAutoArchiveLastRunAt
+        };
+      } catch (error) {
+        console.warn('Automatic task archiving failed:', error);
+        return { skipped: 'error', archived: 0 };
+      } finally {
+        taskAutoArchiveBusy = false;
+      }
+    }
+
+    function startTaskAutoArchiveScheduler() {
+      if (taskAutoArchiveInterval) return;
+      void runAutoArchiveCompletedTasks({ silent: true });
+      taskAutoArchiveInterval = setInterval(() => {
+        void runAutoArchiveCompletedTasks({ silent: true });
+      }, 20 * 60 * 1000);
+    }
+
+    function stopTaskAutoArchiveScheduler() {
+      if (!taskAutoArchiveInterval) return;
+      clearInterval(taskAutoArchiveInterval);
+      taskAutoArchiveInterval = null;
+    }
+
     function showToast(message, duration = 3000) {
       if (window.TaskMDAUI?.showToast) {
         window.TaskMDAUI.showToast(message, duration);
@@ -7189,6 +8881,9 @@
     let notifiedCollaboratorEventIds = new Set();
     let dueReminderInterval = null;
     let backupReminderInterval = null;
+    let taskAutoArchiveInterval = null;
+    let taskAutoArchiveBusy = false;
+    let taskAutoArchiveLastRunAt = 0;
     let dueReminderBusy = false;
     let editProjectFromDashboard = false;
     let dueReminderMemory = {};
@@ -7273,6 +8968,12 @@
     const PROFANITY_FILTER_MODE_STORAGE_KEY = 'taskmda_profanity_mode_v1';
     const PROFANITY_FILTER_DEFAULT_MODE = 'convert';
     const PROFANITY_FILTER_MODES = new Set(['off', 'remove', 'convert', 'encrypt']);
+    const TASK_AUTO_ARCHIVE_SETTINGS_KEY = 'taskAutoArchiveSettings';
+    const VIA_ANNUAIRE_ROR_PREFILL_ONCE_KEY = 'taskmda_annuaire_ror_prefill_once_v1';
+    const TASK_AUTO_ARCHIVE_DEFAULT_MONTHS = 1;
+    const TASK_AUTO_ARCHIVE_MIN_MONTHS = 1;
+    const TASK_AUTO_ARCHIVE_MAX_MONTHS = 36;
+    const TASK_AUTO_ARCHIVE_THROTTLE_MS = 30 * 60 * 1000;
     const PROFANITY_RULES = [
       { regex: /\bputain\b/giu, replacement: 'zut' },
       { regex: /\bmerde\b/giu, replacement: 'mince' },
@@ -7292,6 +8993,7 @@
     ];
     const GLOBAL_MESSAGE_HIDDEN_GROUPS_STORAGE_KEY = 'taskmda_global_hidden_group_channels_v1';
     const GLOBAL_MESSAGE_HIDDEN_PEERS_STORAGE_KEY = 'taskmda_global_hidden_peer_conversations_v1';
+    const GLOBAL_FEED_DIGEST_VIEW_STORAGE_KEY = 'taskmda_global_feed_digest_view_v1';
     let globalMessagePeerUserId = GLOBAL_MESSAGE_BROADCAST_TARGET;
     let globalMessageActiveGroupConversationId = '';
     let globalMessageRecipientUserIds = new Set();
@@ -7312,6 +9014,7 @@
     let globalFeedSortMode = 'desc'; // desc | asc
     let globalFeedMentionCatalogCache = null;
     let globalFeedComposerCollapsed = true;
+    let globalFeedDigestViewMode = String(localStorage.getItem(GLOBAL_FEED_DIGEST_VIEW_STORAGE_KEY) || '').trim().toLowerCase() === 'full' ? 'full' : 'compact';
     const GLOBAL_MESSAGE_READ_STORAGE_KEY = 'taskmda_global_message_reads_v1';
     let globalMessageReadMap = loadGlobalMessageReadMap();
     let globalMessageHiddenGroupChannels = loadGlobalMessageHiddenGroupChannels();
@@ -7321,10 +9024,16 @@
     const GLOBAL_KANBAN_INITIAL_BATCH = 18;
     const GLOBAL_KANBAN_BATCH_SIZE = 18;
     const GLOBAL_KANBAN_SCROLL_THRESHOLD_PX = 84;
+    const TASK_KANBAN_PAGE_SIZE = 12;
+    const GLOBAL_TASK_KANBAN_PAGE_SIZE = 12;
     const GLOBAL_TIMELINE_INITIAL_BATCH = 16;
     const GLOBAL_TIMELINE_BATCH_SIZE = 16;
     const GLOBAL_TIMELINE_SCROLL_THRESHOLD_PX = 84;
+    const TASK_COMPLETION_FX_MAX_EVENT_AGE_MS = 12000;
+    const TASK_COMPLETION_FX_QUEUE_TTL_MS = 16000;
     let draggedGlobalTaskRef = null;
+    let projectKanbanPageByStatus = { todo: 1, 'en-cours': 1, suspendu: 1, termine: 1 };
+    let globalKanbanPageByStatus = { todo: 1, 'en-cours': 1, suspendu: 1, termine: 1 };
     let currentGlobalTaskDetailRef = '';
     let currentGlobalTaskDetailContext = null;
     let currentGlobalTaskDetailTask = null;
@@ -7333,6 +9042,53 @@
     const taskDetailInlineDebounceTimers = new Map();
     const taskDetailInlineFinalizeTimers = new Map();
     const taskDetailInlineLastSavedValues = new Map();
+    const taskDetailInlinePendingSaves = new Map();
+    const taskCompletionFxQueue = new Map();
+    const VIA_ANNUAIRE_PUBLIC_API_ENDPOINT = 'https://data.opendatasoft.com/api/explore/v2.1/catalog/datasets/healthref-france-finess%40public/records';
+    const VIA_ANNUAIRE_PUBLIC_PAGE_SIZE = 100;
+    const VIA_ANNUAIRE_PUBLIC_MAX_SCAN = 2500;
+    const VIA_ANNUAIRE_ROR_FHIR_ENDPOINTS = ['https://gateway.api.esante.gouv.fr/fhir/v2'];
+    const VIA_ANNUAIRE_ROR_SETTINGS_KEY = 'viaAnnuaireRorSettings';
+    const VIA_ANNUAIRE_CONFIG_EXPANDED_KEY = 'taskmda_via_annuaire_config_expanded_v1';
+    let viaAnnuaireRuntimeCache = {
+      departements: [],
+      lastDepartmentsSyncAt: 0
+    };
+    const VIA_ANNUAIRE_FALLBACK_DEPARTEMENTS = [
+      { id: '61', nom: 'Orne (61)', region: 'NORMANDIE' }
+    ];
+    const viaAnnuaireRorEmailCache = new Map();
+    const viaAnnuaireRorOrganizationCache = new Map();
+    let viaAnnuaireRorUnavailable = false;
+    let viaAnnuaireRorUnavailableReason = '';
+    let viaAnnuaireRorProbeDone = false;
+    let viaAnnuaireRorSettingsLoaded = false;
+    let viaAnnuaireRorSettingsCache = {
+      endpoint: VIA_ANNUAIRE_ROR_FHIR_ENDPOINTS[0] || '',
+      apiKey: ''
+    };
+    let viaAnnuaireConfigExpanded = localStorage.getItem(VIA_ANNUAIRE_CONFIG_EXPANDED_KEY) !== '0';
+    let viaAnnuaireLiveSearchState = {
+      domain: 'PH',
+      departmentCode: '',
+      keyword: '',
+      sortKey: 'name',
+      pageIndex: 0,
+      pageSize: 12,
+      total: 0,
+      allResults: [],
+      results: [],
+      selectedResultRef: '',
+      openAuditRef: '',
+      auditMode: false,
+      auditLoading: false,
+      auditByRef: {},
+      loading: false,
+      lastError: '',
+      lastQueryLabel: ''
+    };
+    let taskDetailWorkspaceRefreshTimer = null;
+    let taskDetailWorkspaceRefreshQueue = Promise.resolve();
     let currentProjectInlineCanEdit = false;
     const projectInlineDebounceTimers = new Map();
     const projectInlineFinalizeTimers = new Map();
@@ -7451,14 +9207,16 @@
       return replacement;
     }
 
-    function applyProfanityFilterToText(value, modeOverride = '') {
+    function applyProfanityFilterToText(value, modeOverride = '', options = {}) {
       const mode = String(modeOverride || getProfanityFilterMode()).trim().toLowerCase();
+      const preserveSpacing = options?.preserveSpacing === true;
       let output = String(value || '');
       if (!output || mode === 'off') return output;
       PROFANITY_RULES.forEach((rule) => {
         if (!(rule?.regex instanceof RegExp)) return;
         output = output.replace(rule.regex, (match) => applyProfanityAction(match, String(rule.replacement || ''), mode));
       });
+      if (preserveSpacing) return output;
       return output
         .replace(/[ \t]{2,}/g, ' ')
         .replace(/\s+([,.;:!?])/g, '$1')
@@ -7480,7 +9238,7 @@
         const parentTag = String(node?.parentElement?.tagName || '').toLowerCase();
         if (parentTag === 'code' || parentTag === 'pre') continue;
         const before = String(node?.textContent || '');
-        const after = applyProfanityFilterToText(before, mode);
+        const after = applyProfanityFilterToText(before, mode, { preserveSpacing: true });
         if (after !== before) {
           toPatch.push({ node, text: after });
         }
@@ -8274,6 +10032,20 @@
       await renderGlobalTasks();
     }
 
+    async function setProjectKanbanPage(statusKey, page) {
+      const key = String(statusKey || '').trim();
+      if (!key) return;
+      projectKanbanPageByStatus[key] = Math.max(1, Number(page) || 1);
+      renderKanban(currentProjectState?.tasks || []);
+    }
+
+    async function setGlobalKanbanPage(statusKey, page) {
+      const key = String(statusKey || '').trim();
+      if (!key) return;
+      globalKanbanPageByStatus[key] = Math.max(1, Number(page) || 1);
+      await renderGlobalTasks();
+    }
+
     function updateGlobalTasksViewButtons() {
       const buttons = {
         cards: document.getElementById('global-tasks-view-cards'),
@@ -8335,6 +10107,10 @@
           title: 'Aide: Habilitations',
           text: "Les habilitations globales se basent sur les niveaux techniques Propriétaire, Manager et Membre, avec des libellés métier personnalisables."
         },
+        annuaire: {
+          title: 'Aide: Annuaire ESMS',
+          text: "Interrogez l'annuaire public FINESS en lecture seule (PA/PH) avec filtres et tri, puis ouvrez la fiche ViaTrajectoire associée via FINESS."
+        },
         views: {
           title: 'Aide: Options de vues',
           text: "Administrez les sous-onglets visibles pour chaque rubrique et fixez un onglet par défaut. Les vues désactivées basculent automatiquement vers une vue autorisée."
@@ -8370,6 +10146,7 @@
         themes: document.getElementById('global-settings-tab-themes'),
         groups: document.getElementById('global-settings-tab-groups'),
         roles: document.getElementById('global-settings-tab-roles'),
+        annuaire: document.getElementById('global-settings-tab-annuaire'),
         views: document.getElementById('global-settings-tab-views')
       };
       Object.entries(tabButtons).forEach(([key, btn]) => {
@@ -8384,6 +10161,7 @@
       const themesCard = document.querySelector('#global-settings-section .global-settings-card-themes');
       const groupsCard = document.querySelector('#global-settings-section .global-settings-card-groups');
       const rolesCard = document.querySelector('#global-settings-section .global-settings-card-roles');
+      const annuaireCard = document.querySelector('#global-settings-section .global-settings-card-annuaire');
       const viewsCard = document.querySelector('#global-settings-section .global-settings-card-views');
       const softwareTipsCard = document.querySelector('#global-settings-section .global-settings-card-software-tips');
       const globalSettingsSection = document.getElementById('global-settings-section');
@@ -8392,6 +10170,7 @@
       if (themesCard) themesCard.classList.toggle('hidden', globalSettingsTab !== 'themes');
       if (groupsCard) groupsCard.classList.toggle('hidden', globalSettingsTab !== 'groups');
       if (rolesCard) rolesCard.classList.toggle('hidden', globalSettingsTab !== 'roles');
+      if (annuaireCard) annuaireCard.classList.toggle('hidden', globalSettingsTab !== 'annuaire');
       if (viewsCard) viewsCard.classList.toggle('hidden', globalSettingsTab !== 'views');
       if (softwareTipsCard) softwareTipsCard.classList.toggle('hidden', globalSettingsTab !== 'views');
       globalSettingsSection?.classList.toggle('software-tab-active', false);
@@ -8564,13 +10343,52 @@
         }
       });
 
-      const allowedTags = new Set(['p', 'br', 'strong', 'em', 'u', 's', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'blockquote', 'code', 'pre', 'a', 'img', 'figure', 'figcaption', 'span', 'div', 'iframe']);
+      const allowedTags = new Set(['p', 'br', 'strong', 'em', 'u', 's', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'code', 'pre', 'a', 'img', 'figure', 'figcaption', 'span', 'div', 'iframe', 'details', 'summary', 'section', 'article', 'hr', 'table', 'thead', 'tbody', 'tr', 'th', 'td']);
       const allowedImageClasses = new Set(['desc-img-align-left', 'desc-img-align-center', 'desc-img-align-right']);
+      const allowedDigestClassTokens = new Set([
+        'feed-digest-block',
+        'feed-digest-panels',
+        'feed-digest-panel-compact',
+        'feed-digest-panel-full',
+        'feed-digest-mail-html',
+        'feed-digest-pdf-pages',
+        'feed-digest-pdf-page',
+        'feed-digest-compact-note'
+      ]);
+
+      function sanitizeDigestClassList(value) {
+        return String(value || '')
+          .split(/\s+/)
+          .map((token) => token.trim())
+          .filter(Boolean)
+          .filter((token) => token.startsWith('feed-digest-') || allowedDigestClassTokens.has(token))
+          .filter((token) => /^[a-z0-9_-]{1,80}$/i.test(token))
+          .join(' ');
+      }
+
+      function copyDigestSafeAttributes(sourceEl, targetEl) {
+        if (!(sourceEl instanceof Element) || !(targetEl instanceof Element)) return;
+        const cls = sanitizeDigestClassList(sourceEl.getAttribute('class'));
+        if (cls) targetEl.setAttribute('class', cls);
+        const id = String(sourceEl.getAttribute('id') || '').trim();
+        if (/^feed-digest-[a-z0-9:_-]{1,120}$/i.test(id)) {
+          targetEl.setAttribute('id', id);
+        }
+        const feedDigestView = String(sourceEl.getAttribute('data-feed-digest-view') || '').trim().toLowerCase();
+        if (feedDigestView === 'compact' || feedDigestView === 'full') {
+          targetEl.setAttribute('data-feed-digest-view', feedDigestView);
+        }
+        const kind = String(sourceEl.getAttribute('data-feed-digest-kind') || '').trim().toLowerCase();
+        if (kind && /^[a-z0-9_-]{1,40}$/.test(kind)) {
+          targetEl.setAttribute('data-feed-digest-kind', kind);
+        }
+      }
 
       function safeHref(value) {
         const raw = String(value || '').trim();
         if (!raw) return '';
         const lower = raw.toLowerCase();
+        if (/^#[a-z0-9][a-z0-9:_-]{0,120}$/i.test(raw)) return raw;
         if (lower.startsWith('http://') || lower.startsWith('https://') || lower.startsWith('mailto:')) return raw;
         return '';
       }
@@ -8641,8 +10459,10 @@
           const href = safeHref(node.getAttribute('href'));
           if (href) {
             out.setAttribute('href', href);
-            out.setAttribute('target', '_blank');
-            out.setAttribute('rel', 'noopener noreferrer');
+            if (!href.startsWith('#')) {
+              out.setAttribute('target', '_blank');
+              out.setAttribute('rel', 'noopener noreferrer');
+            }
           }
         } else if (tag === 'img') {
           const src = safeImageSrc(node.getAttribute('src'));
@@ -8668,6 +10488,11 @@
           out.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
           out.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share');
           return out;
+        } else if (tag === 'details') {
+          copyDigestSafeAttributes(node, out);
+          if (node.hasAttribute('open')) out.setAttribute('open', '');
+        } else if (tag === 'summary' || tag === 'section' || tag === 'article' || tag === 'div' || tag === 'span' || tag === 'p') {
+          copyDigestSafeAttributes(node, out);
         }
 
         Array.from(node.childNodes || []).forEach((child) => {
@@ -10001,6 +11826,70 @@
       }));
     }
 
+    function buildTaskCompletionFxQueueKey(payload = {}) {
+      const sourceType = payload.sourceType === 'standalone' ? 'standalone' : 'project';
+      const projectId = sourceType === 'project' ? String(payload.projectId || '').trim() : '';
+      const entityId = String(payload.entityId || '').trim();
+      return `${sourceType}::${projectId}::${entityId}`;
+    }
+
+    function queueTaskCompletionFx(payload = {}) {
+      const entityId = String(payload.entityId || payload.taskId || payload.id || '').trim();
+      if (!entityId) return;
+      const sourceType = payload.sourceType === 'standalone' ? 'standalone' : 'project';
+      const projectId = sourceType === 'project' ? String(payload.projectId || currentProjectId || '').trim() : '';
+      const eventTs = Number(payload.eventTs || Date.now()) || Date.now();
+      if (Date.now() - eventTs > TASK_COMPLETION_FX_MAX_EVENT_AGE_MS) return;
+      const entry = {
+        sourceType,
+        projectId,
+        entityId,
+        queuedAt: Date.now()
+      };
+      taskCompletionFxQueue.set(buildTaskCompletionFxQueueKey(entry), entry);
+    }
+
+    function playTaskCompletionFx(anchorEl) {
+      if (!(anchorEl instanceof HTMLElement)) return;
+      const emote = document.createElement('span');
+      emote.className = 'task-completion-fx-emote';
+      emote.textContent = '👍';
+      emote.setAttribute('aria-hidden', 'true');
+      const driftX = (Math.random() * 52) - 26;
+      emote.style.setProperty('--task-fx-drift-x', `${driftX.toFixed(1)}px`);
+      anchorEl.appendChild(emote);
+      requestAnimationFrame(() => {
+        emote.classList.add('is-active');
+      });
+      emote.addEventListener('animationend', () => {
+        emote.remove();
+      }, { once: true });
+    }
+
+    function flushTaskCompletionFxQueue() {
+      if (!taskCompletionFxQueue.size) return;
+      const now = Date.now();
+      for (const [queueKey, payload] of taskCompletionFxQueue.entries()) {
+        if (!payload || (now - Number(payload.queuedAt || 0) > TASK_COMPLETION_FX_QUEUE_TTL_MS)) {
+          taskCompletionFxQueue.delete(queueKey);
+          continue;
+        }
+        const sourceType = payload.sourceType === 'standalone' ? 'standalone' : 'project';
+        const candidates = Array.from(document.querySelectorAll('.task-completion-fx-anchor')).filter((node) => {
+          if (!(node instanceof HTMLElement)) return false;
+          if (String(node.dataset.taskEntityId || '').trim() !== payload.entityId) return false;
+          if (String(node.dataset.taskSourceType || '').trim() !== sourceType) return false;
+          if (sourceType === 'project') {
+            return String(node.dataset.taskProjectId || '').trim() === String(payload.projectId || '').trim();
+          }
+          return true;
+        });
+        if (!candidates.length) continue;
+        playTaskCompletionFx(candidates[0]);
+        taskCompletionFxQueue.delete(queueKey);
+      }
+    }
+
     function parseGlobalTaskRef(ref) {
       try {
         return JSON.parse(decodeURIComponent(ref || ''));
@@ -10080,10 +11969,115 @@
       `;
     }
 
-    function closeGlobalTaskDetails() {
+    async function flushTaskDetailInlinePendingSaves() {
+      const pending = Array.from(taskDetailInlinePendingSaves.values());
+      if (!pending.length) return;
+      for (const item of pending) {
+        try {
+          if (!item?.taskRef) continue;
+          if (item.kind === 'descriptionHtml') {
+            await persistTaskDetailDescriptionHtml(item.taskRef, item.value, { force: true });
+          } else if (item.kind === 'recurring') {
+            await persistTaskDetailRecurring(item.taskRef, item.value, { force: true });
+          } else if (item.kind === 'field') {
+            await persistTaskDetailInlineField(item.taskRef, item.field, item.value, { force: true });
+          }
+          taskDetailInlinePendingSaves.delete(item.key);
+        } catch (error) {
+          console.error('flush task detail pending save failed', error);
+        }
+      }
+    }
+
+    async function commitOpenTaskDetailInlineEditors(modal) {
+      if (!modal) return;
+      const editingTriggers = Array.from(modal.querySelectorAll('[data-inline-task-field][data-inline-editing="1"]'));
+      for (const triggerEl of editingTriggers) {
+        const field = String(triggerEl?.dataset?.inlineTaskField || '').trim();
+        if (!field) continue;
+        try {
+          if (field === 'documents') continue;
+          if (field === 'description') {
+            const quillRoot = triggerEl.querySelector('.ql-editor');
+            if (quillRoot) {
+              const html = String(quillRoot.innerHTML || '').trim();
+              await scheduleTaskDetailInlineDescriptionSave(html, { immediate: true });
+              const nextDescriptionText = getProjectDescriptionPlainText(html).trim();
+              currentGlobalTaskDetailTask = {
+                ...(currentGlobalTaskDetailTask || {}),
+                descriptionHtml: sanitizeProjectDescriptionHtml(html),
+                description: nextDescriptionText
+              };
+              triggerEl.dataset.inlineEditing = '0';
+              triggerEl.classList.remove('is-inline-editing');
+              refreshTaskDetailInlineDisplay(field, nextDescriptionText);
+              continue;
+            }
+          }
+          if (field === 'recurring') {
+            const enabledEl = triggerEl.querySelector('[data-inline-recurring="enabled"]');
+            if (enabledEl instanceof HTMLInputElement) {
+              const enabled = !!enabledEl.checked;
+              let config = null;
+              if (enabled) {
+                const frequency = String(triggerEl.querySelector('[data-inline-recurring="frequency"]')?.value || 'weekly');
+                const interval = Math.max(1, Number.parseInt(String(triggerEl.querySelector('[data-inline-recurring="interval"]')?.value || '1'), 10) || 1);
+                const startDate = String(triggerEl.querySelector('[data-inline-recurring="startDate"]')?.value || toYmd(new Date()));
+                const endType = String(triggerEl.querySelector('[data-inline-recurring="endType"]')?.value || 'infinite');
+                const weekdays = String(triggerEl.querySelector('[data-inline-recurring="weekdays"]')?.value || '')
+                  .split(',').map((v) => Number.parseInt(v.trim(), 10)).filter((v) => Number.isInteger(v) && v >= 0 && v <= 6);
+                const monthDays = String(triggerEl.querySelector('[data-inline-recurring="monthDays"]')?.value || '')
+                  .split(',').map((v) => Number.parseInt(v.trim(), 10)).filter((v) => Number.isInteger(v) && v >= 1 && v <= 31);
+                const yearDates = String(triggerEl.querySelector('[data-inline-recurring="yearDates"]')?.value || '')
+                  .split(',').map((v) => v.trim()).filter((v) => /^\d{2}-\d{2}$/.test(v));
+                const endValue = String(triggerEl.querySelector('[data-inline-recurring="endValue"]')?.value || '').trim();
+                const next = {
+                  enabled: true,
+                  frequency,
+                  interval,
+                  startDate,
+                  endType,
+                  weekdays,
+                  monthDays,
+                  yearDates
+                };
+                if (endType === 'count') next.endCount = Math.max(1, Number.parseInt(endValue || '10', 10) || 10);
+                if (endType === 'until') next.endDate = /^\d{4}-\d{2}-\d{2}$/.test(endValue) ? endValue : startDate;
+                config = normalizeTaskRecurringConfig(next);
+              }
+              currentGlobalTaskDetailTask = {
+                ...(currentGlobalTaskDetailTask || {}),
+                recurring: config
+              };
+              await scheduleTaskDetailRecurringSave(config, { immediate: true });
+              triggerEl.dataset.inlineEditing = '0';
+              triggerEl.classList.remove('is-inline-editing');
+              refreshTaskDetailInlineDisplay('recurring', '');
+              continue;
+            }
+          }
+
+          const inputEl = triggerEl.querySelector('textarea, input, select');
+          if (!inputEl) continue;
+          const rawValue = String(inputEl.value || '');
+          const nextValue = normalizeTaskDetailInlineFieldValue(field, rawValue);
+          applyTaskDetailInlineFieldToTask(currentGlobalTaskDetailTask || {}, field, nextValue);
+          await scheduleTaskDetailInlineSave(field, nextValue, { immediate: true });
+          triggerEl.dataset.inlineEditing = '0';
+          triggerEl.classList.remove('is-inline-editing');
+          refreshTaskDetailInlineDisplay(field, nextValue);
+        } catch (error) {
+          console.error('task detail inline commit before close failed', error);
+        }
+      }
+    }
+
+    async function closeGlobalTaskDetails() {
       const modal = document.getElementById('modal-global-task-details');
       if (!modal) return;
+      await commitOpenTaskDetailInlineEditors(modal);
       modal.classList.add('hidden');
+      await flushTaskDetailInlinePendingSaves();
       resetTaskDetailInlineEditingState();
       currentGlobalTaskDetailRef = '';
       currentGlobalTaskDetailContext = null;
@@ -10102,6 +12096,7 @@
       taskDetailInlineDebounceTimers.clear();
       taskDetailInlineFinalizeTimers.clear();
       taskDetailInlineLastSavedValues.clear();
+      taskDetailInlinePendingSaves.clear();
     }
 
     function normalizeTaskDetailInlineFieldValue(field, rawValue) {
@@ -10167,7 +12162,13 @@
       }
       if (field === 'requestDate') return { requestDate: normalizedValue || null };
       if (field === 'dueDate') return { dueDate: normalizedValue || null };
-      if (field === 'status') return { status: normalizedValue || 'todo' };
+      if (field === 'status') {
+        const nextStatus = normalizedValue || 'todo';
+        return {
+          status: nextStatus,
+          completedAt: nextStatus === 'termine' ? Date.now() : null
+        };
+      }
       if (field === 'urgency') return { urgency: normalizedValue || 'medium' };
       if (field === 'theme') return { theme: normalizedValue || 'General' };
       if (field === 'subtasks') {
@@ -10177,12 +12178,59 @@
       return {};
     }
 
+    function shouldRefreshTaskWorkspaceForInlineField(field = '') {
+      return ['title', 'status', 'urgency', 'theme', 'requestDate', 'dueDate', 'subtasks'].includes(String(field || '').trim());
+    }
+
+    function scheduleTaskDetailWorkspaceRefresh(options = {}) {
+      const immediate = !!options.immediate;
+      if (taskDetailWorkspaceRefreshTimer) {
+        clearTimeout(taskDetailWorkspaceRefreshTimer);
+      }
+      taskDetailWorkspaceRefreshTimer = setTimeout(() => {
+        taskDetailWorkspaceRefreshTimer = null;
+        taskDetailWorkspaceRefreshQueue = taskDetailWorkspaceRefreshQueue
+          .then(async () => {
+            if (workspaceMode === 'global' && globalWorkspaceView === 'tasks') {
+              await renderGlobalTasks();
+              return;
+            }
+            if (workspaceMode === 'project' && currentProjectId && currentProjectState) {
+              const tasks = currentProjectState.tasks || [];
+              if (activeProjectView === 'list') {
+                renderTasks(tasks);
+                return;
+              }
+              if (activeProjectView === 'kanban') {
+                renderKanban(tasks);
+                return;
+              }
+              if (activeProjectView === 'timeline') {
+                renderTimeline(tasks);
+                return;
+              }
+              if (activeProjectView === 'gantt') {
+                renderGantt(tasks);
+              }
+            }
+          })
+          .catch((error) => {
+            console.error('task detail workspace refresh failed', error);
+          });
+      }, immediate ? 0 : 120);
+    }
+
     async function persistTaskDetailDescriptionHtml(taskRef, htmlValue, options = {}) {
       const safeHtml = sanitizeProjectDescriptionHtml(String(htmlValue || ''));
       const descriptionText = getProjectDescriptionPlainText(safeHtml).trim();
       const saveKey = `${taskRef}::descriptionHtml`;
       const currentSig = `descriptionHtml::${safeHtml}`;
-      if (!options.force && taskDetailInlineLastSavedValues.get(saveKey) === currentSig) return safeHtml;
+      if (taskDetailInlineLastSavedValues.get(saveKey) === currentSig) {
+        if (options.force) {
+          scheduleTaskDetailWorkspaceRefresh({ immediate: true });
+        }
+        return safeHtml;
+      }
       const resolved = await resolveGlobalTaskFromRef(taskRef);
       if (!resolved?.task) return safeHtml;
       const changes = {
@@ -10211,6 +12259,12 @@
         ...changes,
         updatedAt: Date.now()
       };
+      const pendingKey = 'descriptionHtml';
+      const pending = taskDetailInlinePendingSaves.get(pendingKey);
+      if (pending?.taskRef === taskRef && pending.value === safeHtml) {
+        taskDetailInlinePendingSaves.delete(pendingKey);
+      }
+      scheduleTaskDetailWorkspaceRefresh({ immediate: !!options.force });
       return safeHtml;
     }
 
@@ -10218,6 +12272,13 @@
       const taskRef = currentGlobalTaskDetailRef;
       if (!taskRef) return;
       const safeHtml = sanitizeProjectDescriptionHtml(String(htmlValue || ''));
+      const pendingKey = 'descriptionHtml';
+      taskDetailInlinePendingSaves.set(pendingKey, {
+        key: pendingKey,
+        kind: 'descriptionHtml',
+        taskRef,
+        value: safeHtml
+      });
       const debounceDelay = options.immediate ? 0 : 220;
       const timerKey = 'descriptionHtml';
       if (taskDetailInlineDebounceTimers.has(timerKey)) {
@@ -10283,7 +12344,7 @@
       const normalized = normalizeTaskRecurringConfig(recurringConfig);
       const saveKey = `${taskRef}::recurring`;
       const signature = JSON.stringify(normalized || null);
-      if (!options.force && taskDetailInlineLastSavedValues.get(saveKey) === signature) return normalized;
+      if (taskDetailInlineLastSavedValues.get(saveKey) === signature) return normalized;
       const resolved = await resolveGlobalTaskFromRef(taskRef);
       if (!resolved?.task) return normalized;
       const changes = { recurring: normalized };
@@ -10308,22 +12369,39 @@
         recurring: normalized
       };
       taskDetailInlineLastSavedValues.set(saveKey, signature);
+      const pendingKey = 'recurring';
+      const pending = taskDetailInlinePendingSaves.get(pendingKey);
+      const pendingSignature = pending ? JSON.stringify(normalizeTaskRecurringConfig(pending.value) || null) : '';
+      if (pending?.taskRef === taskRef && pendingSignature === signature) {
+        taskDetailInlinePendingSaves.delete(pendingKey);
+      }
+      if (options.force) {
+        scheduleTaskDetailWorkspaceRefresh({ immediate: true });
+      }
       return normalized;
     }
 
     async function scheduleTaskDetailRecurringSave(config, options = {}) {
       const taskRef = currentGlobalTaskDetailRef;
       if (!taskRef) return;
+      const normalizedConfig = normalizeTaskRecurringConfig(config);
+      const pendingKey = 'recurring';
+      taskDetailInlinePendingSaves.set(pendingKey, {
+        key: pendingKey,
+        kind: 'recurring',
+        taskRef,
+        value: normalizedConfig
+      });
       const timerKey = 'recurring';
       if (taskDetailInlineDebounceTimers.has(timerKey)) clearTimeout(taskDetailInlineDebounceTimers.get(timerKey));
       taskDetailInlineDebounceTimers.set(timerKey, setTimeout(() => {
-        persistTaskDetailRecurring(taskRef, config).catch((error) => {
+        persistTaskDetailRecurring(taskRef, normalizedConfig).catch((error) => {
           console.error('inline recurring save failed', error);
         });
       }, options.immediate ? 0 : 220));
       if (taskDetailInlineFinalizeTimers.has(timerKey)) clearTimeout(taskDetailInlineFinalizeTimers.get(timerKey));
       taskDetailInlineFinalizeTimers.set(timerKey, setTimeout(() => {
-        persistTaskDetailRecurring(taskRef, config, { force: true }).catch((error) => {
+        persistTaskDetailRecurring(taskRef, normalizedConfig, { force: true }).catch((error) => {
           console.error('inline recurring finalize save failed', error);
         });
       }, 900));
@@ -10409,12 +12487,21 @@
       const normalizedValue = normalizeTaskDetailInlineFieldValue(field, rawValue);
       const saveKey = `${taskRef}::${field}`;
       const currentSig = `${field}::${normalizedValue}`;
-      if (!options.force && taskDetailInlineLastSavedValues.get(saveKey) === currentSig) return normalizedValue;
+      if (taskDetailInlineLastSavedValues.get(saveKey) === currentSig) return normalizedValue;
       const changes = buildTaskDetailInlineChanges(field, normalizedValue);
       if (!Object.keys(changes).length) return normalizedValue;
       const resolved = await resolveGlobalTaskFromRef(taskRef);
       if (!resolved?.task) return normalizedValue;
+      const becameCompleted = field === 'status'
+        && normalizeTaskStatusValue(resolved.task.status) !== 'termine'
+        && normalizeTaskStatusValue(changes.status) === 'termine';
       if (resolved.sourceType === 'standalone') {
+        if (becameCompleted) {
+          queueTaskCompletionFx({
+            sourceType: 'standalone',
+            id: resolved.task.id
+          });
+        }
         await putEncrypted('globalTasks', {
           ...resolved.task,
           ...changes,
@@ -10431,6 +12518,14 @@
         if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(resolved.projectId, [event]); }
       }
       taskDetailInlineLastSavedValues.set(saveKey, currentSig);
+      const pendingKey = `field::${field}`;
+      const pending = taskDetailInlinePendingSaves.get(pendingKey);
+      if (pending?.taskRef === taskRef && pending.value === normalizedValue) {
+        taskDetailInlinePendingSaves.delete(pendingKey);
+      }
+      if (shouldRefreshTaskWorkspaceForInlineField(field)) {
+        scheduleTaskDetailWorkspaceRefresh({ immediate: field === 'status' || field === 'urgency' });
+      }
       return normalizedValue;
     }
 
@@ -10681,6 +12776,14 @@
       const taskRef = currentGlobalTaskDetailRef;
       if (!taskRef) return;
       const normalizedValue = normalizeTaskDetailInlineFieldValue(field, rawValue);
+      const pendingKey = `field::${field}`;
+      taskDetailInlinePendingSaves.set(pendingKey, {
+        key: pendingKey,
+        kind: 'field',
+        taskRef,
+        field,
+        value: normalizedValue
+      });
       const debounceDelay = options.immediate ? 0 : 220;
       if (taskDetailInlineDebounceTimers.has(field)) {
         clearTimeout(taskDetailInlineDebounceTimers.get(field));
@@ -11424,7 +13527,7 @@
           }
         });
 
-        closeGlobalTaskDetails();
+        await closeGlobalTaskDetails();
         await refreshStats();
         await renderProjects();
         if (workspaceMode === 'global') {
@@ -11532,28 +13635,28 @@
       if (btnConvert) {
         btnConvert.classList.toggle('hidden', !canEdit);
         btnConvert.onclick = async () => {
-          closeGlobalTaskDetails();
+          await closeGlobalTaskDetails();
           await convertTaskToProject(taskRef);
         };
       }
       if (btnEdit) {
         btnEdit.classList.toggle('hidden', !canEdit);
         btnEdit.onclick = async () => {
-          closeGlobalTaskDetails();
+          await closeGlobalTaskDetails();
           await editGlobalTask(taskRef);
         };
       }
       if (btnArchive) {
         btnArchive.classList.toggle('hidden', !canArchive);
         btnArchive.onclick = async () => {
-          closeGlobalTaskDetails();
+          await closeGlobalTaskDetails();
           await archiveGlobalTask(taskRef);
         };
       }
       if (btnDelete) {
         btnDelete.classList.toggle('hidden', !canDelete);
         btnDelete.onclick = async () => {
-          closeGlobalTaskDetails();
+          await closeGlobalTaskDetails();
           await deleteGlobalTask(taskRef);
         };
       }
@@ -11702,28 +13805,28 @@
             sourceProjectId: currentProjectId,
             taskId: task.taskId
           });
-          closeGlobalTaskDetails();
+          await closeGlobalTaskDetails();
           await convertTaskToProject(taskRef);
         };
       }
       if (btnEdit) {
         btnEdit.classList.toggle('hidden', !canEdit);
         btnEdit.onclick = async () => {
-          closeGlobalTaskDetails();
+          await closeGlobalTaskDetails();
           await editTask(taskId);
         };
       }
       if (btnArchive) {
         btnArchive.classList.toggle('hidden', !canArchive);
         btnArchive.onclick = async () => {
-          closeGlobalTaskDetails();
+          await closeGlobalTaskDetails();
           await archiveTask(taskId);
         };
       }
       if (btnDelete) {
         btnDelete.classList.toggle('hidden', !canDelete);
         btnDelete.onclick = async () => {
-          closeGlobalTaskDetails();
+          await closeGlobalTaskDetails();
           await deleteTask(taskId);
         };
       }
@@ -12926,9 +15029,36 @@
         .map(label => ({ id: uuidv4(), label, done: false }));
     }
 
+    function normalizeTaskStatusValue(rawStatus) {
+      const value = String(rawStatus || '').trim().toLowerCase();
+      if (!value) return 'todo';
+      const aliasMap = {
+        'todo': 'todo',
+        'a-faire': 'todo',
+        'à-faire': 'todo',
+        'afaire': 'todo',
+        'a faire': 'todo',
+        'à faire': 'todo',
+        'en-cours': 'en-cours',
+        'encours': 'en-cours',
+        'in-progress': 'en-cours',
+        'in progress': 'en-cours',
+        'en-attente': 'suspendu',
+        'en attente': 'suspendu',
+        'suspendu': 'suspendu',
+        'paused': 'suspendu',
+        'termine': 'termine',
+        'terminé': 'termine',
+        'done': 'termine',
+        'completed': 'termine',
+        'realise': 'termine',
+        'réalisé': 'termine'
+      };
+      return aliasMap[value] || 'todo';
+    }
+
     function normalizeTaskStatusForCreate(rawStatus) {
-      const value = String(rawStatus || '').trim();
-      return ['todo', 'en-cours', 'suspendu', 'termine'].includes(value) ? value : 'todo';
+      return normalizeTaskStatusValue(rawStatus);
     }
 
     function openProjectTaskCreateModalWithStatus(status = 'todo') {
@@ -13417,6 +15547,7 @@
         resetWorkspaceScrollTop();
       }
       workspaceMode = 'project';
+      applyWorkspaceWidthMode();
       const previousProjectId = currentProjectId;
       currentProjectId = projectId;
       if (previousProjectId !== projectId) {
@@ -14171,6 +16302,7 @@
       clearProjectWorkFocusState();
       resetProjectInlineEditingState();
       workspaceMode = 'dashboard';
+      applyWorkspaceWidthMode();
       projectsPage = 1;
       document.getElementById('project-detail').classList.add('hidden');
       document.getElementById('global-hub')?.classList.add('hidden');
@@ -14180,6 +16312,7 @@
       if (document.getElementById('dashboard-title')) {
         document.getElementById('dashboard-title').textContent = 'Tableau de bord';
       }
+      document.querySelector('.dashboard-bento')?.classList.remove('no-margin-for-global-tasks');
       document.getElementById('dashboard-stats')?.classList.remove('hidden');
       document.getElementById('dashboard-quick-actions')?.classList.remove('hidden');
       currentProjectId = null;
@@ -14198,6 +16331,7 @@
       clearProjectWorkFocusState();
       resetProjectInlineEditingState();
       workspaceMode = 'dashboard';
+      applyWorkspaceWidthMode();
       projectsPage = 1;
       document.getElementById('project-detail').classList.add('hidden');
       document.getElementById('global-hub')?.classList.add('hidden');
@@ -14207,6 +16341,7 @@
       if (document.getElementById('dashboard-title')) {
         document.getElementById('dashboard-title').textContent = 'Vue Projets';
       }
+      document.querySelector('.dashboard-bento')?.classList.add('no-margin-for-global-tasks');
       document.getElementById('dashboard-stats')?.classList.add('hidden');
       document.getElementById('dashboard-quick-actions')?.classList.add('hidden');
       currentProjectId = null;
@@ -14349,6 +16484,7 @@
       const query = `${globalSearchQuery} ${document.getElementById('global-task-search')?.value || ''}`.trim();
       const status = document.getElementById('global-task-status')?.value || 'all';
       const theme = document.getElementById('global-task-theme')?.value || '';
+      const urgencies = getSelectedGlobalTaskUrgencySet();
 
       let filtered = all.filter(task => matchesQuery([
         task.title,
@@ -14360,6 +16496,7 @@
       ], query));
       if (status !== 'all') filtered = filtered.filter(task => (task.status || 'todo') === status);
       if (theme.trim()) filtered = filtered.filter(task => matchesQuery([task.theme], theme));
+      filtered = filtered.filter(task => urgencies.has(getTaskUrgencyMeta(task.urgency).key));
       const mode = ['cards', 'list', 'kanban', 'timeline', 'calendar', 'archives'].includes(globalTasksViewMode) ? globalTasksViewMode : 'cards';
       if (mode !== 'kanban') detachGlobalKanbanInfiniteScroll();
       if (mode === 'calendar') {
@@ -14423,7 +16560,7 @@
           ${task._canDelete ? `<button onclick="event.stopPropagation(); deleteGlobalTask('${task._taskRef}')" class="task-action-btn task-action-btn-subtle task-action-btn-danger">Supprimer</button>` : ''}
         `;
         const taskCard = (task) => `
-          <div class="global-task-card global-task-card-modern ${getTaskUrgencyMeta(task.urgency).accentClass} rounded-xl border border-slate-200 bg-white p-4 cursor-grab active:cursor-grabbing" draggable="true" ondragstart="startGlobalKanbanDrag(event, '${task._taskRef}')" onclick="openGlobalTaskDetails('${task._taskRef}')" role="button" tabindex="0">
+          <div class="global-task-card global-task-card-modern task-completion-fx-anchor ${getTaskUrgencyMeta(task.urgency).accentClass} rounded-xl border border-slate-200 bg-white p-4 cursor-grab active:cursor-grabbing" data-task-entity-id="${escapeHtml(String(task.taskId || task.id || ''))}" data-task-source-type="${escapeHtml(String(task.sourceType || 'project'))}" data-task-project-id="${escapeHtml(String(task.sourceProjectId || ''))}" draggable="true" ondragstart="startGlobalKanbanDrag(event, '${task._taskRef}')" onclick="openGlobalTaskDetails('${task._taskRef}')" role="button" tabindex="0">
             <div class="flex items-start justify-between gap-3">
               <div>
                 <div class="flex flex-wrap items-center gap-2 mb-1">
@@ -14496,9 +16633,8 @@
             { key: 'suspendu', label: 'Suspendu' },
             { key: 'termine', label: 'Termine' }
           ];
-          const itemsByCol = {};
           const taskCardKanban = (task) => `
-            <div class="global-task-card global-task-card-modern global-kanban-card kanban-card ${getTaskUrgencyMeta(task.urgency).accentClass} rounded-xl border border-slate-200 bg-white p-3 cursor-grab active:cursor-grabbing" draggable="true" ondragstart="startGlobalKanbanDrag(event, '${task._taskRef}')" onclick="openGlobalTaskDetails('${task._taskRef}')" role="button" tabindex="0">
+            <div class="global-task-card global-task-card-modern global-kanban-card kanban-card task-completion-fx-anchor ${getTaskUrgencyMeta(task.urgency).accentClass} rounded-xl border border-slate-200 bg-white p-3 cursor-grab active:cursor-grabbing" data-task-entity-id="${escapeHtml(String(task.taskId || task.id || ''))}" data-task-source-type="${escapeHtml(String(task.sourceType || 'project'))}" data-task-project-id="${escapeHtml(String(task.sourceProjectId || ''))}" draggable="true" ondragstart="startGlobalKanbanDrag(event, '${task._taskRef}')" onclick="openGlobalTaskDetails('${task._taskRef}')" role="button" tabindex="0">
               <div class="mb-2 flex items-center justify-between gap-2">
                 <span class="${getTaskUrgencyMeta(task.urgency).chipClass}">${getTaskUrgencyMeta(task.urgency).label}</span>
                 <span class="${getTaskStatusMeta(task._statusKey).chipClass}">${getTaskStatusMeta(task._statusKey).label}</span>
@@ -14515,10 +16651,35 @@
               <div class="task-hover-actions mt-2 flex flex-wrap gap-1 text-xs">${taskActions(task)}</div>
             </div>
           `;
+          const buildKanbanPager = (colKey, pagination) => {
+            if (pagination.totalPages <= 1) {
+              return `<p class="text-[11px] text-slate-500">${pagination.totalItems} carte(s)</p>`;
+            }
+            const prevDisabled = pagination.currentPage <= 1;
+            const nextDisabled = pagination.currentPage >= pagination.totalPages;
+            return `
+              <div class="flex items-center justify-between gap-2 text-[11px] text-slate-500">
+                <button
+                  type="button"
+                  class="px-2 py-1 rounded border border-slate-300 ${prevDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-100'}"
+                  ${prevDisabled ? 'disabled' : `onclick="event.stopPropagation(); setGlobalKanbanPage('${colKey}', ${pagination.currentPage - 1})"`}
+                >Prec.</button>
+                <span>${pagination.start + 1}-${pagination.end} / ${pagination.totalItems}</span>
+                <button
+                  type="button"
+                  class="px-2 py-1 rounded border border-slate-300 ${nextDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-100'}"
+                  ${nextDisabled ? 'disabled' : `onclick="event.stopPropagation(); setGlobalKanbanPage('${colKey}', ${pagination.currentPage + 1})"`}
+                >Suiv.</button>
+              </div>
+            `;
+          };
           container.innerHTML = cols.map(col => {
             const items = prepared.filter(task => task._statusKey === col.key);
-            itemsByCol[col.key] = items;
-            const initialCount = Math.min(items.length, GLOBAL_KANBAN_INITIAL_BATCH);
+            const pagination = paginateItems(items, globalKanbanPageByStatus[col.key] || 1, GLOBAL_TASK_KANBAN_PAGE_SIZE);
+            globalKanbanPageByStatus[col.key] = pagination.currentPage;
+            const colCards = pagination.totalItems > 0
+              ? pagination.pageItems.map(taskCardKanban).join('')
+              : '<p class="text-xs text-slate-400 py-2">Aucune tâche</p>';
             return `
               <div class="global-kanban-col rounded-xl border border-slate-200 bg-slate-50 p-3" data-col="${col.key}" ondragover="allowKanbanDrop(event)" ondrop="dropGlobalKanbanTask(event, '${col.key}')">
                 <div class="global-kanban-col-head flex items-center justify-between mb-2">
@@ -14539,83 +16700,14 @@
                     <span class="taskmda-action-label">Ajouter</span>
                   </button>
                 </div>
-                <div id="global-kanban-items-${col.key}" class="global-kanban-items space-y-2 pr-1" data-col-key="${col.key}" data-rendered="${initialCount}">
-                  ${initialCount > 0 ? items.slice(0, initialCount).map(taskCardKanban).join('') : '<p class="text-xs text-slate-400 py-2">Aucune tâche</p>'}
+                <div id="global-kanban-items-${col.key}" class="global-kanban-items space-y-2 pr-1" data-col-key="${col.key}">
+                  ${colCards}
                 </div>
-                <div class="mt-2 flex items-center justify-between gap-2">
-                  <p class="text-[11px] text-slate-500">
-                    <span id="global-kanban-count-${col.key}">${initialCount}</span> / ${items.length}
-                  </p>
-                  <span class="text-[11px] text-slate-400 ${initialCount >= items.length ? 'hidden' : ''}" id="global-kanban-hint-${col.key}">Défilez la page pour charger plus</span>
-                </div>
+                <div class="mt-2">${buildKanbanPager(col.key, pagination)}</div>
               </div>
             `;
           }).join('');
-
           detachGlobalKanbanInfiniteScroll();
-          const columnLoaders = cols.map((col) => {
-            const listEl = document.getElementById(`global-kanban-items-${col.key}`);
-            const countEl = document.getElementById(`global-kanban-count-${col.key}`);
-            const hintEl = document.getElementById(`global-kanban-hint-${col.key}`);
-            const items = itemsByCol[col.key] || [];
-            if (!listEl) {
-              return { hasMore: () => false, loadNext: () => false };
-            }
-            const updateCounters = (rendered) => {
-              if (countEl) countEl.textContent = String(rendered);
-              if (hintEl) hintEl.classList.toggle('hidden', rendered >= items.length);
-            };
-            const loadNext = () => {
-              const rendered = Number.parseInt(listEl.dataset.rendered || '0', 10) || 0;
-              if (rendered >= items.length) {
-                updateCounters(items.length);
-                return false;
-              }
-              const next = Math.min(items.length, rendered + GLOBAL_KANBAN_BATCH_SIZE);
-              const chunk = items.slice(rendered, next);
-              listEl.insertAdjacentHTML('beforeend', chunk.map(taskCardKanban).join(''));
-              listEl.dataset.rendered = String(next);
-              updateCounters(next);
-              return next > rendered;
-            };
-            const hasMore = () => {
-              const rendered = Number.parseInt(listEl.dataset.rendered || '0', 10) || 0;
-              return rendered < items.length;
-            };
-            return { hasMore, loadNext };
-          });
-
-          const loadNextKanbanBatchAllColumns = () => {
-            let changed = false;
-            columnLoaders.forEach((loader) => {
-              if (loader.hasMore()) {
-                changed = loader.loadNext() || changed;
-              }
-            });
-            return changed;
-          };
-
-          const hasMoreKanbanRows = () => columnLoaders.some((loader) => loader.hasMore());
-          const scrollHandler = () => {
-            if (!hasMoreKanbanRows()) return;
-            const scroller = document.scrollingElement || document.documentElement;
-            const remaining = (scroller.scrollHeight - (window.scrollY + window.innerHeight));
-            if (remaining <= GLOBAL_KANBAN_SCROLL_THRESHOLD_PX) {
-              loadNextKanbanBatchAllColumns();
-            }
-          };
-          globalKanbanInfiniteScrollState = { handler: scrollHandler };
-          window.addEventListener('scroll', scrollHandler, { passive: true });
-
-          let safety = 0;
-          while (hasMoreKanbanRows() && safety < 6) {
-            const scroller = document.scrollingElement || document.documentElement;
-            const needsFill = scroller.scrollHeight <= (window.innerHeight + GLOBAL_KANBAN_SCROLL_THRESHOLD_PX);
-            if (!needsFill) break;
-            const changed = loadNextKanbanBatchAllColumns();
-            if (!changed) break;
-            safety += 1;
-          }
           return;
         }
         container.className = 'space-y-4';
@@ -14791,7 +16883,7 @@
         return;
       }
 
-      const pagination = paginateItems(filtered, globalTasksPage, paginationConfig.globalTasksPerPage);
+      const pagination = paginateItems(filtered, globalTasksPage, getGlobalTaskCardsPerPage());
       globalTasksPage = pagination.currentPage;
       
       // Trier les tâches
@@ -14847,7 +16939,7 @@
         if (dueStatus.isDueToday && !task._notifiedToday) {
           const assigneeName = getTaskAssigneeName(task, stateByProjectId.get(task.sourceProjectId)) || 'Aucun responsable';
           addNotification(
-            'ðŸ“Œ Tâche à l\'échéance',
+            "Tâche à l'échéance",
             `${task.title} - Assisté par ${assigneeName}`,
             task.sourceProjectId,
             {
@@ -14861,12 +16953,12 @@
         }
         
         return `
-        <div class="global-task-card global-task-card-modern ${cardAccentClass} ${focusClass} rounded-xl border border-slate-200 ${cardBgClass} p-4 cursor-pointer ${ringClass}" onclick="openGlobalTaskDetails('${taskRef}')" role="button" tabindex="0">
+        <div class="global-task-card global-task-card-modern task-completion-fx-anchor ${cardAccentClass} ${focusClass} rounded-xl border border-slate-200 ${cardBgClass} p-4 cursor-pointer ${ringClass}" data-task-entity-id="${escapeHtml(String(task.taskId || task.id || ''))}" data-task-source-type="${escapeHtml(String(task.sourceType || 'project'))}" data-task-project-id="${escapeHtml(String(task.sourceProjectId || ''))}" onclick="openGlobalTaskDetails('${taskRef}')" role="button" tabindex="0">
           <div class="flex items-start justify-between gap-3">
             <div>
               <div class="flex flex-wrap items-center gap-2 mb-1">
                 ${dueStatus.isOverdue ? '<span class="px-2 py-1 rounded-lg bg-red-200 text-red-800 text-xs font-bold">⚠️ EN RETARD</span>' : ''}
-                ${dueStatus.isDueToday ? '<span class="px-2 py-1 rounded-lg bg-yellow-200 text-yellow-800 text-xs font-bold">ðŸ“Œ AUJOURD\'HUI</span>' : ''}
+                ${dueStatus.isDueToday ? '<span class="px-2 py-1 rounded-lg bg-yellow-200 text-yellow-800 text-xs font-bold">AUJOURD\'HUI</span>' : ''}
                 <span class="${getTaskUrgencyMeta(task.urgency).chipClass}">${getTaskUrgencyMeta(task.urgency).label}</span>
                 ${buildTaskRecurrenceBadgeHtml(task)}
               </div>
@@ -14905,6 +16997,7 @@
       const query = `${globalSearchQuery} ${document.getElementById('global-task-search')?.value || ''}`.trim();
       const status = String(document.getElementById('global-task-status')?.value || 'all').trim();
       const theme = String(document.getElementById('global-task-theme')?.value || '').trim();
+      const urgencies = getSelectedGlobalTaskUrgencySet();
       let archived = (allTasks || []).filter(task => task?.archivedAt);
       archived = archived.filter(task => matchesQuery([
         task.title,
@@ -14916,6 +17009,7 @@
       ], query));
       if (status !== 'all') archived = archived.filter(task => (task.status || 'todo') === status);
       if (theme) archived = archived.filter(task => matchesQuery([task.theme], theme));
+      archived = archived.filter(task => urgencies.has(getTaskUrgencyMeta(task.urgency).key));
       archived.sort((a, b) => (b.archivedAt || 0) - (a.archivedAt || 0));
 
       if (archived.length === 0) {
@@ -14964,6 +17058,7 @@
       const query = `${globalSearchQuery} ${document.getElementById('global-task-search')?.value || ''}`.trim();
       const status = document.getElementById('global-task-status')?.value || 'all';
       const theme = document.getElementById('global-task-theme')?.value || '';
+      const urgencies = getSelectedGlobalTaskUrgencySet();
 
       let filtered = all.filter(task => matchesQuery([
         task.title,
@@ -14974,6 +17069,7 @@
       ], query));
       if (status !== 'all') filtered = filtered.filter(task => (task.status || 'todo') === status);
       if (theme.trim()) filtered = filtered.filter(task => matchesQuery([task.theme], theme));
+      filtered = filtered.filter(task => urgencies.has(getTaskUrgencyMeta(task.urgency).key));
       filtered = filtered.filter(task => !task.archivedAt);
 
       if (all.length === 0 && filtered.length === 0) {
@@ -14992,6 +17088,7 @@
         `;
         if (paginationContainer) paginationContainer.innerHTML = '';
       }
+      flushTaskCompletionFxQueue();
     };
 
     async function renderGlobalCalendar() {
@@ -15461,9 +17558,16 @@
       const resolved = await resolveGlobalTaskFromRef(taskRef);
       if (!resolved?.task) return;
       if (resolved.sourceType === 'standalone') {
+        if (normalizeTaskStatusValue(resolved.task.status) !== 'termine') {
+          queueTaskCompletionFx({
+            sourceType: 'standalone',
+            id: resolved.task.id
+          });
+        }
         await putEncrypted('globalTasks', {
           ...resolved.task,
           status: 'termine',
+          completedAt: Number(resolved.task?.completedAt || Date.now()) || Date.now(),
           archivedAt: Date.now(),
           updatedAt: Date.now()
         }, 'id');
@@ -15483,7 +17587,10 @@
         EventTypes.UPDATE_TASK,
         resolved.projectId,
         currentUser.userId,
-        { taskId: resolved.task.taskId, changes: { status: 'termine', archivedAt: Date.now() } }
+        {
+          taskId: resolved.task.taskId,
+          changes: { status: 'termine', completedAt: Date.now(), archivedAt: Date.now() }
+        }
       );
       await publishEvent(event);
       if (sharedFolderHandle) void syncProjectEventsToSharedSpace(resolved.projectId, [event]);
@@ -18006,6 +20113,7 @@
       const panel = document.querySelector('.feed-composer-panel');
       const body = document.getElementById('global-feed-composer-body');
       const toggleBtn = document.getElementById('btn-toggle-global-feed-composer');
+      const headTrigger = document.getElementById('global-feed-composer-head-trigger');
       const toggleIcon = document.getElementById('global-feed-composer-toggle-icon');
       const toggleLabel = document.getElementById('global-feed-composer-toggle-label');
       if (!panel || !body || !toggleBtn) return;
@@ -18013,6 +20121,7 @@
       globalFeedComposerCollapsed = shouldCollapse;
       panel.classList.toggle('is-collapsed', shouldCollapse);
       toggleBtn.setAttribute('aria-expanded', shouldCollapse ? 'false' : 'true');
+      if (headTrigger) headTrigger.setAttribute('aria-expanded', shouldCollapse ? 'false' : 'true');
       if (toggleIcon) toggleIcon.textContent = shouldCollapse ? 'edit_square' : 'expand_less';
       if (toggleLabel) toggleLabel.textContent = shouldCollapse ? 'Rédiger' : 'Replier';
       toggleBtn.title = shouldCollapse ? 'Rédiger un post' : 'Replier le formulaire';
@@ -18214,30 +20323,765 @@
       return merged;
     }
 
+    function byteArrayToLatin1String(bytes) {
+      const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || new ArrayBuffer(0));
+      const chunkSize = 0x8000;
+      let out = '';
+      for (let i = 0; i < arr.length; i += chunkSize) {
+        const chunk = arr.subarray(i, i + chunkSize);
+        out += String.fromCharCode(...chunk);
+      }
+      return out;
+    }
+
+    function latin1StringToBytes(value) {
+      const source = String(value || '');
+      const out = new Uint8Array(source.length);
+      for (let i = 0; i < source.length; i += 1) {
+        out[i] = source.charCodeAt(i) & 0xFF;
+      }
+      return out;
+    }
+
+    function decodeBytesWithCharset(bytes, charset) {
+      const input = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
+      const rawCharset = String(charset || '').trim().toLowerCase().replace(/^"+|"+$/g, '');
+      const aliases = new Map([
+        ['utf8', 'utf-8'],
+        ['utf_8', 'utf-8'],
+        ['us-ascii', 'windows-1252'],
+        ['ascii', 'windows-1252'],
+        ['latin1', 'iso-8859-1'],
+        ['latin-1', 'iso-8859-1'],
+        ['cp1252', 'windows-1252'],
+        ['windows1252', 'windows-1252']
+      ]);
+      const normalized = aliases.get(rawCharset) || rawCharset || 'utf-8';
+      const fallbacks = [normalized, 'utf-8', 'windows-1252', 'iso-8859-1'];
+      for (const label of fallbacks) {
+        try {
+          const decoder = new TextDecoder(label, { fatal: false });
+          return decoder.decode(input);
+        } catch {
+          continue;
+        }
+      }
+      return byteArrayToLatin1String(input);
+    }
+
+    function decodeQuotedPrintableToBytes(value, isHeader = false) {
+      let source = String(value || '');
+      if (isHeader) source = source.replace(/_/g, ' ');
+      source = source.replace(/=\r?\n/g, '');
+      const out = [];
+      for (let i = 0; i < source.length; i += 1) {
+        const ch = source[i];
+        if (ch === '=' && i + 2 < source.length) {
+          const hex = source.slice(i + 1, i + 3);
+          if (/^[0-9A-Fa-f]{2}$/.test(hex)) {
+            out.push(parseInt(hex, 16));
+            i += 2;
+            continue;
+          }
+        }
+        out.push(source.charCodeAt(i) & 0xFF);
+      }
+      return new Uint8Array(out);
+    }
+
+    function decodeBase64ToBytes(value) {
+      const source = String(value || '').replace(/[^A-Za-z0-9+/=]/g, '');
+      if (!source) return new Uint8Array(0);
+      try {
+        const binary = atob(source);
+        const out = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i += 1) out[i] = binary.charCodeAt(i) & 0xFF;
+        return out;
+      } catch {
+        return new Uint8Array(0);
+      }
+    }
+
+    function decodeMimeEncodedWords(value) {
+      const source = String(value || '');
+      return source.replace(/=\?([^?]+)\?([bqBQ])\?([^?]*)\?=/g, (_m, charset, mode, payload) => {
+        const transfer = String(mode || '').toLowerCase();
+        const bytes = transfer === 'b'
+          ? decodeBase64ToBytes(payload)
+          : decodeQuotedPrintableToBytes(payload, true);
+        return decodeBytesWithCharset(bytes, charset);
+      });
+    }
+
+    function splitMimeHeaderAndBody(rawEntity) {
+      const source = String(rawEntity || '');
+      const m = source.match(/\r?\n\r?\n/);
+      if (!m || m.index == null) {
+        return { headerText: source, bodyText: '' };
+      }
+      const sepLen = m[0].length;
+      return {
+        headerText: source.slice(0, m.index),
+        bodyText: source.slice(m.index + sepLen)
+      };
+    }
+
+    function parseMimeHeaders(rawHeaderText) {
+      const lines = String(rawHeaderText || '').split(/\r?\n/);
+      const unfolded = [];
+      let current = '';
+      lines.forEach((line) => {
+        if (/^\s/.test(line)) {
+          current += ` ${line.trim()}`;
+        } else {
+          if (current) unfolded.push(current);
+          current = line;
+        }
+      });
+      if (current) unfolded.push(current);
+      const headers = new Map();
+      unfolded.forEach((line) => {
+        const idx = line.indexOf(':');
+        if (idx <= 0) return;
+        const key = line.slice(0, idx).trim().toLowerCase();
+        const value = line.slice(idx + 1).trim();
+        if (!key) return;
+        if (headers.has(key)) {
+          headers.set(key, `${headers.get(key)}, ${value}`);
+        } else {
+          headers.set(key, value);
+        }
+      });
+      return headers;
+    }
+
+    function parseMimeHeaderValue(headerValue, fallbackMain = '') {
+      const source = String(headerValue || fallbackMain || '').trim();
+      const chunks = source.split(';').map((part) => part.trim()).filter(Boolean);
+      const main = String(chunks.shift() || fallbackMain || '').toLowerCase();
+      const params = {};
+      chunks.forEach((part) => {
+        const eq = part.indexOf('=');
+        if (eq <= 0) return;
+        const key = part.slice(0, eq).trim().toLowerCase();
+        let val = part.slice(eq + 1).trim();
+        val = val.replace(/^"(.*)"$/, '$1');
+        params[key] = val;
+      });
+      return { main, params };
+    }
+
+    function parseMimeContentType(contentTypeValue) {
+      const parsed = parseMimeHeaderValue(contentTypeValue, 'text/plain');
+      return { mimeType: parsed.main || 'text/plain', params: parsed.params || {} };
+    }
+
+    function splitMimeMultipartBody(rawBody, boundary) {
+      const marker = `--${String(boundary || '').trim()}`;
+      if (!marker || marker === '--') return [];
+      const source = String(rawBody || '').replace(/\r\n/g, '\n');
+      const chunks = source.split(marker);
+      if (chunks.length <= 1) return [];
+      const parts = [];
+      chunks.slice(1).forEach((chunk) => {
+        if (chunk.startsWith('--')) return;
+        const cleaned = chunk.replace(/^\n+/, '').replace(/\n+$/, '');
+        if (cleaned.trim()) parts.push(cleaned);
+      });
+      return parts;
+    }
+
+    function decodeMimeBodyToText(bodyText, transferEncoding, charset) {
+      const encoding = String(transferEncoding || '').trim().toLowerCase();
+      let bytes = new Uint8Array(0);
+      if (encoding === 'base64') {
+        bytes = decodeBase64ToBytes(bodyText);
+      } else if (encoding === 'quoted-printable') {
+        bytes = decodeQuotedPrintableToBytes(bodyText, false);
+      } else {
+        bytes = latin1StringToBytes(bodyText);
+      }
+      return decodeBytesWithCharset(bytes, charset);
+    }
+
+    function parseMimeEntity(rawEntity, defaultCharset = 'utf-8') {
+      const { headerText, bodyText } = splitMimeHeaderAndBody(rawEntity);
+      const headers = parseMimeHeaders(headerText);
+      const contentType = parseMimeContentType(headers.get('content-type') || 'text/plain; charset=utf-8');
+      const transferEncoding = headers.get('content-transfer-encoding') || '';
+      const disposition = parseMimeHeaderValue(headers.get('content-disposition') || '', '');
+      const charset = String(contentType.params.charset || defaultCharset || 'utf-8');
+
+      if (contentType.mimeType.startsWith('multipart/')) {
+        const boundary = contentType.params.boundary || '';
+        const parts = splitMimeMultipartBody(bodyText, boundary);
+        const aggregate = { plainParts: [], htmlParts: [], attachments: [] };
+        parts.forEach((partRaw) => {
+          const nested = parseMimeEntity(partRaw, charset);
+          if (nested.plainParts.length) aggregate.plainParts.push(...nested.plainParts);
+          if (nested.htmlParts.length) aggregate.htmlParts.push(...nested.htmlParts);
+          if (nested.attachments.length) aggregate.attachments.push(...nested.attachments);
+        });
+        return aggregate;
+      }
+
+      const decoded = decodeMimeBodyToText(bodyText, transferEncoding, charset);
+      if (contentType.mimeType.includes('text/html')) {
+        return { plainParts: [], htmlParts: [decoded], attachments: [] };
+      }
+      if (contentType.mimeType.includes('text/plain')) {
+        return { plainParts: [decoded], htmlParts: [], attachments: [] };
+      }
+      const fileName = String(
+        disposition.params.filename
+        || contentType.params.name
+        || ''
+      ).trim();
+      return {
+        plainParts: [],
+        htmlParts: [],
+        attachments: [{
+          mimeType: contentType.mimeType || 'application/octet-stream',
+          fileName,
+          disposition: disposition.main || '',
+          transferEncoding: String(transferEncoding || '').trim().toLowerCase(),
+          payloadChars: String(bodyText || '').length
+        }]
+      };
+    }
+
+    function sanitizeDigestHtmlFragment(html) {
+      const source = String(html || '').trim();
+      if (!source) return '';
+      const sanitized = sanitizeProjectDescriptionHtml(source);
+      return applyProfanityFilterToHtml(sanitized);
+    }
+
+    function stringifyMimeHeaders(headers) {
+      const rows = [];
+      headers.forEach((value, key) => {
+        rows.push(`${key}: ${decodeMimeEncodedWords(String(value || ''))}`);
+      });
+      return rows.join('\n').trim();
+    }
+
+    function buildPdfStructuredPage(pageItems, options = {}) {
+      const items = Array.isArray(pageItems) ? pageItems : [];
+      const pageHeight = Number(options?.pageHeight || 0);
+      const tokens = items
+        .map((item) => {
+          const text = String(item?.str || '');
+          const transform = Array.isArray(item?.transform) ? item.transform : [];
+          const x = Number(transform[4] || 0);
+          const y = Number(transform[5] || 0);
+          const width = Math.max(0, Number(item?.width || 0));
+          const height = Math.max(0.5, Number(item?.height || Math.abs(transform[0] || 0) || 0));
+          const fontName = String(item?.fontName || '');
+          return { text, x, y, width, height, fontName };
+        })
+        .filter((token) => token.text.trim().length > 0);
+      if (!tokens.length) return { text: '', html: '' };
+
+      function toFootnoteMarker(value) {
+        const digits = String(value || '').replace(/\s+/g, '');
+        return digits ? `[${digits}]` : '';
+      }
+
+      function isNumericMarker(value) {
+        return /^\d{1,3}$/.test(String(value || '').trim());
+      }
+
+      function isMarkerOnlyLine(value) {
+        const txt = String(value || '').trim();
+        if (!txt) return false;
+        return /^(\[?\d{1,3}\]?)([\s,;]+(\[?\d{1,3}\]?))*$/.test(txt);
+      }
+
+      function normalizeMarkerSequence(value) {
+        const nums = String(value || '')
+          .match(/\d{1,3}/g);
+        if (!nums || !nums.length) return '';
+        const unique = nums.filter((n, idx) => nums.indexOf(n) === idx);
+        return unique.map((n) => `[${n}]`).join(' ');
+      }
+
+      const heights = tokens
+        .map((t) => t.height)
+        .filter((h) => Number.isFinite(h) && h > 0)
+        .sort((a, b) => a - b);
+      const medianHeight = heights.length ? heights[Math.floor(heights.length / 2)] : 11;
+      const lineTolerance = Math.max(1.8, medianHeight * 0.42);
+
+      const rawLines = [];
+      tokens.forEach((token) => {
+        let best = null;
+        let bestDist = Number.POSITIVE_INFINITY;
+        for (const line of rawLines) {
+          const dist = Math.abs(line.y - token.y);
+          if (dist <= lineTolerance && dist < bestDist) {
+            best = line;
+            bestDist = dist;
+          }
+        }
+        if (!best) {
+          best = { y: token.y, tokens: [] };
+          rawLines.push(best);
+        }
+        best.tokens.push(token);
+      });
+
+      const lines = rawLines.map((line) => {
+        const row = [...line.tokens].sort((a, b) => a.x - b.x);
+        let text = '';
+        let prev = null;
+        row.forEach((token) => {
+          const currentText = String(token.text || '');
+          if (!currentText) return;
+          if (!prev) {
+            text += currentText;
+            prev = token;
+            return;
+          }
+          const prevEndX = Number(prev.x || 0) + Number(prev.width || 0);
+          const gap = Number(token.x || 0) - prevEndX;
+          const noLeadingSpace = /^[,.;:!?%)\]\}]/.test(currentText);
+          const superscriptLike = isNumericMarker(currentText)
+            && Number(token.height || 0) < Number(prev.height || 0) * 0.86
+            && Number(token.y || 0) > Number(prev.y || 0) + Math.max(0.6, Number(prev.height || 0) * 0.16)
+            && gap < Math.max(10, Number(prev.height || 0));
+          if (superscriptLike) {
+            text += toFootnoteMarker(currentText);
+          } else if (gap > Math.max(1.2, Number(prev.height || 0) * 0.12) && !noLeadingSpace) {
+            text += ` ${currentText}`;
+          } else {
+            text += currentText;
+          }
+          prev = token;
+        });
+        const normalizedText = text.replace(/\s{2,}/g, ' ').trim();
+        const startX = Math.min(...row.map((t) => Number(t.x || 0)));
+        const endX = Math.max(...row.map((t) => Number(t.x || 0) + Number(t.width || 0)));
+        const avgHeight = row.reduce((sum, t) => sum + Number(t.height || 0), 0) / Math.max(1, row.length);
+        const boldishCount = row.filter((t) => /bold|black|heavy|demi/i.test(String(t.fontName || ''))).length;
+        const boldRatio = boldishCount / Math.max(1, row.length);
+        return {
+          text: normalizedText,
+          y: Number(line.y || 0),
+          startX,
+          endX,
+          avgHeight,
+          boldRatio
+        };
+      }).filter((line) => line.text.length > 0);
+
+      if (!lines.length) return { text: '', html: '' };
+
+      const startXs = lines.map((line) => line.startX).sort((a, b) => a - b);
+      const minX = startXs[0];
+      const maxX = startXs[startXs.length - 1];
+      const xSpan = maxX - minX;
+      let useTwoColumns = false;
+      let splitX = 0;
+      if (lines.length >= 9 && xSpan >= 180) {
+        const q1 = startXs[Math.floor(startXs.length * 0.25)];
+        const q3 = startXs[Math.floor(startXs.length * 0.75)];
+        const gap = q3 - q1;
+        if (gap >= Math.max(95, xSpan * 0.22)) {
+          const leftCount = lines.filter((line) => line.startX <= (q1 + q3) / 2).length;
+          const rightCount = lines.length - leftCount;
+          if (leftCount >= 3 && rightCount >= 3) {
+            useTwoColumns = true;
+            splitX = (q1 + q3) / 2;
+          }
+        }
+      }
+
+      const ordered = [...lines].sort((a, b) => {
+        const colA = useTwoColumns ? (a.startX <= splitX ? 0 : 1) : 0;
+        const colB = useTwoColumns ? (b.startX <= splitX ? 0 : 1) : 0;
+        if (colA !== colB) return colA - colB;
+        if (Math.abs(a.y - b.y) > lineTolerance) return b.y - a.y;
+        return a.startX - b.startX;
+      });
+
+      const orderedWithMarkers = [];
+      for (const line of ordered) {
+        const txt = String(line?.text || '').trim();
+        if (!isMarkerOnlyLine(txt)) {
+          orderedWithMarkers.push({ ...line, markerOnly: false });
+          continue;
+        }
+        const markers = normalizeMarkerSequence(txt);
+        if (!markers) continue;
+        const last = orderedWithMarkers.length ? orderedWithMarkers[orderedWithMarkers.length - 1] : null;
+        const nearPrevious = last
+          && Math.abs(Number(last.y || 0) - Number(line.y || 0)) <= Math.max(42, medianHeight * 4)
+          && Math.abs(Number(last.startX || 0) - Number(line.startX || 0)) <= Math.max(40, medianHeight * 3);
+        if (nearPrevious && !last.markerOnly) {
+          last.text = `${String(last.text || '').trim()} ${markers}`.replace(/\s{2,}/g, ' ').trim();
+        } else {
+          orderedWithMarkers.push({ ...line, text: markers, markerOnly: true });
+        }
+      }
+
+      const topY = Math.max(...orderedWithMarkers.map((l) => l.y));
+      const bottomY = Math.min(...orderedWithMarkers.map((l) => l.y));
+      const pageSpanY = Math.max(1, topY - bottomY);
+      const bottomBandY = bottomY + pageSpanY * 0.2;
+      const effectivePageHeight = pageHeight > 0 ? pageHeight : topY + (medianHeight * 2);
+
+      function isPotentialFootnoteLine(line) {
+        const txt = String(line.text || '').trim();
+        if (!txt) return false;
+        if (line.markerOnly) return false;
+        const lowerArea = line.y <= bottomBandY || line.y <= effectivePageHeight * 0.2;
+        const smallFont = line.avgHeight <= medianHeight * 0.9;
+        const startsMarker = /^\[?\d{1,3}\]?[\s.).-]/.test(txt) || /^\d{1,3}$/.test(txt);
+        return smallFont && lowerArea && (startsMarker || txt.length <= 90);
+      }
+
+      const footnotes = [];
+      const bodyLines = [];
+      orderedWithMarkers.forEach((line) => {
+        if (isPotentialFootnoteLine(line)) {
+          footnotes.push(line);
+        } else {
+          bodyLines.push(line);
+        }
+      });
+
+      function lineLooksLikeHeading(line) {
+        const txt = String(line?.text || '').trim();
+        if (!txt || txt.length > 140) return false;
+        if (/^[•\-–]\s/.test(txt) || /^\d+\./.test(txt)) return false;
+        const letters = txt.replace(/[^A-Za-zÀ-ÖØ-öø-ÿ]/g, '');
+        const upper = txt.replace(/[^A-ZÀ-ÖØ-Þ]/g, '');
+        const upperRatio = letters.length ? upper.length / letters.length : 0;
+        const bigFont = Number(line.avgHeight || 0) >= medianHeight * 1.24;
+        const boldish = Number(line.boldRatio || 0) >= 0.5;
+        const shortish = txt.length <= 95;
+        const endsLikeSentence = /[.!?;:]$/.test(txt);
+        return ((bigFont && shortish) || (boldish && shortish) || (upperRatio > 0.7 && txt.length <= 80)) && !endsLikeSentence;
+      }
+
+      const blocks = [];
+      let pendingBullet = false;
+      for (const line of bodyLines) {
+        let txt = String(line.text || '').trim();
+        if (!txt) continue;
+        if (line.markerOnly) {
+          const previous = blocks.length ? blocks[blocks.length - 1] : null;
+          if (previous && (previous.type === 'paragraph' || previous.type === 'list-item')) {
+            previous.text = `${String(previous.text || '').trim()} ${txt}`.replace(/\s{2,}/g, ' ').trim();
+            previous.lastY = line.y;
+          } else {
+            blocks.push({ type: 'paragraph', text: txt, startX: line.startX, lastY: line.y });
+          }
+          continue;
+        }
+        if (txt === '•' || txt === '.') {
+          pendingBullet = true;
+          continue;
+        }
+        if (pendingBullet) {
+          txt = `• ${txt}`;
+          pendingBullet = false;
+        }
+
+        const isHeading = lineLooksLikeHeading({ ...line, text: txt });
+        const isListItem = /^[•\-–]\s+/.test(txt) || /^\d+\.\s+/.test(txt);
+        const previous = blocks.length ? blocks[blocks.length - 1] : null;
+        const verticalGap = previous ? Math.max(0, Number(previous.lastY || 0) - Number(line.y || 0)) : 0;
+        const similarIndent = previous ? Math.abs(Number(previous.startX || 0) - Number(line.startX || 0)) <= Math.max(12, medianHeight * 1.6) : false;
+        const canMerge = previous
+          && previous.type === 'paragraph'
+          && !isHeading
+          && !isListItem
+          && similarIndent
+          && verticalGap <= Math.max(16, medianHeight * 1.7);
+
+        if (isHeading) {
+          const level = Number(line.avgHeight || 0) >= medianHeight * 1.45 ? 'h2' : 'h3';
+          blocks.push({ type: 'heading', level, text: txt, startX: line.startX, lastY: line.y });
+          continue;
+        }
+
+        if (isListItem) {
+          blocks.push({ type: 'list-item', text: txt, startX: line.startX, lastY: line.y });
+          continue;
+        }
+
+        if (canMerge) {
+          const current = String(txt || '');
+          const previousText = String(previous.text || '');
+          const hyphenJoin = /-$/.test(previousText) && /^[a-zà-öø-ÿ]/i.test(current);
+          previous.text = hyphenJoin
+            ? `${previousText.slice(0, -1)}${current}`
+            : `${previousText} ${current}`.replace(/\s{2,}/g, ' ').trim();
+          previous.lastY = line.y;
+        } else {
+          blocks.push({ type: 'paragraph', text: txt, startX: line.startX, lastY: line.y });
+        }
+      }
+
+      const textParts = [];
+      const htmlParts = [];
+      blocks.forEach((block) => {
+        const value = String(block.text || '').trim();
+        if (!value) return;
+        textParts.push(value);
+        if (block.type === 'heading') {
+          const safeLevel = block.level === 'h2' ? 'h2' : 'h3';
+          htmlParts.push(`<${safeLevel}>${escapeHtml(value)}</${safeLevel}>`);
+        } else if (block.type === 'list-item') {
+          htmlParts.push(`<p>${escapeHtml(value)}</p>`);
+        } else {
+          htmlParts.push(`<p>${escapeHtml(value)}</p>`);
+        }
+      });
+
+      if (footnotes.length > 0) {
+        const footRows = footnotes
+          .map((line) => String(line.text || '').trim())
+          .filter(Boolean)
+          .map((line) => line.replace(/^(\d{1,3})(?=\s)/, '[$1]'));
+        if (footRows.length) {
+          textParts.push('');
+          textParts.push('Notes de bas de page:');
+          footRows.forEach((row) => textParts.push(row));
+          htmlParts.push(`
+            <details class="feed-digest-pdf-footnotes">
+              <summary>Notes de bas de page (${footRows.length})</summary>
+              <ul>${footRows.map((row) => `<li>${escapeHtml(row)}</li>`).join('')}</ul>
+            </details>
+          `);
+        }
+      }
+
+      return {
+        text: normalizeDigestText(textParts.join('\n')),
+        html: htmlParts.join('')
+      };
+    }
+
+    async function extractPdfPageLinks(page) {
+      try {
+        const annotations = await page.getAnnotations({ intent: 'display' });
+        return (annotations || [])
+          .map((ann) => String(ann?.url || ann?.unsafeUrl || ann?.dest || '').trim())
+          .filter(Boolean)
+          .filter((value, index, arr) => arr.indexOf(value) === index);
+      } catch {
+        return [];
+      }
+    }
+
+    function renderPdfPageLinksHtml(links = [], pageNo = 1, anchorPrefix = 'feed-digest-pdf') {
+      const list = Array.isArray(links) ? links.filter(Boolean) : [];
+      if (!list.length) return '';
+      const sectionId = `${anchorPrefix}-links-page-${Number(pageNo || 1)}`;
+      return `
+        <details id="${escapeHtml(sectionId)}" class="feed-digest-pdf-links">
+          <summary>Liens detectes (${list.length})</summary>
+          <ul>
+            ${list.map((href, idx) => `<li id="${escapeHtml(`${sectionId}-ref-${idx + 1}`)}"><a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(href)}</a></li>`).join('')}
+          </ul>
+        </details>
+      `;
+    }
+
+    function linkifyPdfMarkersToPageLinksSection(html, links = [], pageNo = 1, anchorPrefix = 'feed-digest-pdf') {
+      const source = String(html || '');
+      const list = Array.isArray(links) ? links.filter(Boolean) : [];
+      if (!source || !list.length) return source;
+      const sectionId = `${anchorPrefix}-links-page-${Number(pageNo || 1)}`;
+      return source.replace(/\[(\d{1,3})\]/g, (_full, n) => {
+        const idx = Number(n);
+        if (!Number.isFinite(idx) || idx < 1 || idx > list.length) return `[${n}]`;
+        return `<a href="#${escapeHtml(sectionId)}" class="feed-digest-marker-link" title="Aller aux liens detectes de la page">[${escapeHtml(String(n))}]</a>`;
+      });
+    }
+
+    const PDF2MD_CDN_URL = 'https://esm.sh/@opendocsg/pdf2md@0.2.2?bundle';
+    let pdf2MdModulePromise = null;
+
+    async function ensurePdf2MdModule() {
+      if (pdf2MdModulePromise) return pdf2MdModulePromise;
+      pdf2MdModulePromise = import(PDF2MD_CDN_URL)
+        .then((mod) => mod?.default || mod)
+        .catch((error) => {
+          console.warn('pdf2md CDN unavailable, fallback to PDF.js extraction:', error);
+          return null;
+        });
+      return pdf2MdModulePromise;
+    }
+
+    async function extractPdfMarkdownWithCdn(buffer) {
+      try {
+        const pdf2md = await ensurePdf2MdModule();
+        if (typeof pdf2md !== 'function') return '';
+        const markdown = await pdf2md(buffer);
+        return normalizeDigestText(String(markdown || ''));
+      } catch (error) {
+        console.warn('pdf2md extraction failed, fallback to PDF.js extraction:', error);
+        return '';
+      }
+    }
+
+    function renderDigestDetailsList(details = []) {
+      if (!Array.isArray(details) || !details.length) return '';
+      return `<p>${details.map((item) => escapeHtml(item)).join(' • ')}</p>`;
+    }
+
+    function trimDigestTextForCompact(text, maxChars = 2600, maxLines = 28) {
+      const source = normalizeDigestText(text);
+      if (!source) return { text: '', truncated: false };
+      const lines = source.split('\n');
+      const clippedLines = lines.slice(0, maxLines);
+      let joined = clippedLines.join('\n');
+      let truncated = lines.length > maxLines;
+      if (joined.length > maxChars) {
+        joined = `${joined.slice(0, maxChars)}...`;
+        truncated = true;
+      }
+      return { text: joined.trim(), truncated };
+    }
+
+    function renderDigestMarkdownHtml(markdownText) {
+      const source = String(markdownText || '');
+      if (!source.trim()) return '';
+      try {
+        if (globalThis.marked && typeof globalThis.marked.parse === 'function') {
+          const parsed = globalThis.marked.parse(source, {
+            gfm: true,
+            breaks: true,
+            headerIds: false,
+            mangle: false
+          });
+          return sanitizeProjectDescriptionHtml(String(parsed || ''));
+        }
+      } catch (error) {
+        console.warn('Markdown parse failed, fallback used:', error);
+      }
+      return sanitizeProjectDescriptionHtml(renderSafeMarkdown(source));
+    }
+
+    function buildDigestContentHtml(digest, file, displayMode = 'compact') {
+      const effectiveMode = normalizeGlobalFeedDigestView(displayMode, 'compact');
+      const sourceLabel = digest.kind === 'email'
+        ? 'Email'
+        : (digest.kind === 'pdf' ? 'PDF' : (digest.kind === 'office' ? 'DOCX/Office' : 'Document'));
+      const createdLabel = new Date().toLocaleString('fr-FR');
+      const title = String(digest.title || file?.name || 'Document').trim();
+      const details = [];
+      if (digest.sourceAuthor) details.push(`Expediteur: ${digest.sourceAuthor}`);
+      if (digest.sourceDate) details.push(`Date source: ${digest.sourceDate}`);
+      if (digest.degraded && !digest.unavailableReason) details.push('Extraction partielle (fallback binaire)');
+      if (digest.unavailableReason) details.push(`Parser manquant: ${digest.unavailableReason}`);
+
+      let compactPanelHtml = '';
+      let fullPanelHtml = '';
+      if (digest.kind === 'email') {
+        const headersDump = String(digest.headersDump || '').trim();
+        const htmlFragment = String(digest.sourceHtml || '').trim();
+        const sanitizedHtmlFragment = sanitizeDigestHtmlFragment(htmlFragment);
+        const compactText = trimDigestTextForCompact(digest.text || '', FEED_DIGEST_COMPACT_TEXT_MAX_CHARS, FEED_DIGEST_COMPACT_TEXT_MAX_LINES);
+        compactPanelHtml = `
+          ${renderDigestDetailsList(details)}
+          ${compactText.text ? `<pre class="feed-digest-excerpt">${escapeHtml(compactText.text)}</pre>` : '<p>Aucun contenu textuel detecte.</p>'}
+          ${compactText.truncated || sanitizedHtmlFragment ? '<p class="feed-digest-compact-note">Mode compact: contenu complet disponible en mode "Complet".</p>' : ''}
+        `;
+        fullPanelHtml = `
+          ${renderDigestDetailsList(details)}
+          ${headersDump ? `<details open><summary>En-tetes complets</summary><pre class="feed-digest-excerpt">${escapeHtml(headersDump)}</pre></details>` : ''}
+          ${sanitizedHtmlFragment ? `<details open><summary>Structure HTML complete du mail</summary><section class="feed-digest-mail-html">${sanitizedHtmlFragment}</section></details>` : ''}
+          ${digest.text ? `<details><summary>Version texte complete</summary><pre class="feed-digest-excerpt">${escapeHtml(String(digest.text || ''))}</pre></details>` : `<p>Aucun contenu textuel detecte.</p>`}
+          ${Array.isArray(digest.attachments) && digest.attachments.length ? `<details><summary>Pieces jointes detectees (${digest.attachments.length})</summary><ul>${digest.attachments.map((att) => `<li>${escapeHtml(`${att.fileName || '(sans nom)'} • ${att.mimeType || 'application/octet-stream'} • encodage ${att.transferEncoding || 'n/a'} • ${Number(att.payloadChars || 0)} caracteres` )}</li>`).join('')}</ul></details>` : ''}
+        `;
+      } else if (digest.kind === 'pdf') {
+        const metadataLines = Array.isArray(digest.metadataLines) ? digest.metadataLines.filter(Boolean) : [];
+        const pagesHtml = String(digest.pagesHtml || '').trim();
+        const pagesPreviewHtml = String(digest.pagesPreviewHtml || '').trim();
+        const markdownSource = String(digest.markdownSource || '').trim();
+        const compactText = trimDigestTextForCompact(digest.text || '', FEED_DIGEST_COMPACT_TEXT_MAX_CHARS, FEED_DIGEST_COMPACT_TEXT_MAX_LINES);
+        const compactMarkdown = markdownSource
+          ? renderDigestMarkdownHtml(trimDigestTextForCompact(markdownSource, FEED_DIGEST_COMPACT_TEXT_MAX_CHARS, FEED_DIGEST_COMPACT_TEXT_MAX_LINES).text)
+          : '';
+        const fullMarkdown = markdownSource ? renderDigestMarkdownHtml(markdownSource) : '';
+        compactPanelHtml = `
+          ${renderDigestDetailsList(details)}
+          ${metadataLines.length ? `<pre class="feed-digest-excerpt">${escapeHtml(metadataLines.join('\n'))}</pre>` : ''}
+          ${compactMarkdown ? `<section class="feed-digest-plain-content">${compactMarkdown}</section>` : ''}
+          ${pagesPreviewHtml ? `<section class="feed-digest-pdf-pages">${pagesPreviewHtml}</section>` : ''}
+          ${!compactMarkdown && compactText.text ? `<details><summary>Texte</summary><pre class="feed-digest-excerpt">${escapeHtml(compactText.text)}</pre></details>` : ''}
+          ${compactText.truncated ? '<p class="feed-digest-compact-note">Mode compact: pages et texte complets disponibles en mode "Complet".</p>' : ''}
+        `;
+        fullPanelHtml = `
+          ${renderDigestDetailsList(details)}
+          ${metadataLines.length ? `<details open><summary>Metadonnees PDF</summary><pre class="feed-digest-excerpt">${escapeHtml(metadataLines.join('\n'))}</pre></details>` : ''}
+          ${fullMarkdown ? `<details open><summary>Contenu reconstruit (Markdown)</summary><section class="feed-digest-plain-content">${fullMarkdown}</section></details>` : ''}
+          ${pagesHtml ? `<details open><summary>Contenu structure par pages</summary><section class="feed-digest-pdf-pages">${pagesHtml}</section></details>` : ''}
+          ${!fullMarkdown && digest.text ? `<details><summary>Texte complet</summary><pre class="feed-digest-excerpt">${escapeHtml(String(digest.text || ''))}</pre></details>` : ''}
+          ${!fullMarkdown && !digest.text ? `<p>Aucun texte exploitable detecte.</p>` : ''}
+        `;
+      } else {
+        const sourceText = String(digest.text || '').trim();
+        const compactText = trimDigestTextForCompact(sourceText, FEED_DIGEST_COMPACT_TEXT_MAX_CHARS, FEED_DIGEST_COMPACT_TEXT_MAX_LINES);
+        const compactRendered = digest.kind === 'markdown'
+          ? renderDigestMarkdownHtml(compactText.text)
+          : escapeHtml(compactText.text).replace(/\n/g, '<br>');
+        const fullRendered = digest.kind === 'markdown'
+          ? renderDigestMarkdownHtml(sourceText)
+          : escapeHtml(sourceText).replace(/\n/g, '<br>');
+        const compactBody = compactText.text
+          ? `<section class="feed-digest-plain-content">${compactRendered}</section>`
+          : `<p>Aucun contenu exploitable detecte.</p>`;
+        const fullBody = sourceText
+          ? `<section class="feed-digest-plain-content">${fullRendered}</section>`
+          : `<p>Aucun contenu exploitable detecte.</p>`;
+        compactPanelHtml = `
+          ${renderDigestDetailsList(details)}
+          ${compactBody}
+          ${compactText.truncated ? '<p class="feed-digest-compact-note">Mode compact: contenu complet disponible en mode "Complet".</p>' : ''}
+        `;
+        fullPanelHtml = `
+          ${renderDigestDetailsList(details)}
+          ${fullBody}
+        `;
+      }
+
+      const selectedPanelHtml = effectiveMode === 'full' ? fullPanelHtml : compactPanelHtml;
+      const modeLabel = effectiveMode === 'full' ? 'Complet' : 'Compact';
+      return applyProfanityFilterToHtml(`
+        <div class="feed-digest-block" data-feed-digest-kind="${escapeHtml(String(digest.kind || 'document'))}" data-feed-digest-view="${escapeHtml(effectiveMode)}">
+          <h3>Actualite extraite - ${escapeHtml(title)}</h3>
+          <div class="feed-digest-panels">
+            <section class="feed-digest-panel-${escapeHtml(effectiveMode)}">${selectedPanelHtml}</section>
+          </div>
+          <div class="feed-digest-meta-box">
+            <p><strong>Source:</strong> ${escapeHtml(sourceLabel)} • <strong>Digest:</strong> ${escapeHtml(createdLabel)} • <strong>Mode:</strong> ${escapeHtml(modeLabel)}</p>
+          </div>
+        </div>
+      `);
+    }
+
     function parseEmlDigest(raw) {
       const source = String(raw || '');
-      const lines = source.split(/\r?\n/);
-      const headers = new Map();
-      let idx = 0;
-      for (; idx < lines.length; idx += 1) {
-        const line = lines[idx];
-        if (!line.trim()) {
-          idx += 1;
-          break;
-        }
-        const m = line.match(/^([^:]+):\s*(.*)$/);
-        if (m) headers.set(String(m[1] || '').toLowerCase().trim(), String(m[2] || '').trim());
-      }
-      const body = lines.slice(idx).join('\n');
-      let text = body;
-      if (/content-type:\s*text\/html/i.test(source)) {
-        text = stripHtmlTagsForDigest(body);
-      }
+      const { headerText } = splitMimeHeaderAndBody(source);
+      const headers = parseMimeHeaders(headerText);
+      const entity = parseMimeEntity(source, 'utf-8');
+      const plainText = normalizeDigestText(entity.plainParts.join('\n\n'));
+      const sourceHtml = String(entity.htmlParts.join('\n\n') || '').trim();
+      const htmlText = normalizeDigestText(stripHtmlTagsForDigest(sourceHtml));
+      const text = plainText || htmlText;
       return {
-        title: headers.get('subject') || '',
-        author: headers.get('from') || '',
-        date: headers.get('date') || '',
-        text: normalizeDigestText(text)
+        title: decodeMimeEncodedWords(headers.get('subject') || ''),
+        author: decodeMimeEncodedWords(headers.get('from') || ''),
+        date: decodeMimeEncodedWords(headers.get('date') || ''),
+        text: normalizeDigestText(text),
+        sourceHtml,
+        headersDump: stringifyMimeHeaders(headers),
+        attachments: Array.isArray(entity.attachments) ? entity.attachments : []
       };
     }
 
@@ -18256,14 +21100,18 @@
       const type = String(file?.type || '').toLowerCase();
 
       if (ext === 'eml' || type === 'message/rfc822') {
-        const raw = await file.text();
+        const buffer = await file.arrayBuffer();
+        const raw = byteArrayToLatin1String(new Uint8Array(buffer));
         const parsed = parseEmlDigest(raw);
         return {
           kind: 'email',
           title: parsed.title || name,
           sourceAuthor: parsed.author || '',
           sourceDate: parsed.date || '',
-          text: parsed.text
+          text: parsed.text,
+          sourceHtml: parsed.sourceHtml || '',
+          headersDump: parsed.headersDump || '',
+          attachments: Array.isArray(parsed.attachments) ? parsed.attachments : []
         };
       }
 
@@ -18281,26 +21129,64 @@
         const text = ext === 'rtf'
           ? normalizeDigestText(raw.replace(/\\par[d]?/gi, '\n').replace(/\\'[0-9a-fA-F]{2}/g, '').replace(/[{}\\]/g, ' '))
           : normalizeDigestText(raw);
-        return { kind: 'text', title: name, text };
+        return { kind: ext === 'md' ? 'markdown' : 'text', title: name, text };
       }
 
       if ((type.includes('pdf') || ext === 'pdf') && ensurePdfJsDigestReady()) {
         const buffer = await file.arrayBuffer();
+        const markdownFromCdn = await extractPdfMarkdownWithCdn(new Uint8Array(buffer));
         const pdf = await globalThis.pdfjsLib.getDocument({ data: buffer }).promise;
+        const anchorPrefix = `feed-digest-pdf-${Math.random().toString(36).slice(2, 9)}`;
         const pages = [];
-        let extractedChars = 0;
+        const pagesHtml = [];
+        const pagesPreviewHtml = [];
         for (let pageNo = 1; pageNo <= pdf.numPages; pageNo += 1) {
           const page = await pdf.getPage(pageNo);
+          const viewport = page.getViewport({ scale: 1 });
           const content = await page.getTextContent();
-          const pageText = (content.items || []).map((item) => String(item.str || '')).join(' ');
-          const cleanPageText = pageText.trim();
+          const structured = buildPdfStructuredPage(content.items || [], { pageHeight: Number(viewport?.height || 0) });
+          const links = await extractPdfPageLinks(page);
+          const cleanPageText = structured.text.trim();
           if (cleanPageText) {
             pages.push(cleanPageText);
-            extractedChars += cleanPageText.length;
+            const linkedPageHtml = linkifyPdfMarkersToPageLinksSection(
+              structured.html || `<p>${escapeHtml(cleanPageText)}</p>`,
+              links,
+              pageNo,
+              anchorPrefix
+            );
+            const pageHtml = `<article class="feed-digest-pdf-page"><h4>Page ${pageNo}</h4>${linkedPageHtml}${renderPdfPageLinksHtml(links, pageNo, anchorPrefix)}</article>`;
+            pagesHtml.push(pageHtml);
+            if (pagesPreviewHtml.length < FEED_DIGEST_COMPACT_PDF_PAGES) pagesPreviewHtml.push(pageHtml);
           }
-          if (extractedChars > FEED_DIGEST_PDF_MAX_CHARS) break;
         }
-        return { kind: 'pdf', title: name, text: normalizeDigestText(pages.join('\n\n')) };
+        let metadata = null;
+        try {
+          metadata = await pdf.getMetadata();
+        } catch {
+          metadata = null;
+        }
+        const info = metadata?.info || {};
+        const metadataLines = [
+          `Pages: ${Number(pdf.numPages || 0)}`,
+          info?.Title ? `Titre: ${info.Title}` : '',
+          info?.Author ? `Auteur: ${info.Author}` : '',
+          info?.Subject ? `Sujet: ${info.Subject}` : '',
+          info?.Creator ? `Createur: ${info.Creator}` : '',
+          info?.Producer ? `Producteur: ${info.Producer}` : '',
+          info?.CreationDate ? `Creation: ${info.CreationDate}` : '',
+          info?.ModDate ? `Modification: ${info.ModDate}` : '',
+          info?.PDFFormatVersion ? `Version PDF: ${info.PDFFormatVersion}` : ''
+        ].filter(Boolean);
+        return {
+          kind: 'pdf',
+          title: name,
+          text: markdownFromCdn || normalizeDigestText(pages.join('\n\n')),
+          markdownSource: markdownFromCdn || '',
+          pagesHtml: pagesHtml.join(''),
+          pagesPreviewHtml: pagesPreviewHtml.join(''),
+          metadataLines
+        };
       }
 
       if (type.includes('pdf') || ext === 'pdf') {
@@ -18339,9 +21225,28 @@
       };
     }
 
-    const FEED_DIGEST_PDF_MAX_CHARS = 120000;
     const FEED_DIGEST_BULLET_MAX_CHARS = 900;
     const FEED_DIGEST_EXCERPT_MAX_CHARS = 50000;
+    const FEED_DIGEST_COMPACT_TEXT_MAX_CHARS = 3200;
+    const FEED_DIGEST_COMPACT_TEXT_MAX_LINES = 34;
+    const FEED_DIGEST_COMPACT_PDF_PAGES = 2;
+
+    function normalizeGlobalFeedDigestView(value, fallback = 'compact') {
+      const v = String(value || '').trim().toLowerCase();
+      if (v === 'full' || v === 'complet') return 'full';
+      if (v === 'compact') return 'compact';
+      return fallback === 'full' ? 'full' : 'compact';
+    }
+
+    function pickGlobalFeedDigestImportMode() {
+      const isFull = window.confirm(
+        'Mode de digest pour cet import:\n\nOK = complet\nAnnuler = compact'
+      );
+      const normalized = isFull ? 'full' : 'compact';
+      globalFeedDigestViewMode = normalized;
+      localStorage.setItem(GLOBAL_FEED_DIGEST_VIEW_STORAGE_KEY, normalized);
+      return normalized;
+    }
 
     function summarizeDigestText(text, maxBullets = 12) {
       const source = normalizeDigestText(text);
@@ -18369,58 +21274,52 @@
       return { bullets, excerpt: source.slice(0, FEED_DIGEST_EXCERPT_MAX_CHARS) };
     }
 
-    async function publishGlobalFeedDigestFromFiles(fileList) {
+    async function publishGlobalFeedDigestFromFiles(fileList, options = {}) {
       const files = Array.from(fileList || []).filter(Boolean);
       if (files.length === 0) return;
-      const published = [];
+      const digestViewMode = normalizeGlobalFeedDigestView(options?.digestView || globalFeedDigestViewMode, globalFeedDigestViewMode);
+      const digestBlocks = [];
       for (const file of files) {
         try {
           const digest = await extractFeedDigestFromFile(file);
-          const summary = summarizeDigestText(digest.text || '');
-          const sourceLabel = digest.kind === 'email'
-            ? 'Email'
-            : (digest.kind === 'pdf' ? 'PDF' : (digest.kind === 'office' ? 'DOCX/Office' : 'Document'));
-          const createdLabel = new Date().toLocaleString('fr-FR');
-          const title = String(digest.title || file.name || 'Document').trim();
-          const details = [];
-          if (digest.sourceAuthor) details.push(`Expediteur: ${digest.sourceAuthor}`);
-          if (digest.sourceDate) details.push(`Date source: ${digest.sourceDate}`);
-          if (digest.degraded && !digest.unavailableReason) details.push('Extraction partielle (fallback binaire)');
-          if (digest.unavailableReason) details.push(`Parser manquant: ${digest.unavailableReason}`);
-          const contentHtml = applyProfanityFilterToHtml(`
-            <h3>Actualite extraite - ${escapeHtml(title)}</h3>
-            <p><strong>Source:</strong> ${escapeHtml(sourceLabel)} • <strong>Digest:</strong> ${escapeHtml(createdLabel)}</p>
-            ${details.length ? `<p>${details.map((item) => escapeHtml(item)).join(' • ')}</p>` : ''}
-            ${summary.bullets.length ? `<ul>${summary.bullets.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>` : ''}${summary.excerpt ? `<details><summary>Extrait etendu du document</summary><pre class="feed-digest-excerpt">${escapeHtml(summary.excerpt)}</pre></details>` : `<p>Aucun contenu exploitable detecte.</p>`}
-          `);
-          const post = {
-            postId: uuidv4(),
-            authorUserId: String(currentUser?.userId || ''),
-            authorName: String(currentUser?.name || fallbackDirectoryName(currentUser?.userId || '')),
-            content: contentHtml,
-            mentions: [],
-            refs: [],
-            createdAt: Date.now(),
-            source: sharedFolderHandle ? 'shared' : 'local',
-            digestSource: {
-              fileName: String(file.name || ''),
-              fileType: String(file.type || ''),
-              size: Number(file.size || 0),
-              parserKind: String(digest.kind || ''),
-              degraded: !!digest.degraded
-            }
-          };
-          await putEncrypted('globalPosts', post, 'postId');
-          knownGlobalPostIds.add(post.postId);
-          published.push(post);
-          if (sharedFolderHandle) writeGlobalFeedPostToSharedFolder(post);
+          const contentHtml = buildDigestContentHtml(digest, file, digestViewMode);
+          digestBlocks.push(contentHtml);
         } catch (error) {
           console.warn('Digest feed import failed:', error);
           showToast(`Digest impossible pour ${file?.name || 'fichier'}`);
         }
       }
-      await renderGlobalFeed();
-      if (published.length > 0) showToast(`${published.length} actualite(s) generee(s)`);
+
+      if (!digestBlocks.length) return;
+
+      if (typeof editingGlobalFeedPostId !== 'undefined' && editingGlobalFeedPostId) {
+        cancelEditGlobalFeedPost();
+      }
+      openGlobalFeedComposerForNewPost({ focusEditor: false });
+
+      const input = document.getElementById('global-feed-input');
+      const quill = projectDescriptionQuillEditors.get('global-feed-editor');
+      const importedHtml = digestBlocks.join('<p><br></p><hr><p><br></p>');
+      if (quill) {
+        const currentHtml = String(quill.root.innerHTML || '').trim();
+        const hasExistingDraft = !!currentHtml && currentHtml !== '<p><br></p>';
+        const nextHtml = hasExistingDraft
+          ? `${currentHtml}<p><br></p><hr><p><br></p>${importedHtml}`
+          : importedHtml;
+        quill.clipboard.dangerouslyPasteHTML(nextHtml || '<p><br></p>');
+        const len = Math.max(0, quill.getLength() - 1);
+        quill.setSelection(len, 0, 'user');
+        quill.focus();
+      } else if (input) {
+        const currentValue = String(input.value || '').trim();
+        input.value = currentValue
+          ? `${currentValue}\n\n--------------------\n\n${stripHtmlTagsForDigest(importedHtml)}`
+          : stripHtmlTagsForDigest(importedHtml);
+        input.focus();
+      }
+
+      await updateGlobalFeedMentionCounter();
+      showToast(`${digestBlocks.length} digest importe(s) dans l editeur (publication manuelle).`);
     }
 
     async function publishGlobalFeedPost() {
@@ -18682,7 +21581,6 @@
           </article>
         `;
       }).join('');
-
       if (globalFeedFocusPostId) {
         const target = document.getElementById(`global-feed-post-${globalFeedFocusPostId}`);
         if (target) {
@@ -20093,6 +22991,7 @@
 
     function setGlobalHubView(view) {
       globalWorkspaceView = view;
+      document.querySelector('.dashboard-bento')?.classList.add('no-margin-for-global-tasks');
       const mapping = {
         tasks: ['Vue Tâches (Tous projets)', 'Pilotage transversal des tâches, y compris hors projet.'],
         workflow: ['Workflow', 'Organisation metier: carte, agents, taches, procedures et logiciels.'],
@@ -20115,6 +23014,7 @@
       document.getElementById('global-rgpd-section')?.classList.toggle('hidden', view !== 'rgpd');
       document.getElementById('global-settings-section')?.classList.toggle('hidden', view !== 'settings');
       updateGlobalTasksViewButtons();
+      applyWorkspaceWidthMode();
     }
 
     async function showGlobalWorkspace(view) {
@@ -20388,6 +23288,25 @@
       };
     }
 
+    function getSelectedGlobalTaskUrgencySet() {
+      const checks = Array.from(document.querySelectorAll('input[data-global-task-urgency]'));
+      const allUrgencies = new Set(['high', 'medium', 'low']);
+      if (checks.length === 0) return allUrgencies;
+      const selected = new Set(
+        checks
+          .filter((input) => input instanceof HTMLInputElement && input.checked)
+          .map((input) => String(input.getAttribute('data-global-task-urgency') || '').trim())
+          .filter((value) => allUrgencies.has(value))
+      );
+      return selected.size > 0 ? selected : allUrgencies;
+    }
+
+    function getGlobalTaskCardsPerPage() {
+      if (globalTaskCardsColumns >= 4) return 12;
+      if (globalTaskCardsColumns === 3) return 9;
+      return paginationConfig.globalTasksPerPage;
+    }
+
     function filterProjectTasksByControls(tasks) {
       const filters = getProjectTaskFilters();
       let filtered = (tasks || []).filter(task => matchesQuery([
@@ -20464,7 +23383,7 @@
         
         if (renderAsList) {
           return `
-        <div id="task-card-${task.taskId}" class="task-list-row rounded-lg ${cardBgClass} border border-slate-200 p-3 cursor-pointer" onclick="openProjectTaskDetails('${task.taskId}')" role="button" tabindex="0">
+        <div id="task-card-${task.taskId}" class="task-list-row task-completion-fx-anchor rounded-lg ${cardBgClass} border border-slate-200 p-3 cursor-pointer" data-task-entity-id="${escapeHtml(String(task.taskId || ''))}" data-task-source-type="project" data-task-project-id="${escapeHtml(String(currentProjectId || ''))}" onclick="openProjectTaskDetails('${task.taskId}')" role="button" tabindex="0">
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0 flex-1">
               <div class="flex flex-wrap items-center gap-2 mb-1">
@@ -20494,7 +23413,7 @@
       `;
         }
         return `
-        <div id="task-card-${task.taskId}" class="task-list-card task-list-card-modern task-density-${compactLevel} ${urgencyMeta.accentClass} rounded-lg p-4 ${cardBgClass} cursor-pointer" onclick="openProjectTaskDetails('${task.taskId}')" role="button" tabindex="0">
+        <div id="task-card-${task.taskId}" class="task-list-card task-completion-fx-anchor task-list-card-modern task-density-${compactLevel} ${urgencyMeta.accentClass} rounded-lg p-4 ${cardBgClass} cursor-pointer" data-task-entity-id="${escapeHtml(String(task.taskId || ''))}" data-task-source-type="project" data-task-project-id="${escapeHtml(String(currentProjectId || ''))}" onclick="openProjectTaskDetails('${task.taskId}')" role="button" tabindex="0">
           <div class="flex justify-between items-start mb-2">
             <div>
               <div class="flex flex-wrap items-center gap-2 mb-1">
@@ -20568,6 +23487,7 @@
       `;
       }).join('');
       renderPagination('tasks-pagination', pagination, 'setTasksPage', 'taches');
+      flushTaskCompletionFxQueue();
     }
 
     function renderArchivedTasks(tasks) {
@@ -20644,12 +23564,36 @@
         { key: 'suspendu', label: 'Suspendu' },
         { key: 'termine', label: 'Terminé' }
       ];
+      const buildKanbanPager = (colKey, pagination) => {
+        if (pagination.totalPages <= 1) {
+          return `<p class="text-[11px] text-slate-500">${pagination.totalItems} carte(s)</p>`;
+        }
+        const prevDisabled = pagination.currentPage <= 1;
+        const nextDisabled = pagination.currentPage >= pagination.totalPages;
+        return `
+          <div class="flex items-center justify-between gap-2 text-[11px] text-slate-500">
+            <button
+              type="button"
+              class="px-2 py-1 rounded border border-slate-300 ${prevDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-100'}"
+              ${prevDisabled ? 'disabled' : `onclick="event.stopPropagation(); setProjectKanbanPage('${colKey}', ${pagination.currentPage - 1})"`}
+            >Prec.</button>
+            <span>${pagination.start + 1}-${pagination.end} / ${pagination.totalItems}</span>
+            <button
+              type="button"
+              class="px-2 py-1 rounded border border-slate-300 ${nextDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-100'}"
+              ${nextDisabled ? 'disabled' : `onclick="event.stopPropagation(); setProjectKanbanPage('${colKey}', ${pagination.currentPage + 1})"`}
+            >Suiv.</button>
+          </div>
+        `;
+      };
 
       board.innerHTML = columns.map(col => {
         const items = scopedTasks.filter(t => (t.status || 'todo') === col.key);
-        const cards = items.length === 0
+        const pagination = paginateItems(items, projectKanbanPageByStatus[col.key] || 1, TASK_KANBAN_PAGE_SIZE);
+        projectKanbanPageByStatus[col.key] = pagination.currentPage;
+        const cards = pagination.totalItems === 0
           ? '<p class="text-sm text-gray-500 text-center py-4">Aucune tâche</p>'
-          : items.map(task => {
+          : pagination.pageItems.map(task => {
             const dueStatus = getTaskDueStatus(task);
             const cardBgClass = dueStatus.isOverdue ? 'is-overdue-card' : 'bg-white';
             return `
@@ -20701,6 +23645,7 @@
               </button>
             </div>
             <div class="space-y-3">${cards}</div>
+            <div class="mt-2">${buildKanbanPager(col.key, pagination)}</div>
           </div>
         `;
       }).join('');
@@ -21151,6 +24096,14 @@
       if ((resolved.task.status || 'todo') === targetStatus) return false;
 
       if (resolved.sourceType === 'standalone') {
+        const prevStatus = normalizeTaskStatusValue(resolved.task.status);
+        const nextStatus = normalizeTaskStatusValue(targetStatus);
+        if (prevStatus !== 'termine' && nextStatus === 'termine') {
+          queueTaskCompletionFx({
+            sourceType: 'standalone',
+            id: resolved.task.id
+          });
+        }
         await putEncrypted('globalTasks', {
           ...resolved.task,
           status: targetStatus,
@@ -23559,6 +26512,7 @@
           taskId,
           changes: {
             status: 'termine',
+            completedAt: Date.now(),
             archivedAt: Date.now()
           }
         }
@@ -24195,6 +27149,7 @@
         stopPolling();
         stopDueReminders();
         stopBackupReminders();
+        stopTaskAutoArchiveScheduler();
         if (window.TaskMDACrypto && typeof window.TaskMDACrypto.lock === 'function') {
           window.TaskMDACrypto.lock();
         }
@@ -24220,6 +27175,163 @@
     document.getElementById('btn-select-folder').addEventListener('click', handleSelectFolder);
     document.getElementById('btn-continue-local')?.addEventListener('click', handleContinueWithoutFolder);
     document.getElementById('btn-theme-toggle')?.addEventListener('click', toggleTheme);
+    document.getElementById('task-auto-archive-months-input')?.addEventListener('change', async (e) => {
+      if (!isAppAdmin()) {
+        showToast('Action reservee a l admin application');
+        await renderGlobalSettings();
+        return;
+      }
+      const target = e.target;
+      const months = normalizeTaskAutoArchiveMonths(target?.value);
+      if (target) target.value = String(months);
+      await saveTaskAutoArchiveMonths(months);
+      const current = document.getElementById('task-auto-archive-months-current');
+      if (current) current.textContent = `Archivage après ${months} mois`;
+      showToast(`Archivage automatique configure: ${months} mois`);
+      const result = await runAutoArchiveCompletedTasks({ force: true, silent: true });
+      const lastRun = document.getElementById('task-auto-archive-last-run');
+      if (lastRun) {
+        const ts = Number(result?.lastRunAt || 0);
+        lastRun.textContent = ts > 0
+          ? `Dernier archivage auto exécuté le : ${new Date(ts).toLocaleString('fr-FR')}`
+          : 'Dernier archivage auto exécuté le : jamais';
+      }
+    });
+    document.getElementById('btn-via-annuaire-ror-save')?.addEventListener('click', async () => {
+      if (!isAppAdmin()) {
+        showToast('Action reservee a l admin application');
+        await renderGlobalSettings();
+        return;
+      }
+      const endpointInput = document.getElementById('via-annuaire-ror-endpoint-input');
+      const apiKeyInput = document.getElementById('via-annuaire-ror-apikey-input');
+      const endpoint = normalizeViaAnnuaireRorEndpoint(endpointInput?.value || '');
+      const apiKey = String(apiKeyInput?.value || '').trim();
+      await saveViaAnnuaireRorSettings({ endpoint, apiKey });
+      showToast(endpoint
+        ? (apiKey
+          ? 'Configuration Annuaire Santé enregistrée (avec clé API)'
+          : 'Configuration Annuaire Santé enregistrée (mode sans clé API)')
+        : 'Configuration Annuaire Santé incomplète (endpoint manquant)');
+      await renderGlobalSettings();
+    });
+    document.getElementById('btn-via-annuaire-ror-test')?.addEventListener('click', async () => {
+      const endpointInput = document.getElementById('via-annuaire-ror-endpoint-input');
+      const apiKeyInput = document.getElementById('via-annuaire-ror-apikey-input');
+      const endpoint = normalizeViaAnnuaireRorEndpoint(endpointInput?.value || '');
+      const apiKey = String(apiKeyInput?.value || '').trim();
+      if (!endpoint) {
+        showToast('Renseignez un endpoint Annuaire Santé FHIR');
+        return;
+      }
+      try {
+        showLoading(true);
+        const result = await testViaAnnuaireRorEndpointReachability(endpoint, apiKey);
+        if (result.authRequired) {
+          showToast(`Endpoint Annuaire Santé joignable (HTTP ${result.status}, authentification requise)`);
+        } else {
+          showToast(`Endpoint Annuaire Santé joignable (HTTP ${result.status})`);
+        }
+      } catch (error) {
+        showToast(`Test endpoint Annuaire Santé impossible: ${String(error?.message || 'erreur')}`);
+      } finally {
+        showLoading(false);
+      }
+    });
+    document.getElementById('via-annuaire-ror-endpoint-input')?.addEventListener('keydown', async (event) => {
+      if (event?.key !== 'Enter') return;
+      event.preventDefault();
+      document.getElementById('btn-via-annuaire-ror-save')?.click();
+    });
+    document.getElementById('via-annuaire-ror-apikey-input')?.addEventListener('keydown', async (event) => {
+      if (event?.key !== 'Enter') return;
+      event.preventDefault();
+      document.getElementById('btn-via-annuaire-ror-save')?.click();
+    });
+    document.getElementById('btn-via-annuaire-live-search')?.addEventListener('click', async () => {
+      await runViaAnnuaireLiveSearch({ fromUi: true, pageIndex: 0 });
+    });
+    document.getElementById('btn-via-annuaire-live-prev')?.addEventListener('click', async () => {
+      const nextPage = Math.max(0, Number(viaAnnuaireLiveSearchState.pageIndex || 0) - 1);
+      await runViaAnnuaireLiveSearch({ fromUi: false, pageIndex: nextPage });
+    });
+    document.getElementById('btn-via-annuaire-live-next')?.addEventListener('click', async () => {
+      const nextPage = Math.max(0, Number(viaAnnuaireLiveSearchState.pageIndex || 0) + 1);
+      await runViaAnnuaireLiveSearch({ fromUi: false, pageIndex: nextPage });
+    });
+    document.getElementById('btn-via-annuaire-config-toggle')?.addEventListener('click', () => {
+      setViaAnnuaireConfigExpanded(!viaAnnuaireConfigExpanded);
+    });
+    document.getElementById('btn-via-annuaire-live-audit-toggle')?.addEventListener('click', async () => {
+      const nextMode = !Boolean(viaAnnuaireLiveSearchState.auditMode);
+      viaAnnuaireLiveSearchState = {
+        ...viaAnnuaireLiveSearchState,
+        auditMode: nextMode,
+        openAuditRef: '',
+        auditByRef: nextMode ? (viaAnnuaireLiveSearchState.auditByRef || {}) : {}
+      };
+      renderViaAnnuaireLiveSearchPanel({ keepSelection: true });
+      if (nextMode) {
+        void runViaAnnuaireAuditForRows(viaAnnuaireLiveSearchState.results || []);
+      }
+    });
+    document.getElementById('via-annuaire-live-domain')?.addEventListener('change', () => {
+      const input = readViaAnnuaireLiveSearchInputs();
+      viaAnnuaireLiveSearchState = {
+        ...viaAnnuaireLiveSearchState,
+        domain: input.domain,
+        pageIndex: 0,
+        total: 0,
+        allResults: [],
+        results: [],
+        auditByRef: {},
+        openAuditRef: '',
+        selectedResultRef: '',
+        lastQueryLabel: ''
+      };
+      renderViaAnnuaireLiveSearchPanel({ keepSelection: true });
+    });
+    document.getElementById('via-annuaire-live-departement')?.addEventListener('change', () => {
+      const input = readViaAnnuaireLiveSearchInputs();
+      viaAnnuaireLiveSearchState = {
+        ...viaAnnuaireLiveSearchState,
+        departmentCode: input.departmentCode,
+        pageIndex: 0,
+        total: 0,
+        allResults: [],
+        results: [],
+        auditByRef: {},
+        openAuditRef: '',
+        selectedResultRef: '',
+        lastQueryLabel: ''
+      };
+      renderViaAnnuaireLiveSearchPanel({ keepSelection: true });
+    });
+    document.getElementById('via-annuaire-live-sort')?.addEventListener('change', () => {
+      const input = readViaAnnuaireLiveSearchInputs();
+      const sortedAll = sortViaAnnuaireLiveResults(viaAnnuaireLiveSearchState.allResults, input.sortKey);
+      const pageSize = Math.max(1, Number(viaAnnuaireLiveSearchState.pageSize || 12));
+      const total = sortedAll.length;
+      const pageIndex = 0;
+      const paged = sortedAll.slice(0, pageSize);
+      viaAnnuaireLiveSearchState = {
+        ...viaAnnuaireLiveSearchState,
+        sortKey: input.sortKey,
+        allResults: sortedAll,
+        pageIndex,
+        total,
+        results: paged,
+        selectedResultRef: String(paged[0]?.ref || '')
+      };
+      renderViaAnnuaireLiveSearchPanel({ keepSelection: true });
+      void enrichViaAnnuaireRowsWithRorEmail(paged);
+      void runViaAnnuaireAuditForRows(paged);
+    });
+    document.getElementById('via-annuaire-live-keyword')?.addEventListener('keydown', async (event) => {
+      if (event?.key !== 'Enter') return;
+      event.preventDefault();
+      await runViaAnnuaireLiveSearch({ fromUi: true, pageIndex: 0 });
+    });
     document.getElementById('btn-open-app-help')?.addEventListener('click', () => {
       document.getElementById('modal-app-help')?.classList.remove('hidden');
     });
@@ -24274,6 +27386,7 @@
         closeMobileSidebar,
         publishGlobalFeedPost,
         publishGlobalFeedDigestFromFiles,
+        pickGlobalFeedDigestImportMode,
         insertMentionTokenInGlobalFeed,
         setGlobalFeedComposerCollapsed,
         openGlobalFeedComposerForNewPost,
@@ -24787,6 +27900,17 @@
         next.ui.tabIcons = !!target.checked;
         await saveViewOptions(next);
         applyTabIconsToUI();
+        renderViewOptionsMatrix(true);
+        return;
+      }
+      if (target.classList.contains('view-option-workspace-wide')) {
+        const sectionKey = String(target.getAttribute('data-view-workspace-width') || '').trim();
+        if (!sectionKey || !WORKSPACE_WIDTH_SECTION_META[sectionKey]) return;
+        const next = deepClone(viewOptions || DEFAULT_VIEW_OPTIONS);
+        next.ui = next.ui || {};
+        next.ui.workspaceWideSections = normalizeWorkspaceWideSections(next.ui.workspaceWideSections || {});
+        next.ui.workspaceWideSections[sectionKey] = !!target.checked;
+        await saveViewOptions(next);
         renderViewOptionsMatrix(true);
         return;
       }
@@ -25489,57 +28613,205 @@
       }
     });
 
+    function buildTaskImportFingerprint(task) {
+      const title = normalizeCatalogKey(task?.title || '');
+      const dueDate = String(task?.dueDate || '').trim();
+      const assignee = normalizeCatalogKey(task?.assignee || '');
+      const theme = normalizeCatalogKey(task?.theme || '');
+      return [title, dueDate, assignee, theme].filter(Boolean).join('|');
+    }
+
+    function mergeImportedTask(existingTask, incomingTask) {
+      const existing = existingTask && typeof existingTask === 'object' ? existingTask : {};
+      const incoming = incomingTask && typeof incomingTask === 'object' ? incomingTask : {};
+      const merged = {
+        ...existing,
+        ...incoming,
+        id: String(existing.id || incoming.id || '').trim(),
+        createdAt: Number(existing.createdAt || incoming.createdAt || Date.now()),
+        updatedAt: Date.now(),
+        sharingMode: String(existing.sharingMode || incoming.sharingMode || 'private'),
+        metadata: {
+          ...(existing.metadata && typeof existing.metadata === 'object' ? existing.metadata : {}),
+          ...(incoming.metadata && typeof incoming.metadata === 'object' ? incoming.metadata : {})
+        }
+      };
+      const existingComparable = JSON.stringify({
+        ...existing,
+        updatedAt: 0
+      });
+      const mergedComparable = JSON.stringify({
+        ...merged,
+        updatedAt: 0
+      });
+      return {
+        task: merged,
+        changed: existingComparable !== mergedComparable
+      };
+    }
+
+    function buildExistingGlobalTaskImportIndexes(tasks) {
+      const byId = new Map();
+      const byCustomRef = new Map();
+      const bySourceTaskId = new Map();
+      const byFingerprint = new Map();
+      (Array.isArray(tasks) ? tasks : []).forEach((task) => {
+        if (!task || typeof task !== 'object') return;
+        const id = String(task.id || '').trim();
+        if (id) byId.set(id, task);
+        const metadata = task.metadata && typeof task.metadata === 'object' ? task.metadata : {};
+        const customRef = normalizeCatalogKey(metadata.customRef || '');
+        if (customRef) byCustomRef.set(customRef, task);
+        const sourceTaskId = String(metadata.sourceTaskId || '').trim();
+        if (sourceTaskId) bySourceTaskId.set(sourceTaskId, task);
+        const fingerprint = buildTaskImportFingerprint(task);
+        if (fingerprint && !byFingerprint.has(fingerprint)) {
+          byFingerprint.set(fingerprint, task);
+        }
+      });
+      return { byId, byCustomRef, bySourceTaskId, byFingerprint };
+    }
+
+    function resolveExistingGlobalTaskForImport(incomingTask, indexes) {
+      const id = String(incomingTask?.id || '').trim();
+      if (id && indexes.byId.has(id)) return indexes.byId.get(id);
+      const metadata = incomingTask?.metadata && typeof incomingTask.metadata === 'object' ? incomingTask.metadata : {};
+      const customRef = normalizeCatalogKey(metadata.customRef || '');
+      if (customRef && indexes.byCustomRef.has(customRef)) return indexes.byCustomRef.get(customRef);
+      const sourceTaskId = String(metadata.sourceTaskId || '').trim();
+      if (sourceTaskId && indexes.bySourceTaskId.has(sourceTaskId)) return indexes.bySourceTaskId.get(sourceTaskId);
+      const fingerprint = buildTaskImportFingerprint(incomingTask);
+      if (fingerprint && indexes.byFingerprint.has(fingerprint)) return indexes.byFingerprint.get(fingerprint);
+      return null;
+    }
+
+    function upsertGlobalTaskImportIndexes(task, indexes) {
+      if (!task || typeof task !== 'object') return;
+      const id = String(task.id || '').trim();
+      if (id) indexes.byId.set(id, task);
+      const metadata = task.metadata && typeof task.metadata === 'object' ? task.metadata : {};
+      const customRef = normalizeCatalogKey(metadata.customRef || '');
+      if (customRef) indexes.byCustomRef.set(customRef, task);
+      const sourceTaskId = String(metadata.sourceTaskId || '').trim();
+      if (sourceTaskId) indexes.bySourceTaskId.set(sourceTaskId, task);
+      const fingerprint = buildTaskImportFingerprint(task);
+      if (fingerprint) indexes.byFingerprint.set(fingerprint, task);
+    }
+
+    function showTaskImportDetailedLog(entries = {}) {
+      const updated = Array.isArray(entries.updated) ? entries.updated : [];
+      const imported = Array.isArray(entries.imported) ? entries.imported : [];
+      if (updated.length === 0 && imported.length === 0) return;
+
+      const maxLines = 12;
+      const lines = [];
+      if (updated.length > 0) {
+        lines.push('Mises à jour:');
+        updated.slice(0, maxLines).forEach((item, index) => {
+          const before = String(item?.statusBefore || '').trim() || '-';
+          const after = String(item?.statusAfter || '').trim() || '-';
+          const title = String(item?.title || 'Tâche sans titre').trim();
+          lines.push(`${index + 1}. ${title} [${before} -> ${after}]`);
+        });
+        if (updated.length > maxLines) {
+          lines.push(`... +${updated.length - maxLines} autre(s) mise(s) à jour`);
+        }
+      }
+      if (imported.length > 0) {
+        lines.push('');
+        lines.push('Nouvelles tâches:');
+        imported.slice(0, maxLines).forEach((item, index) => {
+          const status = String(item?.status || '').trim() || '-';
+          const title = String(item?.title || 'Tâche sans titre').trim();
+          lines.push(`${index + 1}. ${title} [${status}]`);
+        });
+        if (imported.length > maxLines) {
+          lines.push(`... +${imported.length - maxLines} autre(s) importée(s)`);
+        }
+      }
+
+      console.group('Import tâches - détail');
+      if (updated.length > 0) console.table(updated);
+      if (imported.length > 0) console.table(imported);
+      console.groupEnd();
+
+      window.alert(lines.join('\n'));
+    }
+
     async function importTasksFromJSON(data) {
       if (!data) {
         throw new Error('Fichier JSON vide ou invalide');
       }
 
-      // Detect format: array = project_manager_variant or Nexus MDA export
       const tasks = Array.isArray(data) ? data : (data.tasks || []);
       if (tasks.length === 0) {
         showToast('⚠️ Aucune tâche à importer');
         return;
       }
 
+      const existingTasks = await getAllDecrypted('globalTasks', 'id');
+      const indexes = buildExistingGlobalTaskImportIndexes(existingTasks);
+
       let imported = 0;
+      let updated = 0;
       let skipped = 0;
+      const updatedEntries = [];
+      const importedEntries = [];
 
       for (const taskData of tasks) {
         try {
-          // Detect if it's project_manager_variant format
-          const isVariantFormat = taskData.requester || taskData.type || taskData.customRef ||
-                                   (taskData.status && ['en-cours', 'en-attente', 'realise'].includes(taskData.status));
+          const isVariantFormat = taskData.requester || taskData.type || taskData.customRef
+            || (taskData.status && ['en-cours', 'en-attente', 'realise'].includes(taskData.status));
 
-          let nexusTask;
-          if (isVariantFormat) {
-            // Convert from project_manager_variant to Nexus MDA format
-            nexusTask = convertVariantTaskToNexus(taskData);
-          } else {
-            // Already in Nexus format or compatible
-            nexusTask = normalizeNexusTask(taskData);
-          }
+          const incomingTask = isVariantFormat
+            ? convertVariantTaskToNexus(taskData)
+            : normalizeNexusTask(taskData);
 
-          // Check if task already exists (by id or title + createdAt)
-          const existing = await getDecrypted('globalTasks', nexusTask.id, 'id');
+          const existing = resolveExistingGlobalTaskForImport(incomingTask, indexes);
           if (existing) {
-            skipped++;
-            continue;
+            const merged = mergeImportedTask(existing, incomingTask);
+            if (!merged.changed) {
+              skipped++;
+              continue;
+            }
+            await putEncrypted('globalTasks', merged.task, 'id');
+            upsertGlobalTaskImportIndexes(merged.task, indexes);
+            updated++;
+            updatedEntries.push({
+              title: merged.task.title || 'Tâche sans titre',
+              statusBefore: existing.status || '',
+              statusAfter: merged.task.status || '',
+              dueDateBefore: existing.dueDate || '',
+              dueDateAfter: merged.task.dueDate || ''
+            });
+          } else {
+            await putEncrypted('globalTasks', incomingTask, 'id');
+            upsertGlobalTaskImportIndexes(incomingTask, indexes);
+            imported++;
+            importedEntries.push({
+              title: incomingTask.title || 'Tâche sans titre',
+              status: incomingTask.status || '',
+              dueDate: incomingTask.dueDate || ''
+            });
           }
-
-          await putEncrypted('globalTasks', nexusTask, 'id');
-          imported++;
         } catch (error) {
           console.error('Error importing task:', error, taskData);
           skipped++;
         }
       }
 
-      if (imported > 0) {
+      if (imported > 0 || updated > 0) {
         await renderGlobalTasks();
         await refreshStats();
       }
 
-      showToast(`✅ Import terminé: ${imported} tâche(s) importée(s)${skipped > 0 ? `, ${skipped} ignorée(s)` : ''}`);
+      const parts = [`${imported} importée(s)`, `${updated} mise(s) à jour`];
+      if (skipped > 0) parts.push(`${skipped} ignorée(s)`);
+      showToast(`✅ Import terminé: ${parts.join(', ')}`);
+      showTaskImportDetailedLog({
+        updated: updatedEntries,
+        imported: importedEntries
+      });
     }
 
     function convertVariantTaskToNexus(variantTask) {
@@ -25576,8 +28848,14 @@
         };
       }
 
+      const sourceTaskId = String(variantTask.id || '').trim();
+      const customRef = String(variantTask.customRef || '').trim();
+      const stableId = customRef
+        ? `variant-ref:${normalizeCatalogKey(customRef)}`
+        : (sourceTaskId ? `variant-id:${sourceTaskId}` : uuidv4());
+
       const nexusTask = {
-        id: uuidv4(), // Generate new UUID
+        id: stableId,
         title: variantTask.title || 'Tâche importée',
         assignee: variantTask.requester || '',
         assigneeUserId: null,
@@ -25595,15 +28873,16 @@
         groupName: null,
         sharingMode: 'private',
         recurring: recurring,
-        createdAt: variantTask.id || Date.now(), // Use original id as createdAt if numeric
+        createdAt: Number(variantTask.id) > 0 ? Number(variantTask.id) : Date.now(),
         updatedAt: Date.now(),
         archivedAt: variantTask.archivedAt || (variantTask.status === 'realise' ? Date.now() : null)
       };
 
-      // Add customRef as metadata if present
-      if (variantTask.customRef) {
-        nexusTask.metadata = { customRef: variantTask.customRef };
-      }
+      nexusTask.metadata = {
+        importSource: 'project_manager_variant',
+        customRef: customRef || '',
+        sourceTaskId
+      };
 
       return nexusTask;
     }
@@ -25631,7 +28910,8 @@
         recurring: taskData.recurring || null,
         createdAt: taskData.createdAt || Date.now(),
         updatedAt: taskData.updatedAt || Date.now(),
-        archivedAt: taskData.archivedAt || null
+        archivedAt: taskData.archivedAt || null,
+        metadata: taskData.metadata && typeof taskData.metadata === 'object' ? taskData.metadata : {}
       };
     }
 
@@ -25959,8 +29239,8 @@
     document.getElementById('btn-delete-project-conversation')?.addEventListener('click', async () => {
       await deleteProjectConversation();
     });
-    document.getElementById('btn-close-global-task-details')?.addEventListener('click', () => {
-      closeGlobalTaskDetails();
+    document.getElementById('btn-close-global-task-details')?.addEventListener('click', async () => {
+      await closeGlobalTaskDetails();
     });
     document.getElementById('btn-close-task-convert-modal')?.addEventListener('click', () => {
       closeTaskConvertModal();
@@ -26139,7 +29419,7 @@
         closeTaskConvertModal();
         closeGlobalConversationDeleteModal();
         document.getElementById('modal-app-help')?.classList.add('hidden');
-        closeGlobalTaskDetails();
+        await closeGlobalTaskDetails();
         resetStandaloneCalendarForm();
         closeGlobalCalendarItemModal();
         toggleNotificationsPanel(false);
@@ -26161,8 +29441,8 @@
         editingTaskId = null;
         editingStandaloneTaskId = null;
     });
-    registerSafeBackdropClose('modal-global-task-details', () => {
-      closeGlobalTaskDetails();
+    registerSafeBackdropClose('modal-global-task-details', async () => {
+      await closeGlobalTaskDetails();
     });
     registerSafeBackdropClose('modal-task-convert', () => {
       closeTaskConvertModal();
@@ -26312,7 +29592,7 @@
           label += ' (global)';
         }
         const option = `<option value="${escapeHtml(group.groupKey)}">${label}</option>`;
-        console.log(`  ðŸ“ HTML: ${option}`);
+        console.log(`[debug] HTML option: ${option}`);
         return option;
       });
 
@@ -26321,13 +29601,13 @@
         ...htmlOptions
       ].join('\n');
 
-      console.log('ðŸ“„ Final HTML to insert:');
+      console.log('[debug] Final HTML to insert:');
       console.log(finalHTML);
 
       select.innerHTML = finalHTML;
 
       console.log('✅ Select updated. Options count:', select.options.length);
-      console.log('ðŸ” [populateGlobalMessageGroupChannelSelect] END');
+      console.log('[debug] [populateGlobalMessageGroupChannelSelect] END');
     }
 
     document.getElementById('btn-project-subnav-horizontal')?.addEventListener('click', () => setProjectSubnavLayout('horizontal'));

@@ -2,6 +2,35 @@
 
 ## Version actuelle - Avril 2026
 
+### Mise a jour incrementale - Avril 2026 (Annuaire ESMS + Audit divergences + UX)
+
+- Referentiels / Annuaire ESMS:
+  - stabilisation du connecteur Annuaire Sante FHIR (`gateway.api.esante.gouv.fr`) avec support endpoint configure + cle API optionnelle selon plan.
+  - normalisation automatique des endpoints gateway (`/fhir` converti en `/fhir/v2`).
+  - renforcement des requetes FHIR `Organization` (construction via `URLSearchParams`, variantes de recherche FINESS nettoyees).
+  - garde-fous anti-bruit reseau:
+    - pre-check unique de disponibilite/authentification avant enrichissement,
+    - arret des appels d enrichissement en cas de `401/403` ou `400` persistant,
+    - affichage explicite de la raison d indisponibilite.
+  - ajout d un panneau de configuration API repliable/depliable (toggle) avec persistance locale de l etat.
+  - libelle du toggle clarifie avec icones (`Afficher config API` / `Masquer config API`).
+- Audit divergences FINESS vs FHIR:
+  - ajout d un mode `Audit` activable depuis l annuaire.
+  - badge par ligne + detail au clic des champs compares (nom, ville, adresse, telephone, email).
+  - statuts introduits: `OK`, `Proche`, `Incomplet`, `Different`.
+  - recapitulatif des compteurs par ligne (OK / Proche / Incomplet / Different).
+  - moteur de proximite semantique pour limiter les faux positifs:
+    - normalisation casse/accents/ponctuation,
+    - similarite texte (Dice),
+    - overlap de tokens,
+    - detection d inclusion.
+  - ajout d une recommandation `adresse enrichie` et action locale `Utiliser l adresse enrichie` quand l adresse FHIR est plus informative.
+  - correction d un bug de boucle de rendu/audit (stabilisation UX en mode audit ON).
+- UI Referentiels:
+  - barre d onglets ajustee pour integrer le bouton d aide sur la meme ligne, a droite.
+- Taches:
+  - animation de completion sur carte (`pouce leve` flottant + fade) lors d un passage a `termine`.
+
 ### Mise a jour incrementale - Avril 2026 (UX/UI + Workflow KPI)
 
 - Projets:

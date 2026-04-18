@@ -81,6 +81,18 @@
       .filter(Boolean);
   }
 
+  function paginateWorkflowItems(items, page, pageSize) {
+    const list = Array.isArray(items) ? items : [];
+    const totalItems = list.length;
+    const safePageSize = Math.max(1, Number(pageSize) || 1);
+    const totalPages = Math.max(1, Math.ceil(totalItems / safePageSize));
+    const currentPage = Math.min(Math.max(1, Number(page) || 1), totalPages);
+    const start = (currentPage - 1) * safePageSize;
+    const end = Math.min(totalItems, start + safePageSize);
+    const pageItems = list.slice(start, end);
+    return { totalItems, totalPages, currentPage, start, end, pageItems };
+  }
+
   function defaultLayout(now) {
     return {
       id: 'main',
@@ -186,6 +198,14 @@
         multiSelectMode: false,
         linkMode: false,
         dragSourceStepId: null
+      },
+      workflowKanbanPageByStatus: {
+        todo: 1,
+        in_progress: 1,
+        blocked: 1,
+        ready_for_review: 1,
+        done: 1,
+        approved: 1
       },
       permissionAutoReviewRunning: false,
       inlineDetailSaveTimers: new Map(),
@@ -363,6 +383,7 @@
     }
 
     const TASK_STATUS_OPTIONS = ['todo', 'in_progress', 'blocked', 'ready_for_review', 'done', 'approved'];
+    const WORKFLOW_KANBAN_PAGE_SIZE = 12;
     const TASK_APPROVAL_OPTIONS = ['pending', 'approved', 'rejected'];
     const PERMISSION_LEVEL_OPTIONS = ['read', 'write', 'validate', 'admin'];
     const PERMISSION_STATUS_OPTIONS = ['active', 'suspended', 'revoked', 'review_due'];
@@ -6058,19 +6079,17 @@ ${clone.outerHTML}
         { key: 'done', label: 'Terminees' },
         { key: 'approved', label: 'Approuvees' }
       ];
-      const taskCardsByLane = new Map(lanes.map((lane) => [lane.key, []]));
+      const taskRowsByLane = new Map(lanes.map((lane) => [lane.key, []]));
       const tasks = filterTasksByStatus(applyFilters(state.collections.tasks, (item) => ({
         serviceId: item.serviceId,
         groupId: item.groupId,
         agentId: item.ownerAgentId
       })));
-      tasks.forEach((task) => {
-        const status = TASK_STATUS_OPTIONS.includes(String(task.status || '')) ? String(task.status) : 'todo';
-        const lane = taskCardsByLane.get(status) ? status : 'todo';
+      const renderTaskCard = (task) => {
         const checklist = normalizeChecklist(task);
         const doneCount = checklist.filter((entry) => entry.done).length;
         const draggable = canEditWorkflow() ? 'true' : 'false';
-        taskCardsByLane.get(lane).push(`
+        return `
           <article class="workflow-card workflow-kanban-task" draggable="${draggable}" data-wf-task-card="1" data-wf-task-id="${esc(task.id)}" data-wf-type="task" data-wf-id="${esc(task.id)}">
             <p class="workflow-card-title">${esc(task.title || 'Tache')}</p>
             ${task.description ? `<p class="workflow-card-sub">${esc(task.description)}</p>` : ''}
@@ -6078,14 +6097,57 @@ ${clone.outerHTML}
               <span class="workflow-chip">${esc(`${doneCount}/${checklist.length} checklist`)}</span>
               <span class="workflow-chip">${esc(task.priority || 'medium')}</span>
             </div>
-            ${buildQuickCardActions('task', task.id, { status })}
+            ${buildQuickCardActions('task', task.id, { status: TASK_STATUS_OPTIONS.includes(String(task.status || '')) ? String(task.status) : 'todo' })}
           </article>
-        `);
+        `;
+      };
+      const buildLanePager = (laneKey, pagination) => {
+        if (pagination.totalPages <= 1) {
+          return `<p class="text-[11px] text-slate-500">${esc(String(pagination.totalItems))} carte(s)</p>`;
+        }
+        const prevDisabled = pagination.currentPage <= 1;
+        const nextDisabled = pagination.currentPage >= pagination.totalPages;
+        return `
+          <div class="flex items-center justify-between gap-2 text-[11px] text-slate-500 mt-2">
+            <button
+              type="button"
+              class="px-2 py-1 rounded border border-slate-300 ${prevDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-100'}"
+              data-wf-kanban-lane-key="${esc(laneKey)}"
+              data-wf-kanban-page-target="${esc(String(pagination.currentPage - 1))}"
+              ${prevDisabled ? 'disabled' : ''}
+            >Prec.</button>
+            <span>${esc(`${pagination.start + 1}-${pagination.end} / ${pagination.totalItems}`)}</span>
+            <button
+              type="button"
+              class="px-2 py-1 rounded border border-slate-300 ${nextDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-100'}"
+              data-wf-kanban-lane-key="${esc(laneKey)}"
+              data-wf-kanban-page-target="${esc(String(pagination.currentPage + 1))}"
+              ${nextDisabled ? 'disabled' : ''}
+            >Suiv.</button>
+          </div>
+        `;
+      };
+      tasks.forEach((task) => {
+        const status = TASK_STATUS_OPTIONS.includes(String(task.status || '')) ? String(task.status) : 'todo';
+        const lane = taskRowsByLane.get(status) ? status : 'todo';
+        taskRowsByLane.get(lane).push(task);
       });
 
       refs.content.innerHTML = `
         <div class="workflow-map workflow-kanban">
           ${lanes.map((lane) => `
+            ${(() => {
+              const laneRows = taskRowsByLane.get(lane.key) || [];
+              const pagination = paginateWorkflowItems(
+                laneRows,
+                state.workflowKanbanPageByStatus?.[lane.key] || 1,
+                WORKFLOW_KANBAN_PAGE_SIZE
+              );
+              state.workflowKanbanPageByStatus[lane.key] = pagination.currentPage;
+              const cardsHtml = pagination.totalItems > 0
+                ? pagination.pageItems.map((task) => renderTaskCard(task)).join('')
+                : '<div class="workflow-empty">Aucune tache</div>';
+              return `
             <section class="workflow-map-col workflow-kanban-lane" data-wf-kanban-lane="${esc(lane.key)}">
               <div class="workflow-kanban-lane-head">
                 <h6>${esc(lane.label)}</h6>
@@ -6105,8 +6167,11 @@ ${clone.outerHTML}
                   </button>
                 ` : ''}
               </div>
-              <div class="workflow-grid">${taskCardsByLane.get(lane.key).join('') || '<div class="workflow-empty">Aucune tache</div>'}</div>
+              <div class="workflow-grid">${cardsHtml}</div>
+              ${buildLanePager(lane.key, pagination)}
             </section>
+            `;
+            })()}
           `).join('')}
         </div>
       `;
@@ -10642,6 +10707,18 @@ ${clone.outerHTML}
       });
 
       refs.content?.addEventListener('click', async (event) => {
+        const kanbanPagerBtn = event.target.closest('[data-wf-kanban-lane-key][data-wf-kanban-page-target]');
+        if (kanbanPagerBtn && state.activeView === 'kanban') {
+          event.preventDefault();
+          event.stopPropagation();
+          const laneKey = String(kanbanPagerBtn.getAttribute('data-wf-kanban-lane-key') || '').trim();
+          const targetPage = Math.max(1, Number.parseInt(String(kanbanPagerBtn.getAttribute('data-wf-kanban-page-target') || '1'), 10) || 1);
+          if (!laneKey || !TASK_STATUS_OPTIONS.includes(laneKey)) return;
+          state.workflowKanbanPageByStatus[laneKey] = targetPage;
+          renderContent();
+          return;
+        }
+
         const quickAction = event.target.closest('[data-wf-card-action][data-wf-type][data-wf-id]');
         if (quickAction) {
           event.preventDefault();

@@ -184,6 +184,7 @@
     document.getElementById('global-settings-tab-themes')?.addEventListener('click', () => opts.setGlobalSettingsTab?.('themes'));
     document.getElementById('global-settings-tab-groups')?.addEventListener('click', () => opts.setGlobalSettingsTab?.('groups'));
     document.getElementById('global-settings-tab-roles')?.addEventListener('click', () => opts.setGlobalSettingsTab?.('roles'));
+    document.getElementById('global-settings-tab-annuaire')?.addEventListener('click', () => opts.setGlobalSettingsTab?.('annuaire'));
     document.getElementById('global-settings-tab-software')?.addEventListener('click', () => opts.setGlobalSettingsTab?.('software'));
     document.getElementById('global-settings-tab-views')?.addEventListener('click', () => opts.setGlobalSettingsTab?.('views'));
 
@@ -257,4 +258,3 @@
     bind
   };
 }(window));
-
