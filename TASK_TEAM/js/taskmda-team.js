@@ -46,6 +46,7 @@
     const DB_VERSION = 18; // + module contingence workflow
     const LOCAL_RESET_TS_KEY = 'taskmda_last_local_reset_ts';
     const USER_ID_HISTORY_KEY = 'taskmda_user_id_history';
+    const LAST_ACCESSED_PROJECT_STORAGE_KEY = 'taskmda_last_accessed_project_id';
     const DATA_EXPORT_STORES = {
       events: 'eventId',
       processedEvents: 'eventId',
@@ -126,6 +127,22 @@
       const merged = saveUserIdHistory([...loadUserIdHistory(), id]);
       currentUserIdAliases = new Set([...currentUserIdAliases, ...merged, id]);
       return merged;
+    }
+
+    function getLastAccessedProjectId() {
+      try {
+        return String(localStorage.getItem(LAST_ACCESSED_PROJECT_STORAGE_KEY) || '').trim();
+      } catch (_) {
+        return '';
+      }
+    }
+
+    function rememberLastAccessedProjectId(projectId) {
+      const normalized = String(projectId || '').trim();
+      if (!normalized) return;
+      try {
+        localStorage.setItem(LAST_ACCESSED_PROJECT_STORAGE_KEY, normalized);
+      } catch (_) {}
     }
 
     function getCurrentUserIdAliases(userId = getCurrentUserId()) {
@@ -8377,6 +8394,48 @@
     let carouselStateByProjectId = null;
     let carouselTotalProjectsCount = 0;
     let renderProjectsRequestSeq = 0;
+    const PROJECT_PRIORITY_LABELS = {
+      critique: 'Critique',
+      haute: 'Haute',
+      normale: 'Normale',
+      basse: 'Basse'
+    };
+    const PROJECT_PRIORITY_RANK = {
+      critique: 0,
+      haute: 1,
+      normale: 2,
+      basse: 3
+    };
+
+    function normalizeProjectPriority(value) {
+      const normalized = String(value || '').trim().toLowerCase();
+      if (normalized === 'critique' || normalized === 'haute' || normalized === 'normale' || normalized === 'basse') {
+        return normalized;
+      }
+      return 'normale';
+    }
+
+    function getProjectPriorityLabel(value) {
+      const key = normalizeProjectPriority(value);
+      return PROJECT_PRIORITY_LABELS[key] || PROJECT_PRIORITY_LABELS.normale;
+    }
+
+    function getProjectPriorityChipClass(value) {
+      const key = normalizeProjectPriority(value);
+      if (key === 'critique') return 'workspace-chip-priority-critique';
+      if (key === 'haute') return 'workspace-chip-priority-haute';
+      if (key === 'basse') return 'workspace-chip-priority-basse';
+      return 'workspace-chip-priority-normale';
+    }
+
+    function normalizeProjectSortMode(value) {
+      const mode = String(value || 'recent').trim().toLowerCase();
+      if (mode === 'status') return 'priority';
+      if (mode === 'recent' || mode === 'oldest' || mode === 'name-asc' || mode === 'name-desc' || mode === 'priority') {
+        return mode;
+      }
+      return 'recent';
+    }
 
     function renderProjectsCarousel(projects, stateByProjectId, totalCount = projects.length) {
       carouselAllProjects = projects;
@@ -8408,6 +8467,7 @@
       track.className = isListView
         ? 'projects-carousel-track space-y-3'
         : 'projects-carousel-track grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4';
+      const lastAccessedProjectId = getLastAccessedProjectId();
 
       track.innerHTML = pageProjects.map(project => {
         const state = carouselStateByProjectId.get(project.projectId);
@@ -8418,6 +8478,11 @@
         const badge = isPrivate
           ? '<span class="workspace-chip workspace-chip-private">PRIVE</span>'
           : '<span class="workspace-chip workspace-chip-shared">PARTAGE</span>';
+        const lastAccessedBadge = project.projectId === lastAccessedProjectId
+          ? '<span class="workspace-chip workspace-chip-last-accessed"><span class="material-symbols-outlined" aria-hidden="true">history</span><span>Dernier accédé</span></span>'
+          : '';
+        const priority = normalizeProjectPriority(project.priority);
+        const priorityBadge = `<span class="workspace-chip ${getProjectPriorityChipClass(priority)}">${getProjectPriorityLabel(priority)}</span>`;
         const status = String(project.status || 'en-cours');
         const statusBadge = status === 'urgent'
           ? '<span class="workspace-chip workspace-chip-status-urgent">Urgent</span>'
@@ -8449,8 +8514,8 @@
         return `
           <div class="project-card workspace-card-shell project-card-interactive rounded-xl cursor-pointer ${isListView ? 'project-card-list' : ''}" onclick="showProjectDetail('${project.projectId}')">
             <div class="project-card-header">
-              <span class="material-symbols-outlined text-slate-400">lock</span>
-              <div class="project-card-badges">${badge}${statusBadge}</div>
+              <span class="material-symbols-outlined text-slate-400">${icon}</span>
+              <div class="project-card-badges">${lastAccessedBadge}${badge}${priorityBadge}${statusBadge}</div>
             </div>
             <div class="project-card-body">
               <h4 class="workspace-card-title text-lg font-bold font-headline mb-3">${project.name}</h4>
@@ -8610,15 +8675,18 @@
       const cardsQuery = cardsQueryRaw.trim();
       const combinedCardsQuery = cardsQuery;
       const themeFilterKey = isDashboardHome ? '' : normalizeCatalogKey(projectsFilters.theme || '');
+      const priorityFilter = isDashboardHome ? 'all' : String(projectsFilters.priority || 'all');
       const statusFilter = isDashboardHome ? 'all' : String(projectsFilters.status || 'all');
       const sharingFilter = isDashboardHome ? 'all' : String(projectsFilters.sharing || 'all');
       const ownershipFilter = isDashboardHome ? 'all' : String(projectsFilters.ownership || 'all');
+      const sortMode = isDashboardHome ? 'recent' : normalizeProjectSortMode(projectsFilters.sort || 'recent');
       const hasActiveProjectFilters = Boolean(cardsQuery)
         || Boolean(themeFilterKey)
+        || priorityFilter !== 'all'
         || statusFilter !== 'all'
         || sharingFilter !== 'all'
         || ownershipFilter !== 'all'
-        || (!isDashboardHome && String(projectsFilters.sort || 'recent') !== 'recent');
+        || (!isDashboardHome && sortMode !== 'recent');
       const me = String(currentUser?.userId || getCurrentUserId() || '').trim();
       const filteredProjects = projectsWithDescriptionMeta.filter(project => {
         const state = stateByProjectId.get(project.projectId);
@@ -8626,12 +8694,14 @@
           project.name,
           project._descriptionPlain,
           project.status,
+          project.priority,
           project.sharingMode,
           ...(state?.themes || []),
           ...((state?.tasks || []).map((task) => String(task?.theme || '').trim())),
           ...((state?.members || []).map((m) => String(m?.displayName || m?.userId || '').trim()))
         ], combinedCardsQuery)) return false;
 
+        if (priorityFilter !== 'all' && normalizeProjectPriority(project.priority) !== normalizeProjectPriority(priorityFilter)) return false;
         if (statusFilter !== 'all' && String(project.status || 'en-cours') !== statusFilter) return false;
         if (sharingFilter === 'private' && String(project.sharingMode || '') !== 'private') return false;
         if (sharingFilter === 'shared' && String(project.sharingMode || '') === 'private') return false;
@@ -8655,14 +8725,13 @@
         return true;
       });
       const sortedProjects = [...filteredProjects];
-      const statusSortRank = { urgent: 0, 'en-cours': 1, planifie: 2, termine: 3 };
-      const sortMode = isDashboardHome ? 'recent' : String(projectsFilters.sort || 'recent');
       sortedProjects.sort((a, b) => {
         if (sortMode === 'oldest') return Number(a.createdAt || 0) - Number(b.createdAt || 0);
         if (sortMode === 'name-asc') return String(a.name || '').localeCompare(String(b.name || ''), 'fr', { sensitivity: 'base' });
         if (sortMode === 'name-desc') return String(b.name || '').localeCompare(String(a.name || ''), 'fr', { sensitivity: 'base' });
-        if (sortMode === 'status') {
-          const delta = (statusSortRank[String(a.status || 'en-cours')] ?? 9) - (statusSortRank[String(b.status || 'en-cours')] ?? 9);
+        if (sortMode === 'priority') {
+          const delta = (PROJECT_PRIORITY_RANK[normalizeProjectPriority(a.priority)] ?? 9)
+            - (PROJECT_PRIORITY_RANK[normalizeProjectPriority(b.priority)] ?? 9);
           if (delta !== 0) return delta;
           return String(a.name || '').localeCompare(String(b.name || ''), 'fr', { sensitivity: 'base' });
         }
@@ -8733,6 +8802,7 @@
 
       const pagination = paginateItems(sortedProjects, projectsPage, paginationConfig.projectsPerPage);
       projectsPage = pagination.currentPage;
+      const lastAccessedProjectId = getLastAccessedProjectId();
       container.innerHTML = pagination.pageItems.map(project => {
         const state = stateByProjectId.get(project.projectId);
         const canEdit = canEditProjectMeta(state);
@@ -8742,6 +8812,11 @@
         const badge = isPrivate
           ? '<span class="workspace-chip workspace-chip-private">PRIVE</span>'
           : '<span class="workspace-chip workspace-chip-shared">PARTAGE</span>';
+        const lastAccessedBadge = project.projectId === lastAccessedProjectId
+          ? '<span class="workspace-chip workspace-chip-last-accessed"><span class="material-symbols-outlined" aria-hidden="true">history</span><span>Dernier accédé</span></span>'
+          : '';
+        const priority = normalizeProjectPriority(project.priority);
+        const priorityBadge = `<span class="workspace-chip ${getProjectPriorityChipClass(priority)}">${getProjectPriorityLabel(priority)}</span>`;
         const status = String(project.status || 'en-cours');
         const statusBadge = status === 'urgent'
           ? '<span class="workspace-chip workspace-chip-status-urgent">Urgent</span>'
@@ -8773,8 +8848,8 @@
         return `
           <div class="project-card workspace-card-shell project-card-interactive rounded-xl cursor-pointer ${isListView ? 'project-card-list' : ''}" onclick="showProjectDetail('${project.projectId}')">
             <div class="project-card-header">
-              <span class="material-symbols-outlined text-slate-400">lock</span>
-              <div class="project-card-badges">${badge}${statusBadge}</div>
+              <span class="material-symbols-outlined text-slate-400">${icon}</span>
+              <div class="project-card-badges">${lastAccessedBadge}${badge}${priorityBadge}${statusBadge}</div>
             </div>
             <div class="project-card-body">
               <h4 class="workspace-card-title text-lg font-bold font-headline mb-3">${project.name}</h4>
@@ -8869,7 +8944,7 @@
     let globalMessageFilesPanelOpen = false;
     let messageFilters = { query: '', onlyMine: false };
     let globalSearchQuery = '';
-    let projectsFilters = { query: '', theme: '', status: 'all', sharing: 'all', ownership: 'all', sort: 'recent' };
+    let projectsFilters = { query: '', theme: '', priority: 'all', status: 'all', sharing: 'all', ownership: 'all', sort: 'recent' };
     let headerSearchResults = [];
     let headerSearchActiveIndex = -1;
     let headerSearchDebounceTimer = null;
@@ -12196,7 +12271,11 @@
               return;
             }
             if (workspaceMode === 'project' && currentProjectId && currentProjectState) {
-              const tasks = currentProjectState.tasks || [];
+              const latestState = await getProjectState(currentProjectId);
+              if (latestState?.project) {
+                currentProjectState = latestState;
+              }
+              const tasks = currentProjectState?.tasks || [];
               if (activeProjectView === 'list') {
                 renderTasks(tasks);
                 return;
@@ -13016,9 +13095,9 @@
             currentGlobalTaskDetailTask = { ...latest.task };
             currentGlobalTaskDetailResolved = latest;
           }
-          if (currentGlobalTaskDetailRef.startsWith('project:')) {
-            const parts = currentGlobalTaskDetailRef.split(':');
-            await openProjectTaskDetails(parts[2]);
+          const parsedRef = parseGlobalTaskRef(currentGlobalTaskDetailRef);
+          if (parsedRef?.sourceType === 'project' && parsedRef?.taskId) {
+            await openProjectTaskDetails(parsedRef.taskId);
           } else {
             await openGlobalTaskDetails(currentGlobalTaskDetailRef);
           }
@@ -13844,7 +13923,11 @@
         task
       };
       await renderTaskDetailRgpdImpactCard(currentGlobalTaskDetailContext);
-      currentGlobalTaskDetailRef = `project:${currentProjectId}:${taskId}`;
+      currentGlobalTaskDetailRef = buildGlobalTaskRef({
+        sourceType: 'project',
+        sourceProjectId: currentProjectId,
+        taskId
+      });
       initTaskDetailInlineEditing(canEdit);
       modal.classList.remove('hidden');
     }
@@ -14639,6 +14722,7 @@
     function syncProjectsFilterControls() {
       const queryInput = document.getElementById('projects-filter-query');
       const themeSelect = document.getElementById('projects-filter-theme-known');
+      const prioritySelect = document.getElementById('projects-filter-priority');
       const statusSelect = document.getElementById('projects-filter-status');
       const sharingSelect = document.getElementById('projects-filter-sharing');
       const ownershipSelect = document.getElementById('projects-filter-ownership');
@@ -14648,10 +14732,11 @@
         queryInput.removeAttribute('list');
       }
       if (themeSelect) themeSelect.value = projectsFilters.theme || '';
+      if (prioritySelect) prioritySelect.value = projectsFilters.priority || 'all';
       if (statusSelect) statusSelect.value = projectsFilters.status || 'all';
       if (sharingSelect) sharingSelect.value = projectsFilters.sharing || 'all';
       if (ownershipSelect) ownershipSelect.value = projectsFilters.ownership || 'all';
-      if (sortSelect) sortSelect.value = projectsFilters.sort || 'recent';
+      if (sortSelect) sortSelect.value = normalizeProjectSortMode(projectsFilters.sort || 'recent');
     }
 
     function syncProjectThemeFilterAssist(state) {
@@ -15569,6 +15654,7 @@
         showDashboard();
         return;
       }
+      rememberLastAccessedProjectId(projectId);
       await refreshKnownUsersCache();
 
       // Hide dashboard, show detail
@@ -15596,6 +15682,24 @@
         const hasCreatedByFallback = !memberIds.size && String(state?.project?.createdBy || '').trim();
         const displayedMembersCount = memberIds.size + (hasCreatedByFallback ? 1 : 0);
         projectMembersIconEl.classList.toggle('hidden', displayedMembersCount > 0);
+      }
+      const projectOverviewBadgesEl = document.getElementById('project-overview-badges');
+      if (projectOverviewBadgesEl) {
+        const isPrivate = String(state.project.sharingMode || '') === 'private';
+        const sharingBadge = isPrivate
+          ? '<span class="workspace-chip workspace-chip-private">PRIVE</span>'
+          : '<span class="workspace-chip workspace-chip-shared">PARTAGE</span>';
+        const priority = normalizeProjectPriority(state.project.priority);
+        const priorityBadge = `<span class="workspace-chip ${getProjectPriorityChipClass(priority)}">${getProjectPriorityLabel(priority)}</span>`;
+        const status = String(state.project.status || 'en-cours');
+        const statusBadge = status === 'urgent'
+          ? '<span class="workspace-chip workspace-chip-status-urgent">Urgent</span>'
+          : status === 'termine'
+            ? '<span class="workspace-chip workspace-chip-status-termine">Termine</span>'
+            : status === 'planifie'
+              ? '<span class="workspace-chip workspace-chip-status-planifie">Planifie</span>'
+              : '<span class="workspace-chip workspace-chip-status-active">En cours</span>';
+        projectOverviewBadgesEl.innerHTML = `${sharingBadge}${priorityBadge}${statusBadge}`;
       }
       const visibleTasks = (state.tasks || []).filter(t => !t.archivedAt);
       document.getElementById('project-kpi-tasks').textContent = String(visibleTasks.length);
@@ -15755,6 +15859,7 @@
       if (editProjectDocInput) editProjectDocInput.value = '';
       updateEditProjectDocFilesSummary();
       document.getElementById('edit-project-status').value = state.project.status || 'en-cours';
+      document.getElementById('edit-project-priority').value = normalizeProjectPriority(state.project.priority);
       document.getElementById('edit-project-read-access').value = normalizeProjectReadAccess(
         state.project.readAccess,
         normalizeSharingMode(state.project.sharingMode, 'private') === 'private' ? 'private' : 'members'
@@ -15806,6 +15911,7 @@
         name,
         description: getProjectDescriptionHtmlForStorage('edit-project-description-editor', 'edit-project-description'),
         status: document.getElementById('edit-project-status').value || 'en-cours',
+        priority: normalizeProjectPriority(document.getElementById('edit-project-priority')?.value || 'normale'),
         readAccess: (document.getElementById('edit-project-read-access')?.value || 'private') === 'public' ? 'public' : 'private',
         sharingMode: nextSharingMode,
         joinPassphrase: nextSharingMode === 'shared'
@@ -27355,7 +27461,18 @@
     if (window.TaskMDAProjectsUI?.bind) {
       window.TaskMDAProjectsUI.bind({
         getProjectsFilters: () => projectsFilters,
-        setProjectsFilters: (next) => { projectsFilters = next; },
+        setProjectsFilters: (next) => {
+          const base = (next && typeof next === 'object') ? next : {};
+          projectsFilters = {
+            query: String(base.query || ''),
+            theme: String(base.theme || ''),
+            priority: String(base.priority || 'all'),
+            status: String(base.status || 'all'),
+            sharing: String(base.sharing || 'all'),
+            ownership: String(base.ownership || 'all'),
+            sort: normalizeProjectSortMode(base.sort || 'recent')
+          };
+        },
         setProjectsPage: (next) => { projectsPage = next; },
         setGlobalTasksPage: (next) => { globalTasksPage = next; },
         setGlobalTasksViewMode: (next) => { globalTasksViewMode = next; },
@@ -28102,6 +28219,7 @@
       if (createProjectDocInput) createProjectDocInput.value = '';
       updateCreateProjectDocFilesSummary();
       document.getElementById('project-status').value = 'en-cours';
+      document.getElementById('project-priority').value = 'normale';
       document.getElementById('project-read-access').value = 'private';
       const sharingModeSelect = document.getElementById('project-sharing-mode-select');
       if (sharingModeSelect) sharingModeSelect.value = 'private';
@@ -28496,6 +28614,7 @@
             name: name,
             description: getProjectDescriptionHtmlForStorage('project-description-editor', 'project-description-input'),
             status: document.getElementById('project-status').value,
+            priority: normalizeProjectPriority(document.getElementById('project-priority')?.value || 'normale'),
             readAccess: (document.getElementById('project-read-access')?.value || 'private') === 'public' ? 'public' : 'private',
             sharingMode: sharingMode,
             joinPassphrase: passphrase || null

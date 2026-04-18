@@ -63,6 +63,12 @@
       await rerenderDashboardProjectsFromFilters();
     });
 
+    document.getElementById('projects-filter-priority')?.addEventListener('change', async () => {
+      const next = { ...getProjectsFilters(), priority: String(document.getElementById('projects-filter-priority')?.value || 'all') };
+      setProjectsFilters(next);
+      await rerenderDashboardProjectsFromFilters();
+    });
+
     document.getElementById('projects-filter-status')?.addEventListener('change', async () => {
       const next = { ...getProjectsFilters(), status: String(document.getElementById('projects-filter-status')?.value || 'all') };
       setProjectsFilters(next);
@@ -88,7 +94,7 @@
     });
 
     document.getElementById('projects-filter-reset')?.addEventListener('click', async () => {
-      setProjectsFilters({ query: '', theme: '', status: 'all', sharing: 'all', ownership: 'all', sort: 'recent' });
+      setProjectsFilters({ query: '', theme: '', priority: 'all', status: 'all', sharing: 'all', ownership: 'all', sort: 'recent' });
       opts.syncProjectsFilterControls?.();
       await rerenderDashboardProjectsFromFilters();
     });

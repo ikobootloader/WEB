@@ -287,59 +287,86 @@
           <div id="projects-toolbar-panel" class="mb-3">
             <div id="projects-list-head" class="flex items-center justify-between gap-3 mb-4">
               <p class="text-xs text-slate-400 projects-toolbar-caption">Tous les projets accessibles (privés assignés + publics).</p>
-              <div id="projects-toolbar-actions" class="flex items-center gap-2">
-                <button id="btn-projects-add" type="button" class="btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold inline-flex items-center justify-center gap-2 taskmda-create-cta" onclick="document.getElementById('btn-create-project')?.click()" aria-label="Nouveau projet" title="Nouveau projet" data-action-kind="create" data-action-label="Nouveau projet">
-                  <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">add_circle</span>
-                  <span class="taskmda-action-label" id="btn-projects-add-text">Nouveau projet</span>
-                </button>
-                <div id="projects-view-controls" class="inline-flex items-center gap-1 rounded-xl bg-slate-100 p-1">
-                  <button id="projects-view-grid" class="p-2 rounded-lg text-slate-600" title="Vue grille" aria-label="Vue grille">
-                    <span class="material-symbols-outlined text-[20px]">grid_view</span>
-                  </button>
-                  <button id="projects-view-list" class="p-2 rounded-lg text-slate-600" title="Vue liste" aria-label="Vue liste">
-                    <span class="material-symbols-outlined text-[20px]">view_list</span>
-                  </button>
-                  <button id="projects-view-archives" class="p-2 rounded-lg text-slate-600" title="Archives" aria-label="Projets archivés">
-                    <span class="material-symbols-outlined text-[20px]">archive</span>
-                  </button>
-                </div>
-              </div>
             </div>
             <div id="projects-filter-row" class="projects-filter-layout mb-2">
-              <div class="projects-filter-search-row">
-                <label class="projects-filter-search-wrap" for="projects-filter-query">
-                  <span class="material-symbols-outlined projects-filter-search-icon" aria-hidden="true">search</span>
-                  <input id="projects-filter-query" type="search" placeholder="Recherche globale" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                </label>
+              <div class="projects-filter-top-row">
+                <div class="projects-filter-search-row">
+                  <label class="projects-filter-search-wrap" for="projects-filter-query">
+                    <span class="material-symbols-outlined projects-filter-search-icon" aria-hidden="true">search</span>
+                    <input id="projects-filter-query" type="search" placeholder="Recherche globale" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  </label>
+                </div>
+                <div id="projects-toolbar-actions" class="flex items-center gap-2">
+                  <button id="btn-projects-add" type="button" class="btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold inline-flex items-center justify-center gap-2 taskmda-create-cta" onclick="document.getElementById('btn-create-project')?.click()" aria-label="Nouveau projet" title="Nouveau projet" data-action-kind="create" data-action-label="Nouveau projet">
+                    <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">add_circle</span>
+                    <span class="taskmda-action-label" id="btn-projects-add-text">Nouveau projet</span>
+                  </button>
+                  <div id="projects-view-controls" class="inline-flex items-center gap-1 rounded-xl bg-slate-100 p-1">
+                    <button id="projects-view-grid" class="p-2 rounded-lg text-slate-600" title="Vue grille" aria-label="Vue grille">
+                      <span class="material-symbols-outlined text-[20px]">grid_view</span>
+                    </button>
+                    <button id="projects-view-list" class="p-2 rounded-lg text-slate-600" title="Vue liste" aria-label="Vue liste">
+                      <span class="material-symbols-outlined text-[20px]">view_list</span>
+                    </button>
+                    <button id="projects-view-archives" class="p-2 rounded-lg text-slate-600" title="Archives" aria-label="Projets archivés">
+                      <span class="material-symbols-outlined text-[20px]">archive</span>
+                    </button>
+                  </div>
+                </div>
               </div>
               <div class="projects-filter-controls-row">
-                <select id="projects-filter-theme-known" class="px-3 py-2 border border-slate-300 rounded-lg text-sm" title="Choisir parmi les thématiques existantes">
-                  <option value="">Thématiques existantes...</option>
-                </select>
-                <select id="projects-filter-status" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                  <option value="all">Tous les statuts</option>
-                  <option value="en-cours">En cours</option>
-                  <option value="planifie">Planifié</option>
-                  <option value="urgent">Urgent</option>
-                  <option value="termine">Terminé</option>
-                </select>
-                <select id="projects-filter-sharing" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                  <option value="all">Tous les modes</option>
-                  <option value="shared">Collaborative</option>
-                  <option value="private">Privée</option>
-                </select>
-                <select id="projects-filter-ownership" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                  <option value="all">Tous les projets</option>
-                  <option value="mine">Mes projets</option>
-                  <option value="team">Projets d'équipe</option>
-                </select>
-                <select id="projects-filter-sort" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                  <option value="recent">Tri: plus récents</option>
-                  <option value="oldest">Tri: plus anciens</option>
-                  <option value="name-asc">Tri: nom A → Z</option>
-                  <option value="name-desc">Tri: nom Z → A</option>
-                  <option value="status">Tri: statut</option>
-                </select>
+                <label class="projects-filter-field" for="projects-filter-theme-known">
+                  <span class="material-symbols-outlined projects-filter-field-icon" aria-hidden="true">palette</span>
+                  <select id="projects-filter-theme-known" class="px-3 py-2 border border-slate-300 rounded-lg text-sm" title="Choisir parmi les thématiques existantes">
+                    <option value="">Thématiques existantes...</option>
+                  </select>
+                </label>
+                <label class="projects-filter-field" for="projects-filter-priority">
+                  <span class="material-symbols-outlined projects-filter-field-icon" aria-hidden="true">flag</span>
+                  <select id="projects-filter-priority" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    <option value="all">Toutes priorités</option>
+                    <option value="critique">Critique</option>
+                    <option value="haute">Haute</option>
+                    <option value="normale">Normale</option>
+                    <option value="basse">Basse</option>
+                  </select>
+                </label>
+                <label class="projects-filter-field" for="projects-filter-status">
+                  <span class="material-symbols-outlined projects-filter-field-icon" aria-hidden="true">pending_actions</span>
+                  <select id="projects-filter-status" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    <option value="all">Tous statuts</option>
+                    <option value="en-cours">En cours</option>
+                    <option value="planifie">Planifié</option>
+                    <option value="urgent">Urgent</option>
+                    <option value="termine">Terminé</option>
+                  </select>
+                </label>
+                <label class="projects-filter-field" for="projects-filter-sharing">
+                  <span class="material-symbols-outlined projects-filter-field-icon" aria-hidden="true">groups</span>
+                  <select id="projects-filter-sharing" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    <option value="all">Tous les modes</option>
+                    <option value="shared">Collaborative</option>
+                    <option value="private">Privée</option>
+                  </select>
+                </label>
+                <label class="projects-filter-field" for="projects-filter-ownership">
+                  <span class="material-symbols-outlined projects-filter-field-icon" aria-hidden="true">folder_shared</span>
+                  <select id="projects-filter-ownership" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    <option value="all">Tous les projets</option>
+                    <option value="mine">Mes projets</option>
+                    <option value="team">Projets d'équipe</option>
+                  </select>
+                </label>
+                <label class="projects-filter-field" for="projects-filter-sort">
+                  <span class="material-symbols-outlined projects-filter-field-icon" aria-hidden="true">sort</span>
+                  <select id="projects-filter-sort" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    <option value="recent">Tri: plus récents</option>
+                    <option value="oldest">Tri: plus anciens</option>
+                    <option value="name-asc">Tri: nom A → Z</option>
+                    <option value="name-desc">Tri: nom Z → A</option>
+                    <option value="priority">Tri: priorité</option>
+                  </select>
+                </label>
                 <button id="projects-filter-reset" class="task-action-btn task-action-btn-subtle projects-filter-reset-btn" data-action-kind="default" aria-label="Réinitialiser les filtres" title="Réinitialiser les filtres">
                   <span class="material-symbols-outlined taskmda-action-icon">restart_alt</span>
                 </button>
@@ -1284,6 +1311,7 @@
               <span class="flex items-center gap-1"><span class="material-symbols-outlined text-base">calendar_today</span><span id="project-date"></span></span>
               <span class="flex items-center gap-1"><span id="project-members-icon" class="material-symbols-outlined text-base">group</span><span id="project-members-count">0 membres</span></span>
             </div>
+            <div id="project-overview-badges" class="project-overview-badges mb-3"></div>
             <div class="mb-4">
               <button id="btn-toggle-project-description" type="button" class="project-description-toggle hidden mb-2">Afficher la description</button>
               <div id="project-description-display" class="project-description markdown-content text-slate-700"></div>
@@ -1771,7 +1799,8 @@
           <input id="project-description-image-input" type="file" accept="image/*" multiple class="hidden">
           <p class="text-[11px] text-slate-500 mt-1">Décrivez le contexte, l'objectif et le résultat attendu. Astuce: cliquez une image pour la redimensionner.</p>
         </div>
-        <div><label class="block text-sm font-semibold mb-2">Statut</label><select id="project-status" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"><option value="en-cours">En cours</option><option value="planifie">Planifié</option><option value="urgent">Urgent</option><option value="termine">Terminé</option></select></div>
+        <div><label class="block text-sm font-semibold mb-2">Statut projet</label><select id="project-status" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"><option value="en-cours">En cours</option><option value="planifie">Planifié</option><option value="urgent">Urgent</option><option value="termine">Terminé</option></select></div>
+        <div><label class="block text-sm font-semibold mb-2">Priorité projet</label><select id="project-priority" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"><option value="normale">Normale</option><option value="haute">Haute</option><option value="critique">Critique</option><option value="basse">Basse</option></select></div>
         <div>
           <label class="block text-sm font-semibold mb-2">Mode du projet</label>
           <select id="project-sharing-mode-select" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
@@ -2483,7 +2512,8 @@
           <p id="edit-project-doc-files-summary" class="text-xs text-slate-500 mt-2">Aucun fichier sélectionné</p>
           <p class="text-[11px] text-slate-500 mt-1">Ces documents seront ajoutés automatiquement dans lâ€™onglet Documents après enregistrement.</p>
         </div>
-        <div><label class="block text-sm font-semibold mb-2">Statut</label><select id="edit-project-status" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"><option value="en-cours">En cours</option><option value="planifie">Planifié</option><option value="urgent">Urgent</option><option value="termine">Terminé</option></select></div>
+        <div><label class="block text-sm font-semibold mb-2">Statut projet</label><select id="edit-project-status" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"><option value="en-cours">En cours</option><option value="planifie">Planifié</option><option value="urgent">Urgent</option><option value="termine">Terminé</option></select></div>
+        <div><label class="block text-sm font-semibold mb-2">Priorité projet</label><select id="edit-project-priority" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"><option value="normale">Normale</option><option value="haute">Haute</option><option value="critique">Critique</option><option value="basse">Basse</option></select></div>
         <div>
           <label class="block text-sm font-semibold mb-2">Visibilité lecture</label>
           <select id="edit-project-read-access" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">

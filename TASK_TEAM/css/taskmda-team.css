@@ -1168,6 +1168,31 @@ html.dark .workspace-chip-status-active {
   color: #bfdbfe;
 }
 
+html.dark .workspace-chip-last-accessed {
+  background: #5b3b16;
+  color: #fcd34d;
+}
+
+html.dark .workspace-chip-priority-critique {
+  background: #5f1d1d;
+  color: #fecaca;
+}
+
+html.dark .workspace-chip-priority-haute {
+  background: #4a2f1a;
+  color: #fdba74;
+}
+
+html.dark .workspace-chip-priority-normale {
+  background: #1e3a8a;
+  color: #bfdbfe;
+}
+
+html.dark .workspace-chip-priority-basse {
+  background: #14532d;
+  color: #bbf7d0;
+}
+
 html.dark .projects-filter-count-active {
   color: #bfdbfe;
   background: rgba(59, 130, 246, 0.18);
@@ -1980,6 +2005,13 @@ html.dark .project-admin-block {
   justify-content: flex-end;
 }
 
+.project-overview-badges {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
 .project-card-body {
   flex: 1;
   padding: 0 1rem 0.75rem 1rem;
@@ -2111,6 +2143,13 @@ html.dark .project-admin-block {
   gap: 10px;
 }
 
+.projects-filter-top-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
 .projects-filter-search-row {
   width: 100%;
 }
@@ -2154,16 +2193,40 @@ html.dark .project-admin-block {
 
 .projects-filter-controls-row {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr)) auto;
+  grid-template-columns: repeat(6, minmax(0, 1fr)) auto;
   gap: 10px;
   align-items: center;
+}
+
+.projects-filter-field {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.projects-filter-field-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 18px;
+  line-height: 1;
+  color: #64748b;
+  pointer-events: none;
+  z-index: 1;
 }
 
 .projects-filter-controls-row select {
   min-height: 50px;
   border-radius: 14px;
-  font-size: 0.84rem;
+  font-size: 0.95rem;
   font-weight: 700;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  padding-left: 40px !important;
+  padding-right: 34px !important;
 }
 
 .projects-filter-reset-btn {
@@ -2175,6 +2238,8 @@ html.dark .project-admin-block {
   justify-content: center;
   align-items: center;
   border-radius: 14px !important;
+  margin-left: auto;
+  flex: 0 0 auto;
 }
 
 html.dark #projects-view-controls {
@@ -2204,16 +2269,8 @@ html.dark #projects-filter-query::placeholder {
   color: #8ea2c8;
 }
 
-@media (max-width: 1280px) {
-  .projects-filter-controls-row {
-    grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
-  }
-}
-
-@media (max-width: 900px) {
-  .projects-filter-controls-row {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
-  }
+html.dark .projects-filter-field-icon {
+  color: #9eb0cf;
 }
 
 @media (max-width: 640px) {
@@ -2221,13 +2278,26 @@ html.dark #projects-filter-query::placeholder {
     flex-wrap: wrap;
   }
 
+  .projects-filter-top-row {
+    grid-template-columns: 1fr;
+  }
+
   #projects-toolbar-actions {
-    width: 100%;
-    justify-content: flex-end;
+    justify-content: flex-start;
   }
 
   .projects-filter-controls-row {
     grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .projects-filter-field {
+    width: 100%;
+  }
+
+  .projects-filter-controls-row select {
+    width: 100%;
+    max-width: none;
   }
 
   .projects-filter-reset-btn {
@@ -2296,6 +2366,39 @@ html.dark #projects-filter-query::placeholder {
 .workspace-chip-status-active {
   background: #dbeafe;
   color: #1d4ed8;
+}
+
+.workspace-chip-last-accessed {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #fff1df;
+  color: #b45309;
+}
+
+.workspace-chip-last-accessed .material-symbols-outlined {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.workspace-chip-priority-critique {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.workspace-chip-priority-haute {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
+.workspace-chip-priority-normale {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.workspace-chip-priority-basse {
+  background: #dcfce7;
+  color: #166534;
 }
 
 .project-card-interactive {
