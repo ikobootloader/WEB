@@ -151,6 +151,36 @@
   flex-wrap: nowrap;
 }
 
+@media (max-width: 1200px) {
+  .workflow-toolbar-main {
+    flex-wrap: wrap;
+  }
+
+  .workflow-toolbar-main .workflow-quick-actions {
+    width: 100%;
+    margin-left: 0;
+    justify-content: flex-end;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .workflow-filters {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+  }
+
+  .workflow-filters > * {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 900px) {
+  .workflow-filters {
+    grid-template-columns: 1fr;
+  }
+}
+
 .workflow-toolbar-main .workflow-quick-actions {
   margin-left: auto;
   flex: 0 0 auto;
@@ -399,6 +429,13 @@
   display: flex;
   flex-direction: column;
   position: relative;
+}
+
+@media (max-width: 1023px) {
+  .workflow-detail-modal-panel {
+    width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
+  }
 }
 
 .workflow-detail-head {
@@ -906,6 +943,7 @@ html[data-wf-action-buttons="text"] .workflow-card-action-btn .taskmda-action-ic
   background: linear-gradient(180deg, #ffffff, #f8faff);
   padding: 0.4rem;
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
   margin-top: 0.45rem;
   margin-bottom: 0.45rem;
 }
@@ -1173,6 +1211,7 @@ html[data-wf-action-buttons="text"] .workflow-card-action-btn .taskmda-action-ic
   width: 100%;
   border-collapse: collapse;
   font-size: 0.74rem;
+  min-width: 640px;
 }
 
 .workflow-perm-table th,
@@ -1913,12 +1952,26 @@ html[data-wf-action-buttons="text"] .workflow-card-action-btn .taskmda-action-ic
   }
 
   .workflow-organigram-canvas {
-    min-width: 760px;
+    min-width: 700px;
   }
 
   .workflow-organigram-service-line {
     left: 4%;
     right: 4%;
+  }
+}
+
+@media (max-width: 767px) {
+  .workflow-flow-graph-svg {
+    min-width: 700px;
+  }
+
+  .workflow-organigram-canvas {
+    min-width: 640px;
+  }
+
+  .workflow-perm-table {
+    min-width: 560px;
   }
 }
 
@@ -1986,6 +2039,149 @@ html[data-wf-action-buttons="text"] .workflow-card-action-btn .taskmda-action-ic
 
   .workflow-organigram-service-column {
     width: 100%;
+  }
+}
+
+@media (max-width: 500px) {
+  .workflow-group-tabs,
+  .workflow-sub-tabs {
+    flex-wrap: wrap !important;
+    overflow: visible !important;
+    -ms-overflow-style: auto;
+    scrollbar-width: auto;
+  }
+
+  .workflow-group-tab,
+  .workflow-sub-tabs .workflow-view-tab {
+    flex: 1 1 auto;
+    min-width: max-content;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Phase 3 pixel-fit desktop presets (Workflow Carte)                         */
+/* Cibles: 1366x768, 1536x864, 1920x1080                                      */
+/* -------------------------------------------------------------------------- */
+
+/* 1366x768 family */
+@media (min-width: 1280px) and (max-width: 1439px) {
+  #global-workflow-section .workflow-content {
+    padding: 0.5rem;
+  }
+
+  #global-workflow-section .workflow-map-shell {
+    gap: 0.52rem;
+  }
+
+  #global-workflow-section .workflow-map-toolbar {
+    gap: 0.42rem;
+    flex-wrap: wrap;
+  }
+
+  #global-workflow-section .workflow-map-controls {
+    gap: 0.3rem;
+  }
+
+  #global-workflow-section .workflow-map {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+
+  #global-workflow-section .workflow-map-link-search {
+    min-width: 200px;
+    max-width: 300px;
+  }
+
+  #global-workflow-section .workflow-map-link-sort {
+    min-width: 156px;
+  }
+
+  #global-workflow-section .workflow-map-links {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.5rem;
+  }
+
+  #global-workflow-section .workflow-flow-graph-svg {
+    min-width: 780px;
+  }
+
+  #global-workflow-section .workflow-map-minimap-surface {
+    width: min(228px, 36vw);
+    height: 116px;
+  }
+}
+
+/* 1536x864 family */
+@media (min-width: 1440px) and (max-width: 1699px) {
+  #global-workflow-section .workflow-content {
+    padding: 0.56rem;
+  }
+
+  #global-workflow-section .workflow-map-shell {
+    gap: 0.58rem;
+  }
+
+  #global-workflow-section .workflow-map {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.58rem;
+  }
+
+  #global-workflow-section .workflow-map-link-search {
+    min-width: 220px;
+    max-width: 332px;
+  }
+
+  #global-workflow-section .workflow-map-links {
+    grid-template-columns: repeat(auto-fit, minmax(236px, 1fr));
+    gap: 0.54rem;
+  }
+
+  #global-workflow-section .workflow-flow-graph-svg {
+    min-width: 900px;
+  }
+
+  #global-workflow-section .workflow-map-minimap-surface {
+    width: min(250px, 34vw);
+    height: 124px;
+  }
+}
+
+/* 1920x1080+ family */
+@media (min-width: 1700px) {
+  #global-workflow-section .workflow-content {
+    padding: 0.65rem;
+  }
+
+  #global-workflow-section .workflow-map-shell {
+    gap: 0.65rem;
+  }
+
+  #global-workflow-section .workflow-map-toolbar {
+    gap: 0.55rem;
+  }
+
+  #global-workflow-section .workflow-map {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.65rem;
+  }
+
+  #global-workflow-section .workflow-map-link-search {
+    min-width: 250px;
+    max-width: 380px;
+  }
+
+  #global-workflow-section .workflow-map-links {
+    grid-template-columns: repeat(auto-fit, minmax(252px, 1fr));
+    gap: 0.62rem;
+  }
+
+  #global-workflow-section .workflow-flow-graph-svg {
+    min-width: 1040px;
+  }
+
+  #global-workflow-section .workflow-map-minimap-surface {
+    width: min(296px, 30vw);
+    height: 138px;
   }
 }
 

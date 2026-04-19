@@ -3447,6 +3447,7 @@
       { listId: 'global-feed-filter-tabs', maxVisible: 4, controlClass: 'feed-filter-btn', sectionKey: 'globalFeed' },
       { listId: 'global-settings-tabs-list', maxVisible: 4, controlClass: 'project-view-tab', sectionKey: 'globalSettings' }
     ];
+    const TAB_OVERFLOW_MIN_CONTAINER_WIDTH = 500;
 
     function closeAllTabOverflowMenus(options = {}) {
       const force = Boolean(options?.force);
@@ -3467,6 +3468,14 @@
         child.classList.remove('tab-overflow-hidden');
       });
       listEl.querySelector('.tab-overflow-wrap')?.remove();
+
+      const containerWidth = Math.round(listEl.getBoundingClientRect?.().width || listEl.clientWidth || 0);
+      const disableOverflowMenu = containerWidth > 0 && containerWidth <= TAB_OVERFLOW_MIN_CONTAINER_WIDTH;
+      listEl.classList.toggle('tab-overflow-disabled', disableOverflowMenu);
+      if (disableOverflowMenu) {
+        closeAllTabOverflowMenus({ force: true });
+        return;
+      }
 
       const controls = Array.from(listEl.querySelectorAll(':scope > button'))
         .filter((btn) => !btn.classList.contains('tab-overflow-control'))

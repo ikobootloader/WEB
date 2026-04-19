@@ -1742,6 +1742,28 @@ html.dark .taskmda-modal-close-btn:hover {
   gap: 8px;
 }
 
+@media (max-width: 1280px) {
+  #global-task-filter-row .global-task-filter-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 980px) {
+  #global-task-filter-row {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  #global-task-filter-row .global-task-filter-fields {
+    grid-template-columns: 1fr;
+  }
+
+  #global-task-filter-row .global-task-filter-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
 #global-task-filter-row .global-task-select-wrap {
   position: relative;
   display: block;
@@ -2255,6 +2277,28 @@ html.dark .project-admin-block {
   align-items: center;
 }
 
+@media (max-width: 1280px) {
+  .projects-filter-controls-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  }
+}
+
+@media (max-width: 1024px) {
+  .projects-filter-controls-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  }
+}
+
+@media (max-width: 860px) {
+  .projects-filter-controls-row {
+    grid-template-columns: 1fr;
+  }
+
+  .projects-filter-reset-btn {
+    justify-self: end;
+  }
+}
+
 .projects-filter-field {
   position: relative;
   display: inline-flex;
@@ -2691,6 +2735,16 @@ html[data-tab-icons="off"] .tab-icon {
 
 .tab-overflow-hidden {
   display: none !important;
+}
+
+.tab-overflow-disabled {
+  flex-wrap: wrap !important;
+  overflow: visible !important;
+  scroll-snap-type: none;
+}
+
+.tab-overflow-disabled::-webkit-scrollbar {
+  display: none;
 }
 
 .tab-overflow-wrap {
@@ -8513,6 +8567,30 @@ html.dark .project-calendar-year-month-selected {
   background: linear-gradient(180deg, #f8f9ff, #f2f5fe);
 }
 
+@media (max-width: 1200px) {
+  .discussion-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .discussion-side {
+    border-left: 0;
+    border-top: 1px solid rgba(101, 115, 141, 0.16);
+    min-width: 100%;
+  }
+
+  #global-messages-section .discussion-layout {
+    grid-template-columns: 1fr;
+  }
+
+  #global-messages-section .discussion-side {
+    min-width: 100%;
+  }
+
+  html.dark .discussion-side {
+    border-top-color: rgba(138, 161, 202, 0.24);
+  }
+}
+
 .discussion-main {
   display: flex;
   flex-direction: column;
@@ -8866,6 +8944,63 @@ html[data-wf-action-buttons="icon"] .discussion-action-icon-btn .taskmda-action-
   font-size: 0.78rem;
   background: hsl(var(--surface-base));
   color: hsl(var(--text-strong));
+}
+
+@media (max-width: 1023px) {
+  #modal-new-project > div,
+  #modal-new-task > div,
+  #modal-global-task-details > div,
+  #modal-doc-preview > div,
+  #modal-doc-binding > div,
+  #modal-doc-editor > div,
+  #modal-task-convert > div,
+  #modal-global-conversation-delete > div,
+  #modal-calendar-info-details > div,
+  #modal-edit-user-name > div,
+  #modal-edit-project > div,
+  #modal-workflow-entity > div,
+  #modal-message-image-preview > div {
+    width: min(100vw - 16px, 980px) !important;
+    max-height: calc(100vh - 16px) !important;
+    margin: 8px auto !important;
+  }
+
+  #modal-new-project > div,
+  #modal-new-task > div,
+  #modal-edit-project > div,
+  #modal-workflow-entity > div {
+    padding: 14px !important;
+  }
+}
+
+@media (max-width: 767px) {
+  .doc-editor-css-table {
+    min-width: 520px;
+  }
+
+  .doc-editor-css-table th,
+  .doc-editor-css-table td {
+    font-size: 0.76rem;
+    padding: 0.38rem;
+  }
+
+  #modal-new-project > div,
+  #modal-new-task > div,
+  #modal-global-task-details > div,
+  #modal-doc-preview > div,
+  #modal-doc-binding > div,
+  #modal-doc-editor > div,
+  #modal-task-convert > div,
+  #modal-global-conversation-delete > div,
+  #modal-calendar-info-details > div,
+  #modal-edit-user-name > div,
+  #modal-edit-project > div,
+  #modal-workflow-entity > div,
+  #modal-message-image-preview > div {
+    width: calc(100vw - 10px) !important;
+    max-height: calc(100vh - 10px) !important;
+    border-radius: 14px !important;
+  }
 }
 
 .doc-editor-css-del-btn,
@@ -9353,6 +9488,25 @@ html.dark .doc-editor-tabulator-wrap .tabulator .tabulator-header {
   min-width: 210px;
 }
 
+#global-messages-section .discussion-side-head {
+  margin-bottom: 10px;
+}
+
+#global-messages-section .discussion-side-body {
+  min-width: 0;
+}
+
+#global-messages-section #global-message-contact-search,
+#global-messages-section #global-message-group-channel-select {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+#global-messages-section .discussion-recipient-actions > * {
+  min-width: 0;
+}
+
 #global-messages-section .discussion-composer {
   border-top: 1px solid rgba(101, 115, 141, 0.16);
   background: #ffffff;
@@ -9400,6 +9554,7 @@ html.dark .doc-editor-tabulator-wrap .tabulator .tabulator-header {
   align-items: flex-end;
   gap: 8px;
   padding: 10px 12px;
+  min-width: 0;
 }
 
 #global-messages-section #global-message-input {
@@ -9414,6 +9569,7 @@ html.dark .doc-editor-tabulator-wrap .tabulator .tabulator-header {
   overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-word;
+  min-width: 0;
 }
 
 #global-messages-section #global-message-input:focus {
@@ -9495,6 +9651,7 @@ html.dark .doc-editor-tabulator-wrap .tabulator .tabulator-header {
   align-items: flex-end;
   gap: 8px;
   padding: 10px 12px;
+  min-width: 0;
 }
 
 #discussion-section #message-input {
@@ -9509,6 +9666,7 @@ html.dark .doc-editor-tabulator-wrap .tabulator .tabulator-header {
   overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-word;
+  min-width: 0;
 }
 
 #discussion-section #message-input:focus {
@@ -11583,14 +11741,44 @@ html.dark .view-preset-btn:hover:not(:disabled) {
     justify-content: space-between;
   }
 
-  .discussion-composer-actions {
-    width: 100%;
-    justify-content: stretch;
+  #discussion-section .discussion-composer-input-row,
+  #global-messages-section .discussion-composer-input-row {
+    flex-wrap: wrap;
+    align-items: stretch;
   }
 
-  .discussion-send-btn {
+  #discussion-section #message-input,
+  #global-messages-section #global-message-input {
+    flex: 1 1 100%;
     width: 100%;
-    min-height: 42px;
+    min-width: 0;
+  }
+
+  #discussion-section .discussion-composer-actions,
+  #global-messages-section .discussion-composer-actions {
+    width: 100%;
+    justify-content: flex-end;
+    flex-wrap: nowrap;
+  }
+
+  #discussion-section .discussion-send-btn,
+  #global-messages-section .discussion-send-btn {
+    width: auto;
+    min-width: 46px;
+    min-height: 40px;
+  }
+
+  #global-messages-section .discussion-side-body .discussion-recipient-actions {
+    gap: 6px;
+  }
+
+  #global-messages-section .discussion-side-body .discussion-recipient-actions > * {
+    flex: 1 1 100%;
+  }
+
+  #global-messages-section #btn-global-message-open-group-channel {
+    flex: 0 0 auto;
+    width: 100%;
   }
 
   #modal-doc-binding > div,
@@ -11602,6 +11790,146 @@ html.dark .view-preset-btn:hover:not(:disabled) {
   #modal-edit-project > div,
   #modal-workflow-entity > div {
     padding: 16px !important;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Phase 3 pixel-fit desktop presets (Projets / Documents / Discussion)       */
+/* Cibles: 1366x768, 1536x864, 1920x1080                                      */
+/* -------------------------------------------------------------------------- */
+
+/* 1366x768 family */
+@media (min-width: 1280px) and (max-width: 1439px) {
+  .projects-filter-controls-row {
+    grid-template-columns: repeat(6, minmax(0, 1fr)) auto;
+    gap: 6px;
+  }
+
+  .projects-filter-controls-row select {
+    min-height: 42px;
+    font-size: 0.84rem;
+    padding-left: 34px !important;
+    padding-right: 30px !important;
+  }
+
+  .projects-filter-field-icon {
+    left: 10px;
+    font-size: 16px;
+  }
+
+  .projects-filter-reset-btn {
+    width: 42px;
+    min-width: 42px;
+    height: 42px;
+    border-radius: 12px !important;
+  }
+
+  .project-card-body .workspace-card-title {
+    font-size: 1.55rem;
+  }
+
+  .docs-search-card .grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    gap: 10px;
+  }
+
+  #global-doc-search,
+  #global-doc-theme,
+  #global-doc-reset {
+    min-height: 42px;
+  }
+
+  #global-docs-container {
+    max-height: min(48vh, 420px);
+    overflow-y: auto;
+  }
+
+  .discussion-composer {
+    padding: 10px;
+  }
+
+  .discussion-composer-actions {
+    gap: 7px;
+  }
+
+  .discussion-main,
+  #global-messages-section .discussion-main {
+    max-height: min(62vh, 680px);
+  }
+}
+
+/* 1536x864 family */
+@media (min-width: 1440px) and (max-width: 1699px) {
+  .projects-filter-controls-row {
+    grid-template-columns: repeat(6, minmax(0, 1fr)) auto;
+    gap: 7px;
+  }
+
+  .projects-filter-controls-row select {
+    min-height: 44px;
+    font-size: 0.88rem;
+    padding-left: 36px !important;
+    padding-right: 31px !important;
+  }
+
+  .projects-filter-reset-btn {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+  }
+
+  .docs-search-card .grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    gap: 12px;
+  }
+
+  #global-docs-container {
+    max-height: min(52vh, 520px);
+    overflow-y: auto;
+  }
+
+  .discussion-composer {
+    padding: 12px;
+  }
+
+  .discussion-main,
+  #global-messages-section .discussion-main {
+    max-height: min(66vh, 740px);
+  }
+}
+
+/* 1920x1080+ family */
+@media (min-width: 1700px) {
+  .projects-filter-controls-row {
+    grid-template-columns: repeat(6, minmax(0, 1fr)) auto;
+    gap: 10px;
+  }
+
+  .project-card-body .workspace-card-title {
+    font-size: 1.72rem;
+  }
+
+  .docs-search-card .grid {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) auto;
+    gap: 12px;
+  }
+
+  #global-docs-container {
+    max-height: min(58vh, 720px);
+    overflow-y: auto;
+  }
+
+  .discussion-composer {
+    padding: 12px 14px;
+  }
+
+  .discussion-composer-actions {
+    gap: 8px;
+  }
+
+  .discussion-main,
+  #global-messages-section .discussion-main {
+    max-height: min(70vh, 860px);
   }
 }
 
