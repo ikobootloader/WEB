@@ -2535,7 +2535,9 @@
         'open_in_new', 'swap_horiz', 'play_arrow', 'task_alt', 'add_circle',
         'content_copy', 'inventory_2',
         'delete', 'edit', 'visibility', 'archive', 'mail', 'download', 'save',
-        'sync', 'settings', 'publish', 'unarchive', 'link', 'bolt', 'more_horiz', 'close'
+        'sync', 'settings', 'publish', 'unarchive', 'link', 'bolt', 'more_horiz', 'close',
+        'restart_alt', 'filter_alt_off', 'filter_alt', 'search', 'tune', 'category',
+        'upload', 'upload_file', 'add', 'info', 'help', 'check', 'done', 'undo'
       ];
       const leadingIconsRegex = new RegExp(`^(?:${iconTokens.join('|')})\\s+`, 'i');
       while (leadingIconsRegex.test(value)) {
@@ -2696,7 +2698,11 @@
       );
       if (byAttr) return byAttr;
 
-      const byText = sanitizeActionButtonLabel(el.textContent || '');
+      const textClone = el.cloneNode(true);
+      if (textClone?.querySelectorAll) {
+        textClone.querySelectorAll('.taskmda-action-icon, .material-symbols-outlined, .tab-icon, .tab-overflow-item-icon').forEach((node) => node.remove());
+      }
+      const byText = sanitizeActionButtonLabel(textClone?.textContent || '');
       if (byText) return byText;
 
       const iconToken = String(
@@ -2894,9 +2900,102 @@
       });
     }
 
+    function harmonizeSemanticActionButtons(root = document) {
+      if (!root?.querySelectorAll) return;
+      const actionButtonCatalog = [
+        ['btn-send-invite', 'notify', 'Inviter'],
+        ['btn-send-message', 'submit', 'Envoyer'],
+        ['btn-global-send-message', 'submit', 'Envoyer'],
+        ['global-doc-reset', 'default', 'Réinitialiser'],
+        ['docs-filter-reset', 'default', 'Réinitialiser'],
+        ['btn-global-feed-post', 'submit', 'Publier'],
+        ['btn-global-feed-cancel', 'close', 'Annuler'],
+        ['btn-global-feed-digest', 'convert', 'Synthétiser un document'],
+        ['btn-global-feed-insert-mention', 'link', 'Insérer @mention'],
+        ['btn-global-calendar-pin-theme', 'manage', 'Épingler la thématique'],
+        ['btn-project-doc-select-all', 'manage', 'Tout sélectionner'],
+        ['btn-project-doc-clear-selection', 'manage', 'Tout désélectionner'],
+        ['btn-save-doc-binding', 'save', 'Enregistrer'],
+        ['btn-save-doc-editor', 'save', 'Enregistrer'],
+        ['btn-save-app-branding', 'save', 'Enregistrer'],
+        ['btn-assign-app-admin', 'manage', 'Définir admin'],
+        ['btn-reset-app-branding', 'default', 'Valeurs par défaut'],
+        ['btn-reset-test-data', 'danger', 'Réinitialiser les données locales'],
+        ['btn-via-annuaire-ror-save', 'save', 'Enregistrer'],
+        ['btn-via-annuaire-ror-test', 'sync', 'Tester'],
+        ['btn-via-annuaire-live-search', 'open', 'Rechercher'],
+        ['btn-via-annuaire-live-prev', 'default', 'Page précédente'],
+        ['btn-via-annuaire-live-next', 'default', 'Page suivante'],
+        ['btn-remove-profile-photo', 'danger', 'Retirer'],
+        ['btn-export-user-json', 'export', 'Exporter JSON'],
+        ['btn-import-user-json', 'open', 'Importer JSON'],
+        ['btn-export-excel', 'export', 'Exporter projets et tâches (CSV Excel)'],
+        ['btn-change-password', 'manage', 'Changer le mot de passe'],
+        ['btn-show-recovery-key', 'open', 'Afficher la clé de récupération'],
+        ['btn-regenerate-recovery-key', 'sync', 'Régénérer la clé']
+      ];
+      actionButtonCatalog.forEach(([id, actionKind, fallbackLabel]) => {
+        const button = document.getElementById(id);
+        if (!(button instanceof HTMLElement)) return;
+        if (!button.getAttribute('data-action-kind')) button.setAttribute('data-action-kind', actionKind);
+        if (!button.getAttribute('data-action-label')) {
+          const textLabel = String(button.textContent || '').replace(/\s+/g, ' ').trim();
+          button.setAttribute('data-action-label', textLabel || fallbackLabel);
+        }
+        if (!button.getAttribute('aria-label')) {
+          button.setAttribute('aria-label', button.getAttribute('data-action-label') || fallbackLabel);
+        }
+      });
+    }
+
+    function harmonizeUtilityButtonsExclusions(root = document) {
+      if (!root?.querySelectorAll) return;
+      const utilityExclusionIds = [
+        'btn-theme-toggle',
+        'btn-notifications',
+        'btn-open-app-help',
+        'btn-sidebar-collapse',
+        'btn-project-prev',
+        'btn-project-next',
+        'btn-toggle-global-message-sidebar',
+        'btn-toggle-global-feed-composer',
+        'btn-toggle-docs-upload',
+        'btn-via-annuaire-config-toggle',
+        'btn-via-annuaire-live-audit-toggle',
+        'btn-toggle-project-description',
+        'btn-project-settings-subnav-horizontal',
+        'btn-project-settings-subnav-vertical',
+        'btn-project-settings-work-focus',
+        'btn-project-subnav-horizontal',
+        'btn-project-subnav-vertical',
+        'btn-project-work-focus'
+      ];
+      utilityExclusionIds.forEach((id) => {
+        const button = document.getElementById(id);
+        if (!(button instanceof HTMLElement)) return;
+        button.dataset.actionUtility = 'excluded';
+        button.removeAttribute('data-action-kind');
+        button.removeAttribute('data-action-label');
+        button.removeAttribute('data-ui-tooltip');
+        delete button.dataset.actionUiDecorated;
+      });
+
+      // Workflow quick-add dropdown is a menu: labels must stay visible.
+      root.querySelectorAll('.workflow-quick-add-menu .workflow-quick-add-item').forEach((button) => {
+        if (!(button instanceof HTMLElement)) return;
+        button.dataset.actionUtility = 'excluded';
+        button.removeAttribute('data-action-kind');
+        button.removeAttribute('data-action-label');
+        button.removeAttribute('data-ui-tooltip');
+        delete button.dataset.actionUiDecorated;
+      });
+    }
+
     function applyActionButtonsDisplayMode(root = document) {
       if (!root?.querySelectorAll) return;
       harmonizeCreateCtaButtons(root);
+      harmonizeSemanticActionButtons(root);
+      harmonizeUtilityButtonsExclusions(root);
       const selectors = [
         'button.task-action-btn',
         'button.card-quick-btn',
@@ -2931,6 +3030,8 @@
         'button#rgpd-filters-reset'
       ].join(', ');
       root.querySelectorAll(selectors).forEach((button) => {
+        if (button instanceof HTMLElement && button.closest('.workflow-quick-add-menu')) return;
+        if (button instanceof HTMLElement && button.dataset.actionUtility === 'excluded') return;
         ensureActionButtonDecor(button);
         button.removeAttribute('title');
         button.querySelectorAll('[title]').forEach((child) => child.removeAttribute('title'));
@@ -3415,7 +3516,7 @@
         clone.querySelectorAll('.tab-icon').forEach((el) => el.remove());
         const label = String(clone.textContent || '').replace(/\s+/g, ' ').trim();
         const iconEl = btn.querySelector('.tab-icon');
-        const iconHtml = iconEl ? `<span class="material-symbols-outlined tab-icon">${escapeHtml(iconEl.textContent.trim())}</span> ` : '';
+        const iconHtml = iconEl ? `<span class="material-symbols-outlined tab-overflow-item-icon" aria-hidden="true">${escapeHtml(iconEl.textContent.trim())}</span> ` : '';
         const id = String(btn.id || '').trim();
         const active = btn.classList.contains('view-tab-active') || btn.classList.contains('is-active');
         return `
@@ -7757,7 +7858,27 @@
       prevBtn.disabled = !canPrev;
       nextBtn.disabled = !canNext;
       searchBtn.disabled = !!state.loading;
-      searchBtn.textContent = state.loading ? 'Recherche...' : 'Rechercher';
+      const searchBtnLabelText = state.loading ? 'Recherche...' : 'Rechercher';
+      const searchBtnIcon = searchBtn.querySelector('.taskmda-action-icon, .material-symbols-outlined');
+      if (searchBtnIcon) {
+        searchBtnIcon.textContent = state.loading ? 'progress_activity' : 'search';
+      }
+      searchBtn.setAttribute('data-action-kind', 'open');
+      searchBtn.setAttribute('data-action-label', searchBtnLabelText);
+      searchBtn.setAttribute('aria-label', searchBtnLabelText);
+      searchBtn.setAttribute('data-ui-tooltip', searchBtnLabelText);
+      let searchBtnLabel = searchBtn.querySelector('.taskmda-action-label');
+      if (!searchBtnLabel) {
+        searchBtnLabel = document.createElement('span');
+        searchBtnLabel.className = 'taskmda-action-label';
+        searchBtn.appendChild(searchBtnLabel);
+      }
+      searchBtnLabel.textContent = searchBtnLabelText;
+      Array.from(searchBtn.childNodes).forEach((node) => {
+        if (node.nodeType === Node.TEXT_NODE && String(node.textContent || '').trim()) {
+          searchBtn.removeChild(node);
+        }
+      });
       if (auditToggleBtn) {
         const modeOn = !!state.auditMode;
         auditToggleBtn.textContent = modeOn ? 'Audit: ON' : 'Audit: OFF';
@@ -8479,7 +8600,7 @@
           ? '<span class="workspace-chip workspace-chip-private">PRIVE</span>'
           : '<span class="workspace-chip workspace-chip-shared">PARTAGE</span>';
         const lastAccessedBadge = project.projectId === lastAccessedProjectId
-          ? '<span class="workspace-chip workspace-chip-last-accessed"><span class="material-symbols-outlined" aria-hidden="true">history</span><span>Dernier accédé</span></span>'
+          ? '<span class="workspace-chip workspace-chip-last-accessed" title="Dernière activité" aria-label="Dernière activité"><span class="material-symbols-outlined" aria-hidden="true">history</span><span>Dernier accès</span></span>'
           : '';
         const priority = normalizeProjectPriority(project.priority);
         const priorityBadge = `<span class="workspace-chip ${getProjectPriorityChipClass(priority)}">${getProjectPriorityLabel(priority)}</span>`;
@@ -8514,8 +8635,11 @@
         return `
           <div class="project-card workspace-card-shell project-card-interactive rounded-xl cursor-pointer ${isListView ? 'project-card-list' : ''}" onclick="showProjectDetail('${project.projectId}')">
             <div class="project-card-header">
-              <span class="material-symbols-outlined text-slate-400">${icon}</span>
-              <div class="project-card-badges">${lastAccessedBadge}${badge}${priorityBadge}${statusBadge}</div>
+              <div class="project-card-header-main">
+                <span class="material-symbols-outlined text-slate-400">${icon}</span>
+                ${lastAccessedBadge}
+              </div>
+              <div class="project-card-badges project-card-badges-meta">${badge}${priorityBadge}${statusBadge}</div>
             </div>
             <div class="project-card-body">
               <h4 class="workspace-card-title text-lg font-bold font-headline mb-3">${project.name}</h4>
@@ -8669,7 +8793,7 @@
       if (isStale()) return;
       const stateByProjectId = new Map(allProjectStates);
       const projectThemes = collectProjectThemeNames(projectsWithDescriptionMeta, stateByProjectId);
-      fillProjectThemeSelect('projects-filter-theme-known', projectThemes, 'Thématiques existantes...');
+      fillProjectThemeSelect('projects-filter-theme-known', projectThemes, 'Thématique (transverse)...');
       syncProjectsFilterControls();
       const cardsQueryRaw = isDashboardHome ? '' : String(projectsFilters.query || '');
       const cardsQuery = cardsQueryRaw.trim();
@@ -8813,7 +8937,7 @@
           ? '<span class="workspace-chip workspace-chip-private">PRIVE</span>'
           : '<span class="workspace-chip workspace-chip-shared">PARTAGE</span>';
         const lastAccessedBadge = project.projectId === lastAccessedProjectId
-          ? '<span class="workspace-chip workspace-chip-last-accessed"><span class="material-symbols-outlined" aria-hidden="true">history</span><span>Dernier accédé</span></span>'
+          ? '<span class="workspace-chip workspace-chip-last-accessed" title="Dernière activité" aria-label="Dernière activité"><span class="material-symbols-outlined" aria-hidden="true">history</span><span>Dernier accès</span></span>'
           : '';
         const priority = normalizeProjectPriority(project.priority);
         const priorityBadge = `<span class="workspace-chip ${getProjectPriorityChipClass(priority)}">${getProjectPriorityLabel(priority)}</span>`;
@@ -8848,8 +8972,11 @@
         return `
           <div class="project-card workspace-card-shell project-card-interactive rounded-xl cursor-pointer ${isListView ? 'project-card-list' : ''}" onclick="showProjectDetail('${project.projectId}')">
             <div class="project-card-header">
-              <span class="material-symbols-outlined text-slate-400">${icon}</span>
-              <div class="project-card-badges">${lastAccessedBadge}${badge}${priorityBadge}${statusBadge}</div>
+              <div class="project-card-header-main">
+                <span class="material-symbols-outlined text-slate-400">${icon}</span>
+                ${lastAccessedBadge}
+              </div>
+              <div class="project-card-badges project-card-badges-meta">${badge}${priorityBadge}${statusBadge}</div>
             </div>
             <div class="project-card-body">
               <h4 class="workspace-card-title text-lg font-bold font-headline mb-3">${project.name}</h4>
@@ -14578,58 +14705,51 @@
       `).join('');
     }
 
-    function refreshTaskMetadataOptions(state) {
+    function refreshTaskMetadataOptions(state, options = {}) {
+      const skipGroups = !!options.skipGroups;
       const groupSelect = document.getElementById('task-group');
       const themeInput = document.getElementById('task-theme');
-      if (!groupSelect) return;
-      const groups = state?.groups || [];
-      const projectGroupRows = groups.map(g => ({
-        value: g.groupId,
-        label: g.name,
-        scope: 'project',
-        key: normalizeCatalogKey(g.name),
-        groupName: g.name
-      }));
-      const projectKeys = new Set(projectGroupRows.map(g => g.key).filter(Boolean));
-      const globalGroupRows = (globalGroupCatalog || [])
-        .filter(g => g && g.groupKey && g.name)
-        .filter(g => !projectKeys.has(g.groupKey))
-        .map(g => ({
-          value: `global:${g.groupKey}`,
-          label: `${g.name} (global)`,
-          scope: 'global',
-          key: g.groupKey,
+      if (groupSelect) {
+        const groups = skipGroups ? [] : (state?.groups || []);
+        const projectGroupRows = groups.map(g => ({
+          value: g.groupId,
+          label: g.name,
+          scope: 'project',
+          key: normalizeCatalogKey(g.name),
           groupName: g.name
         }));
+        const projectKeys = new Set(projectGroupRows.map(g => g.key).filter(Boolean));
+        const globalGroupRows = skipGroups
+          ? []
+          : (globalGroupCatalog || [])
+            .filter(g => g && g.groupKey && g.name)
+            .filter(g => !projectKeys.has(g.groupKey))
+            .map(g => ({
+              value: `global:${g.groupKey}`,
+              label: `${g.name} (global)`,
+              scope: 'global',
+              key: g.groupKey,
+              groupName: g.name
+            }));
 
-      const options = ['<option value="">Aucun groupe</option>'];
-      if (projectGroupRows.length > 0) {
-        options.push('<optgroup label="Groupes du projet">');
-        options.push(...projectGroupRows.map(g => `<option value="${escapeHtml(g.value)}" data-group-scope="${g.scope}" data-group-name="${escapeHtml(g.groupName)}">${escapeHtml(g.label)}</option>`));
-        options.push('</optgroup>');
+        const options = ['<option value="">Aucun groupe</option>'];
+        if (projectGroupRows.length > 0) {
+          options.push('<optgroup label="Groupes du projet">');
+          options.push(...projectGroupRows.map(g => `<option value="${escapeHtml(g.value)}" data-group-scope="${g.scope}" data-group-name="${escapeHtml(g.groupName)}">${escapeHtml(g.label)}</option>`));
+          options.push('</optgroup>');
+        }
+        if (globalGroupRows.length > 0) {
+          options.push('<optgroup label="Groupes globaux">');
+          options.push(...globalGroupRows.map(g => `<option value="${escapeHtml(g.value)}" data-group-scope="${g.scope}" data-group-name="${escapeHtml(g.groupName)}">${escapeHtml(g.label)}</option>`));
+          options.push('</optgroup>');
+        }
+        groupSelect.innerHTML = options.join('');
       }
-      if (globalGroupRows.length > 0) {
-        options.push('<optgroup label="Groupes globaux">');
-        options.push(...globalGroupRows.map(g => `<option value="${escapeHtml(g.value)}" data-group-scope="${g.scope}" data-group-name="${escapeHtml(g.groupName)}">${escapeHtml(g.label)}</option>`));
-        options.push('</optgroup>');
-      }
-      groupSelect.innerHTML = options.join('');
 
       if (themeInput) {
         const projectThemes = (state?.themes || []).map(t => String(t || '').trim()).filter(Boolean);
         const globalThemes = (globalThemeCatalog || []).map(t => String(t.name || '').trim()).filter(Boolean);
-        const uniqThemes = Array.from(new Set([...projectThemes, ...globalThemes].map(t => `${normalizeCatalogKey(t)}|||${t}`)))
-          .map(item => item.split('|||')[1])
-          .filter(Boolean);
-
-        let datalist = document.getElementById('task-theme-options');
-        if (!datalist) {
-          datalist = document.createElement('datalist');
-          datalist.id = 'task-theme-options';
-          document.body.appendChild(datalist);
-        }
-        datalist.innerHTML = uniqThemes.map(theme => `<option value="${escapeHtml(theme)}"></option>`).join('');
-        themeInput.setAttribute('list', 'task-theme-options');
+        fillThemePicker('task-theme-known', 'task-theme', [...projectThemes, ...globalThemes], 'Thématiques existantes...');
       }
     }
 
@@ -14692,6 +14812,15 @@
       select.value = matchOption ? matchOption.value : '';
     }
 
+    function syncThemePickerInputFromSelection(selectId, inputId) {
+      const select = document.getElementById(selectId);
+      const input = document.getElementById(inputId);
+      if (!select || !input) return;
+      const selected = String(select.value || '').trim();
+      if (!selected) return;
+      input.value = selected;
+    }
+
     function collectProjectThemeNames(projects = [], stateByProjectId = new Map()) {
       const names = [];
       (projects || []).forEach((project) => {
@@ -14745,7 +14874,7 @@
         ...((state?.tasks || []).map((task) => String(task?.theme || '').trim())),
         ...((globalThemeCatalog || []).map((t) => String(t?.name || '').trim()))
       ];
-      fillThemePicker('project-task-theme-known', 'project-task-theme-filter', themes, 'Thématiques du projet...');
+      fillThemePicker('project-task-theme-known', 'project-task-theme-filter', themes, 'Thématiques projet + référentiel...');
     }
 
     function syncGlobalThemeFilterAssist(tasks = []) {
@@ -14753,7 +14882,7 @@
         ...((tasks || []).map((task) => String(task?.theme || '').trim())),
         ...((globalThemeCatalog || []).map((t) => String(t?.name || '').trim()))
       ];
-      fillThemePicker('global-task-theme-known', 'global-task-theme', themes, 'Thématiques existantes...');
+      fillThemePicker('global-task-theme-known', 'global-task-theme', themes, 'Référentiel thématiques...');
     }
 
     function refreshProjectDocumentTaskOptions(state) {
@@ -15186,9 +15315,10 @@
         groupPendingBox.innerHTML = '';
       }
       taskPendingGroupMemberUserIds = [];
-      if (!standaloneTaskMode) {
-        refreshTaskMetadataOptions(currentProjectState);
-      }
+      refreshTaskMetadataOptions(
+        standaloneTaskMode ? null : currentProjectState,
+        { skipGroups: standaloneTaskMode }
+      );
       const currentAssignees = getTaskAssigneeEntries(task, standaloneTaskMode ? null : currentProjectState);
       refreshTaskAssigneeOptionsMulti(
         standaloneTaskMode ? null : currentProjectState,
@@ -15222,9 +15352,20 @@
         const taskEditorImageInput = document.getElementById('task-description-image-input');
         if (taskEditorImageInput) taskEditorImageInput.value = '';
         document.getElementById('task-share-docs').checked = true;
-        document.getElementById('btn-save-task').textContent = 'Mettre à jour';
+        const saveTaskBtn = document.getElementById('btn-save-task');
+        if (saveTaskBtn) {
+          saveTaskBtn.setAttribute('data-action-kind', 'save');
+          saveTaskBtn.setAttribute('data-action-label', 'Mettre à jour');
+          saveTaskBtn.setAttribute('aria-label', 'Mettre à jour');
+          saveTaskBtn.setAttribute('data-ui-tooltip', 'Mettre à jour');
+          const saveTaskIcon = saveTaskBtn.querySelector('.taskmda-action-icon, .material-symbols-outlined');
+          if (saveTaskIcon) saveTaskIcon.textContent = 'save';
+          const saveTaskLabel = saveTaskBtn.querySelector('.taskmda-action-label');
+          if (saveTaskLabel) saveTaskLabel.textContent = 'Mettre à jour';
+        }
         if (standaloneModeInput) standaloneModeInput.value = normalizeSharingMode(task.sharingMode, 'private');
         if (taskThemeInput) taskThemeInput.value = task.theme || '';
+        syncThemePickerSelectionFromInput('task-theme-known', 'task-theme');
         if (taskGroupInput) {
           if (task.groupId) {
             taskGroupInput.value = task.groupId;
@@ -15268,9 +15409,20 @@
         const taskEditorImageInput = document.getElementById('task-description-image-input');
         if (taskEditorImageInput) taskEditorImageInput.value = '';
         document.getElementById('task-share-docs').checked = true;
-        document.getElementById('btn-save-task').textContent = 'Créer';
+        const saveTaskBtn = document.getElementById('btn-save-task');
+        if (saveTaskBtn) {
+          saveTaskBtn.setAttribute('data-action-kind', 'create');
+          saveTaskBtn.setAttribute('data-action-label', 'Créer');
+          saveTaskBtn.setAttribute('aria-label', 'Créer');
+          saveTaskBtn.setAttribute('data-ui-tooltip', 'Créer');
+          const saveTaskIcon = saveTaskBtn.querySelector('.taskmda-action-icon, .material-symbols-outlined');
+          if (saveTaskIcon) saveTaskIcon.textContent = 'add_circle';
+          const saveTaskLabel = saveTaskBtn.querySelector('.taskmda-action-label');
+          if (saveTaskLabel) saveTaskLabel.textContent = 'Créer';
+        }
         if (standaloneModeInput) standaloneModeInput.value = 'private';
         if (taskThemeInput) taskThemeInput.value = (currentProjectState?.themes || [])[0] || '';
+        syncThemePickerSelectionFromInput('task-theme-known', 'task-theme');
         if (taskGroupInput) taskGroupInput.value = '';
         // Réinitialiser la configuration de récurrence
         if (window.TaskMDARecurrenceUI?.resetRecurrenceForm) {
@@ -18265,7 +18417,7 @@
       const notes = (document.getElementById('global-calendar-item-notes')?.value || '').trim();
       const sharingMode = document.getElementById('global-calendar-item-mode')?.value || 'private';
       if (!title || !startDate) {
-        showToast('Sujet et date de début sont requis');
+        showToast('Titre et date de début requis');
         return;
       }
       if (endDate < startDate) {
@@ -23101,7 +23253,7 @@
       const mapping = {
         tasks: ['Vue Tâches (Tous projets)', 'Pilotage transversal des tâches, y compris hors projet.'],
         workflow: ['Workflow', 'Organisation metier: carte, agents, taches, procedures et logiciels.'],
-        calendar: ['Vue Calendrier (Tous projets)', 'Dates limites consolidées avec recherche thématique/sujet.'],
+        calendar: ['Vue Calendrier (Tous projets)', 'Dates limites consolidées avec recherche thématique/titre.'],
         docs: ['Vue Documents (Tous projets)', 'Référentiel documentaire projet + thématique hors projet.'],
         messages: ['Messagerie hors projet', 'Canal general (tous) ou discussion privee entre agents connus du dossier collaboratif.'],
         feed: ["Fil d'information transverse", 'Activités automatiques (créations projet/tâche) + posts manuels, mentions et références croisées.'],
@@ -23545,7 +23697,7 @@
           ${showProjectTaskCardDescription ? `<p class="task-card-description text-gray-600 text-sm mb-3">${escapeHtml(task.description || '')}</p>` : ''}
           ${buildTaskProgressBarHtml(task)}
           <div class="hidden text-xs text-slate-500 flex flex-wrap gap-2 mb-3">
-            ${task.theme ? `<span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700">Thème: ${escapeHtml(task.theme)}</span>` : ''}
+            ${task.theme ? `<span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700">Thématique: ${escapeHtml(task.theme)}</span>` : ''}
             ${getTaskGroupName(task, currentProjectState) ? `<span class="px-2 py-1 rounded-full bg-blue-100 text-blue-700">Groupe: ${escapeHtml(getTaskGroupName(task, currentProjectState) || 'N/A')}</span>` : ''}
           </div>
           <div class="task-card-meta text-xs text-gray-500 flex flex-wrap items-center gap-3 mb-3">
@@ -30054,6 +30206,13 @@
       document.getElementById('chat-filter-mine').checked = false;
       renderMessages(currentProjectState?.messages || []);
     });
+    document.getElementById('task-theme')?.addEventListener('input', () => {
+      syncThemePickerSelectionFromInput('task-theme-known', 'task-theme');
+    });
+    document.getElementById('task-theme-known')?.addEventListener('change', () => {
+      syncThemePickerInputFromSelection('task-theme-known', 'task-theme');
+    });
+
     function assignFilesToInput(input, files) {
       if (!input || !files) return;
       const dt = new DataTransfer();
@@ -30530,6 +30689,12 @@
       }
       if (nextOpen) {
         renderEmojiPicker();
+        const discussionMain = panel.closest('.discussion-main');
+        if (discussionMain) {
+          setTimeout(() => {
+            discussionMain.scrollTop = discussionMain.scrollHeight;
+          }, 50);
+        }
       }
     }
 
@@ -30580,6 +30745,12 @@
       }
       if (nextOpen) {
         renderGlobalEmojiPicker();
+        const discussionMain = panel.closest('.discussion-main');
+        if (discussionMain) {
+          setTimeout(() => {
+            discussionMain.scrollTop = discussionMain.scrollHeight;
+          }, 50);
+        }
       }
     }
 
@@ -30698,7 +30869,7 @@
       
       const content = `
         <div class="p-4">
-          <p class="text-sm text-slate-500 mb-4">Gérez les thématiques transverses utilisées pour classer vos tâches hors projet et filtrer le tableau de bord.</p>
+          <p class="text-sm text-slate-500 mb-4">Gérez le référentiel transverse des thématiques réutilisables dans toute l'application (projets, tâches, workflow, calendrier, documents). Chaque projet active ensuite son sous-ensemble utile.</p>
           
           <div class="mb-4">
             <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Ajouter une thématique</label>

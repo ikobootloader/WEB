@@ -182,6 +182,11 @@ html:not(.dark) select {
   background-color: hsl(var(--surface-base));
 }
 
+.content {
+  container-type: inline-size;
+  container-name: content-area;
+}
+
 .material-symbols-outlined {
   font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
 }
@@ -1737,6 +1742,34 @@ html.dark .taskmda-modal-close-btn:hover {
   gap: 8px;
 }
 
+#global-task-filter-row .global-task-select-wrap {
+  position: relative;
+  display: block;
+}
+
+#global-task-filter-row .global-task-filter-fields input,
+#global-task-filter-row .global-task-filter-fields select,
+#global-task-filter-row .global-task-select-wrap,
+#global-task-filter-row .global-task-select-wrap select {
+  min-height: 42px;
+}
+
+#global-task-filter-row .global-task-select-wrap .global-task-select-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 18px;
+  line-height: 1;
+  color: #64748b;
+  pointer-events: none;
+}
+
+#global-task-filter-row .global-task-select-wrap select {
+  width: 100%;
+  padding-left: 36px !important;
+}
+
 #global-task-filter-row .global-task-filter-actions {
   flex: 0 0 auto;
   display: inline-flex;
@@ -1985,12 +2018,16 @@ html.dark .project-admin-block {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  container-type: inline-size;
+  container-name: project-card;
 }
 
 .project-card-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: start;
+  column-gap: 0.75rem;
+  row-gap: 0.45rem;
   padding: 1rem 1rem 0.5rem 1rem;
 }
 
@@ -1998,11 +2035,31 @@ html.dark .project-admin-block {
   font-size: 1.25rem;
 }
 
+.project-card-header-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
 .project-card-badges {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.4rem;
   flex-wrap: wrap;
+}
+
+.project-card-badges-meta {
   justify-content: flex-end;
+  flex-wrap: nowrap;
+  align-items: center;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.project-card-badges-meta .workspace-chip {
+  flex: 0 0 auto;
 }
 
 .project-overview-badges {
@@ -2374,11 +2431,50 @@ html.dark .projects-filter-field-icon {
   gap: 4px;
   background: #fff1df;
   color: #b45309;
+  max-width: clamp(152px, 40vw, 240px);
+  overflow: hidden;
 }
 
 .workspace-chip-last-accessed .material-symbols-outlined {
   font-size: 14px;
   line-height: 1;
+  flex: 0 0 auto;
+}
+
+.workspace-chip-last-accessed > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@container project-card (max-width: 560px) {
+  .workspace-chip-last-accessed {
+    max-width: none;
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+
+  .workspace-chip-last-accessed > span:last-child {
+    display: none;
+  }
+}
+
+@container content-area (min-width: 1250px) {
+  .workspace-chip-last-accessed > span:last-child {
+    display: inline;
+  }
+}
+
+@media (max-width: 767px) {
+  .project-card-header {
+    grid-template-columns: 1fr;
+  }
+
+  .project-card-badges-meta {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
 }
 
 .workspace-chip-priority-critique {
@@ -2629,6 +2725,9 @@ html[data-tab-icons="off"] .tab-icon {
 }
 
 .tab-overflow-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
   text-align: left;
   border: 1px solid transparent;
   border-radius: 0.55rem;
@@ -2637,6 +2736,17 @@ html[data-tab-icons="off"] .tab-icon {
   font-size: 0.78rem;
   font-weight: 700;
   padding: 0.42rem 0.52rem;
+}
+
+.tab-overflow-item-icon {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  line-height: 1;
+  flex-shrink: 0;
 }
 
 .tab-overflow-item:hover {
@@ -6143,6 +6253,88 @@ html[data-wf-action-buttons="icon"] button[id^="rgpd-"][id$="-btn"] {
   align-items: center !important;
   gap: 0 !important;
   line-height: 1;
+}
+
+/* Any explicit action button must follow icon-mode compact size */
+html[data-wf-action-buttons="icon"] button[data-action-kind],
+html[data-wf-action-buttons="icon"] button[data-action-label],
+html[data-wf-action-buttons="icon"] a[data-action-kind],
+html[data-wf-action-buttons="icon"] a[data-action-label] {
+  display: inline-flex !important;
+  min-width: 34px;
+  min-height: 34px;
+  width: 34px;
+  height: 34px;
+  padding: 0 !important;
+  border-style: solid !important;
+  border-width: 1px !important;
+  box-shadow: none !important;
+  filter: none !important;
+  transform: none !important;
+  justify-content: center !important;
+  align-items: center !important;
+  gap: 0 !important;
+  line-height: 1;
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+}
+
+html[data-wf-action-buttons="icon"] button[data-action-kind]:focus-visible,
+html[data-wf-action-buttons="icon"] button[data-action-label]:focus-visible,
+html[data-wf-action-buttons="icon"] a[data-action-kind]:focus-visible,
+html[data-wf-action-buttons="icon"] a[data-action-label]:focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 2px rgba(30, 64, 175, 0.28) !important;
+}
+
+html[data-wf-action-buttons="icon"] button[data-action-kind]:disabled,
+html[data-wf-action-buttons="icon"] button[data-action-label]:disabled,
+html[data-wf-action-buttons="icon"] a[data-action-kind][aria-disabled="true"],
+html[data-wf-action-buttons="icon"] a[data-action-label][aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+html[data-wf-action-buttons="icon"] button[data-action-kind] .taskmda-action-label,
+html[data-wf-action-buttons="icon"] button[data-action-label] .taskmda-action-label,
+html[data-wf-action-buttons="icon"] a[data-action-kind] .taskmda-action-label,
+html[data-wf-action-buttons="icon"] a[data-action-label] .taskmda-action-label {
+  display: none !important;
+}
+
+html[data-wf-action-buttons="icon"] button[data-action-kind] .taskmda-action-icon,
+html[data-wf-action-buttons="icon"] button[data-action-label] .taskmda-action-icon,
+html[data-wf-action-buttons="icon"] a[data-action-kind] .taskmda-action-icon,
+html[data-wf-action-buttons="icon"] a[data-action-label] .taskmda-action-icon,
+html[data-wf-action-buttons="icon"] button[data-action-kind] .material-symbols-outlined,
+html[data-wf-action-buttons="icon"] button[data-action-label] .material-symbols-outlined,
+html[data-wf-action-buttons="icon"] a[data-action-kind] .material-symbols-outlined,
+html[data-wf-action-buttons="icon"] a[data-action-label] .material-symbols-outlined {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  line-height: 1;
+  margin: 0;
+  vertical-align: middle;
+}
+
+html[data-wf-action-buttons="text"] button[data-action-kind] .taskmda-action-icon,
+html[data-wf-action-buttons="text"] button[data-action-label] .taskmda-action-icon,
+html[data-wf-action-buttons="text"] a[data-action-kind] .taskmda-action-icon,
+html[data-wf-action-buttons="text"] a[data-action-label] .taskmda-action-icon {
+  display: none !important;
+}
+
+/* Explicit lock for project creation modal footer actions */
+html[data-wf-action-buttons="icon"] #btn-cancel-project,
+html[data-wf-action-buttons="icon"] #btn-save-project {
+  width: 34px !important;
+  min-width: 34px !important;
+  height: 34px !important;
+  min-height: 34px !important;
 }
 
 /* Preserve explicit hidden state in icon-mode action buttons */
@@ -9715,6 +9907,58 @@ html.dark #discussion-section #message-files-list {
 
 html.dark #global-messages-section #btn-global-toggle-message-files {
   color: #a7bddf;
+}
+
+html.dark #discussion-section .discussion-composer-actions #btn-toggle-emoji-picker,
+html.dark #discussion-section .discussion-composer-actions #btn-toggle-message-files,
+html.dark #global-messages-section .discussion-composer-actions #btn-global-toggle-emoji-picker,
+html.dark #global-messages-section .discussion-composer-actions #btn-global-toggle-message-files {
+  border: 1px solid #35507b !important;
+  background: #172741 !important;
+  color: #c8d9f5 !important;
+}
+
+html.dark #discussion-section .discussion-composer-actions #btn-toggle-emoji-picker:hover,
+html.dark #discussion-section .discussion-composer-actions #btn-toggle-message-files:hover,
+html.dark #global-messages-section .discussion-composer-actions #btn-global-toggle-emoji-picker:hover,
+html.dark #global-messages-section .discussion-composer-actions #btn-global-toggle-message-files:hover {
+  border-color: #5a7db5 !important;
+  background: #1f3558 !important;
+  color: #e2ecff !important;
+}
+
+html.dark #discussion-section .discussion-composer-actions #btn-toggle-emoji-picker:focus-visible,
+html.dark #discussion-section .discussion-composer-actions #btn-toggle-message-files:focus-visible,
+html.dark #global-messages-section .discussion-composer-actions #btn-global-toggle-emoji-picker:focus-visible,
+html.dark #global-messages-section .discussion-composer-actions #btn-global-toggle-message-files:focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 2px rgba(122, 162, 255, 0.35) !important;
+}
+
+html.dark #discussion-section .discussion-composer-actions .discussion-send-btn:disabled,
+html.dark #global-messages-section .discussion-composer-actions .discussion-send-btn:disabled,
+html.dark #discussion-section .discussion-composer-actions #btn-toggle-emoji-picker:disabled,
+html.dark #discussion-section .discussion-composer-actions #btn-toggle-message-files:disabled,
+html.dark #global-messages-section .discussion-composer-actions #btn-global-toggle-emoji-picker:disabled,
+html.dark #global-messages-section .discussion-composer-actions #btn-global-toggle-message-files:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Micro-retouche: teinte dark du bouton Envoyer, proche de "Modifier" mais conserve une identité submit */
+html.dark #discussion-section .discussion-composer-actions .discussion-send-btn[data-action-kind="submit"],
+html.dark #global-messages-section .discussion-composer-actions .discussion-send-btn[data-action-kind="submit"] {
+  border-color: #4f78ad !important;
+  background: #1b3154 !important;
+  color: #dbe9fb !important;
+}
+
+html.dark #discussion-section .discussion-composer-actions .discussion-send-btn[data-action-kind="submit"]:hover,
+html.dark #global-messages-section .discussion-composer-actions .discussion-send-btn[data-action-kind="submit"]:hover {
+  border-color: #6a93c7 !important;
+  background: #233b61 !important;
+  color: #eff6ff !important;
 }
 
 html.dark #global-messages-section .discussion-files-panel {

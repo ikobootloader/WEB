@@ -317,8 +317,8 @@
               <div class="projects-filter-controls-row">
                 <label class="projects-filter-field" for="projects-filter-theme-known">
                   <span class="material-symbols-outlined projects-filter-field-icon" aria-hidden="true">palette</span>
-                  <select id="projects-filter-theme-known" class="px-3 py-2 border border-slate-300 rounded-lg text-sm" title="Choisir parmi les thématiques existantes">
-                    <option value="">Thématiques existantes...</option>
+                  <select id="projects-filter-theme-known" class="px-3 py-2 border border-slate-300 rounded-lg text-sm" title="Choisir parmi le référentiel transverse et les thématiques utilisées en projet">
+                    <option value="">Thématique (transverse)...</option>
                   </select>
                 </label>
                 <label class="projects-filter-field" for="projects-filter-priority">
@@ -476,17 +476,23 @@
             <div id="global-task-filter-row" class="mb-4">
               <div class="global-task-filter-fields">
                 <input id="global-task-search" type="text" placeholder="Recherche tâches (titre, projet, thème)" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                <select id="global-task-status" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                  <option value="all">Tous statuts</option>
-                  <option value="todo">À faire</option>
-                  <option value="en-cours">En cours</option>
-                  <option value="suspendu">Suspendu</option>
-                  <option value="termine">Terminé</option>
-                </select>
+                <label class="global-task-select-wrap" for="global-task-status">
+                  <span class="material-symbols-outlined global-task-select-icon" aria-hidden="true">pending_actions</span>
+                  <select id="global-task-status" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    <option value="all">Tous statuts</option>
+                    <option value="todo">À faire</option>
+                    <option value="en-cours">En cours</option>
+                    <option value="suspendu">Suspendu</option>
+                    <option value="termine">Terminé</option>
+                  </select>
+                </label>
                 <input id="global-task-theme" type="text" placeholder="Filtre thématique" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                <select id="global-task-theme-known" class="px-3 py-2 border border-slate-300 rounded-lg text-sm" title="Choisir parmi les thématiques existantes">
-                  <option value="">Thématiques existantes...</option>
-                </select>
+                <label class="global-task-select-wrap" for="global-task-theme-known">
+                  <span class="material-symbols-outlined global-task-select-icon" aria-hidden="true">category</span>
+                  <select id="global-task-theme-known" class="px-3 py-2 border border-slate-300 rounded-lg text-sm" title="Choisir dans le référentiel transverse des thématiques">
+                    <option value="">Référentiel thématiques...</option>
+                  </select>
+                </label>
               </div>
               <div class="global-task-filter-actions">
                 <div class="global-task-urgency-wrap relative">
@@ -605,24 +611,36 @@
               </div>
               <div id="workflow-filters-panel" class="workflow-filters hidden">
                 <input id="workflow-search" type="text" placeholder="Recherche workflow..." class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                <select id="workflow-service-filter" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                  <option value="all">Tous services</option>
-                </select>
-                <select id="workflow-group-filter" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                  <option value="all">Tous groupes</option>
-                </select>
-                <select id="workflow-agent-filter" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                  <option value="all">Tous agents</option>
-                </select>
-                <select id="workflow-status-filter" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                  <option value="all">Tous statuts</option>
-                  <option value="todo">A faire</option>
-                  <option value="in_progress">En cours</option>
-                  <option value="blocked">Bloquees</option>
-                  <option value="ready_for_review">A valider</option>
-                  <option value="done">Terminees</option>
-                  <option value="approved">Approuvees</option>
-                </select>
+                <label class="workflow-filter-select-wrap" for="workflow-service-filter">
+                  <span class="material-symbols-outlined workflow-filter-select-icon" aria-hidden="true">apartment</span>
+                  <select id="workflow-service-filter" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    <option value="all">Tous services</option>
+                  </select>
+                </label>
+                <label class="workflow-filter-select-wrap" for="workflow-group-filter">
+                  <span class="material-symbols-outlined workflow-filter-select-icon" aria-hidden="true">groups</span>
+                  <select id="workflow-group-filter" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    <option value="all">Tous groupes</option>
+                  </select>
+                </label>
+                <label class="workflow-filter-select-wrap" for="workflow-agent-filter">
+                  <span class="material-symbols-outlined workflow-filter-select-icon" aria-hidden="true">manage_accounts</span>
+                  <select id="workflow-agent-filter" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    <option value="all">Tous agents</option>
+                  </select>
+                </label>
+                <label class="workflow-filter-select-wrap" for="workflow-status-filter">
+                  <span class="material-symbols-outlined workflow-filter-select-icon" aria-hidden="true">pending_actions</span>
+                  <select id="workflow-status-filter" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    <option value="all">Tous statuts</option>
+                    <option value="todo">A faire</option>
+                    <option value="in_progress">En cours</option>
+                    <option value="blocked">Bloquees</option>
+                    <option value="ready_for_review">A valider</option>
+                    <option value="done">Terminees</option>
+                    <option value="approved">Approuvees</option>
+                  </select>
+                </label>
               </div>
             </div>
             <div id="workflow-breadcrumbs" class="workflow-breadcrumbs mb-3"></div>
@@ -698,7 +716,7 @@
               </div>
               <div id="global-calendar-controls-panel" class="calendar-controls-panel">
                 <div class="calendar-toolbar-main grid grid-cols-1 md:grid-cols-2 gap-2">
-                  <input id="global-calendar-search" type="text" placeholder="Recherche par thématique/sujet/projet" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  <input id="global-calendar-search" type="text" placeholder="Recherche par thématique/titre/projet" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
                   <select id="global-calendar-month" class="px-3 py-2 border border-slate-300 rounded-lg text-sm"></select>
                 </div>
                 <div class="calendar-toolbar-bottom mt-3">
@@ -721,7 +739,10 @@
                     <select id="global-calendar-theme-pin-select" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
                       <option value="">Choisir une thématique à épingler...</option>
                     </select>
-                    <button id="btn-global-calendar-pin-theme" type="button" class="px-3 py-2 rounded-lg bg-white border border-slate-300 text-slate-700 text-sm font-semibold">Épingler</button>
+                    <button id="btn-global-calendar-pin-theme" type="button" class="px-3 py-2 rounded-lg bg-white border border-slate-300 text-slate-700 text-sm font-semibold inline-flex items-center gap-2" data-action-kind="manage" data-action-label="Épingler la thématique" aria-label="Épingler la thématique">
+                      <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">push_pin</span>
+                      <span class="taskmda-action-label">Épingler</span>
+                    </button>
                     <div class="calendar-theme-actions-menu-wrap">
                       <button id="btn-global-calendar-theme-actions-toggle" type="button" class="calendar-theme-actions-toggle-btn" title="Actions des thématiques" aria-label="Actions des thématiques">
                         <span class="material-symbols-outlined" aria-hidden="true">more_vert</span>
@@ -786,8 +807,8 @@
                         <button id="btn-global-toggle-message-files" type="button" class="task-action-btn task-action-btn-subtle" data-action-kind="default" aria-label="Ajouter des fichiers" title="Fichiers">
                           <span class="material-symbols-outlined">add</span>
                         </button>
-                        <button id="btn-global-send-message" class="btn-primary discussion-send-btn text-white font-semibold rounded-lg" aria-label="Envoyer le message hors projet" title="Envoyer">
-                          <span class="material-symbols-outlined">send</span>
+                        <button id="btn-global-send-message" class="btn-primary discussion-send-btn text-white font-semibold rounded-lg" data-action-kind="submit" data-action-label="Envoyer" data-ui-tooltip="Envoyer" aria-label="Envoyer le message hors projet" title="Envoyer">
+                          <span class="material-symbols-outlined taskmda-action-icon">send</span>
                         </button>
                       </div>
                     </div>
@@ -1148,8 +1169,12 @@
                   <div class="grid grid-cols-1 xl:grid-cols-[1fr_1fr_auto_auto] gap-2 mb-2">
                     <input id="via-annuaire-ror-endpoint-input" type="text" class="px-3 py-2 border border-slate-300 rounded-lg text-sm" placeholder="Endpoint Annuaire Santé FHIR (ex: https://gateway.api.esante.gouv.fr/fhir/v2)">
                     <input id="via-annuaire-ror-apikey-input" type="password" class="px-3 py-2 border border-slate-300 rounded-lg text-sm" placeholder="Clé API ESANTE-API-KEY">
-                    <button id="btn-via-annuaire-ror-save" class="px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold">Enregistrer</button>
-                    <button id="btn-via-annuaire-ror-test" class="px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold">Tester</button>
+                    <button id="btn-via-annuaire-ror-save" class="task-action-btn px-3 py-2 text-sm font-semibold inline-flex items-center justify-center" data-action-kind="save" data-action-label="Enregistrer" aria-label="Enregistrer">
+                      <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">save</span>
+                    </button>
+                    <button id="btn-via-annuaire-ror-test" class="task-action-btn px-3 py-2 text-sm font-semibold inline-flex items-center justify-center" data-action-kind="sync" data-action-label="Tester" aria-label="Tester">
+                      <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">science</span>
+                    </button>
                   </div>
                   <p id="via-annuaire-ror-hint" class="text-[11px] text-slate-500 mb-1">Renseignez l'endpoint Annuaire Santé FHIR et la clé API pour activer l'enrichissement email des établissements.</p>
                   <p id="via-annuaire-last-sync" class="text-[11px] text-slate-500">Dernière mise à jour des départements: jamais</p>
@@ -1166,7 +1191,9 @@
                       <option value="">Département...</option>
                     </select>
                     <input id="via-annuaire-live-keyword" type="text" class="px-3 py-2 border border-slate-300 rounded-lg text-sm" placeholder="Nom établissement (optionnel)">
-                    <button id="btn-via-annuaire-live-search" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Rechercher</button>
+                    <button id="btn-via-annuaire-live-search" class="task-action-btn px-3 py-2 text-sm font-semibold inline-flex items-center justify-center" data-action-kind="open" data-action-label="Rechercher" aria-label="Rechercher">
+                      <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">search</span>
+                    </button>
                   </div>
                   <div class="flex items-center justify-between gap-2 text-[11px] text-slate-500 mb-2">
                     <p id="via-annuaire-live-meta">Aucune recherche effectuée.</p>
@@ -1177,8 +1204,12 @@
                         <option value="city">Tri: ville</option>
                       </select>
                       <div class="flex items-center gap-1">
-                      <button id="btn-via-annuaire-live-prev" class="px-2 py-1 rounded border border-slate-300 text-slate-700 disabled:opacity-40" disabled>Préc.</button>
-                      <button id="btn-via-annuaire-live-next" class="px-2 py-1 rounded border border-slate-300 text-slate-700 disabled:opacity-40" disabled>Suiv.</button>
+                      <button id="btn-via-annuaire-live-prev" class="task-action-btn task-action-btn-subtle px-2 py-1 inline-flex items-center justify-center disabled:opacity-40" data-action-kind="default" data-action-label="Page précédente" aria-label="Page précédente" disabled>
+                        <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">chevron_left</span>
+                      </button>
+                      <button id="btn-via-annuaire-live-next" class="task-action-btn task-action-btn-subtle px-2 py-1 inline-flex items-center justify-center disabled:opacity-40" data-action-kind="default" data-action-label="Page suivante" aria-label="Page suivante" disabled>
+                        <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">chevron_right</span>
+                      </button>
                       </div>
                     </div>
                   </div>
@@ -1189,6 +1220,7 @@
               </div>
               <div class="global-settings-card-themes rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <h4 class="font-bold text-slate-800 mb-3">Thématiques globales</h4>
+                <p class="text-xs text-slate-500 mb-3">Référentiel transverse réutilisable partout (projets, tâches, workflow, calendrier, documents). Chaque projet active ensuite celles dont il a besoin.</p>
                 <div class="flex gap-2 mb-3">
                   <input id="global-theme-name-input" type="text" placeholder="Ex: Juridique" class="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm">
                   <button id="btn-global-theme-add" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold taskmda-create-cta" data-action-kind="create" data-action-label="Ajouter thématique" aria-label="Ajouter thématique">
@@ -1450,8 +1482,8 @@
             </div>
             <div class="project-settings-card-themes mt-4">
               <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <h3 class="font-bold text-slate-800 mb-3">Sujets / Thématiques</h3>
-                <p class="text-xs text-slate-500 mb-3">Gérez ici les thématiques du projet pour organiser les tâches, filtres et recherches.</p>
+                <h3 class="font-bold text-slate-800 mb-3">Thématiques</h3>
+                <p class="text-xs text-slate-500 mb-3">Portée projet: activez ici les thématiques utiles au projet (issues du référentiel transverse ou spécifiques au contexte local).</p>
                 <div class="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 mb-3">
                   <input id="theme-name-input" type="text" placeholder="Ex: Juridique, RH, Budget" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
                   <button id="btn-add-theme" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Ajouter</button>
@@ -1542,8 +1574,8 @@
                   <option value="termine">Terminé</option>
                 </select>
                 <input id="project-task-theme-filter" type="text" placeholder="Filtre thématique" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                <select id="project-task-theme-known" class="px-3 py-2 border border-slate-300 rounded-lg text-sm" title="Choisir parmi les thématiques connues du projet">
-                  <option value="">Thématiques existantes...</option>
+                <select id="project-task-theme-known" class="px-3 py-2 border border-slate-300 rounded-lg text-sm" title="Choisir parmi les thématiques du projet et du référentiel transverse">
+                  <option value="">Thématiques projet + référentiel...</option>
                 </select>
               </div>
               <div id="tasks-container" class="space-y-4"><p class="text-slate-500 text-center py-8">Aucune tâche pour le moment</p></div>
@@ -1683,8 +1715,8 @@
                         <button id="btn-toggle-message-files" type="button" class="task-action-btn task-action-btn-subtle" data-action-kind="default" aria-label="Ajouter des fichiers" title="Fichiers">
                           <span class="material-symbols-outlined">add</span>
                         </button>
-                        <button id="btn-send-message" class="btn-primary discussion-send-btn text-white font-semibold rounded-lg" aria-label="Envoyer le message" title="Envoyer">
-                          <span class="material-symbols-outlined">send</span>
+                        <button id="btn-send-message" class="btn-primary discussion-send-btn text-white font-semibold rounded-lg" data-action-kind="submit" data-action-label="Envoyer" data-ui-tooltip="Envoyer" aria-label="Envoyer le message" title="Envoyer">
+                          <span class="material-symbols-outlined taskmda-action-icon">send</span>
                         </button>
                       </div>
                     </div>
@@ -1851,9 +1883,15 @@
         </div>
         <div id="passphrase-section" class="hidden"><label class="block text-sm font-semibold mb-2">Phrase secrète (optionnelle)</label><input id="project-passphrase" type="text" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"></div>
       </div>
-      <div class="flex gap-4 mt-6">
-        <button id="btn-cancel-project" class="flex-1 px-4 py-3 border border-slate-300 rounded-lg font-semibold">Annuler</button>
-        <button id="btn-save-project" class="flex-1 btn-primary px-4 py-3 text-white font-semibold rounded-lg">Créer</button>
+      <div class="flex items-center justify-end gap-3 mt-6">
+        <button id="btn-cancel-project" type="button" class="task-action-btn task-action-btn-subtle px-4 py-3 font-semibold inline-flex items-center justify-center gap-2" data-action-kind="close" data-action-label="Annuler" aria-label="Annuler">
+          <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">undo</span>
+          <span class="taskmda-action-label">Annuler</span>
+        </button>
+        <button id="btn-save-project" type="button" class="btn-primary taskmda-create-cta px-4 py-3 text-white font-semibold rounded-lg inline-flex items-center justify-center gap-2" data-action-kind="create" data-action-label="Créer" aria-label="Créer">
+          <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">add_circle</span>
+          <span class="taskmda-action-label">Créer</span>
+        </button>
       </div>
     </div>
   </div>
@@ -1918,12 +1956,16 @@
         <div id="task-project-metadata-wrap">
           <label class="modal-field-label block text-sm font-semibold mb-2"><span class="material-symbols-outlined modal-field-icon" aria-hidden="true">sell</span><span>Thématique</span></label>
           <div class="flex gap-2">
-            <input id="task-theme" type="text" class="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Sujet principal de la tâche">
+            <input id="task-theme" type="text" class="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Thématique principale de la tâche">
             <button id="btn-open-task-theme-manager" type="button" class="task-action-btn task-action-btn-subtle" data-action-kind="manage" title="Gérer les thématiques">
               <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">tune</span>
               <span class="taskmda-action-label">Thématiques</span>
             </button>
           </div>
+          <select id="task-theme-known" class="w-full mt-2 px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" title="Choisir parmi les thématiques existantes">
+            <option value="">Thématiques existantes...</option>
+          </select>
+          <p class="text-[11px] text-slate-500 mt-1">Les thématiques proviennent du référentiel transverse et peuvent être contextualisées dans chaque projet.</p>
         </div>
         <div id="task-standalone-mode-wrap" class="hidden">
           <label class="modal-field-label block text-sm font-semibold mb-2"><span class="material-symbols-outlined modal-field-icon" aria-hidden="true">handshake</span><span>Visibilité hors projet</span></label>
@@ -2019,9 +2061,15 @@
           <label class="mt-2 inline-flex items-center gap-2 text-sm text-slate-700"><input id="task-share-docs" type="checkbox" checked> <span>Publier aussi dans Documents</span></label>
         </div>
       </div>
-      <div class="flex gap-4 mt-6">
-        <button id="btn-cancel-task" class="flex-1 px-4 py-3 border border-slate-300 rounded-lg font-semibold">Annuler</button>
-        <button id="btn-save-task" class="flex-1 btn-primary px-4 py-3 text-white font-semibold rounded-lg">Créer</button>
+      <div class="flex items-center justify-end gap-3 mt-6">
+        <button id="btn-cancel-task" type="button" class="task-action-btn task-action-btn-subtle px-4 py-3 font-semibold inline-flex items-center justify-center gap-2" data-action-kind="close" data-action-label="Annuler" aria-label="Annuler">
+          <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">undo</span>
+          <span class="taskmda-action-label">Annuler</span>
+        </button>
+        <button id="btn-save-task" type="button" class="btn-primary taskmda-create-cta px-4 py-3 text-white font-semibold rounded-lg inline-flex items-center justify-center gap-2" data-action-kind="create" data-action-label="Créer" aria-label="Créer">
+          <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">add_circle</span>
+          <span class="taskmda-action-label">Créer</span>
+        </button>
       </div>
     </div>
   </div>
@@ -2299,8 +2347,14 @@
       </div>
       <p id="task-convert-error" class="hidden text-sm text-rose-600 font-semibold mb-3">Merci de saisir un nom de projet.</p>
       <div class="flex items-center justify-end gap-2">
-        <button id="btn-task-convert-cancel" class="px-3 py-1.5 rounded-lg border border-slate-300 text-sm font-semibold">Annuler</button>
-        <button id="btn-task-convert-confirm" class="btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold">Convertir en projet</button>
+        <button id="btn-task-convert-cancel" type="button" class="task-action-btn task-action-btn-subtle px-3 py-1.5 text-sm font-semibold inline-flex items-center justify-center gap-2" data-action-kind="close" data-action-label="Annuler" aria-label="Annuler">
+          <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">undo</span>
+          <span class="taskmda-action-label">Annuler</span>
+        </button>
+        <button id="btn-task-convert-confirm" type="button" class="task-action-btn px-4 py-2 text-sm font-semibold inline-flex items-center justify-center gap-2" data-action-kind="convert" data-action-label="Convertir en projet" aria-label="Convertir en projet">
+          <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">swap_horiz</span>
+          <span class="taskmda-action-label">Convertir en projet</span>
+        </button>
       </div>
     </div>
   </div>
@@ -2373,8 +2427,8 @@
       </div>
       <div class="global-calendar-item-modal-fields">
         <div>
-          <label for="global-calendar-item-title" class="global-calendar-item-modal-label">Sujet hors projet</label>
-          <input id="global-calendar-item-title" type="text" placeholder="Entrez le sujet..." class="global-calendar-item-modal-input">
+          <label for="global-calendar-item-title" class="global-calendar-item-modal-label">Titre hors projet</label>
+          <input id="global-calendar-item-title" type="text" placeholder="Entrez le titre..." class="global-calendar-item-modal-input">
         </div>
         <div class="global-calendar-item-modal-date-grid">
           <div class="global-calendar-item-modal-field">
@@ -2471,9 +2525,15 @@
           <p class="text-[11px] text-slate-500 mt-2">Conservez votre clé de récupération hors ligne. Sans mot de passe ni clé, les données chiffrées ne pourront pas être restaurées.</p>
         </div>
       </div>
-      <div class="flex gap-4 mt-6">
-        <button id="btn-cancel-user-name" class="flex-1 px-4 py-3 border border-slate-300 rounded-lg font-semibold">Annuler</button>
-        <button id="btn-save-user-name" class="flex-1 btn-primary px-4 py-3 text-white font-semibold rounded-lg">Enregistrer</button>
+      <div class="flex items-center justify-end gap-3 mt-6">
+        <button id="btn-cancel-user-name" type="button" class="task-action-btn task-action-btn-subtle px-4 py-3 font-semibold inline-flex items-center justify-center gap-2" data-action-kind="close" data-action-label="Annuler" aria-label="Annuler">
+          <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">undo</span>
+          <span class="taskmda-action-label">Annuler</span>
+        </button>
+        <button id="btn-save-user-name" type="button" class="task-action-btn px-4 py-3 font-semibold inline-flex items-center justify-center gap-2" data-action-kind="save" data-action-label="Enregistrer" aria-label="Enregistrer">
+          <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">save</span>
+          <span class="taskmda-action-label">Enregistrer</span>
+        </button>
       </div>
     </div>
   </div>
@@ -2542,9 +2602,15 @@
           <p class="text-[11px] text-slate-500 mt-2">Vous pouvez passer un projet existant de privé à collaboratif sans le recréer.</p>
         </div>
       </div>
-      <div class="flex gap-4 mt-6">
-        <button id="btn-cancel-edit-project" class="flex-1 px-4 py-3 border border-slate-300 rounded-lg font-semibold">Annuler</button>
-        <button id="btn-save-edit-project" class="flex-1 btn-primary px-4 py-3 text-white font-semibold rounded-lg">Enregistrer</button>
+      <div class="flex items-center justify-end gap-3 mt-6">
+        <button id="btn-cancel-edit-project" type="button" class="task-action-btn task-action-btn-subtle px-4 py-3 font-semibold inline-flex items-center justify-center gap-2" data-action-kind="close" data-action-label="Annuler" aria-label="Annuler">
+          <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">undo</span>
+          <span class="taskmda-action-label">Annuler</span>
+        </button>
+        <button id="btn-save-edit-project" type="button" class="task-action-btn px-4 py-3 font-semibold inline-flex items-center justify-center gap-2" data-action-kind="save" data-action-label="Enregistrer" aria-label="Enregistrer">
+          <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">save</span>
+          <span class="taskmda-action-label">Enregistrer</span>
+        </button>
       </div>
     </div>
   </div>
@@ -2583,8 +2649,14 @@
       </div>
       <div id="workflow-modal-body" class="space-y-3"></div>
       <div class="mt-4 flex items-center justify-end gap-2">
-        <button id="btn-cancel-workflow-modal" class="px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold">Annuler</button>
-        <button id="btn-save-workflow-modal" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Enregistrer</button>
+        <button id="btn-cancel-workflow-modal" type="button" class="task-action-btn task-action-btn-subtle px-3 py-2 text-sm font-semibold inline-flex items-center justify-center gap-2" data-action-kind="close" data-action-label="Annuler" aria-label="Annuler">
+          <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">undo</span>
+          <span class="taskmda-action-label">Annuler</span>
+        </button>
+        <button id="btn-save-workflow-modal" type="button" class="task-action-btn px-3 py-2 text-sm font-semibold inline-flex items-center justify-center gap-2" data-action-kind="save" data-action-label="Enregistrer" aria-label="Enregistrer">
+          <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">save</span>
+          <span class="taskmda-action-label">Enregistrer</span>
+        </button>
       </div>
     </div>
   </div>

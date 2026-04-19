@@ -332,6 +332,27 @@
   padding: 0.45rem;
 }
 
+.workflow-filter-select-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.workflow-filter-select-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 18px;
+  line-height: 1;
+  color: #64748b;
+  pointer-events: none;
+}
+
+.workflow-filter-select-wrap select {
+  padding-left: 36px !important;
+}
+
 .workflow-breadcrumbs {
   border: 1px solid rgba(101, 115, 141, 0.2);
   border-radius: 0.7rem;
@@ -1939,6 +1960,10 @@ html[data-wf-action-buttons="text"] .workflow-card-action-btn .taskmda-action-ic
     width: 100%;
     min-height: 40px;
     font-size: 16px;
+  }
+
+  .workflow-filter-select-wrap {
+    width: 100%;
   }
 }
 

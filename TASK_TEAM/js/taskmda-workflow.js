@@ -9643,7 +9643,31 @@ ${clone.outerHTML}
       if (!refs.modal || !refs.modalBody || !refs.modalTitle || !refs.modalSave) return;
       workflowCreateKind = kind;
       refs.modal.classList.remove('hidden');
-      refs.modalSave.textContent = 'Enregistrer';
+      const setWorkflowModalSaveButton = (opts = {}) => {
+        if (!refs.modalSave) return;
+        const actionKind = String(opts.actionKind || 'save');
+        const label = String(opts.label || 'Enregistrer');
+        const icon = String(opts.icon || (actionKind === 'create' ? 'add_circle' : 'save'));
+        refs.modalSave.setAttribute('data-action-kind', actionKind);
+        refs.modalSave.setAttribute('data-action-label', label);
+        refs.modalSave.setAttribute('aria-label', label);
+        refs.modalSave.setAttribute('data-ui-tooltip', label);
+        const iconEl = refs.modalSave.querySelector('.taskmda-action-icon, .material-symbols-outlined');
+        if (iconEl) iconEl.textContent = icon;
+        let labelEl = refs.modalSave.querySelector('.taskmda-action-label');
+        if (!labelEl) {
+          labelEl = document.createElement('span');
+          labelEl.className = 'taskmda-action-label';
+          refs.modalSave.appendChild(labelEl);
+        }
+        labelEl.textContent = label;
+        Array.from(refs.modalSave.childNodes).forEach((node) => {
+          if (node.nodeType === Node.TEXT_NODE && String(node.textContent || '').trim()) {
+            refs.modalSave.removeChild(node);
+          }
+        });
+      };
+      setWorkflowModalSaveButton({ actionKind: 'save', label: 'Enregistrer', icon: 'save' });
 
       if (kind === 'community') {
         refs.modalTitle.textContent = 'Nouvelle communaute workflow';
@@ -9747,7 +9771,7 @@ ${clone.outerHTML}
           .slice()
           .sort((a, b) => String(a.title || '').localeCompare(String(b.title || ''), 'fr'));
         refs.modalTitle.textContent = 'Nouveau modele de processus';
-        refs.modalSave.textContent = 'Creer le modele';
+        setWorkflowModalSaveButton({ actionKind: 'create', label: 'Creer le modele', icon: 'add_circle' });
         refs.modalBody.innerHTML = `
           <input id="wf-create-template-mode" type="hidden" value="blank">
           <div style="display:grid;gap:0.45rem;">
