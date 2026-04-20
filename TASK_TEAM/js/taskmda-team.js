@@ -15482,11 +15482,12 @@
       const plain = (descEl.textContent || '').trim();
       const hasMedia = descEl.querySelector('img, iframe, video, embed, object') !== null;
       const isDescriptionEmpty = !plain && !hasMedia;
+      const showInlineEmptyZone = isDescriptionEmpty && !!currentProjectInlineCanEdit;
       descEl.classList.toggle('project-description-empty', isDescriptionEmpty);
       descEl.classList.remove('is-collapsed');
 
       if (isDescriptionEmpty) {
-        descEl.classList.add('hidden');
+        descEl.classList.toggle('hidden', !showInlineEmptyZone);
         toggleBtn.classList.add('hidden');
         return;
       }
@@ -15757,6 +15758,7 @@
 
     function initProjectInlineEditing(canEdit = false) {
       currentProjectInlineCanEdit = !!canEdit;
+      renderProjectDescription(currentProjectState?.project?.description || '');
       const titleEl = document.getElementById('project-title');
       const descEl = document.getElementById('project-description-display');
       decorateProjectInlineEditableElement(titleEl, 'title');
