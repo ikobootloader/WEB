@@ -2,6 +2,24 @@
 
 ## Version actuelle - Avril 2026
 
+### Mise a jour incrementale - Avril 2026 (Hierarchie Epic/Feature finalisee)
+
+- Projets / Structure:
+  - KPIs hierarchiques ajoutes dans l onglet `Structure` (taches actives, avec/sans feature, terminees, completion).
+  - actions rapides ajoutees:
+    - deplacement `Feature -> Epic`
+    - reassignment `Tache -> Feature`
+  - drag & drop natif dans `Structure`:
+    - `Feature -> Epic` par glisser-deposer
+    - `Tache -> Feature` via liste de taches draggable et zones de depot par feature
+    - zone `Sans feature` pour detacher rapidement une tache
+- Taches projet/transverses:
+  - affichage du badge `Epic` en plus du badge `Feature` sur les cartes et details.
+  - filtres projet enrichis `Epic` + `Feature` (avec dependance dynamique Epic -> Features).
+- Exports CSV:
+  - export projets enrichi (`epics`, `features`, `taches_avec_feature`, `taches_sans_feature`).
+  - export taches enrichi (`epic_id`, `epic`, `feature_id`, `feature`).
+
 ### Mise a jour incrementale - Avril 2026 (Annuaire ESMS + Audit divergences + UX)
 
 - Referentiels / Annuaire ESMS:

@@ -221,7 +221,19 @@
         <a href="#" id="nav-projects" class="nav-link"><span class="material-symbols-outlined">folder_shared</span><span class="nav-link-label">Projets</span></a>
         <a href="#" id="nav-tasks" class="nav-link"><span class="material-symbols-outlined">assignment</span><span class="nav-link-label">Tâches</span></a>
         <a href="#" id="nav-calendar" class="nav-link"><span class="material-symbols-outlined">calendar_today</span><span class="nav-link-label">Calendrier</span></a>
-        <a href="#" id="nav-workflow" class="nav-link"><span class="material-symbols-outlined">schema</span><span class="nav-link-label">Workflow</span></a>
+        <div class="sidebar-workflow-row">
+          <a href="#" id="nav-workflow" class="nav-link"><span class="material-symbols-outlined">schema</span><span class="nav-link-label">Workflow</span></a>
+          <button id="nav-workflow-subnav-toggle" class="sidebar-workflow-toggle" type="button" aria-label="Masquer les sous-rubriques Workflow" aria-expanded="true" title="Masquer les sous-rubriques Workflow">
+            <span id="nav-workflow-subnav-toggle-icon" class="material-symbols-outlined">keyboard_arrow_down</span>
+          </button>
+        </div>
+        <div id="workflow-sidebar-subnav" class="sidebar-subnav" aria-label="Sous-rubriques workflow">
+          <a href="#" id="nav-workflow-group-structure" class="sidebar-subnav-link"><span class="material-symbols-outlined">apartment</span><span class="nav-link-label">Structure</span></a>
+          <a href="#" id="nav-workflow-group-processes" class="sidebar-subnav-link"><span class="material-symbols-outlined">hub</span><span class="nav-link-label">Processus</span></a>
+          <a href="#" id="nav-workflow-group-pilotage" class="sidebar-subnav-link"><span class="material-symbols-outlined">assignment</span><span class="nav-link-label">Pilotage</span></a>
+          <a href="#" id="nav-workflow-group-referentiels" class="sidebar-subnav-link"><span class="material-symbols-outlined">library_books</span><span class="nav-link-label">Référentiels</span></a>
+          <a href="#" id="nav-workflow-group-supervision" class="sidebar-subnav-link"><span class="material-symbols-outlined">monitoring</span><span class="nav-link-label">Supervision</span></a>
+        </div>
         <a href="#" id="nav-docs" class="nav-link"><span class="material-symbols-outlined">description</span><span class="nav-link-label">Documents</span></a>
         <a href="#" id="nav-messages" class="nav-link"><span class="material-symbols-outlined">chat</span><span class="nav-link-label">Messagerie</span></a>
         <a href="#" id="nav-feed" class="nav-link"><span class="material-symbols-outlined">campaign</span><span class="nav-link-label">Fil d'info</span></a>
@@ -235,6 +247,7 @@
       <div class="workspace max-w-7xl mx-auto">
         <div id="dashboard-head" class="dashboard-head flex justify-between items-center mb-3">
           <h2 id="dashboard-title" class="section-title text-3xl font-extrabold text-primary">Tableau de bord</h2>
+          <p id="dashboard-context-caption" class="dashboard-context-caption text-sm text-slate-500 hidden"></p>
         </div>
 
         <div class="dashboard-bento mb-4">
@@ -285,9 +298,6 @@
 
         <div id="projects-list" class="mt-1 hidden">
           <div id="projects-toolbar-panel" class="mb-3">
-            <div id="projects-list-head" class="flex items-center justify-between gap-3 mb-4">
-              <p class="text-xs text-slate-400 projects-toolbar-caption">Tous les projets accessibles (privés assignés + publics).</p>
-            </div>
             <div id="projects-filter-row" class="projects-filter-layout mb-2">
               <div class="projects-filter-top-row">
                 <div class="projects-filter-search-row">
@@ -1264,6 +1274,14 @@
                   <div id="view-options-summary" class="text-[11px] text-slate-500 mb-3"></div>
                   <div id="view-options-matrix" class="space-y-3"></div>
                   <div class="mt-4 pt-4 border-t border-slate-200">
+                    <label class="block text-sm font-semibold text-slate-800 mb-1">Barre des groupes Workflow</label>
+                    <p class="text-xs text-slate-500 mb-2">Afficher ou masquer la barre d'onglets de groupes (Structure, Processus, Pilotage, Référentiels, Supervision) dans l'écran Workflow.</p>
+                    <label class="inline-flex items-center gap-2 text-sm text-slate-700">
+                      <input id="view-option-workflow-group-tabs-visible" type="checkbox" class="view-option-workflow-group-tabs-visible w-4 h-4">
+                      <span>Afficher la barre des groupes Workflow</span>
+                    </label>
+                  </div>
+                  <div class="mt-4 pt-4 border-t border-slate-200">
                     <label for="view-option-workflow-actions-mode" class="block text-sm font-semibold text-slate-800 mb-1">Boutons d'action (Workflow, Projets, Tâches)</label>
                     <p class="text-xs text-slate-500 mb-2">Choisissez le rendu des actions sur les cartes et listes (texte, icône + texte, ou icône seule).</p>
                     <select id="view-option-workflow-actions-mode" class="view-option-workflow-actions-mode px-3 py-2 border border-slate-300 rounded-lg text-sm">
@@ -1396,6 +1414,10 @@
                   <span class="material-symbols-outlined text-[18px]">shield_person</span>
                   <span>Permissions</span>
                 </button>
+                <button id="project-settings-tab-structure" role="tab" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">
+                  <span class="material-symbols-outlined text-[18px]">account_tree</span>
+                  <span>Structure</span>
+                </button>
               </div>
               <div class="project-settings-nav-controls">
                 <div class="project-subnav-layout-group flex bg-slate-100/80 p-1 rounded-lg" role="group" aria-label="Disposition des sous-onglets">
@@ -1516,6 +1538,9 @@
                 <p class="text-[11px] text-slate-500 mt-3">Note: certaines actions manager sont limitées aux membres (pas d’escalade Propriétaire/Manager).</p>
               </div>
             </div>
+            <div class="project-settings-card-structure mt-4">
+              <div id="project-hierarchy-panel" class="space-y-3"></div>
+            </div>
           </div>
           
           <div id="project-work-panel" class="panel p-3 mb-3">
@@ -1564,7 +1589,7 @@
                   <button id="project-task-view-4" type="button" class="project-task-layout-btn" title="Vue 4 colonnes ultra compacte" aria-label="Vue 4 colonnes"><span class="material-symbols-outlined">grid_view</span></button>
                 </div>
               </div>
-              <div id="project-task-filter-row" class="mb-4 grid grid-cols-1 md:grid-cols-4 gap-2">
+              <div id="project-task-filter-row" class="mb-4 grid grid-cols-1 md:grid-cols-6 gap-2">
                 <input id="project-task-search" type="text" placeholder="Recherche tâches (titre, assigné, groupe, thème)" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
                 <select id="project-task-status" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
                   <option value="all">Tous statuts</option>
@@ -1572,6 +1597,12 @@
                   <option value="en-cours">En cours</option>
                   <option value="suspendu">Suspendu</option>
                   <option value="termine">Terminé</option>
+                </select>
+                <select id="project-task-filter-epic" class="px-3 py-2 border border-slate-300 rounded-lg text-sm" title="Filtrer par epic">
+                  <option value="all">Tous epics</option>
+                </select>
+                <select id="project-task-filter-feature" class="px-3 py-2 border border-slate-300 rounded-lg text-sm" title="Filtrer par feature">
+                  <option value="all">Toutes features</option>
                 </select>
                 <input id="project-task-theme-filter" type="text" placeholder="Filtre thématique" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
                 <select id="project-task-theme-known" class="px-3 py-2 border border-slate-300 rounded-lg text-sm" title="Choisir parmi les thématiques du projet et du référentiel transverse">
@@ -1911,6 +1942,12 @@
               <option value="">Aucun groupe</option>
             </select>
             <div id="task-group-pending-members" class="task-group-pending-members hidden"></div>
+          </div>
+          <div id="task-feature-assignment-wrap" class="mt-3">
+            <label class="modal-field-label block text-sm font-semibold mb-2"><span class="material-symbols-outlined modal-field-icon" aria-hidden="true">account_tree</span><span>Feature</span></label>
+            <select id="task-feature" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+              <option value="">Aucune feature</option>
+            </select>
           </div>
           <label class="modal-field-label block text-sm font-semibold mt-3 mb-2"><span class="material-symbols-outlined modal-field-icon" aria-hidden="true">person_add</span><span>Ajout manuel (hors membres)</span></label>
           <textarea id="task-assignee-manual" rows="2" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Une ligne par nom ou email (ex: Jean Dupont <jean@orga.fr>)"></textarea>
@@ -2691,6 +2728,7 @@
   <script src="js/taskmda-projects-ui.js?v=20260406-01"></script>
   <script src="js/taskmda-comms-ui.js?v=20260406-01"></script>
   <script src="js/taskmda-admin-ui.js?v=20260406-01"></script>
+  <script src="js/taskmda-hierarchy.js?v=20260420-01"></script>
   <script src="js/taskmda-team.js?v=20260402-01"></script>
 </body>
 </html>

@@ -723,6 +723,14 @@
       CREATE_DOCUMENT: 'CREATE_DOCUMENT',
       UPDATE_DOCUMENT: 'UPDATE_DOCUMENT',
       DELETE_DOCUMENT: 'DELETE_DOCUMENT',
+      CREATE_EPIC: 'CREATE_EPIC',
+      UPDATE_EPIC: 'UPDATE_EPIC',
+      DELETE_EPIC: 'DELETE_EPIC',
+      CREATE_FEATURE: 'CREATE_FEATURE',
+      UPDATE_FEATURE: 'UPDATE_FEATURE',
+      DELETE_FEATURE: 'DELETE_FEATURE',
+      MOVE_FEATURE_TO_EPIC: 'MOVE_FEATURE_TO_EPIC',
+      MOVE_TASK_TO_FEATURE: 'MOVE_TASK_TO_FEATURE',
       LOCK_RESOURCE: 'LOCK_RESOURCE',
       UNLOCK_RESOURCE: 'UNLOCK_RESOURCE',
       RGPD_ACTIVITY_CREATED: 'RGPD_ACTIVITY_CREATED',
@@ -870,6 +878,8 @@
         userGroups: [],
         themes: [],
         documents: [],
+        epics: [],
+        features: [],
         resourceLocks: {},
         project: null
       };
@@ -882,8 +892,11 @@
       if (!Array.isArray(state.userGroups)) state.userGroups = [];
       if (!Array.isArray(state.themes)) state.themes = [];
       if (!Array.isArray(state.documents)) state.documents = [];
+      if (!Array.isArray(state.epics)) state.epics = [];
+      if (!Array.isArray(state.features)) state.features = [];
       if (!state.resourceLocks || typeof state.resourceLocks !== 'object') state.resourceLocks = {};
       state.resourceLocks = pruneResourceLocksMap(state.resourceLocks);
+      window.TaskMDAHierarchy?.ensureStateShape?.(state);
       const themesToUpsert = [];
       const registerTheme = (rawTheme) => {
         const theme = String(rawTheme || '').trim();
@@ -1093,6 +1106,17 @@
 
         case EventTypes.DELETE_DOCUMENT:
           state.documents = state.documents.filter(d => d.docId !== event.payload.docId);
+          break;
+
+        case EventTypes.CREATE_EPIC:
+        case EventTypes.UPDATE_EPIC:
+        case EventTypes.DELETE_EPIC:
+        case EventTypes.CREATE_FEATURE:
+        case EventTypes.UPDATE_FEATURE:
+        case EventTypes.DELETE_FEATURE:
+        case EventTypes.MOVE_FEATURE_TO_EPIC:
+        case EventTypes.MOVE_TASK_TO_FEATURE:
+          window.TaskMDAHierarchy?.applyEventToState?.(state, event);
           break;
 
         case EventTypes.LOCK_RESOURCE: {
@@ -2235,6 +2259,7 @@
       },
       ui: {
         workflowActionButtons: 'icon',
+        workflowGroupTabsVisible: false,
         iconTooltips: true,
         tabIcons: true,
         workflowActionButtonsShape: 'rect',
@@ -2336,6 +2361,16 @@
 
     function getWorkflowActionButtonsShape() {
       return normalizeWorkflowActionButtonsShape(viewOptions?.ui?.workflowActionButtonsShape);
+    }
+
+    function isWorkflowGroupTabsVisible() {
+      return viewOptions?.ui?.workflowGroupTabsVisible === true;
+    }
+
+    function applyWorkflowGroupTabsVisibility() {
+      const groupTabs = document.querySelector('#global-workflow-section .workflow-group-tabs');
+      if (!groupTabs) return;
+      groupTabs.classList.toggle('hidden', !isWorkflowGroupTabsVisible());
     }
 
     function isWorkspaceWideEnabledForView(viewKey = '') {
@@ -3316,6 +3351,7 @@
       }
       next.ui = {
         workflowActionButtons: normalizeWorkflowActionButtonsMode(raw?.ui?.workflowActionButtons || defaults?.ui?.workflowActionButtons),
+        workflowGroupTabsVisible: raw?.ui?.workflowGroupTabsVisible === true,
         iconTooltips: raw?.ui?.iconTooltips !== false,
         tabIcons: raw?.ui?.tabIcons !== false,
         workflowActionButtonsShape: normalizeWorkflowActionButtonsShape(raw?.ui?.workflowActionButtonsShape || defaults?.ui?.workflowActionButtonsShape),
@@ -4698,6 +4734,10 @@
       const projectsRows = states.map(state => {
         const tasks = (state.tasks || []);
         const visibleTasks = tasks.filter(t => !t.archivedAt);
+        const activeFeatures = (state.features || []).filter((feature) => String(feature?.status || 'active').trim() !== 'archived');
+        const activeEpics = (state.epics || []).filter((epic) => String(epic?.status || 'active').trim() !== 'archived');
+        const featureIds = new Set(activeFeatures.map((feature) => String(feature.featureId || '').trim()).filter(Boolean));
+        const taskWithFeatureCount = visibleTasks.filter((task) => featureIds.has(String(task?.featureId || '').trim())).length;
         const done = visibleTasks.filter(t => t.status === 'termine').length;
         return {
           project_id: state.project?.projectId || '',
@@ -4706,15 +4746,25 @@
           visibilite: normalizeSharingMode(state.project?.sharingMode, 'private') === 'shared' ? 'Collaborative' : 'Privée',
           date_creation: state.project?.createdAt ? new Date(state.project.createdAt).toLocaleString('fr-FR') : '',
           membres: (state.members || []).length,
+          epics: activeEpics.length,
+          features: activeFeatures.length,
           taches: visibleTasks.length,
           taches_terminees: done,
+          taches_avec_feature: taskWithFeatureCount,
+          taches_sans_feature: Math.max(0, visibleTasks.length - taskWithFeatureCount),
           description: state.project?.description || ''
         };
       });
 
       const tasksRows = [];
       states.forEach(state => {
+        const activeFeatures = (state.features || []).filter((feature) => String(feature?.status || 'active').trim() !== 'archived');
+        const activeEpics = (state.epics || []).filter((epic) => String(epic?.status || 'active').trim() !== 'archived');
+        const featureById = new Map(activeFeatures.map((feature) => [String(feature.featureId || '').trim(), feature]));
+        const epicById = new Map(activeEpics.map((epic) => [String(epic.epicId || '').trim(), epic]));
         (state.tasks || []).forEach(task => {
+          const feature = featureById.get(String(task?.featureId || '').trim()) || null;
+          const epic = feature ? (epicById.get(String(feature?.epicId || '').trim()) || null) : null;
           tasksRows.push({
             projet: state.project?.name || '',
             task_id: task.taskId || '',
@@ -4723,6 +4773,10 @@
             statut: task.status || 'todo',
             urgence: task.urgency || '',
             date_limite: task.dueDate ? formatDate(task.dueDate) : '',
+            epic_id: epic?.epicId || '',
+            epic: epic?.name || '',
+            feature_id: feature?.featureId || '',
+            feature: feature?.name || '',
             thematique: task.theme || '',
             groupe_thematique: getTaskGroupName(task, state) || '',
             archivee: task.archivedAt ? 'Oui' : 'Non',
@@ -4733,8 +4787,8 @@
       });
 
       const tag = formatExportDateTag();
-      const projectsCsv = toCsv(projectsRows, ['project_id', 'projet', 'statut', 'visibilite', 'date_creation', 'membres', 'taches', 'taches_terminees', 'description']);
-      const tasksCsv = toCsv(tasksRows, ['projet', 'task_id', 'titre', 'responsable', 'statut', 'urgence', 'date_limite', 'thematique', 'groupe_thematique', 'archivee', 'visibilite_projet', 'description']);
+      const projectsCsv = toCsv(projectsRows, ['project_id', 'projet', 'statut', 'visibilite', 'date_creation', 'membres', 'epics', 'features', 'taches', 'taches_terminees', 'taches_avec_feature', 'taches_sans_feature', 'description']);
+      const tasksCsv = toCsv(tasksRows, ['projet', 'task_id', 'titre', 'responsable', 'statut', 'urgence', 'date_limite', 'epic_id', 'epic', 'feature_id', 'feature', 'thematique', 'groupe_thematique', 'archivee', 'visibilite_projet', 'description']);
       downloadBlobFile(projectsCsv, `taskmda_projets_${tag}.csv`, 'text/csv;charset=utf-8');
       downloadBlobFile(tasksCsv, `taskmda_taches_${tag}.csv`, 'text/csv;charset=utf-8');
       showToast('Exports Excel (CSV) générés');
@@ -5697,6 +5751,7 @@
       const taskAutoArchiveMonthsCurrent = document.getElementById('task-auto-archive-months-current');
       const taskAutoArchiveLastRun = document.getElementById('task-auto-archive-last-run');
       const workflowActionsModeSelect = document.getElementById('view-option-workflow-actions-mode');
+      const workflowGroupTabsVisibleToggle = document.getElementById('view-option-workflow-group-tabs-visible');
       const workflowActionsShapeSelect = document.getElementById('view-option-workflow-actions-shape');
       const taskAutoArchiveSettings = await getTaskAutoArchiveSettings();
       const taskAutoArchiveMonths = taskAutoArchiveSettings.months;
@@ -5705,10 +5760,15 @@
         workflowActionsModeSelect.value = getWorkflowActionButtonsMode();
         workflowActionsModeSelect.disabled = !canManageBranding;
       }
+      if (workflowGroupTabsVisibleToggle) {
+        workflowGroupTabsVisibleToggle.checked = isWorkflowGroupTabsVisible();
+        workflowGroupTabsVisibleToggle.disabled = !canManageBranding;
+      }
       if (workflowActionsShapeSelect) {
         workflowActionsShapeSelect.value = getWorkflowActionButtonsShape();
         workflowActionsShapeSelect.disabled = !canManageBranding;
       }
+      applyWorkflowGroupTabsVisibility();
       if (profanityModeSelect) {
         profanityModeSelect.value = getProfanityFilterMode();
       }
@@ -5840,7 +5900,56 @@
         if (!link) return;
         link.classList.toggle('active', key === navKey);
       });
+      if (navKey !== 'workflow') {
+        setWorkflowSidebarSubnavOpen(false);
+      }
       applyWorkspaceWidthMode();
+    }
+
+    function normalizeWorkflowSidebarGroup(rawGroup) {
+      const group = String(rawGroup || '').trim().toLowerCase();
+      if (group === 'structure' || group === 'processes' || group === 'pilotage' || group === 'referentiels' || group === 'supervision') {
+        return group;
+      }
+      return 'structure';
+    }
+
+    function setWorkflowSidebarSubnavOpen(nextOpen) {
+      const isOpen = !!nextOpen;
+      const panel = document.getElementById('workflow-sidebar-subnav');
+      const btn = document.getElementById('nav-workflow-subnav-toggle');
+      const icon = document.getElementById('nav-workflow-subnav-toggle-icon');
+      if (panel) panel.classList.toggle('hidden', !isOpen);
+      if (btn) {
+        btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        btn.setAttribute('aria-label', isOpen ? 'Masquer les sous-rubriques Workflow' : 'Afficher les sous-rubriques Workflow');
+        btn.setAttribute('title', isOpen ? 'Masquer les sous-rubriques Workflow' : 'Afficher les sous-rubriques Workflow');
+      }
+      if (icon) icon.textContent = isOpen ? 'keyboard_arrow_down' : 'keyboard_arrow_right';
+      localStorage.setItem('taskmda_workflow_sidebar_subnav_open', isOpen ? '1' : '0');
+      return isOpen;
+    }
+
+    function setActiveWorkflowSidebarGroup(rawGroup) {
+      const group = normalizeWorkflowSidebarGroup(rawGroup);
+      const links = {
+        structure: document.getElementById('nav-workflow-group-structure'),
+        processes: document.getElementById('nav-workflow-group-processes'),
+        pilotage: document.getElementById('nav-workflow-group-pilotage'),
+        referentiels: document.getElementById('nav-workflow-group-referentiels'),
+        supervision: document.getElementById('nav-workflow-group-supervision')
+      };
+      Object.entries(links).forEach(([key, link]) => {
+        if (!link) return;
+        link.classList.toggle('active', key === group);
+      });
+      localStorage.setItem('taskmda_sidebar_workflow_group', group);
+      return group;
+    }
+
+    function getActiveWorkflowGroupFromDom() {
+      const active = document.querySelector('#global-workflow-section .workflow-group-tab.is-active[data-wf-group]');
+      return normalizeWorkflowSidebarGroup(active?.getAttribute('data-wf-group') || 'structure');
     }
 
     async function rerenderCurrentContext() {
@@ -9144,6 +9253,9 @@
     };
     let selectedUserGroupId = null;
     let selectedProjectGroupId = null;
+    let editingProjectFeatureId = null;
+    let draggedHierarchyFeatureId = null;
+    let draggedHierarchyTaskId = null;
     let taskPendingGroupMemberUserIds = [];
     let editingStandaloneTaskId = null;
     let pendingTaskStatusPrefill = null;
@@ -10813,7 +10925,7 @@
     }
 
     function applyProjectSettingsTabView() {
-      const allowed = new Set(['overview', 'members', 'collab', 'themes', 'permissions']);
+      const allowed = new Set(['overview', 'members', 'collab', 'themes', 'permissions', 'structure']);
       if (!allowed.has(String(projectSettingsTab || ''))) {
         projectSettingsTab = projectSubnavLayout === 'vertical' ? 'overview' : 'members';
       }
@@ -10822,7 +10934,8 @@
         members: document.getElementById('project-settings-tab-members'),
         collab: document.getElementById('project-settings-tab-collab'),
         themes: document.getElementById('project-settings-tab-themes'),
-        permissions: document.getElementById('project-settings-tab-permissions')
+        permissions: document.getElementById('project-settings-tab-permissions'),
+        structure: document.getElementById('project-settings-tab-structure')
       };
       Object.entries(tabButtons).forEach(([key, btn]) => {
         if (!btn) return;
@@ -10835,16 +10948,18 @@
       const collabCard = document.querySelector('#project-settings-panel .project-settings-card-collab');
       const themesCard = document.querySelector('#project-settings-panel .project-settings-card-themes');
       const permissionsCard = document.querySelector('#project-settings-panel .project-settings-card-permissions');
+      const structureCard = document.querySelector('#project-settings-panel .project-settings-card-structure');
       if (membersCard) membersCard.classList.toggle('hidden', projectSettingsTab !== 'members');
       if (collabCard) collabCard.classList.toggle('hidden', projectSettingsTab !== 'collab');
       if (themesCard) themesCard.classList.toggle('hidden', projectSettingsTab !== 'themes');
       if (permissionsCard) permissionsCard.classList.toggle('hidden', projectSettingsTab !== 'permissions');
+      if (structureCard) structureCard.classList.toggle('hidden', projectSettingsTab !== 'structure');
       
       updateProjectOverviewVisibility();
     }
 
     function setProjectSettingsTab(tabKey) {
-      const allowed = new Set(['overview', 'members', 'collab', 'themes', 'permissions']);
+      const allowed = new Set(['overview', 'members', 'collab', 'themes', 'permissions', 'structure']);
       const next = allowed.has(String(tabKey || '')) ? String(tabKey) : 'members';
       projectSettingsTab = next;
       applyProjectSettingsTabView();
@@ -11984,6 +12099,46 @@
       if (!task) return '';
       if (task.groupName) return String(task.groupName);
       return getGroupNameById(state, task.groupId);
+    }
+
+    function getTaskFeature(task, state = currentProjectState) {
+      if (!task || !state) return null;
+      const featureId = String(task.featureId || '').trim();
+      if (!featureId) return null;
+      const feature = (state.features || []).find((item) => String(item?.featureId || '').trim() === featureId);
+      if (!feature) return null;
+      if (String(feature.status || '').trim().toLowerCase() === 'archived') return null;
+      return feature;
+    }
+
+    function getTaskFeatureName(task, state = currentProjectState) {
+      const feature = getTaskFeature(task, state);
+      return feature ? String(feature.name || '').trim() : '';
+    }
+
+    function getTaskEpic(task, state = currentProjectState) {
+      const feature = getTaskFeature(task, state);
+      if (!feature || !state) return null;
+      const epicId = String(feature.epicId || '').trim();
+      if (!epicId) return null;
+      const epic = (state.epics || []).find((item) => String(item?.epicId || '').trim() === epicId);
+      if (!epic) return null;
+      if (String(epic.status || '').trim().toLowerCase() === 'archived') return null;
+      return epic;
+    }
+
+    function getTaskEpicName(task, state = currentProjectState) {
+      const epic = getTaskEpic(task, state);
+      return epic ? String(epic.name || '').trim() : '';
+    }
+
+    function buildTaskHierarchyChipsHtml(task, state = currentProjectState) {
+      const epicName = getTaskEpicName(task, state);
+      const featureName = getTaskFeatureName(task, state);
+      return [
+        epicName ? `<span class="task-epic-chip">${escapeHtml(epicName)}</span>` : '',
+        featureName ? `<span class="task-feature-chip">${escapeHtml(featureName)}</span>` : ''
+      ].join('');
     }
 
     function getTaskAssigneeEntries(task, state = currentProjectState) {
@@ -13813,6 +13968,7 @@
         badgesEl.innerHTML = `
           <span id="global-task-detail-urgency-chip" class="${urgencyMeta.chipClass}">${urgencyMeta.label}</span>
           <span id="global-task-detail-status-chip" class="${statusMeta.chipClass}">${statusMeta.label}</span>
+          ${buildTaskHierarchyChipsHtml(task, state)}
           ${sharingModeBadge(task.sharingMode)}
         `;
       }
@@ -13966,6 +14122,7 @@
         badgesEl.innerHTML = `
           <span id="global-task-detail-urgency-chip" class="${urgencyMeta.chipClass}">${urgencyMeta.label}</span>
           <span id="global-task-detail-status-chip" class="${statusMeta.chipClass}">${statusMeta.label}</span>
+          ${buildTaskHierarchyChipsHtml(task, state)}
           ${sharingModeBadge(sharingMode)}
         `;
       }
@@ -14740,9 +14897,421 @@
       `).join('');
     }
 
+    function renderProjectHierarchy(state) {
+      const container = document.getElementById('project-hierarchy-panel');
+      if (!container) return;
+      const canManage = canManageProjectCollaboration(state);
+      editingProjectFeatureId = null;
+      draggedHierarchyFeatureId = null;
+      draggedHierarchyTaskId = null;
+      if (!window.TaskMDAHierarchy?.renderProjectHierarchyPanel) {
+        container.innerHTML = '<p class="text-sm text-slate-500">Module hiérarchie non disponible.</p>';
+        return;
+      }
+      container.innerHTML = window.TaskMDAHierarchy.renderProjectHierarchyPanel({
+        state,
+        canManage,
+        escapeHtml
+      });
+    }
+
+    async function createProjectEpic() {
+      if (!currentProjectId || !currentProjectState) return;
+      if (!canManageProjectCollaboration(currentProjectState)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const input = document.getElementById('project-epic-name-input');
+      const name = String(input?.value || '').trim();
+      if (!name) {
+        showToast('Nom epic requis');
+        return;
+      }
+      const event = createEvent(
+        EventTypes.CREATE_EPIC,
+        currentProjectId,
+        currentUser.userId,
+        {
+          epicId: uuidv4(),
+          name,
+          description: '',
+          status: 'active'
+        }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(currentProjectId, [event]); }
+      if (input) input.value = '';
+      currentProjectState = await getProjectState(currentProjectId);
+      renderProjectHierarchy(currentProjectState);
+      refreshProjectHierarchyTaskFilters(currentProjectState);
+      showToast('Epic cree');
+    }
+
+    async function createProjectFeature() {
+      if (!currentProjectId || !currentProjectState) return;
+      if (!canManageProjectCollaboration(currentProjectState)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const nameInput = document.getElementById('project-feature-name-input');
+      const epicSelect = document.getElementById('project-feature-epic-select');
+      const name = String(nameInput?.value || '').trim();
+      if (!name) {
+        showToast('Nom feature requis');
+        return;
+      }
+      const epicIdRaw = String(epicSelect?.value || '').trim();
+      const event = createEvent(
+        EventTypes.CREATE_FEATURE,
+        currentProjectId,
+        currentUser.userId,
+        {
+          featureId: uuidv4(),
+          epicId: epicIdRaw || null,
+          name,
+          description: '',
+          status: 'active'
+        }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(currentProjectId, [event]); }
+      if (nameInput) nameInput.value = '';
+      if (epicSelect) epicSelect.value = '';
+      currentProjectState = await getProjectState(currentProjectId);
+      renderProjectHierarchy(currentProjectState);
+      refreshTaskMetadataOptions(currentProjectState);
+      refreshProjectHierarchyTaskFilters(currentProjectState);
+      rerenderActiveProjectTaskView();
+      showToast('Feature creee');
+    }
+
+    async function editProjectEpicPrompt(epicIdEncoded) {
+      if (!currentProjectId || !currentProjectState) return;
+      if (!canManageProjectCollaboration(currentProjectState)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const epicId = decodeURIComponent(String(epicIdEncoded || ''));
+      const epic = (currentProjectState.epics || []).find((item) => String(item?.epicId || '') === epicId);
+      if (!epic) {
+        showToast('Epic introuvable');
+        return;
+      }
+      const nextName = String(global.prompt('Nouveau nom de l epic', String(epic.name || '')) || '').trim();
+      if (!nextName) return;
+      const event = createEvent(
+        EventTypes.UPDATE_EPIC,
+        currentProjectId,
+        currentUser.userId,
+        { epicId, changes: { name: nextName } }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(currentProjectId, [event]); }
+      currentProjectState = await getProjectState(currentProjectId);
+      renderProjectHierarchy(currentProjectState);
+      refreshProjectHierarchyTaskFilters(currentProjectState);
+      showToast('Epic mis a jour');
+    }
+
+    async function deleteProjectEpic(epicIdEncoded) {
+      if (!currentProjectId || !currentProjectState) return;
+      if (!canManageProjectCollaboration(currentProjectState)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const epicId = decodeURIComponent(String(epicIdEncoded || ''));
+      const epic = (currentProjectState.epics || []).find((item) => String(item?.epicId || '') === epicId);
+      if (!epic) {
+        showToast('Epic introuvable');
+        return;
+      }
+      if (!global.confirm(`Supprimer l epic "${epic.name || 'Epic'}" ? Les features seront detachées.`)) return;
+      const event = createEvent(
+        EventTypes.DELETE_EPIC,
+        currentProjectId,
+        currentUser.userId,
+        { epicId }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(currentProjectId, [event]); }
+      currentProjectState = await getProjectState(currentProjectId);
+      renderProjectHierarchy(currentProjectState);
+      refreshTaskMetadataOptions(currentProjectState);
+      refreshProjectHierarchyTaskFilters(currentProjectState);
+      rerenderActiveProjectTaskView();
+      showToast('Epic supprime');
+    }
+
+    async function editProjectFeaturePrompt(featureIdEncoded) {
+      return openProjectFeatureEditor(featureIdEncoded);
+    }
+
+    async function openProjectFeatureEditor(featureIdEncoded) {
+      if (!currentProjectId || !currentProjectState) return;
+      if (!canManageProjectCollaboration(currentProjectState)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const featureId = decodeURIComponent(String(featureIdEncoded || ''));
+      const feature = (currentProjectState.features || []).find((item) => String(item?.featureId || '') === featureId);
+      if (!feature) {
+        showToast('Feature introuvable');
+        return;
+      }
+      const editor = document.getElementById('project-feature-editor');
+      const idInput = document.getElementById('project-feature-edit-id');
+      const nameInput = document.getElementById('project-feature-edit-name');
+      const descInput = document.getElementById('project-feature-edit-description');
+      const epicInput = document.getElementById('project-feature-edit-epic');
+      if (!editor || !idInput || !nameInput || !descInput || !epicInput) {
+        showToast('Editeur feature indisponible');
+        return;
+      }
+      idInput.value = featureId;
+      nameInput.value = String(feature.name || '');
+      descInput.value = String(feature.description || '');
+      epicInput.value = String(feature.epicId || '');
+      editingProjectFeatureId = featureId;
+      editor.classList.remove('hidden');
+      nameInput.focus();
+      nameInput.select();
+    }
+
+    function cancelProjectFeatureEditor() {
+      editingProjectFeatureId = null;
+      const editor = document.getElementById('project-feature-editor');
+      const idInput = document.getElementById('project-feature-edit-id');
+      const nameInput = document.getElementById('project-feature-edit-name');
+      const descInput = document.getElementById('project-feature-edit-description');
+      const epicInput = document.getElementById('project-feature-edit-epic');
+      if (idInput) idInput.value = '';
+      if (nameInput) nameInput.value = '';
+      if (descInput) descInput.value = '';
+      if (epicInput) epicInput.value = '';
+      if (editor) editor.classList.add('hidden');
+    }
+
+    async function saveProjectFeatureEditor() {
+      if (!currentProjectId || !currentProjectState) return;
+      if (!canManageProjectCollaboration(currentProjectState)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const idInput = document.getElementById('project-feature-edit-id');
+      const nameInput = document.getElementById('project-feature-edit-name');
+      const descInput = document.getElementById('project-feature-edit-description');
+      const epicInput = document.getElementById('project-feature-edit-epic');
+      const featureId = String(idInput?.value || editingProjectFeatureId || '').trim();
+      if (!featureId) {
+        showToast('Feature introuvable');
+        return;
+      }
+      const nextName = String(nameInput?.value || '').trim();
+      if (!nextName) {
+        showToast('Nom feature requis');
+        return;
+      }
+      const nextDescription = String(descInput?.value || '').trim();
+      const nextEpicId = String(epicInput?.value || '').trim();
+      const event = createEvent(
+        EventTypes.UPDATE_FEATURE,
+        currentProjectId,
+        currentUser.userId,
+        {
+          featureId,
+          changes: {
+            name: nextName,
+            description: nextDescription,
+            epicId: nextEpicId || null
+          }
+        }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(currentProjectId, [event]); }
+      currentProjectState = await getProjectState(currentProjectId);
+      renderProjectHierarchy(currentProjectState);
+      refreshTaskMetadataOptions(currentProjectState);
+      refreshProjectHierarchyTaskFilters(currentProjectState);
+      rerenderActiveProjectTaskView();
+      showToast('Feature mise a jour');
+    }
+
+    async function deleteProjectFeature(featureIdEncoded) {
+      if (!currentProjectId || !currentProjectState) return;
+      if (!canManageProjectCollaboration(currentProjectState)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const featureId = decodeURIComponent(String(featureIdEncoded || ''));
+      const feature = (currentProjectState.features || []).find((item) => String(item?.featureId || '') === featureId);
+      if (!feature) {
+        showToast('Feature introuvable');
+        return;
+      }
+      if (!global.confirm(`Supprimer la feature "${feature.name || 'Feature'}" ? Les taches seront detachees.`)) return;
+      const event = createEvent(
+        EventTypes.DELETE_FEATURE,
+        currentProjectId,
+        currentUser.userId,
+        { featureId }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(currentProjectId, [event]); }
+      currentProjectState = await getProjectState(currentProjectId);
+      renderProjectHierarchy(currentProjectState);
+      refreshTaskMetadataOptions(currentProjectState);
+      refreshProjectHierarchyTaskFilters(currentProjectState);
+      rerenderActiveProjectTaskView();
+      showToast('Feature supprimee');
+    }
+
+    async function moveFeatureToEpicQuick() {
+      if (!currentProjectId || !currentProjectState) return;
+      if (!canManageProjectCollaboration(currentProjectState)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const featureId = String(document.getElementById('project-hierarchy-move-feature-id')?.value || '').trim();
+      const epicId = String(document.getElementById('project-hierarchy-move-epic-id')?.value || '').trim();
+      if (!featureId) {
+        showToast('Selectionnez une feature');
+        return;
+      }
+      const event = createEvent(
+        EventTypes.MOVE_FEATURE_TO_EPIC,
+        currentProjectId,
+        currentUser.userId,
+        { featureId, epicId: epicId || null }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(currentProjectId, [event]); }
+      currentProjectState = await getProjectState(currentProjectId);
+      renderProjectHierarchy(currentProjectState);
+      refreshTaskMetadataOptions(currentProjectState);
+      refreshProjectHierarchyTaskFilters(currentProjectState);
+      rerenderActiveProjectTaskView();
+      showToast('Feature deplacee');
+    }
+
+    async function moveTaskToFeatureQuick() {
+      if (!currentProjectId || !currentProjectState) return;
+      if (!canManageProjectCollaboration(currentProjectState)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const taskId = String(document.getElementById('project-hierarchy-move-task-id')?.value || '').trim();
+      const featureId = String(document.getElementById('project-hierarchy-move-task-feature-id')?.value || '').trim();
+      if (!taskId) {
+        showToast('Selectionnez une tache');
+        return;
+      }
+      const event = createEvent(
+        EventTypes.MOVE_TASK_TO_FEATURE,
+        currentProjectId,
+        currentUser.userId,
+        { taskId, featureId: featureId || null }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(currentProjectId, [event]); }
+      currentProjectState = await getProjectState(currentProjectId);
+      renderProjectHierarchy(currentProjectState);
+      refreshTaskMetadataOptions(currentProjectState);
+      refreshProjectHierarchyTaskFilters(currentProjectState);
+      rerenderActiveProjectTaskView();
+      showToast('Tache reassignee');
+    }
+
+    function allowHierarchyDrop(event) {
+      if (!event) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+    }
+
+    function startFeatureDragToEpic(event, featureIdEncoded) {
+      const featureId = decodeURIComponent(String(featureIdEncoded || ''));
+      draggedHierarchyFeatureId = String(featureId || '').trim();
+      if (event?.dataTransfer) {
+        event.dataTransfer.setData('text/plain', draggedHierarchyFeatureId);
+        event.dataTransfer.effectAllowed = 'move';
+      }
+    }
+
+    async function dropFeatureOnEpic(event, epicIdEncoded) {
+      if (event) event.preventDefault();
+      if (!currentProjectId || !currentProjectState) return;
+      if (!canManageProjectCollaboration(currentProjectState)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const droppedFeatureId = String(
+        event?.dataTransfer?.getData?.('text/plain')
+          || draggedHierarchyFeatureId
+          || ''
+      ).trim();
+      const epicId = decodeURIComponent(String(epicIdEncoded || '')).trim();
+      draggedHierarchyFeatureId = null;
+      if (!droppedFeatureId) return;
+      const eventMove = createEvent(
+        EventTypes.MOVE_FEATURE_TO_EPIC,
+        currentProjectId,
+        currentUser.userId,
+        { featureId: droppedFeatureId, epicId: epicId || null }
+      );
+      await publishEvent(eventMove);
+      if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(currentProjectId, [eventMove]); }
+      currentProjectState = await getProjectState(currentProjectId);
+      renderProjectHierarchy(currentProjectState);
+      refreshTaskMetadataOptions(currentProjectState);
+      refreshProjectHierarchyTaskFilters(currentProjectState);
+      rerenderActiveProjectTaskView();
+      showToast('Feature deplacee');
+    }
+
+    function startTaskDragToFeature(event, taskIdEncoded) {
+      const taskId = decodeURIComponent(String(taskIdEncoded || ''));
+      draggedHierarchyTaskId = String(taskId || '').trim();
+      if (event?.dataTransfer) {
+        event.dataTransfer.setData('text/plain', draggedHierarchyTaskId);
+        event.dataTransfer.effectAllowed = 'move';
+      }
+    }
+
+    async function dropTaskOnFeature(event, featureIdEncoded) {
+      if (event) event.preventDefault();
+      if (!currentProjectId || !currentProjectState) return;
+      if (!canManageProjectCollaboration(currentProjectState)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const droppedTaskId = String(
+        event?.dataTransfer?.getData?.('text/plain')
+          || draggedHierarchyTaskId
+          || ''
+      ).trim();
+      const featureId = decodeURIComponent(String(featureIdEncoded || '')).trim();
+      draggedHierarchyTaskId = null;
+      if (!droppedTaskId) return;
+      const eventMove = createEvent(
+        EventTypes.MOVE_TASK_TO_FEATURE,
+        currentProjectId,
+        currentUser.userId,
+        { taskId: droppedTaskId, featureId: featureId || null }
+      );
+      await publishEvent(eventMove);
+      if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(currentProjectId, [eventMove]); }
+      currentProjectState = await getProjectState(currentProjectId);
+      renderProjectHierarchy(currentProjectState);
+      refreshTaskMetadataOptions(currentProjectState);
+      refreshProjectHierarchyTaskFilters(currentProjectState);
+      rerenderActiveProjectTaskView();
+      showToast('Tache deplacee');
+    }
+
     function refreshTaskMetadataOptions(state, options = {}) {
       const skipGroups = !!options.skipGroups;
       const groupSelect = document.getElementById('task-group');
+      const featureSelect = document.getElementById('task-feature');
+      const featureWrap = document.getElementById('task-feature-assignment-wrap');
       const themeInput = document.getElementById('task-theme');
       if (groupSelect) {
         const groups = skipGroups ? [] : (state?.groups || []);
@@ -14785,6 +15354,28 @@
         const projectThemes = (state?.themes || []).map(t => String(t || '').trim()).filter(Boolean);
         const globalThemes = (globalThemeCatalog || []).map(t => String(t.name || '').trim()).filter(Boolean);
         fillThemePicker('task-theme-known', 'task-theme', [...projectThemes, ...globalThemes], 'Thématiques existantes...');
+      }
+
+      if (featureWrap) {
+        featureWrap.classList.toggle('hidden', skipGroups);
+      }
+      if (featureSelect) {
+        const features = skipGroups
+          ? []
+          : (state?.features || [])
+            .filter((feature) => String(feature?.status || 'active').toLowerCase() !== 'archived');
+        const epicById = new Map((state?.epics || []).map((epic) => [String(epic?.epicId || ''), String(epic?.name || '')]));
+        const optionsHtml = ['<option value="">Aucune feature</option>'];
+        features.forEach((feature) => {
+          const featureId = String(feature?.featureId || '').trim();
+          if (!featureId) return;
+          const epicName = epicById.get(String(feature?.epicId || '').trim());
+          const label = epicName
+            ? `${String(feature?.name || 'Feature').trim()} (Epic: ${epicName})`
+            : String(feature?.name || 'Feature').trim();
+          optionsHtml.push(`<option value="${escapeHtml(featureId)}">${escapeHtml(label)}</option>`);
+        });
+        featureSelect.innerHTML = optionsHtml.join('');
       }
     }
 
@@ -14910,6 +15501,68 @@
         ...((globalThemeCatalog || []).map((t) => String(t?.name || '').trim()))
       ];
       fillThemePicker('project-task-theme-known', 'project-task-theme-filter', themes, 'Thématiques projet + référentiel...');
+    }
+
+    function refreshProjectHierarchyTaskFilters(state) {
+      const epicSelect = document.getElementById('project-task-filter-epic');
+      const featureSelect = document.getElementById('project-task-filter-feature');
+      if (!epicSelect || !featureSelect) return;
+
+      const previousEpic = String(epicSelect.value || 'all').trim() || 'all';
+      const previousFeature = String(featureSelect.value || 'all').trim() || 'all';
+      const activeEpics = (state?.epics || [])
+        .filter((epic) => String(epic?.status || 'active').trim() !== 'archived');
+      const activeFeatures = (state?.features || [])
+        .filter((feature) => String(feature?.status || 'active').trim() !== 'archived');
+
+      epicSelect.innerHTML = [
+        '<option value="all">Tous epics</option>',
+        '<option value="__none__">Sans epic</option>',
+        ...activeEpics.map((epic) => `<option value="${escapeHtml(String(epic.epicId || ''))}">${escapeHtml(String(epic.name || 'Epic'))}</option>`)
+      ].join('');
+
+      const selectedEpic = new Set(Array.from(epicSelect.options).map((opt) => opt.value)).has(previousEpic)
+        ? previousEpic
+        : 'all';
+      epicSelect.value = selectedEpic;
+
+      const scopedFeatures = activeFeatures.filter((feature) => {
+        if (selectedEpic === 'all') return true;
+        const epicId = String(feature?.epicId || '').trim();
+        if (selectedEpic === '__none__') return !epicId;
+        return epicId === selectedEpic;
+      });
+
+      featureSelect.innerHTML = [
+        '<option value="all">Toutes features</option>',
+        '<option value="__none__">Sans feature</option>',
+        ...scopedFeatures.map((feature) => `<option value="${escapeHtml(String(feature.featureId || ''))}">${escapeHtml(String(feature.name || 'Feature'))}</option>`)
+      ].join('');
+
+      featureSelect.value = new Set(Array.from(featureSelect.options).map((opt) => opt.value)).has(previousFeature)
+        ? previousFeature
+        : 'all';
+    }
+
+    function rerenderActiveProjectTaskView() {
+      if (workspaceMode !== 'project' || !currentProjectState) return;
+      const tasks = (currentProjectState.tasks || []).filter((task) => !task.archivedAt);
+      if (activeProjectView === 'list') {
+        renderTasks(tasks);
+        return;
+      }
+      if (activeProjectView === 'kanban') {
+        renderKanban(tasks);
+        return;
+      }
+      if (activeProjectView === 'gantt') {
+        renderGantt(tasks);
+        return;
+      }
+      if (activeProjectView === 'timeline') {
+        renderTimeline(tasks);
+        renderCalendar(tasks);
+      }
     }
 
     function syncGlobalThemeFilterAssist(tasks = []) {
@@ -15178,6 +15831,22 @@
     window.deleteProjectRole = deleteProjectRole;
     window.editSoftwareVersionEntry = editSoftwareVersionEntry;
     window.deleteSoftwareVersionEntry = deleteSoftwareVersionEntry;
+    window.createProjectEpic = createProjectEpic;
+    window.createProjectFeature = createProjectFeature;
+    window.editProjectEpicPrompt = editProjectEpicPrompt;
+    window.deleteProjectEpic = deleteProjectEpic;
+    window.editProjectFeaturePrompt = editProjectFeaturePrompt;
+    window.openProjectFeatureEditor = openProjectFeatureEditor;
+    window.saveProjectFeatureEditor = saveProjectFeatureEditor;
+    window.cancelProjectFeatureEditor = cancelProjectFeatureEditor;
+    window.moveFeatureToEpicQuick = moveFeatureToEpicQuick;
+    window.moveTaskToFeatureQuick = moveTaskToFeatureQuick;
+    window.allowHierarchyDrop = allowHierarchyDrop;
+    window.startFeatureDragToEpic = startFeatureDragToEpic;
+    window.dropFeatureOnEpic = dropFeatureOnEpic;
+    window.startTaskDragToFeature = startTaskDragToFeature;
+    window.dropTaskOnFeature = dropTaskOnFeature;
+    window.deleteProjectFeature = deleteProjectFeature;
 
     async function createUserGroup() {
       if (!currentProjectId || !currentProjectState) return;
@@ -15333,9 +16002,11 @@
       const standaloneModeInput = document.getElementById('task-standalone-mode');
       const metadataWrap = document.getElementById('task-project-metadata-wrap');
       const groupAssignWrap = document.getElementById('task-group-assignment-wrap');
+      const featureAssignWrap = document.getElementById('task-feature-assignment-wrap');
       const groupPendingBox = document.getElementById('task-group-pending-members');
       const taskThemeInput = document.getElementById('task-theme');
       const taskGroupInput = document.getElementById('task-group');
+      const taskFeatureInput = document.getElementById('task-feature');
       if (standaloneModeWrap) {
         standaloneModeWrap.classList.toggle('hidden', !standaloneTaskMode);
       }
@@ -15344,6 +16015,9 @@
       }
       if (groupAssignWrap) {
         groupAssignWrap.classList.toggle('hidden', standaloneTaskMode);
+      }
+      if (featureAssignWrap) {
+        featureAssignWrap.classList.toggle('hidden', standaloneTaskMode);
       }
       if (groupPendingBox) {
         groupPendingBox.classList.add('hidden');
@@ -15417,6 +16091,9 @@
             taskGroupInput.value = '';
           }
         }
+        if (taskFeatureInput) {
+          taskFeatureInput.value = String(task.featureId || '').trim();
+        }
         // Charger la configuration de récurrence si elle existe
         if (window.TaskMDARecurrenceUI?.populateRecurrenceForm) {
           window.TaskMDARecurrenceUI.populateRecurrenceForm(task.recurring);
@@ -15459,6 +16136,7 @@
         if (taskThemeInput) taskThemeInput.value = (currentProjectState?.themes || [])[0] || '';
         syncThemePickerSelectionFromInput('task-theme-known', 'task-theme');
         if (taskGroupInput) taskGroupInput.value = '';
+        if (taskFeatureInput) taskFeatureInput.value = '';
         // Réinitialiser la configuration de récurrence
         if (window.TaskMDARecurrenceUI?.resetRecurrenceForm) {
           window.TaskMDARecurrenceUI.resetRecurrenceForm();
@@ -15851,6 +16529,7 @@
       document.getElementById('projects-list').classList.add('hidden');
       document.getElementById('dashboard-head')?.classList.add('hidden');
       document.getElementById('dashboard-title')?.classList.add('hidden');
+      setDashboardContextCaption('');
       document.getElementById('dashboard-stats')?.classList.add('hidden');
       document.getElementById('dashboard-quick-actions')?.classList.add('hidden');
       document.getElementById('project-detail').classList.remove('hidden');
@@ -15903,9 +16582,11 @@
       renderProjectInvitations(state);
       await renderProjectGroups(state);
       renderProjectThemes(state);
+      renderProjectHierarchy(state);
       await syncProjectTaxonomyToGlobal(state);
       refreshTaskMetadataOptions(state);
       syncProjectThemeFilterAssist(state);
+      refreshProjectHierarchyTaskFilters(state);
       refreshProjectDocumentTaskOptions(state);
       await refreshTaskAssigneeOptionsMulti(state);
       const btnEditProject = document.getElementById('btn-edit-project');
@@ -16742,6 +17423,19 @@
       openMailto({ to: recipients, subject: payload.subject, body: payload.body });
     }
 
+    function setDashboardContextCaption(text = '') {
+      const captionEl = document.getElementById('dashboard-context-caption');
+      if (!captionEl) return;
+      const nextText = String(text || '').trim();
+      if (!nextText) {
+        captionEl.textContent = '';
+        captionEl.classList.add('hidden');
+        return;
+      }
+      captionEl.textContent = nextText;
+      captionEl.classList.remove('hidden');
+    }
+
     function showDashboard() {
       resetWorkspaceScrollTop();
       closeMobileSidebar();
@@ -16753,11 +17447,13 @@
       document.getElementById('project-detail').classList.add('hidden');
       document.getElementById('global-hub')?.classList.add('hidden');
       document.getElementById('projects-list').classList.remove('hidden');
+      document.getElementById('dashboard-head')?.classList.remove('dashboard-head-projects');
       document.getElementById('dashboard-head')?.classList.remove('hidden');
       document.getElementById('dashboard-title')?.classList.add('hidden');
       if (document.getElementById('dashboard-title')) {
         document.getElementById('dashboard-title').textContent = 'Tableau de bord';
       }
+      setDashboardContextCaption('');
       document.querySelector('.dashboard-bento')?.classList.remove('no-margin-for-global-tasks');
       document.getElementById('dashboard-stats')?.classList.remove('hidden');
       document.getElementById('dashboard-quick-actions')?.classList.remove('hidden');
@@ -16782,11 +17478,13 @@
       document.getElementById('project-detail').classList.add('hidden');
       document.getElementById('global-hub')?.classList.add('hidden');
       document.getElementById('projects-list').classList.remove('hidden');
+      document.getElementById('dashboard-head')?.classList.add('dashboard-head-projects');
       document.getElementById('dashboard-head')?.classList.remove('hidden');
       document.getElementById('dashboard-title')?.classList.remove('hidden');
       if (document.getElementById('dashboard-title')) {
         document.getElementById('dashboard-title').textContent = 'Vue Projets';
       }
+      setDashboardContextCaption('Tous les projets accessibles (privés assignés + publics).');
       document.querySelector('.dashboard-bento')?.classList.add('no-margin-for-global-tasks');
       document.getElementById('dashboard-stats')?.classList.add('hidden');
       document.getElementById('dashboard-quick-actions')?.classList.add('hidden');
@@ -17021,6 +17719,7 @@
             <div>
               <h4 class="font-bold text-slate-800">${escapeHtml(task.title || 'Tache')}</h4>
               <p class="text-xs text-slate-500 mt-1">${escapeHtml(task.sourceProjectName || 'Hors projet')} - ${escapeHtml(task.theme || 'General')}</p>
+              ${buildTaskHierarchyChipsHtml(task, stateByProjectId.get(task.sourceProjectId)) ? `<p class="mt-1">${buildTaskHierarchyChipsHtml(task, stateByProjectId.get(task.sourceProjectId))}</p>` : ''}
             </div>
             <p class="text-sm text-slate-600 mt-2">${escapeHtml(task.description || '')}</p>
             ${buildSubtaskProgressHtml(task, true)}
@@ -17089,6 +17788,7 @@
               ${buildTaskRecurrenceBadgeHtml(task)}
               <h4 class="font-semibold text-slate-900 text-[1.04rem] leading-tight mb-1">${escapeHtml(task.title || 'Tache')}</h4>
               <p class="text-xs text-slate-500 mb-2">${escapeHtml(task.sourceProjectName || 'Hors projet')} • ${escapeHtml(task.theme || 'General')}</p>
+              ${buildTaskHierarchyChipsHtml(task, stateByProjectId.get(task.sourceProjectId)) ? `<p class="mb-2">${buildTaskHierarchyChipsHtml(task, stateByProjectId.get(task.sourceProjectId))}</p>` : ''}
               <p class="text-sm text-slate-700 global-kanban-desc mb-2">${escapeHtml(task.description || '')}</p>
               ${buildSubtaskProgressHtml(task, true)}
               <div class="mt-2 text-xs text-slate-600 flex items-center justify-between gap-2">
@@ -17416,6 +18116,7 @@
           <div>
             <h4 class="font-bold text-slate-800">${escapeHtml(task.title || 'Tâche')}</h4>
             <p class="text-xs text-slate-500 mt-1">${escapeHtml(task.sourceProjectName || 'Hors projet')} • ${escapeHtml(task.theme || 'Général')}</p>
+            ${buildTaskHierarchyChipsHtml(task, stateByProjectId.get(task.sourceProjectId)) ? `<p class="mt-1">${buildTaskHierarchyChipsHtml(task, stateByProjectId.get(task.sourceProjectId))}</p>` : ''}
           </div>
           ${showGlobalTaskCardDescription ? `<p class="text-sm text-slate-600 mt-2">${escapeHtml(task.description || '')}</p>` : ''}
           ${buildTaskProgressBarHtml(task)}
@@ -23435,6 +24136,7 @@
       }
       await workflowRuntime.init();
       await workflowRuntime.render();
+      applyWorkflowGroupTabsVisibility();
     }
 
     function setGlobalHubView(view) {
@@ -23463,6 +24165,18 @@
       document.getElementById('global-settings-section')?.classList.toggle('hidden', view !== 'settings');
       updateGlobalTasksViewButtons();
       applyWorkspaceWidthMode();
+    }
+
+    async function openWorkflowSidebarGroup(rawGroup, options = {}) {
+      const group = setActiveWorkflowSidebarGroup(rawGroup);
+      await showGlobalWorkspace('workflow');
+      const groupBtn = document.getElementById(`workflow-group-${group}`);
+      if (groupBtn && !groupBtn.classList.contains('is-active')) {
+        groupBtn.click();
+      }
+      if (options.closeSidebar !== false) {
+        closeMobileSidebar();
+      }
     }
 
     async function showGlobalWorkspace(view) {
@@ -23501,6 +24215,7 @@
       if (document.getElementById('dashboard-title')) {
         document.getElementById('dashboard-title').textContent = 'Vue transverse';
       }
+      setDashboardContextCaption('');
       document.getElementById('dashboard-stats')?.classList.add('hidden');
       document.getElementById('dashboard-quick-actions')?.classList.add('hidden');
       setGlobalHubView(view);
@@ -23523,6 +24238,7 @@
       if (view === 'tasks') await renderGlobalTasks();
       if (view === 'workflow') {
         await renderWorkflowWorkspace();
+        setActiveWorkflowSidebarGroup(getActiveWorkflowGroupFromDom());
         if (isViewOverridesLocked()) {
           const workflowDefault = resolveViewWithLock('workflow', '', 'organigram');
           const workflowDefaultBtnId = VIEW_SECTION_META.workflow.tabs?.[workflowDefault]?.buttonId;
@@ -23530,6 +24246,7 @@
           if (btn && !btn.classList.contains('hidden')) {
             btn.click();
           }
+          setActiveWorkflowSidebarGroup(getActiveWorkflowGroupFromDom());
         }
       }
       if (view === 'calendar') await renderGlobalCalendar();
@@ -23732,6 +24449,8 @@
       return {
         query: String(document.getElementById('project-task-search')?.value || '').trim(),
         status: String(document.getElementById('project-task-status')?.value || 'all').trim(),
+        epicId: String(document.getElementById('project-task-filter-epic')?.value || 'all').trim(),
+        featureId: String(document.getElementById('project-task-filter-feature')?.value || 'all').trim(),
         theme: String(document.getElementById('project-task-theme-filter')?.value || '').trim()
       };
     }
@@ -23766,6 +24485,26 @@
       ], `${globalSearchQuery} ${filters.query}`.trim()));
       if (filters.status && filters.status !== 'all') {
         filtered = filtered.filter(task => (task.status || 'todo') === filters.status);
+      }
+      if (filters.epicId && filters.epicId !== 'all') {
+        const activeFeatures = (currentProjectState?.features || [])
+          .filter((feature) => String(feature?.status || 'active').trim() !== 'archived');
+        const featureById = new Map(
+          activeFeatures.map((feature) => [String(feature.featureId || '').trim(), String(feature.epicId || '').trim()])
+        );
+        filtered = filtered.filter((task) => {
+          const taskFeatureId = String(task?.featureId || '').trim();
+          const taskEpicId = taskFeatureId ? (featureById.get(taskFeatureId) || '') : '';
+          if (filters.epicId === '__none__') return !taskEpicId;
+          return taskEpicId === filters.epicId;
+        });
+      }
+      if (filters.featureId && filters.featureId !== 'all') {
+        filtered = filtered.filter((task) => {
+          const taskFeatureId = String(task?.featureId || '').trim();
+          if (filters.featureId === '__none__') return !taskFeatureId;
+          return taskFeatureId === filters.featureId;
+        });
       }
       if (filters.theme) {
         filtered = filtered.filter(task => matchesQuery([task.theme], filters.theme));
@@ -23837,6 +24576,7 @@
               <div class="flex flex-wrap items-center gap-2 mb-1">
                 <span class="${urgencyMeta.chipClass}">${urgencyMeta.label}</span>
                 ${task.theme ? `<span class="task-theme-chip">${escapeHtml(task.theme)}</span>` : ''}
+                ${buildTaskHierarchyChipsHtml(task, currentProjectState)}
                 <span class="${statusMeta.chipClass}">${statusMeta.label}</span>
                 ${buildTaskRecurrenceBadgeHtml(task)}
               </div>
@@ -23868,6 +24608,7 @@
               <div class="flex flex-wrap items-center gap-2 mb-1">
                 <span class="${urgencyMeta.chipClass}">${urgencyMeta.label}</span>
                 ${task.theme ? `<span class="task-theme-chip">${escapeHtml(task.theme)}</span>` : ''}
+                ${buildTaskHierarchyChipsHtml(task, currentProjectState)}
                 ${getTaskGroupName(task, currentProjectState) ? `<span class="task-group-chip">${escapeHtml(getTaskGroupName(task, currentProjectState) || 'Groupe')}</span>` : ''}
                 ${buildTaskRecurrenceBadgeHtml(task)}
               </div>
@@ -24050,6 +24791,7 @@
                 <span class="${getTaskUrgencyMeta(task.urgency).chipClass}">${getTaskUrgencyMeta(task.urgency).label}</span>
                 <span class="${getTaskStatusMeta(task.status).chipClass}">${getTaskStatusMeta(task.status).label}</span>
               </div>
+              ${buildTaskHierarchyChipsHtml(task, currentProjectState) ? `<div class="mb-2">${buildTaskHierarchyChipsHtml(task, currentProjectState)}</div>` : ''}
               ${buildTaskRecurrenceBadgeHtml(task)}
               <h4 class="font-semibold text-sm mb-1">${escapeHtml(task.title)}</h4>
               <p class="text-xs text-gray-500 mb-2">${escapeHtml(task.description || '')}</p>
@@ -27975,6 +28717,39 @@
       await showGlobalWorkspace('calendar');
       closeMobileSidebar();
     });
+    document.getElementById('nav-workflow')?.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const preferredGroup = localStorage.getItem('taskmda_sidebar_workflow_group') || 'structure';
+      await openWorkflowSidebarGroup(preferredGroup);
+    });
+    document.getElementById('nav-workflow-group-structure')?.addEventListener('click', async (e) => {
+      e.preventDefault();
+      await openWorkflowSidebarGroup('structure');
+    });
+    document.getElementById('nav-workflow-group-processes')?.addEventListener('click', async (e) => {
+      e.preventDefault();
+      await openWorkflowSidebarGroup('processes');
+    });
+    document.getElementById('nav-workflow-group-pilotage')?.addEventListener('click', async (e) => {
+      e.preventDefault();
+      await openWorkflowSidebarGroup('pilotage');
+    });
+    document.getElementById('nav-workflow-group-referentiels')?.addEventListener('click', async (e) => {
+      e.preventDefault();
+      await openWorkflowSidebarGroup('referentiels');
+    });
+    document.getElementById('nav-workflow-group-supervision')?.addEventListener('click', async (e) => {
+      e.preventDefault();
+      await openWorkflowSidebarGroup('supervision');
+    });
+    setActiveWorkflowSidebarGroup(localStorage.getItem('taskmda_sidebar_workflow_group') || 'structure');
+    setWorkflowSidebarSubnavOpen(localStorage.getItem('taskmda_workflow_sidebar_subnav_open') !== '0');
+    document.getElementById('nav-workflow-subnav-toggle')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const current = document.getElementById('nav-workflow-subnav-toggle')?.getAttribute('aria-expanded') === 'true';
+      setWorkflowSidebarSubnavOpen(!current);
+    });
 
     document.getElementById('search-input')?.addEventListener('input', async (e) => {
       globalSearchQuery = (e.target.value || '').trim();
@@ -28394,6 +29169,18 @@
         }
         return;
       }
+      if (target.classList.contains('view-option-workflow-group-tabs-visible')) {
+        const next = deepClone(viewOptions || DEFAULT_VIEW_OPTIONS);
+        next.ui = next.ui || {};
+        next.ui.workflowGroupTabsVisible = !!target.checked;
+        await saveViewOptions(next);
+        applyWorkflowGroupTabsVisibility();
+        if (workflowRuntime && workspaceMode === 'global' && globalWorkspaceView === 'workflow') {
+          await workflowRuntime.render().catch(() => null);
+          applyWorkflowGroupTabsVisibility();
+        }
+        return;
+      }
       if (target.classList.contains('view-option-workflow-actions-shape')) {
         const next = deepClone(viewOptions || DEFAULT_VIEW_OPTIONS);
         next.ui = next.ui || {};
@@ -28497,6 +29284,7 @@
     document.getElementById('project-settings-tab-collab')?.addEventListener('click', () => setProjectSettingsTab('collab'));
     document.getElementById('project-settings-tab-themes')?.addEventListener('click', () => setProjectSettingsTab('themes'));
     document.getElementById('project-settings-tab-permissions')?.addEventListener('click', () => setProjectSettingsTab('permissions'));
+    document.getElementById('project-settings-tab-structure')?.addEventListener('click', () => setProjectSettingsTab('structure'));
     document.getElementById('btn-toggle-permissions-details')?.addEventListener('click', () => {
       projectPermissionDetailsOpen = !projectPermissionDetailsOpen;
       renderProjectPermissionMatrix(currentProjectState);
@@ -29332,6 +30120,7 @@
         theme: variantTask.type || 'Importé',
         groupId: null,
         groupName: null,
+        featureId: null,
         sharingMode: 'private',
         recurring: recurring,
         createdAt: Number(variantTask.id) > 0 ? Number(variantTask.id) : Date.now(),
@@ -29367,6 +30156,7 @@
         theme: taskData.theme || 'Général',
         groupId: taskData.groupId || null,
         groupName: taskData.groupName || null,
+        featureId: taskData.featureId || null,
         sharingMode: taskData.sharingMode || 'private',
         recurring: taskData.recurring || null,
         createdAt: taskData.createdAt || Date.now(),
@@ -29539,6 +30329,7 @@
         theme: (document.getElementById('task-theme')?.value || '').trim(),
         groupId: resolvedGroupId || null,
         groupName: resolvedGroupName || null,
+        featureId: standaloneTaskMode ? null : (String(document.getElementById('task-feature')?.value || '').trim() || null),
         subtasks: existingTask
           ? mergeSubtasksWithExisting(existingTask.subtasks || [], subtasksParsed)
           : subtasksParsed
@@ -29598,6 +30389,7 @@
           theme: payload.theme || document.getElementById('global-task-theme')?.value?.trim() || 'General',
           groupId: payload.groupId || null,
           groupName: payload.groupName || null,
+          featureId: null,
           sharingMode: standaloneSharingMode,
           recurring: recurring || null,
           createdAt: existingStandalone?.createdAt || Date.now(),
@@ -29964,6 +30756,9 @@
     document.getElementById('workflow-view-tabs-list')?.addEventListener('click', (e) => {
       if (e?.target?.closest?.('.tab-overflow-wrap')) return;
       setTimeout(() => refreshManagedTabOverflow(), 0);
+      setTimeout(() => {
+        setActiveWorkflowSidebarGroup(getActiveWorkflowGroupFromDom());
+      }, 0);
     });
     document.getElementById('global-settings-tabs-list')?.addEventListener('click', (e) => {
       if (e?.target?.closest?.('.tab-overflow-wrap')) return;
@@ -29987,6 +30782,25 @@
     document.getElementById('project-task-view-2')?.addEventListener('click', () => setProjectTaskCardsColumns(2));
     document.getElementById('project-task-view-3')?.addEventListener('click', () => setProjectTaskCardsColumns(3));
     document.getElementById('project-task-view-4')?.addEventListener('click', () => setProjectTaskCardsColumns(4));
+    const rerenderProjectFilters = () => {
+      tasksPage = 1;
+      rerenderActiveProjectTaskView();
+    };
+    document.getElementById('project-task-search')?.addEventListener('input', rerenderProjectFilters);
+    document.getElementById('project-task-theme-filter')?.addEventListener('input', () => {
+      syncThemePickerSelectionFromInput('project-task-theme-known', 'project-task-theme-filter');
+      rerenderProjectFilters();
+    });
+    document.getElementById('project-task-status')?.addEventListener('change', rerenderProjectFilters);
+    document.getElementById('project-task-filter-feature')?.addEventListener('change', rerenderProjectFilters);
+    document.getElementById('project-task-theme-known')?.addEventListener('change', () => {
+      syncThemePickerInputFromSelection('project-task-theme-known', 'project-task-theme-filter');
+      rerenderProjectFilters();
+    });
+    document.getElementById('project-task-filter-epic')?.addEventListener('change', () => {
+      refreshProjectHierarchyTaskFilters(currentProjectState);
+      rerenderProjectFilters();
+    });
     // Fonction pour remplir le select de sélection de groupe en messagerie
     async function populateGlobalMessageGroupChannelSelect() {
       console.log('[populateGlobalMessageGroupChannelSelect] START');
