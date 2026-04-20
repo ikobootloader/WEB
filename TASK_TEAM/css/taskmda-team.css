@@ -5023,6 +5023,20 @@ html.dark .global-kanban-col-count {
   backdrop-filter: blur(2px);
 }
 
+#global-task-detail-email-template {
+  background: var(--ui-action-subtle-bg) !important;
+  border: 1px solid var(--ui-action-subtle-border) !important;
+  color: var(--ui-action-subtle-text) !important;
+  border-radius: 10px;
+  min-height: 38px;
+  padding: 0 34px 0 10px;
+}
+
+#global-task-detail-email-template:focus-visible {
+  border-color: var(--ui-field-focus-border) !important;
+  box-shadow: var(--ui-field-focus-ring);
+}
+
 #modal-doc-preview button:focus-visible,
 #modal-doc-binding button:focus-visible,
 #modal-doc-binding [data-inline-doc-binding-field]:focus-visible,

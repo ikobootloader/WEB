@@ -13789,6 +13789,8 @@
       const subtasksEl = document.getElementById('global-task-detail-subtasks');
       const attachmentsEl = document.getElementById('global-task-detail-attachments');
       const btnConvert = document.getElementById('btn-global-task-detail-convert');
+      const btnTaskEmail = document.getElementById('btn-global-task-detail-email');
+      const taskEmailTemplateSelect = document.getElementById('global-task-detail-email-template');
       const btnEdit = document.getElementById('btn-global-task-detail-edit');
       const btnArchive = document.getElementById('btn-global-task-detail-archive');
       const btnDelete = document.getElementById('btn-global-task-detail-delete');
@@ -13852,6 +13854,17 @@
         btnConvert.onclick = async () => {
           await closeGlobalTaskDetails();
           await convertTaskToProject(taskRef);
+        };
+      }
+      if (taskEmailTemplateSelect) {
+        taskEmailTemplateSelect.value = getSavedTaskEmailTemplatePreference();
+      }
+      if (btnTaskEmail) {
+        btnTaskEmail.classList.remove('hidden');
+        btnTaskEmail.onclick = async () => {
+          const selectedTemplate = normalizeTaskEmailTemplate(taskEmailTemplateSelect?.value || 'auto');
+          saveTaskEmailTemplatePreference(selectedTemplate);
+          await sendTaskEmailByRef(taskRef, selectedTemplate);
         };
       }
       if (btnEdit) {
@@ -13924,6 +13937,8 @@
       const subtasksEl = document.getElementById('global-task-detail-subtasks');
       const attachmentsEl = document.getElementById('global-task-detail-attachments');
       const btnConvert = document.getElementById('btn-global-task-detail-convert');
+      const btnTaskEmail = document.getElementById('btn-global-task-detail-email');
+      const taskEmailTemplateSelect = document.getElementById('global-task-detail-email-template');
       const btnEdit = document.getElementById('btn-global-task-detail-edit');
       const btnArchive = document.getElementById('btn-global-task-detail-archive');
       const btnDelete = document.getElementById('btn-global-task-detail-delete');
@@ -14022,6 +14037,17 @@
           });
           await closeGlobalTaskDetails();
           await convertTaskToProject(taskRef);
+        };
+      }
+      if (taskEmailTemplateSelect) {
+        taskEmailTemplateSelect.value = getSavedTaskEmailTemplatePreference();
+      }
+      if (btnTaskEmail) {
+        btnTaskEmail.classList.remove('hidden');
+        btnTaskEmail.onclick = async () => {
+          const selectedTemplate = normalizeTaskEmailTemplate(taskEmailTemplateSelect?.value || 'auto');
+          saveTaskEmailTemplatePreference(selectedTemplate);
+          await sendTaskEmail(task.taskId, selectedTemplate);
         };
       }
       if (btnEdit) {
@@ -16522,47 +16548,198 @@
       }
     }
 
-    async function sendTaskStatusEmail(taskId, doneOnly = false) {
+    const TASK_EMAIL_TEMPLATE_STORAGE_KEY = 'taskmda_task_email_template_pref';
+
+    function normalizeTaskEmailTemplate(value) {
+      const key = String(value || '').trim().toLowerCase();
+      if (key === 'demande' || key === 'relance' || key === 'conclusion') return key;
+      return 'auto';
+    }
+
+    function getSavedTaskEmailTemplatePreference() {
+      return normalizeTaskEmailTemplate(localStorage.getItem(TASK_EMAIL_TEMPLATE_STORAGE_KEY) || 'auto');
+    }
+
+    function saveTaskEmailTemplatePreference(value) {
+      const normalized = normalizeTaskEmailTemplate(value);
+      if (normalized === 'auto') {
+        localStorage.removeItem(TASK_EMAIL_TEMPLATE_STORAGE_KEY);
+        return;
+      }
+      localStorage.setItem(TASK_EMAIL_TEMPLATE_STORAGE_KEY, normalized);
+    }
+
+    function resolveTaskEmailTemplate(task, requestedTemplate = 'auto') {
+      const requested = normalizeTaskEmailTemplate(requestedTemplate);
+      if (requested !== 'auto') return requested;
+
+      const status = String(task?.status || 'todo').trim().toLowerCase();
+      const closedStatuses = new Set(['termine', 'done', 'approved']);
+      if (closedStatuses.has(status)) return 'conclusion';
+
+      const dueInfo = getTaskDueStatus(task || {});
+      const relanceStatuses = new Set(['en-cours', 'in_progress', 'suspendu', 'blocked', 'ready_for_review']);
+      if (dueInfo.isOverdue || relanceStatuses.has(status)) return 'relance';
+
+      return 'demande';
+    }
+
+    function buildTaskEmailPayload(task, template, options = {}) {
+      const selectedTemplate = normalizeTaskEmailTemplate(template) === 'auto'
+        ? resolveTaskEmailTemplate(task, 'auto')
+        : normalizeTaskEmailTemplate(template);
+      const sourceProjectName = String(options.sourceProjectName || 'Hors projet');
+      const statusLabel = getTaskStatusMeta(task?.status || 'todo')?.label || 'A faire';
+      const urgencyLabel = getTaskUrgencyMeta(task?.urgency || 'medium')?.label || 'Normale';
+      const assigneeLabel = String(options.assigneeLabel || 'Aucun responsable');
+      const groupLabel = String(options.groupLabel || 'Aucun groupe');
+      const taskTitle = String(task?.title || 'Tache');
+      const theme = String(task?.theme || 'Non renseignee');
+      const dueDate = formatDate(task?.dueDate);
+      const dateNow = new Date().toLocaleDateString('fr-FR');
+      const taskDescription = String(task?.description || 'Aucune description');
+
+      if (selectedTemplate === 'conclusion') {
+        return {
+          subject: `[NEXUS MDA] Conclusion - Tache: ${taskTitle}`,
+          body: [
+            'Bonjour,',
+            '',
+            `La tache "${taskTitle}" est consideree comme conclue.`,
+            '',
+            'Synthese:',
+            `- Projet: ${sourceProjectName}`,
+            `- Statut final: ${statusLabel}`,
+            `- Urgence: ${urgencyLabel}`,
+            `- Thematique: ${theme}`,
+            `- Groupe: ${groupLabel}`,
+            `- Responsable: ${assigneeLabel}`,
+            `- Date de conclusion: ${dateNow}`,
+            '',
+            `Description de reference: ${taskDescription}`,
+            '',
+            'Merci pour votre contribution.',
+            `${currentUser?.name || 'Equipe projet'}`
+          ].join('\n')
+        };
+      }
+
+      if (selectedTemplate === 'relance') {
+        return {
+          subject: `[NEXUS MDA] Relance - Tache: ${taskTitle}`,
+          body: [
+            'Bonjour,',
+            '',
+            `Relance concernant la tache "${taskTitle}".`,
+            '',
+            'Rappel de contexte:',
+            `- Projet: ${sourceProjectName}`,
+            `- Statut actuel: ${statusLabel}`,
+            `- Urgence: ${urgencyLabel}`,
+            `- Date limite: ${dueDate}`,
+            `- Responsable: ${assigneeLabel}`,
+            '',
+            'Merci de partager un retour sur:',
+            '- avancement actuel,',
+            '- points bloquants,',
+            '- date cible de finalisation.',
+            '',
+            `Description de reference: ${taskDescription}`,
+            '',
+            'Merci d avance,',
+            `${currentUser?.name || 'Equipe projet'}`
+          ].join('\n')
+        };
+      }
+
+      return {
+        subject: `[NEXUS MDA] Demande d informations complementaires - Tache: ${taskTitle}`,
+        body: [
+          'Bonjour,',
+          '',
+          `Dans le cadre de la tache "${taskTitle}", merci de partager les informations complementaires necessaires.`,
+          '',
+          'Contexte:',
+          `- Projet: ${sourceProjectName}`,
+          `- Statut: ${statusLabel}`,
+          `- Urgence: ${urgencyLabel}`,
+          `- Thematique: ${theme}`,
+          `- Groupe: ${groupLabel}`,
+          `- Responsable: ${assigneeLabel}`,
+          `- Date limite: ${dueDate}`,
+          '',
+          'Elements attendus:',
+          '- [A preciser]',
+          '',
+          `Description de reference: ${taskDescription}`,
+          '',
+          'Merci par avance,',
+          `${currentUser?.name || 'Equipe projet'}`
+        ].join('\n')
+      };
+    }
+
+    async function collectStandaloneTaskRecipientEmails(task) {
+      if (!task) return [];
+      const recipients = new Set();
+      const users = await getAllDecrypted('users', 'userId');
+      const directoryUsers = await getAllDecrypted('directoryUsers', 'userId');
+      const emailByUserId = new Map();
+      (directoryUsers || []).forEach((user) => {
+        const id = String(user?.userId || '').trim();
+        const email = String(user?.email || '').trim().toLowerCase();
+        if (id && isValidEmailAddress(email)) emailByUserId.set(id, email);
+      });
+      (users || []).forEach((user) => {
+        const id = String(user?.userId || '').trim();
+        const email = String(user?.email || '').trim().toLowerCase();
+        if (id && isValidEmailAddress(email)) emailByUserId.set(id, email);
+      });
+      getTaskAssigneeEntries(task, null).forEach((entry) => {
+        const directEmail = String(entry?.email || '').trim().toLowerCase();
+        if (isValidEmailAddress(directEmail)) recipients.add(directEmail);
+        const mapped = emailByUserId.get(String(entry?.userId || '').trim());
+        if (mapped) recipients.add(mapped);
+        const parsed = parseAssigneeToken(entry?.name || '');
+        if (isValidEmailAddress(parsed?.email || '')) {
+          recipients.add(String(parsed.email).toLowerCase());
+        }
+      });
+      return Array.from(recipients);
+    }
+
+    async function sendTaskEmail(taskId, template = 'auto') {
       if (!currentProjectId || !taskId) return;
       const state = await getProjectState(currentProjectId);
       if (!state?.project) return;
       const task = (state.tasks || []).find(t => t.taskId === taskId);
       if (!task) return;
       const recipients = await collectProjectRecipientEmails(state, { task });
-      const groupName = getTaskGroupName(task, state) || 'Aucun groupe';
-      const subject = doneOnly
-        ? `[NEXUS MDA] Tâche achevée: ${task.title}`
-        : `[NEXUS MDA] Statut tâche: ${task.title}`;
-      const body = doneOnly
-        ? [
-            `Bonjour,`,
-            '',
-            `La tâche "${task.title}" est achevée.`,
-            '',
-            `Projet: ${state.project.name}`,
-            `Thématique: ${task.theme || 'Non renseignée'}`,
-            `Groupe: ${groupName}`,
-            `Responsable: ${getTaskAssigneeName(task, state) || 'Aucun responsable'}`,
-            `Date de clôture: ${new Date().toLocaleDateString('fr-FR')}`,
-            '',
-            `Commentaire: ${task.description || 'N/A'}`
-          ].join('\n')
-        : [
-            `Bonjour,`,
-            '',
-            `Point sur la tâche "${task.title}":`,
-            '',
-            `Projet: ${state.project.name}`,
-            `Statut: ${task.status || 'todo'}`,
-            `Urgence: ${task.urgency || 'medium'}`,
-            `Thématique: ${task.theme || 'Non renseignée'}`,
-            `Groupe: ${groupName}`,
-            `Responsable: ${getTaskAssigneeName(task, state) || 'Aucun responsable'}`,
-            `Date limite: ${formatDate(task.dueDate)}`,
-            '',
-            `Description: ${task.description || 'N/A'}`
-          ].join('\n');
-      openMailto({ to: recipients, subject, body });
+      const payload = buildTaskEmailPayload(task, template, {
+        sourceProjectName: state.project?.name || 'Projet',
+        assigneeLabel: getTaskAssigneeName(task, state) || 'Aucun responsable',
+        groupLabel: getTaskGroupName(task, state) || task.groupName || 'Aucun groupe'
+      });
+      openMailto({ to: recipients, subject: payload.subject, body: payload.body });
+    }
+
+    async function sendTaskEmailByRef(taskRef, template = 'auto') {
+      const resolved = await resolveGlobalTaskFromRef(taskRef);
+      if (!resolved?.task) {
+        showToast('Tache introuvable');
+        return;
+      }
+      const task = resolved.task;
+      const state = resolved.sourceType === 'project' ? resolved.state : null;
+      const recipients = state
+        ? await collectProjectRecipientEmails(state, { task })
+        : await collectStandaloneTaskRecipientEmails(task);
+      const payload = buildTaskEmailPayload(task, template, {
+        sourceProjectName: state?.project?.name || 'Hors projet',
+        assigneeLabel: getTaskAssigneeName(task, state) || 'Aucun responsable',
+        groupLabel: getTaskGroupName(task, state) || task.groupName || 'Aucun groupe'
+      });
+      openMailto({ to: recipients, subject: payload.subject, body: payload.body });
     }
 
     function showDashboard() {
@@ -16825,24 +17002,25 @@
         const taskActions = (task) => `
           ${task._canEdit ? `<button onclick="event.stopPropagation(); editGlobalTask('${task._taskRef}')" class="task-action-btn task-action-btn-subtle">Modifier</button>` : ''}
           ${task._canEdit ? `<button onclick="event.stopPropagation(); convertTaskToProject('${task._taskRef}')" class="task-action-btn task-action-btn-subtle">Convertir</button>` : ''}
+          <button onclick="event.stopPropagation(); sendTaskEmailByRef('${task._taskRef}', 'auto')" class="task-action-btn task-action-btn-subtle"><span class="material-symbols-outlined">mail</span> Email</button>
           ${task._canArchive ? `<button onclick="event.stopPropagation(); archiveGlobalTask('${task._taskRef}')" class="task-action-btn task-action-btn-subtle task-action-btn-warn">Archiver</button>` : ''}
           ${task._canDelete ? `<button onclick="event.stopPropagation(); deleteGlobalTask('${task._taskRef}')" class="task-action-btn task-action-btn-subtle task-action-btn-danger">Supprimer</button>` : ''}
         `;
         const taskCard = (task) => `
           <div class="global-task-card global-task-card-modern task-completion-fx-anchor ${getTaskUrgencyMeta(task.urgency).accentClass} rounded-xl border border-slate-200 bg-white p-4 cursor-grab active:cursor-grabbing" data-task-entity-id="${escapeHtml(String(task.taskId || task.id || ''))}" data-task-source-type="${escapeHtml(String(task.sourceType || 'project'))}" data-task-project-id="${escapeHtml(String(task.sourceProjectId || ''))}" draggable="true" ondragstart="startGlobalKanbanDrag(event, '${task._taskRef}')" onclick="openGlobalTaskDetails('${task._taskRef}')" role="button" tabindex="0">
-            <div class="flex items-start justify-between gap-3">
-              <div>
-                <div class="flex flex-wrap items-center gap-2 mb-1">
-                  <span class="${getTaskUrgencyMeta(task.urgency).chipClass}">${getTaskUrgencyMeta(task.urgency).label}</span>
-                  ${buildTaskRecurrenceBadgeHtml(task)}
-                </div>
-                <h4 class="font-bold text-slate-800">${escapeHtml(task.title || 'Tache')}</h4>
-                <p class="text-xs text-slate-500 mt-1">${escapeHtml(task.sourceProjectName || 'Hors projet')} - ${escapeHtml(task.theme || 'General')}</p>
+            <div class="task-card-badge-row flex items-center justify-between gap-2 mb-1">
+              <div class="task-card-badge-left flex items-center gap-2 min-w-0">
+                <span class="${getTaskUrgencyMeta(task.urgency).chipClass}">${getTaskUrgencyMeta(task.urgency).label}</span>
               </div>
-              <div class="flex flex-wrap items-center justify-end gap-1">
+              <div class="task-card-badge-right flex items-center justify-end gap-1 shrink-0">
+                ${buildTaskRecurrenceBadgeHtml(task)}
                 ${sharingModeBadge(task.sharingMode)}
                 <span class="${getTaskStatusMeta(task._statusKey).chipClass}">${getTaskStatusMeta(task._statusKey).label}</span>
               </div>
+            </div>
+            <div>
+              <h4 class="font-bold text-slate-800">${escapeHtml(task.title || 'Tache')}</h4>
+              <p class="text-xs text-slate-500 mt-1">${escapeHtml(task.sourceProjectName || 'Hors projet')} - ${escapeHtml(task.theme || 'General')}</p>
             </div>
             <p class="text-sm text-slate-600 mt-2">${escapeHtml(task.description || '')}</p>
             ${buildSubtaskProgressHtml(task, true)}
@@ -17223,21 +17401,21 @@
         
         return `
         <div class="global-task-card global-task-card-modern task-completion-fx-anchor ${cardAccentClass} ${focusClass} rounded-xl border border-slate-200 ${cardBgClass} p-4 cursor-pointer ${ringClass}" data-task-entity-id="${escapeHtml(String(task.taskId || task.id || ''))}" data-task-source-type="${escapeHtml(String(task.sourceType || 'project'))}" data-task-project-id="${escapeHtml(String(task.sourceProjectId || ''))}" onclick="openGlobalTaskDetails('${taskRef}')" role="button" tabindex="0">
-          <div class="flex items-start justify-between gap-3">
-            <div>
-              <div class="flex flex-wrap items-center gap-2 mb-1">
-                ${dueStatus.isOverdue ? '<span class="px-2 py-1 rounded-lg bg-red-200 text-red-800 text-xs font-bold">⚠️ EN RETARD</span>' : ''}
-                ${dueStatus.isDueToday ? '<span class="px-2 py-1 rounded-lg bg-yellow-200 text-yellow-800 text-xs font-bold">AUJOURD\'HUI</span>' : ''}
-                <span class="${getTaskUrgencyMeta(task.urgency).chipClass}">${getTaskUrgencyMeta(task.urgency).label}</span>
-                ${buildTaskRecurrenceBadgeHtml(task)}
-              </div>
-              <h4 class="font-bold text-slate-800">${escapeHtml(task.title || 'Tâche')}</h4>
-              <p class="text-xs text-slate-500 mt-1">${escapeHtml(task.sourceProjectName || 'Hors projet')} • ${escapeHtml(task.theme || 'Général')}</p>
+          <div class="task-card-badge-row flex items-center justify-between gap-2 mb-1">
+            <div class="task-card-badge-left flex items-center gap-2 min-w-0">
+              ${dueStatus.isOverdue ? '<span class="px-2 py-1 rounded-lg bg-red-200 text-red-800 text-xs font-bold">⚠️ EN RETARD</span>' : ''}
+              ${dueStatus.isDueToday ? '<span class="px-2 py-1 rounded-lg bg-yellow-200 text-yellow-800 text-xs font-bold">AUJOURD\'HUI</span>' : ''}
+              <span class="${getTaskUrgencyMeta(task.urgency).chipClass}">${getTaskUrgencyMeta(task.urgency).label}</span>
             </div>
-            <div class="flex flex-wrap items-center justify-end gap-1">
+            <div class="task-card-badge-right flex items-center justify-end gap-1 shrink-0">
+              ${buildTaskRecurrenceBadgeHtml(task)}
               ${sharingModeBadge(task.sharingMode)}
               <span class="${getTaskStatusMeta(task.status).chipClass}">${getTaskStatusMeta(task.status).label}</span>
             </div>
+          </div>
+          <div>
+            <h4 class="font-bold text-slate-800">${escapeHtml(task.title || 'Tâche')}</h4>
+            <p class="text-xs text-slate-500 mt-1">${escapeHtml(task.sourceProjectName || 'Hors projet')} • ${escapeHtml(task.theme || 'Général')}</p>
           </div>
           ${showGlobalTaskCardDescription ? `<p class="text-sm text-slate-600 mt-2">${escapeHtml(task.description || '')}</p>` : ''}
           ${buildTaskProgressBarHtml(task)}
@@ -17250,6 +17428,7 @@
           <div class="task-hover-actions mt-3 flex flex-wrap gap-2 text-xs">
             ${canEdit ? `<button onclick="event.stopPropagation(); editGlobalTask('${taskRef}')" class="task-action-btn task-action-btn-subtle">Modifier</button>` : ''}
             ${canEdit ? `<button onclick="event.stopPropagation(); convertTaskToProject('${taskRef}')" class="task-action-btn task-action-btn-subtle">Convertir</button>` : ''}
+            <button onclick="event.stopPropagation(); sendTaskEmailByRef('${taskRef}', 'auto')" class="task-action-btn task-action-btn-subtle"><span class="material-symbols-outlined">mail</span> Email</button>
             ${canArchive ? `<button onclick="event.stopPropagation(); archiveGlobalTask('${taskRef}')" class="task-action-btn task-action-btn-subtle task-action-btn-warn">Archiver</button>` : ''}
             ${canDelete ? `<button onclick="event.stopPropagation(); deleteGlobalTask('${taskRef}')" class="task-action-btn task-action-btn-subtle task-action-btn-danger">Supprimer</button>` : ''}
           </div>
@@ -23674,6 +23853,7 @@
             <div class="task-hover-actions task-hover-actions-inline flex items-center gap-2">
               ${canEditTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); editTask('${task.taskId}')" class="task-action-btn task-action-btn-subtle text-xs">Modifier</button>` : ''}
               ${canEditTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); convertTaskToProject('${buildGlobalTaskRef({ sourceType: 'project', sourceProjectId: currentProjectId, taskId: task.taskId })}')" class="task-action-btn task-action-btn-subtle text-xs">Convertir</button>` : ''}
+              <button onclick="event.stopPropagation(); sendTaskEmail('${task.taskId}', 'auto')" class="task-action-btn task-action-btn-subtle text-xs"><span class="material-symbols-outlined">mail</span> Email</button>
               ${canDeleteTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); deleteTask('${task.taskId}')" class="task-action-btn task-action-btn-subtle text-xs text-red-600">Supprimer</button>` : ''}
             </div>
           </div>
@@ -23733,8 +23913,7 @@
             <div class="task-card-participants">${participantsHtml}</div>
             <div class="task-card-actions task-hover-actions flex items-center gap-3">
               ${canEditTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); convertTaskToProject('${buildGlobalTaskRef({ sourceType: 'project', sourceProjectId: currentProjectId, taskId: task.taskId })}')" class="task-action-btn task-action-btn-subtle">Convertir en projet</button>` : ''}
-              <button onclick="event.stopPropagation(); sendTaskStatusEmail('${task.taskId}', false)" class="task-action-btn task-action-btn-subtle"><span class="material-symbols-outlined">mail</span> Email statut</button>
-              ${task.status === 'termine' ? `<button onclick="event.stopPropagation(); sendTaskStatusEmail('${task.taskId}', true)" class="task-action-btn task-action-btn-subtle"><span class="material-symbols-outlined">mark_email_read</span> Email achevée</button>` : ''}
+              <button onclick="event.stopPropagation(); sendTaskEmail('${task.taskId}', 'auto')" class="task-action-btn task-action-btn-subtle"><span class="material-symbols-outlined">mail</span> Email</button>
               ${canChangeTaskStatus(task, currentProjectState) ? `<button onclick="event.stopPropagation(); toggleTaskStatus('${task.taskId}')" class="task-action-btn task-action-btn-subtle"><span class="material-symbols-outlined">published_with_changes</span> Changer statut</button>` : ''}
             </div>
           </div>

@@ -2298,6 +2298,17 @@
       </div>
       <div id="global-task-detail-rgpd" class="mb-4"></div>
       <div class="modal-action-bar-neo flex flex-wrap items-center justify-end gap-2">
+        <label for="global-task-detail-email-template" class="sr-only">Template email tâche</label>
+        <select id="global-task-detail-email-template" class="px-2 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm">
+          <option value="auto">Auto mail</option>
+          <option value="demande">Demande</option>
+          <option value="relance">Relance</option>
+          <option value="conclusion">Conclusion</option>
+        </select>
+        <button id="btn-global-task-detail-email" class="task-action-btn task-action-btn-subtle" data-action-kind="notify">
+          <span class="material-symbols-outlined">mail</span>
+          <span>Email</span>
+        </button>
         <button id="btn-global-task-detail-convert" class="task-action-btn">Convertir en projet</button>
         <button id="btn-global-task-detail-edit" class="task-action-btn">Modifier</button>
         <button id="btn-global-task-detail-archive" class="task-action-btn task-action-btn-warn">Archiver</button>
