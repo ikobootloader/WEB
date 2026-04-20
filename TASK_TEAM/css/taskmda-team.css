@@ -10337,10 +10337,31 @@ html.dark .discussion-member-item.is-active:focus-visible {
   gap: 6px;
   max-height: 168px;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
   border: 1px solid #cbd5e1;
   border-radius: 12px;
   background: #f8fafc;
   padding: 8px;
+}
+
+.emoji-picker-panel::-webkit-scrollbar {
+  width: 7px;
+}
+
+.emoji-picker-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.emoji-picker-panel::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.42);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.emoji-picker-panel:hover::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.5);
 }
 
 .emoji-picker-btn {
@@ -10371,6 +10392,15 @@ html.dark .discussion-member-item.is-active:focus-visible {
 html.dark .emoji-picker-panel {
   border-color: #325188;
   background: #13203a;
+  scrollbar-color: rgba(100, 130, 176, 0.48) transparent;
+}
+
+html.dark .emoji-picker-panel::-webkit-scrollbar-thumb {
+  background: rgba(100, 130, 176, 0.42);
+}
+
+html.dark .emoji-picker-panel:hover::-webkit-scrollbar-thumb {
+  background: rgba(130, 162, 214, 0.54);
 }
 
 html.dark .emoji-picker-btn {
