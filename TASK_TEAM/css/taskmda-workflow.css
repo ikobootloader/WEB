@@ -499,6 +499,38 @@
   resize: vertical;
 }
 
+.workflow-multi-checklist {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.35rem 0.55rem;
+  max-height: 180px;
+  overflow: auto;
+  border: 1px solid rgba(101, 115, 141, 0.24);
+  border-radius: 0.6rem;
+  background: #ffffff;
+  padding: 0.5rem 0.55rem;
+}
+
+.workflow-multi-check-item {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 24px;
+  font-size: 0.8rem;
+  color: #334155;
+}
+
+.workflow-multi-check-input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: #1d4ed8;
+}
+
+.workflow-form-hint {
+  margin-top: 0.2rem;
+}
+
 .workflow-detail-actions {
   display: flex;
   align-items: center;
@@ -1736,29 +1768,61 @@ html[data-wf-action-buttons="text"] .workflow-card-action-btn .taskmda-action-ic
   width: 100%;
   display: grid;
   justify-items: center;
-  gap: 0.25rem;
+  gap: 0.18rem;
+  margin-top: 0.62rem;
+}
+
+.workflow-organigram-group-trunk {
+  width: 1px;
+  height: 12px;
+  background: linear-gradient(180deg, rgba(148, 163, 184, 0.82), rgba(148, 163, 184, 0.28));
 }
 
 .workflow-organigram-group-line {
-  width: calc(100% - 24px);
+  width: calc(100% - 28px);
+  max-width: 280px;
   border-top: 1px dashed rgba(148, 163, 184, 0.72);
 }
 
 .workflow-organigram-group-grid {
   width: 100%;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.38rem;
-  justify-content: center;
+  max-width: 320px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.44rem 0.5rem;
+  padding-top: 0.3rem;
+  align-items: start;
 }
 
 .workflow-organigram-group-card {
-  min-width: 120px;
+  width: 100%;
+  min-width: 0;
+  position: relative;
   border: 1px solid rgba(124, 58, 237, 0.3);
   border-radius: 0.7rem;
   background: linear-gradient(180deg, #f5f3ff, #f3e8ff);
   padding: 0.45rem 0.52rem;
   cursor: pointer;
+}
+
+.workflow-organigram-group-card::before {
+  content: '';
+  position: absolute;
+  top: -0.3rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 1px;
+  height: 0.3rem;
+  background: rgba(148, 163, 184, 0.72);
+}
+
+.workflow-organigram-group-level.is-single .workflow-organigram-group-grid {
+  grid-template-columns: minmax(150px, 240px);
+}
+
+.workflow-organigram-group-level.is-single .workflow-organigram-group-line {
+  width: 1px;
+  max-width: 1px;
 }
 
 .workflow-organigram-group-title {
@@ -2493,6 +2557,15 @@ html.dark .workflow-form-select {
   color: #e8f0ff;
 }
 
+html.dark .workflow-multi-checklist {
+  background: #101b32;
+  border-color: #334769;
+}
+
+html.dark .workflow-multi-check-item {
+  color: #dce8ff;
+}
+
 html.dark .workflow-kpi-value {
   color: #dce8ff;
 }
@@ -2586,6 +2659,11 @@ html.dark .workflow-organigram-service-stem {
 
 html.dark .workflow-organigram-group-line {
   border-top-color: rgba(138, 161, 202, 0.45);
+}
+
+html.dark .workflow-organigram-group-trunk,
+html.dark .workflow-organigram-group-card::before {
+  background: rgba(138, 161, 202, 0.52);
 }
 
 html.dark .workflow-organigram-group-card {

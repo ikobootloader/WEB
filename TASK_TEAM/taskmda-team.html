@@ -496,6 +496,15 @@
                     <option value="termine">Terminé</option>
                   </select>
                 </label>
+                <label class="global-task-select-wrap" for="global-task-assignee-kind">
+                  <span class="material-symbols-outlined global-task-select-icon" aria-hidden="true">person_search</span>
+                  <select id="global-task-assignee-kind" class="px-3 py-2 border border-slate-300 rounded-lg text-sm" title="Filtrer par type d'affectation">
+                    <option value="all">Tous responsables</option>
+                    <option value="members">Membres uniquement</option>
+                    <option value="agents">Agents uniquement</option>
+                    <option value="mixed">Mixte agent+membre</option>
+                  </select>
+                </label>
                 <input id="global-task-theme" type="text" placeholder="Filtre thématique" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
                 <label class="global-task-select-wrap" for="global-task-theme-known">
                   <span class="material-symbols-outlined global-task-select-icon" aria-hidden="true">category</span>
@@ -571,6 +580,7 @@
                       <div class="workflow-quick-add-group-label">Référentiel</div>
                       <button id="btn-workflow-add-procedure" type="button" class="workflow-quick-add-item" role="menuitem" data-wf-add-group="referentiels"><span class="material-symbols-outlined">article</span>Nouvelle procédure</button>
                       <button id="btn-workflow-add-software" type="button" class="workflow-quick-add-item" role="menuitem" data-wf-add-group="referentiels"><span class="material-symbols-outlined">computer</span>Nouveau logiciel</button>
+                      <button id="btn-workflow-add-job-title" type="button" class="workflow-quick-add-item" role="menuitem" data-wf-add-group="referentiels"><span class="material-symbols-outlined">badge</span>Nouveau titre de poste</button>
                       <button id="btn-workflow-add-contingency-plan" type="button" class="workflow-quick-add-item" role="menuitem" data-wf-add-group="referentiels"><span class="material-symbols-outlined">emergency_home</span>Plan de contingence</button>
                     </div>
                   </div>
@@ -612,6 +622,7 @@
                   <button id="workflow-view-kpi" class="workflow-view-tab" type="button" data-wf-group="pilotage"><span class="material-symbols-outlined tab-icon">monitoring</span> KPI</button>
                   <button id="workflow-view-procedures" class="workflow-view-tab" type="button" data-wf-group="referentiels"><span class="material-symbols-outlined tab-icon">article</span> Procédures</button>
                   <button id="workflow-view-software" class="workflow-view-tab" type="button" data-wf-group="referentiels"><span class="material-symbols-outlined tab-icon">computer</span> Logiciels métiers</button>
+                  <button id="workflow-view-jobtitles" class="workflow-view-tab" type="button" data-wf-group="referentiels"><span class="material-symbols-outlined tab-icon">badge</span> Postes</button>
                   <button id="workflow-view-contingency" class="workflow-view-tab" type="button" data-wf-group="referentiels"><span class="material-symbols-outlined tab-icon">emergency_home</span> Contingence</button>
                   <button id="workflow-view-analytics" class="workflow-view-tab" type="button" data-wf-group="supervision"><span class="material-symbols-outlined tab-icon">bar_chart</span> Analyse</button>
                   <button id="workflow-view-governance" class="workflow-view-tab" type="button" data-wf-group="supervision"><span class="material-symbols-outlined tab-icon">verified</span> Gouvernance</button>
@@ -1343,6 +1354,10 @@
             <div class="flex items-start justify-between gap-3">
               <h2 id="project-title" class="section-title text-3xl font-extrabold mb-2"></h2>
                 <div class="flex items-center gap-2 flex-wrap">
+                <button id="btn-toggle-project-overview" class="task-action-btn task-action-btn-subtle" type="button" data-action-kind="default" aria-expanded="true" title="Replier le panneau projet">
+                  <span class="material-symbols-outlined" id="btn-toggle-project-overview-icon">unfold_less</span>
+                  <span id="btn-toggle-project-overview-label">Replier</span>
+                </button>
                 <button id="btn-edit-project" class="task-action-btn" data-action-kind="edit">Modifier</button>
                 <button id="btn-restore-project" class="task-action-btn task-action-btn-success hidden" data-action-kind="success">
                   <span class="material-symbols-outlined">unarchive</span>
@@ -1580,34 +1595,42 @@
 
               <div id="project-work-main" class="project-work-main">
                 <div id="task-list-section" class="project-view-section">
-              <div class="project-task-layout-toolbar mb-3">
-                <span class="project-task-layout-label">Affichage cartes</span>
-                <div class="project-task-layout-buttons" role="group" aria-label="Densité d'affichage des tâches">
-                  <button id="project-task-view-1" type="button" class="project-task-layout-btn view-tab-active" title="Vue détaillée 1 colonne" aria-label="Vue 1 colonne"><span class="material-symbols-outlined">view_agenda</span></button>
-                  <button id="project-task-view-2" type="button" class="project-task-layout-btn" title="Vue 2 colonnes" aria-label="Vue 2 colonnes"><span class="material-symbols-outlined">view_column_2</span></button>
-                  <button id="project-task-view-3" type="button" class="project-task-layout-btn" title="Vue 3 colonnes simplifiée" aria-label="Vue 3 colonnes"><span class="material-symbols-outlined">dashboard</span></button>
-                  <button id="project-task-view-4" type="button" class="project-task-layout-btn" title="Vue 4 colonnes ultra compacte" aria-label="Vue 4 colonnes"><span class="material-symbols-outlined">grid_view</span></button>
+              <div id="project-work-commandbar" class="project-work-commandbar">
+                <div class="project-task-layout-toolbar mb-3">
+                  <span class="project-task-layout-label">Affichage cartes</span>
+                  <div class="project-task-layout-buttons" role="group" aria-label="Densité d'affichage des tâches">
+                    <button id="project-task-view-1" type="button" class="project-task-layout-btn view-tab-active" title="Vue détaillée 1 colonne" aria-label="Vue 1 colonne"><span class="material-symbols-outlined">view_agenda</span></button>
+                    <button id="project-task-view-2" type="button" class="project-task-layout-btn" title="Vue 2 colonnes" aria-label="Vue 2 colonnes"><span class="material-symbols-outlined">view_column_2</span></button>
+                    <button id="project-task-view-3" type="button" class="project-task-layout-btn" title="Vue 3 colonnes simplifiée" aria-label="Vue 3 colonnes"><span class="material-symbols-outlined">dashboard</span></button>
+                    <button id="project-task-view-4" type="button" class="project-task-layout-btn" title="Vue 4 colonnes ultra compacte" aria-label="Vue 4 colonnes"><span class="material-symbols-outlined">grid_view</span></button>
+                  </div>
                 </div>
-              </div>
-              <div id="project-task-filter-row" class="mb-4 grid grid-cols-1 md:grid-cols-6 gap-2">
-                <input id="project-task-search" type="text" placeholder="Recherche tâches (titre, assigné, groupe, thème)" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                <select id="project-task-status" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                  <option value="all">Tous statuts</option>
-                  <option value="todo">À faire</option>
-                  <option value="en-cours">En cours</option>
-                  <option value="suspendu">Suspendu</option>
-                  <option value="termine">Terminé</option>
-                </select>
-                <select id="project-task-filter-epic" class="px-3 py-2 border border-slate-300 rounded-lg text-sm" title="Filtrer par epic">
-                  <option value="all">Tous epics</option>
-                </select>
-                <select id="project-task-filter-feature" class="px-3 py-2 border border-slate-300 rounded-lg text-sm" title="Filtrer par feature">
-                  <option value="all">Toutes features</option>
-                </select>
-                <input id="project-task-theme-filter" type="text" placeholder="Filtre thématique" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                <select id="project-task-theme-known" class="px-3 py-2 border border-slate-300 rounded-lg text-sm" title="Choisir parmi les thématiques du projet et du référentiel transverse">
-                  <option value="">Thématiques projet + référentiel...</option>
-                </select>
+                <div id="project-task-filter-row" class="mb-4 grid grid-cols-1 md:grid-cols-7 gap-2">
+                  <input id="project-task-search" type="text" placeholder="Recherche tâches (titre, assigné, groupe, thème)" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  <select id="project-task-status" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    <option value="all">Tous statuts</option>
+                    <option value="todo">À faire</option>
+                    <option value="en-cours">En cours</option>
+                    <option value="suspendu">Suspendu</option>
+                    <option value="termine">Terminé</option>
+                  </select>
+                  <select id="project-task-assignee-kind" class="px-3 py-2 border border-slate-300 rounded-lg text-sm" title="Filtrer par type d'affectation">
+                    <option value="all">Tous responsables</option>
+                    <option value="members">Membres uniquement</option>
+                    <option value="agents">Agents uniquement</option>
+                    <option value="mixed">Mixte agent+membre</option>
+                  </select>
+                  <select id="project-task-filter-epic" class="px-3 py-2 border border-slate-300 rounded-lg text-sm" title="Filtrer par epic">
+                    <option value="all">Tous epics</option>
+                  </select>
+                  <select id="project-task-filter-feature" class="px-3 py-2 border border-slate-300 rounded-lg text-sm" title="Filtrer par feature">
+                    <option value="all">Toutes features</option>
+                  </select>
+                  <input id="project-task-theme-filter" type="text" placeholder="Filtre thématique" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  <select id="project-task-theme-known" class="px-3 py-2 border border-slate-300 rounded-lg text-sm" title="Choisir parmi les thématiques du projet et du référentiel transverse">
+                    <option value="">Thématiques projet + référentiel...</option>
+                  </select>
+                </div>
               </div>
               <div id="tasks-container" class="space-y-4"><p class="text-slate-500 text-center py-8">Aucune tâche pour le moment</p></div>
               <div id="tasks-pagination" class="mt-4 flex items-center justify-between gap-3 text-sm text-slate-600"></div>
@@ -1934,7 +1957,7 @@
       <div class="space-y-4">
         <div><label class="modal-field-label block text-sm font-semibold mb-2"><span class="material-symbols-outlined modal-field-icon" aria-hidden="true">title</span><span>Titre</span></label><input id="task-title" type="text" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"></div>
         <div>
-          <label class="modal-field-label block text-sm font-semibold mb-2"><span class="material-symbols-outlined modal-field-icon" aria-hidden="true">group</span><span>Responsables (membres du projet)</span></label>
+          <label class="modal-field-label block text-sm font-semibold mb-2"><span class="material-symbols-outlined modal-field-icon" aria-hidden="true">group</span><span>Responsables (agents et membres)</span></label>
           <select id="task-assignee" multiple class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary min-h-[92px]"></select>
           <div id="task-group-assignment-wrap" class="mt-3">
             <label class="modal-field-label block text-sm font-semibold mb-2"><span class="material-symbols-outlined modal-field-icon" aria-hidden="true">groups</span><span>Groupe</span></label>
@@ -2542,6 +2565,11 @@
           <input id="edit-user-email-input" type="email" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" placeholder="prenom.nom@organisation.fr">
         </div>
         <div>
+          <label class="block text-sm font-semibold mb-2">Rôle dans Workflow (agent)</label>
+          <input id="edit-user-workflow-role-input" type="text" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Ex: Responsable parcours, Coordinateur, Evaluateur">
+          <p class="text-[11px] text-slate-500 mt-1">Ce rôle permet de vous référencer automatiquement comme agent Workflow lié à votre compte.</p>
+        </div>
+        <div>
           <label class="block text-sm font-semibold mb-2">Photo de profil (optionnel)</label>
           <div class="flex items-center gap-3">
             <input id="profile-photo-input" type="file" accept="image/*" class="w-full px-3 py-2 border border-slate-300 rounded-lg bg-slate-50 text-sm">
@@ -2723,7 +2751,7 @@
   <script src="js/taskmda-workflow-store.js?v=20260403-01"></script>
   <script src="js/taskmda-workflow-graph.js?v=20260403-01"></script>
   <script src="js/taskmda-workflow-ui.js?v=20260403-01"></script>
-  <script src="js/taskmda-workflow.js?v=20260406-02"></script>
+  <script src="js/taskmda-workflow.js?v=20260406-04"></script>
   <script src="js/taskmda-app-init.js?v=20260406-01"></script>
   <script src="js/taskmda-projects-ui.js?v=20260406-01"></script>
   <script src="js/taskmda-comms-ui.js?v=20260406-01"></script>

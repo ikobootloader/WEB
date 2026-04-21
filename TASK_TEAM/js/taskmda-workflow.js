@@ -10,6 +10,7 @@
     workflowTasks: 'id',
     workflowProcedures: 'id',
     workflowSoftware: 'id',
+    workflowJobTitles: 'id',
     workflowRoles: 'id',
     workflowProcesses: 'id',
     workflowProcessSteps: 'id',
@@ -46,6 +47,7 @@
     task: { store: 'workflowTasks', label: 'Tache workflow' },
     procedure: { store: 'workflowProcedures', label: 'Procedure' },
     software: { store: 'workflowSoftware', label: 'Logiciel metier' },
+    jobTitle: { store: 'workflowJobTitles', label: 'Titre de poste' },
     contingencyPlan: { store: 'workflowContingencyPlans', label: 'Plan de contingence' }
   };
 
@@ -74,11 +76,55 @@
       .filter(Boolean);
   }
 
+  function normalizeIdList(value) {
+    const list = Array.isArray(value)
+      ? value
+      : (String(value || '').includes(',') ? parseCsv(value) : [String(value || '').trim()]);
+    return Array.from(new Set(list.map((item) => String(item || '').trim()).filter(Boolean)));
+  }
+
+  function getAgentServiceIds(agent) {
+    if (!agent || typeof agent !== 'object') return [];
+    return normalizeIdList([agent.serviceId, ...(Array.isArray(agent.serviceIds) ? agent.serviceIds : [])]);
+  }
+
+  function getAgentGroupIds(agent) {
+    if (!agent || typeof agent !== 'object') return [];
+    return normalizeIdList(agent.groupIds);
+  }
+
+  function getAgentCommunityIds(agent) {
+    if (!agent || typeof agent !== 'object') return [];
+    return normalizeIdList([agent.communityId, ...(Array.isArray(agent.communityIds) ? agent.communityIds : [])]);
+  }
+
   function parseMultiline(value) {
     return String(value || '')
       .split('\n')
       .map((item) => item.trim())
       .filter(Boolean);
+  }
+
+  function getAgentContactParts(agent) {
+    if (!agent || typeof agent !== 'object') return [];
+    const parts = [];
+    const fixed = String(agent.phoneFixed || '').trim();
+    const internal = String(agent.phoneInternal || '').trim();
+    const mobile = String(agent.phoneMobile || '').trim();
+    const email = String(agent.email || '').trim();
+    if (fixed) parts.push(`Fixe: ${fixed}`);
+    if (internal) parts.push(`Poste: ${internal}`);
+    if (mobile) parts.push(`Mobile: ${mobile}`);
+    if (email) parts.push(`Mail: ${email}`);
+    return parts;
+  }
+
+  function countAgentsUsingJobTitle(jobTitleId, agents) {
+    const safeJobTitleId = String(jobTitleId || '').trim();
+    if (!safeJobTitleId) return 0;
+    return (Array.isArray(agents) ? agents : [])
+      .filter((agent) => String(agent?.titleRefId || '').trim() === safeJobTitleId)
+      .length;
   }
 
   function paginateWorkflowItems(items, page, pageSize) {
@@ -228,6 +274,7 @@
         tasks: [],
         procedures: [],
         software: [],
+        jobTitles: [],
         permissionProfiles: [],
         permissionAssignments: [],
         permissionRequests: [],
@@ -299,6 +346,7 @@
       kpi: 'workflow-view-kpi',
       procedures: 'workflow-view-procedures',
       software: 'workflow-view-software',
+      jobtitles: 'workflow-view-jobtitles',
       contingency: 'workflow-view-contingency',
       analytics: 'workflow-view-analytics',
       governance: 'workflow-view-governance',
@@ -327,7 +375,7 @@
       referentiels: {
         label: 'R\u00e9f\u00e9rentiels',
         icon: 'library_books',
-        views: ['procedures', 'software', 'contingency'],
+        views: ['procedures', 'software', 'jobtitles', 'contingency'],
         defaultView: 'procedures'
       },
       supervision: {
@@ -395,6 +443,16 @@
     const CONTINGENCY_ACTION_STATUS = ['todo', 'in_progress', 'done', 'blocked'];
     const CONTINGENCY_ACTIVATION_STATUS = ['active', 'closed'];
     const CONTINGENCY_EXERCISE_RESULT = ['pending', 'ok', 'partial', 'ko'];
+    const DEFAULT_JOB_TITLE_NAMES = [
+      'Agent referent',
+      'Responsable de service',
+      'Coordinateur',
+      'Evaluateur social',
+      'Evaluateur medical',
+      'Infirmier coordinateur',
+      'Charge de parcours',
+      'Assistant administratif'
+    ];
 
     function now() {
       return typeof api.now === 'function' ? Number(api.now()) : Date.now();
@@ -420,8 +478,8 @@
       if (!agents.length) return null;
       const scored = agents.map((agent) => {
         let score = 0;
-        if (serviceId && String(agent.serviceId || '') === serviceId) score += 2;
-        if (groupId && Array.isArray(agent.groupIds) && agent.groupIds.includes(groupId)) score += 1;
+        if (serviceId && getAgentServiceIds(agent).includes(serviceId)) score += 2;
+        if (groupId && getAgentGroupIds(agent).includes(groupId)) score += 1;
         return { agent, score };
       }).sort((a, b) => b.score - a.score);
       return String(scored[0]?.agent?.id || '').trim() || null;
@@ -1216,7 +1274,8 @@ ${reviews.map((row)=>`<tr><td>${esc(row.reviewDate || '-')}</td><td>${esc(row.ne
           if (safe) roleIds.add(safe);
         });
         (state.collections.roles || []).forEach((role) => {
-          if (String(role.serviceId || '') !== String(agent.serviceId || '')) return;
+          const roleServiceId = String(role.serviceId || '').trim();
+          if (roleServiceId && !getAgentServiceIds(agent).includes(roleServiceId)) return;
           const hints = Array.isArray(role.permissionHints) ? role.permissionHints.map((hint) => normalize(hint)) : [];
           const roleName = normalize(role.name || '');
           const canApprove = hints.includes('approver')
@@ -1492,6 +1551,7 @@ ${reviews.map((row)=>`<tr><td>${esc(row.reviewDate || '-')}</td><td>${esc(row.ne
         tasks: Array.isArray(state.collections.tasks) ? state.collections.tasks : [],
         procedures: Array.isArray(state.collections.procedures) ? state.collections.procedures : [],
         software: Array.isArray(state.collections.software) ? state.collections.software : [],
+        jobTitles: Array.isArray(state.collections.jobTitles) ? state.collections.jobTitles : [],
         metrics: Array.isArray(state.collections.metrics) ? state.collections.metrics : []
       };
     }
@@ -2060,7 +2120,7 @@ ${reviews.map((row)=>`<tr><td>${esc(row.reviewDate || '-')}</td><td>${esc(row.ne
     }
 
     async function loadCollections() {
-      const [communities, services, groups, agents, roles, processes, steps, flows, templates, metrics, users, directoryUsers, tasks, procedures, software, permissionProfiles, permissionAssignments, permissionRequests, permissionReviews, permissionAudit, contingencyPlans, contingencyActions, contingencyActivations, contingencyExercises, contingencyReviews, contingencyAudit, softwareVersions, audit, history, globalTasks, globalDocs, globalThemes, globalGroups] = await Promise.all([
+      const [communities, services, groups, agents, roles, processes, steps, flows, templates, metrics, users, directoryUsers, tasks, procedures, software, jobTitles, permissionProfiles, permissionAssignments, permissionRequests, permissionReviews, permissionAudit, contingencyPlans, contingencyActions, contingencyActivations, contingencyExercises, contingencyReviews, contingencyAudit, softwareVersions, audit, history, globalTasks, globalDocs, globalThemes, globalGroups] = await Promise.all([
         api.getAll('workflowCommunities', STORE_KEY_FIELDS.workflowCommunities),
         api.getAll('workflowServices', STORE_KEY_FIELDS.workflowServices),
         api.getAll('workflowGroups', STORE_KEY_FIELDS.workflowGroups),
@@ -2076,6 +2136,7 @@ ${reviews.map((row)=>`<tr><td>${esc(row.reviewDate || '-')}</td><td>${esc(row.ne
         api.getAll('workflowTasks', STORE_KEY_FIELDS.workflowTasks),
         api.getAll('workflowProcedures', STORE_KEY_FIELDS.workflowProcedures),
         api.getAll('workflowSoftware', STORE_KEY_FIELDS.workflowSoftware),
+        api.getAll('workflowJobTitles', STORE_KEY_FIELDS.workflowJobTitles),
         api.getAll('workflowPermissionProfiles', STORE_KEY_FIELDS.workflowPermissionProfiles),
         api.getAll('workflowPermissionAssignments', STORE_KEY_FIELDS.workflowPermissionAssignments),
         api.getAll('workflowPermissionRequests', STORE_KEY_FIELDS.workflowPermissionRequests),
@@ -2111,6 +2172,7 @@ ${reviews.map((row)=>`<tr><td>${esc(row.reviewDate || '-')}</td><td>${esc(row.ne
       state.collections.tasks = Array.isArray(tasks) ? tasks : [];
       state.collections.procedures = Array.isArray(procedures) ? procedures : [];
       state.collections.software = Array.isArray(software) ? software : [];
+      state.collections.jobTitles = Array.isArray(jobTitles) ? jobTitles : [];
       state.collections.permissionProfiles = Array.isArray(permissionProfiles) ? permissionProfiles : [];
       state.collections.permissionAssignments = Array.isArray(permissionAssignments) ? permissionAssignments : [];
       state.collections.permissionRequests = Array.isArray(permissionRequests) ? permissionRequests : [];
@@ -2129,6 +2191,35 @@ ${reviews.map((row)=>`<tr><td>${esc(row.reviewDate || '-')}</td><td>${esc(row.ne
       state.collections.globalDocs = Array.isArray(globalDocs) ? globalDocs : [];
       state.collections.globalThemes = Array.isArray(globalThemes) ? globalThemes : [];
       state.collections.globalGroups = Array.isArray(globalGroups) ? globalGroups : [];
+      if ((state.collections.jobTitles || []).length === 0) {
+        const titleNames = Array.from(new Set(
+          DEFAULT_JOB_TITLE_NAMES.concat(
+            (state.collections.agents || []).map((agent) => String(agent?.title || '').trim()).filter(Boolean)
+          )
+        ));
+        const nowTs = now();
+        const seededRows = titleNames.map((name) => ({
+          id: `wf-job-title-${uid()}`,
+          name,
+          category: 'metier',
+          active: true,
+          description: '',
+          metadata: { source: 'default_seed' },
+          createdAt: nowTs,
+          updatedAt: nowTs
+        }));
+        try {
+          await Promise.all(seededRows.map((row) => api.put('workflowJobTitles', row, STORE_KEY_FIELDS.workflowJobTitles)));
+          state.collections.jobTitles = seededRows;
+        } catch (error) {
+          if (error?.name === 'NotFoundError') {
+            console.warn('[Workflow] Store workflowJobTitles introuvable temporairement (migration IndexedDB en attente).');
+            state.collections.jobTitles = [];
+          } else {
+            throw error;
+          }
+        }
+      }
       await runAutomaticPermissionReviews();
       resolveWorkflowPermissions();
     }
@@ -3653,6 +3744,7 @@ ${reviews.map((row)=>`<tr><td>${esc(row.reviewDate || '-')}</td><td>${esc(row.ne
       if (type === 'task') return state.collections.tasks;
       if (type === 'procedure') return state.collections.procedures;
       if (type === 'software') return state.collections.software;
+      if (type === 'jobTitle') return state.collections.jobTitles;
       if (type === 'contingencyPlan') return state.collections.contingencyPlans;
       return [];
     }
@@ -3681,13 +3773,16 @@ ${reviews.map((row)=>`<tr><td>${esc(row.reviewDate || '-')}</td><td>${esc(row.ne
     }
 
     function matchesFilterTriplet(serviceId, groupId, agentId) {
-      if (state.serviceFilter !== 'all' && String(serviceId || '') !== state.serviceFilter) {
+      const serviceIds = normalizeIdList(serviceId);
+      const groupIds = normalizeIdList(groupId);
+      const agentIds = normalizeIdList(agentId);
+      if (state.serviceFilter !== 'all' && !serviceIds.includes(state.serviceFilter)) {
         return false;
       }
-      if (state.groupFilter !== 'all' && String(groupId || '') !== state.groupFilter) {
+      if (state.groupFilter !== 'all' && !groupIds.includes(state.groupFilter)) {
         return false;
       }
-      if (state.agentFilter !== 'all' && String(agentId || '') !== state.agentFilter) {
+      if (state.agentFilter !== 'all' && !agentIds.includes(state.agentFilter)) {
         return false;
       }
       return true;
@@ -3732,8 +3827,12 @@ ${reviews.map((row)=>`<tr><td>${esc(row.reviewDate || '-')}</td><td>${esc(row.ne
       const q = normalize(state.query);
       return (items || []).filter((item) => {
         const resolved = resolver ? resolver(item) : {
-          serviceId: item?.serviceId || null,
-          groupId: item?.groupId || null,
+          serviceId: (Array.isArray(item?.serviceIds) && item.serviceIds.length)
+            ? item.serviceIds
+            : (item?.serviceId || null),
+          groupId: (Array.isArray(item?.groupIds) && item.groupIds.length)
+            ? item.groupIds
+            : (item?.groupId || null),
           agentId: item?.ownerAgentId || item?.managerAgentId || null
         };
         const normalizedResolved = typeof resolved === 'string'
@@ -3743,9 +3842,9 @@ ${reviews.map((row)=>`<tr><td>${esc(row.reviewDate || '-')}</td><td>${esc(row.ne
             agentId: resolved === 'all' ? 'all' : null
           }
           : {
-            serviceId: resolved?.serviceId || null,
-            groupId: resolved?.groupId || null,
-            agentId: resolved?.agentId || null
+            serviceId: resolved?.serviceId ?? null,
+            groupId: resolved?.groupId ?? null,
+            agentId: resolved?.agentId ?? null
           };
         if (normalizedResolved.serviceId !== 'all' && !matchesFilterTriplet(normalizedResolved.serviceId, normalizedResolved.groupId, normalizedResolved.agentId)) {
           return false;
@@ -3782,9 +3881,9 @@ ${reviews.map((row)=>`<tr><td>${esc(row.reviewDate || '-')}</td><td>${esc(row.ne
       if (refs.agentFilter) {
         let agents = state.serviceFilter === 'all'
           ? state.collections.agents
-          : state.collections.agents.filter((agent) => String(agent.serviceId || '') === state.serviceFilter);
+          : state.collections.agents.filter((agent) => getAgentServiceIds(agent).includes(state.serviceFilter));
         if (state.groupFilter !== 'all') {
-          agents = agents.filter((agent) => Array.isArray(agent.groupIds) && agent.groupIds.includes(state.groupFilter));
+          agents = agents.filter((agent) => getAgentGroupIds(agent).includes(state.groupFilter));
         }
         const previousAgent = state.agentFilter || 'all';
         refs.agentFilter.innerHTML = ['<option value="all">Tous agents</option>']
@@ -3811,6 +3910,7 @@ ${reviews.map((row)=>`<tr><td>${esc(row.reviewDate || '-')}</td><td>${esc(row.ne
         'btn-workflow-add-task',
         'btn-workflow-add-procedure',
         'btn-workflow-add-software',
+        'btn-workflow-add-job-title',
         'btn-workflow-add-contingency-plan',
         'btn-workflow-migrate-agent-users',
         'btn-workflow-inject-org-model'
@@ -3864,6 +3964,7 @@ ${reviews.map((row)=>`<tr><td>${esc(row.reviewDate || '-')}</td><td>${esc(row.ne
       if (viewKey === 'kpi') return 'KPI';
       if (viewKey === 'procedures') return 'Procedures';
       if (viewKey === 'software') return 'Logiciels metiers';
+      if (viewKey === 'jobtitles') return 'Postes';
       if (viewKey === 'contingency') return 'Contingence';
       if (viewKey === 'analytics') return 'Analyse';
       if (viewKey === 'governance') return 'Gouvernance';
@@ -3951,7 +4052,7 @@ ${reviews.map((row)=>`<tr><td>${esc(row.reviewDate || '-')}</td><td>${esc(row.ne
         }
       }
 
-      if ((safeType === 'task' || safeType === 'procedure' || safeType === 'software' || safeType === 'process' || safeType === 'step' || safeType === 'flow' || safeType === 'role' || safeType === 'template' || safeType === 'contingencyPlan') && editable) {
+      if ((safeType === 'task' || safeType === 'procedure' || safeType === 'software' || safeType === 'process' || safeType === 'step' || safeType === 'flow' || safeType === 'role' || safeType === 'template' || safeType === 'contingencyPlan' || safeType === 'jobTitle') && editable) {
         actions.push({ action: 'delete', label: 'Supprimer', icon: 'delete', tone: 'danger' });
       }
 
@@ -4233,8 +4334,9 @@ ${clone.outerHTML}
       });
 
       (agents || []).forEach((agent) => {
-        if (Array.isArray(agent.groupIds) && agent.groupIds.some((id) => groupIds.has(String(id)))) {
-          agent.groupIds.filter((id) => groupIds.has(String(id))).forEach((groupId) => {
+        const visibleGroupIds = getAgentGroupIds(agent).filter((id) => groupIds.has(String(id)));
+        if (visibleGroupIds.length > 0) {
+          visibleGroupIds.forEach((groupId) => {
             structure.push({
               label: 'Groupe -> Agent',
               source: { type: 'group', id: groupId, name: maps.groupById.get(groupId)?.name || groupId },
@@ -4243,10 +4345,13 @@ ${clone.outerHTML}
           });
           return;
         }
-        structure.push({
-          label: 'Service -> Agent',
-          source: { type: 'service', id: agent.serviceId, name: maps.serviceById.get(agent.serviceId)?.name || agent.serviceId || 'Sans service' },
-          target: { type: 'agent', id: agent.id, name: agent.displayName || agent.id }
+        const visibleServiceIds = getAgentServiceIds(agent).filter((id) => serviceIds.has(String(id)));
+        (visibleServiceIds.length ? visibleServiceIds : [agent.serviceId]).forEach((serviceId) => {
+          structure.push({
+            label: 'Service -> Agent',
+            source: { type: 'service', id: serviceId, name: maps.serviceById.get(serviceId)?.name || serviceId || 'Sans service' },
+            target: { type: 'agent', id: agent.id, name: agent.displayName || agent.id }
+          });
         });
       });
 
@@ -4336,8 +4441,8 @@ ${clone.outerHTML}
       const services = applyFilters(state.collections.services, (item) => ({ serviceId: item.id }));
       const groups = applyFilters(state.collections.groups, (item) => ({ serviceId: item.serviceId, groupId: item.id }));
       const agents = applyFilters(state.collections.agents, (item) => ({
-        serviceId: item.serviceId,
-        groupId: Array.isArray(item.groupIds) && item.groupIds.length ? item.groupIds[0] : null,
+        serviceId: getAgentServiceIds(item),
+        groupId: getAgentGroupIds(item),
         agentId: item.id
       }));
       const processes = applyFilters(state.collections.processes, (item) => ({
@@ -4501,8 +4606,8 @@ ${clone.outerHTML}
       const filteredServices = applyFilters(state.collections.services, (item) => ({ serviceId: item.id }));
       const filteredGroups = applyFilters(state.collections.groups, (item) => ({ serviceId: item.serviceId, groupId: item.id }));
       const filteredAgents = applyFilters(state.collections.agents, (item) => ({
-        serviceId: item.serviceId,
-        groupId: Array.isArray(item.groupIds) && item.groupIds.length ? item.groupIds[0] : null,
+        serviceId: getAgentServiceIds(item),
+        groupId: getAgentGroupIds(item),
         agentId: item.id
       }));
 
@@ -4529,19 +4634,18 @@ ${clone.outerHTML}
       const agentsByGroup = new Map();
       const directAgentsByService = new Map();
       filteredAgents.forEach((agent) => {
-        const agentServiceId = String(agent.serviceId || '');
-        const linkedGroups = Array.isArray(agent.groupIds)
-          ? agent.groupIds
+        const agentServiceIds = new Set(getAgentServiceIds(agent));
+        const linkedGroups = getAgentGroupIds(agent)
             .map((id) => String(id))
             .filter((id) => filteredGroupIds.has(id))
             .filter((id) => {
               const group = groupById.get(id);
               if (!group) return false;
               const groupServiceId = String(group.serviceId || '');
-              if (!groupServiceId || !agentServiceId) return true;
-              return groupServiceId === agentServiceId;
+              if (!groupServiceId || agentServiceIds.size === 0) return true;
+              return agentServiceIds.has(groupServiceId);
             })
-          : [];
+        ;
         if (linkedGroups.length > 0) {
           linkedGroups.forEach((groupId) => {
             if (!agentsByGroup.has(groupId)) agentsByGroup.set(groupId, []);
@@ -4549,9 +4653,16 @@ ${clone.outerHTML}
           });
           return;
         }
-        const serviceId = String(agent.serviceId || '__none__');
-        if (!directAgentsByService.has(serviceId)) directAgentsByService.set(serviceId, []);
-        directAgentsByService.get(serviceId).push(agent);
+        const directServiceIds = getAgentServiceIds(agent);
+        if (directServiceIds.length === 0) {
+          if (!directAgentsByService.has('__none__')) directAgentsByService.set('__none__', []);
+          directAgentsByService.get('__none__').push(agent);
+          return;
+        }
+        directServiceIds.forEach((serviceId) => {
+          if (!directAgentsByService.has(serviceId)) directAgentsByService.set(serviceId, []);
+          directAgentsByService.get(serviceId).push(agent);
+        });
       });
 
       const defaultBranchOpen = (type) => type === 'community' || type === 'service';
@@ -4587,19 +4698,23 @@ ${clone.outerHTML}
       };
 
       const buildAgentNode = (agent) => {
-        const serviceName = maps.serviceById.get(agent.serviceId)?.name || 'Sans service';
+        const serviceNames = getAgentServiceIds(agent)
+          .map((id) => maps.serviceById.get(id)?.name || id)
+          .filter(Boolean);
+        const serviceName = serviceNames.length > 0 ? serviceNames.join(' / ') : 'Sans service';
         const managerName = maps.agentById.get(agent.managerAgentId)?.displayName || '';
-        const inconsistentGroupIds = (Array.isArray(agent.groupIds) ? agent.groupIds : [])
+        const agentServiceIds = new Set(getAgentServiceIds(agent));
+        const inconsistentGroupIds = getAgentGroupIds(agent)
           .map((id) => String(id))
           .filter((id) => {
             const group = allGroupsById.get(id);
             if (!group) return false;
             const groupServiceId = String(group.serviceId || '');
-            const agentServiceId = String(agent.serviceId || '');
-            return !!(groupServiceId && agentServiceId && groupServiceId !== agentServiceId);
+            return !!(groupServiceId && agentServiceIds.size > 0 && !agentServiceIds.has(groupServiceId));
           });
         const chips = [agent.title || 'Agent'];
         if (managerName) chips.push(`Manager: ${managerName}`);
+        chips.push(...getAgentContactParts(agent));
         if (inconsistentGroupIds.length > 0) {
           chips.push({
             label: '⚠ incoherence service/groupe',
@@ -4631,8 +4746,9 @@ ${clone.outerHTML}
         const services = (servicesByCommunity.get(String(community.id)) || []).map(buildServiceNode).join('');
         if (!services && state.serviceFilter !== 'all') return '';
         const serviceCount = (servicesByCommunity.get(String(community.id)) || []).length;
+        const communityManager = maps.agentById.get(community.managerAgentId)?.displayName || 'Sans responsable';
         const placeholder = services ? '' : '<li class="workflow-org-ghost">Aucun service visible</li>';
-        return nodeHtml('community', community.id, community.name || 'Communaute', community.description || '', [`${serviceCount} services`], `${services}${placeholder}`);
+        return nodeHtml('community', community.id, community.name || 'Communaute', community.description || '', [communityManager, `${serviceCount} services`], `${services}${placeholder}`);
       }).filter(Boolean);
 
       const orphanServices = (servicesByCommunity.get('__none__') || []).map(buildServiceNode).join('');
@@ -4669,17 +4785,20 @@ ${clone.outerHTML}
       const filteredServices = applyFilters(state.collections.services, (item) => ({ serviceId: item.id }));
       const filteredGroups = applyFilters(state.collections.groups, (item) => ({ serviceId: item.serviceId, groupId: item.id }));
       const filteredAgents = applyFilters(state.collections.agents, (item) => ({
-        serviceId: item.serviceId,
-        groupId: Array.isArray(item.groupIds) && item.groupIds.length ? item.groupIds[0] : null,
+        serviceId: getAgentServiceIds(item),
+        groupId: getAgentGroupIds(item),
         agentId: item.id
       }));
       const visibleServiceIds = new Set(filteredServices.map((service) => String(service.id || '')));
       const serviceAgentsMap = new Map();
       filteredAgents.forEach((agent) => {
-        const serviceId = String(agent?.serviceId || '').trim();
-        if (!serviceId || !visibleServiceIds.has(serviceId)) return;
-        if (!serviceAgentsMap.has(serviceId)) serviceAgentsMap.set(serviceId, []);
-        serviceAgentsMap.get(serviceId).push(agent);
+        const serviceIds = getAgentServiceIds(agent)
+          .map((id) => String(id || '').trim())
+          .filter((id) => id && visibleServiceIds.has(id));
+        serviceIds.forEach((serviceId) => {
+          if (!serviceAgentsMap.has(serviceId)) serviceAgentsMap.set(serviceId, []);
+          serviceAgentsMap.get(serviceId).push(agent);
+        });
       });
 
       const tasksByService = new Map();
@@ -4699,6 +4818,27 @@ ${clone.outerHTML}
         if (!serviceId || !visibleServiceIds.has(serviceId)) return;
         if (!groupsByService.has(serviceId)) groupsByService.set(serviceId, []);
         groupsByService.get(serviceId).push(group);
+      });
+      const groupMemberIdsMap = new Map(
+        filteredGroups.map((group) => [String(group?.id || '').trim(), new Set()])
+      );
+      filteredAgents.forEach((agent) => {
+        const safeAgentId = String(agent?.id || '').trim();
+        if (!safeAgentId) return;
+        getAgentGroupIds(agent).forEach((groupIdRaw) => {
+          const groupId = String(groupIdRaw || '').trim();
+          if (!groupId || !groupMemberIdsMap.has(groupId)) return;
+          groupMemberIdsMap.get(groupId).add(safeAgentId);
+        });
+      });
+      filteredGroups.forEach((group) => {
+        const safeGroupId = String(group?.id || '').trim();
+        if (!safeGroupId || !groupMemberIdsMap.has(safeGroupId)) return;
+        normalizeIdList(group?.memberAgentIds).forEach((agentIdRaw) => {
+          const agentId = String(agentIdRaw || '').trim();
+          if (!agentId) return;
+          groupMemberIdsMap.get(safeGroupId).add(agentId);
+        });
       });
       const servicesByCommunity = new Map();
       filteredServices.forEach((service) => {
@@ -4764,9 +4904,12 @@ ${clone.outerHTML}
         const isRoot = !!options.isRoot;
         const linkedToRoot = rootServiceId ? !!linkMap.get(rootServiceId)?.has(serviceId) : false;
         const showLinkToRootAction = rootServiceId && !isRoot && !linkedToRoot;
+        const managerAgent = maps.agentById.get(service.managerAgentId)
+          || (serviceAgentsMap.get(serviceId)?.[0] || null);
         const manager = maps.agentById.get(service.managerAgentId)?.displayName
           || (serviceAgentsMap.get(serviceId)?.[0]?.displayName)
           || 'Responsable non defini';
+        const managerContact = getAgentContactParts(managerAgent).join(' - ');
         const count = (serviceAgentsMap.get(serviceId) || []).length;
         const tag = statusMeta(service);
         const linkedCount = (linkMap.get(serviceId) && linkMap.get(serviceId).size) ? linkMap.get(serviceId).size : 0;
@@ -4777,10 +4920,24 @@ ${clone.outerHTML}
           : '';
         const groupsHtml = groups.length
           ? `
-            <div class="workflow-organigram-group-level">
-              <div class="workflow-organigram-group-line"></div>
+            <div class="workflow-organigram-group-level ${groups.length === 1 ? 'is-single' : ''}">
+              <div class="workflow-organigram-group-trunk" aria-hidden="true"></div>
+              <div class="workflow-organigram-group-line" aria-hidden="true"></div>
               <div class="workflow-organigram-group-grid">
-                ${groups.map((group) => `<article class="workflow-organigram-group-card" data-wf-type="group" data-wf-id="${esc(group.id)}"><p class="workflow-organigram-group-title">${esc(group.name || 'Groupe')}</p><p class="workflow-organigram-group-sub">${esc(group.type || 'metier')}</p></article>`).join('')}
+                ${groups.map((group) => {
+                  const safeGroupId = String(group?.id || '').trim();
+                  const memberIds = Array.from(groupMemberIdsMap.get(safeGroupId) || []);
+                  const memberCount = memberIds.length;
+                  const previewNames = memberIds
+                    .slice(0, 2)
+                    .map((agentId) => maps.agentById.get(agentId)?.displayName || agentId)
+                    .filter(Boolean)
+                    .join(' - ');
+                  const details = previewNames
+                    ? `${memberCount} agent${memberCount > 1 ? 's' : ''} - ${previewNames}`
+                    : `${memberCount} agent${memberCount > 1 ? 's' : ''}`;
+                  return `<article class="workflow-organigram-group-card" data-wf-type="group" data-wf-id="${esc(group.id)}"><p class="workflow-organigram-group-title">${esc(group.name || 'Groupe')}</p><p class="workflow-organigram-group-sub">${esc(group.type || 'metier')}</p><p class="workflow-organigram-group-sub">${esc(details)}</p></article>`;
+                }).join('')}
               </div>
             </div>
           `
@@ -4799,6 +4956,7 @@ ${clone.outerHTML}
                 <div class="workflow-organigram-manager">
                   <p>Responsable</p>
                   <strong>${esc(manager)}</strong>
+                  ${managerContact ? `<span>${esc(managerContact)}</span>` : ''}
                   <span>${esc(`${count} agent${count > 1 ? 's' : ''} - ${groups.length} groupe${groups.length > 1 ? 's' : ''} - ${linkedCount} lien${linkedCount > 1 ? 's' : ''}`)}</span>
                 </div>
               </div>
@@ -4830,6 +4988,7 @@ ${clone.outerHTML}
             || (serviceAgentsMap.get(String(leadService.id || ''))?.[0]?.displayName)
             || 'Responsable non defini')
           : 'Responsable non defini';
+        const communityManager = maps.agentById.get(community?.managerAgentId)?.displayName || leadManager;
         const serviceCols = services.map((service) => renderServiceCard(service, { isRoot: String(service.id || '') === rootId, rootServiceId: rootId })).join('');
         return `
           <section class="workflow-organigram-community-block">
@@ -4840,7 +4999,7 @@ ${clone.outerHTML}
               <div class="workflow-organigram-community-foot">
                 <div>
                   <p class="workflow-organigram-community-meta-label">Responsable</p>
-                  <strong>${esc(leadManager)}</strong>
+                  <strong>${esc(communityManager)}</strong>
                 </div>
                 <div class="workflow-organigram-community-count">
                   <p class="workflow-organigram-community-meta-label">Effectif</p>
@@ -5053,15 +5212,16 @@ ${clone.outerHTML}
     function renderAgentsView() {
       const maps = getMaps();
       const cards = applyFilters(state.collections.agents, (item) => ({
-        serviceId: item.serviceId,
-        groupId: Array.isArray(item.groupIds) && item.groupIds.length ? item.groupIds[0] : null,
+        serviceId: getAgentServiceIds(item),
+        groupId: getAgentGroupIds(item),
         agentId: item.id
       })).map((item) => {
         const serviceName = maps.serviceById.get(item.serviceId)?.name || 'Sans service';
         const taskCount = state.collections.tasks.filter((task) => task.ownerAgentId === item.id).length;
         const managerName = maps.agentById.get(item.managerAgentId)?.displayName || 'Aucun manager';
         const reports = state.collections.agents.filter((agent) => agent.managerAgentId === item.id).length;
-        return cardHtml('agent', item.id, item.displayName || 'Agent', `${item.title || 'Poste'} - ${serviceName}`, [`${taskCount} taches`, `Manager: ${managerName}`, `${reports} rattaches`], buildQuickCardActions('agent', item.id));
+        const chips = [`${taskCount} taches`, `Manager: ${managerName}`, `${reports} rattaches`, ...getAgentContactParts(item)];
+        return cardHtml('agent', item.id, item.displayName || 'Agent', `${item.title || 'Poste'} - ${serviceName}`, chips, buildQuickCardActions('agent', item.id));
       });
       refs.content.innerHTML = `<div class="workflow-grid">${cards.join('') || '<div class="workflow-empty">Aucun agent</div>'}</div>`;
     }
@@ -5910,6 +6070,25 @@ ${clone.outerHTML}
       refs.content.innerHTML = `<div class="workflow-grid">${cards.join('') || '<div class="workflow-empty">Aucun logiciel metier</div>'}</div>`;
     }
 
+    function renderJobTitlesView() {
+      const cards = applyFilters(state.collections.jobTitles || [], () => 'all')
+        .slice()
+        .sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || ''), 'fr'))
+        .map((item) => {
+          const linkedAgents = (state.collections.agents || [])
+            .filter((agent) => String(agent?.titleRefId || '') === String(item.id || ''))
+            .length;
+          const category = String(item.category || 'metier').trim() || 'metier';
+          const chips = [
+            `Categorie: ${category}`,
+            item.active === false ? 'Inactif' : 'Actif',
+            `${linkedAgents} agent(s)`
+          ];
+          return cardHtml('jobTitle', item.id, item.name || 'Titre de poste', item.description || '', chips, buildQuickCardActions('jobTitle', item.id));
+        });
+      refs.content.innerHTML = `<div class="workflow-grid">${cards.join('') || '<div class="workflow-empty">Aucun titre de poste</div>'}</div>`;
+    }
+
     function renderContingencyView() {
       const maps = getMaps();
       const today = todayIsoDate();
@@ -6373,6 +6552,7 @@ ${clone.outerHTML}
       else if (state.activeView === 'kpi') renderKpiView();
       else if (state.activeView === 'procedures') renderProceduresView();
       else if (state.activeView === 'software') renderSoftwareView();
+      else if (state.activeView === 'jobtitles') renderJobTitlesView();
       else if (state.activeView === 'contingency') renderContingencyView();
       else if (state.activeView === 'analytics') renderAnalyticsView();
       else if (state.activeView === 'governance') renderGovernanceView();
@@ -6396,6 +6576,151 @@ ${clone.outerHTML}
         .join('');
     }
 
+    function normalizeOwnerSelectionValue(value) {
+      const raw = String(value || '').trim();
+      if (!raw) return '';
+      if (raw.startsWith('agent:') || raw.startsWith('user:')) return raw;
+      return `agent:${raw}`;
+    }
+
+    function buildOwnerSelectOptions(selected) {
+      const safeSelected = normalizeOwnerSelectionValue(selected);
+      const byUserId = new Map();
+      const users = []
+        .concat(Array.isArray(state.collections.users) ? state.collections.users : [])
+        .concat(Array.isArray(state.collections.directoryUsers) ? state.collections.directoryUsers : []);
+      users.forEach((row) => {
+        const userId = String(row?.userId || '').trim();
+        if (!userId) return;
+        if (byUserId.has(userId)) return;
+        byUserId.set(userId, {
+          userId,
+          name: String(row?.name || row?.displayName || userId).trim() || userId
+        });
+      });
+      const agentOptions = (state.collections.agents || [])
+        .slice()
+        .sort((a, b) => String(a?.displayName || '').localeCompare(String(b?.displayName || ''), 'fr'))
+        .map((agent) => {
+          const id = String(agent?.id || '').trim();
+          if (!id) return '';
+          const value = `agent:${id}`;
+          const label = String(agent?.displayName || id).trim() || id;
+          return `<option value="${esc(value)}" ${value === safeSelected ? 'selected' : ''}>${esc(`Agent - ${label}`)}</option>`;
+        })
+        .filter(Boolean);
+      const userOptions = Array.from(byUserId.values())
+        .sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || ''), 'fr'))
+        .map((user) => {
+          const value = `user:${String(user.userId || '').trim()}`;
+          return `<option value="${esc(value)}" ${value === safeSelected ? 'selected' : ''}>${esc(`Membre - ${user.name}`)}</option>`;
+        });
+      return ['<option value="">-</option>']
+        .concat(agentOptions)
+        .concat(userOptions)
+        .join('');
+    }
+
+    async function ensureWorkflowAgentForUser(userId, options = {}) {
+      const safeUserId = String(userId || '').trim();
+      if (!safeUserId) return null;
+      const existingAgents = Array.isArray(state.collections.agents) ? state.collections.agents : [];
+      const linked = existingAgents.find((row) => String(row?.metadata?.userId || '').trim() === safeUserId);
+      const contextServiceId = String(options?.serviceId || '').trim() || null;
+      const contextGroupId = String(options?.groupId || '').trim() || null;
+      const contextGroup = contextGroupId
+        ? (state.collections.groups || []).find((row) => String(row?.id || '').trim() === contextGroupId)
+        : null;
+      const resolvedServiceId = String(contextServiceId || contextGroup?.serviceId || '').trim() || null;
+      const resolvedCommunityId = resolvedServiceId
+        ? String((state.collections.services || []).find((row) => String(row?.id || '').trim() === resolvedServiceId)?.communityId || '').trim() || null
+        : null;
+      if (linked) {
+        let changed = false;
+        const next = { ...linked };
+        if (!next.serviceId && resolvedServiceId) {
+          next.serviceId = resolvedServiceId;
+          changed = true;
+        }
+        const serviceIds = Array.isArray(next.serviceIds) ? next.serviceIds.slice() : [];
+        if (resolvedServiceId && !serviceIds.includes(resolvedServiceId)) {
+          next.serviceIds = serviceIds.concat([resolvedServiceId]);
+          changed = true;
+        }
+        const communityIds = Array.isArray(next.communityIds) ? next.communityIds.slice() : [];
+        if (resolvedCommunityId && !communityIds.includes(resolvedCommunityId)) {
+          next.communityIds = communityIds.concat([resolvedCommunityId]);
+          changed = true;
+        }
+        if (!next.communityId && resolvedCommunityId) {
+          next.communityId = resolvedCommunityId;
+          changed = true;
+        }
+        if (contextGroupId) {
+          const groupIds = Array.isArray(next.groupIds) ? next.groupIds.slice() : [];
+          if (!groupIds.includes(contextGroupId)) {
+            next.groupIds = groupIds.concat([contextGroupId]);
+            changed = true;
+          }
+        }
+        if (changed) {
+          next.updatedAt = now();
+          await api.put('workflowAgents', next, STORE_KEY_FIELDS.workflowAgents);
+        }
+        return String(next.id || '').trim() || null;
+      }
+
+      const user = (state.collections.users || []).find((row) => String(row?.userId || '').trim() === safeUserId)
+        || (state.collections.directoryUsers || []).find((row) => String(row?.userId || '').trim() === safeUserId);
+      const displayName = String(user?.name || user?.displayName || safeUserId).trim() || safeUserId;
+      const baseHandleRaw = normalize(displayName).replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '').slice(0, 28) || 'agent';
+      let nextHandle = baseHandleRaw;
+      const usedHandles = new Set(existingAgents.map((row) => String(row?.handle || '').trim()).filter(Boolean));
+      let suffix = 2;
+      while (usedHandles.has(nextHandle)) {
+        nextHandle = `${baseHandleRaw}.${suffix++}`;
+      }
+      const created = {
+        id: `wf-agent-${uid()}`,
+        displayName,
+        handle: nextHandle,
+        title: String(options?.title || '').trim() || 'Agent',
+        serviceId: resolvedServiceId,
+        serviceIds: resolvedServiceId ? [resolvedServiceId] : [],
+        communityId: resolvedCommunityId,
+        communityIds: resolvedCommunityId ? [resolvedCommunityId] : [],
+        groupIds: contextGroupId ? [contextGroupId] : [],
+        managerAgentId: null,
+        mission: '',
+        responsibilities: [],
+        skills: [],
+        tools: [],
+        rbacHints: [],
+        metadata: {
+          userId: safeUserId,
+          source: 'member_link'
+        },
+        createdAt: now(),
+        updatedAt: now()
+      };
+      await api.put('workflowAgents', created, STORE_KEY_FIELDS.workflowAgents);
+      return String(created.id || '').trim() || null;
+    }
+
+    async function resolveOwnerAgentIdFromSelection(value, options = {}) {
+      const safe = String(value || '').trim();
+      if (!safe) return null;
+      if (safe.startsWith('agent:')) {
+        return String(safe.slice('agent:'.length) || '').trim() || null;
+      }
+      if (safe.startsWith('user:')) {
+        const userId = String(safe.slice('user:'.length) || '').trim();
+        if (!userId) return null;
+        return await ensureWorkflowAgentForUser(userId, options);
+      }
+      return safe || null;
+    }
+
     function fieldHtml(label, key, value, kind) {
       if (kind === 'readonly') {
         return `<label class="workflow-form-label" for="wf-field-${esc(key)}">${esc(label)}</label><input id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-input" type="text" value="${esc(value)}" readonly>`;
@@ -6405,6 +6730,9 @@ ${clone.outerHTML}
       }
       if (kind === 'select-agent') {
         return `<label class="workflow-form-label" for="wf-field-${esc(key)}">${esc(label)}</label><select id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-select">${buildSelectOptions(state.collections.agents, 'id', 'displayName', value)}</select>`;
+      }
+      if (kind === 'select-owner') {
+        return `<label class="workflow-form-label" for="wf-field-${esc(key)}">${esc(label)}</label><select id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-select">${buildOwnerSelectOptions(value)}</select>`;
       }
       if (kind === 'select-role') {
         return `<label class="workflow-form-label" for="wf-field-${esc(key)}">${esc(label)}</label><select id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-select">${buildSelectOptions(state.collections.roles, 'id', 'name', value)}</select>`;
@@ -6441,11 +6769,53 @@ ${clone.outerHTML}
       if (kind === 'select-procedure') {
         return `<label class="workflow-form-label" for="wf-field-${esc(key)}">${esc(label)}</label><select id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-select">${buildSelectOptions(state.collections.procedures, 'id', 'title', value)}</select>`;
       }
+      if (kind === 'select-job-title') {
+        const selected = String(value || '').trim();
+        const options = ['<option value="">-- Aucun referentiel --</option>']
+          .concat((state.collections.jobTitles || [])
+            .slice()
+            .sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || ''), 'fr'))
+            .map((row) => {
+              const id = String(row?.id || '').trim();
+              if (!id) return '';
+              const label = `${row?.name || id}${row?.active === false ? ' (inactif)' : ''}`;
+              return `<option value="${esc(id)}" ${selected === id ? 'selected' : ''}>${esc(label)}</option>`;
+            }))
+          .join('');
+        return `<label class="workflow-form-label" for="wf-field-${esc(key)}">${esc(label)}</label><select id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-select">${options}</select>`;
+      }
       if (kind === 'select-task-status') {
         return `<label class="workflow-form-label" for="wf-field-${esc(key)}">${esc(label)}</label><select id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-select">${TASK_STATUS_OPTIONS.map((option) => `<option value="${esc(option)}" ${String(value || 'todo') === option ? 'selected' : ''}>${esc(option)}</option>`).join('')}</select>`;
       }
       if (kind === 'select-approval-status') {
         return `<label class="workflow-form-label" for="wf-field-${esc(key)}">${esc(label)}</label><select id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-select">${TASK_APPROVAL_OPTIONS.map((option) => `<option value="${esc(option)}" ${String(value || 'pending') === option ? 'selected' : ''}>${esc(option)}</option>`).join('')}</select>`;
+      }
+      if (kind === 'multi-checkbox') {
+        const selectedValues = Array.isArray(value?.selected)
+          ? value.selected
+          : normalizeIdList(value?.selected || value);
+        const selected = new Set(selectedValues.map((item) => String(item || '').trim()).filter(Boolean));
+        const options = Array.isArray(value?.options) ? value.options : [];
+        const hint = String(value?.hint || '').trim();
+        const emptyLabel = String(value?.emptyLabel || 'Aucune option disponible').trim();
+        const rows = options.map((option) => {
+          const optionId = String(option?.id || '').trim();
+          if (!optionId) return '';
+          const optionLabel = String(option?.label || option?.name || optionId).trim() || optionId;
+          return `
+            <label class="workflow-multi-check-item">
+              <input type="checkbox" class="workflow-multi-check-input" data-wf-check-item="${esc(key)}" value="${esc(optionId)}" ${selected.has(optionId) ? 'checked' : ''}>
+              <span>${esc(optionLabel)}</span>
+            </label>
+          `;
+        }).join('');
+        return `
+          <label class="workflow-form-label">${esc(label)}</label>
+          <div class="workflow-multi-checklist" data-wf-checklist-key="${esc(key)}">
+            ${rows || `<div class="workflow-card-sub">${esc(emptyLabel)}</div>`}
+          </div>
+          ${hint ? `<p class="workflow-card-sub workflow-form-hint">${esc(hint)}</p>` : ''}
+        `;
       }
       return `<label class="workflow-form-label" for="wf-field-${esc(key)}">${esc(label)}</label><input id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-input" type="text" value="${esc(value)}">`;
     }
@@ -6950,6 +7320,7 @@ ${clone.outerHTML}
       if (type === 'community') {
         fields.push(fieldHtml('Nom', 'name', item.name || '', 'text'));
         fields.push(fieldHtml('Description', 'description', item.description || '', 'textarea'));
+        fields.push(fieldHtml('Responsable', 'managerAgentId', item.managerAgentId || '', 'select-agent'));
         fields.push(fieldHtml('Couleur', 'color', item.color || '#1a428a', 'text'));
         fields.push(fieldHtml('Ordre', 'order', String(item.order || 1), 'text'));
       }
@@ -6969,17 +7340,60 @@ ${clone.outerHTML}
         fields.push(fieldHtml('Membres agentIds (csv)', 'memberAgentIds', toCsv(item.memberAgentIds), 'text'));
       }
       if (type === 'agent') {
+        const serviceNameById = new Map((state.collections.services || []).map((service) => [String(service.id || '').trim(), service]));
+        const serviceOptions = (state.collections.services || []).map((service) => ({
+          id: String(service.id || '').trim(),
+          label: String(service.name || service.id || '').trim() || String(service.id || '').trim()
+        }));
+        const communityOptions = (state.collections.communities || []).map((community) => ({
+          id: String(community.id || '').trim(),
+          label: String(community.name || community.id || '').trim() || String(community.id || '').trim()
+        }));
+        const groupOptions = (state.collections.groups || []).map((group) => {
+          const serviceId = String(group.serviceId || '').trim();
+          const serviceName = serviceNameById.get(serviceId)?.name || serviceId || 'Sans service';
+          return {
+            id: String(group.id || '').trim(),
+            label: `${group.name || group.id} - ${serviceName}`
+          };
+        });
         fields.push(fieldHtml('Nom affiche', 'displayName', item.displayName || '', 'text'));
         fields.push(fieldHtml('Handle', 'handle', item.handle || '', 'text'));
-        fields.push(fieldHtml('Titre poste', 'title', item.title || '', 'text'));
-        fields.push(fieldHtml('Service', 'serviceId', item.serviceId || '', 'select-service'));
-        fields.push(fieldHtml('Groupes (csv agentIds)', 'groupIds', toCsv(item.groupIds), 'text'));
+        const resolvedTitleRefId = String(item.titleRefId || '').trim() || String((state.collections.jobTitles || []).find((row) => normalize(row?.name || '') === normalize(item.title || ''))?.id || '').trim();
+        fields.push(fieldHtml('Titre poste (referentiel)', 'titleRefId', resolvedTitleRefId, 'select-job-title'));
+        fields.push(fieldHtml('Titre poste (libre)', 'title', item.title || '', 'text'));
+        fields.push(fieldHtml('Service principal', 'serviceId', item.serviceId || '', 'select-service'));
+        fields.push(fieldHtml('Services associes', 'serviceIds', {
+          selected: getAgentServiceIds(item),
+          options: serviceOptions,
+          hint: 'Selection multiple'
+        }, 'multi-checkbox'));
+        fields.push(fieldHtml('Communautes associees', 'communityIds', {
+          selected: getAgentCommunityIds(item),
+          options: communityOptions,
+          hint: 'Selection multiple'
+        }, 'multi-checkbox'));
+        fields.push(fieldHtml('Telephone fixe', 'phoneFixed', item.phoneFixed || '', 'text'));
+        fields.push(fieldHtml('Poste interne', 'phoneInternal', item.phoneInternal || '', 'text'));
+        fields.push(fieldHtml('Telephone portable', 'phoneMobile', item.phoneMobile || '', 'text'));
+        fields.push(fieldHtml('Adresse email', 'email', item.email || '', 'text'));
+        fields.push(fieldHtml('Groupes associes', 'groupIds', {
+          selected: getAgentGroupIds(item),
+          options: groupOptions,
+          hint: 'Selection multiple'
+        }, 'multi-checkbox'));
         fields.push(fieldHtml('Manager', 'managerAgentId', item.managerAgentId || '', 'select-agent'));
         fields.push(fieldHtml('Compte local (userId)', 'metadataUserId', String(item?.metadata?.userId || ''), 'text'));
         fields.push(fieldHtml('RBAC hints (csv)', 'rbacHints', toCsv(item.rbacHints), 'text'));
         fields.push(fieldHtml('Mission', 'mission', item.mission || '', 'textarea'));
         fields.push(fieldHtml('Competences (csv)', 'skills', toCsv(item.skills), 'text'));
         fields.push(fieldHtml('Outils (csv)', 'tools', toCsv(item.tools), 'text'));
+      }
+      if (type === 'jobTitle') {
+        fields.push(fieldHtml('Nom du poste', 'name', item.name || '', 'text'));
+        fields.push(fieldHtml('Categorie', 'category', item.category || 'metier', 'text'));
+        fields.push(fieldHtml('Actif (true/false)', 'active', String(item.active !== false), 'text'));
+        fields.push(fieldHtml('Description', 'description', item.description || '', 'textarea'));
       }
       if (type === 'role') {
         fields.push(fieldHtml('Nom role', 'name', item.name || '', 'text'));
@@ -6995,7 +7409,7 @@ ${clone.outerHTML}
         fields.push(fieldHtml('Communaute', 'communityId', item.communityId || '', 'select-community'));
         fields.push(fieldHtml('Service', 'serviceId', item.serviceId || '', 'select-service'));
         fields.push(fieldHtml('Groupe', 'groupId', item.groupId || '', 'select-group'));
-        fields.push(fieldHtml('Responsable', 'ownerAgentId', item.ownerAgentId || '', 'select-agent'));
+        fields.push(fieldHtml('Responsable', 'ownerAgentId', item.ownerAgentId || '', 'select-owner'));
         fields.push(fieldHtml('Statut', 'status', item.status || 'draft', 'text'));
         fields.push(fieldHtml('Criticite', 'criticality', item.criticality || 'medium', 'text'));
         fields.push(fieldHtml('Entrees (1 ligne = 1 element)', 'inputs', (item.inputs || []).join('\n'), 'textarea'));
@@ -7048,7 +7462,7 @@ ${clone.outerHTML}
         fields.push(fieldHtml('Processus', 'processId', item.processId || '', 'select-process'));
         fields.push(fieldHtml('Service', 'serviceId', item.serviceId || '', 'select-service'));
         fields.push(fieldHtml('Groupe', 'groupId', item.groupId || '', 'select-group'));
-        fields.push(fieldHtml('Agent responsable', 'ownerAgentId', item.ownerAgentId || '', 'select-agent'));
+        fields.push(fieldHtml('Agent responsable', 'ownerAgentId', item.ownerAgentId || '', 'select-owner'));
         fields.push(fieldHtml('Statut', 'status', item.status || 'todo', 'select-task-status'));
         fields.push(fieldHtml('Priorite', 'priority', item.priority || 'medium', 'text'));
         fields.push(fieldHtml('Validation', 'approvalStatus', item.approvalStatus || 'pending', 'select-approval-status'));
@@ -8758,6 +9172,14 @@ ${clone.outerHTML}
         }
         map[key] = node.value;
       });
+      refs.detailBody?.querySelectorAll('[data-wf-checklist-key]')?.forEach((block) => {
+        const key = String(block.getAttribute('data-wf-checklist-key') || '').trim();
+        if (!key) return;
+        const values = Array.from(block.querySelectorAll(`input[type="checkbox"][data-wf-check-item="${key}"]:checked`))
+          .map((node) => String(node.value || '').trim())
+          .filter(Boolean);
+        map[key] = values.join(',');
+      });
       return map;
     }
 
@@ -8979,6 +9401,7 @@ ${clone.outerHTML}
       if (type === 'community') {
         updated.name = String(fields.name || '').trim();
         updated.description = String(fields.description || '').trim();
+        updated.managerAgentId = String(fields.managerAgentId || '').trim() || null;
         updated.color = String(fields.color || '#1a428a').trim();
         updated.order = Number(fields.order || 1) || 1;
       }
@@ -9000,9 +9423,32 @@ ${clone.outerHTML}
       if (type === 'agent') {
         updated.displayName = String(fields.displayName || '').trim();
         updated.handle = String(fields.handle || '').trim();
-        updated.title = String(fields.title || '').trim();
+        const selectedTitleRefId = String(fields.titleRefId || '').trim();
+        const manualTitle = String(fields.title || '').trim();
+        const refTitleRow = selectedTitleRefId
+          ? (state.collections.jobTitles || []).find((row) => String(row?.id || '').trim() === selectedTitleRefId)
+          : null;
+        updated.titleRefId = selectedTitleRefId || null;
+        updated.title = String(refTitleRow?.name || manualTitle || 'Agent').trim() || 'Agent';
         updated.serviceId = String(fields.serviceId || '').trim() || null;
         updated.groupIds = parseCsv(fields.groupIds);
+        const explicitServiceIds = parseCsv(fields.serviceIds);
+        updated.serviceIds = Array.from(new Set(
+          [updated.serviceId, ...explicitServiceIds]
+            .map((id) => String(id || '').trim())
+            .filter(Boolean)
+        ));
+        const explicitCommunityIds = parseCsv(fields.communityIds);
+        updated.communityIds = Array.from(new Set(
+          explicitCommunityIds
+            .map((id) => String(id || '').trim())
+            .filter(Boolean)
+        ));
+        updated.communityId = String(updated.communityIds[0] || updated.communityId || '').trim() || null;
+        updated.phoneFixed = String(fields.phoneFixed || '').trim();
+        updated.phoneInternal = String(fields.phoneInternal || '').trim();
+        updated.phoneMobile = String(fields.phoneMobile || '').trim();
+        updated.email = String(fields.email || '').trim().toLowerCase();
         updated.managerAgentId = String(fields.managerAgentId || '').trim() || null;
         updated.rbacHints = parseUniqueCsv(fields.rbacHints);
         updated.metadata = {
@@ -9012,6 +9458,18 @@ ${clone.outerHTML}
         updated.mission = String(fields.mission || '').trim();
         updated.skills = parseCsv(fields.skills);
         updated.tools = parseCsv(fields.tools);
+      }
+      if (type === 'jobTitle') {
+        updated.name = String(fields.name || '').trim();
+        updated.category = String(fields.category || 'metier').trim() || 'metier';
+        updated.active = String(fields.active || 'true').trim().toLowerCase() !== 'false';
+        updated.description = String(fields.description || '').trim();
+        const linkedAgentsCount = countAgentsUsingJobTitle(item?.id, state.collections.agents);
+        const wasActive = item?.active !== false;
+        if (wasActive && updated.active === false && linkedAgentsCount > 0) {
+          toast(`Desactivation impossible: ce poste est encore attribue a ${linkedAgentsCount} agent(s).`);
+          return;
+        }
       }
       if (type === 'role') {
         updated.name = String(fields.name || '').trim();
@@ -9027,7 +9485,11 @@ ${clone.outerHTML}
         updated.communityId = String(fields.communityId || '').trim() || null;
         updated.serviceId = String(fields.serviceId || '').trim() || null;
         updated.groupId = String(fields.groupId || '').trim() || null;
-        updated.ownerAgentId = String(fields.ownerAgentId || '').trim() || null;
+        updated.ownerAgentId = await resolveOwnerAgentIdFromSelection(fields.ownerAgentId, {
+          serviceId: updated.serviceId,
+          groupId: updated.groupId,
+          title: 'Responsable workflow'
+        });
         updated.status = String(fields.status || '').trim() || 'draft';
         updated.criticality = String(fields.criticality || '').trim() || 'medium';
         updated.inputs = parseMultiline(fields.inputs);
@@ -9049,7 +9511,11 @@ ${clone.outerHTML}
         updated.description = String(fields.description || '').trim();
         updated.serviceId = String(fields.serviceId || '').trim() || null;
         updated.groupId = String(fields.groupId || '').trim() || null;
-        updated.ownerAgentId = String(fields.ownerAgentId || '').trim() || null;
+        updated.ownerAgentId = await resolveOwnerAgentIdFromSelection(fields.ownerAgentId, {
+          serviceId: updated.serviceId,
+          groupId: updated.groupId,
+          title: 'Agent workflow'
+        });
         updated.roleId = String(fields.roleId || '').trim() || null;
         updated.linkedProcedureId = String(fields.linkedProcedureId || '').trim() || null;
         updated.linkedSoftwareIds = parseUniqueCsv(fields.linkedSoftwareIds);
@@ -9340,6 +9806,11 @@ ${clone.outerHTML}
       }
 
       if (type === 'agent') {
+        state.collections.communities.forEach((community) => {
+          if (community.managerAgentId === id) {
+            updates.push(api.put('workflowCommunities', { ...community, managerAgentId: null, updatedAt: now() }, STORE_KEY_FIELDS.workflowCommunities));
+          }
+        });
         state.collections.services.forEach((service) => {
           if (service.managerAgentId === id) {
             updates.push(api.put('workflowServices', { ...service, managerAgentId: null, updatedAt: now() }, STORE_KEY_FIELDS.workflowServices));
@@ -9477,6 +9948,14 @@ ${clone.outerHTML}
         });
       }
 
+      if (type === 'jobTitle') {
+        state.collections.agents.forEach((agent) => {
+          if (String(agent.titleRefId || '') === String(id || '')) {
+            updates.push(api.put('workflowAgents', { ...agent, titleRefId: null, updatedAt: now() }, STORE_KEY_FIELDS.workflowAgents));
+          }
+        });
+      }
+
       if (type === 'contingencyPlan') {
         state.collections.contingencyActions.forEach((row) => {
           if (String(row.planId || '') === String(id)) updates.push(api.remove('workflowContingencyActions', row.id));
@@ -9518,6 +9997,13 @@ ${clone.outerHTML}
       const meta = ENTITY_META[type];
       if (!meta) return;
       const beforeDelete = getItem(type, id);
+      if (type === 'jobTitle') {
+        const linkedAgentsCount = countAgentsUsingJobTitle(id, state.collections.agents);
+        if (linkedAgentsCount > 0) {
+          toast(`Suppression impossible: ce poste est encore attribue a ${linkedAgentsCount} agent(s).`);
+          return;
+        }
+      }
 
       await applyDetachOnDelete(type, id);
       await api.remove(meta.store, id);
@@ -9552,6 +10038,13 @@ ${clone.outerHTML}
       if (!meta) return;
       const current = getItem(safeType, safeId);
       if (!current) return;
+      if (safeType === 'jobTitle') {
+        const linkedAgentsCount = countAgentsUsingJobTitle(safeId, state.collections.agents);
+        if (linkedAgentsCount > 0) {
+          toast(`Suppression impossible: ce poste est encore attribue a ${linkedAgentsCount} agent(s).`);
+          return;
+        }
+      }
       const label = current.name || current.displayName || current.title || current.id || safeId;
       if (!global.confirm(`Supprimer ${safeType} "${label}" ?`)) return;
 
@@ -9674,6 +10167,7 @@ ${clone.outerHTML}
         refs.modalBody.innerHTML = `
           <div><label class="workflow-form-label">Nom</label><input id="wf-create-community-name" class="workflow-form-input" type="text"></div>
           <div><label class="workflow-form-label">Description</label><textarea id="wf-create-community-description" class="workflow-form-textarea"></textarea></div>
+          <div><label class="workflow-form-label">Responsable</label><select id="wf-create-community-manager" class="workflow-form-select">${buildSelectOptions(state.collections.agents, 'id', 'displayName', '')}</select></div>
           <div><label class="workflow-form-label">Couleur</label><input id="wf-create-community-color" class="workflow-form-input" type="text" value="#1a428a"></div>
           <div><label class="workflow-form-label">Icone</label><input id="wf-create-community-icon" class="workflow-form-input" type="text" value="schema"></div>
         `;
@@ -9704,10 +10198,35 @@ ${clone.outerHTML}
 
       if (kind === 'agent') {
         refs.modalTitle.textContent = 'Nouvel agent workflow';
+        const titleSuggestions = (state.collections.jobTitles || [])
+          .slice()
+          .sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || ''), 'fr'))
+          .map((row) => `<option value="${esc(row?.name || '')}"></option>`)
+          .join('');
         refs.modalBody.innerHTML = `
           <div><label class="workflow-form-label">Nom affiche</label><input id="wf-create-agent-name" class="workflow-form-input" type="text"></div>
-          <div><label class="workflow-form-label">Titre / poste</label><input id="wf-create-agent-title" class="workflow-form-input" type="text" value="Agent"></div>
+          <div>
+            <label class="workflow-form-label">Titre / poste</label>
+            <input id="wf-create-agent-title" class="workflow-form-input" type="text" value="Agent" list="wf-create-agent-title-suggestions">
+            <datalist id="wf-create-agent-title-suggestions">${titleSuggestions}</datalist>
+          </div>
           <div><label class="workflow-form-label">Service</label><select id="wf-create-agent-service" class="workflow-form-select">${buildSelectOptions(state.collections.services, 'id', 'name', state.serviceFilter !== 'all' ? state.serviceFilter : '')}</select></div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:0.6rem;">
+            <div><label class="workflow-form-label">Telephone fixe</label><input id="wf-create-agent-phone-fixed" class="workflow-form-input" type="text" placeholder="Ex: 01 40 00 00 00"></div>
+            <div><label class="workflow-form-label">Poste interne</label><input id="wf-create-agent-phone-internal" class="workflow-form-input" type="text" placeholder="Ex: 245"></div>
+            <div><label class="workflow-form-label">Telephone portable</label><input id="wf-create-agent-phone-mobile" class="workflow-form-input" type="text" placeholder="Ex: 06 00 00 00 00"></div>
+          </div>
+          <div><label class="workflow-form-label">Adresse email</label><input id="wf-create-agent-email" class="workflow-form-input" type="email" placeholder="prenom.nom@organisation.fr"></div>
+        `;
+      }
+
+      if (kind === 'job-title') {
+        refs.modalTitle.textContent = 'Nouveau titre de poste';
+        refs.modalBody.innerHTML = `
+          <div><label class="workflow-form-label">Nom du poste</label><input id="wf-create-job-title-name" class="workflow-form-input" type="text" placeholder="Ex: Agent referent MDA"></div>
+          <div><label class="workflow-form-label">Categorie</label><input id="wf-create-job-title-category" class="workflow-form-input" type="text" value="metier"></div>
+          <div><label class="workflow-form-label">Description</label><textarea id="wf-create-job-title-description" class="workflow-form-textarea"></textarea></div>
+          <div><label class="workflow-form-label">Actif</label><select id="wf-create-job-title-active" class="workflow-form-select"><option value="true" selected>Oui</option><option value="false">Non</option></select></div>
         `;
       }
 
@@ -9732,7 +10251,7 @@ ${clone.outerHTML}
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:0.6rem;">
             <div><label class="workflow-form-label">Service</label><select id="wf-create-process-service" class="workflow-form-select">${buildSelectOptions(state.collections.services, 'id', 'name', defaultServiceId)}</select></div>
             <div><label class="workflow-form-label">Groupe</label><select id="wf-create-process-group" class="workflow-form-select">${buildSelectOptions(state.collections.groups, 'id', 'name', defaultGroupId)}</select></div>
-            <div><label class="workflow-form-label">Responsable</label><select id="wf-create-process-owner" class="workflow-form-select">${buildSelectOptions(state.collections.agents, 'id', 'displayName', defaultOwnerAgentId)}</select></div>
+            <div><label class="workflow-form-label">Responsable</label><select id="wf-create-process-owner" class="workflow-form-select">${buildOwnerSelectOptions(defaultOwnerAgentId)}</select></div>
           </div>
           <details style="border:1px solid #cbd5e1;border-radius:12px;padding:0.65rem 0.75rem;background:#f8fafc;">
             <summary class="workflow-form-label" style="cursor:pointer;list-style:none;">Parametres avances</summary>
@@ -9986,7 +10505,7 @@ ${clone.outerHTML}
           <div><label class="workflow-form-label">Titre</label><input id="wf-create-task-title" class="workflow-form-input" type="text" placeholder="Ex: Verifier les pieces du dossier"></div>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:0.6rem;">
             <div><label class="workflow-form-label">Processus (optionnel)</label><select id="wf-create-task-process" class="workflow-form-select">${buildSelectOptions(state.collections.processes, 'id', 'title', '')}</select></div>
-            <div><label class="workflow-form-label">Agent responsable</label><select id="wf-create-task-owner" class="workflow-form-select">${buildSelectOptions(state.collections.agents, 'id', 'displayName', defaultOwnerAgentId)}</select></div>
+            <div><label class="workflow-form-label">Agent responsable</label><select id="wf-create-task-owner" class="workflow-form-select">${buildOwnerSelectOptions(defaultOwnerAgentId)}</select></div>
             <div><label class="workflow-form-label">Priorite</label><select id="wf-create-task-priority" class="workflow-form-select"><option value="low">Basse</option><option value="medium" selected>Moyenne</option><option value="high">Haute</option></select></div>
           </div>
           <details style="border:1px solid #cbd5e1;border-radius:12px;padding:0.65rem 0.75rem;background:#f8fafc;">
@@ -10017,7 +10536,7 @@ ${clone.outerHTML}
           const process = processId ? processById.get(processId) : null;
           if (!process) return;
           if (taskServiceSelect && !touched.service && String(process.serviceId || '').trim()) taskServiceSelect.value = String(process.serviceId || '');
-          if (taskOwnerSelect && !touched.owner && String(process.ownerAgentId || '').trim()) taskOwnerSelect.value = String(process.ownerAgentId || '');
+          if (taskOwnerSelect && !touched.owner && String(process.ownerAgentId || '').trim()) taskOwnerSelect.value = normalizeOwnerSelectionValue(process.ownerAgentId || '');
         });
         if (taskTitleInput) taskTitleInput.focus();
       }
@@ -10112,6 +10631,7 @@ ${clone.outerHTML}
           id: `wf-community-${uid()}`,
           name,
           description: String(document.getElementById('wf-create-community-description')?.value || '').trim(),
+          managerAgentId: String(document.getElementById('wf-create-community-manager')?.value || '').trim() || null,
           color: String(document.getElementById('wf-create-community-color')?.value || '#1a428a').trim() || '#1a428a',
           icon: String(document.getElementById('wf-create-community-icon')?.value || 'schema').trim() || 'schema',
           order: maxOrder + 1,
@@ -10195,13 +10715,29 @@ ${clone.outerHTML}
           return;
         }
         const title = String(document.getElementById('wf-create-agent-title')?.value || 'Agent').trim() || 'Agent';
+        const titleRefId = String((state.collections.jobTitles || []).find((row) => normalize(row?.name || '') === normalize(title))?.id || '').trim() || null;
         const serviceId = String(document.getElementById('wf-create-agent-service')?.value || '').trim() || null;
+        const serviceCommunityId = serviceId
+          ? String((state.collections.services || []).find((row) => String(row?.id || '') === serviceId)?.communityId || '').trim() || null
+          : null;
+        const phoneFixed = String(document.getElementById('wf-create-agent-phone-fixed')?.value || '').trim();
+        const phoneInternal = String(document.getElementById('wf-create-agent-phone-internal')?.value || '').trim();
+        const phoneMobile = String(document.getElementById('wf-create-agent-phone-mobile')?.value || '').trim();
+        const email = String(document.getElementById('wf-create-agent-email')?.value || '').trim().toLowerCase();
         const row = {
           id: `wf-agent-${uid()}`,
           displayName: name,
           handle: normalize(name).replace(/\s+/g, '.').slice(0, 32),
           title,
+          titleRefId,
           serviceId,
+          serviceIds: serviceId ? [serviceId] : [],
+          communityId: serviceCommunityId,
+          communityIds: serviceCommunityId ? [serviceCommunityId] : [],
+          phoneFixed,
+          phoneInternal,
+          phoneMobile,
+          email,
           groupIds: [],
           managerAgentId: null,
           mission: '',
@@ -10221,6 +10757,33 @@ ${clone.outerHTML}
         openDetail('agent', row.id);
         closeCreateModal();
         toast('Agent workflow ajoute');
+        return;
+      }
+
+      if (workflowCreateKind === 'job-title') {
+        const name = String(document.getElementById('wf-create-job-title-name')?.value || '').trim();
+        if (!name) {
+          toast('Nom du poste requis');
+          return;
+        }
+        const row = {
+          id: `wf-job-title-${uid()}`,
+          name,
+          category: String(document.getElementById('wf-create-job-title-category')?.value || 'metier').trim() || 'metier',
+          description: String(document.getElementById('wf-create-job-title-description')?.value || '').trim(),
+          active: String(document.getElementById('wf-create-job-title-active')?.value || 'true').trim().toLowerCase() !== 'false',
+          metadata: {},
+          createdAt: now(),
+          updatedAt: now()
+        };
+        await api.put('workflowJobTitles', row, STORE_KEY_FIELDS.workflowJobTitles);
+        await logAudit('create', 'jobTitle', row.id, { name: row.name });
+        await loadCollections();
+        renderServiceFilter();
+        renderContent();
+        openDetail('jobTitle', row.id);
+        closeCreateModal();
+        toast('Titre de poste ajoute');
         return;
       }
 
@@ -10277,7 +10840,7 @@ ${clone.outerHTML}
           communityId: selectedCommunityId || selectedService?.communityId || null,
           serviceId: selectedServiceId,
           groupId: String(document.getElementById('wf-create-process-group')?.value || '').trim() || null,
-          ownerAgentId: String(document.getElementById('wf-create-process-owner')?.value || '').trim() || null,
+          ownerAgentId: processOwnerAgentId,
           status: String(document.getElementById('wf-create-process-status')?.value || 'draft').trim() || 'draft',
           criticality: String(document.getElementById('wf-create-process-criticality')?.value || 'medium').trim() || 'medium',
           inputs: parseMultiline(document.getElementById('wf-create-process-inputs')?.value || ''),
@@ -10468,11 +11031,18 @@ ${clone.outerHTML}
           : null;
         const selectedServiceId = String(document.getElementById('wf-create-task-service')?.value || '').trim() || null;
         const serviceId = selectedServiceId || relatedProcess?.serviceId || null;
+        const taskOwnerAgentId = await resolveOwnerAgentIdFromSelection(
+          String(document.getElementById('wf-create-task-owner')?.value || '').trim(),
+          {
+            serviceId,
+            title: 'Agent workflow'
+          }
+        );
         const row = {
           id: `wf-task-${uid()}`,
           title,
           description: String(document.getElementById('wf-create-task-description')?.value || '').trim(),
-          ownerAgentId: String(document.getElementById('wf-create-task-owner')?.value || '').trim() || null,
+          ownerAgentId: taskOwnerAgentId,
           processId,
           serviceId,
           groupId: null,
@@ -10642,6 +11212,7 @@ ${clone.outerHTML}
             'kpi': 'task',
             'procedures': 'procedure',
             'software': 'software',
+            'jobtitles': 'job-title',
             'contingency': 'contingency-plan'
           };
           
@@ -11346,6 +11917,7 @@ ${clone.outerHTML}
             'btn-workflow-add-task': 'task',
             'btn-workflow-add-procedure': 'procedure',
             'btn-workflow-add-software': 'software',
+            'btn-workflow-add-job-title': 'job-title',
             'btn-workflow-add-contingency-plan': 'contingency-plan'
           };
 

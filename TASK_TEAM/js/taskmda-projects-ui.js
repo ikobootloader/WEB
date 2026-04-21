@@ -115,6 +115,11 @@
       opts.renderGlobalTasks?.();
     });
 
+    document.getElementById('global-task-assignee-kind')?.addEventListener('change', () => {
+      setGlobalTasksPage(1);
+      opts.renderGlobalTasks?.();
+    });
+
     document.getElementById('global-task-theme')?.addEventListener('input', () => {
       opts.syncThemePickerSelectionFromInput?.('global-task-theme-known', 'global-task-theme');
       setGlobalTasksPage(1);
@@ -184,11 +189,13 @@
     document.getElementById('global-task-filter-reset')?.addEventListener('click', () => {
       const searchInput = document.getElementById('global-task-search');
       const statusInput = document.getElementById('global-task-status');
+      const assigneeKindInput = document.getElementById('global-task-assignee-kind');
       const themeInput = document.getElementById('global-task-theme');
       const knownThemeInput = document.getElementById('global-task-theme-known');
       const urgencyChecks = Array.from(document.querySelectorAll('input[data-global-task-urgency]'));
       if (searchInput) searchInput.value = '';
       if (statusInput) statusInput.value = 'all';
+      if (assigneeKindInput) assigneeKindInput.value = 'all';
       if (themeInput) themeInput.value = '';
       if (knownThemeInput) knownThemeInput.value = '';
       urgencyChecks.forEach((input) => {
@@ -214,6 +221,7 @@
 
     document.getElementById('project-task-search')?.addEventListener('input', rerenderProjectTasksFromFilters);
     document.getElementById('project-task-status')?.addEventListener('change', rerenderProjectTasksFromFilters);
+    document.getElementById('project-task-assignee-kind')?.addEventListener('change', rerenderProjectTasksFromFilters);
     document.getElementById('project-task-theme-filter')?.addEventListener('input', () => {
       opts.syncThemePickerSelectionFromInput?.('project-task-theme-known', 'project-task-theme-filter');
       rerenderProjectTasksFromFilters();

@@ -43,7 +43,7 @@
     // ============================================================================
 
     const DB_NAME = 'taskmda-team-standalone';
-    const DB_VERSION = 18; // + module contingence workflow
+    const DB_VERSION = 19; // + referentiel workflowJobTitles
     const LOCAL_RESET_TS_KEY = 'taskmda_last_local_reset_ts';
     const USER_ID_HISTORY_KEY = 'taskmda_user_id_history';
     const LAST_ACCESSED_PROJECT_STORAGE_KEY = 'taskmda_last_accessed_project_id';
@@ -71,6 +71,7 @@
       workflowTasks: 'id',
       workflowProcedures: 'id',
       workflowSoftware: 'id',
+      workflowJobTitles: 'id',
       workflowRoles: 'id',
       workflowProcesses: 'id',
       workflowProcessSteps: 'id',
@@ -319,6 +320,12 @@
               const store = db.createObjectStore('workflowSoftware', { keyPath: 'id' });
               store.createIndex('name', 'name');
               store.createIndex('category', 'category');
+            }
+            if (!db.objectStoreNames.contains('workflowJobTitles')) {
+              const store = db.createObjectStore('workflowJobTitles', { keyPath: 'id' });
+              store.createIndex('name', 'name');
+              store.createIndex('category', 'category');
+              store.createIndex('active', 'active');
             }
             if (!db.objectStoreNames.contains('workflowRoles')) {
               const store = db.createObjectStore('workflowRoles', { keyPath: 'id' });
@@ -641,7 +648,16 @@
      */
     async function getAllDecrypted(storeName, idField) {
       const db = getDatabase();
-      const objs = await db.getAll(storeName);
+      let objs = [];
+      try {
+        objs = await db.getAll(storeName);
+      } catch (error) {
+        if (error?.name === 'NotFoundError') {
+          console.warn(`[IndexedDB] store introuvable: ${storeName}`);
+          return [];
+        }
+        throw error;
+      }
 
       if (!objs || objs.length === 0) return [];
 
@@ -9183,6 +9199,7 @@
     let messageMarkdownDebounceTimer = null;
     let messageRenderedDraftHtml = '';
     let projectDescriptionExpanded = false;
+    let projectOverviewCollapsed = localStorage.getItem('taskmda_project_overview_collapsed_v1') === '1';
     let emojiPickerOpen = false;
     let globalEmojiPickerOpen = false;
     let projectMessageFilesPanelOpen = false;
@@ -9317,6 +9334,7 @@
     const GLOBAL_MESSAGE_HIDDEN_GROUPS_STORAGE_KEY = 'taskmda_global_hidden_group_channels_v1';
     const GLOBAL_MESSAGE_HIDDEN_PEERS_STORAGE_KEY = 'taskmda_global_hidden_peer_conversations_v1';
     const GLOBAL_FEED_DIGEST_VIEW_STORAGE_KEY = 'taskmda_global_feed_digest_view_v1';
+    const PROJECT_OVERVIEW_COLLAPSED_STORAGE_KEY = 'taskmda_project_overview_collapsed_v1';
     let globalMessagePeerUserId = GLOBAL_MESSAGE_BROADCAST_TARGET;
     let globalMessageActiveGroupConversationId = '';
     let globalMessageRecipientUserIds = new Set();
@@ -10187,6 +10205,17 @@
       if (!topbar || !root) return;
       const measured = Math.max(56, Math.round(topbar.getBoundingClientRect().height || 0));
       root.style.setProperty('--topbar-height', `${measured}px`);
+      root.style.setProperty('--project-sticky-top', `${Math.max(60, measured + 8)}px`);
+    }
+
+    function syncProjectWorkCommandbarVisibility(view = activeProjectView) {
+      const commandbar = document.getElementById('project-work-commandbar');
+      if (!commandbar) return;
+      const currentView = String(view || '').trim();
+      const shouldShow = workspaceMode === 'project'
+        && projectDetailMode === 'work'
+        && currentView === 'list';
+      commandbar.classList.toggle('hidden', !shouldShow);
     }
 
     function detachGlobalKanbanInfiniteScroll() {
@@ -10562,6 +10591,34 @@
       }
     }
 
+    function syncProjectOverviewCollapseButton() {
+      const btn = document.getElementById('btn-toggle-project-overview');
+      if (!btn) return;
+      const icon = document.getElementById('btn-toggle-project-overview-icon');
+      const label = document.getElementById('btn-toggle-project-overview-label');
+      const collapsed = !!projectOverviewCollapsed;
+      btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      btn.setAttribute('title', collapsed ? 'Déplier le panneau projet' : 'Replier le panneau projet');
+      if (icon) icon.textContent = collapsed ? 'unfold_more' : 'unfold_less';
+      if (label) label.textContent = collapsed ? 'Déplier' : 'Replier';
+    }
+
+    function applyProjectOverviewCollapsedState() {
+      const detail = document.getElementById('project-detail');
+      if (!detail) return;
+      detail.classList.toggle('is-overview-collapsed', !!projectOverviewCollapsed);
+      syncProjectOverviewCollapseButton();
+    }
+
+    function setProjectOverviewCollapsed(nextCollapsed, options = {}) {
+      const persist = options.persist !== false;
+      projectOverviewCollapsed = !!nextCollapsed;
+      applyProjectOverviewCollapsedState();
+      if (persist) {
+        localStorage.setItem(PROJECT_OVERVIEW_COLLAPSED_STORAGE_KEY, projectOverviewCollapsed ? '1' : '0');
+      }
+    }
+
     function updateProjectOverviewVisibility() {
       const overviewPanel = document.getElementById('project-overview-panel');
       if (!overviewPanel) return;
@@ -10576,6 +10633,7 @@
       }
       overviewPanel.classList.toggle('hidden', !shouldShowOverview);
       overviewPanel.setAttribute('aria-hidden', shouldShowOverview ? 'false' : 'true');
+      syncProjectOverviewCollapseButton();
     }
 
     function applyProjectSettingsLayout() {
@@ -11154,6 +11212,11 @@
       if (previousView === 'overview' && view !== 'overview') {
         collapseProjectDescriptionIfExpanded();
       }
+      if (view === 'overview' && projectOverviewCollapsed) {
+        // Comportement intelligent: ouvrir automatiquement l'aperçu
+        // quand l'utilisateur choisit explicitement l'onglet d'aperçu.
+        setProjectOverviewCollapsed(false);
+      }
       if (view === 'activity' && !canReadProjectActivity(currentProjectState)) {
         showToast('Action non autorisee');
         view = 'list';
@@ -11217,6 +11280,7 @@
         setActiveSidebarNav(navKey);
       }
       updateProjectOverviewVisibility();
+      syncProjectWorkCommandbarVisibility(view);
       if (view === 'list' && workspaceMode === 'project' && currentProjectState) {
         renderTasks(currentProjectState.tasks || []);
       }
@@ -11489,6 +11553,22 @@
       return entries;
     }
 
+    function parseTaskAssigneeSelectValue(rawValue) {
+      const value = String(rawValue || '').trim();
+      if (!value) return { kind: '', id: '' };
+      if (value.startsWith('agent:')) {
+        return { kind: 'agent', id: String(value.slice('agent:'.length) || '').trim() };
+      }
+      return { kind: 'user', id: value };
+    }
+
+    function buildTaskAssigneeSelectValue(entry) {
+      const agentId = String(entry?.agentId || '').trim();
+      if (agentId) return `agent:${agentId}`;
+      const userId = String(entry?.userId || '').trim();
+      return userId || '';
+    }
+
     async function refreshTaskQuickAssigneeSuggestions(state) {
       const datalist = document.getElementById('task-assignee-quick-options');
       if (!datalist) return;
@@ -11503,6 +11583,15 @@
         const name = String(user?.name || '').trim();
         if (name) names.add(name);
       });
+      try {
+        const workflowAgents = await getAllDecrypted('workflowAgents', 'id');
+        (workflowAgents || []).forEach((agent) => {
+          const displayName = String(agent?.displayName || '').trim();
+          if (displayName) names.add(displayName);
+        });
+      } catch (error) {
+        console.warn('Unable to refresh workflow agent suggestions:', error);
+      }
       const sorted = Array.from(names).sort((a, b) => a.localeCompare(b, 'fr'));
       datalist.innerHTML = sorted.map((name) => `<option value="${escapeHtml(name)}"></option>`).join('');
     }
@@ -11536,40 +11625,104 @@
       const assigneeSelect = document.getElementById('task-assignee');
       if (!assigneeSelect) return;
       const selectedSet = new Set((selectedUserIds || []).filter(Boolean));
+      let workflowAgents = [];
+      try {
+        workflowAgents = await getAllDecrypted('workflowAgents', 'id');
+      } catch (error) {
+        console.warn('Unable to load workflow agents for task assignees:', error);
+      }
+      const agentOptions = (workflowAgents || [])
+        .map((agent) => {
+          const agentId = String(agent?.id || '').trim();
+          if (!agentId) return null;
+          const label = String(agent?.displayName || agent?.title || '').trim() || `Agent ${agentId.slice(0, 8)}`;
+          const linkedUserId = String(agent?.metadata?.userId || '').trim();
+          const role = String(agent?.title || '').trim();
+          return {
+            value: `agent:${agentId}`,
+            label: role ? `${label} [Agent - ${role}]` : `${label} [Agent]`,
+            assigneeName: label,
+            kind: 'agent',
+            linkedUserId,
+            pending: false
+          };
+        })
+        .filter(Boolean);
 
       if (!state?.project) {
+        const currentUserId = String(currentUser?.userId || '').trim();
+        const filteredAgentOptions = agentOptions.filter((entry) => {
+          const linkedUserId = String(entry?.linkedUserId || '').trim();
+          return !(linkedUserId && currentUserId && linkedUserId === currentUserId);
+        });
+        const normalizedSelectedSet = new Set(selectedSet);
+        (agentOptions || []).forEach((entry) => {
+          const linkedUserId = String(entry?.linkedUserId || '').trim();
+          if (linkedUserId && currentUserId && linkedUserId === currentUserId && normalizedSelectedSet.has(entry.value)) {
+            normalizedSelectedSet.delete(entry.value);
+            normalizedSelectedSet.add(currentUserId);
+          }
+        });
         const currentName = currentUser?.name || 'Moi';
-        assigneeSelect.innerHTML = `<option value="${escapeHtml(currentUser?.userId || '')}" data-assignee-name="${escapeHtml(currentName)}">${escapeHtml(currentName)}</option>`;
+        const options = [{
+          value: String(currentUser?.userId || '').trim(),
+          label: currentName,
+          assigneeName: currentName,
+          kind: 'user',
+          pending: false
+        }, ...filteredAgentOptions];
+        assigneeSelect.innerHTML = options
+          .filter((entry) => entry.value)
+          .map((entry) => `<option value="${escapeHtml(entry.value)}" data-assignee-name="${escapeHtml(entry.assigneeName)}" data-assignee-kind="${escapeHtml(entry.kind)}" ${entry.kind === 'agent' ? `data-agent-id="${escapeHtml(entry.value.slice('agent:'.length))}" data-user-id="${escapeHtml(entry.linkedUserId || '')}"` : ''}>${escapeHtml(entry.label)}</option>`)
+          .join('');
         Array.from(assigneeSelect.options || []).forEach(opt => {
-          opt.selected = selectedSet.has(opt.value);
+          opt.selected = normalizedSelectedSet.has(opt.value);
         });
         return;
       }
 
       const members = await getProjectMembersResolved(state);
       const options = members.map(m => ({
-        userId: String(m.userId || ''),
+        value: String(m.userId || ''),
         label: String(m.displayNameResolved || '').trim() || fallbackDirectoryName(m.userId),
+        assigneeName: String(m.displayNameResolved || '').trim() || fallbackDirectoryName(m.userId),
+        kind: 'user',
         pending: false
       }));
-      const optionIds = new Set(options.map(o => o.userId));
+      const optionIds = new Set(options.map(o => o.value));
       (pendingMembers || []).forEach((member) => {
         const userId = String(member?.userId || '').trim();
         if (!userId || optionIds.has(userId)) return;
         optionIds.add(userId);
         const label = String(member?.displayName || '').trim() || fallbackDirectoryName(userId);
         options.push({
-          userId,
+          value: userId,
           label,
+          assigneeName: label,
+          kind: 'user',
           pending: true
         });
       });
+      const filteredAgentOptions = agentOptions.filter((entry) => {
+        const linkedUserId = String(entry?.linkedUserId || '').trim();
+        return !(linkedUserId && optionIds.has(linkedUserId));
+      });
+      const normalizedSelectedSet = new Set(selectedSet);
+      (agentOptions || []).forEach((entry) => {
+        const linkedUserId = String(entry?.linkedUserId || '').trim();
+        if (linkedUserId && optionIds.has(linkedUserId) && normalizedSelectedSet.has(entry.value)) {
+          normalizedSelectedSet.delete(entry.value);
+          normalizedSelectedSet.add(linkedUserId);
+        }
+      });
       assigneeSelect.innerHTML = options.map((entry) => {
         const suffix = entry.pending ? ' (groupe - en attente)' : '';
-        return `<option value="${escapeHtml(entry.userId)}" data-assignee-name="${escapeHtml(entry.label)}" ${entry.pending ? 'data-pending-group-member="1"' : ''}>${escapeHtml(entry.label + suffix)}</option>`;
-      }).join('');
+        return `<option value="${escapeHtml(entry.value)}" data-assignee-name="${escapeHtml(entry.assigneeName)}" data-assignee-kind="${escapeHtml(entry.kind)}" ${entry.pending ? 'data-pending-group-member="1"' : ''}>${escapeHtml(entry.label + suffix)}</option>`;
+      }).join('') + filteredAgentOptions.map((entry) => (
+        `<option value="${escapeHtml(entry.value)}" data-assignee-name="${escapeHtml(entry.assigneeName)}" data-assignee-kind="agent" data-agent-id="${escapeHtml(entry.value.slice('agent:'.length))}" data-user-id="${escapeHtml(entry.linkedUserId || '')}">${escapeHtml(entry.label)}</option>`
+      )).join('');
       Array.from(assigneeSelect.options || []).forEach(opt => {
-        opt.selected = selectedSet.has(opt.value);
+        opt.selected = normalizedSelectedSet.has(opt.value);
       });
     }
 
@@ -12148,15 +12301,16 @@
         const dedup = [];
         const seen = new Set();
         task.assignees.forEach((entry) => {
+          const agentId = String(entry?.agentId || '').trim();
           const userId = String(entry?.userId || '').trim();
           const fallbackName = userId ? (memberMap.get(userId) || '') : '';
-          const name = String(entry?.name || fallbackName || '').trim();
+          const name = String(entry?.name || fallbackName || (agentId ? `Agent ${agentId.slice(0, 8)}` : '')).trim();
           const email = String(entry?.email || '').trim().toLowerCase();
-          const key = `${userId}|${normalizeSearch(name)}|${email}`;
-          if (!userId && !name) return;
+          const key = `${agentId}|${userId}|${normalizeSearch(name)}|${email}`;
+          if (!agentId && !userId && !name) return;
           if (seen.has(key)) return;
           seen.add(key);
-          dedup.push({ userId: userId || null, name, email });
+          dedup.push({ agentId: agentId || null, userId: userId || null, name, email });
         });
         return dedup;
       }
@@ -12181,6 +12335,54 @@
       const names = getTaskAssigneeNames(task, state);
       if (names.length === 0) return '';
       return firstOnly ? names[0] : names.join(', ');
+    }
+
+    function getTaskAssigneeAllocationKind(task, state = currentProjectState) {
+      const entries = getTaskAssigneeEntries(task, state);
+      let hasAgent = false;
+      let hasMember = false;
+      entries.forEach((entry) => {
+        if (String(entry?.agentId || '').trim()) {
+          hasAgent = true;
+          return;
+        }
+        if (String(entry?.userId || '').trim()) {
+          hasMember = true;
+        }
+      });
+      if (hasAgent && hasMember) return 'mixed';
+      if (hasAgent) return 'agent';
+      if (hasMember) return 'member';
+      return 'none';
+    }
+
+    function buildTaskAssigneeKindBadgeHtml(task, state = currentProjectState, compact = false) {
+      const kind = getTaskAssigneeAllocationKind(task, state);
+      if (kind === 'none') return '';
+      const labels = {
+        member: 'Membre',
+        agent: 'Agent',
+        mixed: 'Mixte'
+      };
+      const cssKind = kind === 'member' ? 'member' : kind === 'agent' ? 'agent' : 'mixed';
+      const compactClass = compact ? ' task-assignee-kind-chip-compact' : '';
+      return `<span class="task-assignee-kind-chip task-assignee-kind-${cssKind}${compactClass}">${labels[kind] || 'Responsable'}</span>`;
+    }
+
+    function buildTaskAssigneeInlineHtml(task, state = currentProjectState, fallback = 'Aucun responsable') {
+      const assigneeName = getTaskAssigneeName(task, state) || fallback;
+      const badge = buildTaskAssigneeKindBadgeHtml(task, state, true);
+      return `<span>${escapeHtml(assigneeName)}</span>${badge}`;
+    }
+
+    function matchesTaskAssigneeKindFilter(task, state, rawFilter = 'all') {
+      const filter = String(rawFilter || 'all').trim();
+      if (!filter || filter === 'all') return true;
+      const kind = getTaskAssigneeAllocationKind(task, state);
+      if (filter === 'members') return kind === 'member';
+      if (filter === 'agents') return kind === 'agent';
+      if (filter === 'mixed') return kind === 'mixed';
+      return true;
     }
 
     function buildGlobalTaskRef(task) {
@@ -13770,11 +13972,12 @@
         : getTaskAssigneeEntries(task, sourceState);
       const preparedAssignees = assignees
         .map((entry) => ({
+          agentId: entry?.agentId ? String(entry.agentId).trim() : null,
           userId: entry?.userId ? String(entry.userId).trim() : null,
           name: String(entry?.name || '').trim(),
           email: String(entry?.email || '').trim()
         }))
-        .filter((entry) => entry.userId || entry.name || entry.email);
+        .filter((entry) => entry.agentId || entry.userId || entry.name || entry.email);
       const primaryAssignee = preparedAssignees[0] || { userId: null, name: '', email: '' };
       const firstTaskId = uuidv4();
       const firstGroupName = String(task.groupName || getTaskGroupName(task, sourceState) || '').trim();
@@ -13968,6 +14171,7 @@
         badgesEl.innerHTML = `
           <span id="global-task-detail-urgency-chip" class="${urgencyMeta.chipClass}">${urgencyMeta.label}</span>
           <span id="global-task-detail-status-chip" class="${statusMeta.chipClass}">${statusMeta.label}</span>
+          ${buildTaskAssigneeKindBadgeHtml(task, state)}
           ${buildTaskHierarchyChipsHtml(task, state)}
           ${sharingModeBadge(task.sharingMode)}
         `;
@@ -13975,7 +14179,7 @@
       renderTaskDescriptionToElement(task, descriptionEl);
       if (requestDateEl) requestDateEl.textContent = formatDate(task.requestDate);
       if (dueDateEl) dueDateEl.textContent = formatDate(task.dueDate);
-      if (assigneesEl) assigneesEl.textContent = assigneeNames;
+      if (assigneesEl) assigneesEl.innerHTML = `<span class="inline-flex items-center gap-1.5">${buildTaskAssigneeInlineHtml(task, state)}</span>`;
       if (groupEl) groupEl.textContent = groupName;
       if (recurrenceWrapEl && recurrenceEl) {
         const recurringCfg = normalizeTaskRecurringConfig(task?.recurring);
@@ -14122,6 +14326,7 @@
         badgesEl.innerHTML = `
           <span id="global-task-detail-urgency-chip" class="${urgencyMeta.chipClass}">${urgencyMeta.label}</span>
           <span id="global-task-detail-status-chip" class="${statusMeta.chipClass}">${statusMeta.label}</span>
+          ${buildTaskAssigneeKindBadgeHtml(task, state)}
           ${buildTaskHierarchyChipsHtml(task, state)}
           ${sharingModeBadge(sharingMode)}
         `;
@@ -14129,7 +14334,7 @@
       renderTaskDescriptionToElement(task, descriptionEl);
       if (requestDateEl) requestDateEl.textContent = formatDate(task.requestDate);
       if (dueDateEl) dueDateEl.textContent = formatDate(task.dueDate);
-      if (assigneesEl) assigneesEl.textContent = assigneeNames;
+      if (assigneesEl) assigneesEl.innerHTML = `<span class="inline-flex items-center gap-1.5">${buildTaskAssigneeInlineHtml(task, state)}</span>`;
       if (groupEl) groupEl.textContent = groupName;
       if (recurrenceWrapEl && recurrenceEl) {
         const recurringCfg = normalizeTaskRecurringConfig(task?.recurring);
@@ -16029,9 +16234,12 @@
         { skipGroups: standaloneTaskMode }
       );
       const currentAssignees = getTaskAssigneeEntries(task, standaloneTaskMode ? null : currentProjectState);
+      const selectedAssigneeValues = currentAssignees
+        .map((entry) => buildTaskAssigneeSelectValue(entry))
+        .filter(Boolean);
       refreshTaskAssigneeOptionsMulti(
         standaloneTaskMode ? null : currentProjectState,
-        currentAssignees.map(a => a.userId).filter(Boolean)
+        selectedAssigneeValues
       );
       refreshTaskQuickAssigneeSuggestions(standaloneTaskMode ? null : currentProjectState);
       if (titleEl) {
@@ -16049,7 +16257,7 @@
           task.descriptionHtml || task.description || ''
         );
         const manualAssignees = currentAssignees
-          .filter(a => !a.userId && a.name)
+          .filter(a => !a.userId && !a.agentId && a.name)
           .map(a => (a.email && normalizeSearch(a.email) !== normalizeSearch(a.name || '')) ? `${a.name} <${a.email}>` : a.name);
         document.getElementById('task-assignee-manual').value = manualAssignees.join('\n');
         document.getElementById('task-request-date').value = task.requestDate || (task.createdAt ? toYmd(new Date(task.createdAt)) : '');
@@ -16101,7 +16309,7 @@
         if (!standaloneTaskMode) {
           refreshTaskGroupSelectionPreview(
             currentProjectState,
-            currentAssignees.map(a => a.userId).filter(Boolean)
+            selectedAssigneeValues
           );
         }
       } else {
@@ -16628,6 +16836,7 @@
 
       currentProjectState = state;
       initProjectInlineEditing(canEditProjectOverviewInline);
+      applyProjectOverviewCollapsedState();
       const canSendChat = canSendProjectMessage(state);
       const btnSendMessage = document.getElementById('btn-send-message');
       const messageInput = document.getElementById('message-input');
@@ -16686,6 +16895,7 @@
       syncProjectWorkFocusButton();
       setProjectDetailMode(projectDetailMode);
       setProjectView(activeProjectView);
+      syncProjectWorkCommandbarVisibility(activeProjectView);
       applyLiveSearchFilter();
     }
 
@@ -17627,6 +17837,7 @@
 
       const query = `${globalSearchQuery} ${document.getElementById('global-task-search')?.value || ''}`.trim();
       const status = document.getElementById('global-task-status')?.value || 'all';
+      const assigneeKind = String(document.getElementById('global-task-assignee-kind')?.value || 'all').trim();
       const theme = document.getElementById('global-task-theme')?.value || '';
       const urgencies = getSelectedGlobalTaskUrgencySet();
 
@@ -17639,6 +17850,7 @@
         sharingModeLabel(task.sharingMode)
       ], query));
       if (status !== 'all') filtered = filtered.filter(task => (task.status || 'todo') === status);
+      if (assigneeKind !== 'all') filtered = filtered.filter(task => matchesTaskAssigneeKindFilter(task, stateByProjectId.get(task.sourceProjectId), assigneeKind));
       if (theme.trim()) filtered = filtered.filter(task => matchesQuery([task.theme], theme));
       filtered = filtered.filter(task => urgencies.has(getTaskUrgencyMeta(task.urgency).key));
       const mode = ['cards', 'list', 'kanban', 'timeline', 'calendar', 'archives'].includes(globalTasksViewMode) ? globalTasksViewMode : 'cards';
@@ -17694,6 +17906,7 @@
             _canArchive: canArchive,
             _statusKey: task.status || 'todo',
             _assigneeName: getTaskAssigneeName(task, stateByProjectId.get(task.sourceProjectId)) || 'Aucun responsable',
+            _assigneeInlineHtml: buildTaskAssigneeInlineHtml(task, stateByProjectId.get(task.sourceProjectId)),
             _dueTs: Number.isFinite(dueTs) ? dueTs : Number.POSITIVE_INFINITY
           };
         });
@@ -17726,7 +17939,7 @@
             <div class="mt-2 text-xs text-slate-500 flex flex-wrap gap-3">
               <span>Demande: ${formatDate(task.requestDate)}</span>
               <span>Date limite: ${formatDate(task.dueDate)}</span>
-              <span>Responsable: ${escapeHtml(task._assigneeName)}</span>
+              <span class="inline-flex items-center gap-1.5">Responsable: ${task._assigneeInlineHtml}</span>
             </div>
             <div class="task-hover-actions mt-3 flex flex-wrap gap-2 text-xs">${taskActions(task)}</div>
           </div>
@@ -17760,7 +17973,7 @@
                       <td class="px-3 py-2 text-slate-600">${escapeHtml(task.sourceProjectName || 'Hors projet')}</td>
                       <td class="px-3 py-2 text-slate-600"><span class="${getTaskStatusMeta(task._statusKey).chipClass}">${getTaskStatusMeta(task._statusKey).label}</span></td>
                       <td class="px-3 py-2 text-slate-600">${formatDate(task.dueDate)}</td>
-                      <td class="px-3 py-2 text-slate-600">${escapeHtml(task._assigneeName)}</td>
+                      <td class="px-3 py-2 text-slate-600"><span class="inline-flex items-center gap-1.5">${task._assigneeInlineHtml}</span></td>
                       <td class="px-3 py-2" onclick="event.stopPropagation()"><div class="flex flex-wrap gap-1 text-xs">${taskActions(task)}</div></td>
                     </tr>
                   `).join('')}
@@ -17792,7 +18005,7 @@
               <p class="text-sm text-slate-700 global-kanban-desc mb-2">${escapeHtml(task.description || '')}</p>
               ${buildSubtaskProgressHtml(task, true)}
               <div class="mt-2 text-xs text-slate-600 flex items-center justify-between gap-2">
-                <span class="truncate">${escapeHtml(task._assigneeName)}</span>
+                <span class="truncate inline-flex items-center gap-1.5">${task._assigneeInlineHtml}</span>
                 <span class="whitespace-nowrap">${formatDate(task.dueDate)}</span>
               </div>
               <div class="task-hover-actions mt-2 flex flex-wrap gap-1 text-xs">${taskActions(task)}</div>
@@ -18124,7 +18337,7 @@
           <div class="mt-2 text-xs text-slate-500 flex flex-wrap gap-3">
             <span>Demande: ${formatDate(task.requestDate)}</span>
             <span>Date limite: ${formatDate(task.dueDate)}</span>
-            <span>Responsable: ${escapeHtml(getTaskAssigneeName(task, stateByProjectId.get(task.sourceProjectId)) || 'Aucun responsable')}</span>
+            <span class="inline-flex items-center gap-1.5">Responsable: ${buildTaskAssigneeInlineHtml(task, stateByProjectId.get(task.sourceProjectId))}</span>
           </div>
           <div class="task-hover-actions mt-3 flex flex-wrap gap-2 text-xs">
             ${canEdit ? `<button onclick="event.stopPropagation(); editGlobalTask('${taskRef}')" class="task-action-btn task-action-btn-subtle">Modifier</button>` : ''}
@@ -18145,6 +18358,7 @@
 
       const query = `${globalSearchQuery} ${document.getElementById('global-task-search')?.value || ''}`.trim();
       const status = String(document.getElementById('global-task-status')?.value || 'all').trim();
+      const assigneeKind = String(document.getElementById('global-task-assignee-kind')?.value || 'all').trim();
       const theme = String(document.getElementById('global-task-theme')?.value || '').trim();
       const urgencies = getSelectedGlobalTaskUrgencySet();
       let archived = (allTasks || []).filter(task => task?.archivedAt);
@@ -18157,6 +18371,7 @@
         sharingModeLabel(task.sharingMode)
       ], query));
       if (status !== 'all') archived = archived.filter(task => (task.status || 'todo') === status);
+      if (assigneeKind !== 'all') archived = archived.filter(task => matchesTaskAssigneeKindFilter(task, stateByProjectId?.get(task.sourceProjectId), assigneeKind));
       if (theme) archived = archived.filter(task => matchesQuery([task.theme], theme));
       archived = archived.filter(task => urgencies.has(getTaskUrgencyMeta(task.urgency).key));
       archived.sort((a, b) => (b.archivedAt || 0) - (a.archivedAt || 0));
@@ -18206,6 +18421,7 @@
       const all = await getGlobalTasksList();
       const query = `${globalSearchQuery} ${document.getElementById('global-task-search')?.value || ''}`.trim();
       const status = document.getElementById('global-task-status')?.value || 'all';
+      const assigneeKind = String(document.getElementById('global-task-assignee-kind')?.value || 'all').trim();
       const theme = document.getElementById('global-task-theme')?.value || '';
       const urgencies = getSelectedGlobalTaskUrgencySet();
 
@@ -18217,6 +18433,7 @@
         sharingModeLabel(task.sharingMode)
       ], query));
       if (status !== 'all') filtered = filtered.filter(task => (task.status || 'todo') === status);
+      if (assigneeKind !== 'all') filtered = filtered.filter(task => matchesTaskAssigneeKindFilter(task, null, assigneeKind));
       if (theme.trim()) filtered = filtered.filter(task => matchesQuery([task.theme], theme));
       filtered = filtered.filter(task => urgencies.has(getTaskUrgencyMeta(task.urgency).key));
       filtered = filtered.filter(task => !task.archivedAt);
@@ -21071,6 +21288,7 @@
         task: 'workflowTasks',
         procedure: 'workflowProcedures',
         software: 'workflowSoftware',
+        job_title: 'workflowJobTitles',
         role: 'workflowRoles',
         process: 'workflowProcesses',
         step: 'workflowProcessSteps',
@@ -21105,6 +21323,7 @@
         workflowTasks: 'task',
         workflowProcedures: 'procedure',
         workflowSoftware: 'software',
+        workflowJobTitles: 'job_title',
         workflowRoles: 'role',
         workflowProcesses: 'process',
         workflowProcessSteps: 'step',
@@ -24449,6 +24668,7 @@
       return {
         query: String(document.getElementById('project-task-search')?.value || '').trim(),
         status: String(document.getElementById('project-task-status')?.value || 'all').trim(),
+        assigneeKind: String(document.getElementById('project-task-assignee-kind')?.value || 'all').trim(),
         epicId: String(document.getElementById('project-task-filter-epic')?.value || 'all').trim(),
         featureId: String(document.getElementById('project-task-filter-feature')?.value || 'all').trim(),
         theme: String(document.getElementById('project-task-theme-filter')?.value || '').trim()
@@ -24485,6 +24705,9 @@
       ], `${globalSearchQuery} ${filters.query}`.trim()));
       if (filters.status && filters.status !== 'all') {
         filtered = filtered.filter(task => (task.status || 'todo') === filters.status);
+      }
+      if (filters.assigneeKind && filters.assigneeKind !== 'all') {
+        filtered = filtered.filter((task) => matchesTaskAssigneeKindFilter(task, currentProjectState, filters.assigneeKind));
       }
       if (filters.epicId && filters.epicId !== 'all') {
         const activeFeatures = (currentProjectState?.features || [])
@@ -24584,7 +24807,7 @@
               <p class="text-sm text-slate-500 truncate">${escapeHtml(task.description || '')}</p>
             </div>
             <div class="task-list-row-right text-xs text-slate-600">
-              <div>${escapeHtml(getTaskAssigneeName(task, currentProjectState) || 'Aucun responsable')}</div>
+              <div class="inline-flex items-center gap-1.5">${buildTaskAssigneeInlineHtml(task, currentProjectState)}</div>
               <div>${formatDate(task.dueDate)}</div>
             </div>
           </div>
@@ -24643,7 +24866,7 @@
             </span>
             <span class="flex items-center gap-1">
               <span class="material-symbols-outlined text-base">person</span>
-              ${escapeHtml(getTaskAssigneeName(task, currentProjectState) || 'Aucun responsable')}
+              <span class="inline-flex items-center gap-1.5">${buildTaskAssigneeInlineHtml(task, currentProjectState)}</span>
             </span>
             <span class="flex items-center gap-1">
               <span class="material-symbols-outlined text-base">attach_file</span>
@@ -24801,7 +25024,7 @@
                 ${getTaskGroupName(task, currentProjectState) ? `<span class="task-group-chip">${escapeHtml(getTaskGroupName(task, currentProjectState) || 'Groupe')}</span>` : ''}
               </div>
               <div class="text-xs text-gray-500 flex items-center justify-between">
-                <span>${escapeHtml(getTaskAssigneeName(task, currentProjectState) || 'Aucun responsable')}</span>
+                <span class="inline-flex items-center gap-1.5">${buildTaskAssigneeInlineHtml(task, currentProjectState)}</span>
                 <span>${formatDate(task.dueDate)}</span>
               </div>
               ${buildProjectLockHintHtml(currentProjectState, LOCK_SCOPE_TASK, task.taskId, true)}
@@ -24955,7 +25178,7 @@
         <div class="gantt-left-row">
           <div class="gantt-left-title">${escapeHtml(task.title || 'Tâche')}</div>
           <div class="gantt-left-meta">
-            <span>${escapeHtml(getTaskAssigneeName(task, currentProjectState) || 'Aucun responsable')}</span>
+            <span class="inline-flex items-center gap-1.5">${buildTaskAssigneeInlineHtml(task, currentProjectState)}</span>
             <span>${formatDate(start.toISOString().slice(0, 10))} → ${formatDate(end.toISOString().slice(0, 10))}</span>
             <span class="gantt-left-progress">${progress}%</span>
           </div>
@@ -25222,7 +25445,7 @@
               : `<div class="space-y-2">${selectedTasks.map(task => `
                   <div class="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
                     <p class="text-sm font-semibold text-slate-800">${escapeHtml(task.title)}</p>
-                    <p class="text-xs text-slate-500">${escapeHtml(getTaskAssigneeName(task, currentProjectState) || 'Aucun responsable')}</p>
+                    <p class="text-xs text-slate-500 inline-flex items-center gap-1.5">${buildTaskAssigneeInlineHtml(task, currentProjectState)}</p>
                   </div>
                 `).join('')}</div>`
           }
@@ -28663,6 +28886,9 @@
     }
     document.getElementById('btn-edit-project')?.addEventListener('click', () => openEditProjectModal());
     document.getElementById('btn-delete-project')?.addEventListener('click', () => deleteCurrentProject());
+    document.getElementById('btn-toggle-project-overview')?.addEventListener('click', () => {
+      setProjectOverviewCollapsed(!projectOverviewCollapsed);
+    });
     document.getElementById('btn-toggle-project-description')?.addEventListener('click', () => {
       const wasExpanded = projectDescriptionExpanded;
       projectDescriptionExpanded = !projectDescriptionExpanded;
@@ -28684,6 +28910,7 @@
       applySidebarCollapsedState(collapsed, false);
       syncProjectWorkFocusButton();
     });
+    applyProjectOverviewCollapsedState();
     applyProjectSubnavLayout();
     syncProjectWorkFocusButton();
     document.getElementById('btn-notifications')?.addEventListener('click', (e) => {
@@ -29424,16 +29651,119 @@
       });
     });
 
+    function buildUniqueWorkflowAgentHandle(baseLabel, existingAgents = [], currentAgentId = '') {
+      const raw = normalizeMentionHandle(baseLabel || 'agent');
+      const taken = new Set(
+        (Array.isArray(existingAgents) ? existingAgents : [])
+          .filter((row) => String(row?.id || '') !== String(currentAgentId || ''))
+          .map((row) => String(row?.handle || '').trim())
+          .filter(Boolean)
+      );
+      let next = raw || 'agent';
+      let suffix = 2;
+      while (taken.has(next)) {
+        next = `${raw}.${suffix++}`;
+      }
+      return next;
+    }
+
+    async function upsertWorkflowAgentFromCurrentUserProfile() {
+      const userId = String(currentUser?.userId || '').trim();
+      if (!userId) return null;
+      const displayName = String(currentUser?.name || fallbackDirectoryName(userId)).trim() || fallbackDirectoryName(userId);
+      const desiredRole = String(currentUser?.workflowAgentRole || '').trim();
+      const desiredEmail = String(currentUser?.email || '').trim().toLowerCase();
+      const existingAgents = await getAllDecrypted('workflowAgents', 'id');
+      const linked = (existingAgents || []).find((row) => String(row?.metadata?.userId || '').trim() === userId);
+
+      if (!linked && !desiredRole) return null;
+
+      if (linked) {
+        const next = { ...linked };
+        let changed = false;
+        if (String(next.displayName || '').trim() !== displayName) {
+          next.displayName = displayName;
+          changed = true;
+        }
+        if (desiredRole && String(next.title || '').trim() !== desiredRole) {
+          next.title = desiredRole;
+          changed = true;
+        }
+        if (String(next.email || '').trim().toLowerCase() !== desiredEmail) {
+          next.email = desiredEmail;
+          changed = true;
+        }
+        const currentMetadataUserId = String(next?.metadata?.userId || '').trim();
+        if (currentMetadataUserId !== userId) {
+          next.metadata = { ...(next.metadata || {}), userId };
+          changed = true;
+        }
+        if (changed) {
+          next.updatedAt = Date.now();
+          await putEncrypted('workflowAgents', next, 'id');
+          if (sharedFolderHandle) {
+            enqueueWorkflowSharedFolderWrite({
+              changeId: `wf-change-${uuidv4()}`,
+              action: 'upsert',
+              entityType: 'agent',
+              entityId: String(next.id || ''),
+              entity: next,
+              updatedAt: Number(next.updatedAt || Date.now()),
+              byUserId: currentUser?.userId || null,
+              createdAt: Date.now()
+            });
+          }
+        }
+        return String(next.id || '').trim() || null;
+      }
+
+      const nowTs = Date.now();
+      const created = {
+        id: `wf-agent-${uuidv4()}`,
+        displayName,
+        handle: buildUniqueWorkflowAgentHandle(displayName, existingAgents || []),
+        title: desiredRole || 'Agent',
+        email: desiredEmail,
+        serviceId: null,
+        groupIds: [],
+        managerAgentId: null,
+        mission: '',
+        responsibilities: [],
+        skills: [],
+        tools: [],
+        rbacHints: [],
+        metadata: { userId, source: 'profile_auto_link' },
+        createdAt: nowTs,
+        updatedAt: nowTs
+      };
+      await putEncrypted('workflowAgents', created, 'id');
+      if (sharedFolderHandle) {
+        enqueueWorkflowSharedFolderWrite({
+          changeId: `wf-change-${uuidv4()}`,
+          action: 'upsert',
+          entityType: 'agent',
+          entityId: String(created.id || ''),
+          entity: created,
+          updatedAt: Number(created.updatedAt || nowTs),
+          byUserId: currentUser?.userId || null,
+          createdAt: nowTs
+        });
+      }
+      return String(created.id || '').trim() || null;
+    }
+
     // Edit user profile
     document.getElementById('btn-edit-user-name').addEventListener('click', () => {
       const modal = document.getElementById('modal-edit-user-name');
       const nameInput = document.getElementById('edit-user-name-input');
       const emailInput = document.getElementById('edit-user-email-input');
+      const workflowRoleInput = document.getElementById('edit-user-workflow-role-input');
       const photoInput = document.getElementById('profile-photo-input');
       const importInput = document.getElementById('import-user-json-input');
       modal.classList.remove('hidden');
       nameInput.value = currentUser.name;
       if (emailInput) emailInput.value = String(currentUser.email || '').trim();
+      if (workflowRoleInput) workflowRoleInput.value = String(currentUser.workflowAgentRole || '').trim();
       nameInput.focus();
       pendingProfilePhotoDataUrl = currentUser.avatarDataUrl || '';
       pendingProfilePhotoDirty = false;
@@ -29630,7 +29960,9 @@
     document.getElementById('btn-save-user-name').addEventListener('click', async () => {
       const newName = document.getElementById('edit-user-name-input').value.trim();
       const emailInput = document.getElementById('edit-user-email-input');
+      const workflowRoleInput = document.getElementById('edit-user-workflow-role-input');
       const newEmail = String(emailInput?.value || '').trim().toLowerCase();
+      const newWorkflowRole = String(workflowRoleInput?.value || '').trim();
       if (!newName) {
         showToast('❌ Le nom est requis');
         document.getElementById('edit-user-name-input').focus();
@@ -29648,6 +29980,7 @@
         // Mettre à jour le nom dans currentUser
         currentUser.name = newName;
         currentUser.email = newEmail;
+        currentUser.workflowAgentRole = newWorkflowRole;
         if (pendingProfilePhotoDirty) {
           currentUser.avatarDataUrl = pendingProfilePhotoDataUrl || '';
         }
@@ -29664,6 +29997,7 @@
 
         // Sauvegarder dans la config chiffrée
         await saveEncryptedConfig();
+        await upsertWorkflowAgentFromCurrentUserProfile();
 
         // Mettre à jour l'affichage
         updateUserInfo();
@@ -29671,6 +30005,9 @@
         document.getElementById('modal-edit-user-name').classList.add('hidden');
         pendingProfilePhotoDirty = false;
         showToast('✅ Nom mis à jour');
+        if (workflowRuntime && workspaceMode === 'global' && globalWorkspaceView === 'workflow') {
+          await workflowRuntime.render().catch(() => null);
+        }
         showLoading(false);
       } catch (error) {
         console.error('Error updating name:', error);
@@ -30279,10 +30616,23 @@
       }
       const assigneeSelectEl = document.getElementById('task-assignee');
       const manualAssigneeInput = document.getElementById('task-assignee-manual');
-      const selectedAssigneeUserIds = Array.from(assigneeSelectEl?.selectedOptions || [])
+      const selectedAssigneeValues = Array.from(assigneeSelectEl?.selectedOptions || [])
         .map(opt => String(opt.value || '').trim())
         .filter(Boolean);
-      const selectedAssigneesFromMembers = selectedAssigneeUserIds.map((userId) => {
+      const selectedAssigneesFromMembers = selectedAssigneeValues.map((assigneeValue) => {
+        const parsed = parseTaskAssigneeSelectValue(assigneeValue);
+        const option = Array.from(assigneeSelectEl?.options || []).find(opt => String(opt.value || '').trim() === assigneeValue);
+        if (parsed.kind === 'agent') {
+          const agentId = parsed.id;
+          const linkedUserId = String(option?.dataset?.userId || '').trim();
+          const name = String(option?.dataset?.assigneeName || option?.textContent || '').trim();
+          return {
+            agentId: agentId || null,
+            userId: linkedUserId || null,
+            name
+          };
+        }
+        const userId = parsed.id;
         let name = '';
         if (!standaloneTaskMode) {
           const member = (effectiveState?.members || []).find(m => m.userId === userId);
@@ -30291,7 +30641,6 @@
           name = currentUser?.name || '';
         }
         if (!name) {
-          const option = Array.from(assigneeSelectEl?.options || []).find(opt => opt.value === userId);
           name = String(option?.dataset?.assigneeName || option?.textContent || '').trim();
         }
         return { userId, name };
@@ -30305,7 +30654,7 @@
       }))]
         .filter((entry) => entry.userId || entry.name)
         .filter((entry) => {
-          const key = `${entry.userId || ''}|${normalizeSearch(entry.name || '')}|${String(entry.email || '').toLowerCase()}`;
+          const key = `${entry.agentId || ''}|${entry.userId || ''}|${normalizeSearch(entry.name || '')}|${String(entry.email || '').toLowerCase()}`;
           if (seenAssignees.has(key)) return false;
           seenAssignees.add(key);
           return true;
