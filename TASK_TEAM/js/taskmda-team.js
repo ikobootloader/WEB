@@ -2980,6 +2980,7 @@
         ['btn-remove-profile-photo', 'danger', 'Retirer'],
         ['btn-export-user-json', 'export', 'Exporter JSON'],
         ['btn-import-user-json', 'open', 'Importer JSON'],
+        ['btn-hard-sync-global-identities', 'sync', 'Lancer le hard sync global'],
         ['btn-export-excel', 'export', 'Exporter projets et tâches (CSV Excel)'],
         ['btn-change-password', 'manage', 'Changer le mot de passe'],
         ['btn-show-recovery-key', 'open', 'Afficher la clé de récupération'],
@@ -9313,6 +9314,8 @@
     const TASK_AUTO_ARCHIVE_DEFAULT_MONTHS = 1;
     const TASK_AUTO_ARCHIVE_MIN_MONTHS = 1;
     const TASK_AUTO_ARCHIVE_MAX_MONTHS = 36;
+    const HARD_SYNC_GLOBAL_AUDIT_SETTINGS_KEY = 'identityHardSyncGlobalAudit';
+    const HARD_SYNC_GLOBAL_AUDIT_MAX_ENTRIES = 120;
     const TASK_AUTO_ARCHIVE_THROTTLE_MS = 30 * 60 * 1000;
     const PROFANITY_RULES = [
       { regex: /\bputain\b/giu, replacement: 'zut' },
@@ -10603,17 +10606,63 @@
       if (label) label.textContent = collapsed ? 'Déplier' : 'Replier';
     }
 
-    function applyProjectOverviewCollapsedState() {
+    function animateProjectOverviewCollapse(nextCollapsed) {
+      const detail = document.getElementById('project-detail');
+      const panel = document.getElementById('project-overview-panel');
+      if (!detail || !panel) return false;
+      if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        detail.classList.toggle('is-overview-collapsed', !!nextCollapsed);
+        return true;
+      }
+      const startHeight = Math.round(panel.getBoundingClientRect().height || 0);
+      panel.classList.add('is-overview-animating');
+      detail.classList.toggle('is-overview-collapsed', !!nextCollapsed);
+      const endHeight = Math.round(panel.getBoundingClientRect().height || 0);
+      if (Math.abs(endHeight - startHeight) < 2) {
+        panel.classList.remove('is-overview-animating');
+        return true;
+      }
+      panel.style.height = `${startHeight}px`;
+      panel.style.overflow = 'hidden';
+      panel.style.transition = 'height 180ms cubic-bezier(0.2, 0, 0, 1)';
+      // Force le style initial avant de lancer la transition.
+      // eslint-disable-next-line no-unused-expressions
+      panel.offsetHeight;
+      panel.style.height = `${endHeight}px`;
+
+      let cleaned = false;
+      const cleanup = () => {
+        if (cleaned) return;
+        cleaned = true;
+        panel.classList.remove('is-overview-animating');
+        panel.style.height = '';
+        panel.style.overflow = '';
+        panel.style.transition = '';
+        panel.removeEventListener('transitionend', onTransitionEnd);
+      };
+      const onTransitionEnd = (event) => {
+        if (event?.propertyName === 'height') cleanup();
+      };
+      panel.addEventListener('transitionend', onTransitionEnd);
+      setTimeout(cleanup, 260);
+      return true;
+    }
+
+    function applyProjectOverviewCollapsedState(options = {}) {
       const detail = document.getElementById('project-detail');
       if (!detail) return;
-      detail.classList.toggle('is-overview-collapsed', !!projectOverviewCollapsed);
+      if (options.animate === true) {
+        animateProjectOverviewCollapse(projectOverviewCollapsed);
+      } else {
+        detail.classList.toggle('is-overview-collapsed', !!projectOverviewCollapsed);
+      }
       syncProjectOverviewCollapseButton();
     }
 
     function setProjectOverviewCollapsed(nextCollapsed, options = {}) {
       const persist = options.persist !== false;
       projectOverviewCollapsed = !!nextCollapsed;
-      applyProjectOverviewCollapsedState();
+      applyProjectOverviewCollapsedState({ animate: options.animate === true });
       if (persist) {
         localStorage.setItem(PROJECT_OVERVIEW_COLLAPSED_STORAGE_KEY, projectOverviewCollapsed ? '1' : '0');
       }
@@ -11402,7 +11451,7 @@
         const known = usersMap.get(member.userId) || directoryMap.get(member.userId);
         return {
           ...member,
-          displayNameResolved: member.displayName || known?.name || fallbackDirectoryName(member.userId)
+          displayNameResolved: known?.name || member.displayName || fallbackDirectoryName(member.userId)
         };
       });
     }
@@ -12304,7 +12353,8 @@
           const agentId = String(entry?.agentId || '').trim();
           const userId = String(entry?.userId || '').trim();
           const fallbackName = userId ? (memberMap.get(userId) || '') : '';
-          const name = String(entry?.name || fallbackName || (agentId ? `Agent ${agentId.slice(0, 8)}` : '')).trim();
+          const resolvedKnownName = userId ? resolveKnownUserIdentity(userId, String(entry?.name || fallbackName || '').trim()).name : '';
+          const name = String(resolvedKnownName || entry?.name || fallbackName || (agentId ? `Agent ${agentId.slice(0, 8)}` : '')).trim();
           const email = String(entry?.email || '').trim().toLowerCase();
           const key = `${agentId}|${userId}|${normalizeSearch(name)}|${email}`;
           if (!agentId && !userId && !name) return;
@@ -12318,9 +12368,12 @@
       const legacyName = task.assignee || member?.displayName || '';
       if (!task.assigneeUserId && !legacyName) return [];
       const parsedLegacy = parseAssigneeToken(legacyName);
+      const resolvedLegacyName = task.assigneeUserId
+        ? resolveKnownUserIdentity(task.assigneeUserId, String(parsedLegacy?.name || legacyName || '').trim()).name
+        : String(parsedLegacy?.name || legacyName || '').trim();
       return [{
         userId: task.assigneeUserId || null,
-        name: String(parsedLegacy?.name || legacyName || '').trim(),
+        name: String(resolvedLegacyName || '').trim(),
         email: String(parsedLegacy?.email || '').trim().toLowerCase()
       }];
     }
@@ -15775,7 +15828,7 @@
         ...((tasks || []).map((task) => String(task?.theme || '').trim())),
         ...((globalThemeCatalog || []).map((t) => String(t?.name || '').trim()))
       ];
-      fillThemePicker('global-task-theme-known', 'global-task-theme', themes, 'Référentiel thématiques...');
+      fillProjectThemeSelect('global-task-theme-known', themes, 'Référentiel thématiques...');
     }
 
     function refreshProjectDocumentTaskOptions(state) {
@@ -17838,7 +17891,7 @@
       const query = `${globalSearchQuery} ${document.getElementById('global-task-search')?.value || ''}`.trim();
       const status = document.getElementById('global-task-status')?.value || 'all';
       const assigneeKind = String(document.getElementById('global-task-assignee-kind')?.value || 'all').trim();
-      const theme = document.getElementById('global-task-theme')?.value || '';
+      const theme = document.getElementById('global-task-theme-known')?.value || '';
       const urgencies = getSelectedGlobalTaskUrgencySet();
 
       let filtered = all.filter(task => matchesQuery([
@@ -18359,7 +18412,7 @@
       const query = `${globalSearchQuery} ${document.getElementById('global-task-search')?.value || ''}`.trim();
       const status = String(document.getElementById('global-task-status')?.value || 'all').trim();
       const assigneeKind = String(document.getElementById('global-task-assignee-kind')?.value || 'all').trim();
-      const theme = String(document.getElementById('global-task-theme')?.value || '').trim();
+      const theme = String(document.getElementById('global-task-theme-known')?.value || '').trim();
       const urgencies = getSelectedGlobalTaskUrgencySet();
       let archived = (allTasks || []).filter(task => task?.archivedAt);
       archived = archived.filter(task => matchesQuery([
@@ -18422,7 +18475,7 @@
       const query = `${globalSearchQuery} ${document.getElementById('global-task-search')?.value || ''}`.trim();
       const status = document.getElementById('global-task-status')?.value || 'all';
       const assigneeKind = String(document.getElementById('global-task-assignee-kind')?.value || 'all').trim();
-      const theme = document.getElementById('global-task-theme')?.value || '';
+      const theme = document.getElementById('global-task-theme-known')?.value || '';
       const urgencies = getSelectedGlobalTaskUrgencySet();
 
       let filtered = all.filter(task => matchesQuery([
@@ -28887,7 +28940,7 @@
     document.getElementById('btn-edit-project')?.addEventListener('click', () => openEditProjectModal());
     document.getElementById('btn-delete-project')?.addEventListener('click', () => deleteCurrentProject());
     document.getElementById('btn-toggle-project-overview')?.addEventListener('click', () => {
-      setProjectOverviewCollapsed(!projectOverviewCollapsed);
+      setProjectOverviewCollapsed(!projectOverviewCollapsed, { animate: true });
     });
     document.getElementById('btn-toggle-project-description')?.addEventListener('click', () => {
       const wasExpanded = projectDescriptionExpanded;
@@ -29674,47 +29727,51 @@
       const desiredRole = String(currentUser?.workflowAgentRole || '').trim();
       const desiredEmail = String(currentUser?.email || '').trim().toLowerCase();
       const existingAgents = await getAllDecrypted('workflowAgents', 'id');
-      const linked = (existingAgents || []).find((row) => String(row?.metadata?.userId || '').trim() === userId);
+      const linkedAgents = (existingAgents || []).filter((row) => String(row?.metadata?.userId || '').trim() === userId);
 
-      if (!linked && !desiredRole) return null;
+      if (!linkedAgents.length && !desiredRole) return null;
 
-      if (linked) {
-        const next = { ...linked };
-        let changed = false;
-        if (String(next.displayName || '').trim() !== displayName) {
-          next.displayName = displayName;
-          changed = true;
-        }
-        if (desiredRole && String(next.title || '').trim() !== desiredRole) {
-          next.title = desiredRole;
-          changed = true;
-        }
-        if (String(next.email || '').trim().toLowerCase() !== desiredEmail) {
-          next.email = desiredEmail;
-          changed = true;
-        }
-        const currentMetadataUserId = String(next?.metadata?.userId || '').trim();
-        if (currentMetadataUserId !== userId) {
-          next.metadata = { ...(next.metadata || {}), userId };
-          changed = true;
-        }
-        if (changed) {
-          next.updatedAt = Date.now();
-          await putEncrypted('workflowAgents', next, 'id');
-          if (sharedFolderHandle) {
-            enqueueWorkflowSharedFolderWrite({
-              changeId: `wf-change-${uuidv4()}`,
-              action: 'upsert',
-              entityType: 'agent',
-              entityId: String(next.id || ''),
-              entity: next,
-              updatedAt: Number(next.updatedAt || Date.now()),
-              byUserId: currentUser?.userId || null,
-              createdAt: Date.now()
-            });
+      if (linkedAgents.length) {
+        let firstId = null;
+        for (const linked of linkedAgents) {
+          const next = { ...linked };
+          let changed = false;
+          if (String(next.displayName || '').trim() !== displayName) {
+            next.displayName = displayName;
+            changed = true;
           }
+          if (desiredRole && String(next.title || '').trim() !== desiredRole) {
+            next.title = desiredRole;
+            changed = true;
+          }
+          if (String(next.email || '').trim().toLowerCase() !== desiredEmail) {
+            next.email = desiredEmail;
+            changed = true;
+          }
+          const currentMetadataUserId = String(next?.metadata?.userId || '').trim();
+          if (currentMetadataUserId !== userId) {
+            next.metadata = { ...(next.metadata || {}), userId };
+            changed = true;
+          }
+          if (changed) {
+            next.updatedAt = Date.now();
+            await putEncrypted('workflowAgents', next, 'id');
+            if (sharedFolderHandle) {
+              enqueueWorkflowSharedFolderWrite({
+                changeId: `wf-change-${uuidv4()}`,
+                action: 'upsert',
+                entityType: 'agent',
+                entityId: String(next.id || ''),
+                entity: next,
+                updatedAt: Number(next.updatedAt || Date.now()),
+                byUserId: currentUser?.userId || null,
+                createdAt: Date.now()
+              });
+            }
+          }
+          if (!firstId) firstId = String(next.id || '').trim() || null;
         }
-        return String(next.id || '').trim() || null;
+        return firstId;
       }
 
       const nowTs = Date.now();
@@ -29752,18 +29809,402 @@
       return String(created.id || '').trim() || null;
     }
 
+    function normalizeIdentityEmail(value) {
+      return String(value || '').trim().toLowerCase();
+    }
+
+    function syncTaskAssigneeSnapshotsForUser(task, userId, displayName, email = '') {
+      if (!task || typeof task !== 'object') return { task, changed: false };
+      const safeUserId = String(userId || '').trim();
+      if (!safeUserId) return { task, changed: false };
+      const safeDisplayName = String(displayName || '').trim();
+      const safeEmail = normalizeIdentityEmail(email);
+      let changed = false;
+      const next = { ...task };
+
+      if (Array.isArray(next.assignees) && next.assignees.length > 0) {
+        const syncedAssignees = next.assignees.map((entry) => {
+          const row = entry && typeof entry === 'object' ? { ...entry } : {};
+          const rowUserId = String(row.userId || '').trim();
+          if (rowUserId !== safeUserId) return row;
+          if (safeDisplayName && String(row.name || '').trim() !== safeDisplayName) {
+            row.name = safeDisplayName;
+            changed = true;
+          }
+          if (safeEmail && normalizeIdentityEmail(row.email) !== safeEmail) {
+            row.email = safeEmail;
+            changed = true;
+          }
+          return row;
+        });
+        if (changed) next.assignees = syncedAssignees;
+      }
+
+      if (String(next.assigneeUserId || '').trim() === safeUserId) {
+        if (safeDisplayName && String(next.assignee || '').trim() !== safeDisplayName) {
+          next.assignee = safeDisplayName;
+          changed = true;
+        }
+      }
+
+      return { task: next, changed };
+    }
+
+    function syncTaskAssigneeSnapshotsWithIdentityMap(task, identityByUserId) {
+      if (!task || typeof task !== 'object') return { task, changed: false };
+      if (!(identityByUserId instanceof Map) || identityByUserId.size === 0) return { task, changed: false };
+      let changed = false;
+      const next = { ...task };
+
+      if (Array.isArray(next.assignees) && next.assignees.length > 0) {
+        const syncedAssignees = next.assignees.map((entry) => {
+          const row = entry && typeof entry === 'object' ? { ...entry } : {};
+          const rowUserId = String(row.userId || '').trim();
+          if (!rowUserId) return row;
+          const identity = identityByUserId.get(rowUserId);
+          if (!identity) return row;
+          const mappedName = String(identity.name || '').trim();
+          const mappedEmail = normalizeIdentityEmail(identity.email || '');
+          if (mappedName && String(row.name || '').trim() !== mappedName) {
+            row.name = mappedName;
+            changed = true;
+          }
+          if (mappedEmail && normalizeIdentityEmail(row.email) !== mappedEmail) {
+            row.email = mappedEmail;
+            changed = true;
+          }
+          return row;
+        });
+        if (changed) next.assignees = syncedAssignees;
+      }
+
+      const legacyUserId = String(next.assigneeUserId || '').trim();
+      if (legacyUserId) {
+        const identity = identityByUserId.get(legacyUserId);
+        const mappedName = String(identity?.name || '').trim();
+        if (mappedName && String(next.assignee || '').trim() !== mappedName) {
+          next.assignee = mappedName;
+          changed = true;
+        }
+      }
+
+      return { task: next, changed };
+    }
+
+    async function hardSyncIdentitySnapshotsForUser(userId, displayName, email = '') {
+      const safeUserId = String(userId || '').trim();
+      const safeDisplayName = String(displayName || '').trim();
+      if (!safeUserId || !safeDisplayName) {
+        return { updatedLocalStates: 0, updatedLocalTasks: 0, updatedGlobalTasks: 0 };
+      }
+
+      let updatedLocalStates = 0;
+      let updatedLocalTasks = 0;
+      const localStates = await getAllDecrypted('localState', 'projectId');
+      for (const stateRow of (localStates || [])) {
+        if (!stateRow || typeof stateRow !== 'object') continue;
+        const nextState = { ...stateRow };
+        let rowChanged = false;
+
+        if (Array.isArray(nextState.members) && nextState.members.length > 0) {
+          const nextMembers = nextState.members.map((member) => {
+            const row = member && typeof member === 'object' ? { ...member } : {};
+            if (String(row.userId || '').trim() !== safeUserId) return row;
+            if (String(row.displayName || '').trim() === safeDisplayName) return row;
+            row.displayName = safeDisplayName;
+            rowChanged = true;
+            return row;
+          });
+          if (rowChanged) nextState.members = nextMembers;
+        }
+
+        if (Array.isArray(nextState.tasks) && nextState.tasks.length > 0) {
+          const nextTasks = nextState.tasks.map((task) => {
+            const synced = syncTaskAssigneeSnapshotsForUser(task, safeUserId, safeDisplayName, email);
+            if (synced.changed) {
+              rowChanged = true;
+              updatedLocalTasks += 1;
+            }
+            return synced.task;
+          });
+          if (rowChanged) nextState.tasks = nextTasks;
+        }
+
+        if (!rowChanged) continue;
+        nextState.updatedAt = Date.now();
+        await putEncrypted('localState', nextState, 'projectId');
+        updatedLocalStates += 1;
+      }
+
+      let updatedGlobalTasks = 0;
+      const globalTasks = await getAllDecrypted('globalTasks', 'id');
+      for (const task of (globalTasks || [])) {
+        const synced = syncTaskAssigneeSnapshotsForUser(task, safeUserId, safeDisplayName, email);
+        if (!synced.changed) continue;
+        const nextTask = { ...synced.task, updatedAt: Date.now() };
+        await putEncrypted('globalTasks', nextTask, 'id');
+        updatedGlobalTasks += 1;
+      }
+
+      return { updatedLocalStates, updatedLocalTasks, updatedGlobalTasks };
+    }
+
+    async function hardSyncIdentitySnapshotsForAllUsers() {
+      const [users, directoryUsers] = await Promise.all([
+        getAllDecrypted('users', 'userId'),
+        getAllDecrypted('directoryUsers', 'userId')
+      ]);
+
+      const identityByUserId = new Map();
+      const mergeIdentity = (userId, name, email = '') => {
+        const id = String(userId || '').trim();
+        if (!id) return;
+        const cleanName = String(name || '').trim();
+        const cleanEmail = normalizeIdentityEmail(email);
+        const existing = identityByUserId.get(id) || { userId: id, name: '', email: '' };
+        identityByUserId.set(id, {
+          userId: id,
+          name: cleanName || existing.name || fallbackDirectoryName(id),
+          email: cleanEmail || existing.email || ''
+        });
+      };
+
+      (directoryUsers || []).forEach((row) => {
+        mergeIdentity(row?.userId, row?.name, row?.email || '');
+      });
+      (users || []).forEach((row) => {
+        mergeIdentity(row?.userId, row?.name, row?.email || '');
+      });
+      if (currentUser?.userId) {
+        mergeIdentity(currentUser.userId, currentUser.name, currentUser.email || '');
+      }
+
+      if (identityByUserId.size === 0) {
+        return {
+          usersResolved: 0,
+          updatedLocalStates: 0,
+          updatedLocalMembers: 0,
+          updatedLocalTasks: 0,
+          updatedGlobalTasks: 0,
+          updatedWorkflowAgents: 0
+        };
+      }
+
+      let updatedLocalStates = 0;
+      let updatedLocalMembers = 0;
+      let updatedLocalTasks = 0;
+      const localStates = await getAllDecrypted('localState', 'projectId');
+      for (const stateRow of (localStates || [])) {
+        if (!stateRow || typeof stateRow !== 'object') continue;
+        const nextState = { ...stateRow };
+        let rowChanged = false;
+
+        if (Array.isArray(nextState.members) && nextState.members.length > 0) {
+          nextState.members = nextState.members.map((member) => {
+            const row = member && typeof member === 'object' ? { ...member } : {};
+            const id = String(row.userId || '').trim();
+            if (!id) return row;
+            const identity = identityByUserId.get(id);
+            if (!identity) return row;
+            const mappedName = String(identity.name || '').trim();
+            if (mappedName && String(row.displayName || '').trim() !== mappedName) {
+              row.displayName = mappedName;
+              rowChanged = true;
+              updatedLocalMembers += 1;
+            }
+            return row;
+          });
+        }
+
+        if (Array.isArray(nextState.tasks) && nextState.tasks.length > 0) {
+          nextState.tasks = nextState.tasks.map((task) => {
+            const synced = syncTaskAssigneeSnapshotsWithIdentityMap(task, identityByUserId);
+            if (synced.changed) {
+              rowChanged = true;
+              updatedLocalTasks += 1;
+            }
+            return synced.task;
+          });
+        }
+
+        if (!rowChanged) continue;
+        nextState.updatedAt = Date.now();
+        await putEncrypted('localState', nextState, 'projectId');
+        updatedLocalStates += 1;
+      }
+
+      let updatedGlobalTasks = 0;
+      const globalTasks = await getAllDecrypted('globalTasks', 'id');
+      for (const task of (globalTasks || [])) {
+        const synced = syncTaskAssigneeSnapshotsWithIdentityMap(task, identityByUserId);
+        if (!synced.changed) continue;
+        const nextTask = { ...synced.task, updatedAt: Date.now() };
+        await putEncrypted('globalTasks', nextTask, 'id');
+        updatedGlobalTasks += 1;
+      }
+
+      let updatedWorkflowAgents = 0;
+      const workflowAgents = await getAllDecrypted('workflowAgents', 'id');
+      for (const agent of (workflowAgents || [])) {
+        if (!agent || typeof agent !== 'object') continue;
+        const userId = String(agent?.metadata?.userId || '').trim();
+        if (!userId) continue;
+        const identity = identityByUserId.get(userId);
+        if (!identity) continue;
+        let changed = false;
+        const nextAgent = { ...agent };
+        const mappedName = String(identity.name || '').trim();
+        const mappedEmail = normalizeIdentityEmail(identity.email || '');
+        if (mappedName && String(nextAgent.displayName || '').trim() !== mappedName) {
+          nextAgent.displayName = mappedName;
+          changed = true;
+        }
+        if (mappedEmail && normalizeIdentityEmail(nextAgent.email) !== mappedEmail) {
+          nextAgent.email = mappedEmail;
+          changed = true;
+        }
+        if (!changed) continue;
+        nextAgent.updatedAt = Date.now();
+        await putEncrypted('workflowAgents', nextAgent, 'id');
+        updatedWorkflowAgents += 1;
+        if (sharedFolderHandle) {
+          enqueueWorkflowSharedFolderWrite({
+            changeId: `wf-change-${uuidv4()}`,
+            action: 'upsert',
+            entityType: 'agent',
+            entityId: String(nextAgent.id || ''),
+            entity: nextAgent,
+            updatedAt: Number(nextAgent.updatedAt || Date.now()),
+            byUserId: currentUser?.userId || null,
+            createdAt: Date.now()
+          });
+        }
+      }
+
+      return {
+        usersResolved: identityByUserId.size,
+        updatedLocalStates,
+        updatedLocalMembers,
+        updatedLocalTasks,
+        updatedGlobalTasks,
+        updatedWorkflowAgents
+      };
+    }
+
+    function normalizeHardSyncGlobalAuditEntries(value) {
+      return (Array.isArray(value) ? value : [])
+        .map((entry) => {
+          const row = entry && typeof entry === 'object' ? entry : {};
+          return {
+            id: String(row.id || `audit-${uuidv4()}`).trim(),
+            createdAt: Number(row.createdAt || 0) || Date.now(),
+            status: String(row.status || 'success').trim() || 'success',
+            adminUserId: String(row.adminUserId || '').trim(),
+            adminName: String(row.adminName || '').trim(),
+            errorMessage: String(row.errorMessage || '').trim(),
+            stats: {
+              usersResolved: Number(row.stats?.usersResolved || 0) || 0,
+              updatedLocalStates: Number(row.stats?.updatedLocalStates || 0) || 0,
+              updatedLocalMembers: Number(row.stats?.updatedLocalMembers || 0) || 0,
+              updatedLocalTasks: Number(row.stats?.updatedLocalTasks || 0) || 0,
+              updatedGlobalTasks: Number(row.stats?.updatedGlobalTasks || 0) || 0,
+              updatedWorkflowAgents: Number(row.stats?.updatedWorkflowAgents || 0) || 0
+            }
+          };
+        })
+        .sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
+    }
+
+    async function getHardSyncGlobalAuditEntries() {
+      const row = await getDecrypted('appSettings', HARD_SYNC_GLOBAL_AUDIT_SETTINGS_KEY, 'key');
+      return normalizeHardSyncGlobalAuditEntries(row?.entries || []);
+    }
+
+    function formatHardSyncGlobalAuditStats(stats) {
+      return [
+        `${Number(stats?.usersResolved || 0)} utilisateur(s)`,
+        `${Number(stats?.updatedLocalMembers || 0)} membre(s)`,
+        `${Number(stats?.updatedLocalTasks || 0)} tache(s) projet`,
+        `${Number(stats?.updatedGlobalTasks || 0)} tache(s) globale(s)`,
+        `${Number(stats?.updatedWorkflowAgents || 0)} agent(s) workflow`
+      ].join(' • ');
+    }
+
+    async function appendHardSyncGlobalAuditEntry(payload = {}) {
+      const existing = await getHardSyncGlobalAuditEntries();
+      const entry = {
+        id: `hard-sync-global-audit-${uuidv4()}`,
+        createdAt: Date.now(),
+        status: String(payload.status || 'success').trim() || 'success',
+        adminUserId: String(payload.adminUserId || currentUser?.userId || '').trim(),
+        adminName: String(payload.adminName || currentUser?.name || '').trim(),
+        errorMessage: String(payload.errorMessage || '').trim(),
+        stats: {
+          usersResolved: Number(payload.stats?.usersResolved || 0) || 0,
+          updatedLocalStates: Number(payload.stats?.updatedLocalStates || 0) || 0,
+          updatedLocalMembers: Number(payload.stats?.updatedLocalMembers || 0) || 0,
+          updatedLocalTasks: Number(payload.stats?.updatedLocalTasks || 0) || 0,
+          updatedGlobalTasks: Number(payload.stats?.updatedGlobalTasks || 0) || 0,
+          updatedWorkflowAgents: Number(payload.stats?.updatedWorkflowAgents || 0) || 0
+        }
+      };
+      const nextEntries = normalizeHardSyncGlobalAuditEntries([entry, ...existing]).slice(0, HARD_SYNC_GLOBAL_AUDIT_MAX_ENTRIES);
+      await putEncrypted('appSettings', {
+        key: HARD_SYNC_GLOBAL_AUDIT_SETTINGS_KEY,
+        entries: nextEntries,
+        updatedAt: Date.now()
+      }, 'key');
+      return entry;
+    }
+
+    async function renderHardSyncGlobalAuditPanel() {
+      const wrap = document.getElementById('profile-hard-sync-global-wrap');
+      const list = document.getElementById('profile-hard-sync-global-audit-list');
+      if (!(wrap instanceof HTMLElement) || !(list instanceof HTMLElement)) return;
+      const canManage = isAppAdmin();
+      wrap.classList.toggle('hidden', !canManage);
+      if (!canManage) return;
+
+      const entries = await getHardSyncGlobalAuditEntries();
+      if (!entries.length) {
+        list.innerHTML = '<p class="text-amber-800">Aucune exécution enregistrée.</p>';
+        return;
+      }
+      list.innerHTML = entries.slice(0, 8).map((entry) => {
+        const status = String(entry.status || '') === 'success'
+          ? '<span class="inline-flex px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">SUCCES</span>'
+          : '<span class="inline-flex px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700 font-semibold">ECHEC</span>';
+        const when = new Date(Number(entry.createdAt || Date.now())).toLocaleString('fr-FR');
+        const adminLabel = escapeHtml(String(entry.adminName || fallbackDirectoryName(entry.adminUserId || '')));
+        const statsLabel = escapeHtml(formatHardSyncGlobalAuditStats(entry.stats || {}));
+        const errorLabel = entry.errorMessage
+          ? `<p class="text-rose-700 mt-1">Erreur: ${escapeHtml(entry.errorMessage)}</p>`
+          : '';
+        return `
+          <div class="rounded-lg border border-amber-200 bg-white px-2 py-2">
+            <div class="flex flex-wrap items-center gap-2">${status}<span class="font-semibold">${escapeHtml(when)}</span><span>Admin: ${adminLabel}</span></div>
+            <p class="text-amber-900 mt-1">${statsLabel}</p>
+            ${errorLabel}
+          </div>
+        `;
+      }).join('');
+    }
+
     // Edit user profile
     document.getElementById('btn-edit-user-name').addEventListener('click', () => {
       const modal = document.getElementById('modal-edit-user-name');
       const nameInput = document.getElementById('edit-user-name-input');
       const emailInput = document.getElementById('edit-user-email-input');
       const workflowRoleInput = document.getElementById('edit-user-workflow-role-input');
+      const globalSyncWrap = document.getElementById('profile-hard-sync-global-wrap');
       const photoInput = document.getElementById('profile-photo-input');
       const importInput = document.getElementById('import-user-json-input');
       modal.classList.remove('hidden');
       nameInput.value = currentUser.name;
       if (emailInput) emailInput.value = String(currentUser.email || '').trim();
       if (workflowRoleInput) workflowRoleInput.value = String(currentUser.workflowAgentRole || '').trim();
+      if (globalSyncWrap) globalSyncWrap.classList.toggle('hidden', !isAppAdmin());
+      void renderHardSyncGlobalAuditPanel();
       nameInput.focus();
       pendingProfilePhotoDataUrl = currentUser.avatarDataUrl || '';
       pendingProfilePhotoDirty = false;
@@ -29820,6 +30261,53 @@
 
     document.getElementById('btn-import-user-json')?.addEventListener('click', () => {
       document.getElementById('import-user-json-input')?.click();
+    });
+
+    document.getElementById('btn-hard-sync-global-identities')?.addEventListener('click', async () => {
+      if (!isAppAdmin()) {
+        showToast('Action reservee a l admin application');
+        return;
+      }
+      const confirmed = window.confirm(
+        'Lancer un hard sync global des identites ?\n\n' +
+        'Cette action recalcule tous les snapshots de noms/emails (membres, taches, agents workflow) pour tous les utilisateurs.'
+      );
+      if (!confirmed) return;
+      try {
+        showLoading(true);
+        const stats = await hardSyncIdentitySnapshotsForAllUsers();
+        await appendHardSyncGlobalAuditEntry({
+          status: 'success',
+          stats,
+          adminUserId: currentUser?.userId || '',
+          adminName: currentUser?.name || ''
+        });
+        await refreshKnownUsersCache();
+        await renderHardSyncGlobalAuditPanel();
+        if (workflowRuntime && workspaceMode === 'global' && globalWorkspaceView === 'workflow') {
+          await workflowRuntime.render().catch(() => null);
+        }
+        showToast(
+          `Hard sync global termine: ${Number(stats?.usersResolved || 0)} utilisateur(s), `
+          + `${Number(stats?.updatedLocalMembers || 0)} membre(s), `
+          + `${Number(stats?.updatedLocalTasks || 0)} tache(s) projet, `
+          + `${Number(stats?.updatedGlobalTasks || 0)} tache(s) globale(s), `
+          + `${Number(stats?.updatedWorkflowAgents || 0)} agent(s) workflow.`
+        );
+      } catch (error) {
+        console.error('Global hard sync failed:', error);
+        await appendHardSyncGlobalAuditEntry({
+          status: 'failed',
+          stats: {},
+          adminUserId: currentUser?.userId || '',
+          adminName: currentUser?.name || '',
+          errorMessage: String(error?.message || error || 'Erreur inconnue')
+        });
+        await renderHardSyncGlobalAuditPanel();
+        showToast('Erreur hard sync global');
+      } finally {
+        showLoading(false);
+      }
     });
 
     document.getElementById('import-user-json-input')?.addEventListener('change', async (e) => {
@@ -29994,10 +30482,12 @@
           source: 'user_rename',
           lastSeenAt: Date.now()
         });
+        await refreshKnownUsersCache();
 
         // Sauvegarder dans la config chiffrée
         await saveEncryptedConfig();
         await upsertWorkflowAgentFromCurrentUserProfile();
+        const syncStats = await hardSyncIdentitySnapshotsForUser(currentUser.userId, currentUser.name, currentUser.email || '');
 
         // Mettre à jour l'affichage
         updateUserInfo();
@@ -30005,6 +30495,9 @@
         document.getElementById('modal-edit-user-name').classList.add('hidden');
         pendingProfilePhotoDirty = false;
         showToast('✅ Nom mis à jour');
+        if ((Number(syncStats?.updatedLocalTasks || 0) + Number(syncStats?.updatedGlobalTasks || 0)) > 0) {
+          showToast(`Synchronisation snapshots: ${Number(syncStats.updatedLocalTasks || 0)} tache(s) projet + ${Number(syncStats.updatedGlobalTasks || 0)} tache(s) globale(s)`);
+        }
         if (workflowRuntime && workspaceMode === 'global' && globalWorkspaceView === 'workflow') {
           await workflowRuntime.render().catch(() => null);
         }
@@ -30735,7 +31228,7 @@
           attachments: attachments.length > 0
             ? ([...(existingStandalone?.attachments || []), ...attachments])
             : (existingStandalone?.attachments || payload.attachments || []),
-          theme: payload.theme || document.getElementById('global-task-theme')?.value?.trim() || 'General',
+          theme: payload.theme || document.getElementById('global-task-theme-known')?.value?.trim() || 'General',
           groupId: payload.groupId || null,
           groupName: payload.groupName || null,
           featureId: null,

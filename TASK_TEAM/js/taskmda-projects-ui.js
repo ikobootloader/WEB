@@ -120,16 +120,7 @@
       opts.renderGlobalTasks?.();
     });
 
-    document.getElementById('global-task-theme')?.addEventListener('input', () => {
-      opts.syncThemePickerSelectionFromInput?.('global-task-theme-known', 'global-task-theme');
-      setGlobalTasksPage(1);
-      opts.renderGlobalTasks?.();
-    });
-
     document.getElementById('global-task-theme-known')?.addEventListener('change', () => {
-      const value = String(document.getElementById('global-task-theme-known')?.value || '');
-      const input = document.getElementById('global-task-theme');
-      if (input) input.value = value;
       setGlobalTasksPage(1);
       opts.renderGlobalTasks?.();
     });
@@ -190,13 +181,11 @@
       const searchInput = document.getElementById('global-task-search');
       const statusInput = document.getElementById('global-task-status');
       const assigneeKindInput = document.getElementById('global-task-assignee-kind');
-      const themeInput = document.getElementById('global-task-theme');
       const knownThemeInput = document.getElementById('global-task-theme-known');
       const urgencyChecks = Array.from(document.querySelectorAll('input[data-global-task-urgency]'));
       if (searchInput) searchInput.value = '';
       if (statusInput) statusInput.value = 'all';
       if (assigneeKindInput) assigneeKindInput.value = 'all';
-      if (themeInput) themeInput.value = '';
       if (knownThemeInput) knownThemeInput.value = '';
       urgencyChecks.forEach((input) => {
         if (input instanceof HTMLInputElement) input.checked = true;

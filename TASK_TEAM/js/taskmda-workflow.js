@@ -1,4 +1,4 @@
-
+﻿
 (function initTaskMdaWorkflowModule(global) {
   'use strict';
 
@@ -32,6 +32,7 @@
     workflowContingencyReviews: 'id',
     workflowContingencyAudit: 'id'
   };
+  const PROCESS_CREATION_HELP_STORAGE_KEY = 'workflow.process.creation.help.v1';
 
   const ENTITY_META = {
     community: { store: 'workflowCommunities', label: 'Communaute' },
@@ -171,7 +172,9 @@
       organigramOptions: {
         zoom: 1,
         panX: 0,
-        panY: 0
+        panY: 0,
+        showOrphanGroups: true,
+        orphanGroupsSide: 'right'
       },
       updatedAt: now
     };
@@ -183,6 +186,28 @@
 
     if (typeof api.getAll !== 'function' || typeof api.put !== 'function' || typeof api.remove !== 'function') {
       throw new Error('TaskMDAWorkflow: API incomplete');
+    }
+
+    function readProcessCreationHelpCollapsed() {
+      try {
+        const raw = global.localStorage?.getItem(PROCESS_CREATION_HELP_STORAGE_KEY) || '';
+        if (!raw) return true;
+        const parsed = JSON.parse(raw);
+        return parsed?.collapsed !== false;
+      } catch (_) {
+        return true;
+      }
+    }
+
+    function writeProcessCreationHelpCollapsed(collapsed) {
+      try {
+        global.localStorage?.setItem(PROCESS_CREATION_HELP_STORAGE_KEY, JSON.stringify({
+          collapsed: !!collapsed,
+          updatedAt: Date.now()
+        }));
+      } catch (_) {
+        // ignore localStorage failures
+      }
     }
 
     const state = {
@@ -231,7 +256,9 @@
       organigramOptions: {
         zoom: 1,
         panX: 0,
-        panY: 0
+        panY: 0,
+        showOrphanGroups: true,
+        orphanGroupsSide: 'right'
       },
       permissions: {
         isAdmin: false,
@@ -245,6 +272,8 @@
         linkMode: false,
         dragSourceStepId: null
       },
+      processCreationHelpCollapsed: readProcessCreationHelpCollapsed(),
+      historyPanelPages: {},
       workflowKanbanPageByStatus: {
         todo: 1,
         in_progress: 1,
@@ -690,6 +719,7 @@
         ownerAgentId: process.ownerAgentId || null,
         status: 'draft',
         tags: Array.isArray(process.tags) ? process.tags.slice() : [],
+        linkedDocumentIds: [],
         validation: normalizeProcessValidation(process.validation),
         version: 1,
         templateSteps: steps.map((step) => ({
@@ -1864,10 +1894,14 @@ ${reviews.map((row)=>`<tr><td>${esc(row.reviewDate || '-')}</td><td>${esc(row.ne
         const zoom = Number(src.zoom || 1);
         const panX = Number(src.panX || 0);
         const panY = Number(src.panY || 0);
+        const showOrphanGroups = src.showOrphanGroups !== false;
+        const orphanGroupsSide = String(src.orphanGroupsSide || 'right').trim().toLowerCase() === 'left' ? 'left' : 'right';
         state.organigramOptions = {
           zoom: Number.isFinite(zoom) ? clampOrganigramZoom(zoom) : 1,
           panX: Number.isFinite(panX) ? panX : 0,
-          panY: Number.isFinite(panY) ? panY : 0
+          panY: Number.isFinite(panY) ? panY : 0,
+          showOrphanGroups,
+          orphanGroupsSide
         };
       }
       if (refs.search) refs.search.value = state.query;
@@ -1991,6 +2025,23 @@ ${reviews.map((row)=>`<tr><td>${esc(row.reviewDate || '-')}</td><td>${esc(row.ne
         .filter((row) => String(row?.entityType || '') === safeType && String(row?.entityId || '') === safeId)
         .sort((a, b) => Number(b?.createdAt || 0) - Number(a?.createdAt || 0))
         .slice(0, limit);
+    }
+
+    function getHistoryPanelKey(entityType, entityId) {
+      return `${String(entityType || '').trim()}::${String(entityId || '').trim()}`;
+    }
+
+    function getHistoryPanelPage(entityType, entityId) {
+      const key = getHistoryPanelKey(entityType, entityId);
+      const value = Number(state.historyPanelPages?.[key] || 1);
+      return Number.isFinite(value) && value > 0 ? Math.floor(value) : 1;
+    }
+
+    function setHistoryPanelPage(entityType, entityId, page) {
+      const key = getHistoryPanelKey(entityType, entityId);
+      const safePage = Math.max(1, Number(page) || 1);
+      if (!state.historyPanelPages || typeof state.historyPanelPages !== 'object') state.historyPanelPages = {};
+      state.historyPanelPages[key] = safePage;
     }
 
     async function restoreFromHistory(historyId, forcedType) {
@@ -2783,7 +2834,7 @@ ${reviews.map((row)=>`<tr><td>${esc(row.reviewDate || '-')}</td><td>${esc(row.ne
               reviewDate,
               decision: 'pending',
               reviewerUserId: null,
-              comments: 'Revue automatique générée',
+              comments: 'Revue automatique gÃ©nÃ©rÃ©e',
               createdAt: now(),
               updatedAt: now()
             });
@@ -3971,7 +4022,6 @@ ${reviews.map((row)=>`<tr><td>${esc(row.reviewDate || '-')}</td><td>${esc(row.ne
       if (viewKey === 'journal') return 'Journal';
       return 'Workflow';
     }
-
     function renderBreadcrumbs() {
       if (!refs.breadcrumbs) return;
       const grpLabel = groupLabel(state.activeGroup);
@@ -3984,17 +4034,31 @@ ${reviews.map((row)=>`<tr><td>${esc(row.reviewDate || '-')}</td><td>${esc(row.ne
           crumbs.push(item.name || item.displayName || item.title || String(state.selectedId));
         }
       }
-      if (global.TaskMDAWorkflowUI?.renderBreadcrumbHtml) {
-        refs.breadcrumbs.innerHTML = global.TaskMDAWorkflowUI.renderBreadcrumbHtml(crumbs, esc);
-      } else {
-        refs.breadcrumbs.innerHTML = `
+      const breadcrumbHtml = global.TaskMDAWorkflowUI?.renderBreadcrumbHtml
+        ? global.TaskMDAWorkflowUI.renderBreadcrumbHtml(crumbs, esc)
+        : `
           <nav class="workflow-breadcrumb-nav" aria-label="Breadcrumb workflow">
             ${crumbs.map((crumb) => `<span class="workflow-breadcrumb-item">${esc(crumb)}</span>`).join('<span class="workflow-breadcrumb-sep">›</span>')}
           </nav>
         `;
-      }
+      const showProcessHelpButton = state.activeView === 'processes' || state.activeView === 'templates';
+      refs.breadcrumbs.innerHTML = `
+        <div class="workflow-breadcrumb-row">
+          ${breadcrumbHtml}
+          ${showProcessHelpButton ? `
+            <button
+              type="button"
+              class="workflow-breadcrumb-help-btn"
+              data-wf-process-help-action="toggle-help"
+              aria-label="${state.processCreationHelpCollapsed ? 'Afficher aide creation processus/modeles' : 'Masquer aide creation processus/modeles'}"
+              title="${state.processCreationHelpCollapsed ? 'Afficher aide creation processus/modeles' : 'Masquer aide creation processus/modeles'}"
+            >
+              <span class="material-symbols-outlined" aria-hidden="true">lightbulb</span>
+            </button>
+          ` : ''}
+        </div>
+      `;
     }
-
     function buildQuickCardActions(type, id, options = {}) {
       const safeType = String(type || '').trim();
       const safeId = String(id || '').trim();
@@ -4079,7 +4143,14 @@ ${reviews.map((row)=>`<tr><td>${esc(row.reviewDate || '-')}</td><td>${esc(row.ne
 
     function cardHtml(type, id, title, sub, chips, actionsHtml = '') {
       const selected = state.selectedType === type && String(state.selectedId) === String(id);
-      const chipHtml = (chips || []).map((chip) => `<span class="workflow-chip">${esc(chip)}</span>`).join('');
+      const chipHtml = (chips || []).map((chip) => {
+        const chipText = typeof chip === 'string' ? chip : String(chip?.label || '');
+        const normalized = normalize(chipText);
+        const extraClass = normalized.startsWith('poste:')
+          ? ' workflow-chip-poste'
+          : (normalized.startsWith('role:') ? ' workflow-chip-role' : '');
+        return `<span class="workflow-chip${extraClass}">${esc(chipText)}</span>`;
+      }).join('');
       return `
         <article class="workflow-card ${selected ? 'is-selected' : ''}" data-wf-type="${esc(type)}" data-wf-id="${esc(id)}">
           <p class="workflow-card-title">${esc(title)}</p>
@@ -4585,9 +4656,9 @@ ${clone.outerHTML}
             </div>
           </div>
           <div class="workflow-map-links">
-            ${state.mapOptions.showStructure ? relationSectionHtml('Liaisons structurelles', preparedRelations.structure, '→', 'showAllStructure', 'structureVisible', 'structure', 'is-structure') : ''}
-            ${state.mapOptions.showTransverse ? relationSectionHtml('Liaisons transverses', preparedRelations.transverse, '↔', 'showAllTransverse', 'transverseVisible', 'transverse', 'is-transverse') : ''}
-            ${state.mapOptions.showApplicative ? relationSectionHtml('Liaisons applicatives', preparedRelations.applicative, '→', 'showAllApplicative', 'applicativeVisible', 'applicative', 'is-applicative') : ''}
+            ${state.mapOptions.showStructure ? relationSectionHtml('Liaisons structurelles', preparedRelations.structure, 'â†’', 'showAllStructure', 'structureVisible', 'structure', 'is-structure') : ''}
+            ${state.mapOptions.showTransverse ? relationSectionHtml('Liaisons transverses', preparedRelations.transverse, 'â†”', 'showAllTransverse', 'transverseVisible', 'transverse', 'is-transverse') : ''}
+            ${state.mapOptions.showApplicative ? relationSectionHtml('Liaisons applicatives', preparedRelations.applicative, 'â†’', 'showAllApplicative', 'applicativeVisible', 'applicative', 'is-applicative') : ''}
           </div>
           <div class="workflow-map-minimap-wrap ${state.mapOptions.showMinimap === false ? 'hidden' : ''}" data-wf-map-minimap>
             <div class="workflow-map-minimap-surface" data-wf-map-minimap-surface title="Cliquer pour recentrer">
@@ -4680,7 +4751,7 @@ ${clone.outerHTML}
             <article class="workflow-org-card" data-wf-type="${esc(type)}" data-wf-id="${esc(id)}">
               <div class="workflow-org-head">
                 <p class="workflow-org-title">${esc(title || 'Element')}</p>
-                ${hasChildren ? `<button class="workflow-org-toggle" type="button" data-wf-branch-toggle aria-expanded="${branchState === 'open' ? 'true' : 'false'}" title="Replier ou deplier">▾</button>` : ''}
+                ${hasChildren ? `<button class="workflow-org-toggle" type="button" data-wf-branch-toggle aria-expanded="${branchState === 'open' ? 'true' : 'false'}" title="Replier ou deplier">â–¾</button>` : ''}
               </div>
               ${subtitle ? `<p class="workflow-org-sub">${esc(subtitle)}</p>` : ''}
               ${(chips || []).length ? `<div class="workflow-chip-row">${chips.map((chip) => {
@@ -4717,7 +4788,7 @@ ${clone.outerHTML}
         chips.push(...getAgentContactParts(agent));
         if (inconsistentGroupIds.length > 0) {
           chips.push({
-            label: '⚠ incoherence service/groupe',
+            label: 'âš  incoherence service/groupe',
             className: 'workflow-chip-warning',
             title: `${inconsistentGroupIds.length} rattachement(s) groupe hors service`
           });
@@ -4766,7 +4837,7 @@ ${clone.outerHTML}
 
       refs.content.innerHTML = `
         <section class="workflow-org">
-          <p class="workflow-org-hint">Vue arbre de l'organisation avec liaisons communaute → service → groupe → agent.</p>
+          <p class="workflow-org-hint">Vue arbre de l'organisation avec liaisons communaute â†’ service â†’ groupe â†’ agent.</p>
           <div class="workflow-org-actions">
             <button class="workflow-org-action" type="button" data-wf-org-action="expand_all">Tout deplier</button>
             <button class="workflow-org-action" type="button" data-wf-org-action="collapse_all">Tout replier</button>
@@ -4886,6 +4957,25 @@ ${clone.outerHTML}
         return { label: 'ACTIF', className: 'is-active' };
       };
 
+      const renderGroupCard = (group, options = {}) => {
+        const safeGroupId = String(group?.id || '').trim();
+        const memberIds = Array.from(groupMemberIdsMap.get(safeGroupId) || []);
+        const memberCount = memberIds.length;
+        const serviceId = String(group?.serviceId || '').trim();
+        const hasKnownService = !!(serviceId && visibleServiceIds.has(serviceId));
+        const previewNames = memberIds
+          .slice(0, 2)
+          .map((agentId) => maps.agentById.get(agentId)?.displayName || agentId)
+          .filter(Boolean)
+          .join(' - ');
+        const details = previewNames
+          ? `${memberCount} agent${memberCount > 1 ? 's' : ''} - ${previewNames}`
+          : `${memberCount} agent${memberCount > 1 ? 's' : ''}`;
+        const extraClass = `${options.compact ? ' is-compact' : ''}${hasKnownService ? '' : ' is-no-service'}`;
+        const orphanBadge = hasKnownService ? '' : '<span class="workflow-organigram-group-badge">Sans service</span>';
+        return `<article class="workflow-organigram-group-card${extraClass}" data-wf-type="group" data-wf-id="${esc(group.id)}"><p class="workflow-organigram-group-title">${esc(group.name || 'Groupe')}</p><p class="workflow-organigram-group-sub">${esc(group.type || 'metier')}</p>${orphanBadge}<p class="workflow-organigram-group-sub">${esc(details)}</p></article>`;
+      };
+
       const renderAgents = (serviceId) => {
         const list = (serviceAgentsMap.get(String(serviceId || '')) || []).slice(0, 3);
         if (!list.length) return '<span class="workflow-organigram-avatar is-empty">NA</span>';
@@ -4924,20 +5014,7 @@ ${clone.outerHTML}
               <div class="workflow-organigram-group-trunk" aria-hidden="true"></div>
               <div class="workflow-organigram-group-line" aria-hidden="true"></div>
               <div class="workflow-organigram-group-grid">
-                ${groups.map((group) => {
-                  const safeGroupId = String(group?.id || '').trim();
-                  const memberIds = Array.from(groupMemberIdsMap.get(safeGroupId) || []);
-                  const memberCount = memberIds.length;
-                  const previewNames = memberIds
-                    .slice(0, 2)
-                    .map((agentId) => maps.agentById.get(agentId)?.displayName || agentId)
-                    .filter(Boolean)
-                    .join(' - ');
-                  const details = previewNames
-                    ? `${memberCount} agent${memberCount > 1 ? 's' : ''} - ${previewNames}`
-                    : `${memberCount} agent${memberCount > 1 ? 's' : ''}`;
-                  return `<article class="workflow-organigram-group-card" data-wf-type="group" data-wf-id="${esc(group.id)}"><p class="workflow-organigram-group-title">${esc(group.name || 'Groupe')}</p><p class="workflow-organigram-group-sub">${esc(group.type || 'metier')}</p><p class="workflow-organigram-group-sub">${esc(details)}</p></article>`;
-                }).join('')}
+                ${groups.map((group) => renderGroupCard(group)).join('')}
               </div>
             </div>
           `
@@ -5038,6 +5115,32 @@ ${clone.outerHTML}
           </section>
         `);
       }
+      const showOrphanGroups = state.organigramOptions?.showOrphanGroups !== false;
+      const orphanGroupsSide = String(state.organigramOptions?.orphanGroupsSide || 'right').trim().toLowerCase() === 'left' ? 'left' : 'right';
+      const orphanGroups = filteredGroups
+        .filter((group) => {
+          const serviceId = String(group?.serviceId || '').trim();
+          return !serviceId || !visibleServiceIds.has(serviceId);
+        })
+        .slice()
+        .sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || ''), 'fr'));
+      const defaultCommunity = filteredCommunities[0] || null;
+      const hasVisibleOrphanGroups = showOrphanGroups && orphanGroups.length > 0;
+      const orphanGroupsRail = hasVisibleOrphanGroups
+        ? `
+          <aside class="workflow-organigram-orphan-rail is-${orphanGroupsSide}">
+            <div class="workflow-organigram-orphan-head">
+              <p class="workflow-organigram-orphan-kicker">Groupes sans service</p>
+              <strong>Hors rattachement service</strong>
+              <span>Communaute par defaut: ${esc(defaultCommunity?.name || 'Sans communaute')}</span>
+              <span>${orphanGroups.length} groupe${orphanGroups.length > 1 ? 's' : ''} sans service</span>
+            </div>
+            <div class="workflow-organigram-orphan-list">
+              ${orphanGroups.map((group) => renderGroupCard(group, { compact: true })).join('')}
+            </div>
+          </aside>
+        `
+        : '';
 
       refs.content.innerHTML = `
         <section class="workflow-organigram">
@@ -5050,6 +5153,8 @@ ${clone.outerHTML}
               <button type="button" class="workflow-org-action" data-wf-organigram-action="zoom_out" title="Zoom -">-</button>
               <button type="button" class="workflow-org-action" data-wf-organigram-action="zoom_in" title="Zoom +">+</button>
               <button type="button" class="workflow-org-action" data-wf-organigram-action="reset" title="Recentrer">Recentrer</button>
+              <button type="button" class="workflow-org-action" data-wf-organigram-action="toggle_orphan_groups" title="${showOrphanGroups ? 'Masquer les groupes sans service' : 'Afficher les groupes sans service'}">${showOrphanGroups ? 'Groupes hors service: ON' : 'Groupes hors service: OFF'}</button>
+              <button type="button" class="workflow-org-action" data-wf-organigram-action="switch_orphan_side" title="Changer la marge d affichage des groupes sans service">${orphanGroupsSide === 'left' ? 'Marge: gauche' : 'Marge: droite'}</button>
               <button type="button" class="workflow-org-action" data-wf-organigram-action="export_pdf_portrait" title="Exporter en PDF portrait">PDF Portrait</button>
               <button type="button" class="workflow-org-action" data-wf-organigram-action="export_pdf_landscape" title="Exporter en PDF paysage">PDF Paysage</button>
               <button type="button" class="workflow-org-action" data-wf-organigram-action="export_pdf_auto" title="Exporter en PDF auto">PDF Auto</button>
@@ -5058,8 +5163,12 @@ ${clone.outerHTML}
           </div>
           <div class="workflow-organigram-viewport" data-wf-organigram-viewport>
             <div class="workflow-organigram-canvas" data-wf-organigram-canvas>
-              <div class="workflow-organigram-tree">
-                ${communityBlocks.join('') || '<div class="workflow-empty">Aucune donnee organisationnelle visible</div>'}
+              <div class="workflow-organigram-layout ${hasVisibleOrphanGroups ? `has-orphans is-${orphanGroupsSide}` : 'no-orphans'}">
+                ${hasVisibleOrphanGroups && orphanGroupsSide === 'left' ? orphanGroupsRail : ''}
+                <div class="workflow-organigram-tree">
+                  ${communityBlocks.join('') || '<div class="workflow-empty">Aucune donnee organisationnelle visible</div>'}
+                </div>
+                ${hasVisibleOrphanGroups && orphanGroupsSide === 'right' ? orphanGroupsRail : ''}
               </div>
             </div>
           </div>
@@ -5211,6 +5320,7 @@ ${clone.outerHTML}
     }
     function renderAgentsView() {
       const maps = getMaps();
+      const jobTitleById = new Map((state.collections.jobTitles || []).map((row) => [String(row?.id || '').trim(), row]));
       const cards = applyFilters(state.collections.agents, (item) => ({
         serviceId: getAgentServiceIds(item),
         groupId: getAgentGroupIds(item),
@@ -5220,13 +5330,40 @@ ${clone.outerHTML}
         const taskCount = state.collections.tasks.filter((task) => task.ownerAgentId === item.id).length;
         const managerName = maps.agentById.get(item.managerAgentId)?.displayName || 'Aucun manager';
         const reports = state.collections.agents.filter((agent) => agent.managerAgentId === item.id).length;
-        const chips = [`${taskCount} taches`, `Manager: ${managerName}`, `${reports} rattaches`, ...getAgentContactParts(item)];
-        return cardHtml('agent', item.id, item.displayName || 'Agent', `${item.title || 'Poste'} - ${serviceName}`, chips, buildQuickCardActions('agent', item.id));
+        const resolvedJobTitleName = (() => {
+          const titleRefId = String(item?.titleRefId || '').trim();
+          if (titleRefId && jobTitleById.has(titleRefId)) {
+            return String(jobTitleById.get(titleRefId)?.name || '').trim();
+          }
+          return String(item?.title || '').trim();
+        })() || 'Non defini';
+        const roleNames = Array.from(new Set(
+          []
+            .concat(Array.isArray(item?.roleIds) ? item.roleIds : [])
+            .concat((state.collections.steps || [])
+              .filter((step) => String(step?.ownerAgentId || '').trim() === String(item?.id || '').trim())
+              .map((step) => String(step?.roleId || '').trim()))
+            .map((roleId) => String(maps.roleById.get(roleId)?.name || '').trim())
+            .filter(Boolean)
+        ));
+        const roleBadge = roleNames.length > 0
+          ? `ROLE: ${roleNames.slice(0, 2).join(' / ')}${roleNames.length > 2 ? ` (+${roleNames.length - 2})` : ''}`
+          : 'ROLE: Non defini';
+        const chips = [
+          `POSTE: ${resolvedJobTitleName}`,
+          roleBadge,
+          `${taskCount} taches`,
+          `Manager: ${managerName}`,
+          `${reports} rattaches`,
+          ...getAgentContactParts(item)
+        ];
+        return cardHtml('agent', item.id, item.displayName || 'Agent', `${serviceName}`, chips, buildQuickCardActions('agent', item.id));
       });
       refs.content.innerHTML = `<div class="workflow-grid">${cards.join('') || '<div class="workflow-empty">Aucun agent</div>'}</div>`;
     }
 
     function renderProcessesView() {
+      const helpHtml = renderProcessCreationHelpPanel('processes');
       const maps = getMaps();
       const candidates = applyFilters(state.collections.processes, (item) => ({
         serviceId: item.serviceId,
@@ -5254,10 +5391,11 @@ ${clone.outerHTML}
         return cardHtml('process', item.id, item.title || 'Processus', item.description || '', chips);
       });
 
-      refs.content.innerHTML = `<div class="workflow-grid">${cards.join('') || '<div class="workflow-empty">Aucun processus workflow</div>'}</div>`;
+      refs.content.innerHTML = `${helpHtml}<div class="workflow-grid">${cards.join('') || '<div class="workflow-empty">Aucun processus workflow</div>'}</div>`;
     }
 
     function renderTemplatesView() {
+      const helpHtml = renderProcessCreationHelpPanel('templates');
       const templates = state.collections.templates || [];
       const cards = applyFilters(state.collections.templates, (item) => ({
         serviceId: item.serviceId,
@@ -5266,6 +5404,7 @@ ${clone.outerHTML}
       })).map((item) => {
         const stepCount = Array.isArray(item.templateSteps) ? item.templateSteps.length : 0;
         const flowCount = Array.isArray(item.templateFlows) ? item.templateFlows.length : 0;
+        const docsCount = parseUniqueCsv(toCsv(item.linkedDocumentIds || [])).length;
         const variantGroupKey = String(item.variantGroupKey || '').trim();
         const variantCount = variantGroupKey
           ? templates.filter((row) => String(row.variantGroupKey || '') === variantGroupKey).length
@@ -5280,13 +5419,39 @@ ${clone.outerHTML}
             item.status || 'draft',
             `${stepCount} etapes`,
             `${flowCount} flux`,
+            `Docs: ${docsCount}`,
             `${Array.isArray(item.tags) ? item.tags.length : 0} tags`,
             isVariant ? `Variante (${variantGroupKey || '-'})` : (variantCount > 0 ? `${variantCount} variantes` : 'Modele racine')
           ],
           buildQuickCardActions('template', item.id, { status: item.status || 'draft' })
         );
       });
-      refs.content.innerHTML = `<div class="workflow-grid">${cards.join('') || '<div class="workflow-empty">Aucun modele de processus</div>'}</div>`;
+      refs.content.innerHTML = `${helpHtml}<div class="workflow-grid">${cards.join('') || '<div class="workflow-empty">Aucun modele de processus</div>'}</div>`;
+    }
+
+    function renderProcessCreationHelpPanel(viewKey) {
+      const safeView = String(viewKey || '').trim() === 'templates' ? 'templates' : 'processes';
+      const collapsed = !!state.processCreationHelpCollapsed;
+      const contextLabel = safeView === 'templates'
+        ? 'Vous etes dans Modeles.'
+        : 'Vous etes dans Processus.';
+      const contextHint = safeView === 'templates'
+        ? 'Pour demarrer vite, creez un modele vierge ou depuis un processus existant.'
+        : 'Commencez par un processus simple puis structurez les etapes et les flux.';
+      if (collapsed) return '';
+      return `
+        <section class="workflow-map-col" style="margin-bottom:0.8rem;border-style:dashed;">
+          <div>
+            <h6>Aide creation processus/modeles</h6>
+            <p class="workflow-card-sub">${esc(contextLabel)} ${esc(contextHint)}</p>
+          </div>
+          <div class="workflow-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));margin-top:0.45rem;">
+            <div class="workflow-map-col"><p class="workflow-card-sub"><strong>1.</strong> Creer un processus avec un titre action, un service pilote et un responsable.</p></div>
+            <div class="workflow-map-col"><p class="workflow-card-sub"><strong>2.</strong> Ouvrir le detail puis ajouter les etapes et relier les flux (concepteur visuel).</p></div>
+            <div class="workflow-map-col"><p class="workflow-card-sub"><strong>3.</strong> Quand le schema est stable, creer un modele reutilisable (standard/variante).</p></div>
+          </div>
+        </section>
+      `;
     }
 
     function renderAnalyticsView() {
@@ -6335,11 +6500,11 @@ ${clone.outerHTML}
                     type="button"
                     class="workflow-btn-light workflow-kanban-add-btn taskmda-create-cta"
                     data-action-kind="create"
-                    data-action-label="Ajouter une tâche workflow"
-                    data-ui-tooltip="Ajouter une tâche workflow"
+                    data-action-label="Ajouter une tÃ¢che workflow"
+                    data-ui-tooltip="Ajouter une tÃ¢che workflow"
                     data-wf-kanban-add="1"
                     data-wf-target-status="${esc(lane.key)}"
-                    aria-label="Ajouter une tâche workflow dans ${esc(lane.label)}"
+                    aria-label="Ajouter une tÃ¢che workflow dans ${esc(lane.label)}"
                   >
                     <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">add</span>
                     <span class="taskmda-action-label">Ajouter</span>
@@ -6721,31 +6886,61 @@ ${clone.outerHTML}
       return safe || null;
     }
 
-    function fieldHtml(label, key, value, kind) {
+    function workflowSectionHtml(badge, title, subtitle, tone) {
+      const safeTone = String(tone || '').trim().toLowerCase() === 'role' ? 'role' : 'poste';
+      return `
+        <div class="workflow-form-section workflow-form-section--${safeTone}">
+          <div class="workflow-form-section-head">
+            <span class="workflow-form-section-pill">${esc(String(badge || '').trim() || 'INFO')}</span>
+            <strong class="workflow-form-section-title">${esc(String(title || '').trim() || '')}</strong>
+          </div>
+          ${String(subtitle || '').trim() ? `<p class="workflow-form-section-sub">${esc(String(subtitle || '').trim())}</p>` : ''}
+        </div>
+      `;
+    }
+
+    function fieldHtml(label, key, value, kind, options = null) {
+      const tooltip = String(options?.tooltip || '').trim();
+      const hintFromOptions = String(options?.hint || '').trim();
+      const labelHelp = tooltip
+        ? ` <button type="button" class="workflow-form-help-btn" data-wf-help-text="${esc(tooltip)}" title="${esc(tooltip)}" aria-label="${esc(tooltip)}">?</button>`
+        : '';
+      const renderLabel = (forTarget) => {
+        const safeFor = String(forTarget || '').trim();
+        const forAttr = safeFor ? ` for="${safeFor}"` : '';
+        const tooltipAttr = tooltip ? ` title="${esc(tooltip)}"` : '';
+        return `<label class="workflow-form-label"${forAttr}${tooltipAttr}>${esc(label)}${labelHelp}</label>`;
+      };
+      const renderHint = (hintText) => {
+        const safeHint = String(hintText || '').trim();
+        return safeHint ? `<p class="workflow-card-sub workflow-form-hint">${esc(safeHint)}</p>` : '';
+      };
+      const withHint = (html, hintText) => `${html}${renderHint(hintText)}`;
+
       if (kind === 'readonly') {
-        return `<label class="workflow-form-label" for="wf-field-${esc(key)}">${esc(label)}</label><input id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-input" type="text" value="${esc(value)}" readonly>`;
+        return withHint(`${renderLabel(`wf-field-${esc(key)}`)}<input id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-input" type="text" value="${esc(value)}" readonly>`, hintFromOptions);
       }
       if (kind === 'textarea') {
-        return `<label class="workflow-form-label" for="wf-field-${esc(key)}">${esc(label)}</label><textarea id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-textarea">${esc(value)}</textarea>`;
+        return withHint(`${renderLabel(`wf-field-${esc(key)}`)}<textarea id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-textarea">${esc(value)}</textarea>`, hintFromOptions);
       }
       if (kind === 'select-agent') {
-        return `<label class="workflow-form-label" for="wf-field-${esc(key)}">${esc(label)}</label><select id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-select">${buildSelectOptions(state.collections.agents, 'id', 'displayName', value)}</select>`;
+        return withHint(`${renderLabel(`wf-field-${esc(key)}`)}<select id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-select">${buildSelectOptions(state.collections.agents, 'id', 'displayName', value)}</select>`, hintFromOptions);
       }
       if (kind === 'select-owner') {
-        return `<label class="workflow-form-label" for="wf-field-${esc(key)}">${esc(label)}</label><select id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-select">${buildOwnerSelectOptions(value)}</select>`;
+        return withHint(`${renderLabel(`wf-field-${esc(key)}`)}<select id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-select">${buildOwnerSelectOptions(value)}</select>`, hintFromOptions);
       }
       if (kind === 'select-role') {
-        return `<label class="workflow-form-label" for="wf-field-${esc(key)}">${esc(label)}</label><select id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-select">${buildSelectOptions(state.collections.roles, 'id', 'name', value)}</select>`;
+        return withHint(`${renderLabel(`wf-field-${esc(key)}`)}<select id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-select">${buildSelectOptions(state.collections.roles, 'id', 'name', value)}</select>`, hintFromOptions);
       }
       if (kind === 'select-process') {
-        return `<label class="workflow-form-label" for="wf-field-${esc(key)}">${esc(label)}</label><select id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-select">${buildSelectOptions(state.collections.processes, 'id', 'title', value)}</select>`;
+        return withHint(`${renderLabel(`wf-field-${esc(key)}`)}<select id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-select">${buildSelectOptions(state.collections.processes, 'id', 'title', value)}</select>`, hintFromOptions);
       }
       if (kind === 'select-step') {
-        return `<label class="workflow-form-label" for="wf-field-${esc(key)}">${esc(label)}</label><select id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-select">${buildSelectOptions(state.collections.steps, 'id', 'title', value)}</select>`;
+        return withHint(`${renderLabel(`wf-field-${esc(key)}`)}<select id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-select">${buildSelectOptions(state.collections.steps, 'id', 'title', value)}</select>`, hintFromOptions);
       }
       if (kind === 'select-validation-mode') {
         const selected = String(value || 'level').trim().toLowerCase();
-        return `<label class="workflow-form-label" for="wf-field-${esc(key)}">${esc(label)}</label><select id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-select"><option value="level" ${selected === 'level' ? 'selected' : ''}>Niveaux (quorum)</option><option value="sequential" ${selected === 'sequential' ? 'selected' : ''}>Sequentiel</option></select>`;
+        return withHint(`${renderLabel(`wf-field-${esc(key)}`)}<select id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-select"><option value="level" ${selected === 'level' ? 'selected' : ''}>Niveaux (quorum)</option><option value="sequential" ${selected === 'sequential' ? 'selected' : ''}>Sequentiel</option></select>`, hintFromOptions);
       }
       if (kind === 'select-roles-multi') {
         const selected = new Set(Array.isArray(value) ? value.map((v) => String(v || '').trim()) : parseCsv(value).map((v) => String(v || '').trim()));
@@ -6755,19 +6950,19 @@ ${clone.outerHTML}
           const label = `${role.name || id}${role.serviceId ? ` (${state.collections.services.find((s) => String(s.id) === String(role.serviceId))?.name || role.serviceId})` : ''}`;
           return `<option value="${esc(id)}" ${selected.has(id) ? 'selected' : ''}>${esc(label)}</option>`;
         }).join('');
-        return `<label class="workflow-form-label" for="wf-field-${esc(key)}">${esc(label)}</label><select id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-select" multiple size="6">${options}</select>`;
+        return withHint(`${renderLabel(`wf-field-${esc(key)}`)}<select id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-select" multiple size="6">${options}</select>`, hintFromOptions);
       }
       if (kind === 'select-service') {
-        return `<label class="workflow-form-label" for="wf-field-${esc(key)}">${esc(label)}</label><select id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-select">${buildSelectOptions(state.collections.services, 'id', 'name', value)}</select>`;
+        return withHint(`${renderLabel(`wf-field-${esc(key)}`)}<select id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-select">${buildSelectOptions(state.collections.services, 'id', 'name', value)}</select>`, hintFromOptions);
       }
       if (kind === 'select-group') {
-        return `<label class="workflow-form-label" for="wf-field-${esc(key)}">${esc(label)}</label><select id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-select">${buildSelectOptions(state.collections.groups, 'id', 'name', value)}</select>`;
+        return withHint(`${renderLabel(`wf-field-${esc(key)}`)}<select id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-select">${buildSelectOptions(state.collections.groups, 'id', 'name', value)}</select>`, hintFromOptions);
       }
       if (kind === 'select-community') {
-        return `<label class="workflow-form-label" for="wf-field-${esc(key)}">${esc(label)}</label><select id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-select">${buildSelectOptions(state.collections.communities, 'id', 'name', value)}</select>`;
+        return withHint(`${renderLabel(`wf-field-${esc(key)}`)}<select id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-select">${buildSelectOptions(state.collections.communities, 'id', 'name', value)}</select>`, hintFromOptions);
       }
       if (kind === 'select-procedure') {
-        return `<label class="workflow-form-label" for="wf-field-${esc(key)}">${esc(label)}</label><select id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-select">${buildSelectOptions(state.collections.procedures, 'id', 'title', value)}</select>`;
+        return withHint(`${renderLabel(`wf-field-${esc(key)}`)}<select id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-select">${buildSelectOptions(state.collections.procedures, 'id', 'title', value)}</select>`, hintFromOptions);
       }
       if (kind === 'select-job-title') {
         const selected = String(value || '').trim();
@@ -6782,13 +6977,13 @@ ${clone.outerHTML}
               return `<option value="${esc(id)}" ${selected === id ? 'selected' : ''}>${esc(label)}</option>`;
             }))
           .join('');
-        return `<label class="workflow-form-label" for="wf-field-${esc(key)}">${esc(label)}</label><select id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-select">${options}</select>`;
+        return withHint(`${renderLabel(`wf-field-${esc(key)}`)}<select id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-select">${options}</select>`, hintFromOptions);
       }
       if (kind === 'select-task-status') {
-        return `<label class="workflow-form-label" for="wf-field-${esc(key)}">${esc(label)}</label><select id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-select">${TASK_STATUS_OPTIONS.map((option) => `<option value="${esc(option)}" ${String(value || 'todo') === option ? 'selected' : ''}>${esc(option)}</option>`).join('')}</select>`;
+        return withHint(`${renderLabel(`wf-field-${esc(key)}`)}<select id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-select">${TASK_STATUS_OPTIONS.map((option) => `<option value="${esc(option)}" ${String(value || 'todo') === option ? 'selected' : ''}>${esc(option)}</option>`).join('')}</select>`, hintFromOptions);
       }
       if (kind === 'select-approval-status') {
-        return `<label class="workflow-form-label" for="wf-field-${esc(key)}">${esc(label)}</label><select id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-select">${TASK_APPROVAL_OPTIONS.map((option) => `<option value="${esc(option)}" ${String(value || 'pending') === option ? 'selected' : ''}>${esc(option)}</option>`).join('')}</select>`;
+        return withHint(`${renderLabel(`wf-field-${esc(key)}`)}<select id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-select">${TASK_APPROVAL_OPTIONS.map((option) => `<option value="${esc(option)}" ${String(value || 'pending') === option ? 'selected' : ''}>${esc(option)}</option>`).join('')}</select>`, hintFromOptions);
       }
       if (kind === 'multi-checkbox') {
         const selectedValues = Array.isArray(value?.selected)
@@ -6796,7 +6991,7 @@ ${clone.outerHTML}
           : normalizeIdList(value?.selected || value);
         const selected = new Set(selectedValues.map((item) => String(item || '').trim()).filter(Boolean));
         const options = Array.isArray(value?.options) ? value.options : [];
-        const hint = String(value?.hint || '').trim();
+        const hint = String(value?.hint || hintFromOptions || '').trim();
         const emptyLabel = String(value?.emptyLabel || 'Aucune option disponible').trim();
         const rows = options.map((option) => {
           const optionId = String(option?.id || '').trim();
@@ -6810,14 +7005,14 @@ ${clone.outerHTML}
           `;
         }).join('');
         return `
-          <label class="workflow-form-label">${esc(label)}</label>
+          ${renderLabel('')}
           <div class="workflow-multi-checklist" data-wf-checklist-key="${esc(key)}">
             ${rows || `<div class="workflow-card-sub">${esc(emptyLabel)}</div>`}
           </div>
-          ${hint ? `<p class="workflow-card-sub workflow-form-hint">${esc(hint)}</p>` : ''}
+          ${renderHint(hint)}
         `;
       }
-      return `<label class="workflow-form-label" for="wf-field-${esc(key)}">${esc(label)}</label><input id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-input" type="text" value="${esc(value)}">`;
+      return withHint(`${renderLabel(`wf-field-${esc(key)}`)}<input id="wf-field-${esc(key)}" data-wf-key="${esc(key)}" class="workflow-form-input" type="text" value="${esc(value)}">`, hintFromOptions);
     }
 
     function clearWorkflowInlineSaveTimers() {
@@ -7237,7 +7432,7 @@ ${clone.outerHTML}
             groupId: null,
             ownerAgentId: action.ownerAgentId || plan.ownerAgentId || null,
             title: `[Urgence] ${action.title || 'Action contingence'}`,
-            description: `Action generée automatiquement par le déclenchement du plan de contingence: ${plan.title || plan.id}.`,
+            description: `Action generÃ©e automatiquement par le dÃ©clenchement du plan de contingence: ${plan.title || plan.id}.`,
             status: 'todo',
             priority: 'high',
             approvalStatus: 'pending',
@@ -7262,7 +7457,7 @@ ${clone.outerHTML}
       renderServiceFilter();
       renderContent();
       openDetail('contingencyPlan', planId);
-      toast('Plan declenche et taches genérees.');
+      toast('Plan declenche et taches genÃ©rees.');
     }
 
     async function closeContingencyActivation(activationId) {
@@ -7359,20 +7554,33 @@ ${clone.outerHTML}
         });
         fields.push(fieldHtml('Nom affiche', 'displayName', item.displayName || '', 'text'));
         fields.push(fieldHtml('Handle', 'handle', item.handle || '', 'text'));
+        fields.push(workflowSectionHtml('POSTE', 'Structure organisationnelle', 'Qui est la personne dans l organisation. Le poste change rarement.', 'poste'));
         const resolvedTitleRefId = String(item.titleRefId || '').trim() || String((state.collections.jobTitles || []).find((row) => normalize(row?.name || '') === normalize(item.title || ''))?.id || '').trim();
-        fields.push(fieldHtml('Titre poste (referentiel)', 'titleRefId', resolvedTitleRefId, 'select-job-title'));
-        fields.push(fieldHtml('Titre poste (libre)', 'title', item.title || '', 'text'));
-        fields.push(fieldHtml('Service principal', 'serviceId', item.serviceId || '', 'select-service'));
+        fields.push(fieldHtml('Poste (referentiel)', 'titleRefId', resolvedTitleRefId, 'select-job-title', {
+          tooltip: 'Intitule metier de la personne dans la structure.',
+          hint: 'Exemple poste: Infirmier coordinateur'
+        }));
+        fields.push(fieldHtml('Poste (saisie libre)', 'title', item.title || '', 'text', {
+          tooltip: 'Champ libre si le poste n est pas encore dans le referentiel.'
+        }));
+        fields.push(workflowSectionHtml('ROLE', 'Affectations workflow', 'Que fait la personne dans les processus. Les affectations peuvent varier selon le contexte.', 'role'));
+        fields.push(fieldHtml('Service principal', 'serviceId', item.serviceId || '', 'select-service', {
+          tooltip: 'Point d ancrage principal de l agent dans l organisation.'
+        }));
         fields.push(fieldHtml('Services associes', 'serviceIds', {
           selected: getAgentServiceIds(item),
           options: serviceOptions,
           hint: 'Selection multiple'
-        }, 'multi-checkbox'));
+        }, 'multi-checkbox', {
+          tooltip: 'Un agent peut intervenir sur plusieurs services.'
+        }));
         fields.push(fieldHtml('Communautes associees', 'communityIds', {
           selected: getAgentCommunityIds(item),
           options: communityOptions,
           hint: 'Selection multiple'
-        }, 'multi-checkbox'));
+        }, 'multi-checkbox', {
+          tooltip: 'Communaute(s) de rattachement de l agent.'
+        }));
         fields.push(fieldHtml('Telephone fixe', 'phoneFixed', item.phoneFixed || '', 'text'));
         fields.push(fieldHtml('Poste interne', 'phoneInternal', item.phoneInternal || '', 'text'));
         fields.push(fieldHtml('Telephone portable', 'phoneMobile', item.phoneMobile || '', 'text'));
@@ -7381,8 +7589,12 @@ ${clone.outerHTML}
           selected: getAgentGroupIds(item),
           options: groupOptions,
           hint: 'Selection multiple'
-        }, 'multi-checkbox'));
-        fields.push(fieldHtml('Manager', 'managerAgentId', item.managerAgentId || '', 'select-agent'));
+        }, 'multi-checkbox', {
+          tooltip: 'Un agent peut etre affecte a plusieurs groupes.'
+        }));
+        fields.push(fieldHtml('Manager', 'managerAgentId', item.managerAgentId || '', 'select-agent', {
+          tooltip: 'Supervision hierarchique (optionnelle).'
+        }));
         fields.push(fieldHtml('Compte local (userId)', 'metadataUserId', String(item?.metadata?.userId || ''), 'text'));
         fields.push(fieldHtml('RBAC hints (csv)', 'rbacHints', toCsv(item.rbacHints), 'text'));
         fields.push(fieldHtml('Mission', 'mission', item.mission || '', 'textarea'));
@@ -7427,8 +7639,15 @@ ${clone.outerHTML}
         fields.push(fieldHtml('Description', 'description', item.description || '', 'textarea'));
         fields.push(fieldHtml('Service', 'serviceId', item.serviceId || '', 'select-service'));
         fields.push(fieldHtml('Groupe', 'groupId', item.groupId || '', 'select-group'));
-        fields.push(fieldHtml('Responsable', 'ownerAgentId', item.ownerAgentId || '', 'select-agent'));
-        fields.push(fieldHtml('Role metier', 'roleId', item.roleId || '', 'select-role'));
+        fields.push(workflowSectionHtml('ROLE', 'Execution de l etape', 'Le role definit la fonction attendue. L agent assigne reste optionnel.', 'role'));
+        fields.push(fieldHtml('Agent assigne (optionnel)', 'ownerAgentId', item.ownerAgentId || '', 'select-agent', {
+          tooltip: 'Personne nommement affectee a cette etape.',
+          hint: 'Peut rester vide si l etape est pilotee par role.'
+        }));
+        fields.push(fieldHtml('Role requis (workflow)', 'roleId', item.roleId || '', 'select-role', {
+          tooltip: 'Fonction operationnelle attendue pour executer/valider l etape.',
+          hint: 'Exemple role: Valideur N2'
+        }));
         fields.push(fieldHtml('Procedure liee', 'linkedProcedureId', item.linkedProcedureId || '', 'select-procedure'));
         fields.push(fieldHtml('Logiciels lies (csv ids)', 'linkedSoftwareIds', toCsv(item.linkedSoftwareIds), 'text'));
         fields.push(fieldHtml('Tache workflow liee', 'linkedTaskId', item.linkedTaskId || '', 'text'));
@@ -7444,6 +7663,20 @@ ${clone.outerHTML}
         fields.push(fieldHtml('Label', 'label', item.label || '', 'text'));
       }
       if (type === 'template') {
+        const globalDocOptions = (state.collections.globalDocs || [])
+          .slice()
+          .sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || ''), 'fr'))
+          .map((doc) => {
+            const id = String(doc?.id || '').trim();
+            if (!id) return null;
+            const name = String(doc?.name || id).trim() || id;
+            const theme = String(doc?.theme || '').trim();
+            return {
+              id,
+              label: theme ? `${name} - ${theme}` : name
+            };
+          })
+          .filter(Boolean);
         fields.push(fieldHtml('Nom', 'name', item.name || '', 'text'));
         fields.push(fieldHtml('Description', 'description', item.description || '', 'textarea'));
         fields.push(fieldHtml('Service', 'serviceId', item.serviceId || '', 'select-service'));
@@ -7451,6 +7684,12 @@ ${clone.outerHTML}
         fields.push(fieldHtml('Responsable', 'ownerAgentId', item.ownerAgentId || '', 'select-agent'));
         fields.push(fieldHtml('Statut', 'status', item.status || 'draft', 'text'));
         fields.push(fieldHtml('Tags (csv)', 'tags', toCsv(item.tags), 'text'));
+        fields.push(fieldHtml('Documents globaux lies', 'linkedDocumentIds', {
+          selected: parseUniqueCsv(toCsv(item.linkedDocumentIds || [])),
+          options: globalDocOptions,
+          hint: 'Selection multiple',
+          emptyLabel: 'Aucun document global disponible'
+        }, 'multi-checkbox'));
         fields.push(fieldHtml('Version', 'version', String(item.version || 1), 'readonly'));
         fields.push(fieldHtml('Modele parent', 'parentTemplateId', String(item.parentTemplateId || ''), 'readonly'));
         fields.push(fieldHtml('Groupe variantes', 'variantGroupKey', String(item.variantGroupKey || ''), 'readonly'));
@@ -7527,7 +7766,7 @@ ${clone.outerHTML}
       const editable = canEdit && !isLocked;
 
       if (isLocked) {
-        refs.detailTitle.innerHTML += ` <span class="badge badge-error ml-2" title="Ce contenu est verrouillé par un autre utilisateur">VERROUILLÉ</span>`;
+        refs.detailTitle.innerHTML += ` <span class="badge badge-error ml-2" title="Ce contenu est verrouillÃ© par un autre utilisateur">VERROUILLÃ‰</span>`;
       }
       let crossLinksHtml = '';
       if (type === 'task' || type === 'procedure') {
@@ -7581,9 +7820,24 @@ ${clone.outerHTML}
       `
         : '';
 
-      const historyRows = getEntityHistory(type, id, 6);
+      const HISTORY_PAGE_SIZE = 4;
+      const historyAllRows = getEntityHistory(type, id, 240);
+      const historyPage = getHistoryPanelPage(type, id);
+      const historyPager = paginateWorkflowItems(historyAllRows, historyPage, HISTORY_PAGE_SIZE);
+      setHistoryPanelPage(type, id, historyPager.currentPage);
+      const historyRows = historyPager.pageItems;
       const historyPanelHtml = global.TaskMDAWorkflowUI?.renderHistoryPanelHtml
-        ? global.TaskMDAWorkflowUI.renderHistoryPanelHtml(historyRows, esc, { type, editable })
+        ? global.TaskMDAWorkflowUI.renderHistoryPanelHtml(historyRows, esc, {
+          type,
+          editable,
+          pagination: {
+            currentPage: historyPager.currentPage,
+            totalPages: historyPager.totalPages,
+            totalItems: historyPager.totalItems,
+            start: historyPager.totalItems > 0 ? historyPager.start + 1 : 0,
+            end: historyPager.end
+          }
+        })
         : '';
       const processValidation = type === 'process'
         ? normalizeProcessValidation(item?.validation)
@@ -8998,6 +9252,25 @@ ${clone.outerHTML}
             btn.textContent = isHidden ? 'Masquer diff' : 'Voir diff';
           });
         });
+        refs.detailBody?.querySelectorAll('[data-wf-history-page-action]')?.forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const action = String(btn.getAttribute('data-wf-history-page-action') || '').trim();
+            if (!action) return;
+            const currentPage = getHistoryPanelPage(type, id);
+            const nextPage = action === 'next' ? currentPage + 1 : currentPage - 1;
+            setHistoryPanelPage(type, id, nextPage);
+            openDetail(type, id);
+          });
+        });
+        refs.detailBody?.querySelectorAll('[data-wf-help-text]')?.forEach((btn) => {
+          btn.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const helpText = String(btn.getAttribute('data-wf-help-text') || '').trim();
+            if (!helpText) return;
+            toast(helpText);
+          });
+        });
         
         if (type === 'contingencyPlan') {
           document.getElementById('btn-wf-cont-activate')?.addEventListener('click', async () => {
@@ -9539,7 +9812,8 @@ ${clone.outerHTML}
           groupId: item.groupId || '',
           ownerAgentId: item.ownerAgentId || '',
           status: item.status || 'draft',
-          tags: item.tags || []
+          tags: item.tags || [],
+          linkedDocumentIds: item.linkedDocumentIds || []
         });
         updated.name = String(fields.name || '').trim();
         updated.description = String(fields.description || '').trim();
@@ -9548,6 +9822,7 @@ ${clone.outerHTML}
         updated.ownerAgentId = String(fields.ownerAgentId || '').trim() || null;
         updated.status = String(fields.status || '').trim() || 'draft';
         updated.tags = parseUniqueCsv(fields.tags);
+        updated.linkedDocumentIds = parseUniqueCsv(fields.linkedDocumentIds);
         const nextSnapshot = JSON.stringify({
           name: updated.name,
           description: updated.description,
@@ -9555,7 +9830,8 @@ ${clone.outerHTML}
           groupId: updated.groupId || '',
           ownerAgentId: updated.ownerAgentId || '',
           status: updated.status,
-          tags: updated.tags || []
+          tags: updated.tags || [],
+          linkedDocumentIds: updated.linkedDocumentIds || []
         });
         const changed = previousSnapshot !== nextSnapshot;
         const nextVersion = changed ? (Number(item.version || 1) + 1) : Number(item.version || 1);
@@ -10078,32 +10354,32 @@ ${clone.outerHTML}
       if (!refs.modalBody) return;
       const hintsByKind = {
         process: [
-          ['wf-create-process-title', 'Donnez un titre orienté action, clair et court.'],
+          ['wf-create-process-title', 'Donnez un titre orientÃ© action, clair et court.'],
           ['wf-create-process-service', 'Le service pilote simplifie le suivi et la gouvernance.']
         ],
         template: [
-          ['wf-create-template-name', 'Un modèle sert de base réutilisable pour lancer des processus.'],
-          ['wf-create-template-source-process', 'Depuis un processus: structure préremplie en un clic.']
+          ['wf-create-template-name', 'Un modÃ¨le sert de base rÃ©utilisable pour lancer des processus.'],
+          ['wf-create-template-source-process', 'Depuis un processus: structure prÃ©remplie en un clic.']
         ],
         step: [
-          ['wf-create-step-title', 'Une étape = une action métier mesurable et attribuable.'],
+          ['wf-create-step-title', 'Une Ã©tape = une action mÃ©tier mesurable et attribuable.'],
           ['wf-create-step-type', 'Choisissez le type pour clarifier la logique du flux.']
         ],
         flow: [
-          ['wf-create-flow-process', 'Un flux relie des étapes d un même processus.'],
-          ['wf-create-flow-type', 'Utilisez condition/parallèle pour décrire les bifurcations.']
+          ['wf-create-flow-process', 'Un flux relie des Ã©tapes d un mÃªme processus.'],
+          ['wf-create-flow-type', 'Utilisez condition/parallÃ¨le pour dÃ©crire les bifurcations.']
         ],
         task: [
-          ['wf-create-task-title', 'Titre court, précis et actionnable.'],
-          ['wf-create-task-process', 'Lier au processus facilite le suivi transverse immédiat.']
+          ['wf-create-task-title', 'Titre court, prÃ©cis et actionnable.'],
+          ['wf-create-task-process', 'Lier au processus facilite le suivi transverse immÃ©diat.']
         ],
         procedure: [
-          ['wf-create-procedure-title', 'La procédure décrit clairement le mode opératoire.'],
-          ['wf-create-procedure-trigger', 'Le déclencheur standardise le démarrage.']
+          ['wf-create-procedure-title', 'La procÃ©dure dÃ©crit clairement le mode opÃ©ratoire.'],
+          ['wf-create-procedure-trigger', 'Le dÃ©clencheur standardise le dÃ©marrage.']
         ],
         software: [
-          ['wf-create-software-name', 'Utilisez le nom métier connu des équipes.'],
-          ['wf-create-software-category', 'La catégorie facilite la recherche dans les référentiels.']
+          ['wf-create-software-name', 'Utilisez le nom mÃ©tier connu des Ã©quipes.'],
+          ['wf-create-software-category', 'La catÃ©gorie facilite la recherche dans les rÃ©fÃ©rentiels.']
         ]
       };
       const hints = hintsByKind[String(kind || '').trim()] || [];
@@ -10123,7 +10399,7 @@ ${clone.outerHTML}
         shortcutHint.className = 'workflow-card-sub';
         shortcutHint.style.marginTop = '0.35rem';
         shortcutHint.setAttribute('data-wf-create-shortcuts', '1');
-        shortcutHint.textContent = 'Raccourcis: Entrée pour enregistrer, Échap pour fermer.';
+        shortcutHint.textContent = 'Raccourcis: EntrÃ©e pour enregistrer, Ã‰chap pour fermer.';
         refs.modalBody.appendChild(shortcutHint);
       }
     }
@@ -10206,9 +10482,10 @@ ${clone.outerHTML}
         refs.modalBody.innerHTML = `
           <div><label class="workflow-form-label">Nom affiche</label><input id="wf-create-agent-name" class="workflow-form-input" type="text"></div>
           <div>
-            <label class="workflow-form-label">Titre / poste</label>
+            <label class="workflow-form-label" title="Poste = identite metier de la personne dans la structure.">Poste (structure)</label>
             <input id="wf-create-agent-title" class="workflow-form-input" type="text" value="Agent" list="wf-create-agent-title-suggestions">
             <datalist id="wf-create-agent-title-suggestions">${titleSuggestions}</datalist>
+            <p class="workflow-card-sub workflow-form-hint">Exemple poste: Infirmier coordinateur</p>
           </div>
           <div><label class="workflow-form-label">Service</label><select id="wf-create-agent-service" class="workflow-form-select">${buildSelectOptions(state.collections.services, 'id', 'name', state.serviceFilter !== 'all' ? state.serviceFilter : '')}</select></div>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:0.6rem;">
@@ -10419,9 +10696,13 @@ ${clone.outerHTML}
               <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0.6rem;">
                 <div><label class="workflow-form-label">Service</label><select id="wf-create-step-service" class="workflow-form-select">${buildSelectOptions(state.collections.services, 'id', 'name', defaultServiceId)}</select></div>
                 <div><label class="workflow-form-label">Groupe</label><select id="wf-create-step-group" class="workflow-form-select">${buildSelectOptions(state.collections.groups, 'id', 'name', defaultGroupId)}</select></div>
-                <div><label class="workflow-form-label">Responsable</label><select id="wf-create-step-owner" class="workflow-form-select">${buildSelectOptions(state.collections.agents, 'id', 'displayName', defaultOwnerAgentId)}</select></div>
+                <div><label class="workflow-form-label" title="Agent nommement designe pour cette etape (optionnel).">Agent assigne (optionnel)</label><select id="wf-create-step-owner" class="workflow-form-select">${buildSelectOptions(state.collections.agents, 'id', 'displayName', defaultOwnerAgentId)}</select></div>
               </div>
-              <div><label class="workflow-form-label">Role metier</label><select id="wf-create-step-role" class="workflow-form-select">${buildSelectOptions(state.collections.roles, 'id', 'name', '')}</select></div>
+              <div>
+                <label class="workflow-form-label" title="Role = fonction attendue dans le workflow.">Role requis (workflow)</label>
+                <select id="wf-create-step-role" class="workflow-form-select">${buildSelectOptions(state.collections.roles, 'id', 'name', '')}</select>
+                <p class="workflow-card-sub workflow-form-hint">Exemple role: Valideur N2</p>
+              </div>
               <div><label class="workflow-form-label">Procedure liee</label><select id="wf-create-step-procedure" class="workflow-form-select">${buildSelectOptions(state.collections.procedures, 'id', 'title', '')}</select></div>
               <div><label class="workflow-form-label">Logiciels lies (csv ids)</label><input id="wf-create-step-software" class="workflow-form-input" type="text"></div>
               <div><label class="workflow-form-label">Tache workflow liee</label><select id="wf-create-step-task" class="workflow-form-select">${buildSelectOptions(state.collections.tasks, 'id', 'title', '')}</select></div>
@@ -10904,6 +11185,7 @@ ${clone.outerHTML}
           ownerAgentId: selectedOwnerAgentId || sourceProcess?.ownerAgentId || null,
           status: 'draft',
           tags: mergedTags,
+          linkedDocumentIds: [],
           validation: normalizeProcessValidation(sourceProcess?.validation || { level: 0, requiredLevels: 2, requiredRoleIds: [], approvers: [] }),
           version: 1,
           templateSteps: sourceSteps.map((step, index) => ({
@@ -11196,6 +11478,20 @@ ${clone.outerHTML}
 
       // Gestion du bouton "Ajouter" (Quick Add) avec delegation d'evenement pour robustesse
       document.addEventListener('click', (event) => {
+        const processHelpAction = event.target.closest('[data-wf-process-help-action]');
+        if (processHelpAction) {
+          event.preventDefault();
+          event.stopPropagation();
+          const action = String(processHelpAction.getAttribute('data-wf-process-help-action') || '').trim();
+          if (action === 'toggle-help') {
+            state.processCreationHelpCollapsed = !state.processCreationHelpCollapsed;
+            writeProcessCreationHelpCollapsed(state.processCreationHelpCollapsed);
+            renderBreadcrumbs();
+            renderContent();
+            return;
+          }
+        }
+
         const toggleBtn = event.target.closest('#workflow-quick-add-toggle');
         if (toggleBtn) {
           event.preventDefault();
@@ -11534,6 +11830,18 @@ ${clone.outerHTML}
             exportOrganigramAsPdf(mode);
             return;
           }
+          if (action === 'toggle_orphan_groups') {
+            state.organigramOptions.showOrphanGroups = state.organigramOptions.showOrphanGroups === false;
+            renderContent();
+            persistLayout().catch(() => null);
+            return;
+          }
+          if (action === 'switch_orphan_side') {
+            state.organigramOptions.orphanGroupsSide = String(state.organigramOptions.orphanGroupsSide || 'right') === 'left' ? 'right' : 'left';
+            renderContent();
+            persistLayout().catch(() => null);
+            return;
+          }
           if (action === 'zoom_in') state.organigramOptions.zoom = clampOrganigramZoom((state.organigramOptions.zoom || 1) + 0.1);
           if (action === 'zoom_out') state.organigramOptions.zoom = clampOrganigramZoom((state.organigramOptions.zoom || 1) - 0.1);
           if (action === 'reset') {
@@ -11640,7 +11948,7 @@ ${clone.outerHTML}
             const toggle = node.querySelector('[data-wf-branch-toggle]');
             if (toggle) {
               toggle.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
-              toggle.textContent = shouldOpen ? '▾' : '▸';
+              toggle.textContent = shouldOpen ? 'â–¾' : 'â–¸';
             }
           });
           persistLayout().catch(() => null);
@@ -11658,7 +11966,7 @@ ${clone.outerHTML}
           const branchKey = String(node.getAttribute('data-wf-branch-key') || '').trim();
           if (branchKey) state.orgBranchState[branchKey] = nextState;
           toggle.setAttribute('aria-expanded', nextState === 'open' ? 'true' : 'false');
-          toggle.textContent = nextState === 'open' ? '▾' : '▸';
+          toggle.textContent = nextState === 'open' ? 'â–¾' : 'â–¸';
           persistLayout().catch(() => null);
           return;
         }
@@ -11892,8 +12200,8 @@ ${clone.outerHTML}
         }
       });
 
-      // Utiliser la délégation d'événements sur le menu parent
-      // Cela évite que les listeners soient perdus si les boutons sont modifiés
+      // Utiliser la dÃ©lÃ©gation d'Ã©vÃ©nements sur le menu parent
+      // Cela Ã©vite que les listeners soient perdus si les boutons sont modifiÃ©s
       if (refs.quickAddMenu) {
         refs.quickAddMenu.addEventListener('click', (e) => {
           const button = e.target.closest('button[id^="btn-workflow-add-"]');
@@ -11903,7 +12211,7 @@ ${clone.outerHTML}
           e.stopPropagation();
           refs.quickAddMenu.classList.add('hidden');
 
-          // Mapper l'ID du bouton à l'action correspondante
+          // Mapper l'ID du bouton Ã  l'action correspondante
           const actionMap = {
             'btn-workflow-add-community': 'community',
             'btn-workflow-add-service': 'service',
@@ -12019,3 +12327,4 @@ ${clone.outerHTML}
     createModule
   };
 }(window));
+
