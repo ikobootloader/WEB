@@ -2,6 +2,24 @@
 
 ## Version actuelle - Avril 2026
 
+### Mise a jour incrementale - Avril 2026 (Deadlines flexibles Projets + Taches)
+
+- Projets:
+  - ajout d un bloc d echeance configurable a la creation et a l edition:
+    - `Date precise`
+    - `Mois`
+    - `Annee`
+    - `Periode (debut / fin)`
+  - affichage de l echeance dans l entete projet et sur les cartes projet (dashboard / vue projets).
+  - stockage harmonise (`deadlineMode`, `deadlineDate`, `deadlineMonth`, `deadlineYear`, `deadlineStart`, `deadlineEnd`, `deadlineAt`).
+- Taches:
+  - ajout d un mode d echeance flexible dans la modale de creation/edition avec les memes 4 formats.
+  - conservation de la compatibilite avec la logique existante (tri, focus/chrono, timeline, calendrier) via `dueDate` derive automatiquement.
+  - affichage adapte dans les rendus (cartes, listes, timeline, detail) pour montrer le format choisi (mois/annee/periode).
+  - edition inline de la date limite convertie explicitement en mode `date precise`.
+- Import:
+  - normalisation des taches importees pour conserver/deriver le nouveau modele d echeance.
+
 ### Mise a jour incrementale - Avril 2026 (Workflow UX - alignement filtres Carte)
 
 - Workflow / Carte:

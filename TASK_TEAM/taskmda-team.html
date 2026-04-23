@@ -381,12 +381,14 @@
                 </label>
                 <label class="projects-filter-field" for="projects-filter-sort">
                   <span class="material-symbols-outlined projects-filter-field-icon" aria-hidden="true">sort</span>
-                  <select id="projects-filter-sort" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  <select id="projects-filter-sort" class="taskmda-sort-select px-3 py-2 border border-slate-300 rounded-lg text-sm">
                     <option value="recent">Tri: plus récents</option>
                     <option value="oldest">Tri: plus anciens</option>
                     <option value="name-asc">Tri: nom A → Z</option>
                     <option value="name-desc">Tri: nom Z → A</option>
                     <option value="priority">Tri: priorité</option>
+                    <option value="deadline-near">Tri: échéance proche</option>
+                    <option value="deadline-far">Tri: échéance lointaine</option>
                   </select>
                 </label>
                 <button id="projects-filter-reset" class="task-action-btn task-action-btn-subtle projects-filter-reset-btn" data-action-kind="default" aria-label="Réinitialiser les filtres" title="Réinitialiser les filtres">
@@ -986,7 +988,7 @@
                 <div class="feed-toolbar rounded-xl border border-slate-200 bg-slate-50 p-3 mb-3">
                   <div class="feed-toolbar-top">
                     <input id="global-feed-search" type="text" placeholder="Rechercher dans le fil..." class="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full">
-                    <select id="global-feed-sort" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    <select id="global-feed-sort" class="taskmda-sort-select px-3 py-2 border border-slate-300 rounded-lg text-sm">
                       <option value="desc">Plus récents</option>
                       <option value="asc">Plus anciens</option>
                     </select>
@@ -1261,7 +1263,7 @@
                     <p id="via-annuaire-live-meta">Aucune recherche effectuée.</p>
                     <div class="flex items-center gap-2">
                       <button id="btn-via-annuaire-live-audit-toggle" class="px-2 py-1 rounded border border-slate-300 text-slate-700 text-[11px] font-semibold">Audit: OFF</button>
-                      <select id="via-annuaire-live-sort" class="px-2 py-1 rounded border border-slate-300 text-[11px] text-slate-700">
+                      <select id="via-annuaire-live-sort" class="taskmda-sort-select taskmda-sort-select-compact px-2 py-1 rounded border border-slate-300 text-[11px] text-slate-700">
                         <option value="name">Tri: nom</option>
                         <option value="city">Tri: ville</option>
                       </select>
@@ -1610,9 +1612,9 @@
                   <button id="view-list" role="tab" aria-controls="task-list-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">view_list</span> Liste</button>
                   <button id="view-gantt" role="tab" aria-controls="gantt-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">view_timeline</span> Gantt</button>
                   <button id="view-timeline" role="tab" aria-controls="timeline-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">calendar_month</span> Timeline</button>
-                  <button id="view-docs" role="tab" aria-controls="documents-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">description</span> Documents</button>
                   <button id="view-notes" role="tab" aria-controls="notes-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">sticky_note_2</span> Notes</button>
                   <button id="view-chat" role="tab" aria-controls="discussion-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">forum</span> Discussion</button>
+                  <button id="view-docs" role="tab" aria-controls="documents-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">description</span> Documents</button>
                   <button id="view-activity" role="tab" aria-controls="activity-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">history</span> Activité</button>
                   <button id="view-archives" role="tab" aria-controls="archives-section" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">archive</span> Archives <span id="archived-tasks-count" class="text-xs opacity-80">(0)</span></button>
                 </div>
@@ -1717,6 +1719,16 @@
                 </div>
                 <div id="documents-section" class="project-view-section hidden">
               <div class="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <button id="btn-toggle-project-docs-upload" type="button" class="docs-header-toggle flex items-center justify-between gap-3 mb-3 w-full" aria-expanded="false" aria-controls="project-docs-upload-body" title="Développer">
+                  <div class="flex items-center gap-3">
+                    <div class="docs-icon-circle">
+                      <span class="material-symbols-outlined text-white">folder</span>
+                    </div>
+                    <h3 class="text-lg font-bold text-slate-800">Charger des documents projet</h3>
+                  </div>
+                  <span id="project-docs-upload-toggle-icon" class="material-symbols-outlined text-slate-500">expand_more</span>
+                </button>
+                <div id="project-docs-upload-body" class="hidden">
                 <div class="project-doc-upload-grid grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
                   <div class="space-y-1 project-doc-drop-col">
                     <label for="project-doc-files" class="project-doc-step-label text-xs font-semibold text-slate-600"><span class="project-doc-step-badge">1</span><span>Déposer des documents</span></label>
@@ -1738,7 +1750,16 @@
                     </div>
                   </div>
                   <div class="space-y-1">
-                    <label for="project-doc-task-links" class="project-doc-step-label text-xs font-semibold text-slate-600"><span class="project-doc-step-badge">3</span><span>Associer à des tâches (optionnel)</span></label>
+                    <label for="project-doc-mode" class="project-doc-step-label text-xs font-semibold text-slate-600"><span class="project-doc-step-badge">3</span><span>Visibilité du document</span></label>
+                    <div class="project-doc-links-card">
+                      <select id="project-doc-mode" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                        <option value="private">Privée</option>
+                        <option value="shared">Collaborative</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="space-y-1">
+                    <label for="project-doc-task-links" class="project-doc-step-label text-xs font-semibold text-slate-600"><span class="project-doc-step-badge">4</span><span>Associer à des tâches (optionnel)</span></label>
                     <div class="project-doc-links-card">
                       <input id="project-doc-task-filter" type="text" placeholder="Filtrer les tâches..." class="project-doc-task-filter px-3 py-2 border border-slate-300 rounded-lg text-sm">
                       <select id="project-doc-task-links" multiple class="hidden px-3 py-2 border border-slate-300 rounded-lg text-sm min-h-[96px]"></select>
@@ -1757,12 +1778,13 @@
                 </div>
                 <div class="project-doc-action-row mt-3">
                   <button id="btn-add-project-documents" class="btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold project-doc-submit taskmda-create-cta" data-action-kind="create" data-action-label="Ajouter document(s)" aria-label="Ajouter document(s)">
-                    <span class="project-doc-step-badge">4</span>
+                    <span class="project-doc-step-badge">5</span>
                     <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">add_circle</span>
                     <span class="taskmda-action-label">Ajouter document(s)</span>
                   </button>
                 </div>
                 <p class="text-xs text-slate-500 mt-2">Optionnel: associez le(s) document(s) à une ou plusieurs tâches. Sans sélection, le document reste indépendant.</p>
+                </div>
               </div>
               <div class="mb-4 grid grid-cols-1 md:grid-cols-4 gap-2">
                 <input id="docs-search-input" type="text" placeholder="Rechercher un document" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
@@ -1773,7 +1795,7 @@
                   <option value="office">Office</option>
                   <option value="other">Autres</option>
                 </select>
-                <select id="docs-sort" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                <select id="docs-sort" class="taskmda-sort-select px-3 py-2 border border-slate-300 rounded-lg text-sm">
                   <option value="recent">Plus récents</option>
                   <option value="oldest">Plus anciens</option>
                   <option value="name">Nom A-Z</option>
@@ -1803,6 +1825,7 @@
                     <span class="taskmda-action-label">Nouvelle note</span>
                   </button>
                 </div>
+                <div id="project-notes-theme-tabs" class="project-notes-theme-tabs mt-3"></div>
                 <p class="mt-2 text-xs text-slate-500">Astuce: utilisez "Nouvelle note" pour ouvrir l’éditeur confortable en modale.</p>
               </div>
               <div id="project-notes-list" class="space-y-3"></div>
@@ -1969,6 +1992,34 @@
         </div>
         <div><label class="block text-sm font-semibold mb-2">Statut projet</label><select id="project-status" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"><option value="en-cours">En cours</option><option value="planifie">Planifié</option><option value="urgent">Urgent</option><option value="termine">Terminé</option></select></div>
         <div><label class="block text-sm font-semibold mb-2">Priorité projet</label><select id="project-priority" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"><option value="normale">Normale</option><option value="haute">Haute</option><option value="critique">Critique</option><option value="basse">Basse</option></select></div>
+        <div id="project-deadline-wrap" class="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-3">
+          <label class="block text-sm font-semibold mb-1">Échéance projet (optionnel)</label>
+          <select id="project-deadline-mode" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+            <option value="date">Date précise</option>
+            <option value="month">Mois</option>
+            <option value="year">Année</option>
+            <option value="period">Période (début / fin)</option>
+          </select>
+          <div id="project-deadline-date-wrap">
+            <input id="project-deadline-date" type="date" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+          </div>
+          <div id="project-deadline-month-wrap" class="hidden">
+            <input id="project-deadline-month" type="month" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+          </div>
+          <div id="project-deadline-year-wrap" class="hidden">
+            <input id="project-deadline-year" type="number" min="1900" max="2200" step="1" placeholder="Ex: 2027" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+          </div>
+          <div id="project-deadline-period-wrap" class="hidden grid grid-cols-1 md:grid-cols-2 gap-2">
+            <div>
+              <label class="block text-xs text-slate-500 mb-1">Début</label>
+              <input id="project-deadline-period-start" type="date" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+            </div>
+            <div>
+              <label class="block text-xs text-slate-500 mb-1">Fin</label>
+              <input id="project-deadline-period-end" type="date" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+            </div>
+          </div>
+        </div>
         <div>
           <label class="block text-sm font-semibold mb-2">Mode du projet</label>
           <select id="project-sharing-mode-select" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
@@ -2097,6 +2148,92 @@
     </div>
   </div>
 
+  <div id="modal-project-note-read" class="hidden fixed inset-0 bg-black/55 flex items-start md:items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
+    <div class="task-detail-modal-panel bg-white rounded-2xl p-5 sm:p-6 max-w-4xl w-full mx-auto max-h-[92vh] overflow-y-auto overscroll-contain">
+      <div class="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <h3 id="project-note-read-title" class="section-title text-2xl font-extrabold">Note</h3>
+          <p id="project-note-read-meta" class="text-sm text-slate-500 mt-1"></p>
+        </div>
+        <button id="btn-close-project-note-read-modal" type="button" class="taskmda-modal-close-btn" data-action-kind="close" data-action-label="Fermer" aria-label="Fermer">
+          <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">close</span>
+          <span class="taskmda-action-label">Fermer</span>
+        </button>
+      </div>
+      <div id="project-note-read-badges" class="flex flex-wrap items-center gap-2 mb-3"></div>
+      <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 mb-3">
+        <div id="project-note-read-content" class="markdown-content text-sm text-slate-700"></div>
+      </div>
+      <div class="flex flex-wrap items-center gap-2 mb-2" id="project-note-read-tags"></div>
+      <div id="project-note-read-links"></div>
+      <div class="flex items-center justify-end gap-2 mt-4">
+        <button id="btn-project-note-read-edit" type="button" class="task-action-btn hidden" data-action-kind="edit" data-action-label="Modifier la note" aria-label="Modifier la note">
+          <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">edit</span>
+          <span class="taskmda-action-label">Modifier</span>
+        </button>
+        <button id="btn-project-note-read-delete" type="button" class="task-action-btn task-action-btn-danger hidden" data-action-kind="danger" data-action-label="Supprimer la note" aria-label="Supprimer la note">
+          <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">delete</span>
+          <span class="taskmda-action-label">Supprimer</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="project-note-selection-menu" class="hidden project-note-selection-menu" role="menu" aria-label="Actions sur la sélection de note">
+    <button id="btn-note-selection-copy" type="button" class="project-note-selection-menu-item" role="menuitem">
+      <span class="material-symbols-outlined text-base" aria-hidden="true">content_copy</span>
+      <span>Copier le texte</span>
+    </button>
+    <button id="btn-note-selection-to-project" type="button" class="project-note-selection-menu-item" role="menuitem">
+      <span class="material-symbols-outlined text-base" aria-hidden="true">folder</span>
+      <span>Copier vers description projet</span>
+    </button>
+    <button id="btn-note-selection-to-task" type="button" class="project-note-selection-menu-item" role="menuitem">
+      <span class="material-symbols-outlined text-base" aria-hidden="true">task</span>
+      <span>Copier vers description tâche...</span>
+    </button>
+    <button id="btn-note-selection-to-project-and-task" type="button" class="project-note-selection-menu-item" role="menuitem">
+      <span class="material-symbols-outlined text-base" aria-hidden="true">content_copy</span>
+      <span>Copier vers description projet + tâche...</span>
+    </button>
+  </div>
+
+  <div id="modal-note-selection-task-target" class="hidden fixed inset-0 bg-black/55 flex items-center justify-center z-[60] p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl p-5 sm:p-6 max-w-xl w-full mx-auto">
+      <div class="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <h3 id="note-selection-task-target-title" class="section-title text-xl font-extrabold">Copier le texte dans une tâche</h3>
+          <p id="note-selection-task-target-subtitle" class="text-sm text-slate-500 mt-1">Choisissez la tâche cible.</p>
+        </div>
+        <button id="btn-close-note-selection-task-target" type="button" class="taskmda-modal-close-btn" data-action-kind="close" data-action-label="Fermer" aria-label="Fermer">
+          <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">close</span>
+          <span class="taskmda-action-label">Fermer</span>
+        </button>
+      </div>
+      <div class="space-y-3">
+        <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 max-h-32 overflow-auto">
+          <p id="note-selection-task-target-preview"></p>
+        </div>
+        <div>
+          <label for="note-selection-task-target-select" class="block text-sm font-semibold mb-2">Tâche</label>
+          <select id="note-selection-task-target-select" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+            <option value="">Choisir une tâche...</option>
+          </select>
+        </div>
+      </div>
+      <div class="flex items-center justify-end gap-2 mt-4">
+        <button id="btn-cancel-note-selection-task-target" type="button" class="task-action-btn task-action-btn-subtle" data-action-kind="close" data-action-label="Annuler" aria-label="Annuler">
+          <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">undo</span>
+          <span class="taskmda-action-label">Annuler</span>
+        </button>
+        <button id="btn-confirm-note-selection-task-target" type="button" class="task-action-btn" data-action-kind="save" data-action-label="Copier dans la tâche" aria-label="Copier dans la tâche">
+          <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">content_paste</span>
+          <span id="note-selection-task-target-confirm-label" class="taskmda-action-label">Copier dans la tâche</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <div id="modal-new-task" class="task-modal hidden fixed inset-0 bg-black/50 flex items-start md:items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
     <div class="task-modal-panel task-modal-panel-neo bg-white rounded-2xl p-6 sm:p-8 max-w-4xl w-full mx-auto my-2 sm:my-4 md:my-0 max-h-[92vh] overflow-y-auto overscroll-contain">
       <h3 class="section-title text-2xl font-extrabold mb-3">Nouvelle tâche</h3>
@@ -2154,9 +2291,33 @@
         <div><label class="modal-field-label block text-sm font-semibold mb-2"><span class="material-symbols-outlined modal-field-icon" aria-hidden="true">calendar_clock</span><span>Date de demande</span></label><input id="task-request-date" type="date" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"></div>
         
         <!-- Date limite (masquée si récurrence) -->
-        <div id="task-due-date-wrap">
-          <label class="modal-field-label block text-sm font-semibold mb-2"><span class="material-symbols-outlined modal-field-icon" aria-hidden="true">event</span><span>Date limite</span></label>
-          <input id="task-due-date" type="date" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+        <div id="task-due-date-wrap" class="space-y-3">
+          <label class="modal-field-label block text-sm font-semibold mb-2"><span class="material-symbols-outlined modal-field-icon" aria-hidden="true">event</span><span>Échéance</span></label>
+          <select id="task-deadline-mode" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+            <option value="date">Date précise</option>
+            <option value="month">Mois</option>
+            <option value="year">Année</option>
+            <option value="period">Période (début / fin)</option>
+          </select>
+          <div id="task-deadline-date-wrap">
+            <input id="task-due-date" type="date" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+          </div>
+          <div id="task-deadline-month-wrap" class="hidden">
+            <input id="task-deadline-month" type="month" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+          </div>
+          <div id="task-deadline-year-wrap" class="hidden">
+            <input id="task-deadline-year" type="number" min="1900" max="2200" step="1" placeholder="Ex: 2027" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+          </div>
+          <div id="task-deadline-period-wrap" class="hidden grid grid-cols-1 md:grid-cols-2 gap-2">
+            <div>
+              <label class="block text-xs text-slate-500 mb-1">Début</label>
+              <input id="task-deadline-period-start" type="date" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+            </div>
+            <div>
+              <label class="block text-xs text-slate-500 mb-1">Fin</label>
+              <input id="task-deadline-period-end" type="date" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+            </div>
+          </div>
         </div>
         <div><label class="modal-field-label block text-sm font-semibold mb-2"><span class="material-symbols-outlined modal-field-icon" aria-hidden="true">flag</span><span>Statut</span></label><select id="task-status" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"><option value="todo">À faire</option><option value="en-cours">En cours</option><option value="suspendu">Suspendu</option><option value="termine">Terminé</option></select></div>
         <div><label class="modal-field-label block text-sm font-semibold mb-2"><span class="material-symbols-outlined modal-field-icon" aria-hidden="true">priority_high</span><span>Urgence</span></label><select id="task-urgency" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"><option value="low">Basse</option><option value="medium">Moyenne</option><option value="high">Haute</option></select></div>
@@ -2815,6 +2976,34 @@
         </div>
         <div><label class="block text-sm font-semibold mb-2">Statut projet</label><select id="edit-project-status" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"><option value="en-cours">En cours</option><option value="planifie">Planifié</option><option value="urgent">Urgent</option><option value="termine">Terminé</option></select></div>
         <div><label class="block text-sm font-semibold mb-2">Priorité projet</label><select id="edit-project-priority" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"><option value="normale">Normale</option><option value="haute">Haute</option><option value="critique">Critique</option><option value="basse">Basse</option></select></div>
+        <div id="edit-project-deadline-wrap" class="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-3">
+          <label class="block text-sm font-semibold mb-1">Échéance projet (optionnel)</label>
+          <select id="edit-project-deadline-mode" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+            <option value="date">Date précise</option>
+            <option value="month">Mois</option>
+            <option value="year">Année</option>
+            <option value="period">Période (début / fin)</option>
+          </select>
+          <div id="edit-project-deadline-date-wrap">
+            <input id="edit-project-deadline-date" type="date" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+          </div>
+          <div id="edit-project-deadline-month-wrap" class="hidden">
+            <input id="edit-project-deadline-month" type="month" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+          </div>
+          <div id="edit-project-deadline-year-wrap" class="hidden">
+            <input id="edit-project-deadline-year" type="number" min="1900" max="2200" step="1" placeholder="Ex: 2027" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+          </div>
+          <div id="edit-project-deadline-period-wrap" class="hidden grid grid-cols-1 md:grid-cols-2 gap-2">
+            <div>
+              <label class="block text-xs text-slate-500 mb-1">Début</label>
+              <input id="edit-project-deadline-period-start" type="date" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+            </div>
+            <div>
+              <label class="block text-xs text-slate-500 mb-1">Fin</label>
+              <input id="edit-project-deadline-period-end" type="date" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+            </div>
+          </div>
+        </div>
         <div>
           <label class="block text-sm font-semibold mb-2">Visibilité lecture</label>
           <select id="edit-project-read-access" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">

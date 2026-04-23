@@ -664,6 +664,93 @@ html.dark .feed-mention {
   color: #334155;
 }
 
+.feed-item-body p {
+  margin: 0 0 0.5rem;
+}
+
+.feed-item-body p:last-child {
+  margin-bottom: 0;
+}
+
+.feed-item-body h1,
+.feed-item-body h2,
+.feed-item-body h3,
+.feed-item-body h4,
+.feed-item-body h5,
+.feed-item-body h6 {
+  margin: 0.35rem 0 0.45rem;
+  line-height: 1.25;
+  color: #0f172a;
+  font-weight: 800;
+}
+
+.feed-item-body h1 { font-size: 1.5rem; }
+.feed-item-body h2 { font-size: 1.3rem; }
+.feed-item-body h3 { font-size: 1.12rem; }
+.feed-item-body h4 { font-size: 1rem; }
+.feed-item-body h5 { font-size: 0.92rem; }
+.feed-item-body h6 { font-size: 0.85rem; }
+
+.feed-item-body ul,
+.feed-item-body ol {
+  margin: 0.3rem 0 0.55rem 1.2rem;
+}
+
+.feed-item-body li {
+  margin: 0.2rem 0;
+}
+
+.feed-item-body blockquote {
+  margin: 0.45rem 0;
+  padding: 0.35rem 0.75rem;
+  border-left: 3px solid #93c5fd;
+  background: #eff6ff;
+  border-radius: 8px;
+}
+
+.feed-item-body pre {
+  margin: 0.45rem 0;
+  padding: 0.55rem 0.65rem;
+  border-radius: 10px;
+  background: #0f172a;
+  color: #e2e8f0;
+  overflow: auto;
+  font-size: 0.82rem;
+}
+
+.feed-item-body code {
+  border-radius: 6px;
+  background: #eef2ff;
+  color: #1e3a8a;
+  padding: 1px 5px;
+  font-size: 0.86em;
+}
+
+.feed-item-body pre code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+}
+
+.feed-item-body a {
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+
+.feed-item-body .ql-align-center { text-align: center; }
+.feed-item-body .ql-align-right { text-align: right; }
+.feed-item-body .ql-align-justify { text-align: justify; }
+.feed-item-body .ql-direction-rtl { direction: rtl; text-align: inherit; }
+.feed-item-body .ql-indent-1 { padding-left: 1.5em; }
+.feed-item-body .ql-indent-2 { padding-left: 3em; }
+.feed-item-body .ql-indent-3 { padding-left: 4.5em; }
+.feed-item-body .ql-indent-4 { padding-left: 6em; }
+.feed-item-body .ql-indent-5 { padding-left: 7.5em; }
+.feed-item-body .ql-indent-6 { padding-left: 9em; }
+.feed-item-body .ql-indent-7 { padding-left: 10.5em; }
+.feed-item-body .ql-indent-8 { padding-left: 12em; }
+.feed-item-body .ql-indent-9 { padding-left: 13.5em; }
+
 .feed-digest-compact-note {
   margin-top: 0.5rem;
   font-size: 0.78rem;
@@ -959,6 +1046,34 @@ html.dark .feed-item {
 
 html.dark .feed-item-body {
   color: #d3e1fb;
+}
+
+html.dark .feed-item-body h1,
+html.dark .feed-item-body h2,
+html.dark .feed-item-body h3,
+html.dark .feed-item-body h4,
+html.dark .feed-item-body h5,
+html.dark .feed-item-body h6 {
+  color: #e7efff;
+}
+
+html.dark .feed-item-body blockquote {
+  border-left-color: rgba(147, 197, 253, 0.65);
+  background: rgba(30, 58, 138, 0.26);
+}
+
+html.dark .feed-item-body pre {
+  background: #0b1224;
+  color: #dbeafe;
+}
+
+html.dark .feed-item-body code {
+  background: rgba(59, 130, 246, 0.18);
+  color: #dbeafe;
+}
+
+html.dark .feed-item-body a {
+  color: #9cc2ff;
 }
 
 html.dark .feed-digest-compact-note {
@@ -2577,6 +2692,32 @@ html.dark .project-admin-block {
   padding-right: 34px !important;
 }
 
+.taskmda-sort-select {
+  min-height: 42px;
+  height: 42px;
+  line-height: 1.2;
+}
+
+.taskmda-sort-select.taskmda-sort-select-compact {
+  min-height: 34px;
+  height: 34px;
+}
+
+#global-feed-section .feed-toolbar-top input,
+#global-feed-section .feed-toolbar-top .taskmda-sort-select {
+  min-height: 42px;
+}
+
+#global-docs-section #docs-sort {
+  min-height: 42px;
+  height: 42px;
+}
+
+.workflow-map-link-filters .taskmda-sort-select {
+  min-height: 42px;
+  height: 42px;
+}
+
 .projects-filter-reset-btn {
   display: inline-flex !important;
   width: 50px;
@@ -2668,6 +2809,56 @@ html.dark .projects-filter-field-icon {
 .workspace-card-shell.project-card {
   border-top: 3px solid #ff9b40;
 }
+
+.project-note-selection-menu {
+  position: fixed;
+  z-index: 80;
+  min-width: 280px;
+  border: 1px solid #d8e2f3;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.2);
+  padding: 6px;
+  display: grid;
+  gap: 4px;
+}
+
+.project-note-selection-menu-item {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #1f2937;
+  padding: 9px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.project-note-selection-menu-item:hover {
+  border-color: #bfd0ef;
+  background: #f8fbff;
+}
+
+
+html.dark .project-note-selection-menu {
+  border-color: #344a6d;
+  background: #13203a;
+}
+
+html.dark .project-note-selection-menu-item {
+  background: #13203a;
+  color: #dce8ff;
+}
+
+html.dark .project-note-selection-menu-item:hover {
+  border-color: #4d6799;
+  background: #1a2a49;
+}
+
 
 .workspace-card-title {
   color: var(--ui-card-title);
@@ -3016,7 +3207,7 @@ html[data-tab-icons="off"] .tab-icon {
   left: 0;
   right: auto;
   top: calc(100% + 6px);
-  z-index: 40;
+  z-index: 90;
   min-width: 190px;
   border: 1px solid rgba(101, 115, 141, 0.24);
   border-radius: 0.75rem;
@@ -3109,6 +3300,11 @@ html[data-tab-icons="off"] .tab-icon {
   row-gap: 8px;
 }
 
+.project-work-nav {
+  position: relative;
+  z-index: 32;
+}
+
 .global-tasks-nav {
   margin-bottom: 12px;
 }
@@ -3119,6 +3315,8 @@ html[data-tab-icons="off"] .tab-icon {
   margin-top: 0;
   margin-bottom: 0;
   width: 100%;
+  position: relative;
+  z-index: 35;
 }
 
 .project-work-nav-controls {
@@ -6006,6 +6204,22 @@ textarea:focus {
   border-radius: 12px;
 }
 
+.dashboard-news-item-clickable {
+  cursor: pointer;
+  transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+
+.dashboard-news-item-clickable:hover {
+  border-color: rgba(59, 130, 246, 0.45);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
+}
+
+.dashboard-news-item-clickable:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.65);
+  outline-offset: 2px;
+}
+
 .dashboard-news-item:last-child {
   border-bottom: none;
 }
@@ -6182,6 +6396,35 @@ textarea:focus {
   font-size: 1rem;
 }
 
+.dashboard-news-refs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.dashboard-news-ref-btn {
+  border: 1px solid rgba(59, 130, 246, 0.28);
+  background: rgba(239, 246, 255, 0.9);
+  color: #1d4ed8;
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.dashboard-news-ref-btn:hover {
+  border-color: rgba(37, 99, 235, 0.45);
+  background: rgba(219, 234, 254, 0.95);
+}
+
+.dashboard-news-ref-btn:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.6);
+  outline-offset: 1px;
+}
+
 .dashboard-news-time {
   flex-shrink: 0;
   font-size: 0.72rem;
@@ -6246,6 +6489,17 @@ html.dark .dashboard-news-sub,
 html.dark .dashboard-news-time,
 html.dark .dashboard-news-empty {
   color: #b6c7e7;
+}
+
+html.dark .dashboard-news-ref-btn {
+  border-color: rgba(125, 167, 255, 0.34);
+  background: rgba(30, 58, 138, 0.28);
+  color: #dbe8ff;
+}
+
+html.dark .dashboard-news-ref-btn:hover {
+  border-color: rgba(147, 197, 253, 0.5);
+  background: rgba(37, 99, 235, 0.34);
 }
 
 #projects-view-grid.view-tab-active,
@@ -12848,4 +13102,58 @@ html.dark .taskmda-bulk-checkbox-wrap {
   height: calc(100vh - 16px);
   max-height: calc(100vh - 16px);
   border-radius: 0.9rem;
+}
+
+.project-notes-theme-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.project-notes-theme-tab {
+  border: 1px solid #cbd5e1;
+  border-bottom: 2px solid #94a3b8;
+  background: #ffffff;
+  color: #334155;
+  border-radius: 12px 12px 0 0;
+  padding: 7px 12px 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.1;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.project-notes-theme-tab span {
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: #64748b;
+}
+
+.project-notes-theme-tab.is-active {
+  background: #dbeafe;
+  color: #1d4ed8;
+  border-color: #93c5fd;
+  border-bottom-color: #2563eb;
+}
+
+html.dark .project-notes-theme-tab {
+  border-color: rgba(148, 163, 184, 0.4);
+  border-bottom-color: rgba(148, 163, 184, 0.7);
+  background: #15203a;
+  color: #dbeafe;
+}
+
+html.dark .project-notes-theme-tab span {
+  color: #bfd0ec;
+}
+
+html.dark .project-notes-theme-tab.is-active {
+  background: rgba(30, 64, 175, 0.35);
+  color: #dbeafe;
+  border-color: rgba(125, 167, 255, 0.7);
+  border-bottom-color: rgba(147, 197, 253, 0.9);
 }

@@ -4935,7 +4935,7 @@ ${clone.outerHTML}
           </div>
           <div class="workflow-map-link-filters">
             <input type="text" class="workflow-form-input workflow-map-link-search" data-wf-map-input="linkQuery" placeholder="Rechercher une liaison..." value="${esc(state.mapOptions.linkQuery || '')}">
-            <select class="workflow-form-select workflow-map-link-sort" data-wf-map-input="linkSort">
+            <select class="workflow-form-select workflow-map-link-sort taskmda-sort-select" data-wf-map-input="linkSort">
               <option value="source" ${linkSort === 'source' ? 'selected' : ''}>Tri: Source</option>
               <option value="target" ${linkSort === 'target' ? 'selected' : ''}>Tri: Cible</option>
               <option value="label" ${linkSort === 'label' ? 'selected' : ''}>Tri: Type de lien</option>
@@ -7378,6 +7378,9 @@ ${clone.outerHTML}
     function scheduleWorkflowInlineAutosave(fieldKey, immediate = false) {
       const safeKey = String(fieldKey || '').trim();
       if (!safeKey || !state.selectedType || !state.selectedId) return;
+      // Les titres de poste sont désormais en sauvegarde manuelle uniquement
+      // (autosave trop intempestif sur cette fiche).
+      if (String(state.selectedType || '').trim() === 'jobTitle') return;
       const saveDelay = immediate ? 0 : 280;
       if (state.inlineDetailSaveTimers.has(safeKey)) {
         clearTimeout(state.inlineDetailSaveTimers.get(safeKey));
