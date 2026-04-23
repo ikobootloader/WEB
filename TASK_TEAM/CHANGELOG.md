@@ -2,6 +2,13 @@
 
 ## Version actuelle - Avril 2026
 
+### Mise a jour incrementale - Avril 2026 (Workflow UX - alignement filtres Carte)
+
+- Workflow / Carte:
+  - correction CSS de la zone filtres des liaisons pour afficher `Rechercher une liaison...` et `Tri` sur la meme ligne en desktop.
+  - comportement responsive conserve: retour en empilement sur petits ecrans.
+  - ajustement applique dans `css/taskmda-workflow.css` (source de style active Workflow).
+
 ### Mise a jour incrementale - Avril 2026 (Hierarchie Epic/Feature finalisee)
 
 - Projets / Structure:

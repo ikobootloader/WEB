@@ -25,6 +25,7 @@ Nom d interface par defaut: `NEXUS MDA`.
   - barre de composition ajustee (emoji + envoi), bouton `Envoyer` au style rectangulaire arrondi.
 - Rubrique `Workflow`:
   - onglet `KPI` ajoute dans `Pilotage` (cards de synthese + repartitions statut/priorite + charge par agent).
+  - vue `Carte`: alignement de la barre `Rechercher une liaison...` + `Tri` sur une meme ligne en desktop, avec repli responsive en mobile.
 - Onglet `Plus (x)`:
   - menu complementaire epingle au clic (toggle), plus d ouverture au simple survol.
 
