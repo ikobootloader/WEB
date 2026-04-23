@@ -140,14 +140,16 @@
     });
 
     document.getElementById('global-doc-search')?.addEventListener('input', () => opts.renderGlobalDocs?.());
-    document.getElementById('global-doc-theme')?.addEventListener('input', () => opts.renderGlobalDocs?.());
+    document.getElementById('global-doc-theme-filter')?.addEventListener('input', () => opts.renderGlobalDocs?.());
     document.getElementById('global-doc-reset')?.addEventListener('click', () => {
       const search = document.getElementById('global-doc-search');
-      const theme = document.getElementById('global-doc-theme');
+      const themeFilter = document.getElementById('global-doc-theme-filter');
+      const uploadTheme = document.getElementById('global-doc-upload-theme');
       const files = document.getElementById('global-doc-files');
       const mode = document.getElementById('global-doc-mode');
       if (search) search.value = '';
-      if (theme) theme.value = '';
+      if (themeFilter) themeFilter.value = '';
+      if (uploadTheme) uploadTheme.value = '';
       if (files) files.value = '';
       if (mode) mode.value = 'private';
       opts.renderGlobalDocs?.();

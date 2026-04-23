@@ -606,7 +606,7 @@
     }
 
     function initProjectDescriptionEditors() {
-      ['project-description-editor', 'edit-project-description-editor', 'task-description-editor', 'global-feed-editor'].forEach((editorId) => {
+      ['project-description-editor', 'edit-project-description-editor', 'task-description-editor', 'global-feed-editor', 'project-note-content-editor'].forEach((editorId) => {
         const quill = ensureProjectDescriptionQuillEditor(editorId);
         const fallbackToolbar = document.querySelector(`.project-editor-toolbar-fallback [data-editor-target="${editorId}"]`)?.closest('.project-editor-toolbar-fallback');
         if (fallbackToolbar) {
@@ -631,7 +631,8 @@
         { editorId: 'project-description-editor', inputId: 'project-description-image-input' },
         { editorId: 'edit-project-description-editor', inputId: 'edit-project-description-image-input' },
         { editorId: 'task-description-editor', inputId: 'task-description-image-input' },
-        { editorId: 'global-feed-editor', inputId: 'global-feed-image-input' }
+        { editorId: 'global-feed-editor', inputId: 'global-feed-image-input' },
+        { editorId: 'project-note-content-editor', inputId: 'project-note-content-image-input' }
       ];
       imageBindings.forEach(({ editorId, inputId }) => {
         const editor = document.getElementById(editorId);

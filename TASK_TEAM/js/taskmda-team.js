@@ -739,6 +739,9 @@
       CREATE_DOCUMENT: 'CREATE_DOCUMENT',
       UPDATE_DOCUMENT: 'UPDATE_DOCUMENT',
       DELETE_DOCUMENT: 'DELETE_DOCUMENT',
+      CREATE_NOTE: 'CREATE_NOTE',
+      UPDATE_NOTE: 'UPDATE_NOTE',
+      DELETE_NOTE: 'DELETE_NOTE',
       CREATE_EPIC: 'CREATE_EPIC',
       UPDATE_EPIC: 'UPDATE_EPIC',
       DELETE_EPIC: 'DELETE_EPIC',
@@ -894,6 +897,7 @@
         userGroups: [],
         themes: [],
         documents: [],
+        notes: [],
         epics: [],
         features: [],
         resourceLocks: {},
@@ -908,6 +912,7 @@
       if (!Array.isArray(state.userGroups)) state.userGroups = [];
       if (!Array.isArray(state.themes)) state.themes = [];
       if (!Array.isArray(state.documents)) state.documents = [];
+      if (!Array.isArray(state.notes)) state.notes = [];
       if (!Array.isArray(state.epics)) state.epics = [];
       if (!Array.isArray(state.features)) state.features = [];
       if (!state.resourceLocks || typeof state.resourceLocks !== 'object') state.resourceLocks = {};
@@ -971,6 +976,19 @@
             const nextTask = { ...t, ...event.payload.changes, updatedAt: event.timestamp };
             const nextStatus = normalizeTaskStatusValue(nextTask.status);
             const prevStatus = normalizeTaskStatusValue(t.status);
+            const isArchiveTransition = Number(nextTask.archivedAt || event.payload?.changes?.archivedAt || 0) > 0;
+            if (prevStatus !== 'termine' && nextStatus === 'termine' && !isArchiveTransition) {
+              const transition = buildTaskStatusTransitionChanges(t, nextStatus, {
+                nowTs: Number(event.timestamp || Date.now()) || Date.now(),
+                archivedAt: Number(nextTask.archivedAt || 0) || 0
+              });
+              if (transition.recurringRolloverApplied) {
+                return {
+                  ...nextTask,
+                  ...transition.changes
+                };
+              }
+            }
             if (nextStatus === 'termine') {
               if (prevStatus !== 'termine') {
                 queueTaskCompletionFx({
@@ -1109,6 +1127,7 @@
               createdBy: event.author,
               createdAt: event.timestamp
             });
+            registerTheme(event.payload?.theme);
           }
           break;
 
@@ -1118,10 +1137,50 @@
               ? { ...d, ...(event.payload.changes || {}), updatedAt: event.timestamp }
               : d
           );
+          registerTheme(event.payload?.changes?.theme);
           break;
 
         case EventTypes.DELETE_DOCUMENT:
           state.documents = state.documents.filter(d => d.docId !== event.payload.docId);
+          break;
+
+        case EventTypes.CREATE_NOTE: {
+          const nextNote = {
+            noteId: event.payload.noteId || uuidv4(),
+            title: String(event.payload.title || '').trim(),
+            content: String(event.payload.content || '').trim(),
+            contentHtml: sanitizeProjectDescriptionHtml(event.payload.contentHtml || ''),
+            tags: Array.isArray(event.payload.tags) ? event.payload.tags : [],
+            linkedTaskIds: Array.isArray(event.payload.linkedTaskIds) ? event.payload.linkedTaskIds : [],
+            pinnedAt: Number(event.payload.pinnedAt || 0) || null,
+            shareToGlobalFeed: event.payload.shareToGlobalFeed === true,
+            createdBy: event.payload.createdBy || event.author,
+            createdByName: String(event.payload.createdByName || '').trim(),
+            createdAt: event.timestamp,
+            updatedAt: event.timestamp,
+            archivedAt: null
+          };
+          state.notes.push(nextNote);
+          break;
+        }
+
+        case EventTypes.UPDATE_NOTE:
+          state.notes = (state.notes || []).map((note) => (
+            note.noteId === event.payload.noteId
+                ? {
+                  ...note,
+                  ...(event.payload.changes || {}),
+                  contentHtml: Object.prototype.hasOwnProperty.call((event.payload.changes || {}), 'contentHtml')
+                    ? sanitizeProjectDescriptionHtml(event.payload.changes.contentHtml || '')
+                    : sanitizeProjectDescriptionHtml(note.contentHtml || ''),
+                  updatedAt: event.timestamp
+                }
+              : note
+          ));
+          break;
+
+        case EventTypes.DELETE_NOTE:
+          state.notes = (state.notes || []).filter((note) => note.noteId !== event.payload.noteId);
           break;
 
         case EventTypes.CREATE_EPIC:
@@ -1207,6 +1266,7 @@
       if (!isValidIdbKey(projectId)) return null;
       const state = await getDecrypted('localState', projectId, 'projectId');
       if (!state) return null;
+      if (!Array.isArray(state.notes)) state.notes = [];
       if (!state.resourceLocks || typeof state.resourceLocks !== 'object') {
         state.resourceLocks = {};
       } else {
@@ -2206,6 +2266,7 @@
           gantt: { label: 'Gantt', buttonId: 'view-gantt' },
           timeline: { label: 'Timeline', buttonId: 'view-timeline' },
           docs: { label: 'Documents', buttonId: 'view-docs' },
+          notes: { label: 'Notes', buttonId: 'view-notes' },
           chat: { label: 'Discussion', buttonId: 'view-chat' },
           activity: { label: 'Activité', buttonId: 'view-activity' },
           archives: { label: 'Archives', buttonId: 'view-archives' }
@@ -2267,7 +2328,7 @@
       sections: {
         globalHub: { defaultTab: 'tasks', tabs: { tasks: true, workflow: true, calendar: true, docs: true, messages: true, feed: true, rgpd: true, settings: true } },
         globalTasks: { defaultTab: 'kanban', tabs: { cards: true, calendar: true, list: true, kanban: true, timeline: true, archives: true } },
-        project: { defaultTab: 'kanban', tabs: { overview: true, cards: true, list: true, kanban: true, gantt: true, timeline: true, docs: true, chat: true, activity: true, archives: true } },
+        project: { defaultTab: 'kanban', tabs: { overview: true, cards: true, list: true, kanban: true, gantt: true, timeline: true, docs: true, notes: true, chat: true, activity: true, archives: true } },
         workflow: { defaultTab: 'organigram', tabs: { map: true, organization: true, organigram: true, agents: true, processes: true, templates: true, tasks: true, kanban: true, timeline: true, procedures: true, software: true, contingency: true, analytics: true, governance: true, journal: true } },
         globalCalendar: { defaultTab: 'grid', tabs: { grid: true, year: true, list: true } },
         globalFeed: { defaultTab: 'all', tabs: { all: true, mentions: true, auto: true, manual: true, 'project-refs': true, 'task-refs': true } },
@@ -2315,7 +2376,7 @@
     const VIEW_ESSENTIAL_TABS = {
       globalHub: ['tasks', 'workflow', 'calendar', 'docs', 'messages', 'feed', 'rgpd', 'settings'],
       globalTasks: ['cards', 'kanban', 'timeline'],
-      project: ['overview', 'cards', 'kanban', 'timeline'],
+      project: ['overview', 'cards', 'kanban', 'timeline', 'notes'],
       workflow: ['organigram', 'organization', 'processes', 'tasks'],
       globalCalendar: ['grid', 'year'],
       globalFeed: ['all', 'mentions'],
@@ -2867,6 +2928,12 @@
       positionIconTooltipLayer(target);
     }
 
+    function refreshIconTooltipLayerForTarget(target) {
+      if (!(target instanceof HTMLElement)) return;
+      if (iconTooltipTarget !== target) return;
+      showIconTooltipLayer(target);
+    }
+
     function ensureIconTooltipLayerBindings() {
       if (document.documentElement?.dataset.iconTooltipLayerBound === '1') return;
       if (!document?.body) return;
@@ -2918,6 +2985,8 @@
       });
     }
 
+    window.TaskMDARefreshIconTooltip = refreshIconTooltipLayerForTarget;
+
     function harmonizeCreateCtaButtons(root = document) {
       if (!root?.querySelectorAll) return;
       const createButtonCatalog = [
@@ -2962,6 +3031,7 @@
         ['btn-global-feed-post', 'submit', 'Publier'],
         ['btn-global-feed-cancel', 'close', 'Annuler'],
         ['btn-global-feed-digest', 'convert', 'Synthétiser un document'],
+        ['btn-project-note-digest', 'convert', 'Digérer document'],
         ['btn-global-feed-insert-mention', 'link', 'Insérer @mention'],
         ['btn-global-calendar-pin-theme', 'manage', 'Épingler la thématique'],
         ['btn-project-doc-select-all', 'manage', 'Tout sélectionner'],
@@ -5942,7 +6012,7 @@
         btn.setAttribute('aria-label', isOpen ? 'Masquer les sous-rubriques Workflow' : 'Afficher les sous-rubriques Workflow');
         btn.setAttribute('title', isOpen ? 'Masquer les sous-rubriques Workflow' : 'Afficher les sous-rubriques Workflow');
       }
-      if (icon) icon.textContent = isOpen ? 'keyboard_arrow_down' : 'keyboard_arrow_right';
+      if (icon) icon.textContent = isOpen ? 'keyboard_arrow_up' : 'keyboard_arrow_down';
       localStorage.setItem('taskmda_workflow_sidebar_subnav_open', isOpen ? '1' : '0');
       return isOpen;
     }
@@ -8813,6 +8883,16 @@
                   <span class="material-symbols-outlined">edit</span>
                   <span>Modifier</span>
                 </button>
+                ${String(project.status || 'en-cours') !== 'termine' ? `
+                <button
+                  class="card-quick-btn"
+                  ${canEdit ? '' : 'disabled title="Réservé aux Propriétaires/Managers"'}
+                  onclick="event.stopPropagation(); markProjectDoneFromDashboard('${project.projectId}')"
+                >
+                  <span class="material-symbols-outlined">task_alt</span>
+                  <span>Réalisé</span>
+                </button>
+                ` : ''}
                 <button
                   class="card-quick-btn card-quick-btn-danger"
                   ${canDelete ? '' : 'disabled title="Réservé au Propriétaire"'}
@@ -8900,6 +8980,11 @@
       const shouldShowProjectsList = workspaceMode === 'dashboard';
       const isDashboardHome = !!dashboardTitle?.classList.contains('hidden');
       const isListView = projectsViewMode === 'list';
+      if (isDashboardHome && projectsBulkSelectionMode) {
+        setProjectsBulkSelectionMode(false, { clearSelection: true });
+      } else {
+        updateProjectsBulkDeleteUi();
+      }
       if (projectsToolbarPanel) {
         projectsToolbarPanel.classList.toggle('panel', !isDashboardHome);
         projectsToolbarPanel.classList.toggle('p-3', !isDashboardHome);
@@ -9066,6 +9151,11 @@
         const state = stateByProjectId.get(project.projectId);
         const canEdit = canEditProjectMeta(state);
         const canDelete = canDeleteProjectMeta(state);
+        const isBulkSelectable = projectsBulkSelectionMode && canDelete;
+        const isSelectedForBulkDelete = selectedProjectIdsForBulkDelete.has(project.projectId);
+        const cardClickHandler = isBulkSelectable
+          ? `toggleProjectBulkSelection('${project.projectId}')`
+          : `showProjectDetail('${project.projectId}')`;
         const isPrivate = project.sharingMode === 'private';
         const icon = isPrivate ? 'lock' : 'groups';
         const badge = isPrivate
@@ -9105,12 +9195,18 @@
         const creatorTooltip = `Projet cree par ${projectCreatorName}`;
 
         return `
-          <div class="project-card workspace-card-shell project-card-interactive rounded-xl cursor-pointer ${isListView ? 'project-card-list' : ''}" onclick="showProjectDetail('${project.projectId}')">
+          <div class="project-card workspace-card-shell project-card-interactive rounded-xl cursor-pointer ${isListView ? 'project-card-list' : ''} ${isSelectedForBulkDelete ? 'is-bulk-selected' : ''}" data-project-card-id="${escapeHtml(project.projectId)}" onclick="${cardClickHandler}">
             <div class="project-card-header">
               <div class="project-card-header-main">
                 <span class="material-symbols-outlined text-slate-400">${icon}</span>
                 ${lastAccessedBadge}
               </div>
+              ${projectsBulkSelectionMode ? `
+                <label class="taskmda-bulk-checkbox-wrap" onclick="event.stopPropagation()">
+                  <input type="checkbox" class="taskmda-bulk-checkbox-input" data-project-id="${escapeHtml(project.projectId)}" ${isSelectedForBulkDelete ? 'checked' : ''} ${canDelete ? '' : 'disabled'} onchange="toggleProjectBulkSelection('${project.projectId}', this.checked)" aria-label="Sélectionner le projet ${escapeHtml(project.name || '')}">
+                  <span class="taskmda-bulk-checkbox-label">Sélection</span>
+                </label>
+              ` : ''}
               <div class="project-card-badges project-card-badges-meta">${badge}${priorityBadge}${statusBadge}</div>
             </div>
             <div class="project-card-body">
@@ -9150,6 +9246,16 @@
                   <span class="material-symbols-outlined">edit</span>
                   <span>Modifier</span>
                 </button>
+                ${String(project.status || 'en-cours') !== 'termine' ? `
+                <button
+                  class="card-quick-btn"
+                  ${canEdit ? '' : 'disabled title="Réservé aux Propriétaires/Managers"'}
+                  onclick="event.stopPropagation(); markProjectDoneFromDashboard('${project.projectId}')"
+                >
+                  <span class="material-symbols-outlined">task_alt</span>
+                  <span>Réalisé</span>
+                </button>
+                ` : ''}
                 <button
                   class="card-quick-btn card-quick-btn-danger"
                   ${canDelete ? '' : 'disabled title="Réservé au Propriétaire"'}
@@ -9186,6 +9292,14 @@
     let projectSubnavLayout = localStorage.getItem('taskmda_project_subnav_layout') === 'vertical' ? 'vertical' : 'horizontal';
     let projectPermissionDetailsOpen = false;
     let activeProjectView = 'kanban';
+    let projectNotesFilterMode = 'all';
+    let projectNotesSearchQuery = '';
+    let editingProjectNoteId = '';
+    let projectNotesFocusNoteId = '';
+    let projectNoteModalFullscreen = false;
+    let projectNoteDraftSaveTimer = null;
+    let projectNoteModalLastFocusedElement = null;
+    const PROJECT_NOTE_DRAFT_STORAGE_KEY = 'taskmda_project_note_draft_v1';
     let projectTaskPresentationMode = localStorage.getItem('taskmda_project_task_presentation') === 'list' ? 'list' : 'cards';
     let editingTaskId = null;
     let draggedTaskId = null;
@@ -9208,6 +9322,8 @@
     let messageFilters = { query: '', onlyMine: false };
     let globalSearchQuery = '';
     let projectsFilters = { query: '', theme: '', priority: 'all', status: 'all', sharing: 'all', ownership: 'all', sort: 'recent' };
+    let projectsBulkSelectionMode = false;
+    let selectedProjectIdsForBulkDelete = new Set();
     let headerSearchResults = [];
     let headerSearchActiveIndex = -1;
     let headerSearchDebounceTimer = null;
@@ -9228,6 +9344,8 @@
     let browserNotifPermissionChecked = false;
     let standaloneTaskMode = false;
     let globalTasksViewMode = localStorage.getItem('taskmda_global_tasks_view') || 'kanban'; // cards | list | kanban | timeline
+    let globalTasksBulkSelectionMode = false;
+    let selectedGlobalTaskRefsForBulkDelete = new Set();
     let globalTimelineDisplayMode = localStorage.getItem('taskmda_global_timeline_mode') === 'list' ? 'list' : 'columns'; // columns | list
     let globalTimelineExpandedGroups = {
       overdue: false,
@@ -10134,14 +10252,128 @@
       menu.classList.toggle('hidden', !shouldOpen);
     }
 
+    function parseYmdLocalToDate(dateKey) {
+      const raw = String(dateKey || '').trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+      const [y, m, d] = raw.split('-').map((v) => Number.parseInt(v, 10));
+      const date = new Date(y, m - 1, d);
+      if (Number.isNaN(date.getTime())) return null;
+      if (date.getFullYear() !== y || date.getMonth() !== (m - 1) || date.getDate() !== d) return null;
+      date.setHours(0, 0, 0, 0);
+      return date;
+    }
+
+    function getTaskRecurringNextDueDateKey(task) {
+      if (!task?.recurring?.enabled) return null;
+      const persistedDue = taskDueDateKey(task);
+      if (persistedDue) return persistedDue;
+      const recurrenceApi = window.TaskMDARecurrence;
+      if (!recurrenceApi) return null;
+      const normalized = normalizeTaskRecurringConfig(task.recurring);
+      if (!normalized?.enabled) return null;
+
+      const today = startOfDay(new Date());
+      const fromKey = toYmd(addDays(today, -1));
+      if (typeof recurrenceApi.getNextOccurrence === 'function') {
+        const next = String(recurrenceApi.getNextOccurrence(fromKey, normalized) || '').trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(next)) return next;
+      }
+
+      if (typeof recurrenceApi.generateOccurrenceDates === 'function') {
+        const occurrences = recurrenceApi.generateOccurrenceDates(normalized);
+        if (Array.isArray(occurrences)) {
+          const todayKey = toYmd(today);
+          const next = occurrences.find((dateKey) => String(dateKey || '').trim() >= todayKey);
+          if (next && /^\d{4}-\d{2}-\d{2}$/.test(String(next))) return String(next);
+        }
+      }
+
+      return null;
+    }
+
+    function computeTaskRecurringNextDueDateAfterCompletion(task, options = {}) {
+      const normalized = normalizeTaskRecurringConfig(task?.recurring);
+      if (!normalized?.enabled) return null;
+      const recurrenceApi = window.TaskMDARecurrence;
+      if (!recurrenceApi) return null;
+      const referenceTs = Number(options.referenceTs || Date.now()) || Date.now();
+      const referenceDate = startOfDay(new Date(referenceTs));
+      const referenceKey = toYmd(referenceDate);
+      const fromKey = taskDueDateKey(task) || referenceKey;
+
+      if (typeof recurrenceApi.getNextOccurrence === 'function') {
+        const next = String(recurrenceApi.getNextOccurrence(fromKey, normalized) || '').trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(next)) return next;
+      }
+
+      if (typeof recurrenceApi.generateOccurrenceDates === 'function') {
+        const occurrences = recurrenceApi.generateOccurrenceDates(normalized);
+        if (Array.isArray(occurrences)) {
+          const next = occurrences.find((dateKey) => String(dateKey || '').trim() > fromKey);
+          if (next && /^\d{4}-\d{2}-\d{2}$/.test(String(next))) return String(next);
+        }
+      }
+
+      return null;
+    }
+
+    function buildTaskStatusTransitionChanges(task, targetStatus, options = {}) {
+      const prevStatus = normalizeTaskStatusValue(task?.status || 'todo');
+      const normalizedTarget = normalizeTaskStatusValue(targetStatus || 'todo');
+      const nowTs = Number(options.nowTs || Date.now()) || Date.now();
+      const shouldSetCompletedAt = normalizedTarget === 'termine';
+      const isArchiveTransition = Number(options.archivedAt || 0) > 0;
+      const didCompleteOccurrence = prevStatus !== 'termine' && normalizedTarget === 'termine';
+      const allowRecurringRollover = options.allowRecurringRollover !== false;
+
+      const changes = {
+        status: normalizedTarget,
+        completedAt: shouldSetCompletedAt ? Number(task?.completedAt || nowTs) || nowTs : null
+      };
+
+      if (didCompleteOccurrence && allowRecurringRollover && !isArchiveTransition && task?.recurring?.enabled) {
+        const nextDueDate = computeTaskRecurringNextDueDateAfterCompletion(task, { referenceTs: nowTs });
+        if (nextDueDate) {
+          return {
+            changes: {
+              ...changes,
+              status: 'todo',
+              completedAt: null,
+              dueDate: nextDueDate
+            },
+            recurringRolloverApplied: true,
+            nextDueDate,
+            didCompleteOccurrence
+          };
+        }
+      }
+
+      return {
+        changes,
+        recurringRolloverApplied: false,
+        nextDueDate: null,
+        didCompleteOccurrence
+      };
+    }
+
+    function getTaskEffectiveDueDateKey(task) {
+      if (task?.recurring?.enabled) {
+        return getTaskRecurringNextDueDateKey(task);
+      }
+      return taskDueDateKey(task);
+    }
+
+    function getTaskEffectiveDueTimestamp(task) {
+      const dueKey = getTaskEffectiveDueDateKey(task);
+      const dueDate = parseYmdLocalToDate(dueKey);
+      return dueDate ? dueDate.getTime() : Number.POSITIVE_INFINITY;
+    }
+
     function getTaskDueStatus(task) {
-      if (!task?.dueDate) return { isDueToday: false, isOverdue: false, daysUntilDue: null };
-      
-      // Les tâches récurrentes ne doivent pas être marquées comme "en retard" basé sur la date d'échéance originale
-      // Chaque occurrence devrait avoir sa propre date d'échéance calculée (à développer pour les occurrences individuelles)
-      if (task?.recurring?.enabled) return { isDueToday: false, isOverdue: false, daysUntilDue: null };
-      
-      const dueDate = new Date(task.dueDate);
+      const dueKey = getTaskEffectiveDueDateKey(task);
+      if (!dueKey) return { isDueToday: false, isOverdue: false, daysUntilDue: null };
+      const dueDate = parseYmdLocalToDate(dueKey);
+      if (!dueDate) return { isDueToday: false, isOverdue: false, daysUntilDue: null };
       const today = new Date();
       const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
       const dueStart = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
@@ -10158,10 +10390,10 @@
      * Calcule le score de priorité "Focus Today" pour une tâche.
      * Plus le score est élevé, plus la tâche doit être en haut du tableau de bord.
      */
-    function getTaskFocusPriority(task) {
+    function getTaskFocusPriority(task, precomputedDueStatus = null) {
       if (task.status === 'termine') return 0;
       
-      const dueStatus = getTaskDueStatus(task);
+      const dueStatus = precomputedDueStatus || getTaskDueStatus(task);
       let score = 0;
       
       // 1. État d'urgence critique (En retard > Aujourd'hui)
@@ -10342,9 +10574,140 @@
       if (archivesBtn) archivesBtn.classList.toggle('view-tab-active', projectsViewMode === 'archives');
     }
 
+    function updateProjectsBulkDeleteUi() {
+      const toggleBtn = document.getElementById('btn-projects-bulk-select-toggle');
+      const deleteBtn = document.getElementById('btn-projects-bulk-delete');
+      const selectAllBtn = document.getElementById('btn-projects-bulk-select-all');
+      const selectedCount = selectedProjectIdsForBulkDelete.size;
+      const selectableInputs = Array.from(document.querySelectorAll('#projects-container .taskmda-bulk-checkbox-input[data-project-id]'))
+        .filter((input) => input instanceof HTMLInputElement && !input.disabled);
+      const selectedVisibleCount = selectableInputs.filter((input) => selectedProjectIdsForBulkDelete.has(String(input.dataset.projectId || '').trim())).length;
+      const allVisibleSelected = selectableInputs.length > 0 && selectedVisibleCount === selectableInputs.length;
+      if (toggleBtn) {
+        toggleBtn.classList.toggle('task-action-btn-warn', projectsBulkSelectionMode);
+        toggleBtn.setAttribute('aria-pressed', projectsBulkSelectionMode ? 'true' : 'false');
+        toggleBtn.setAttribute('aria-label', projectsBulkSelectionMode ? 'Désactiver la sélection multiple des projets' : 'Activer la sélection multiple des projets');
+        const label = toggleBtn.querySelector('.taskmda-action-label');
+        if (label) label.textContent = projectsBulkSelectionMode ? 'Annuler sélection' : 'Sélection multiple';
+      }
+      if (deleteBtn) {
+        deleteBtn.classList.toggle('hidden', !projectsBulkSelectionMode);
+        deleteBtn.disabled = selectedCount === 0;
+        deleteBtn.setAttribute('aria-label', `Supprimer les projets sélectionnés (${selectedCount})`);
+        const label = deleteBtn.querySelector('.taskmda-action-label');
+        if (label) label.textContent = `Supprimer sélection (${selectedCount})`;
+      }
+      if (selectAllBtn) {
+        selectAllBtn.classList.toggle('hidden', !projectsBulkSelectionMode);
+        const nextLabel = allVisibleSelected ? 'Tout désélectionner' : 'Tout sélectionner';
+        const nextAriaLabel = allVisibleSelected ? 'Tout désélectionner les projets visibles' : 'Tout sélectionner les projets visibles';
+        const nextIcon = allVisibleSelected ? 'remove_done' : 'done_all';
+        selectAllBtn.setAttribute('aria-label', nextAriaLabel);
+        selectAllBtn.setAttribute('data-action-label', nextLabel);
+        selectAllBtn.setAttribute('data-ui-tooltip', nextLabel);
+        selectAllBtn.setAttribute('title', nextLabel);
+        const icon = selectAllBtn.querySelector('.taskmda-action-icon, .material-symbols-outlined');
+        if (icon) icon.textContent = nextIcon;
+        const label = selectAllBtn.querySelector('.taskmda-action-label');
+        if (label) label.textContent = nextLabel;
+        window.TaskMDARefreshIconTooltip?.(selectAllBtn);
+      }
+    }
+
+    function setProjectsBulkSelectionMode(enabled, options = {}) {
+      projectsBulkSelectionMode = !!enabled;
+      if (!projectsBulkSelectionMode || options.clearSelection) {
+        selectedProjectIdsForBulkDelete.clear();
+      }
+      updateProjectsBulkDeleteUi();
+    }
+
+    function toggleProjectBulkSelection(projectId, forceValue = null) {
+      const normalizedId = String(projectId || '').trim();
+      if (!normalizedId || !projectsBulkSelectionMode) return;
+      const shouldSelect = typeof forceValue === 'boolean'
+        ? forceValue
+        : !selectedProjectIdsForBulkDelete.has(normalizedId);
+      if (shouldSelect) selectedProjectIdsForBulkDelete.add(normalizedId);
+      else selectedProjectIdsForBulkDelete.delete(normalizedId);
+      updateProjectsBulkDeleteUi();
+    }
+
+    function selectAllVisibleProjectsForBulkDelete() {
+      if (!projectsBulkSelectionMode) return;
+      const inputs = Array.from(document.querySelectorAll('#projects-container .taskmda-bulk-checkbox-input[data-project-id]'))
+        .filter((input) => input instanceof HTMLInputElement && !input.disabled);
+      const allVisibleSelected = inputs.length > 0 && inputs.every((input) => {
+        const projectId = String(input.dataset.projectId || '').trim();
+        return !!projectId && selectedProjectIdsForBulkDelete.has(projectId);
+      });
+      inputs.forEach((input) => {
+        const projectId = String(input.dataset.projectId || '').trim();
+        if (!projectId) return;
+        if (allVisibleSelected) {
+          input.checked = false;
+          selectedProjectIdsForBulkDelete.delete(projectId);
+          input.closest('.project-card')?.classList.remove('is-bulk-selected');
+        } else {
+          input.checked = true;
+          selectedProjectIdsForBulkDelete.add(projectId);
+          input.closest('.project-card')?.classList.add('is-bulk-selected');
+        }
+      });
+      updateProjectsBulkDeleteUi();
+    }
+
+    async function deleteSelectedProjectsBulk() {
+      if (!projectsBulkSelectionMode) return;
+      const projectIds = Array.from(selectedProjectIdsForBulkDelete);
+      if (projectIds.length === 0) {
+        showToast('Aucun projet sélectionné');
+        return;
+      }
+      const confirmed = window.confirm(`Supprimer définitivement ${projectIds.length} projet(s) sélectionné(s) ?`);
+      if (!confirmed) return;
+
+      let deleted = 0;
+      let skipped = 0;
+      for (const projectId of projectIds) {
+        const state = await getProjectState(projectId);
+        if (!state?.project || !canDeleteProjectMeta(state)) {
+          skipped += 1;
+          continue;
+        }
+        if (!ensureProjectResourceUnlockedForAction(state, LOCK_SCOPE_PROJECT, projectId, 'Suppression du projet').ok) {
+          skipped += 1;
+          continue;
+        }
+        const event = createEvent(
+          EventTypes.DELETE_PROJECT,
+          projectId,
+          currentUser.userId,
+          { reason: 'bulk_delete' }
+        );
+        await publishEvent(event);
+        if (sharedFolderHandle && state.project?.sharingMode === 'shared') {
+          void syncProjectEventsToSharedSpace(projectId, [event], { ensureRegistered: true });
+        }
+        deleted += 1;
+      }
+
+      if (workspaceMode === 'project' && currentProjectId && selectedProjectIdsForBulkDelete.has(currentProjectId)) {
+        showDashboard();
+      }
+      selectedProjectIdsForBulkDelete.clear();
+      projectsBulkSelectionMode = false;
+      updateProjectsBulkDeleteUi();
+      await refreshStats();
+      await renderProjects();
+      applyLiveSearchFilter();
+      showToast(`Suppression en masse: ${deleted} projet(s) supprimé(s)${skipped > 0 ? `, ${skipped} ignoré(s)` : ''}`);
+    }
+
     async function setProjectsViewMode(mode) {
       // Supporter les modes: grid, list, archives
       if (mode === 'archives') {
+        setProjectsBulkSelectionMode(false, { clearSelection: true });
         projectsViewMode = 'archives';
         updateProjectsViewButtons();
         await renderProjectsArchives();
@@ -10401,6 +10764,148 @@
       await renderGlobalTasks();
     }
 
+    function updateGlobalTasksBulkDeleteUi() {
+      const toggleBtn = document.getElementById('btn-global-tasks-bulk-select-toggle');
+      const deleteBtn = document.getElementById('btn-global-tasks-bulk-delete');
+      const selectAllBtn = document.getElementById('btn-global-tasks-bulk-select-all');
+      const bulkSupportedModes = new Set(['cards', 'list', 'kanban', 'timeline']);
+      const isBulkSupportedMode = bulkSupportedModes.has(globalTasksViewMode);
+      if (!isBulkSupportedMode && globalTasksBulkSelectionMode) {
+        globalTasksBulkSelectionMode = false;
+        selectedGlobalTaskRefsForBulkDelete.clear();
+      }
+      const selectedCount = selectedGlobalTaskRefsForBulkDelete.size;
+      const selectableInputs = Array.from(document.querySelectorAll('#global-tasks-container .taskmda-bulk-checkbox-input[data-task-ref]'))
+        .filter((input) => input instanceof HTMLInputElement && !input.disabled);
+      const selectedVisibleCount = selectableInputs.filter((input) => selectedGlobalTaskRefsForBulkDelete.has(String(input.dataset.taskRef || '').trim())).length;
+      const allVisibleSelected = selectableInputs.length > 0 && selectedVisibleCount === selectableInputs.length;
+      if (toggleBtn) {
+        toggleBtn.classList.toggle('hidden', !isBulkSupportedMode);
+        toggleBtn.classList.toggle('task-action-btn-warn', globalTasksBulkSelectionMode);
+        toggleBtn.setAttribute('aria-pressed', globalTasksBulkSelectionMode ? 'true' : 'false');
+        toggleBtn.setAttribute('aria-label', globalTasksBulkSelectionMode ? 'Désactiver la sélection multiple des tâches' : 'Activer la sélection multiple des tâches');
+        const label = toggleBtn.querySelector('.taskmda-action-label');
+        if (label) label.textContent = globalTasksBulkSelectionMode ? 'Annuler sélection' : 'Sélection multiple';
+      }
+      if (deleteBtn) {
+        deleteBtn.classList.toggle('hidden', !isBulkSupportedMode || !globalTasksBulkSelectionMode);
+        deleteBtn.disabled = selectedCount === 0;
+        deleteBtn.setAttribute('aria-label', `Supprimer les tâches sélectionnées (${selectedCount})`);
+        const label = deleteBtn.querySelector('.taskmda-action-label');
+        if (label) label.textContent = `Supprimer sélection (${selectedCount})`;
+      }
+      if (selectAllBtn) {
+        selectAllBtn.classList.toggle('hidden', !isBulkSupportedMode || !globalTasksBulkSelectionMode);
+        const nextLabel = allVisibleSelected ? 'Tout désélectionner' : 'Tout sélectionner';
+        const nextAriaLabel = allVisibleSelected ? 'Tout désélectionner les tâches visibles' : 'Tout sélectionner les tâches visibles';
+        const nextIcon = allVisibleSelected ? 'remove_done' : 'done_all';
+        selectAllBtn.setAttribute('aria-label', nextAriaLabel);
+        selectAllBtn.setAttribute('data-action-label', nextLabel);
+        selectAllBtn.setAttribute('data-ui-tooltip', nextLabel);
+        selectAllBtn.setAttribute('title', nextLabel);
+        const icon = selectAllBtn.querySelector('.taskmda-action-icon, .material-symbols-outlined');
+        if (icon) icon.textContent = nextIcon;
+        const label = selectAllBtn.querySelector('.taskmda-action-label');
+        if (label) label.textContent = nextLabel;
+        window.TaskMDARefreshIconTooltip?.(selectAllBtn);
+      }
+    }
+
+    function setGlobalTasksBulkSelectionMode(enabled, options = {}) {
+      globalTasksBulkSelectionMode = !!enabled;
+      if (!globalTasksBulkSelectionMode || options.clearSelection) {
+        selectedGlobalTaskRefsForBulkDelete.clear();
+      }
+      updateGlobalTasksBulkDeleteUi();
+    }
+
+    function toggleGlobalTaskBulkSelection(taskRef, forceValue = null) {
+      const normalizedRef = String(taskRef || '').trim();
+      if (!normalizedRef || !globalTasksBulkSelectionMode) return;
+      const shouldSelect = typeof forceValue === 'boolean'
+        ? forceValue
+        : !selectedGlobalTaskRefsForBulkDelete.has(normalizedRef);
+      if (shouldSelect) selectedGlobalTaskRefsForBulkDelete.add(normalizedRef);
+      else selectedGlobalTaskRefsForBulkDelete.delete(normalizedRef);
+      updateGlobalTasksBulkDeleteUi();
+    }
+
+    function selectAllVisibleGlobalTasksForBulkDelete() {
+      if (!globalTasksBulkSelectionMode) return;
+      const inputs = Array.from(document.querySelectorAll('#global-tasks-container .taskmda-bulk-checkbox-input[data-task-ref]'))
+        .filter((input) => input instanceof HTMLInputElement && !input.disabled);
+      const allVisibleSelected = inputs.length > 0 && inputs.every((input) => {
+        const taskRef = String(input.dataset.taskRef || '').trim();
+        return !!taskRef && selectedGlobalTaskRefsForBulkDelete.has(taskRef);
+      });
+      inputs.forEach((input) => {
+        const taskRef = String(input.dataset.taskRef || '').trim();
+        if (!taskRef) return;
+        if (allVisibleSelected) {
+          input.checked = false;
+          selectedGlobalTaskRefsForBulkDelete.delete(taskRef);
+          input.closest('.global-task-card')?.classList.remove('is-bulk-selected');
+          input.closest('tr')?.classList.remove('is-bulk-selected');
+        } else {
+          input.checked = true;
+          selectedGlobalTaskRefsForBulkDelete.add(taskRef);
+          input.closest('.global-task-card')?.classList.add('is-bulk-selected');
+          input.closest('tr')?.classList.add('is-bulk-selected');
+        }
+      });
+      updateGlobalTasksBulkDeleteUi();
+    }
+
+    async function deleteSelectedGlobalTasksBulk() {
+      if (!globalTasksBulkSelectionMode) return;
+      const taskRefs = Array.from(selectedGlobalTaskRefsForBulkDelete);
+      if (taskRefs.length === 0) {
+        showToast('Aucune tâche sélectionnée');
+        return;
+      }
+      const confirmed = window.confirm(`Supprimer définitivement ${taskRefs.length} tâche(s) sélectionnée(s) ?`);
+      if (!confirmed) return;
+
+      let deleted = 0;
+      let skipped = 0;
+      for (const taskRef of taskRefs) {
+        const resolved = await resolveGlobalTaskFromRef(taskRef);
+        if (!resolved?.task) {
+          skipped += 1;
+          continue;
+        }
+        if (resolved.sourceType === 'standalone') {
+          await deleteFromStore('globalTasks', resolved.task.id);
+          deleted += 1;
+          continue;
+        }
+        if (!canDeleteTaskInProject(resolved.task, resolved.state)) {
+          skipped += 1;
+          continue;
+        }
+        if (!ensureProjectResourceUnlockedForAction(resolved.state, LOCK_SCOPE_TASK, resolved.task.taskId, 'Suppression').ok) {
+          skipped += 1;
+          continue;
+        }
+        const event = createEvent(
+          EventTypes.DELETE_TASK,
+          resolved.projectId,
+          currentUser.userId,
+          { taskId: resolved.task.taskId }
+        );
+        await publishEvent(event);
+        if (sharedFolderHandle) void syncProjectEventsToSharedSpace(resolved.projectId, [event]);
+        deleted += 1;
+      }
+
+      selectedGlobalTaskRefsForBulkDelete.clear();
+      globalTasksBulkSelectionMode = false;
+      updateGlobalTasksBulkDeleteUi();
+      await renderGlobalTasks();
+      await refreshStats();
+      showToast(`Suppression en masse: ${deleted} tâche(s) supprimée(s)${skipped > 0 ? `, ${skipped} ignorée(s)` : ''}`);
+    }
+
     function updateGlobalTasksViewButtons() {
       const buttons = {
         cards: document.getElementById('global-tasks-view-cards'),
@@ -10417,6 +10922,7 @@
         btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
       });
       updateGlobalTaskLayoutButtons();
+      updateGlobalTasksBulkDeleteUi();
       refreshManagedTabOverflow();
     }
 
@@ -10555,6 +11061,7 @@
         gantt: document.getElementById('view-gantt'),
         timeline: document.getElementById('view-timeline'),
         docs: document.getElementById('view-docs'),
+        notes: document.getElementById('view-notes'),
         chat: document.getElementById('view-chat'),
         activity: document.getElementById('view-activity'),
         archives: document.getElementById('view-archives')
@@ -11000,6 +11507,26 @@
       renderProjectDescription(currentProjectState?.project?.description || '');
     }
 
+    function syncProjectModeSwitchButtons() {
+      const openSettingsBtn = document.getElementById('btn-project-open-settings');
+      const openWorkBtn = document.getElementById('btn-project-open-work');
+      const settingsActive = projectDetailMode === 'settings';
+      if (openSettingsBtn) {
+        openSettingsBtn.classList.toggle('is-active', settingsActive);
+        openSettingsBtn.setAttribute('aria-pressed', settingsActive ? 'true' : 'false');
+      }
+      if (openWorkBtn) {
+        openWorkBtn.classList.toggle('is-active', !settingsActive);
+        openWorkBtn.setAttribute('aria-pressed', !settingsActive ? 'true' : 'false');
+      }
+      const tabsWrap = document.getElementById('project-view-tabs-wrap');
+      if (tabsWrap) {
+        tabsWrap.classList.toggle('is-settings-mode', settingsActive);
+        tabsWrap.setAttribute('data-mode', settingsActive ? 'settings' : 'work');
+        tabsWrap.setAttribute('aria-label', settingsActive ? 'Vues de configuration du projet' : 'Vues du projet');
+      }
+    }
+
     function setProjectDetailMode(mode) {
       const nextMode = mode === 'settings' ? 'settings' : 'work';
       if (nextMode !== 'work') {
@@ -11008,15 +11535,12 @@
       projectDetailMode = nextMode;
       const workPanel = document.getElementById('project-work-panel');
       const settingsPanel = document.getElementById('project-settings-panel');
-      const workBtn = document.getElementById('project-mode-work');
-      const settingsBtn = document.getElementById('project-mode-settings');
       const addTaskBtn = document.getElementById('btn-add-task');
 
       if (workPanel) workPanel.classList.toggle('hidden', nextMode !== 'work');
       if (settingsPanel) settingsPanel.classList.toggle('hidden', nextMode !== 'settings');
       if (addTaskBtn) addTaskBtn.classList.toggle('hidden', nextMode !== 'work');
-      if (workBtn) workBtn.classList.toggle('view-tab-active', nextMode === 'work');
-      if (settingsBtn) settingsBtn.classList.toggle('view-tab-active', nextMode === 'settings');
+      syncProjectModeSwitchButtons();
       if (nextMode !== 'work') {
         clearProjectWorkFocusState();
       }
@@ -11278,6 +11802,7 @@
         gantt: document.getElementById('gantt-section'),
         timeline: document.getElementById('timeline-section'),
         docs: document.getElementById('documents-section'),
+        notes: document.getElementById('notes-section'),
         chat: document.getElementById('discussion-section'),
         activity: document.getElementById('activity-section'),
         archives: document.getElementById('archives-section')
@@ -11332,6 +11857,9 @@
       syncProjectWorkCommandbarVisibility(view);
       if (view === 'list' && workspaceMode === 'project' && currentProjectState) {
         renderTasks(currentProjectState.tasks || []);
+      }
+      if (view === 'notes' && workspaceMode === 'project' && currentProjectState) {
+        renderProjectNotes(currentProjectState);
       }
       applyLiveSearchFilter();
       if (previousView !== activeProjectView || (activeProjectView === 'list' && previousPresentation !== projectTaskPresentationMode)) {
@@ -11773,6 +12301,698 @@
       Array.from(assigneeSelect.options || []).forEach(opt => {
         opt.selected = normalizedSelectedSet.has(opt.value);
       });
+    }
+
+    function getProjectNotePostId(projectId, noteId) {
+      return `project-note-${String(projectId || '').trim()}-${String(noteId || '').trim()}`;
+    }
+
+    function getProjectNoteDraftKey(projectId = currentProjectId, noteId = editingProjectNoteId) {
+      const pid = String(projectId || '').trim();
+      const nid = String(noteId || '').trim() || 'new';
+      return `${PROJECT_NOTE_DRAFT_STORAGE_KEY}:${pid}:${nid}`;
+    }
+
+    function saveProjectNoteDraft(draft = null, projectId = currentProjectId, noteId = editingProjectNoteId) {
+      const pid = String(projectId || '').trim();
+      if (!pid) return;
+      const key = getProjectNoteDraftKey(pid, noteId);
+      try {
+        if (!draft) {
+          localStorage.removeItem(key);
+          return;
+        }
+        localStorage.setItem(key, JSON.stringify({
+          ...draft,
+          savedAt: Date.now()
+        }));
+      } catch (_) {}
+    }
+
+    function loadProjectNoteDraft(projectId = currentProjectId, noteId = editingProjectNoteId) {
+      const pid = String(projectId || '').trim();
+      if (!pid) return null;
+      const key = getProjectNoteDraftKey(pid, noteId);
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : null;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    function updateProjectNoteDraftStatus(label) {
+      const statusEl = document.getElementById('project-note-draft-status');
+      if (!statusEl) return;
+      statusEl.textContent = String(label || 'Brouillon inactif');
+    }
+
+    function scheduleProjectNoteDraftSave() {
+      if (!currentProjectId) return;
+      if (projectNoteDraftSaveTimer) clearTimeout(projectNoteDraftSaveTimer);
+      projectNoteDraftSaveTimer = setTimeout(() => {
+        projectNoteDraftSaveTimer = null;
+        const draft = readProjectNoteEditorDraft();
+        if (!draft.title && !draft.content && !(draft.tags || []).length) {
+          saveProjectNoteDraft(null);
+          updateProjectNoteDraftStatus('Brouillon vide');
+          return;
+        }
+        saveProjectNoteDraft(draft);
+        updateProjectNoteDraftStatus(`Brouillon enregistré à ${new Date().toLocaleTimeString('fr-FR')}`);
+      }, 280);
+    }
+
+    function applyProjectNoteModalFullscreen(nextValue) {
+      projectNoteModalFullscreen = !!nextValue;
+      const panel = document.getElementById('project-note-modal-panel');
+      const icon = document.getElementById('project-note-fullscreen-icon');
+      const btn = document.getElementById('btn-project-note-fullscreen');
+      if (panel) panel.classList.toggle('is-fullscreen', projectNoteModalFullscreen);
+      if (icon) icon.textContent = projectNoteModalFullscreen ? 'fullscreen_exit' : 'fullscreen';
+      if (btn) {
+        btn.setAttribute('aria-pressed', projectNoteModalFullscreen ? 'true' : 'false');
+        btn.setAttribute('title', projectNoteModalFullscreen ? 'Quitter le plein écran' : 'Plein écran');
+      }
+    }
+
+    function getProjectNotesForState(state = currentProjectState) {
+      return Array.isArray(state?.notes) ? state.notes : [];
+    }
+
+    function canCreateProjectNote(state = currentProjectState) {
+      return canSendProjectMessage(state);
+    }
+
+    function canManageProjectNote(note, state = currentProjectState) {
+      if (!note || !state?.project) return false;
+      if (canEditProjectMeta(state)) return true;
+      if (!canSendProjectMessage(state)) return false;
+      return String(note.createdBy || '') === String(currentUser?.userId || '');
+    }
+
+    function normalizeProjectNoteTags(rawValue) {
+      if (window.TaskMDAProjectNotes?.parseTagsInput) {
+        return window.TaskMDAProjectNotes.parseTagsInput(rawValue);
+      }
+      return Array.from(new Set(
+        String(rawValue || '')
+          .split(/[,;\n]/g)
+          .map((tag) => tag.trim())
+          .filter(Boolean)
+      ));
+    }
+
+    function stringifyProjectNoteTags(tags = []) {
+      if (window.TaskMDAProjectNotes?.stringifyTags) {
+        return window.TaskMDAProjectNotes.stringifyTags(tags);
+      }
+      return (Array.isArray(tags) ? tags : [])
+        .map((tag) => String(tag || '').trim())
+        .filter(Boolean)
+        .join(', ');
+    }
+
+    function populateProjectNoteTaskOptions(state = currentProjectState, selectedTaskId = '') {
+      const select = document.getElementById('project-note-linked-task');
+      if (!select) return;
+      const selected = String(selectedTaskId || '').trim();
+      const options = ['<option value="">Aucune tâche liée</option>'];
+      (state?.tasks || [])
+        .filter((task) => !task?.archivedAt)
+        .forEach((task) => {
+          const taskId = String(task.taskId || '').trim();
+          if (!taskId) return;
+          options.push(`<option value="${escapeHtml(taskId)}" ${taskId === selected ? 'selected' : ''}>${escapeHtml(task.title || 'Tâche')}</option>`);
+        });
+      select.innerHTML = options.join('');
+    }
+
+    function setProjectNoteSaveButtonLabel(label) {
+      const nextLabel = String(label || 'Enregistrer la note').trim() || 'Enregistrer la note';
+      const saveBtn = document.getElementById('btn-project-note-save');
+      if (!saveBtn) return;
+      const labelEl = document.getElementById('project-note-save-label');
+      if (labelEl) labelEl.textContent = nextLabel;
+      else saveBtn.textContent = nextLabel;
+      saveBtn.setAttribute('data-action-label', nextLabel);
+      saveBtn.setAttribute('aria-label', nextLabel);
+      saveBtn.setAttribute('title', nextLabel);
+    }
+
+    function getFocusableElementsInProjectNoteModal() {
+      const modal = document.getElementById('modal-project-note');
+      if (!modal || modal.classList.contains('hidden')) return [];
+      return Array.from(modal.querySelectorAll(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )).filter((el) => {
+        if (!(el instanceof HTMLElement)) return false;
+        if (el.closest('.hidden')) return false;
+        return el.offsetParent !== null || el === document.activeElement;
+      });
+    }
+
+    function trapProjectNoteModalFocus(event) {
+      if (String(event?.key || '') !== 'Tab') return;
+      const focusables = getFocusableElementsInProjectNoteModal();
+      if (!focusables.length) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = document.activeElement;
+      if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus();
+        return;
+      }
+      if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    function openProjectNoteEditor(noteId = '') {
+      const modal = document.getElementById('modal-project-note');
+      if (!modal) return;
+      projectNoteModalLastFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      const state = currentProjectState;
+      if (!canCreateProjectNote(state)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const safeNoteId = String(noteId || '').trim();
+      const note = safeNoteId
+        ? getProjectNotesForState(state).find((item) => String(item.noteId || '') === safeNoteId)
+        : null;
+      if (note && !canManageProjectNote(note, state)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      editingProjectNoteId = note ? String(note.noteId || '') : '';
+      const titleInput = document.getElementById('project-note-title');
+      const tagsInput = document.getElementById('project-note-tags');
+      const pinnedInput = document.getElementById('project-note-pinned');
+      const shareInput = document.getElementById('project-note-share-feed');
+      const modalTitle = document.getElementById('project-note-modal-title');
+      if (titleInput) titleInput.value = String(note?.title || '');
+      setProjectDescriptionEditorContent(
+        'project-note-content-editor',
+        'project-note-content',
+        String(note?.contentHtml || '').trim() || plainTextToRichHtml(String(note?.content || '').trim())
+      );
+      if (tagsInput) tagsInput.value = stringifyProjectNoteTags(note?.tags || []);
+      if (pinnedInput) pinnedInput.checked = Number(note?.pinnedAt || 0) > 0;
+      if (shareInput) shareInput.checked = note?.shareToGlobalFeed === true;
+      populateProjectNoteTaskOptions(state, Array.isArray(note?.linkedTaskIds) ? (note.linkedTaskIds[0] || '') : '');
+      setProjectNoteSaveButtonLabel(note ? 'Mettre à jour la note' : 'Enregistrer la note');
+      if (modalTitle) modalTitle.textContent = note ? 'Modifier la note' : 'Nouvelle note';
+      applyProjectNoteModalFullscreen(false);
+      ensureProjectNoteDraftAutosaveBindings();
+      modal.classList.remove('hidden');
+      document.body.classList.add('overflow-hidden');
+      if (!note) {
+        const existingDraft = loadProjectNoteDraft(currentProjectId, '');
+        if (existingDraft && (existingDraft.title || existingDraft.content || (existingDraft.tags || []).length)) {
+          if (titleInput && !titleInput.value) titleInput.value = String(existingDraft.title || '');
+          if (tagsInput && !tagsInput.value) tagsInput.value = stringifyProjectNoteTags(existingDraft.tags || []);
+          if (pinnedInput) pinnedInput.checked = !!existingDraft.pinnedAt;
+          if (shareInput) shareInput.checked = existingDraft.shareToGlobalFeed === true;
+          const restoredTaskId = String((Array.isArray(existingDraft.linkedTaskIds) ? existingDraft.linkedTaskIds[0] : '') || '').trim();
+          if (restoredTaskId) populateProjectNoteTaskOptions(state, restoredTaskId);
+          if (String(existingDraft.contentHtml || '').trim()) {
+            setProjectDescriptionEditorContent('project-note-content-editor', 'project-note-content', existingDraft.contentHtml);
+          } else if (String(existingDraft.content || '').trim()) {
+            setProjectDescriptionEditorContent('project-note-content-editor', 'project-note-content', plainTextToRichHtml(existingDraft.content));
+          }
+          updateProjectNoteDraftStatus('Brouillon restauré');
+          showToast('Brouillon de note restauré');
+        } else {
+          updateProjectNoteDraftStatus('Brouillon inactif');
+        }
+      } else {
+        updateProjectNoteDraftStatus('Édition en cours');
+      }
+      requestAnimationFrame(() => {
+        titleInput?.focus();
+      });
+    }
+
+    function closeProjectNoteEditor(options = {}) {
+      const modal = document.getElementById('modal-project-note');
+      const isOpen = !!modal && !modal.classList.contains('hidden');
+      if (!isOpen) return;
+      const preserveDraft = options?.preserveDraft !== false;
+      if (preserveDraft && currentProjectId) {
+        const draftSnapshot = readProjectNoteEditorDraft();
+        if (draftSnapshot.title || draftSnapshot.content || (draftSnapshot.tags || []).length) {
+          saveProjectNoteDraft(draftSnapshot);
+          updateProjectNoteDraftStatus(`Brouillon enregistré à ${new Date().toLocaleTimeString('fr-FR')}`);
+        }
+      }
+      if (modal) modal.classList.add('hidden');
+      document.body.classList.remove('overflow-hidden');
+      const titleInput = document.getElementById('project-note-title');
+      const tagsInput = document.getElementById('project-note-tags');
+      const pinnedInput = document.getElementById('project-note-pinned');
+      const shareInput = document.getElementById('project-note-share-feed');
+      const taskSelect = document.getElementById('project-note-linked-task');
+      const modalTitle = document.getElementById('project-note-modal-title');
+      if (projectNoteDraftSaveTimer) {
+        clearTimeout(projectNoteDraftSaveTimer);
+        projectNoteDraftSaveTimer = null;
+      }
+      if (titleInput) titleInput.value = '';
+      setProjectDescriptionEditorContent('project-note-content-editor', 'project-note-content', '');
+      if (tagsInput) tagsInput.value = '';
+      if (pinnedInput) pinnedInput.checked = false;
+      if (shareInput) shareInput.checked = false;
+      if (taskSelect) taskSelect.value = '';
+      setProjectNoteSaveButtonLabel('Enregistrer la note');
+      if (modalTitle) modalTitle.textContent = 'Nouvelle note';
+      updateProjectNoteDraftStatus('Brouillon inactif');
+      applyProjectNoteModalFullscreen(false);
+      editingProjectNoteId = '';
+      const focusBack = projectNoteModalLastFocusedElement;
+      projectNoteModalLastFocusedElement = null;
+      if (focusBack && typeof focusBack.focus === 'function' && document.contains(focusBack)) {
+        requestAnimationFrame(() => {
+          try { focusBack.focus(); } catch (_) {}
+        });
+      }
+    }
+
+    function readProjectNoteEditorDraft() {
+      const title = String(document.getElementById('project-note-title')?.value || '').trim();
+      const contentHtml = getProjectDescriptionHtmlForStorage('project-note-content-editor', 'project-note-content');
+      const content = getProjectDescriptionPlainText(contentHtml);
+      const tags = normalizeProjectNoteTags(document.getElementById('project-note-tags')?.value || '');
+      const linkedTaskId = String(document.getElementById('project-note-linked-task')?.value || '').trim();
+      const pinned = !!document.getElementById('project-note-pinned')?.checked;
+      const shareToGlobalFeed = !!document.getElementById('project-note-share-feed')?.checked;
+      return {
+        title,
+        content,
+        contentHtml,
+        tags,
+        linkedTaskIds: linkedTaskId ? [linkedTaskId] : [],
+        pinnedAt: pinned ? Date.now() : null,
+        shareToGlobalFeed
+      };
+    }
+
+    function ensureProjectNoteDraftAutosaveBindings() {
+      const modal = document.getElementById('modal-project-note');
+      if (!modal || modal.dataset.noteAutosaveBound === '1') return;
+      modal.dataset.noteAutosaveBound = '1';
+      const fieldIds = [
+        'project-note-title',
+        'project-note-tags',
+        'project-note-linked-task',
+        'project-note-pinned',
+        'project-note-share-feed'
+      ];
+      fieldIds.forEach((fieldId) => {
+        const el = document.getElementById(fieldId);
+        if (!el) return;
+        const eventName = (el instanceof HTMLInputElement && el.type === 'checkbox') || el instanceof HTMLSelectElement
+          ? 'change'
+          : 'input';
+        el.addEventListener(eventName, () => scheduleProjectNoteDraftSave());
+      });
+
+      const noteEditorId = 'project-note-content-editor';
+      const quill = projectDescriptionQuillEditors.get(noteEditorId);
+      if (quill && !quill.__projectNoteDraftBound) {
+        quill.on('text-change', () => scheduleProjectNoteDraftSave());
+        quill.__projectNoteDraftBound = true;
+      } else {
+        const fallbackEditor = document.getElementById(noteEditorId);
+        if (fallbackEditor && fallbackEditor.dataset.noteDraftBound !== '1') {
+          fallbackEditor.dataset.noteDraftBound = '1';
+          fallbackEditor.addEventListener('input', () => scheduleProjectNoteDraftSave());
+        }
+      }
+    }
+
+    async function upsertProjectNoteGlobalFeedPost(projectId, state, note) {
+      if (!projectId || !state?.project || !note) return;
+      const noteId = String(note.noteId || '').trim();
+      if (!noteId) return;
+      const postId = getProjectNotePostId(projectId, noteId);
+      const existing = await getDecrypted('globalPosts', postId, 'postId');
+      const noteTitle = String(note.title || '').trim() || 'Note projet';
+      const noteContent = String(note.content || '').trim();
+      const refs = [
+        { type: 'project', id: projectId, label: state.project.name || 'Projet' },
+        { type: 'project-note', id: `${projectId}:${noteId}`, label: noteTitle }
+      ];
+      (Array.isArray(note.linkedTaskIds) ? note.linkedTaskIds : []).forEach((taskId) => {
+        const task = (state.tasks || []).find((item) => String(item.taskId || '') === String(taskId || ''));
+        if (!task) return;
+        refs.push({
+          type: 'task',
+          id: buildGlobalTaskRef({
+            sourceType: 'project',
+            sourceProjectId: projectId,
+            taskId: task.taskId
+          }),
+          label: `${task.title || 'Tâche'} • ${state.project.name || 'Projet'}`
+        });
+      });
+      const authorIdentity = resolveKnownUserIdentity(
+        String(note.createdBy || ''),
+        String(note.createdByName || fallbackDirectoryName(note.createdBy || ''))
+      );
+      const post = {
+        postId,
+        authorUserId: String(note.createdBy || currentUser?.userId || ''),
+        authorName: String(authorIdentity?.name || note.createdByName || currentUser?.name || 'Utilisateur'),
+        content: `🗒️ ${noteTitle}${noteContent ? `\n\n${noteContent}` : ''}`,
+        mentions: [],
+        refs,
+        createdAt: Number(existing?.createdAt || note.createdAt || Date.now()) || Date.now(),
+        updatedAt: Date.now(),
+        source: sharedFolderHandle ? 'shared' : 'local',
+        isAuto: false,
+        sourceEventId: `project-note:${projectId}:${noteId}`,
+        deletedAt: null
+      };
+      await putEncrypted('globalPosts', post, 'postId');
+      knownGlobalPostIds.add(post.postId);
+      if (sharedFolderHandle) {
+        await writeGlobalFeedPostToSharedFolder(post);
+      }
+    }
+
+    async function removeProjectNoteFromGlobalFeed(projectId, noteId) {
+      const postId = getProjectNotePostId(projectId, noteId);
+      const existing = await getDecrypted('globalPosts', postId, 'postId');
+      if (!existing || existing.deletedAt) return;
+      existing.deletedAt = Date.now();
+      existing.updatedAt = Date.now();
+      await putEncrypted('globalPosts', existing, 'postId');
+      if (sharedFolderHandle) {
+        await writeGlobalFeedPostToSharedFolder(existing);
+      }
+    }
+
+    async function syncProjectNoteGlobalFeed(projectId, noteId) {
+      const state = await getProjectState(projectId);
+      if (!state?.project) return;
+      const note = getProjectNotesForState(state).find((item) => String(item.noteId || '') === String(noteId || ''));
+      if (!note) {
+        await removeProjectNoteFromGlobalFeed(projectId, noteId);
+        return;
+      }
+      if (note.shareToGlobalFeed && !note.archivedAt) {
+        await upsertProjectNoteGlobalFeedPost(projectId, state, note);
+      } else {
+        await removeProjectNoteFromGlobalFeed(projectId, note.noteId);
+      }
+    }
+
+    async function saveProjectNoteFromEditor() {
+      if (!currentProjectId) return;
+      const state = await getProjectState(currentProjectId);
+      if (!state?.project) return;
+      if (!canCreateProjectNote(state)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const draft = readProjectNoteEditorDraft();
+      if (!draft.title && !draft.content) {
+        showToast('Ajoutez un titre ou un contenu');
+        return;
+      }
+      const nowTs = Date.now();
+      const existing = editingProjectNoteId
+        ? getProjectNotesForState(state).find((item) => String(item.noteId || '') === String(editingProjectNoteId))
+        : null;
+      if (existing && !canManageProjectNote(existing, state)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const noteId = existing?.noteId || uuidv4();
+      const payload = existing
+        ? {
+            noteId,
+            changes: {
+              title: draft.title,
+              content: draft.content,
+              contentHtml: draft.contentHtml,
+              tags: draft.tags,
+              linkedTaskIds: draft.linkedTaskIds,
+              pinnedAt: draft.pinnedAt,
+              shareToGlobalFeed: draft.shareToGlobalFeed,
+              archivedAt: null
+            }
+          }
+        : {
+            noteId,
+            title: draft.title,
+            content: draft.content,
+            contentHtml: draft.contentHtml,
+            tags: draft.tags,
+            linkedTaskIds: draft.linkedTaskIds,
+            pinnedAt: draft.pinnedAt,
+            shareToGlobalFeed: draft.shareToGlobalFeed,
+            createdBy: String(currentUser?.userId || ''),
+            createdByName: String(currentUser?.name || '')
+          };
+      const event = createEvent(
+        existing ? EventTypes.UPDATE_NOTE : EventTypes.CREATE_NOTE,
+        currentProjectId,
+        currentUser.userId,
+        payload
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(currentProjectId, [event]); }
+      saveProjectNoteDraft(null, currentProjectId, existing ? existing.noteId : '');
+      saveProjectNoteDraft(null, currentProjectId, '');
+      await syncProjectNoteGlobalFeed(currentProjectId, noteId);
+      if (workspaceMode === 'global' && globalWorkspaceView === 'feed') {
+        await renderGlobalFeed();
+      }
+      closeProjectNoteEditor({ preserveDraft: false });
+      const latestState = await getProjectState(currentProjectId);
+      if (latestState?.project) {
+        currentProjectState = latestState;
+        projectNotesFocusNoteId = String(noteId || '');
+        renderProjectNotes(latestState);
+      }
+      showToast(existing ? 'Note mise à jour' : 'Note créée');
+      await refreshStats();
+      if (Number(nowTs) > 0) {
+        setTimeout(() => {
+          const target = document.getElementById(`project-note-${String(noteId || '')}`);
+          target?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+        }, 40);
+      }
+    }
+
+    function renderProjectNotes(state = currentProjectState) {
+      const listEl = document.getElementById('project-notes-list');
+      const counterEl = document.getElementById('project-notes-count');
+      if (!listEl || !state?.project) return;
+      const notes = getProjectNotesForState(state);
+      const taskTitleById = new Map((state.tasks || []).map((task) => [String(task.taskId || ''), String(task.title || 'Tâche')]));
+      const authorById = new Map();
+      (state.members || []).forEach((member) => {
+        const userId = String(member?.userId || '').trim();
+        if (!userId) return;
+        const identity = resolveKnownUserIdentity(userId, member.displayName || fallbackDirectoryName(userId));
+        authorById.set(userId, String(identity?.name || member.displayName || fallbackDirectoryName(userId)));
+      });
+      authorById.set(String(currentUser?.userId || ''), String(currentUser?.name || 'Moi'));
+      const canManageById = new Map(notes.map((note) => [String(note.noteId || ''), canManageProjectNote(note, state)]));
+      const renderer = window.TaskMDAProjectNotes?.renderProjectNotesList;
+      if (typeof renderer === 'function') {
+        const result = renderer(listEl, {
+          notes,
+          mode: projectNotesFilterMode,
+          query: projectNotesSearchQuery,
+          currentUserId: String(currentUser?.userId || ''),
+          taskTitleById,
+          authorById,
+          canManageById,
+          focusNoteId: projectNotesFocusNoteId
+        });
+        if (counterEl) {
+          const visible = Number(result?.visible || 0);
+          counterEl.textContent = `${visible} note${visible > 1 ? 's' : ''}`;
+        }
+      } else {
+        listEl.innerHTML = '<p class="text-slate-500">Module Notes non chargé.</p>';
+        if (counterEl) counterEl.textContent = '0 note';
+      }
+      populateProjectNoteTaskOptions(state);
+      if (projectNotesFocusNoteId) {
+        const focusedId = String(projectNotesFocusNoteId);
+        projectNotesFocusNoteId = '';
+        setTimeout(() => {
+          document.getElementById(`project-note-${focusedId}`)?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+        }, 40);
+      }
+    }
+
+    async function toggleProjectNotePinned(noteId) {
+      if (!currentProjectId) return;
+      const state = await getProjectState(currentProjectId);
+      if (!state?.project) return;
+      const note = getProjectNotesForState(state).find((item) => String(item.noteId || '') === String(noteId || ''));
+      if (!note) return;
+      if (!canManageProjectNote(note, state)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const nextPinnedAt = Number(note.pinnedAt || 0) > 0 ? null : Date.now();
+      const event = createEvent(
+        EventTypes.UPDATE_NOTE,
+        currentProjectId,
+        currentUser.userId,
+        { noteId: note.noteId, changes: { pinnedAt: nextPinnedAt } }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(currentProjectId, [event]); }
+      currentProjectState = await getProjectState(currentProjectId);
+      renderProjectNotes(currentProjectState);
+    }
+
+    async function toggleProjectNoteFeedPublish(noteId) {
+      if (!currentProjectId) return;
+      const state = await getProjectState(currentProjectId);
+      if (!state?.project) return;
+      const note = getProjectNotesForState(state).find((item) => String(item.noteId || '') === String(noteId || ''));
+      if (!note) return;
+      if (!canManageProjectNote(note, state)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const next = !note.shareToGlobalFeed;
+      const event = createEvent(
+        EventTypes.UPDATE_NOTE,
+        currentProjectId,
+        currentUser.userId,
+        { noteId: note.noteId, changes: { shareToGlobalFeed: next } }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(currentProjectId, [event]); }
+      await syncProjectNoteGlobalFeed(currentProjectId, note.noteId);
+      if (workspaceMode === 'global' && globalWorkspaceView === 'feed') {
+        await renderGlobalFeed();
+      }
+      currentProjectState = await getProjectState(currentProjectId);
+      renderProjectNotes(currentProjectState);
+      showToast(next ? 'Note publiée dans le fil transverse' : 'Note retirée du fil transverse');
+    }
+
+    async function archiveProjectNote(noteId) {
+      if (!currentProjectId) return;
+      const state = await getProjectState(currentProjectId);
+      if (!state?.project) return;
+      const note = getProjectNotesForState(state).find((item) => String(item.noteId || '') === String(noteId || ''));
+      if (!note) return;
+      if (!canManageProjectNote(note, state)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const event = createEvent(
+        EventTypes.UPDATE_NOTE,
+        currentProjectId,
+        currentUser.userId,
+        {
+          noteId: note.noteId,
+          changes: {
+            archivedAt: Date.now(),
+            pinnedAt: null,
+            shareToGlobalFeed: false
+          }
+        }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(currentProjectId, [event]); }
+      await syncProjectNoteGlobalFeed(currentProjectId, note.noteId);
+      if (workspaceMode === 'global' && globalWorkspaceView === 'feed') {
+        await renderGlobalFeed();
+      }
+      currentProjectState = await getProjectState(currentProjectId);
+      renderProjectNotes(currentProjectState);
+      showToast('Note archivée');
+    }
+
+    async function restoreProjectNote(noteId) {
+      if (!currentProjectId) return;
+      const state = await getProjectState(currentProjectId);
+      if (!state?.project) return;
+      const note = getProjectNotesForState(state).find((item) => String(item.noteId || '') === String(noteId || ''));
+      if (!note) return;
+      if (!canManageProjectNote(note, state)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const event = createEvent(
+        EventTypes.UPDATE_NOTE,
+        currentProjectId,
+        currentUser.userId,
+        { noteId: note.noteId, changes: { archivedAt: null } }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(currentProjectId, [event]); }
+      currentProjectState = await getProjectState(currentProjectId);
+      renderProjectNotes(currentProjectState);
+      showToast('Note restaurée');
+    }
+
+    async function convertProjectNoteToTask(noteId) {
+      if (!currentProjectId) return;
+      const state = await getProjectState(currentProjectId);
+      if (!state?.project) return;
+      const note = getProjectNotesForState(state).find((item) => String(item.noteId || '') === String(noteId || ''));
+      if (!note) return;
+      if (!canManageProjectNote(note, state)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const taskId = uuidv4();
+      const title = String(note.title || '').trim() || 'Tâche issue d’une note';
+      const event = createEvent(
+        EventTypes.CREATE_TASK,
+        currentProjectId,
+        currentUser.userId,
+        {
+          taskId,
+          title,
+          description: String(note.content || '').trim(),
+          status: 'todo',
+          urgency: 'medium',
+          dueDate: null,
+          requestDate: toYmd(new Date()),
+          assignee: '',
+          assignees: [],
+          theme: (Array.isArray(note.tags) && note.tags.length > 0) ? String(note.tags[0] || 'General') : 'General',
+          subtasks: [],
+          attachments: []
+        }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(currentProjectId, [event]); }
+      const linkEvent = createEvent(
+        EventTypes.UPDATE_NOTE,
+        currentProjectId,
+        currentUser.userId,
+        {
+          noteId: note.noteId,
+          changes: {
+            linkedTaskIds: Array.from(new Set([...(Array.isArray(note.linkedTaskIds) ? note.linkedTaskIds : []), taskId]))
+          }
+        }
+      );
+      await publishEvent(linkEvent);
+      if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(currentProjectId, [linkEvent]); }
+      currentProjectState = await getProjectState(currentProjectId);
+      renderProjectNotes(currentProjectState);
+      showToast('Tâche créée depuis la note');
     }
 
     async function resolveUserRowsByIds(userIds = []) {
@@ -13113,13 +14333,22 @@
       const saveKey = `${taskRef}::${field}`;
       const currentSig = `${field}::${normalizedValue}`;
       if (taskDetailInlineLastSavedValues.get(saveKey) === currentSig) return normalizedValue;
-      const changes = buildTaskDetailInlineChanges(field, normalizedValue);
+      let changes = buildTaskDetailInlineChanges(field, normalizedValue);
       if (!Object.keys(changes).length) return normalizedValue;
       const resolved = await resolveGlobalTaskFromRef(taskRef);
       if (!resolved?.task) return normalizedValue;
-      const becameCompleted = field === 'status'
-        && normalizeTaskStatusValue(resolved.task.status) !== 'termine'
-        && normalizeTaskStatusValue(changes.status) === 'termine';
+      let completionTransition = null;
+      if (field === 'status' && Object.prototype.hasOwnProperty.call(changes, 'status')) {
+        completionTransition = buildTaskStatusTransitionChanges(resolved.task, changes.status, { nowTs: Date.now() });
+        changes = completionTransition.changes;
+      }
+      const becameCompleted = completionTransition
+        ? completionTransition.didCompleteOccurrence
+        : (
+          field === 'status'
+          && normalizeTaskStatusValue(resolved.task.status) !== 'termine'
+          && normalizeTaskStatusValue(changes.status) === 'termine'
+        );
       if (resolved.sourceType === 'standalone') {
         if (becameCompleted) {
           queueTaskCompletionFx({
@@ -15831,6 +17060,26 @@
       fillProjectThemeSelect('global-task-theme-known', themes, 'Référentiel thématiques...');
     }
 
+    function refreshProjectDocumentThemePicker(state = currentProjectState) {
+      if (!state?.project) return;
+      const themes = [
+        ...(state.themes || []),
+        ...((state.tasks || []).map((task) => String(task?.theme || '').trim())),
+        ...((globalThemeCatalog || []).map((theme) => String(theme?.name || '').trim()))
+      ];
+      fillThemePicker('project-doc-theme-known', 'project-doc-theme', themes, 'Thématiques projet + référentiel...');
+    }
+
+    function refreshGlobalDocumentThemePicker(allDocs = [], states = []) {
+      const themes = [
+        ...((states || []).flatMap((state) => (state?.themes || []))),
+        ...((states || []).flatMap((state) => (state?.tasks || []).map((task) => String(task?.theme || '').trim()))),
+        ...((allDocs || []).map((doc) => String(doc?.theme || '').trim())),
+        ...((globalThemeCatalog || []).map((theme) => String(theme?.name || '').trim()))
+      ];
+      fillThemePicker('global-doc-upload-theme-known', 'global-doc-upload-theme', themes, 'Thématiques existantes...');
+    }
+
     function refreshProjectDocumentTaskOptions(state) {
       const select = document.getElementById('project-doc-task-links');
       if (!select) return;
@@ -16105,6 +17354,7 @@
     window.startTaskDragToFeature = startTaskDragToFeature;
     window.dropTaskOnFeature = dropTaskOnFeature;
     window.deleteProjectFeature = deleteProjectFeature;
+    window.toggleProjectBulkSelection = toggleProjectBulkSelection;
 
     async function createUserGroup() {
       if (!currentProjectId || !currentProjectState) return;
@@ -16290,9 +17540,13 @@
       const selectedAssigneeValues = currentAssignees
         .map((entry) => buildTaskAssigneeSelectValue(entry))
         .filter(Boolean);
+      const defaultCreatorAssigneeValue = !task ? String(currentUser?.userId || '').trim() : '';
+      const effectiveSelectedAssigneeValues = (!task && !selectedAssigneeValues.length && defaultCreatorAssigneeValue)
+        ? [defaultCreatorAssigneeValue]
+        : selectedAssigneeValues;
       refreshTaskAssigneeOptionsMulti(
         standaloneTaskMode ? null : currentProjectState,
-        selectedAssigneeValues
+        effectiveSelectedAssigneeValues
       );
       refreshTaskQuickAssigneeSuggestions(standaloneTaskMode ? null : currentProjectState);
       if (titleEl) {
@@ -16362,7 +17616,7 @@
         if (!standaloneTaskMode) {
           refreshTaskGroupSelectionPreview(
             currentProjectState,
-            selectedAssigneeValues
+            effectiveSelectedAssigneeValues
           );
         }
       } else {
@@ -16403,7 +17657,7 @@
           window.TaskMDARecurrenceUI.resetRecurrenceForm();
         }
         if (!standaloneTaskMode) {
-          refreshTaskGroupSelectionPreview(currentProjectState, []);
+          refreshTaskGroupSelectionPreview(currentProjectState, effectiveSelectedAssigneeValues);
         }
       }
     }
@@ -16767,6 +18021,9 @@
         projectDetailMode = 'work';
         projectDescriptionExpanded = false;
         projectSettingsTab = 'members';
+        editingProjectNoteId = '';
+        projectNotesFocusNoteId = '';
+        closeProjectNoteEditor();
       }
       tasksPage = 1;
       const state = await getProjectState(projectId);
@@ -16784,6 +18041,10 @@
       }
       rememberLastAccessedProjectId(projectId);
       await refreshKnownUsersCache();
+      const notesSearchInput = document.getElementById('project-notes-search');
+      const notesFilterSelect = document.getElementById('project-notes-filter');
+      if (notesSearchInput) notesSearchInput.value = projectNotesSearchQuery;
+      if (notesFilterSelect) notesFilterSelect.value = projectNotesFilterMode;
 
       // Hide dashboard, show detail
       document.getElementById('global-hub')?.classList.add('hidden');
@@ -16851,6 +18112,7 @@
       refreshProjectDocumentTaskOptions(state);
       await refreshTaskAssigneeOptionsMulti(state);
       const btnEditProject = document.getElementById('btn-edit-project');
+      const btnMarkProjectDone = document.getElementById('btn-mark-project-done');
       const btnDeleteProject = document.getElementById('btn-delete-project');
       const canEditProjectOverviewInline = canEditProjectMeta(state);
       if (btnEditProject) {
@@ -16864,6 +18126,16 @@
         btnDeleteProject.disabled = !allowed;
         btnDeleteProject.classList.toggle('opacity-50', !allowed);
         btnDeleteProject.title = allowed ? '' : 'Réservé au Propriétaire';
+      }
+      if (btnMarkProjectDone) {
+        const isDone = String(state.project?.status || '') === 'termine';
+        btnMarkProjectDone.classList.toggle('hidden', isDone);
+        if (!isDone) {
+          const allowed = canEditProjectOverviewInline;
+          btnMarkProjectDone.disabled = !allowed;
+          btnMarkProjectDone.classList.toggle('opacity-50', !allowed);
+          btnMarkProjectDone.title = allowed ? '' : 'Réservé aux Propriétaires/Managers';
+        }
       }
       const projectLockWarning = document.getElementById('project-lock-warning');
       if (projectLockWarning) {
@@ -16899,6 +18171,8 @@
       const btnAddProjectDocs = document.getElementById('btn-add-project-documents');
       const projectDocFilesInput = document.getElementById('project-doc-files');
       const projectDocTaskLinks = document.getElementById('project-doc-task-links');
+      const projectDocThemeInput = document.getElementById('project-doc-theme');
+      const projectDocThemeKnown = document.getElementById('project-doc-theme-known');
       if (btnSendMessage) {
         btnSendMessage.disabled = !canSendChat;
         btnSendMessage.classList.toggle('opacity-50', !canSendChat);
@@ -16933,6 +18207,9 @@
       }
       if (projectDocFilesInput) projectDocFilesInput.disabled = !canSendChat;
       if (projectDocTaskLinks) projectDocTaskLinks.disabled = !canSendChat || (projectDocTaskLinks.options?.length || 0) === 0;
+      if (projectDocThemeInput) projectDocThemeInput.disabled = !canSendChat;
+      if (projectDocThemeKnown) projectDocThemeKnown.disabled = !canSendChat;
+      refreshProjectDocumentThemePicker(state);
       renderTasks(visibleTasks);
       renderArchivedTasks(state.tasks || []);
       renderKanban(visibleTasks);
@@ -16940,6 +18217,7 @@
       renderTimeline(visibleTasks);
       renderCalendar(visibleTasks);
       renderDocuments(state);
+      renderProjectNotes(state);
       renderMessages(state.messages);
       const events = await getProjectEvents(projectId);
       currentProjectEvents = events;
@@ -17200,6 +18478,43 @@
 
     async function deleteProjectFromDashboard(projectId) {
       await deleteCurrentProject(projectId, true);
+    }
+
+    async function markProjectDoneFromDashboard(projectId) {
+      const targetProjectId = resolveProjectIdInput(projectId, null);
+      if (!targetProjectId) return;
+      const state = await getProjectState(targetProjectId);
+      if (!state?.project || !canEditProjectMeta(state)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      if (!ensureProjectResourceUnlockedForAction(state, LOCK_SCOPE_PROJECT, targetProjectId, 'Mise a jour projet').ok) {
+        return;
+      }
+      if (String(state.project.status || 'en-cours') === 'termine') {
+        showToast('Projet déjà réalisé');
+        return;
+      }
+
+      const event = createEvent(
+        EventTypes.UPDATE_PROJECT,
+        targetProjectId,
+        currentUser.userId,
+        { changes: { status: 'termine' } }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle && state.project?.sharingMode === 'shared') {
+        void syncProjectEventsToSharedSpace(targetProjectId, [event], { ensureRegistered: true });
+      }
+      showToast('✅ Projet marqué comme réalisé');
+      addNotification('Projet', 'Projet marqué comme réalisé', targetProjectId);
+
+      if (currentProjectId === targetProjectId && workspaceMode === 'project') {
+        await showProjectDetail(targetProjectId);
+      }
+      await refreshStats();
+      await renderProjects();
+      applyLiveSearchFilter();
     }
 
     async function sendProjectStatusEmail(doneOnly = false) {
@@ -17950,13 +19265,16 @@
             canDelete = canDeleteTaskInProject(task, projectState);
             canArchive = canEditTaskInProject(task, projectState);
           }
-          const dueTs = task.dueDate ? new Date(task.dueDate).getTime() : Number.POSITIVE_INFINITY;
+          const dueTs = getTaskEffectiveDueTimestamp(task);
           return {
             ...task,
             _taskRef: taskRef,
             _canEdit: canEdit,
             _canDelete: canDelete,
             _canArchive: canArchive,
+            _canMarkDone: task.sourceType === 'standalone'
+              ? true
+              : canChangeTaskStatus(task, stateByProjectId.get(task.sourceProjectId)),
             _statusKey: task.status || 'todo',
             _assigneeName: getTaskAssigneeName(task, stateByProjectId.get(task.sourceProjectId)) || 'Aucun responsable',
             _assigneeInlineHtml: buildTaskAssigneeInlineHtml(task, stateByProjectId.get(task.sourceProjectId)),
@@ -17964,19 +19282,35 @@
           };
         });
         const taskActions = (task) => `
+          ${(task._statusKey !== 'termine' && task._canMarkDone) ? `<button onclick="event.stopPropagation(); markGlobalTaskDone('${task._taskRef}')" class="task-action-btn task-action-btn-subtle" data-action-kind="success">Réalisé</button>` : ''}
           ${task._canEdit ? `<button onclick="event.stopPropagation(); editGlobalTask('${task._taskRef}')" class="task-action-btn task-action-btn-subtle">Modifier</button>` : ''}
           ${task._canEdit ? `<button onclick="event.stopPropagation(); convertTaskToProject('${task._taskRef}')" class="task-action-btn task-action-btn-subtle">Convertir</button>` : ''}
           <button onclick="event.stopPropagation(); sendTaskEmailByRef('${task._taskRef}', 'auto')" class="task-action-btn task-action-btn-subtle"><span class="material-symbols-outlined">mail</span> Email</button>
           ${task._canArchive ? `<button onclick="event.stopPropagation(); archiveGlobalTask('${task._taskRef}')" class="task-action-btn task-action-btn-subtle task-action-btn-warn">Archiver</button>` : ''}
           ${task._canDelete ? `<button onclick="event.stopPropagation(); deleteGlobalTask('${task._taskRef}')" class="task-action-btn task-action-btn-subtle task-action-btn-danger">Supprimer</button>` : ''}
         `;
+        const isTaskBulkSelectable = (task) => globalTasksBulkSelectionMode && task._canDelete;
+        const isTaskBulkSelected = (task) => selectedGlobalTaskRefsForBulkDelete.has(task._taskRef);
+        const getTaskOpenHandler = (task) => isTaskBulkSelectable(task)
+          ? `toggleGlobalTaskBulkSelection('${task._taskRef}')`
+          : `openGlobalTaskDetails('${task._taskRef}')`;
+        const renderTaskBulkCheckbox = (task) => {
+          if (!globalTasksBulkSelectionMode) return '';
+          return `
+            <label class="taskmda-bulk-checkbox-wrap" onclick="event.stopPropagation()">
+              <input type="checkbox" class="taskmda-bulk-checkbox-input" data-task-ref="${escapeHtml(task._taskRef)}" ${isTaskBulkSelected(task) ? 'checked' : ''} ${task._canDelete ? '' : 'disabled'} onchange="toggleGlobalTaskBulkSelection('${task._taskRef}', this.checked)" aria-label="Sélectionner la tâche ${escapeHtml(task.title || '')}">
+              <span class="taskmda-bulk-checkbox-label">Sélection</span>
+            </label>
+          `;
+        };
         const taskCard = (task) => `
-          <div class="global-task-card global-task-card-modern task-completion-fx-anchor ${getTaskUrgencyMeta(task.urgency).accentClass} rounded-xl border border-slate-200 bg-white p-4 cursor-grab active:cursor-grabbing" data-task-entity-id="${escapeHtml(String(task.taskId || task.id || ''))}" data-task-source-type="${escapeHtml(String(task.sourceType || 'project'))}" data-task-project-id="${escapeHtml(String(task.sourceProjectId || ''))}" draggable="true" ondragstart="startGlobalKanbanDrag(event, '${task._taskRef}')" onclick="openGlobalTaskDetails('${task._taskRef}')" role="button" tabindex="0">
+          <div class="global-task-card global-task-card-modern task-completion-fx-anchor ${getTaskUrgencyMeta(task.urgency).accentClass} rounded-xl border border-slate-200 bg-white p-4 cursor-grab active:cursor-grabbing ${isTaskBulkSelected(task) ? 'is-bulk-selected' : ''}" data-task-entity-id="${escapeHtml(String(task.taskId || task.id || ''))}" data-task-source-type="${escapeHtml(String(task.sourceType || 'project'))}" data-task-project-id="${escapeHtml(String(task.sourceProjectId || ''))}" draggable="true" ondragstart="startGlobalKanbanDrag(event, '${task._taskRef}')" onclick="${getTaskOpenHandler(task)}" role="button" tabindex="0">
             <div class="task-card-badge-row flex items-center justify-between gap-2 mb-1">
               <div class="task-card-badge-left flex items-center gap-2 min-w-0">
                 <span class="${getTaskUrgencyMeta(task.urgency).chipClass}">${getTaskUrgencyMeta(task.urgency).label}</span>
               </div>
               <div class="task-card-badge-right flex items-center justify-end gap-1 shrink-0">
+                ${renderTaskBulkCheckbox(task)}
                 ${buildTaskRecurrenceBadgeHtml(task)}
                 ${sharingModeBadge(task.sharingMode)}
                 <span class="${getTaskStatusMeta(task._statusKey).chipClass}">${getTaskStatusMeta(task._statusKey).label}</span>
@@ -18006,6 +19340,7 @@
               <table class="min-w-full text-sm">
                 <thead>
                   <tr class="text-left text-slate-500 border-b border-slate-200">
+                    ${globalTasksBulkSelectionMode ? '<th class="px-3 py-2 font-semibold">Sélection</th>' : ''}
                     <th class="px-3 py-2 font-semibold">Tache</th>
                     <th class="px-3 py-2 font-semibold">Projet</th>
                     <th class="px-3 py-2 font-semibold">Statut</th>
@@ -18016,7 +19351,8 @@
                 </thead>
                 <tbody>
                   ${pagination.pageItems.map(task => `
-                    <tr class="border-b border-slate-100 align-top cursor-pointer hover:bg-slate-50" onclick="openGlobalTaskDetails('${task._taskRef}')">
+                    <tr class="border-b border-slate-100 align-top cursor-pointer hover:bg-slate-50 ${isTaskBulkSelected(task) ? 'is-bulk-selected' : ''}" onclick="${getTaskOpenHandler(task)}">
+                      ${globalTasksBulkSelectionMode ? `<td class="px-3 py-2" onclick="event.stopPropagation()">${renderTaskBulkCheckbox(task)}</td>` : ''}
                       <td class="px-3 py-2">
                         <p class="font-semibold text-slate-800">${escapeHtml(task.title || 'Tache')}</p>
                         <div class="flex flex-wrap items-center gap-1 mt-1">${buildTaskRecurrenceBadgeHtml(task)}</div>
@@ -18046,9 +19382,10 @@
             { key: 'termine', label: 'Termine' }
           ];
           const taskCardKanban = (task) => `
-            <div class="global-task-card global-task-card-modern global-kanban-card kanban-card task-completion-fx-anchor ${getTaskUrgencyMeta(task.urgency).accentClass} rounded-xl border border-slate-200 bg-white p-3 cursor-grab active:cursor-grabbing" data-task-entity-id="${escapeHtml(String(task.taskId || task.id || ''))}" data-task-source-type="${escapeHtml(String(task.sourceType || 'project'))}" data-task-project-id="${escapeHtml(String(task.sourceProjectId || ''))}" draggable="true" ondragstart="startGlobalKanbanDrag(event, '${task._taskRef}')" onclick="openGlobalTaskDetails('${task._taskRef}')" role="button" tabindex="0">
+            <div class="global-task-card global-task-card-modern global-kanban-card kanban-card task-completion-fx-anchor ${getTaskUrgencyMeta(task.urgency).accentClass} rounded-xl border border-slate-200 bg-white p-3 cursor-grab active:cursor-grabbing ${isTaskBulkSelected(task) ? 'is-bulk-selected' : ''}" data-task-entity-id="${escapeHtml(String(task.taskId || task.id || ''))}" data-task-source-type="${escapeHtml(String(task.sourceType || 'project'))}" data-task-project-id="${escapeHtml(String(task.sourceProjectId || ''))}" draggable="true" ondragstart="startGlobalKanbanDrag(event, '${task._taskRef}')" onclick="${getTaskOpenHandler(task)}" role="button" tabindex="0">
               <div class="mb-2 flex items-center justify-between gap-2">
                 <span class="${getTaskUrgencyMeta(task.urgency).chipClass}">${getTaskUrgencyMeta(task.urgency).label}</span>
+                ${renderTaskBulkCheckbox(task)}
                 <span class="${getTaskStatusMeta(task._statusKey).chipClass}">${getTaskStatusMeta(task._statusKey).label}</span>
               </div>
               ${buildTaskRecurrenceBadgeHtml(task)}
@@ -18296,31 +19633,35 @@
         return;
       }
 
-      const pagination = paginateItems(filtered, globalTasksPage, getGlobalTaskCardsPerPage());
-      globalTasksPage = pagination.currentPage;
-      
-      // Trier les tâches
-      const itemsWithStatus = pagination.pageItems.map(task => ({
+      // Trier les tâches avant pagination pour éviter les inversions entre pages
+      const itemsWithStatus = filtered.map(task => {
+        const dueStatus = getTaskDueStatus(task);
+        return {
         task,
-        dueStatus: getTaskDueStatus(task),
-        focusScore: getTaskFocusPriority(task)
-      }));
+          dueStatus,
+          focusScore: getTaskFocusPriority(task, dueStatus),
+          dueSortTs: getTaskEffectiveDueTimestamp(task)
+        };
+      });
       
       const sortedItems = itemsWithStatus.sort((a, b) => {
         if (dashboardSortMode === 'focus') {
           return b.focusScore - a.focusScore;
         } else {
           // Chronologique : Date limite asc, puis Priorité desc
-          const timeA = new Date(a.task.dueDate || 0).getTime();
-          const timeB = new Date(b.task.dueDate || 0).getTime();
+          const timeA = Number.isFinite(a.dueSortTs) ? a.dueSortTs : Number.POSITIVE_INFINITY;
+          const timeB = Number.isFinite(b.dueSortTs) ? b.dueSortTs : Number.POSITIVE_INFINITY;
           if (timeA !== timeB) return timeA - timeB;
           return b.focusScore - a.focusScore;
         }
       });
+
+      const pagination = paginateItems(sortedItems, globalTasksPage, getGlobalTaskCardsPerPage());
+      globalTasksPage = pagination.currentPage;
       
       container.className = `global-task-grid cols-${globalTaskCardsColumns}`;
       const showGlobalTaskCardDescription = globalTaskCardsColumns === 1;
-      container.innerHTML = sortedItems.map(({ task, dueStatus, focusScore }) => {
+      container.innerHTML = pagination.pageItems.map(({ task, dueStatus, focusScore }) => {
         const taskRef = buildGlobalTaskRef(task);
         let canEdit = task.sourceType === 'standalone';
         let canDelete = task.sourceType === 'standalone';
@@ -18331,6 +19672,9 @@
           canDelete = canDeleteTaskInProject(task, projectState);
           canArchive = canEditTaskInProject(task, projectState);
         }
+        const canMarkDone = task.sourceType === 'standalone'
+          ? true
+          : canChangeTaskStatus(task, stateByProjectId.get(task.sourceProjectId));
         
         // Déterminer la classe CSS pour mettre en évidence
         let cardBgClass = 'bg-white';
@@ -18364,9 +19708,14 @@
           );
           task._notifiedToday = true; // Marquer pour éviter les doublons
         }
+        const isBulkSelectable = globalTasksBulkSelectionMode && canDelete;
+        const isSelectedForBulkDelete = selectedGlobalTaskRefsForBulkDelete.has(taskRef);
+        const cardClickHandler = isBulkSelectable
+          ? `toggleGlobalTaskBulkSelection('${taskRef}')`
+          : `openGlobalTaskDetails('${taskRef}')`;
         
         return `
-        <div class="global-task-card global-task-card-modern task-completion-fx-anchor ${cardAccentClass} ${focusClass} rounded-xl border border-slate-200 ${cardBgClass} p-4 cursor-pointer ${ringClass}" data-task-entity-id="${escapeHtml(String(task.taskId || task.id || ''))}" data-task-source-type="${escapeHtml(String(task.sourceType || 'project'))}" data-task-project-id="${escapeHtml(String(task.sourceProjectId || ''))}" onclick="openGlobalTaskDetails('${taskRef}')" role="button" tabindex="0">
+        <div class="global-task-card global-task-card-modern task-completion-fx-anchor ${cardAccentClass} ${focusClass} rounded-xl border border-slate-200 ${cardBgClass} p-4 cursor-pointer ${ringClass} ${isSelectedForBulkDelete ? 'is-bulk-selected' : ''}" data-task-entity-id="${escapeHtml(String(task.taskId || task.id || ''))}" data-task-source-type="${escapeHtml(String(task.sourceType || 'project'))}" data-task-project-id="${escapeHtml(String(task.sourceProjectId || ''))}" onclick="${cardClickHandler}" role="button" tabindex="0">
           <div class="task-card-badge-row flex items-center justify-between gap-2 mb-1">
             <div class="task-card-badge-left flex items-center gap-2 min-w-0">
               ${dueStatus.isOverdue ? '<span class="px-2 py-1 rounded-lg bg-red-200 text-red-800 text-xs font-bold">⚠️ EN RETARD</span>' : ''}
@@ -18374,6 +19723,12 @@
               <span class="${getTaskUrgencyMeta(task.urgency).chipClass}">${getTaskUrgencyMeta(task.urgency).label}</span>
             </div>
             <div class="task-card-badge-right flex items-center justify-end gap-1 shrink-0">
+              ${globalTasksBulkSelectionMode ? `
+                <label class="taskmda-bulk-checkbox-wrap" onclick="event.stopPropagation()">
+                  <input type="checkbox" class="taskmda-bulk-checkbox-input" data-task-ref="${escapeHtml(taskRef)}" ${isSelectedForBulkDelete ? 'checked' : ''} ${canDelete ? '' : 'disabled'} onchange="toggleGlobalTaskBulkSelection('${taskRef}', this.checked)" aria-label="Sélectionner la tâche ${escapeHtml(task.title || '')}">
+                  <span class="taskmda-bulk-checkbox-label">Sélection</span>
+                </label>
+              ` : ''}
               ${buildTaskRecurrenceBadgeHtml(task)}
               ${sharingModeBadge(task.sharingMode)}
               <span class="${getTaskStatusMeta(task.status).chipClass}">${getTaskStatusMeta(task.status).label}</span>
@@ -18393,6 +19748,7 @@
             <span class="inline-flex items-center gap-1.5">Responsable: ${buildTaskAssigneeInlineHtml(task, stateByProjectId.get(task.sourceProjectId))}</span>
           </div>
           <div class="task-hover-actions mt-3 flex flex-wrap gap-2 text-xs">
+            ${(task.status || 'todo') !== 'termine' && canMarkDone ? `<button onclick="event.stopPropagation(); markGlobalTaskDone('${taskRef}')" class="task-action-btn task-action-btn-subtle" data-action-kind="success">Réalisé</button>` : ''}
             ${canEdit ? `<button onclick="event.stopPropagation(); editGlobalTask('${taskRef}')" class="task-action-btn task-action-btn-subtle">Modifier</button>` : ''}
             ${canEdit ? `<button onclick="event.stopPropagation(); convertTaskToProject('${taskRef}')" class="task-action-btn task-action-btn-subtle">Convertir</button>` : ''}
             <button onclick="event.stopPropagation(); sendTaskEmailByRef('${taskRef}', 'auto')" class="task-action-btn task-action-btn-subtle"><span class="material-symbols-outlined">mail</span> Email</button>
@@ -19094,16 +20450,40 @@
       }
     }
 
+    async function markGlobalTaskDone(taskRef) {
+      const updated = await updateGlobalTaskStatusFromRef(taskRef, 'termine');
+      if (!updated) return;
+      showToast('✅ Tâche marquée comme réalisée');
+      if (workspaceMode === 'global') {
+        await renderGlobalTasks();
+        await refreshStats();
+      } else {
+        const resolved = await resolveGlobalTaskFromRef(taskRef);
+        if (resolved?.projectId) {
+          await showProjectDetail(resolved.projectId);
+        }
+      }
+    }
+
     window.editGlobalTask = editGlobalTask;
+    window.markGlobalTaskDone = markGlobalTaskDone;
+    window.markProjectDoneFromDashboard = markProjectDoneFromDashboard;
     window.archiveGlobalTask = archiveGlobalTask;
     window.restoreGlobalTask = restoreGlobalTask;
     window.deleteGlobalTask = deleteGlobalTask;
+    window.toggleGlobalTaskBulkSelection = toggleGlobalTaskBulkSelection;
     window.convertTaskToProject = convertTaskToProject;
     window.openGlobalTaskDetails = openGlobalTaskDetails;
     window.openProjectTaskDetails = openProjectTaskDetails;
     window.openProjectTaskCreateModalWithStatus = openProjectTaskCreateModalWithStatus;
     window.openGlobalTaskCreateModalWithStatus = openGlobalTaskCreateModalWithStatus;
     window.closeGlobalTaskDetails = closeGlobalTaskDetails;
+    window.openProjectNoteEditor = openProjectNoteEditor;
+    window.toggleProjectNotePinned = toggleProjectNotePinned;
+    window.toggleProjectNoteFeedPublish = toggleProjectNoteFeedPublish;
+    window.convertProjectNoteToTask = convertProjectNoteToTask;
+    window.archiveProjectNote = archiveProjectNote;
+    window.restoreProjectNote = restoreProjectNote;
     window.deleteGlobalDocument = deleteGlobalDocument;
     window.openDocumentBindingModal = openDocumentBindingModal;
 
@@ -19630,9 +21010,10 @@
       const all = await getGlobalDocumentsList();
       const states = await getAllProjectStates();
       const stateByProjectId = new Map(states.map(s => [s?.project?.projectId, s]));
+      refreshGlobalDocumentThemePicker(all, states);
 
       const q = `${globalSearchQuery} ${document.getElementById('global-doc-search')?.value || ''}`.trim();
-      const themeFilter = document.getElementById('global-doc-theme')?.value || '';
+      const themeFilter = document.getElementById('global-doc-theme-filter')?.value || '';
       const filtered = all.filter(doc => matchesQuery([doc.name, doc.sourceProjectName, doc.theme, doc.type, sharingModeLabel(doc.sharingMode)], q))
         .filter(doc => !themeFilter.trim() || matchesQuery([doc.theme], themeFilter));
 
@@ -19905,19 +21286,27 @@
 
       const projectSelect = document.getElementById('doc-binding-project');
       const modeSelect = document.getElementById('doc-binding-mode');
+      const themeInput = document.getElementById('doc-binding-theme');
       const nameEl = document.getElementById('doc-binding-name');
       const sourceEl = document.getElementById('doc-binding-current-source');
       const modal = document.getElementById('modal-doc-binding');
-      if (!projectSelect || !modeSelect || !nameEl || !sourceEl || !modal) return;
+      if (!projectSelect || !modeSelect || !themeInput || !nameEl || !sourceEl || !modal) return;
 
       const states = await getAllProjectStates();
       const editableProjects = (states || []).filter(state => state?.project && canEditProjectMeta(state));
       const sourceProjectId = String(doc.sourceProjectId || '').trim();
+      const themeCatalog = [
+        ...((states || []).flatMap((state) => (state?.themes || []))),
+        ...((states || []).flatMap((state) => (state?.tasks || []).map((task) => String(task?.theme || '').trim()))),
+        ...((globalThemeCatalog || []).map((theme) => String(theme?.name || '').trim()))
+      ];
       projectSelect.innerHTML = [
         '<option value="">Hors projet</option>',
         ...editableProjects.map(state => `<option value="${escapeHtml(state.project.projectId)}" ${String(state.project.projectId) === sourceProjectId ? 'selected' : ''}>${escapeHtml(state.project.name || 'Projet')}</option>`)
       ].join('');
       modeSelect.value = normalizeSharingMode(doc.sharingMode, 'private');
+      themeInput.value = String(doc.theme || '').trim();
+      fillThemePicker('doc-binding-theme-known', 'doc-binding-theme', themeCatalog, 'Thématiques existantes...');
       nameEl.textContent = doc.name || 'Document';
       sourceEl.textContent = `Source: ${doc.sourceProjectName || 'Hors projet'}`;
 
@@ -19945,11 +21334,13 @@
       const projectSelect = document.getElementById('doc-binding-project');
       const taskSelect = document.getElementById('doc-binding-task');
       const modeSelect = document.getElementById('doc-binding-mode');
-      if (!projectSelect || !taskSelect || !modeSelect) return;
+      const themeInput = document.getElementById('doc-binding-theme');
+      if (!projectSelect || !taskSelect || !modeSelect || !themeInput) return;
 
       const targetProjectId = String(projectSelect.value || '').trim();
       const selectedTaskId = String(taskSelect.value || '').trim();
       const nextSharingMode = normalizeSharingMode(modeSelect.value, 'private');
+      const nextTheme = String(themeInput.value || '').trim() || 'General';
       let changed = false;
       let nextBindingId = '';
       const silent = options?.silent === true;
@@ -19968,6 +21359,7 @@
             await putEncrypted('globalDocs', {
               ...current,
               sharingMode: nextSharingMode,
+              theme: nextTheme,
               updatedAt: Date.now()
             }, 'id');
             if (!silent) showToast('Document mis à jour');
@@ -19991,7 +21383,7 @@
               type: doc.type,
               size: doc.size,
               data: doc.data,
-              theme: doc.theme || 'General',
+              theme: nextTheme,
               notes: doc.notes || '',
               sharingMode: nextSharingMode,
               linkedTaskIds: selectedTaskId ? [selectedTaskId] : []
@@ -20020,7 +21412,7 @@
               type: doc.type,
               size: doc.size,
               data: doc.data,
-              theme: doc.theme || 'General',
+              theme: nextTheme,
               notes: doc.notes || '',
               sharingMode: nextSharingMode,
               createdAt: Date.now(),
@@ -20044,7 +21436,7 @@
                 type: doc.type,
                 size: doc.size,
                 data: doc.data,
-                theme: doc.theme || 'General',
+                theme: nextTheme,
                 notes: doc.notes || '',
                 sharingMode: nextSharingMode,
                 linkedTaskIds: selectedTaskId ? [selectedTaskId] : []
@@ -20176,7 +21568,7 @@
 
     async function addStandaloneDocuments() {
       const filesInput = document.getElementById('global-doc-files');
-      const themeInput = document.getElementById('global-doc-theme');
+      const themeInput = document.getElementById('global-doc-upload-theme');
       const modeInput = document.getElementById('global-doc-mode');
       const files = Array.from(filesInput?.files || []);
       const theme = themeInput?.value?.trim() || 'General';
@@ -20210,6 +21602,7 @@
       }
 
       if (filesInput) filesInput.value = '';
+      if (themeInput) themeInput.value = '';
       if (modeInput) modeInput.value = 'private';
       const label = document.getElementById('global-doc-files-label');
       if (label) label.textContent = 'Aucun fichier choisi';
@@ -22695,6 +24088,38 @@
       return { bullets, excerpt: source.slice(0, FEED_DIGEST_EXCERPT_MAX_CHARS) };
     }
 
+    function appendDigestBlocksToRichEditor(editorId, fallbackInputId, digestBlocksHtml = []) {
+      const blocks = Array.isArray(digestBlocksHtml) ? digestBlocksHtml.filter(Boolean) : [];
+      if (!blocks.length) return false;
+      const importedHtml = blocks.join('<p><br></p><hr><p><br></p>');
+      const quill = projectDescriptionQuillEditors.get(editorId);
+      const fallbackInput = document.getElementById(fallbackInputId);
+      if (quill) {
+        const currentHtml = String(quill.root.innerHTML || '').trim();
+        const hasExistingDraft = !!currentHtml && currentHtml !== '<p><br></p>';
+        const nextHtml = hasExistingDraft
+          ? `${currentHtml}<p><br></p><hr><p><br></p>${importedHtml}`
+          : importedHtml;
+        quill.clipboard.dangerouslyPasteHTML(nextHtml || '<p><br></p>');
+        const len = Math.max(0, quill.getLength() - 1);
+        quill.setSelection(len, 0, 'user');
+        quill.focus();
+        if (fallbackInput) {
+          fallbackInput.value = sanitizeProjectDescriptionHtml(String(quill.root.innerHTML || ''));
+        }
+        return true;
+      }
+      if (fallbackInput) {
+        const currentValue = String(fallbackInput.value || '').trim();
+        fallbackInput.value = currentValue
+          ? `${currentValue}\n\n--------------------\n\n${stripHtmlTagsForDigest(importedHtml)}`
+          : stripHtmlTagsForDigest(importedHtml);
+        fallbackInput.focus();
+        return true;
+      }
+      return false;
+    }
+
     async function publishGlobalFeedDigestFromFiles(fileList, options = {}) {
       const files = Array.from(fileList || []).filter(Boolean);
       if (files.length === 0) return;
@@ -22718,29 +24143,31 @@
       }
       openGlobalFeedComposerForNewPost({ focusEditor: false });
 
-      const input = document.getElementById('global-feed-input');
-      const quill = projectDescriptionQuillEditors.get('global-feed-editor');
-      const importedHtml = digestBlocks.join('<p><br></p><hr><p><br></p>');
-      if (quill) {
-        const currentHtml = String(quill.root.innerHTML || '').trim();
-        const hasExistingDraft = !!currentHtml && currentHtml !== '<p><br></p>';
-        const nextHtml = hasExistingDraft
-          ? `${currentHtml}<p><br></p><hr><p><br></p>${importedHtml}`
-          : importedHtml;
-        quill.clipboard.dangerouslyPasteHTML(nextHtml || '<p><br></p>');
-        const len = Math.max(0, quill.getLength() - 1);
-        quill.setSelection(len, 0, 'user');
-        quill.focus();
-      } else if (input) {
-        const currentValue = String(input.value || '').trim();
-        input.value = currentValue
-          ? `${currentValue}\n\n--------------------\n\n${stripHtmlTagsForDigest(importedHtml)}`
-          : stripHtmlTagsForDigest(importedHtml);
-        input.focus();
-      }
+      appendDigestBlocksToRichEditor('global-feed-editor', 'global-feed-input', digestBlocks);
 
       await updateGlobalFeedMentionCounter();
       showToast(`${digestBlocks.length} digest importe(s) dans l editeur (publication manuelle).`);
+    }
+
+    async function importProjectNoteDigestFromFiles(fileList, options = {}) {
+      const files = Array.from(fileList || []).filter(Boolean);
+      if (!files.length) return;
+      const digestViewMode = normalizeGlobalFeedDigestView(options?.digestView || globalFeedDigestViewMode, globalFeedDigestViewMode);
+      const digestBlocks = [];
+      for (const file of files) {
+        try {
+          const digest = await extractFeedDigestFromFile(file);
+          digestBlocks.push(buildDigestContentHtml(digest, file, digestViewMode));
+        } catch (error) {
+          console.warn('Note digest import failed:', error);
+          showToast(`Digest impossible pour ${file?.name || 'fichier'}`);
+        }
+      }
+      if (!digestBlocks.length) return;
+      const inserted = appendDigestBlocksToRichEditor('project-note-content-editor', 'project-note-content', digestBlocks);
+      if (!inserted) return;
+      scheduleProjectNoteDraftSave();
+      showToast(`${digestBlocks.length} digest importe(s) dans la note.`);
     }
 
     async function publishGlobalFeedPost() {
@@ -22843,6 +24270,16 @@
       if (t === 'task') {
         await showGlobalWorkspace('tasks');
         await openGlobalTaskDetails(id);
+        return;
+      }
+      if (t === 'project-note') {
+        const parts = String(id || '').split(':');
+        const projectId = String(parts[0] || '').trim();
+        const noteId = String(parts[1] || '').trim();
+        if (!projectId || !noteId) return;
+        projectNotesFocusNoteId = noteId;
+        await showProjectDetail(projectId, { resetScroll: true });
+        setProjectView('notes');
         return;
       }
       if (t === 'calendar-info') {
@@ -24867,6 +26304,7 @@
           <div class="mt-2 flex items-center justify-between gap-2 flex-wrap">
             <div class="task-card-participants">${participantsHtml}</div>
             <div class="task-hover-actions task-hover-actions-inline flex items-center gap-2">
+              ${(task.status || 'todo') !== 'termine' && canChangeTaskStatus(task, currentProjectState) ? `<button onclick="event.stopPropagation(); markProjectTaskDone('${task.taskId}')" class="task-action-btn task-action-btn-subtle text-xs" data-action-kind="success">Réalisé</button>` : ''}
               ${canEditTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); editTask('${task.taskId}')" class="task-action-btn task-action-btn-subtle text-xs">Modifier</button>` : ''}
               ${canEditTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); convertTaskToProject('${buildGlobalTaskRef({ sourceType: 'project', sourceProjectId: currentProjectId, taskId: task.taskId })}')" class="task-action-btn task-action-btn-subtle text-xs">Convertir</button>` : ''}
               <button onclick="event.stopPropagation(); sendTaskEmail('${task.taskId}', 'auto')" class="task-action-btn task-action-btn-subtle text-xs"><span class="material-symbols-outlined">mail</span> Email</button>
@@ -24929,6 +26367,7 @@
           <div class="task-card-bottom flex items-center justify-between text-sm gap-3 flex-wrap">
             <div class="task-card-participants">${participantsHtml}</div>
             <div class="task-card-actions task-hover-actions flex items-center gap-3">
+              ${(task.status || 'todo') !== 'termine' && canChangeTaskStatus(task, currentProjectState) ? `<button onclick="event.stopPropagation(); markProjectTaskDone('${task.taskId}')" class="task-action-btn task-action-btn-subtle" data-action-kind="success">Réalisé</button>` : ''}
               ${canEditTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); convertTaskToProject('${buildGlobalTaskRef({ sourceType: 'project', sourceProjectId: currentProjectId, taskId: task.taskId })}')" class="task-action-btn task-action-btn-subtle">Convertir en projet</button>` : ''}
               <button onclick="event.stopPropagation(); sendTaskEmail('${task.taskId}', 'auto')" class="task-action-btn task-action-btn-subtle"><span class="material-symbols-outlined">mail</span> Email</button>
               ${canChangeTaskStatus(task, currentProjectState) ? `<button onclick="event.stopPropagation(); toggleTaskStatus('${task.taskId}')" class="task-action-btn task-action-btn-subtle"><span class="material-symbols-outlined">published_with_changes</span> Changer statut</button>` : ''}
@@ -25082,6 +26521,7 @@
               </div>
               ${buildProjectLockHintHtml(currentProjectState, LOCK_SCOPE_TASK, task.taskId, true)}
               <div class="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                ${(task.status || 'todo') !== 'termine' && canChangeTaskStatus(task, currentProjectState) ? `<button onclick="event.stopPropagation(); markProjectTaskDone('${task.taskId}')" class="task-action-btn task-action-btn-subtle" data-action-kind="success">Réalisé</button>` : ''}
                 ${canEditTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); editTask('${task.taskId}')" class="task-action-btn">Modifier</button>` : ''}
                 ${canEditTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); convertTaskToProject('${buildGlobalTaskRef({ sourceType: 'project', sourceProjectId: currentProjectId, taskId: task.taskId })}')" class="task-action-btn">Convertir</button>` : ''}
                 ${canEditTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); archiveTask('${task.taskId}')" class="task-action-btn task-action-btn-warn">Archiver</button>` : ''}
@@ -25119,6 +26559,10 @@
 
     function parseTaskDateOrNull(rawDate) {
       if (!rawDate) return null;
+      const ymd = /^\d{4}-\d{2}-\d{2}$/.test(String(rawDate || '').trim())
+        ? String(rawDate || '').trim()
+        : null;
+      if (ymd) return parseYmdLocalToDate(ymd);
       const d = new Date(rawDate);
       return Number.isNaN(d.getTime()) ? null : d;
     }
@@ -25560,11 +27004,10 @@
       const resolved = await resolveGlobalTaskFromRef(taskRef);
       if (!resolved?.task) return false;
       if ((resolved.task.status || 'todo') === targetStatus) return false;
+      const transition = buildTaskStatusTransitionChanges(resolved.task, targetStatus, { nowTs: Date.now() });
 
       if (resolved.sourceType === 'standalone') {
-        const prevStatus = normalizeTaskStatusValue(resolved.task.status);
-        const nextStatus = normalizeTaskStatusValue(targetStatus);
-        if (prevStatus !== 'termine' && nextStatus === 'termine') {
+        if (transition.didCompleteOccurrence) {
           queueTaskCompletionFx({
             sourceType: 'standalone',
             id: resolved.task.id
@@ -25572,7 +27015,7 @@
         }
         await putEncrypted('globalTasks', {
           ...resolved.task,
-          status: targetStatus,
+          ...transition.changes,
           updatedAt: Date.now()
         }, 'id');
         return true;
@@ -25589,7 +27032,7 @@
         EventTypes.UPDATE_TASK,
         resolved.projectId,
         currentUser.userId,
-        { taskId: resolved.task.taskId, changes: { status: targetStatus } }
+        { taskId: resolved.task.taskId, changes: transition.changes }
       );
       await publishEvent(eventUpdate);
       if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(resolved.projectId, [eventUpdate]); }
@@ -25653,7 +27096,7 @@
         EventTypes.UPDATE_TASK,
         currentProjectId,
         currentUser.userId,
-        { taskId, changes: { status: targetStatus } }
+        { taskId, changes: buildTaskStatusTransitionChanges(task, targetStatus, { nowTs: Date.now() }).changes }
       );
 
       await publishEvent(eventUpdate);
@@ -26156,6 +27599,143 @@
       return null;
     }
 
+    async function renderPdfPreviewInModal(contentEl, dataUrl, fileName = 'PDF') {
+      if (!contentEl) return false;
+      const bytes = decodeDataUrlToBytes(dataUrl);
+      if (!(bytes instanceof Uint8Array) || bytes.length === 0) return false;
+      if (!ensurePdfJsDigestReady() || !globalThis.pdfjsLib?.getDocument) return false;
+
+      const root = document.createElement('div');
+      root.className = 'space-y-3';
+
+      const toolbar = document.createElement('div');
+      toolbar.className = 'flex flex-wrap items-center justify-between gap-2 p-2 border border-slate-200 rounded-lg bg-white';
+
+      const left = document.createElement('div');
+      left.className = 'flex items-center gap-2';
+      const zoomOutBtn = document.createElement('button');
+      zoomOutBtn.type = 'button';
+      zoomOutBtn.className = 'px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold';
+      zoomOutBtn.textContent = 'Zoom -';
+      const zoomResetBtn = document.createElement('button');
+      zoomResetBtn.type = 'button';
+      zoomResetBtn.className = 'px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold';
+      zoomResetBtn.textContent = '100%';
+      const zoomInBtn = document.createElement('button');
+      zoomInBtn.type = 'button';
+      zoomInBtn.className = 'px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold';
+      zoomInBtn.textContent = 'Zoom +';
+      const prevBtn = document.createElement('button');
+      prevBtn.type = 'button';
+      prevBtn.className = 'px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold';
+      prevBtn.textContent = 'Page -';
+      const nextBtn = document.createElement('button');
+      nextBtn.type = 'button';
+      nextBtn.className = 'px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold';
+      nextBtn.textContent = 'Page +';
+      const pageLabel = document.createElement('span');
+      pageLabel.className = 'text-xs text-slate-600 font-semibold';
+      pageLabel.textContent = 'Page 1 / 1';
+      left.append(zoomOutBtn, zoomResetBtn, zoomInBtn, prevBtn, pageLabel, nextBtn);
+
+      const right = document.createElement('div');
+      right.className = 'text-xs text-slate-500 truncate max-w-[60%]';
+      right.textContent = String(fileName || 'PDF');
+      toolbar.append(left, right);
+
+      const frame = document.createElement('div');
+      frame.className = 'rounded-lg border border-slate-200 bg-white p-2 overflow-auto';
+      const canvas = document.createElement('canvas');
+      canvas.className = 'max-w-full h-auto mx-auto block';
+      frame.appendChild(canvas);
+      root.append(toolbar, frame);
+
+      contentEl.innerHTML = '';
+      contentEl.appendChild(root);
+
+      let pdf = null;
+      try {
+        pdf = await globalThis.pdfjsLib.getDocument({ data: bytes }).promise;
+      } catch (error) {
+        console.warn('pdf preview load failed:', error);
+        return false;
+      }
+
+      let currentPage = 1;
+      let rendering = false;
+      let pendingPage = null;
+      let zoomScale = 1;
+      const totalPages = Math.max(1, Number(pdf?.numPages || 1));
+      const dpr = Math.max(1, Number(window.devicePixelRatio || 1));
+
+      const renderPage = async (pageNumber) => {
+        if (!pdf) return;
+        const bounded = Math.min(totalPages, Math.max(1, Number(pageNumber || 1)));
+        if (rendering) {
+          pendingPage = bounded;
+          return;
+        }
+        rendering = true;
+        try {
+          const page = await pdf.getPage(bounded);
+          const baseViewport = page.getViewport({ scale: 1 });
+          const frameWidth = Math.max(360, frame.clientWidth - 16);
+          const fitScale = Math.max(0.7, Math.min(2.2, frameWidth / Math.max(1, baseViewport.width)));
+          const finalScale = Math.max(0.5, Math.min(4, fitScale * zoomScale));
+          const viewport = page.getViewport({ scale: finalScale });
+
+          canvas.width = Math.floor(viewport.width * dpr);
+          canvas.height = Math.floor(viewport.height * dpr);
+          canvas.style.width = `${Math.floor(viewport.width)}px`;
+          canvas.style.height = `${Math.floor(viewport.height)}px`;
+
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return;
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          await page.render({ canvasContext: ctx, viewport }).promise;
+          currentPage = bounded;
+          pageLabel.textContent = `Page ${currentPage} / ${totalPages} • ${Math.round(zoomScale * 100)}%`;
+          prevBtn.disabled = currentPage <= 1;
+          nextBtn.disabled = currentPage >= totalPages;
+          zoomOutBtn.disabled = zoomScale <= 0.5;
+          zoomInBtn.disabled = zoomScale >= 4;
+        } catch (error) {
+          console.warn('pdf preview render failed:', error);
+        } finally {
+          rendering = false;
+          if (pendingPage != null && pendingPage !== currentPage) {
+            const next = pendingPage;
+            pendingPage = null;
+            await renderPage(next);
+          } else {
+            pendingPage = null;
+          }
+        }
+      };
+
+      prevBtn.addEventListener('click', () => {
+        if (currentPage > 1) void renderPage(currentPage - 1);
+      });
+      nextBtn.addEventListener('click', () => {
+        if (currentPage < totalPages) void renderPage(currentPage + 1);
+      });
+      zoomOutBtn.addEventListener('click', () => {
+        zoomScale = Math.max(0.5, Number((zoomScale - 0.1).toFixed(2)));
+        void renderPage(currentPage);
+      });
+      zoomInBtn.addEventListener('click', () => {
+        zoomScale = Math.min(4, Number((zoomScale + 0.1).toFixed(2)));
+        void renderPage(currentPage);
+      });
+      zoomResetBtn.addEventListener('click', () => {
+        zoomScale = 1;
+        void renderPage(currentPage);
+      });
+
+      await renderPage(1);
+      return true;
+    }
+
     async function openDocumentPreview(dataEncoded, nameEncoded, typeEncoded, refEncoded = '') {
       const modal = document.getElementById('modal-doc-preview');
       const title = document.getElementById('doc-preview-title');
@@ -26214,23 +27794,26 @@
           content.appendChild(img);
         }
       } else if ((type || '').includes('pdf') || String(name || '').toLowerCase().endsWith('.pdf')) {
-        const safeSrc = sanitizeUrlForDom(data, {
-          allowHttp: true,
-          allowBlob: true,
-          allowData: true,
-          allowDataMimePrefixes: ['application/pdf']
-        });
-        if (!safeSrc) {
-          const p = document.createElement('p');
-          p.className = 'text-sm text-slate-500';
-          p.textContent = 'Prévisualisation bloquée (source non sûre).';
-          content.appendChild(p);
-        } else {
-          const frame = document.createElement('iframe');
-          frame.src = safeSrc;
-          frame.className = 'w-full h-[70vh] rounded-lg border border-slate-200';
-          frame.title = String(name || 'PDF');
-          content.appendChild(frame);
+        const rendered = await renderPdfPreviewInModal(content, data, name);
+        if (!rendered) {
+          const safeSrc = sanitizeUrlForDom(data, {
+            allowHttp: true,
+            allowBlob: true,
+            allowData: true,
+            allowDataMimePrefixes: ['application/pdf']
+          });
+          if (!safeSrc) {
+            const p = document.createElement('p');
+            p.className = 'text-sm text-slate-500';
+            p.textContent = 'Prévisualisation PDF indisponible pour ce document.';
+            content.appendChild(p);
+          } else {
+            const frame = document.createElement('iframe');
+            frame.src = safeSrc;
+            frame.className = 'w-full h-[70vh] rounded-lg border border-slate-200';
+            frame.title = String(name || 'PDF');
+            content.appendChild(frame);
+          }
         }
       } else if ((type || '').startsWith('text/')) {
         const safeSrc = sanitizeUrlForDom(data, {
@@ -27142,6 +28725,7 @@
               attachmentIndex,
               uploadedAt: task.updatedAt || task.createdAt || 0,
               createdBy: task.createdBy || null,
+              theme: String(file.theme || task.theme || '').trim() || 'General',
               ...file
             });
           }
@@ -27160,7 +28744,8 @@
           type: doc.type,
           size: doc.size,
           data: doc.data,
-          notes: doc.notes || ''
+          notes: doc.notes || '',
+          theme: String(doc.theme || '').trim() || 'General'
         });
       });
 
@@ -27169,7 +28754,7 @@
         const q = docsFilters.query.trim().toLowerCase();
         filtered = filtered.filter(doc => {
           const linkedTitles = (doc.linkedTaskIds || []).map(id => taskTitleById.get(id) || '').join(' ');
-          return [doc.name, doc.taskTitle, doc.type, doc.notes, linkedTitles]
+          return [doc.name, doc.taskTitle, doc.type, doc.notes, doc.theme, linkedTitles]
             .some(v => String(v || '').toLowerCase().includes(q));
         });
       }
@@ -27215,6 +28800,7 @@
           </div>
           <h4 class="workspace-card-title font-semibold text-sm truncate mb-1">${escapeHtml(doc.name || `document-${idx + 1}`)}</h4>
           <p class="workspace-card-subtitle text-xs mb-2">Source: ${escapeHtml(doc.taskTitle || 'Tâche')}</p>
+          <p class="workspace-card-subtitle text-xs mb-2">Thématique: ${escapeHtml(String(doc.theme || 'General'))}</p>
           <p class="text-[11px] text-slate-500 mb-2 truncate" title="${escapeHtml(linkedLabel)}">${escapeHtml(linkedLabel)}</p>
           <div class="text-[11px] text-slate-500 mb-3">${doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString('fr-FR') : ''}</div>
           <div class="flex items-center justify-between text-xs">
@@ -27285,7 +28871,10 @@
         ADD_THEME: 'Ajout thematique',
         REMOVE_THEME: 'Retrait thematique',
         CREATE_DOCUMENT: 'Ajout document',
-        DELETE_DOCUMENT: 'Suppression document'
+        DELETE_DOCUMENT: 'Suppression document',
+        CREATE_NOTE: 'Création note',
+        UPDATE_NOTE: 'Mise à jour note',
+        DELETE_NOTE: 'Suppression note'
       };
 
       const now = Date.now();
@@ -27333,7 +28922,10 @@
         ADD_MEMBER: { icon: 'group_add', chipClass: 'workspace-chip workspace-chip-shared' },
         REMOVE_MEMBER: { icon: 'person_remove', chipClass: 'workspace-chip workspace-chip-status-urgent' },
         CREATE_DOCUMENT: { icon: 'description', chipClass: 'workspace-chip workspace-chip-status-active' },
-        DELETE_DOCUMENT: { icon: 'delete', chipClass: 'workspace-chip workspace-chip-status-urgent' }
+        DELETE_DOCUMENT: { icon: 'delete', chipClass: 'workspace-chip workspace-chip-status-urgent' },
+        CREATE_NOTE: { icon: 'sticky_note_2', chipClass: 'workspace-chip workspace-chip-status-active' },
+        UPDATE_NOTE: { icon: 'edit_note', chipClass: 'workspace-chip workspace-chip-status-planifie' },
+        DELETE_NOTE: { icon: 'delete', chipClass: 'workspace-chip workspace-chip-status-urgent' }
       };
 
       container.innerHTML = filtered.slice(0, 120).map(evt => `
@@ -27882,6 +29474,7 @@
       const statuses = ['todo', 'en-cours', 'suspendu', 'termine'];
       const currentIndex = statuses.indexOf(task.status);
       const newStatus = statuses[(currentIndex + 1) % statuses.length];
+      const transition = buildTaskStatusTransitionChanges(task, newStatus, { nowTs: Date.now() });
 
       const event = createEvent(
         EventTypes.UPDATE_TASK,
@@ -27889,7 +29482,7 @@
         currentUser.userId,
         {
           taskId: taskId,
-          changes: { status: newStatus }
+          changes: transition.changes
         }
       );
 
@@ -27898,7 +29491,49 @@
         if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(currentProjectId, [event]); }
       });
 
-      showToast('✅ Statut mis à jour');
+      if (transition.recurringRolloverApplied && transition.nextDueDate) {
+        showToast(`🔁 Tâche récurrente replanifiée au ${formatDate(transition.nextDueDate)}`);
+      } else {
+        showToast('✅ Statut mis à jour');
+      }
+      await showProjectDetail(currentProjectId);
+    }
+
+    async function markProjectTaskDone(taskId) {
+      if (!currentProjectId) return;
+      const state = await getProjectState(currentProjectId);
+      const task = state.tasks.find(t => t.taskId === taskId);
+      if (!task) return;
+      if ((task.status || 'todo') === 'termine') return;
+      if (!canChangeTaskStatus(task, state)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      if (!ensureProjectResourceUnlockedForAction(state, LOCK_SCOPE_TASK, task.taskId, 'Changement de statut').ok) {
+        return;
+      }
+
+      const transition = buildTaskStatusTransitionChanges(task, 'termine', { nowTs: Date.now() });
+      const event = createEvent(
+        EventTypes.UPDATE_TASK,
+        currentProjectId,
+        currentUser.userId,
+        {
+          taskId,
+          changes: transition.changes
+        }
+      );
+
+      await runWithLoading(async () => {
+        await publishEvent(event);
+        if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(currentProjectId, [event]); }
+      });
+
+      if (transition.recurringRolloverApplied && transition.nextDueDate) {
+        showToast(`🔁 Tâche récurrente replanifiée au ${formatDate(transition.nextDueDate)}`);
+      } else {
+        showToast('✅ Tâche marquée comme réalisée');
+      }
       await showProjectDetail(currentProjectId);
     }
 
@@ -28184,11 +29819,13 @@
         return;
       }
       const taskLinksSelect = document.getElementById('project-doc-task-links');
+      const themeInput = document.getElementById('project-doc-theme');
       const linkedTaskIds = Array.from(taskLinksSelect?.selectedOptions || [])
         .map(opt => opt.value)
         .filter(Boolean);
       const validTaskIds = new Set((state.tasks || []).map(t => t.taskId));
       const safeLinkedTaskIds = [...new Set(linkedTaskIds.filter(id => validTaskIds.has(id)))];
+      const themeValue = String(themeInput?.value || '').trim() || 'General';
 
       await runWithLoading(async () => {
       for (const file of files) {
@@ -28198,7 +29835,8 @@
           currentUser.userId,
           {
             ...file,
-            linkedTaskIds: safeLinkedTaskIds
+            linkedTaskIds: safeLinkedTaskIds,
+            theme: themeValue
           }
         );
         await publishEvent(event);
@@ -28938,7 +30576,35 @@
       });
     }
     document.getElementById('btn-edit-project')?.addEventListener('click', () => openEditProjectModal());
+    document.getElementById('btn-mark-project-done')?.addEventListener('click', () => markProjectDoneFromDashboard(currentProjectId));
     document.getElementById('btn-delete-project')?.addEventListener('click', () => deleteCurrentProject());
+    document.getElementById('btn-projects-bulk-select-toggle')?.addEventListener('click', async () => {
+      const next = !projectsBulkSelectionMode;
+      setProjectsBulkSelectionMode(next, { clearSelection: !next });
+      await renderProjects();
+    });
+    document.getElementById('btn-projects-bulk-delete')?.addEventListener('click', async () => {
+      await deleteSelectedProjectsBulk();
+    });
+    document.getElementById('btn-projects-bulk-select-all')?.addEventListener('click', () => {
+      selectAllVisibleProjectsForBulkDelete();
+    });
+    document.getElementById('btn-global-tasks-bulk-select-toggle')?.addEventListener('click', async () => {
+      const bulkSupportedModes = new Set(['cards', 'list', 'kanban', 'timeline']);
+      if (!bulkSupportedModes.has(globalTasksViewMode)) {
+        globalTasksViewMode = 'cards';
+        localStorage.setItem('taskmda_global_tasks_view', 'cards');
+      }
+      const next = !globalTasksBulkSelectionMode;
+      setGlobalTasksBulkSelectionMode(next, { clearSelection: !next });
+      await renderGlobalTasks();
+    });
+    document.getElementById('btn-global-tasks-bulk-delete')?.addEventListener('click', async () => {
+      await deleteSelectedGlobalTasksBulk();
+    });
+    document.getElementById('btn-global-tasks-bulk-select-all')?.addEventListener('click', () => {
+      selectAllVisibleGlobalTasksForBulkDelete();
+    });
     document.getElementById('btn-toggle-project-overview')?.addEventListener('click', () => {
       setProjectOverviewCollapsed(!projectOverviewCollapsed, { animate: true });
     });
@@ -29023,7 +30689,7 @@
       await openWorkflowSidebarGroup('supervision');
     });
     setActiveWorkflowSidebarGroup(localStorage.getItem('taskmda_sidebar_workflow_group') || 'structure');
-    setWorkflowSidebarSubnavOpen(localStorage.getItem('taskmda_workflow_sidebar_subnav_open') !== '0');
+    setWorkflowSidebarSubnavOpen(localStorage.getItem('taskmda_workflow_sidebar_subnav_open') === '1');
     document.getElementById('nav-workflow-subnav-toggle')?.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -29268,6 +30934,12 @@
     });
     document.getElementById('doc-binding-task')?.addEventListener('blur', () => {
       setDocumentBindingFieldReadMode('task', true);
+    });
+    document.getElementById('doc-binding-theme')?.addEventListener('input', () => {
+      syncThemePickerSelectionFromInput('doc-binding-theme-known', 'doc-binding-theme');
+    });
+    document.getElementById('doc-binding-theme-known')?.addEventListener('change', () => {
+      syncThemePickerInputFromSelection('doc-binding-theme-known', 'doc-binding-theme');
     });
     document.getElementById('btn-save-doc-binding')?.addEventListener('click', saveDocumentBindingChanges);
     document.getElementById('btn-close-doc-editor')?.addEventListener('click', () => {
@@ -29557,8 +31229,8 @@
     });
     document.getElementById('btn-email-project-status')?.addEventListener('click', () => sendProjectStatusEmail(false));
     document.getElementById('btn-email-project-complete')?.addEventListener('click', () => sendProjectStatusEmail(true));
-    document.getElementById('project-mode-work')?.addEventListener('click', () => setProjectDetailMode('work'));
-    document.getElementById('project-mode-settings')?.addEventListener('click', () => setProjectDetailMode('settings'));
+    document.getElementById('btn-project-open-work')?.addEventListener('click', () => setProjectDetailMode('work'));
+    document.getElementById('btn-project-open-settings')?.addEventListener('click', () => setProjectDetailMode('settings'));
     document.getElementById('project-settings-tab-overview')?.addEventListener('click', () => setProjectSettingsTab('overview'));
     document.getElementById('project-settings-tab-members')?.addEventListener('click', () => setProjectSettingsTab('members'));
     document.getElementById('project-settings-tab-collab')?.addEventListener('click', () => setProjectSettingsTab('collab'));
@@ -31511,6 +33183,7 @@
         await closeDocumentPreview();
         closeDocumentBindingModal();
         closeDocumentEditorModal();
+        closeProjectNoteEditor();
         closeTaskConvertModal();
         closeGlobalConversationDeleteModal();
         document.getElementById('modal-app-help')?.classList.add('hidden');
@@ -31558,6 +33231,9 @@
     registerSafeBackdropClose('modal-doc-editor', () => {
       closeDocumentEditorModal();
     });
+    registerSafeBackdropClose('modal-project-note', () => {
+      closeProjectNoteEditor();
+    });
     registerSafeBackdropClose('modal-app-help', () => {
       document.getElementById('modal-app-help')?.classList.add('hidden');
     });
@@ -31585,6 +33261,7 @@
     document.getElementById('view-gantt')?.addEventListener('click', () => setProjectView('gantt'));
     document.getElementById('view-timeline').addEventListener('click', () => setProjectView('timeline'));
     document.getElementById('view-docs').addEventListener('click', () => setProjectView('docs'));
+    document.getElementById('view-notes')?.addEventListener('click', () => setProjectView('notes'));
     document.getElementById('view-chat').addEventListener('click', () => setProjectView('chat'));
     document.getElementById('view-archives')?.addEventListener('click', () => setProjectView('archives'));
     document.getElementById('global-tasks-view-tabs')?.addEventListener('click', (e) => {
@@ -31639,10 +33316,75 @@
       syncThemePickerInputFromSelection('project-task-theme-known', 'project-task-theme-filter');
       rerenderProjectFilters();
     });
+    document.getElementById('project-doc-theme')?.addEventListener('input', () => {
+      syncThemePickerSelectionFromInput('project-doc-theme-known', 'project-doc-theme');
+    });
+    document.getElementById('project-doc-theme-known')?.addEventListener('change', () => {
+      syncThemePickerInputFromSelection('project-doc-theme-known', 'project-doc-theme');
+    });
+    document.getElementById('global-doc-upload-theme')?.addEventListener('input', () => {
+      syncThemePickerSelectionFromInput('global-doc-upload-theme-known', 'global-doc-upload-theme');
+    });
+    document.getElementById('global-doc-upload-theme-known')?.addEventListener('change', () => {
+      syncThemePickerInputFromSelection('global-doc-upload-theme-known', 'global-doc-upload-theme');
+    });
     document.getElementById('project-task-filter-epic')?.addEventListener('change', () => {
       refreshProjectHierarchyTaskFilters(currentProjectState);
       rerenderProjectFilters();
     });
+    document.getElementById('project-notes-search')?.addEventListener('input', () => {
+      projectNotesSearchQuery = String(document.getElementById('project-notes-search')?.value || '').trim();
+      renderProjectNotes(currentProjectState);
+    });
+    document.getElementById('project-notes-filter')?.addEventListener('change', () => {
+      projectNotesFilterMode = String(document.getElementById('project-notes-filter')?.value || 'all').trim() || 'all';
+      renderProjectNotes(currentProjectState);
+    });
+    document.getElementById('btn-project-note-new')?.addEventListener('click', () => openProjectNoteEditor(''));
+    document.getElementById('btn-project-note-cancel')?.addEventListener('click', () => closeProjectNoteEditor());
+    document.getElementById('btn-close-project-note-modal')?.addEventListener('click', () => closeProjectNoteEditor());
+    document.getElementById('btn-project-note-fullscreen')?.addEventListener('click', () => {
+      applyProjectNoteModalFullscreen(!projectNoteModalFullscreen);
+    });
+    document.getElementById('btn-project-note-save')?.addEventListener('click', async () => {
+      await saveProjectNoteFromEditor();
+    });
+    document.getElementById('btn-project-note-digest')?.addEventListener('click', () => {
+      const input = document.getElementById('project-note-digest-files');
+      const chosenMode = pickGlobalFeedDigestImportMode();
+      if (chosenMode !== 'compact' && chosenMode !== 'full') return;
+      if (input) input.dataset.importDigestView = chosenMode;
+      input?.click();
+    });
+    document.getElementById('project-note-digest-files')?.addEventListener('change', async (event) => {
+      const files = event?.target?.files;
+      const digestView = String(event?.target?.dataset?.importDigestView || '').toLowerCase();
+      await importProjectNoteDigestFromFiles(files, { digestView });
+      if (event?.target) {
+        event.target.value = '';
+        delete event.target.dataset.importDigestView;
+      }
+    });
+    const projectNoteModal = document.getElementById('modal-project-note');
+    if (projectNoteModal && projectNoteModal.dataset.noteShortcutsBound !== '1') {
+      projectNoteModal.dataset.noteShortcutsBound = '1';
+      projectNoteModal.addEventListener('keydown', (event) => {
+        if (projectNoteModal.classList.contains('hidden')) return;
+        const key = String(event.key || '').toLowerCase();
+        if ((event.ctrlKey || event.metaKey) && key === 's') {
+          event.preventDefault();
+          void saveProjectNoteFromEditor();
+          return;
+        }
+        if (key === 'escape') {
+          event.preventDefault();
+          event.stopPropagation();
+          closeProjectNoteEditor();
+          return;
+        }
+        trapProjectNoteModalFocus(event);
+      });
+    }
     // Fonction pour remplir le select de sélection de groupe en messagerie
     async function populateGlobalMessageGroupChannelSelect() {
       console.log('[populateGlobalMessageGroupChannelSelect] START');
@@ -31749,7 +33491,7 @@
       await renderActivity(currentProjectEvents);
     });
 
-    const orderedViews = ['overview', 'kanban', 'cards', 'list', 'gantt', 'timeline', 'docs', 'chat', 'activity', 'archives'];
+    const orderedViews = ['overview', 'kanban', 'cards', 'list', 'gantt', 'timeline', 'docs', 'notes', 'chat', 'activity', 'archives'];
     orderedViews.forEach((viewKey, idx) => {
       const btn = document.getElementById(`view-${viewKey === 'docs' ? 'docs' : viewKey}`);
       if (!btn) return;

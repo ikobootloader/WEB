@@ -285,6 +285,8 @@
       permissionAutoReviewRunning: false,
       inlineDetailSaveTimers: new Map(),
       inlineDetailFinalizeTimers: new Map(),
+      bulkSelectionMode: false,
+      bulkSelectedKeys: new Set(),
       selectedType: null,
       selectedId: null,
       collections: {
@@ -345,6 +347,9 @@
       filtersPanel: document.getElementById('workflow-filters-panel'),
       quickAddToggle: document.getElementById('workflow-quick-add-toggle'),
       quickAddMenu: document.getElementById('workflow-quick-add-menu'),
+      bulkToggle: document.getElementById('btn-workflow-bulk-select-toggle'),
+      bulkSelectAll: document.getElementById('btn-workflow-bulk-select-all'),
+      bulkDelete: document.getElementById('btn-workflow-bulk-delete'),
       modal: document.getElementById('modal-workflow-entity'),
       modalTitle: document.getElementById('workflow-modal-title'),
       modalBody: document.getElementById('workflow-modal-body'),
@@ -1847,6 +1852,250 @@ ${reviews.map((row)=>`<tr><td>${esc(row.reviewDate || '-')}</td><td>${esc(row.ne
         quickAdd.classList.toggle('hidden', hideInAdd.includes(state.activeGroup));
       }
       filterQuickAddByGroup(state.activeGroup);
+      refreshWorkflowBulkSelectionUi();
+    }
+
+    function isWorkflowBulkDeletableType(type) {
+      return [
+        'task',
+        'procedure',
+        'software',
+        'process',
+        'step',
+        'flow',
+        'role',
+        'template',
+        'contingencyPlan',
+        'jobTitle'
+      ].includes(String(type || '').trim());
+    }
+
+    function workflowBulkKey(type, id) {
+      return `${String(type || '').trim()}::${String(id || '').trim()}`;
+    }
+
+    function parseWorkflowBulkKey(key) {
+      const raw = String(key || '').trim();
+      if (!raw || !raw.includes('::')) return { type: '', id: '' };
+      const idx = raw.indexOf('::');
+      return {
+        type: raw.slice(0, idx),
+        id: raw.slice(idx + 2)
+      };
+    }
+
+    function canUseWorkflowBulkSelectionForView(viewKey = state.activeView) {
+      return [
+        'agents',
+        'processes',
+        'templates',
+        'tasks',
+        'kanban',
+        'timeline',
+        'procedures',
+        'software',
+        'jobtitles',
+        'contingency'
+      ].includes(String(viewKey || '').trim());
+    }
+
+    function isWorkflowBulkItemSelectable(type, id) {
+      if (!canEditWorkflow()) return false;
+      const safeType = String(type || '').trim();
+      const safeId = String(id || '').trim();
+      if (!safeType || !safeId || !isWorkflowBulkDeletableType(safeType)) return false;
+      const item = getItem(safeType, safeId);
+      if (!item) return false;
+      if (safeType === 'jobTitle') {
+        const linkedAgentsCount = countAgentsUsingJobTitle(safeId, state.collections.agents);
+        if (linkedAgentsCount > 0) return false;
+      }
+      return true;
+    }
+
+    function setWorkflowBulkSelectionMode(enabled, options = {}) {
+      state.bulkSelectionMode = !!enabled;
+      if (!state.bulkSelectionMode || options.clearSelection) {
+        state.bulkSelectedKeys = new Set();
+      }
+      refreshWorkflowBulkSelectionUi();
+    }
+
+    function toggleWorkflowBulkSelection(type, id, forceValue = null) {
+      const safeType = String(type || '').trim();
+      const safeId = String(id || '').trim();
+      if (!state.bulkSelectionMode || !isWorkflowBulkItemSelectable(safeType, safeId)) return;
+      const key = workflowBulkKey(safeType, safeId);
+      const shouldSelect = typeof forceValue === 'boolean'
+        ? forceValue
+        : !state.bulkSelectedKeys.has(key);
+      if (shouldSelect) state.bulkSelectedKeys.add(key);
+      else state.bulkSelectedKeys.delete(key);
+      refreshWorkflowBulkSelectionUi();
+    }
+
+    function selectAllVisibleWorkflowBulkItems() {
+      if (!state.bulkSelectionMode) return;
+      const cards = Array.from(refs.content?.querySelectorAll('.workflow-card[data-wf-type][data-wf-id]') || []);
+      const selectableCards = cards.filter((card) => {
+        const type = String(card.getAttribute('data-wf-type') || '').trim();
+        const id = String(card.getAttribute('data-wf-id') || '').trim();
+        return isWorkflowBulkItemSelectable(type, id);
+      });
+      const allVisibleSelected = selectableCards.length > 0 && selectableCards.every((card) => {
+        const type = String(card.getAttribute('data-wf-type') || '').trim();
+        const id = String(card.getAttribute('data-wf-id') || '').trim();
+        return state.bulkSelectedKeys.has(workflowBulkKey(type, id));
+      });
+      selectableCards.forEach((card) => {
+        const type = String(card.getAttribute('data-wf-type') || '').trim();
+        const id = String(card.getAttribute('data-wf-id') || '').trim();
+        const key = workflowBulkKey(type, id);
+        if (allVisibleSelected) state.bulkSelectedKeys.delete(key);
+        else state.bulkSelectedKeys.add(key);
+      });
+      refreshWorkflowBulkSelectionUi();
+    }
+
+    function decorateWorkflowCardsForBulkSelection() {
+      const cards = Array.from(refs.content?.querySelectorAll('.workflow-card[data-wf-type][data-wf-id]') || []);
+      cards.forEach((card) => {
+        const type = String(card.getAttribute('data-wf-type') || '').trim();
+        const id = String(card.getAttribute('data-wf-id') || '').trim();
+        const selectable = state.bulkSelectionMode && isWorkflowBulkItemSelectable(type, id);
+        const key = workflowBulkKey(type, id);
+        card.classList.toggle('workflow-card-bulk-active', selectable);
+        card.classList.toggle('is-bulk-selected', selectable && state.bulkSelectedKeys.has(key));
+        let bulkWrap = card.querySelector('.workflow-bulk-check-wrap');
+        if (!state.bulkSelectionMode) {
+          if (bulkWrap) bulkWrap.remove();
+          return;
+        }
+        if (!bulkWrap) {
+          bulkWrap = document.createElement('label');
+          bulkWrap.className = 'workflow-bulk-check-wrap';
+          bulkWrap.setAttribute('data-wf-bulk-checkbox-wrap', '1');
+          bulkWrap.innerHTML = `
+            <input type="checkbox" class="workflow-bulk-check-input" data-wf-bulk-checkbox="1" />
+            <span class="workflow-bulk-check-label">Selection</span>
+          `;
+          card.insertBefore(bulkWrap, card.firstChild);
+        }
+        const input = bulkWrap.querySelector('[data-wf-bulk-checkbox]');
+        if (input instanceof HTMLInputElement) {
+          input.setAttribute('data-wf-type', type);
+          input.setAttribute('data-wf-id', id);
+          input.disabled = !isWorkflowBulkItemSelectable(type, id);
+          input.checked = state.bulkSelectedKeys.has(key);
+        }
+      });
+    }
+
+    function refreshWorkflowBulkSelectionUi() {
+      const supported = canUseWorkflowBulkSelectionForView(state.activeView);
+      const visibleCards = Array.from(refs.content?.querySelectorAll('.workflow-card[data-wf-type][data-wf-id]') || []);
+      state.bulkSelectedKeys = new Set(Array.from(state.bulkSelectedKeys || []).filter((key) => {
+        const parsed = parseWorkflowBulkKey(key);
+        return isWorkflowBulkItemSelectable(parsed.type, parsed.id);
+      }));
+      const selectableCardsCount = visibleCards.filter((card) => {
+        const type = String(card.getAttribute('data-wf-type') || '').trim();
+        const id = String(card.getAttribute('data-wf-id') || '').trim();
+        return isWorkflowBulkItemSelectable(type, id);
+      }).length;
+      const selectedVisibleCount = visibleCards.filter((card) => {
+        const type = String(card.getAttribute('data-wf-type') || '').trim();
+        const id = String(card.getAttribute('data-wf-id') || '').trim();
+        if (!isWorkflowBulkItemSelectable(type, id)) return false;
+        return state.bulkSelectedKeys.has(workflowBulkKey(type, id));
+      }).length;
+      const allVisibleSelected = selectableCardsCount > 0 && selectedVisibleCount === selectableCardsCount;
+      const canShow = supported && canEditWorkflow() && selectableCardsCount > 0;
+      if (!canShow && state.bulkSelectionMode) {
+        state.bulkSelectionMode = false;
+        state.bulkSelectedKeys = new Set();
+      }
+      const selectedCount = state.bulkSelectedKeys.size;
+
+      if (refs.bulkToggle) {
+        refs.bulkToggle.classList.toggle('hidden', !canShow);
+        refs.bulkToggle.classList.toggle('workflow-btn-warn', canShow && state.bulkSelectionMode);
+        refs.bulkToggle.setAttribute('aria-pressed', state.bulkSelectionMode ? 'true' : 'false');
+        const label = refs.bulkToggle.querySelector('.taskmda-action-label');
+        if (label) label.textContent = state.bulkSelectionMode ? 'Annuler selection' : 'Selection multiple';
+      }
+      if (refs.bulkSelectAll) {
+        refs.bulkSelectAll.classList.toggle('hidden', !(canShow && state.bulkSelectionMode));
+        const nextLabel = allVisibleSelected ? 'Tout désélectionner' : 'Tout sélectionner';
+        const nextAriaLabel = allVisibleSelected ? 'Tout désélectionner les éléments workflow visibles' : 'Tout sélectionner les éléments workflow visibles';
+        const nextIcon = allVisibleSelected ? 'remove_done' : 'done_all';
+        refs.bulkSelectAll.setAttribute('aria-label', nextAriaLabel);
+        refs.bulkSelectAll.setAttribute('data-action-label', nextLabel);
+        refs.bulkSelectAll.setAttribute('data-ui-tooltip', nextLabel);
+        refs.bulkSelectAll.setAttribute('title', nextLabel);
+        const icon = refs.bulkSelectAll.querySelector('.taskmda-action-icon, .material-symbols-outlined');
+        if (icon) icon.textContent = nextIcon;
+        const label = refs.bulkSelectAll.querySelector('.taskmda-action-label');
+        if (label) label.textContent = nextLabel;
+        global.TaskMDARefreshIconTooltip?.(refs.bulkSelectAll);
+      }
+      if (refs.bulkDelete) {
+        refs.bulkDelete.classList.toggle('hidden', !(canShow && state.bulkSelectionMode));
+        refs.bulkDelete.disabled = selectedCount === 0;
+        const label = refs.bulkDelete.querySelector('.taskmda-action-label');
+        if (label) label.textContent = `Supprimer selection (${selectedCount})`;
+      }
+
+      decorateWorkflowCardsForBulkSelection();
+    }
+
+    async function deleteWorkflowBulkSelection() {
+      if (!state.bulkSelectionMode) return;
+      const keys = Array.from(state.bulkSelectedKeys);
+      if (keys.length === 0) {
+        toast('Aucun element selectionne');
+        return;
+      }
+      if (!global.confirm(`Supprimer definitivement ${keys.length} element(s) workflow selectionne(s) ?`)) return;
+
+      let deleted = 0;
+      let skipped = 0;
+      for (const key of keys) {
+        const { type, id } = parseWorkflowBulkKey(key);
+        if (!isWorkflowBulkItemSelectable(type, id)) {
+          skipped += 1;
+          continue;
+        }
+        const meta = ENTITY_META[type];
+        const current = getItem(type, id);
+        if (!meta || !current) {
+          skipped += 1;
+          continue;
+        }
+        await applyDetachOnDelete(type, id);
+        await api.remove(meta.store, id);
+        await logHistory('delete', type, id, current || null, null, 'bulk_delete', Object.keys(current || {}));
+        if (type === 'task' || type === 'procedure') {
+          await syncBidirectionalExternalLinks();
+        }
+        await logAudit('delete', type, id, { source: 'bulk_selection' });
+        if (state.selectedType === type && String(state.selectedId || '') === String(id)) {
+          state.selectedType = null;
+          state.selectedId = null;
+        }
+        deleted += 1;
+      }
+
+      state.bulkSelectedKeys = new Set();
+      state.bulkSelectionMode = false;
+      refs.detail?.classList.add('hidden');
+      if (refs.detailBody) refs.detailBody.innerHTML = '';
+      refs.detailModal?.classList.add('hidden');
+      document.body.classList.remove('overflow-hidden');
+      await loadCollections();
+      renderServiceFilter();
+      renderContent();
+      toast(`Suppression workflow: ${deleted} supprime(s)${skipped ? `, ${skipped} ignore(s)` : ''}`);
     }
 
     async function persistLayout() {
@@ -2015,6 +2264,62 @@ ${reviews.map((row)=>`<tr><td>${esc(row.reviewDate || '-')}</td><td>${esc(row.ne
       renderContent();
       toast('Service relie a la racine');
       notifyInternal(`Organigramme: liaison ${updatedSource.name || sourceId} -> ${updatedRoot.name || rootId}`);
+    }
+
+    async function unlinkServiceFromRoot(serviceId, rootServiceId) {
+      const sourceId = String(serviceId || '').trim();
+      const rootId = String(rootServiceId || '').trim();
+      if (!sourceId || !rootId || sourceId === rootId) return;
+      if (!canEditWorkflow()) {
+        toast('Lecture seule: edition reservee au role admin ou manager workflow');
+        return;
+      }
+
+      const source = getItem('service', sourceId);
+      const root = getItem('service', rootId);
+      if (!source || !root) {
+        toast('Service introuvable pour la deliaison');
+        return;
+      }
+
+      const sourceLinks = Array.isArray(source.relatedServiceIds) ? source.relatedServiceIds.map((id) => String(id || '').trim()).filter(Boolean) : [];
+      const rootLinks = Array.isArray(root.relatedServiceIds) ? root.relatedServiceIds.map((id) => String(id || '').trim()).filter(Boolean) : [];
+      const nextSourceLinks = sourceLinks.filter((id) => id && id !== rootId && id !== sourceId);
+      const nextRootLinks = rootLinks.filter((id) => id && id !== sourceId && id !== rootId);
+
+      const sourceChanged = JSON.stringify(sourceLinks.slice().sort()) !== JSON.stringify(nextSourceLinks.slice().sort());
+      const rootChanged = JSON.stringify(rootLinks.slice().sort()) !== JSON.stringify(nextRootLinks.slice().sort());
+      if (!sourceChanged && !rootChanged) {
+        toast('Aucun lien a supprimer');
+        return;
+      }
+
+      const updatedSource = {
+        ...source,
+        relatedServiceIds: nextSourceLinks,
+        updatedAt: now()
+      };
+      const updatedRoot = {
+        ...root,
+        relatedServiceIds: nextRootLinks,
+        updatedAt: now()
+      };
+
+      if (sourceChanged) {
+        await api.put('workflowServices', updatedSource, STORE_KEY_FIELDS.workflowServices);
+        await logHistory('update', 'service', sourceId, source, updatedSource, 'organigram_unlink_from_root', ['relatedServiceIds']);
+      }
+      if (rootChanged) {
+        await api.put('workflowServices', updatedRoot, STORE_KEY_FIELDS.workflowServices);
+        await logHistory('update', 'service', rootId, root, updatedRoot, 'organigram_unlink_from_root', ['relatedServiceIds']);
+      }
+
+      await logAudit('unlink_from_root', 'service', sourceId, { rootServiceId: rootId });
+      await loadCollections();
+      renderServiceFilter();
+      renderContent();
+      toast('Liaison avec la racine supprimee');
+      notifyInternal(`Organigramme: deliaison ${updatedSource.name || sourceId} -/-> ${updatedRoot.name || rootId}`);
     }
 
     function getEntityHistory(entityType, entityId, limit = 8) {
@@ -4994,6 +5299,7 @@ ${clone.outerHTML}
         const isRoot = !!options.isRoot;
         const linkedToRoot = rootServiceId ? !!linkMap.get(rootServiceId)?.has(serviceId) : false;
         const showLinkToRootAction = rootServiceId && !isRoot && !linkedToRoot;
+        const showUnlinkToRootAction = rootServiceId && !isRoot && linkedToRoot;
         const managerAgent = maps.agentById.get(service.managerAgentId)
           || (serviceAgentsMap.get(serviceId)?.[0] || null);
         const manager = maps.agentById.get(service.managerAgentId)?.displayName
@@ -5041,9 +5347,14 @@ ${clone.outerHTML}
                 ${rootBadge}
                 ${rootLinkState}
               </div>
-              ${showLinkToRootAction ? `
+              ${showLinkToRootAction || showUnlinkToRootAction ? `
                 <div class="workflow-detail-actions mt-2">
-                  <button type="button" class="workflow-btn-link-root" data-wf-organigram-link-root="${esc(serviceId)}" data-wf-organigram-root-id="${esc(rootServiceId)}"><span class="material-symbols-outlined">link</span><span>Relier maintenant</span></button>
+                  ${showLinkToRootAction
+                    ? `<button type="button" class="workflow-btn-link-root" data-wf-organigram-link-root="${esc(serviceId)}" data-wf-organigram-root-id="${esc(rootServiceId)}"><span class="material-symbols-outlined">link</span><span>Relier maintenant</span></button>`
+                    : ''}
+                  ${showUnlinkToRootAction
+                    ? `<button type="button" class="workflow-btn-link-root workflow-btn-unlink-root" data-wf-organigram-unlink-root="${esc(serviceId)}" data-wf-organigram-root-id="${esc(rootServiceId)}"><span class="material-symbols-outlined">link_off</span><span>Delier de la racine</span></button>`
+                    : ''}
                 </div>
               ` : ''}
             </article>
@@ -6724,6 +7035,7 @@ ${clone.outerHTML}
       else if (state.activeView === 'journal') renderJournalView();
       else renderMapView();
       renderBreadcrumbs();
+      refreshWorkflowBulkSelectionUi();
     }
     function getItem(type, id) {
       const list = getByType(type);
@@ -11597,7 +11909,33 @@ ${clone.outerHTML}
         renderContent();
       });
 
+      refs.bulkToggle?.addEventListener('click', () => {
+        const next = !state.bulkSelectionMode;
+        setWorkflowBulkSelectionMode(next, { clearSelection: !next });
+      });
+
+      refs.bulkSelectAll?.addEventListener('click', () => {
+        selectAllVisibleWorkflowBulkItems();
+      });
+
+      refs.bulkDelete?.addEventListener('click', () => {
+        deleteWorkflowBulkSelection().catch((error) => {
+          console.error('workflow bulk delete', error);
+          toast(`Erreur suppression en masse: ${error.message}`);
+        });
+      });
+
       refs.content?.addEventListener('click', async (event) => {
+        const bulkCheckbox = event.target.closest('[data-wf-bulk-checkbox]');
+        if (bulkCheckbox) {
+          event.stopPropagation();
+          const type = String(bulkCheckbox.getAttribute('data-wf-type') || '').trim();
+          const id = String(bulkCheckbox.getAttribute('data-wf-id') || '').trim();
+          const checked = !!bulkCheckbox.checked;
+          toggleWorkflowBulkSelection(type, id, checked);
+          return;
+        }
+
         const kanbanPagerBtn = event.target.closest('[data-wf-kanban-lane-key][data-wf-kanban-page-target]');
         if (kanbanPagerBtn && state.activeView === 'kanban') {
           event.preventDefault();
@@ -11868,6 +12206,20 @@ ${clone.outerHTML}
           return;
         }
 
+        const unlinkToRootAction = event.target.closest('[data-wf-organigram-unlink-root]');
+        if (unlinkToRootAction) {
+          if (state.activeView !== 'organigram') return;
+          event.preventDefault();
+          event.stopPropagation();
+          const sourceId = String(unlinkToRootAction.getAttribute('data-wf-organigram-unlink-root') || '').trim();
+          const rootId = String(unlinkToRootAction.getAttribute('data-wf-organigram-root-id') || '').trim();
+          unlinkServiceFromRoot(sourceId, rootId).catch((error) => {
+            console.error('workflow organigram unlink root', error);
+            toast(`Erreur deliaison: ${error.message}`);
+          });
+          return;
+        }
+
         const minimapSurface = event.target.closest('[data-wf-map-minimap-surface]');
         if (minimapSurface) {
           if (state.activeView !== 'map') return;
@@ -11975,6 +12327,12 @@ ${clone.outerHTML}
         const type = String(target.getAttribute('data-wf-type') || '');
         const id = String(target.getAttribute('data-wf-id') || '');
         if (!type || !id) return;
+        if (state.bulkSelectionMode && isWorkflowBulkItemSelectable(type, id)) {
+          event.preventDefault();
+          event.stopPropagation();
+          toggleWorkflowBulkSelection(type, id);
+          return;
+        }
         openDetail(type, id);
       });
 
