@@ -2524,6 +2524,17 @@
           <p id="doc-binding-name" class="text-sm text-slate-700 truncate">-</p>
         </div>
         <div>
+          <label for="doc-binding-storage-path" class="block text-sm font-semibold mb-1">Chemin de stockage</label>
+          <div class="flex items-center gap-2">
+            <input id="doc-binding-storage-path" type="text" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs bg-slate-50 text-slate-600" readonly value="-">
+            <button id="btn-doc-binding-copy-storage-path" type="button" class="task-action-btn task-action-btn-subtle px-3 py-2 text-sm font-semibold inline-flex items-center justify-center gap-2" data-action-kind="copy" data-action-label="Copier le chemin" aria-label="Copier le chemin">
+              <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">content_copy</span>
+              <span class="taskmda-action-label">Copier</span>
+            </button>
+          </div>
+          <p class="text-[11px] text-slate-500 mt-1">Lecture seule. Mis à jour automatiquement après changement de thématique.</p>
+        </div>
+        <div>
           <label for="doc-binding-mode" class="block text-sm font-semibold mb-1">Visibilité du document</label>
           <div id="doc-binding-field-mode" data-inline-doc-binding-field="mode" class="rounded-lg">
             <select id="doc-binding-mode" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
@@ -3125,6 +3136,7 @@
   <script src="js/taskmda-admin-ui.js?v=20260406-01"></script>
   <script src="js/taskmda-hierarchy.js?v=20260420-01"></script>
   <script src="js/taskmda-project-notes.js?v=20260422-01"></script>
+  <script src="js/taskmda-document-storage.js?v=20260424-01"></script>
   <script src="js/taskmda-team.js?v=20260423-10"></script>
 </body>
 </html>

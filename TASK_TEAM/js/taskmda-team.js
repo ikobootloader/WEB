@@ -12829,7 +12829,7 @@
                 || canManageProjectNote(note, currentProjectState);
               return `
                 <div class="flex flex-wrap items-center gap-2">
-                  <button type="button" class="workspace-action-inline" data-action-kind="open" data-action-label="Ouvrir le document" onclick="openDocumentPreview('${encodeURIComponent(doc.data || '')}','${encodeURIComponent(doc.name || '')}','${encodeURIComponent(doc.type || '')}','${refPayload}')">${escapeHtml(doc.name)}</button>
+                  <button type="button" class="workspace-action-inline" data-action-kind="open" data-action-label="Ouvrir le document" onclick="openDocumentPreviewByRef('${refPayload}')">${escapeHtml(doc.name)}</button>
                   ${canDeleteDoc ? `<button type="button" class="workspace-action-inline" data-action-kind="danger" data-action-label="Supprimer le document" onclick="deleteProjectNoteLinkedDocument('${escapeHtml(nid)}','${escapeHtml(doc.docId)}')">Supprimer</button>` : ''}
                 </div>
               `;
@@ -13459,7 +13459,12 @@
         return;
       }
       const draft = readProjectNoteEditorDraft();
-      const noteAttachmentDocs = await readDocumentFilesFromInput('project-note-attachments');
+      const noteAttachmentDocs = await readDocumentFilesFromInput('project-note-attachments', {
+        projectId: currentProjectId,
+        scope: 'project',
+        rubric: 'project-note-attachment',
+        theme: noteTheme || 'General'
+      });
       if (!draft.title && !draft.content && (!Array.isArray(noteAttachmentDocs) || noteAttachmentDocs.length === 0)) {
         showToast('Ajoutez un titre ou un contenu');
         return;
@@ -19222,7 +19227,12 @@
         }
       }
       const selectedGlobalGroups = readSelectedGlobalGroups('edit-project-group-presets');
-      const editProjectDocuments = await readEditProjectDocumentFiles();
+      const editProjectDocuments = await readEditProjectDocumentFiles({
+        projectId: currentProjectId,
+        scope: 'project',
+        rubric: 'project-edit-upload',
+        theme: changes.name || state?.project?.name || 'General'
+      });
       const existingGroupKeys = new Set((state.groups || []).map(g => normalizeCatalogKey(g.name)));
 
       const event = createEvent(
@@ -20037,6 +20047,10 @@
             type: doc.type,
             size: doc.size,
             data: doc.data,
+            storageMode: doc.storageMode || '',
+            storageProvider: doc.storageProvider || '',
+            storagePath: doc.storagePath || '',
+            storedAt: Number(doc.storedAt || 0) || null,
             theme: doc.theme || state.project.name || 'Projet',
             sourceProjectName: state.project.name,
             sourceProjectId: state.project.projectId,
@@ -21893,6 +21907,50 @@
       toggleIcon.textContent = shouldCollapse ? 'expand_more' : 'expand_less';
     }
 
+    async function openDocumentPreviewByRef(refEncoded = '') {
+      const ref = parseDocumentPreviewRef(refEncoded);
+      if (!ref) {
+        showToast('Référence document invalide');
+        return;
+      }
+      const resolved = await resolveDocumentPreviewContext(ref);
+      if (!resolved?.doc) {
+        showToast('Document introuvable');
+        return;
+      }
+      await openDocumentPreview(
+        encodeURIComponent(String(resolved.doc.data || '')),
+        encodeURIComponent(String(resolved.doc.name || 'document')),
+        encodeURIComponent(String(resolved.doc.type || '')),
+        refEncoded
+      );
+    }
+
+    async function downloadDocumentByRef(refEncoded = '') {
+      const ref = parseDocumentPreviewRef(refEncoded);
+      if (!ref) {
+        showToast('Référence document invalide');
+        return;
+      }
+      const resolved = await resolveDocumentPreviewContext(ref);
+      if (!resolved?.doc) {
+        showToast('Document introuvable');
+        return;
+      }
+      const safeHref = sanitizeDownloadHref(resolved.doc.data || '', String(resolved.doc.type || ''));
+      if (!safeHref) {
+        showToast('Téléchargement indisponible');
+        return;
+      }
+      const link = document.createElement('a');
+      link.href = safeHref;
+      link.download = String(resolved.doc.name || 'document');
+      link.rel = 'noopener';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
     async function renderGlobalDocs() {
       const container = document.getElementById('global-docs-container');
       if (!container) return;
@@ -21934,14 +21992,8 @@
           <div class="mt-3 flex items-center justify-between text-xs">
             <span class="text-slate-500">${formatFileSize(doc.size || 0)}</span>
             <div class="doc-hover-actions flex items-center gap-2 flex-wrap">
-              ${isDocumentPreviewable(doc) ? `<button onclick="openDocumentPreview('${encodeURIComponent(doc.data || '')}','${encodeURIComponent(doc.name || '')}','${encodeURIComponent(doc.type || '')}','${encodeDocumentPreviewRef(doc)}')" class="workspace-action-inline" data-action-kind="preview" data-action-label="Aperçu">Aperçu</button>` : ''}
-              ${(() => {
-                const safeHref = sanitizeDownloadHref(doc.data || '', String(doc.type || ''));
-                if (!safeHref) {
-                  return '<span class="workspace-action-inline opacity-60">Téléchargement indisponible</span>';
-                }
-                return `<a class="workspace-action-inline" data-action-kind="export" data-action-label="Télécharger" href="${safeHref.replace(/"/g, '&quot;')}" download="${escapeHtml(doc.name || 'document')}">Télécharger</a>`;
-              })()}
+              ${isDocumentPreviewable(doc) ? `<button onclick="openDocumentPreviewByRef('${encodeDocumentPreviewRef(doc)}')" class="workspace-action-inline" data-action-kind="preview" data-action-label="Aperçu">Aperçu</button>` : ''}
+              <button onclick="downloadDocumentByRef('${encodeDocumentPreviewRef(doc)}')" class="workspace-action-inline" data-action-kind="export" data-action-label="Télécharger">Télécharger</button>
               ${(() => {
                 const canManageDocBinding = doc.sourceType === 'standalone'
                   || (doc.sourceType === 'project-doc' && (() => {
@@ -22176,10 +22228,11 @@
       const projectSelect = document.getElementById('doc-binding-project');
       const modeSelect = document.getElementById('doc-binding-mode');
       const themeInput = document.getElementById('doc-binding-theme');
+      const storagePathInput = document.getElementById('doc-binding-storage-path');
       const nameEl = document.getElementById('doc-binding-name');
       const sourceEl = document.getElementById('doc-binding-current-source');
       const modal = document.getElementById('modal-doc-binding');
-      if (!projectSelect || !modeSelect || !themeInput || !nameEl || !sourceEl || !modal) return;
+      if (!projectSelect || !modeSelect || !themeInput || !storagePathInput || !nameEl || !sourceEl || !modal) return;
 
       const states = await getAllProjectStates();
       const editableProjects = (states || []).filter(state => state?.project && canEditProjectMeta(state));
@@ -22198,6 +22251,8 @@
       fillThemePicker('doc-binding-theme-known', 'doc-binding-theme', themeCatalog, 'Thématiques existantes...');
       nameEl.textContent = doc.name || 'Document';
       sourceEl.textContent = `Source: ${doc.sourceProjectName || 'Hors projet'}`;
+      storagePathInput.value = formatDocumentStoragePathForDisplay(doc);
+      storagePathInput.setAttribute('title', storagePathInput.value);
 
       currentDocBindingContext = {
         doc
@@ -22212,6 +22267,11 @@
       currentDocBindingContext = null;
       currentDocBindingCanEdit = false;
       resetDocumentBindingInlineEditingState();
+      const storagePathInput = document.getElementById('doc-binding-storage-path');
+      if (storagePathInput) {
+        storagePathInput.value = '-';
+        storagePathInput.removeAttribute('title');
+      }
       document.getElementById('modal-doc-binding')?.classList.add('hidden');
     }
 
@@ -22220,6 +22280,7 @@
       if (!ctx?.doc) return;
       if (docBindingInlineSaving) return;
       const doc = ctx.doc;
+      const docData = await resolveDocumentDataForRuntime(doc);
       const projectSelect = document.getElementById('doc-binding-project');
       const taskSelect = document.getElementById('doc-binding-task');
       const modeSelect = document.getElementById('doc-binding-mode');
@@ -22245,8 +22306,14 @@
               if (!silent) showToast('Document introuvable');
               return;
             }
+            const relocated = await maybeRelocateStoredDocumentByTheme(current, nextTheme, {
+              scope: 'global',
+              projectId: 'global',
+              rubric: inferStorageRubricFromPath(current?.storagePath || '', 'global-doc-upload')
+            });
             await putEncrypted('globalDocs', {
               ...current,
+              ...relocated,
               sharingMode: nextSharingMode,
               theme: nextTheme,
               updatedAt: Date.now()
@@ -22261,6 +22328,12 @@
             if (!silent) showToast('Action non autorisée sur le projet cible');
             return;
           }
+          const relocationForTarget = await maybeRelocateStoredDocumentByTheme(doc, nextTheme, {
+            scope: 'project',
+            projectId: targetProjectId,
+            rubric: inferStorageRubricFromPath(doc?.storagePath || '', 'project-doc-upload'),
+            force: true
+          });
           const newDocId = uuidv4();
           const createEventDoc = createEvent(
             EventTypes.CREATE_DOCUMENT,
@@ -22271,7 +22344,11 @@
               name: doc.name,
               type: doc.type,
               size: doc.size,
-              data: doc.data,
+              data: relocationForTarget.data || docData || doc.data || '',
+              storageMode: relocationForTarget.storageMode || doc.storageMode || '',
+              storageProvider: relocationForTarget.storageProvider || doc.storageProvider || '',
+              storagePath: relocationForTarget.storagePath || doc.storagePath || '',
+              storedAt: Number(relocationForTarget.storedAt || doc.storedAt || 0) || null,
               theme: nextTheme,
               notes: doc.notes || '',
               sharingMode: nextSharingMode,
@@ -22294,6 +22371,12 @@
             if (!silent) showToast('Action non autorisée');
             return;
           }
+          const relocationForTarget = await maybeRelocateStoredDocumentByTheme(doc, nextTheme, {
+            scope: targetProjectId ? 'project' : 'global',
+            projectId: targetProjectId || 'global',
+            rubric: inferStorageRubricFromPath(doc?.storagePath || '', targetProjectId ? 'project-doc-upload' : 'global-doc-upload'),
+            force: String(targetProjectId || '').trim() !== String(doc.sourceProjectId || '').trim()
+          });
           if (!targetProjectId) {
             const newGlobalId = uuidv4();
             await putEncrypted('globalDocs', {
@@ -22301,7 +22384,11 @@
               name: doc.name,
               type: doc.type,
               size: doc.size,
-              data: doc.data,
+              data: relocationForTarget.data || docData || doc.data || '',
+              storageMode: relocationForTarget.storageMode || doc.storageMode || '',
+              storageProvider: relocationForTarget.storageProvider || doc.storageProvider || '',
+              storagePath: relocationForTarget.storagePath || doc.storagePath || '',
+              storedAt: Number(relocationForTarget.storedAt || doc.storedAt || 0) || null,
               theme: nextTheme,
               notes: doc.notes || '',
               sharingMode: nextSharingMode,
@@ -22326,7 +22413,11 @@
                 name: doc.name,
                 type: doc.type,
                 size: doc.size,
-                data: doc.data,
+                data: relocationForTarget.data || docData || doc.data || '',
+                storageMode: relocationForTarget.storageMode || doc.storageMode || '',
+                storageProvider: relocationForTarget.storageProvider || doc.storageProvider || '',
+                storagePath: relocationForTarget.storagePath || doc.storagePath || '',
+                storedAt: Number(relocationForTarget.storedAt || doc.storedAt || 0) || null,
                 theme: nextTheme,
                 notes: doc.notes || '',
                 sharingMode: nextSharingMode,
@@ -22376,8 +22467,19 @@
             await populateDocBindingTaskOptions(sourceProjectId, selectedTask);
             const modeSelect = document.getElementById('doc-binding-mode');
             const projectSelect = document.getElementById('doc-binding-project');
+            const themeInput = document.getElementById('doc-binding-theme');
+            const nameEl = document.getElementById('doc-binding-name');
+            const sourceEl = document.getElementById('doc-binding-current-source');
+            const storagePathInput = document.getElementById('doc-binding-storage-path');
             if (modeSelect) modeSelect.value = normalizeSharingMode(refreshed.sharingMode, 'private');
             if (projectSelect) projectSelect.value = sourceProjectId;
+            if (themeInput) themeInput.value = String(refreshed.theme || '').trim();
+            if (nameEl) nameEl.textContent = refreshed.name || 'Document';
+            if (sourceEl) sourceEl.textContent = `Source: ${refreshed.sourceProjectName || 'Hors projet'}`;
+            if (storagePathInput) {
+              storagePathInput.value = formatDocumentStoragePathForDisplay(refreshed);
+              storagePathInput.setAttribute('title', storagePathInput.value);
+            }
             setDocumentBindingReadModeAll(false);
           }
         }
@@ -22385,6 +22487,18 @@
         closeDocumentBindingModal();
       }
       await renderGlobalDocs();
+    }
+
+    async function copyDocumentBindingStoragePath() {
+      const input = document.getElementById('doc-binding-storage-path');
+      if (!input) return;
+      const value = String(input.value || '').trim();
+      if (!value || value === '-') {
+        showToast('Aucun chemin à copier');
+        return;
+      }
+      const copied = await copyTextToClipboard(value);
+      showToast(copied ? 'Chemin copié' : 'Copie impossible');
     }
 
     async function deleteGlobalDocument(docId) {
@@ -22472,21 +22586,30 @@
 
       const maxFileSize = 8 * 1024 * 1024;
       await runWithLoading(async () => {
-      for (const file of files) {
-        if (file.size > maxFileSize) {
-          showToast(`Le fichier ${file.name} dépasse 8 Mo`);
+      for (const rawFile of files) {
+        if (rawFile.size > maxFileSize) {
+          showToast(`Le fichier ${rawFile.name} dépasse 8 Mo`);
           return;
         }
       }
 
-      for (const file of files) {
-        const data = await fileToDataUrl(file);
+      const docs = await readDocumentFilesFromInput('global-doc-files', {
+        projectId: 'global',
+        scope: 'global',
+        rubric: 'global-doc-upload',
+        theme
+      });
+      for (const file of docs) {
         await putEncrypted('globalDocs', {
           id: uuidv4(),
           name: file.name,
           type: file.type || 'application/octet-stream',
           size: file.size,
-          data,
+          data: file.data || '',
+          storageMode: file.storageMode || '',
+          storageProvider: file.storageProvider || '',
+          storagePath: file.storagePath || '',
+          storedAt: Number(file.storedAt || 0) || null,
           theme,
           sharingMode: normalizeSharingMode(sharingMode, 'private'),
           createdAt: Date.now()
@@ -28149,6 +28272,104 @@
       }
     }
 
+    function canUseSharedFilesystemDocumentStorage() {
+      return Boolean(sharedFolderHandle && window.TaskMDADocumentStorage?.isAvailable?.());
+    }
+
+    async function resolveDocumentDataForRuntime(doc = {}) {
+      if (String(doc?.data || '').trim()) return String(doc.data || '');
+      if (!canUseSharedFilesystemDocumentStorage()) return '';
+      if (String(doc?.storageMode || '').trim() !== 'fs') return '';
+      const storagePath = String(doc?.storagePath || '').trim();
+      if (!storagePath) return '';
+      try {
+        const dataUrl = await window.TaskMDADocumentStorage.readDataUrl(
+          sharedFolderHandle,
+          storagePath,
+          String(doc?.type || 'application/octet-stream')
+        );
+        return String(dataUrl || '');
+      } catch (error) {
+        console.warn('Unable to load document from shared filesystem:', error);
+        return '';
+      }
+    }
+
+    async function hydrateDocumentDataForRuntime(doc = {}) {
+      if (!doc || typeof doc !== 'object') return doc;
+      if (String(doc.data || '').trim()) return doc;
+      const resolvedData = await resolveDocumentDataForRuntime(doc);
+      if (!resolvedData) return doc;
+      return { ...doc, data: resolvedData };
+    }
+
+    function inferStorageRubricFromPath(storagePath = '', fallback = 'document-upload') {
+      const normalized = String(storagePath || '').replace(/\\/g, '/');
+      const parts = normalized.split('/').filter(Boolean);
+      const idx = parts.findIndex((part) => part === 'documents');
+      const rubric = idx >= 0 ? String(parts[idx + 1] || '').trim() : '';
+      return rubric || fallback;
+    }
+
+    function inferStorageScopeFromPath(storagePath = '', fallback = 'project') {
+      const normalized = String(storagePath || '').replace(/\\/g, '/');
+      const parts = normalized.split('/').filter(Boolean);
+      const idx = parts.findIndex((part) => part === 'documents');
+      const scope = idx >= 0 ? String(parts[idx + 2] || '').trim() : '';
+      return scope || fallback;
+    }
+
+    function inferStorageProjectFromPath(storagePath = '', fallback = 'global') {
+      const normalized = String(storagePath || '').replace(/\\/g, '/');
+      const parts = normalized.split('/').filter(Boolean);
+      const idx = parts.findIndex((part) => part === 'documents');
+      const projectId = idx >= 0 ? String(parts[idx + 3] || '').trim() : '';
+      return projectId || fallback;
+    }
+
+    async function maybeRelocateStoredDocumentByTheme(doc = {}, nextTheme = '', context = {}) {
+      const currentTheme = String(doc?.theme || '').trim() || 'General';
+      const targetTheme = String(nextTheme || '').trim() || 'General';
+      if (!canUseSharedFilesystemDocumentStorage()) return {};
+      if (String(doc?.storageMode || '').trim() !== 'fs') return {};
+      const oldStoragePath = String(doc?.storagePath || '').trim();
+      if (!oldStoragePath) return {};
+      const currentScope = inferStorageScopeFromPath(oldStoragePath, 'project');
+      const currentProjectId = inferStorageProjectFromPath(oldStoragePath, 'global');
+      const targetScope = String(context.scope || '').trim() || currentScope || 'project';
+      const targetProjectId = String(context.projectId || '').trim() || currentProjectId || 'global';
+      const keepSameTheme = normalizeSearch(currentTheme) === normalizeSearch(targetTheme);
+      const keepSameScope = normalizeSearch(currentScope) === normalizeSearch(targetScope);
+      const keepSameProject = normalizeSearch(currentProjectId) === normalizeSearch(targetProjectId);
+      const force = context.force === true;
+      if (keepSameTheme && keepSameScope && keepSameProject && !force) return {};
+      const dataUrl = await resolveDocumentDataForRuntime(doc);
+      if (!String(dataUrl || '').trim()) return {};
+      const rubric = String(context.rubric || '').trim() || inferStorageRubricFromPath(oldStoragePath, 'document-upload');
+      try {
+        const fsMeta = await window.TaskMDADocumentStorage.writeDataUrl(sharedFolderHandle, dataUrl, {
+          rubric,
+          scope: targetScope,
+          projectId: targetProjectId,
+          theme: targetTheme,
+          fileName: String(doc?.name || 'document.bin')
+        });
+        try {
+          await window.TaskMDADocumentStorage.removeFile(sharedFolderHandle, oldStoragePath);
+        } catch (_) {}
+        return {
+          storageMode: fsMeta.storageMode || 'fs',
+          storageProvider: fsMeta.storageProvider || 'shared-folder',
+          storagePath: fsMeta.storagePath || oldStoragePath,
+          storedAt: Number(fsMeta.storedAt || Date.now()) || Date.now(),
+          data: ''
+        };
+      } catch (error) {
+        console.warn('Unable to relocate stored document for theme change:', error);
+        return {};
+      }
+    }
+
     function normalizeDocumentPreviewInlineFieldValue(field, rawValue) {
       const value = rawValue == null ? '' : String(rawValue);
       if (field === 'name') return value.trim();
@@ -28280,7 +28501,16 @@
         if (!row) return;
         const next = { ...row, updatedAt: Date.now() };
         if (field === 'name' && normalizedValue) next.name = normalizedValue;
-        if (field === 'theme') next.theme = normalizedValue || 'General';
+        if (field === 'theme') {
+          const themeTarget = normalizedValue || 'General';
+          const relocated = await maybeRelocateStoredDocumentByTheme(row, themeTarget, {
+            scope: 'global',
+            projectId: 'global',
+            rubric: inferStorageRubricFromPath(row?.storagePath || '', 'global-doc-upload')
+          });
+          Object.assign(next, relocated);
+          next.theme = themeTarget;
+        }
         if (field === 'notes') next.notes = normalizedValue;
         if (field === 'sharingMode') next.sharingMode = normalizeSharingMode(normalizedValue, normalizeSharingMode(row.sharingMode, 'private'));
         await putEncrypted('globalDocs', next, 'id');
@@ -28294,7 +28524,16 @@
         if (!canEdit) return;
         const changes = {};
         if (field === 'name' && normalizedValue) changes.name = normalizedValue;
-        if (field === 'theme') changes.theme = normalizedValue || 'General';
+        if (field === 'theme') {
+          const themeTarget = normalizedValue || 'General';
+          const relocated = await maybeRelocateStoredDocumentByTheme(doc, themeTarget, {
+            scope: 'project',
+            projectId: ctx.projectId,
+            rubric: inferStorageRubricFromPath(doc?.storagePath || '', 'project-doc-upload')
+          });
+          Object.assign(changes, relocated);
+          changes.theme = themeTarget;
+        }
         if (field === 'notes') changes.notes = normalizedValue;
         if (field === 'sharingMode') {
           changes.sharingMode = normalizeSharingMode(
@@ -28455,11 +28694,12 @@
       if (sourceType === 'standalone' && ref?.id) {
         const row = await getDecrypted('globalDocs', ref.id, 'id');
         if (!row) return null;
+        const hydrated = await hydrateDocumentDataForRuntime(row);
         return {
           ...ref,
           sourceType: 'standalone',
           docRef: String(ref.id || ''),
-          doc: row,
+          doc: hydrated,
           canEdit: true
         };
       }
@@ -28468,14 +28708,15 @@
         const doc = (state?.documents || []).find((item) => String(item.docId || '') === String(ref.docId || ''));
         if (!state?.project || !doc) return null;
         const canEdit = canEditProjectMeta(state) || (doc.createdBy && doc.createdBy === currentUser?.userId);
+        const hydrated = await hydrateDocumentDataForRuntime({
+          ...doc,
+          sourceProjectName: state.project.name
+        });
         return {
           ...ref,
           sourceType: 'project-doc',
           docRef: `${ref.projectId}:project-doc:${doc.docId}`,
-          doc: {
-            ...doc,
-            sourceProjectName: state.project.name
-          },
+          doc: hydrated,
           canEdit
         };
       }
@@ -28485,19 +28726,27 @@
         const idx = Number(ref.attachmentIndex);
         const attachment = task?.attachments?.[idx];
         if (!state?.project || !task || !attachment) return null;
+        const hydrated = await hydrateDocumentDataForRuntime({
+          ...attachment,
+          sourceProjectName: state.project.name,
+          sharingMode: normalizeSharingMode(state.project.sharingMode, 'shared')
+        });
         return {
           ...ref,
           sourceType: 'task-attachment',
           docRef: `${ref.projectId}:${task.taskId}:${idx}`,
-          doc: {
-            ...attachment,
-            sourceProjectName: state.project.name,
-            sharingMode: normalizeSharingMode(state.project.sharingMode, 'shared')
-          },
+          doc: hydrated,
           canEdit: canEditTaskInProject(task, state)
         };
       }
       return null;
+    }
+
+    function formatDocumentStoragePathForDisplay(doc = {}) {
+      const path = String(doc?.storagePath || '').trim();
+      if (path) return path;
+      if (String(doc?.storageMode || '').trim() === 'fs') return 'Stockage disque (chemin non disponible)';
+      return 'Stockage local (IndexedDB)';
     }
 
     async function renderPdfPreviewInModal(contentEl, dataUrl, fileName = 'PDF') {
@@ -29237,7 +29486,10 @@
       const sheetSelect = document.getElementById('doc-editor-xlsx-sheet-select');
       if (!modal || !title || !subtitle || !textWrap || !spreadsheetWrap || !wordWrap || !textarea || !fileInput || !markdownTools || !formatHint || !sheetSelect) return;
 
-      let mode = resolveDocumentEditMode(context?.doc);
+      const hydratedDoc = await hydrateDocumentDataForRuntime(context?.doc || {});
+      const safeContext = { ...(context || {}), doc: hydratedDoc };
+
+      let mode = resolveDocumentEditMode(safeContext?.doc);
       if (mode === 'none') {
         showToast('Edition non disponible pour ce format');
         return;
@@ -29252,12 +29504,12 @@
         }
       }
 
-      currentDocEditorContext = { ...context, mode, isMarkdown: isMarkdownDocument(context?.doc) };
+      currentDocEditorContext = { ...safeContext, mode, isMarkdown: isMarkdownDocument(safeContext?.doc) };
       const xlsxTabBtn = document.getElementById('doc-editor-tab-xlsx');
       const cssTabBtn = document.getElementById('doc-editor-tab-css');
       if (xlsxTabBtn) xlsxTabBtn.disabled = mode !== 'spreadsheet-xlsx';
       if (cssTabBtn) cssTabBtn.disabled = mode !== 'spreadsheet-css';
-      title.textContent = `Modifier: ${context.doc?.name || 'document'}`;
+      title.textContent = `Modifier: ${safeContext.doc?.name || 'document'}`;
       subtitle.textContent = mode === 'text'
         ? 'Edition directe du contenu'
         : mode === 'spreadsheet-css'
@@ -29604,6 +29856,8 @@
     window.openGlobalDocumentEditor = openGlobalDocumentEditor;
     window.openProjectNoteFromDocument = openProjectNoteFromDocument;
     window.deleteProjectNoteLinkedDocument = deleteProjectNoteLinkedDocument;
+    window.openDocumentPreviewByRef = openDocumentPreviewByRef;
+    window.downloadDocumentByRef = downloadDocumentByRef;
 
     function renderDocuments(stateOrTasks) {
       const container = document.getElementById('documents-container');
@@ -29743,13 +29997,9 @@
           <div class="flex items-center justify-between text-xs">
             <span class="text-gray-500">${formatFileSize(doc.size || 0)}</span>
             <div class="doc-hover-actions flex items-center gap-2 flex-wrap">
-              ${isDocumentPreviewable(doc) ? `<button onclick="openDocumentPreview('${encodeURIComponent(doc.data || '')}','${encodeURIComponent(doc.name || '')}','${encodeURIComponent(doc.type || '')}','${encodeDocumentPreviewRef(doc, currentProjectId)}')" class="workspace-action-inline" data-action-kind="preview" data-action-label="Aperçu">Aperçu</button>` : ''}
+              ${isDocumentPreviewable(doc) ? `<button onclick="openDocumentPreviewByRef('${encodeDocumentPreviewRef(doc, currentProjectId)}')" class="workspace-action-inline" data-action-kind="preview" data-action-label="Aperçu">Aperçu</button>` : ''}
               ${isDocumentEditable(doc) && (canEditTaskDoc || canEditProjectDoc) ? `<button onclick="openProjectDocumentEditor('${doc.sourceType}','${escapeHtml(doc.sourceType === 'project-doc' ? doc.docId : doc.taskId)}',${Number(doc.attachmentIndex ?? -1)})" class="workspace-action-inline" data-action-kind="edit" data-action-label="Modifier">Modifier</button>` : ''}
-              ${(() => {
-                const safeHref = sanitizeDownloadHref(doc.data || '', String(doc.type || ''));
-                if (!safeHref) return '<span class="workspace-action-inline opacity-60">Téléchargement indisponible</span>';
-                return `<a class="workspace-action-inline" data-action-kind="export" data-action-label="Télécharger" href="${safeHref.replace(/"/g, '&quot;')}" download="${escapeHtml(doc.name || 'document')}">Télécharger</a>`;
-              })()}
+              <button onclick="downloadDocumentByRef('${encodeDocumentPreviewRef(doc, currentProjectId)}')" class="workspace-action-inline" data-action-kind="export" data-action-label="Télécharger">Télécharger</button>
               ${canManageProjectDocBinding ? `<button onclick="openDocumentBindingModal('${escapeHtml(`${currentProjectId}:project-doc:${doc.docId}`)}')" class="workspace-action-inline" data-action-kind="manage" data-action-label="Gérer">Gérer</button>` : ''}
               ${canDeleteTaskDoc ? `<button onclick="removeAttachment('${doc.taskId}', ${doc.attachmentIndex})" class="workspace-action-inline" data-action-kind="danger" data-action-label="Supprimer">Supprimer</button>` : ''}
               ${canDeleteProjectDoc ? `<button onclick="deleteProjectDocument('${doc.docId}')" class="workspace-action-inline" data-action-kind="danger" data-action-label="Supprimer">Supprimer</button>` : ''}
@@ -30609,40 +30859,67 @@
       await showProjectDetail(currentProjectId);
     }
 
-    async function readDocumentFilesFromInput(inputId) {
+    async function readDocumentFilesFromInput(inputId, options = {}) {
       const input = document.getElementById(inputId);
       const files = Array.from(input?.files || []);
       if (!files.length) return [];
+      const safeOptions = (options && typeof options === 'object') ? options : {};
+      const useFsStorage = canUseSharedFilesystemDocumentStorage();
+      const fileScope = String(safeOptions.scope || 'project').trim() || 'project';
+      const fileProjectId = String(safeOptions.projectId || currentProjectId || 'global').trim() || 'global';
+      const fileTheme = String(safeOptions.theme || 'General').trim() || 'General';
+      const fileRubric = String(safeOptions.rubric || 'document-upload').trim() || 'document-upload';
       const docs = await Promise.all(
-        files.map(file => new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => {
-            resolve({
-              docId: uuidv4(),
-              name: file.name,
-              type: file.type || 'application/octet-stream',
-              size: file.size,
-              data: reader.result,
-              uploadedAt: Date.now()
-            });
+        files.map(async (file) => {
+          const baseDoc = {
+            docId: uuidv4(),
+            name: file.name,
+            type: file.type || 'application/octet-stream',
+            size: file.size,
+            uploadedAt: Date.now()
           };
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        }))
+          if (useFsStorage) {
+            try {
+              const fsMeta = await window.TaskMDADocumentStorage.writeFile(sharedFolderHandle, file, {
+                rubric: fileRubric,
+                scope: fileScope,
+                projectId: fileProjectId,
+                theme: fileTheme
+              });
+              return {
+                ...baseDoc,
+                data: '',
+                storageMode: fsMeta.storageMode,
+                storageProvider: fsMeta.storageProvider,
+                storagePath: fsMeta.storagePath,
+                storedAt: fsMeta.storedAt
+              };
+            } catch (error) {
+              console.warn('Falling back to IndexedDB payload storage for document:', error);
+            }
+          }
+          const data = window.TaskMDADocumentStorage?.readFileAsDataUrl
+            ? await window.TaskMDADocumentStorage.readFileAsDataUrl(file)
+            : await fileToDataUrl(file);
+          return {
+            ...baseDoc,
+            data
+          };
+        })
       );
       return docs;
     }
 
-    async function readProjectDocumentFiles() {
-      return readDocumentFilesFromInput('project-doc-files');
+    async function readProjectDocumentFiles(options = {}) {
+      return readDocumentFilesFromInput('project-doc-files', options);
     }
 
-    async function readCreateProjectDocumentFiles() {
-      return readDocumentFilesFromInput('project-create-doc-files');
+    async function readCreateProjectDocumentFiles(options = {}) {
+      return readDocumentFilesFromInput('project-create-doc-files', options);
     }
 
-    async function readEditProjectDocumentFiles() {
-      return readDocumentFilesFromInput('edit-project-doc-files');
+    async function readEditProjectDocumentFiles(options = {}) {
+      return readDocumentFilesFromInput('edit-project-doc-files', options);
     }
 
     function estimateDataUrlBytes(dataUrl) {
@@ -30750,20 +31027,25 @@
         showToast('Action non autorisee');
         return;
       }
-      const files = await readProjectDocumentFiles();
+      const taskLinksSelect = document.getElementById('project-doc-task-links');
+      const themeInput = document.getElementById('project-doc-theme');
+      const modeInput = document.getElementById('project-doc-mode');
+      const themeValue = String(themeInput?.value || '').trim() || 'General';
+      const files = await readProjectDocumentFiles({
+        projectId: currentProjectId,
+        scope: 'project',
+        rubric: 'project-doc-upload',
+        theme: themeValue
+      });
       if (!files.length) {
         showToast('Selectionnez au moins un document');
         return;
       }
-      const taskLinksSelect = document.getElementById('project-doc-task-links');
-      const themeInput = document.getElementById('project-doc-theme');
-      const modeInput = document.getElementById('project-doc-mode');
       const linkedTaskIds = Array.from(taskLinksSelect?.selectedOptions || [])
         .map(opt => opt.value)
         .filter(Boolean);
       const validTaskIds = new Set((state.tasks || []).map(t => t.taskId));
       const safeLinkedTaskIds = [...new Set(linkedTaskIds.filter(id => validTaskIds.has(id)))];
-      const themeValue = String(themeInput?.value || '').trim() || 'General';
       const selectedSharingMode = normalizeSharingMode(
         String(modeInput?.value || '').trim() || normalizeSharingMode(state.project?.sharingMode, 'private'),
         'private'
@@ -31979,6 +32261,9 @@
     });
     document.getElementById('doc-binding-theme-known')?.addEventListener('change', () => {
       syncThemePickerInputFromSelection('doc-binding-theme-known', 'doc-binding-theme');
+    });
+    document.getElementById('btn-doc-binding-copy-storage-path')?.addEventListener('click', async () => {
+      await copyDocumentBindingStoragePath();
     });
     document.getElementById('btn-save-doc-binding')?.addEventListener('click', saveDocumentBindingChanges);
     document.getElementById('btn-close-doc-editor')?.addEventListener('click', () => {
@@ -33342,7 +33627,12 @@
         }
         const stateAfterCreate = await getProjectState(projectId, { ignoreAccessCheck: true });
         await syncDescriptionImagesAsProjectDocs(projectId, stateAfterCreate, createProjectEvent.payload.description || '');
-        const createProjectDocuments = await readCreateProjectDocumentFiles();
+        const createProjectDocuments = await readCreateProjectDocumentFiles({
+          projectId,
+          scope: 'project',
+          rubric: 'project-create-upload',
+          theme: name || 'General'
+        });
         const createProjectDocumentEvents = createProjectDocuments.map(file => createEvent(
           EventTypes.CREATE_DOCUMENT,
           projectId,
