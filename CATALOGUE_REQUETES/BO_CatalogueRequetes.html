@@ -30,6 +30,15 @@ body{font-family:var(--font);background:var(--gray-50);color:var(--gray-800);min
 .btn-primary:hover{background:var(--orange-dark)}
 .btn-ghost{background:rgba(255,255,255,.1);color:white;border:1px solid rgba(255,255,255,.2);border-radius:var(--radius-sm);padding:8px 14px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;font-family:var(--font)}
 .btn-ghost:hover{background:rgba(255,255,255,.18)}
+.export-menu{position:relative}
+.export-dropdown{position:absolute;top:calc(100% + 6px);right:0;background:white;border:0.5px solid var(--gray-200);border-radius:var(--radius);box-shadow:var(--shadow-md);min-width:220px;z-index:200;overflow:hidden;display:none;animation:modalIn .15s ease}
+.export-dropdown.open{display:block}
+.export-opt{display:flex;align-items:center;gap:12px;padding:11px 14px;border:none;background:white;cursor:pointer;font-family:var(--font);width:100%;text-align:left;transition:background .1s;border-bottom:0.5px solid var(--gray-100)}
+.export-opt:last-child{border-bottom:none}
+.export-opt:hover{background:var(--gray-50)}
+.export-opt svg{color:var(--gray-400);flex-shrink:0}
+.export-opt-label{font-size:13px;font-weight:500;color:var(--gray-800)}
+.export-opt-sub{font-size:11px;color:var(--gray-400);margin-top:1px}
 .sidebar{background:white;border-right:0.5px solid var(--gray-200);display:flex;flex-direction:column;overflow-y:auto;position:sticky;top:58px;height:calc(100vh - 58px)}
 .sidebar-section{padding:16px 12px 8px}
 .sidebar-section-title{font-size:10px;font-weight:600;letter-spacing:.8px;color:var(--gray-400);text-transform:uppercase;padding:0 8px;margin-bottom:6px}
@@ -176,6 +185,50 @@ textarea.form-control{resize:vertical;min-height:80px}
 .empty-state{text-align:center;padding:60px 20px;color:var(--gray-400)}
 .empty-state-icon{font-size:40px;margin-bottom:12px}
 .empty-state h3{font-size:15px;color:var(--gray-600);margin-bottom:6px}
+
+/* ── RÉFÉRENTIEL CNSA ── */
+.ref-wrap{overflow-y:auto;flex:1;background:var(--gray-50)}
+.ref-page{display:grid;grid-template-columns:220px 1fr;height:100%}
+.ref-toc{background:white;border-right:0.5px solid var(--gray-200);overflow-y:auto;padding:16px 10px;display:flex;flex-direction:column;gap:2px;position:sticky;top:0;height:calc(100vh - 58px)}
+.ref-toc-title{font-size:10px;font-weight:600;letter-spacing:.8px;color:var(--gray-400);text-transform:uppercase;padding:0 8px 8px;margin-bottom:4px;border-bottom:0.5px solid var(--gray-100)}
+.toc-item{display:flex;align-items:flex-start;gap:8px;padding:7px 10px;border-radius:var(--radius-sm);cursor:pointer;font-size:12px;color:var(--gray-600);transition:all .1s;border:none;background:none;width:100%;text-align:left;font-family:var(--font);line-height:1.35}
+.toc-item:hover{background:var(--gray-50);color:var(--gray-800)}
+.toc-item.active{background:var(--navy-light);color:var(--navy);font-weight:500}
+.toc-num{font-family:var(--font-mono);font-size:10px;color:var(--gray-400);flex-shrink:0;padding-top:1px;min-width:16px}
+.toc-item.active .toc-num{color:var(--navy)}
+.ref-body{overflow-y:auto;padding:28px 32px;max-width:860px}
+.ref-section{margin-bottom:40px;scroll-margin-top:20px}
+.ref-section-title{font-size:17px;font-weight:700;color:var(--navy);margin-bottom:16px;padding-bottom:10px;border-bottom:2px solid var(--navy-light);display:flex;align-items:center;gap:10px}
+.ref-num{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:7px;background:var(--navy);color:white;font-size:12px;font-weight:700;flex-shrink:0}
+.ref-subsection{margin-bottom:20px}
+.ref-subsection-title{font-size:13.5px;font-weight:600;color:var(--gray-800);margin-bottom:10px;padding-left:10px;border-left:3px solid var(--orange)}
+.ref-rule{display:flex;align-items:flex-start;gap:8px;padding:7px 10px;border-radius:var(--radius-sm);font-size:13px;line-height:1.55;margin-bottom:4px}
+.rule-inclus{background:#EAF3DE;color:#1F4A08}
+.rule-exclus{background:#FCEBEB;color:#7A1F1F}
+.rule-filtre{background:#E6F1FB;color:#0C3D70}
+.rule-calcul{background:#FAEEDA;color:#5C3006}
+.rule-cond{background:#EEEDFE;color:#3A2D8A}
+.rule-tag{font-family:var(--font-mono);font-size:10px;font-weight:700;padding:2px 6px;border-radius:3px;flex-shrink:0;margin-top:2px;letter-spacing:.3px}
+.tag-inclus{background:#C0DD97;color:#1F4A08}
+.tag-exclus{background:#F09595;color:#7A1F1F}
+.tag-filtre{background:#85B7EB;color:#0C3D70}
+.tag-calcul{background:#FAC775;color:#5C3006}
+.tag-cond{background:#AFA9EC;color:#3A2D8A}
+.ref-alert{background:var(--amber-bg);border-left:3px solid var(--orange);border-radius:0 var(--radius-sm) var(--radius-sm) 0;padding:10px 14px;font-size:12.5px;color:var(--amber);line-height:1.55;margin:10px 0;display:flex;gap:8px;align-items:flex-start}
+.ref-alert-icon{flex-shrink:0;font-size:14px;margin-top:1px}
+.ref-formula{background:var(--navy-light);border-radius:var(--radius-sm);padding:10px 14px;font-family:var(--font-mono);font-size:12px;color:var(--navy);margin:8px 0;line-height:1.6;white-space:pre-wrap;word-break:break-word}
+.ref-table{width:100%;border-collapse:collapse;font-size:12.5px;margin:10px 0}
+.ref-table th{background:var(--gray-50);padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--gray-400);text-transform:uppercase;letter-spacing:.4px;border-bottom:0.5px solid var(--gray-200);white-space:nowrap}
+.ref-table td{padding:9px 12px;border-bottom:0.5px solid var(--gray-100);vertical-align:top;line-height:1.45}
+.ref-table tr:last-child td{border-bottom:none}
+.ref-table tr:hover td{background:var(--gray-50)}
+.ref-table-wrap{border:0.5px solid var(--gray-200);border-radius:var(--radius);overflow:hidden;margin:10px 0}
+.ref-source{font-size:11px;color:var(--gray-400);font-style:italic;margin-top:6px;padding-top:6px;border-top:0.5px solid var(--gray-100)}
+.ref-header-card{background:white;border:0.5px solid var(--gray-200);border-radius:var(--radius);padding:18px 22px;margin-bottom:28px;display:flex;align-items:flex-start;gap:16px}
+.ref-header-icon{width:48px;height:48px;border-radius:10px;background:var(--navy);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+.ref-header-title{font-size:16px;font-weight:700;color:var(--gray-800);margin-bottom:4px}
+.ref-header-sub{font-size:12px;color:var(--gray-400);line-height:1.5}
+.ref-badge{display:inline-block;font-size:11px;font-weight:500;padding:3px 8px;border-radius:4px;background:var(--navy-light);color:var(--navy);margin-right:6px;margin-bottom:4px}
 #toast{position:fixed;bottom:24px;right:24px;background:var(--gray-800);color:white;padding:12px 18px;border-radius:var(--radius);font-size:13px;z-index:999;transform:translateY(100px);opacity:0;transition:all .3s;box-shadow:0 4px 20px rgba(0,0,0,.2)}
 #toast.show{transform:translateY(0);opacity:1}
 #toast.success{background:var(--green)}
@@ -197,10 +250,23 @@ textarea.form-control{resize:vertical;min-height:80px}
   </div>
   <span class="topbar-title">Catalogue des requêtes BusinessObjects</span>
   <div class="topbar-actions">
-    <button class="btn-ghost" onclick="exportAll()">
-      <svg width="13" height="13" viewBox="0 0 14 14" fill="currentColor"><path d="M2 10v2h10v-2H2zm4-8v5.586L4.707 6.293 3.293 7.707 7 11.414l3.707-3.707-1.414-1.414L8 7.586V2H6z"/></svg>
-      Exporter
-    </button>
+    <div class="export-menu" id="export-menu">
+      <button class="btn-ghost" onclick="toggleExportMenu(event)">
+        <svg width="13" height="13" viewBox="0 0 14 14" fill="currentColor"><path d="M2 10v2h10v-2H2zm4-8v5.586L4.707 6.293 3.293 7.707 7 11.414l3.707-3.707-1.414-1.414L8 7.586V2H6z"/></svg>
+        Exporter
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" style="opacity:.7"><path d="M2 3l3 4 3-4z"/></svg>
+      </button>
+      <div class="export-dropdown" id="export-dropdown">
+        <button class="export-opt" onclick="exportAll();closeExportMenu()">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M2 2h8l2 2v8H2V2zm2 5h4v4H4V7zm1-5v3h3V2H5z"/></svg>
+          <div><div class="export-opt-label">Export JSON</div><div class="export-opt-sub">Catalogue + configuration</div></div>
+        </button>
+        <button class="export-opt" onclick="exportExcel();closeExportMenu()">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M1 1h8l3 3v9H1V1zm2 5l2 3 2-3H5.5L4.5 8 3.5 6H2zm4 0l2 3 2-3H8.5L7.5 8 6.5 6H5z" opacity=".3"/><path d="M1 1h8l3 3v9H1V1zm7 0v3h3M3 6.5l1.5 2.5L3 11.5m2-5l2 2.5L5 11.5m2-5l2 2.5L7 11.5" fill="none" stroke="currentColor" stroke-width=".8"/><path d="M3 7l1 1.5L3 11h1.2l.8-1.5.8 1.5H7L5.8 8.5 7 7H5.8l-.8 1.3L4.2 7H3zm4 0l1 1.5L7 11h1.2l.8-1.5.8 1.5H11L9.8 8.5 11 7H9.8L9 8.3 8.2 7H7z"/></svg>
+          <div><div class="export-opt-label">Export Excel</div><div class="export-opt-sub">Tableau .xlsx des requêtes</div></div>
+        </button>
+      </div>
+    </div>
     <button class="btn-primary" onclick="openAddModal()">
       <svg width="13" height="13" viewBox="0 0 14 14" fill="currentColor"><path d="M6 0h2v6h6v2H8v6H6V8H0V6h6z"/></svg>
       Nouvelle requête
@@ -227,6 +293,10 @@ textarea.form-control{resize:vertical;min-height:80px}
     <div id="status-nav"></div>
   </div>
   <div class="sidebar-section" style="margin-top:auto;padding-top:16px;border-top:0.5px solid var(--gray-100)">
+    <button class="nav-item" id="nav-ref" onclick="goRef()">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M2 1h7l3 3v9H2V1zm4 4v5m-2-3h4M4 4h3"/><path d="M9 1v3h3" fill="none" stroke="currentColor" stroke-width="1"/></svg>
+      Référentiel CNSA
+    </button>
     <button class="nav-item" onclick="goSettings()">
       <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M5.7.3l-.4 1.6a5 5 0 0 0-1 .6L2.7 2 1 4.7l1.2 1.1a5.3 5.3 0 0 0 0 1.4L1 8.3 2.7 11l1.6-.5a5 5 0 0 0 1 .6l.4 1.6h2.6l.4-1.6a5 5 0 0 0 1-.6L11.3 11 13 8.3l-1.2-1.1a5.3 5.3 0 0 0 0-1.4L13 4.7 11.3 2l-1.6.5a5 5 0 0 0-1-.6L8.3.3H5.7zM7 5a2 2 0 1 1 0 4A2 2 0 0 1 7 5z"/></svg>
       Paramétrage
@@ -436,6 +506,469 @@ textarea.form-control{resize:vertical;min-height:80px}
 
     </div>
   </div>
+  <!-- VUE RÉFÉRENTIEL CNSA -->
+  <div id="view-ref" style="display:none;flex:1;overflow:hidden">
+    <div class="ref-page">
+
+      <!-- TABLE DES MATIÈRES -->
+      <nav class="ref-toc">
+        <div class="ref-toc-title">Sommaire</div>
+        <button class="toc-item active" onclick="scrollRef('r1',this)"><span class="toc-num">1</span>Dossiers déposés et stocks</button>
+        <button class="toc-item" onclick="scrollRef('r2',this)"><span class="toc-num">2</span>Décisions CDAPH</button>
+        <button class="toc-item" onclick="scrollRef('r3',this)"><span class="toc-num">3</span>Bénéficiaires et droits ouverts</button>
+        <button class="toc-item" onclick="scrollRef('r4',this)"><span class="toc-num">4</span>Délai Moyen de Traitement</button>
+        <button class="toc-item" onclick="scrollRef('r5',this)"><span class="toc-num">5</span>Prestations — PCH, AEEH, CMI, AAH</button>
+        <button class="toc-item" onclick="scrollRef('r6',this)"><span class="toc-num">6</span>Orientations ESMS</button>
+        <button class="toc-item" onclick="scrollRef('r7',this)"><span class="toc-num">7</span>Recours — RAPO et contentieux</button>
+        <button class="toc-item" onclick="scrollRef('r8',this)"><span class="toc-num">8</span>Ventilation Enfants / Adultes</button>
+        <button class="toc-item" onclick="scrollRef('r9',this)"><span class="toc-num">9</span>Effectifs (ETP)</button>
+        <button class="toc-item" onclick="scrollRef('r10',this)"><span class="toc-num">10</span>Valeurs manquantes</button>
+        <button class="toc-item" onclick="scrollRef('r11',this)"><span class="toc-num">11</span>Exclusions globales</button>
+        <button class="toc-item" onclick="scrollRef('r12',this)"><span class="toc-num">12</span>Points de vigilance BO/Solis</button>
+        <div style="margin-top:auto;padding-top:12px;border-top:0.5px solid var(--gray-100)">
+          <button class="toc-item" onclick="goBack()" style="color:var(--gray-400)">
+            <span class="toc-num">←</span>Retour au catalogue
+          </button>
+        </div>
+      </nav>
+
+      <!-- CORPS DU RÉFÉRENTIEL -->
+      <div class="ref-body" id="ref-body">
+
+        <div class="ref-header-card">
+          <div class="ref-header-icon">📐</div>
+          <div>
+            <div class="ref-header-title">Référentiel consolidé — Périmètres statistiques MDPH/CNSA</div>
+            <div class="ref-header-sub">Sources croisées : Guide pratique CNSA (Mars 2026) &amp; Maquette Échanges Annuels MDPH 2025<br>
+              <span class="ref-badge">Campagne 2024 / Année N</span>
+              <span class="ref-badge">Consolidé le 24/04/2026</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 1 -->
+        <div class="ref-section" id="r1">
+          <div class="ref-section-title"><span class="ref-num">1</span>Dossiers déposés et stocks</div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">1.1 — Dossiers déposés (année N)</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>Demandes explicites ou génériques avec date de dépôt renseignée</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>Dossiers CERFA et dossiers téléservice (tous canaux confondus)</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>Dossiers de reprise de droits en cours ou suite à révision par un tiers</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>Comptage unique sans doublon — 1 dossier de demande = 1 seule occurrence</div>
+            <div class="ref-rule rule-exclus"><span class="rule-tag tag-exclus">EXCLUS</span>Recours RAPO, recours gracieux et recours contentieux</div>
+            <div class="ref-alert"><span class="ref-alert-icon">⚠</span>Vérifier dans BO que le filtre sur le type de demande exclut bien les RAPO — ne pas se fier au seul statut du dossier.</div>
+            <div class="ref-source">Guide CNSA §1.1 + Maquette §02 — Les reprises de droits sont explicitement incluses par la Maquette.</div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">1.2 — Stock au 1er janvier (dossiers non décidés)</div>
+            <div class="ref-rule rule-filtre"><span class="rule-tag tag-filtre">FILTRE</span>Photographie au 1er janvier de l'année N</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>Dossiers avec date de dépôt renseignée, sans décision ni clôture</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>Périmètre identique aux dossiers déposés : CERFA + téléservice, sans doublon</div>
+            <div class="ref-rule rule-exclus"><span class="rule-tag tag-exclus">EXCLUS</span>Recours déposés</div>
+            <div class="ref-source">Maquette §07 — Le stock comptabilise les demandes par prestation/orientation/avis figurant dans l'onglet DEMANDES détaillé.</div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">1.3 — Stock au 31 décembre (dossiers non décidés)</div>
+            <div class="ref-rule rule-filtre"><span class="rule-tag tag-filtre">FILTRE</span>Photographie au 31 décembre de l'année N</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>Même périmètre que le stock au 1er janvier</div>
+            <div class="ref-formula">Part stock (%) = Nb dossiers non décidés au 31/12/N ÷ Total dossiers déposés N × 100</div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">1.4 — Contrôles de cohérence (Maquette CNSA)</div>
+            <div class="ref-rule rule-calcul"><span class="rule-tag tag-calcul">CALCUL</span>Total demandes déposées (onglet DEMANDES) = Total onglet ACTIVITE GLOBALE</div>
+            <div class="ref-rule rule-calcul"><span class="rule-tag tag-calcul">CALCUL</span>Nb premières demandes + réexamens = total des demandes recevables</div>
+            <div class="ref-rule rule-calcul"><span class="rule-tag tag-calcul">CALCUL</span>Nb demandes recevables ≤ nb demandes déposées</div>
+          </div>
+        </div>
+
+        <!-- 2 -->
+        <div class="ref-section" id="r2">
+          <div class="ref-section-title"><span class="ref-num">2</span>Décisions CDAPH — périmètre et comptages</div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">2.1 — Définition et périmètre général</div>
+            <p style="font-size:13px;color:var(--gray-600);margin-bottom:10px;line-height:1.6">Une décision = un accord, un refus ou un sursis. Les rejets administratifs (dossier irrecevable) sont des refus.</p>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>Accords, refus, sursis — y compris les rejets administratifs</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>Décisions suite à recours gracieux/RAPO : intégrées dans les décisions CDAPH</div>
+            <div class="ref-rule rule-exclus"><span class="rule-tag tag-exclus">EXCLUS</span>Décisions de sortie de dispositif (orientations ESMS ou ORP)</div>
+            <div class="ref-rule rule-exclus"><span class="rule-tag tag-exclus">EXCLUS</span>Non-attributions supplémentaires : ligne 99 uniquement — jamais dans le total (ligne 94)</div>
+            <div class="ref-formula">Nb de décisions = Accords + Refus + Sursis</div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">2.2 — Comptage en personnes uniques</div>
+            <div class="ref-alert"><span class="ref-alert-icon">⚠</span>Ne pas compter les lignes de décision en base — compter les personnes distinctes (identifiants uniques).</div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">2.3 — Règles spécifiques par prestation (Maquette §04)</div>
+            <div class="ref-table-wrap"><table class="ref-table">
+              <thead><tr><th>Prestation</th><th>Règle de comptage</th></tr></thead>
+              <tbody>
+                <tr><td><strong>PCH</strong></td><td>1 décision d'accord quel que soit le nombre d'éléments accordés</td></tr>
+                <tr><td><strong>AEEH</strong></td><td>1 décision quel que soit le contenu. Exception : plusieurs compléments lors d'une même CDAPH → compter plusieurs décisions</td></tr>
+                <tr><td><strong>CMI invalidité/priorité</strong></td><td>1 décision même si la CDAPH prononce deux décisions en séance</td></tr>
+                <tr><td><strong>Orientation ESMS adultes</strong></td><td>1 décision</td></tr>
+              </tbody>
+            </table></div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">2.4 — Contrôles de cohérence</div>
+            <div class="ref-rule rule-calcul"><span class="rule-tag tag-calcul">CALCUL</span>Total décisions CDAPH = Total onglet ACTIVITE GLOBALE</div>
+            <div class="ref-rule rule-calcul"><span class="rule-tag tag-calcul">CALCUL</span>Total décisions enfants = Total onglet ACTIVITE ENFANTS</div>
+            <div class="ref-rule rule-calcul"><span class="rule-tag tag-calcul">CALCUL</span>Total décisions adultes = Total onglet ACTIVITE ADULTES</div>
+          </div>
+        </div>
+
+        <!-- 3 -->
+        <div class="ref-section" id="r3">
+          <div class="ref-section-title"><span class="ref-num">3</span>Bénéficiaires et droits ouverts</div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">3.1 — Nombre de bénéficiaires avec un droit ouvert au 31/12/N</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>Usagers ayant au moins un droit ouvert au 31 décembre de l'année N</div>
+            <div class="ref-rule rule-filtre"><span class="rule-tag tag-filtre">FILTRE</span>date_ouverture_droit ≤ 31/12/N</div>
+            <div class="ref-rule rule-filtre"><span class="rule-tag tag-filtre">FILTRE</span>date_fin_droit &gt; 31/12/N</div>
+            <div class="ref-rule rule-exclus"><span class="rule-tag tag-exclus">EXCLUS</span>Personnes décédées avant le 31/12 de l'année N</div>
+            <div class="ref-formula">Droit ouvert : date_ouv ≤ 31/12/N  ET  date_fin > 31/12/N</div>
+            <div class="ref-alert"><span class="ref-alert-icon">⚠</span>Distinct du « droit notifié » : un droit notifié peut exister sans être ouvert si sa date de début est postérieure au 31/12/N.</div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">3.2 — Précisions Maquette §16</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>Droits actifs au 31/12/N, qu'ils aient été ouverts en N ou avant</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>Droits sans limitation de durée (droits à vie) — colonne dédiée dans la Maquette</div>
+            <p style="font-size:12.5px;color:var(--gray-600);margin-top:8px;line-height:1.55">Ligne AAH : renseigner les droits à vie appliqués à l'AAH-1 uniquement. Ligne orientations ESMS : une personne bénéficiant d'un établissement ET d'un service n'est comptée qu'une fois. Total droits ouverts (ligne 37) : une personne cumulant plusieurs droits n'est comptée qu'une fois.</p>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">3.3 — Dénombrements de personnes (Maquette §08)</div>
+            <div class="ref-table-wrap"><table class="ref-table">
+              <thead><tr><th>Indicateur</th><th>Définition</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Nb personnes ≥ 1 demande déposée</strong></td><td>Personnes ayant déposé au moins 1 formulaire dans l'année</td></tr>
+                <tr><td><strong>Nb personnes ≥ 1 décision/avis</strong></td><td>Personnes ayant bénéficié d'au moins une décision ou un avis</td></tr>
+                <tr><td><strong>Nb personnes ≥ 1 accord</strong></td><td>Personnes ayant obtenu au moins un droit ouvert dans l'année</td></tr>
+                <tr><td><strong>Nb moyen demandes / personne</strong></td><td>Total demandes ÷ Nb personnes ≥ 1 demande</td></tr>
+                <tr><td><strong>Nb moyen décisions / personne</strong></td><td>(Total décisions + avis) ÷ Nb personnes ≥ 1 décision</td></tr>
+              </tbody>
+            </table></div>
+            <div class="ref-alert"><span class="ref-alert-icon">⚠</span>Total demandeurs (GLOBAL) &lt; Total adultes + Total enfants : les personnes de la tranche 16–25 ans sont intentionnellement comptées dans les deux onglets.</div>
+          </div>
+        </div>
+
+        <!-- 4 -->
+        <div class="ref-section" id="r4">
+          <div class="ref-section-title"><span class="ref-num">4</span>Délai Moyen de Traitement (DMT)</div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">4.1 — Formule officielle CNSA</div>
+            <div class="ref-rule rule-filtre"><span class="rule-tag tag-filtre">FILTRE</span>Point de départ : date de recevabilité (≠ date de dépôt)</div>
+            <div class="ref-rule rule-filtre"><span class="rule-tag tag-filtre">FILTRE</span>Point d'arrivée : date de la décision ou de l'avis</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>Les avis (CMI, AVPF, aide insertion) figurent dans le calcul du DMT</div>
+            <div class="ref-formula">DMT (mois) = [ Σ jours (date recevabilité → date décision/avis) ] ÷ Nb (décisions + avis) ÷ 30,4375
+Diviseur : 30,4375 = 365,25 ÷ 12 (durée moyenne d'un mois calendaire)</div>
+            <div class="ref-alert"><span class="ref-alert-icon">⚠</span>La date de départ peut varier selon les MDPH. La norme CNSA est la <strong>date de recevabilité</strong>. Documenter le choix retenu dans l'onglet Qualité des Données.</div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">4.2 — DMT Enfants vs Adultes</div>
+            <div class="ref-rule rule-filtre"><span class="rule-tag tag-filtre">FILTRE</span>DMT Enfants : personnes de moins de 20 ans à la date de la décision</div>
+            <div class="ref-rule rule-filtre"><span class="rule-tag tag-filtre">FILTRE</span>DMT Adultes : personnes de 20 ans ou plus à la date de la décision</div>
+            <div class="ref-source">Référence : Art. R.241-33 CASF</div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">4.3 — Indicateur complémentaire</div>
+            <p style="font-size:13px;color:var(--gray-600);line-height:1.6">Pourcentage de demandes traitées en ≤ 4 mois : part des demandes instruites dans le délai légal. Calculé séparément pour l'activité globale, le périmètre enfants et le périmètre adultes.</p>
+          </div>
+        </div>
+
+        <!-- 5 -->
+        <div class="ref-section" id="r5">
+          <div class="ref-section-title"><span class="ref-num">5</span>Prestations spécifiques — PCH, AEEH, CMI, AAH/RQTH/ORP</div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">5.1 — PCH — Prestation de Compensation du Handicap</div>
+            <p style="font-size:13px;color:var(--gray-600);margin-bottom:10px;line-height:1.6">1 demande quel que soit le nombre d'éléments demandés. 1 décision d'accord dès lors qu'au moins un élément est accordé.</p>
+            <div class="ref-table-wrap"><table class="ref-table">
+              <thead><tr><th>Élément PCH</th><th>Ce qu'on compte</th><th>Type montant</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Élément 1 — Aide humaine</strong></td><td>Nb d'éléments 1 attribués (y compris parentalité, forfaits cécité/surdité)</td><td>Mensuel</td></tr>
+                <tr><td><strong>Élément 2 — Aides techniques</strong></td><td>Nb d'éléments 2 attribués quel que soit le nombre d'aides</td><td>Ponctuel / mensuel</td></tr>
+                <tr><td><strong>Élément 3a — Logement/déménagement</strong></td><td>Nb d'éléments 3a attribués</td><td>Ponctuel</td></tr>
+                <tr><td><strong>Élément 3b — Véhicule</strong></td><td>Nb d'éléments 3b attribués</td><td>Ponctuel</td></tr>
+                <tr><td><strong>Élément 3c — Surcoûts transport</strong></td><td>Nb d'éléments 3c attribués</td><td>Mensuel / ponctuel</td></tr>
+                <tr><td><strong>Élément 4a — Charges spécifiques</strong></td><td>Nb d'éléments 4a attribués</td><td>Mensuel</td></tr>
+                <tr><td><strong>Élément 4b — Charges exceptionnelles</strong></td><td>Nb d'éléments 4b attribués</td><td>Ponctuel</td></tr>
+                <tr><td><strong>Élément 5 — Aides animalières</strong></td><td>Nb d'éléments 5 attribués quel que soit le contenu</td><td>Mensuel</td></tr>
+              </tbody>
+            </table></div>
+            <div class="ref-alert"><span class="ref-alert-icon">⚠</span>La somme des éléments PCH est SUPÉRIEURE au total des accords PCH — une même personne peut avoir plusieurs éléments sur un seul accord.</div>
+            <div class="ref-formula">Montant moyen / élément = Montant total accordé (période) ÷ Nb éléments attribués (même période)</div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">5.2 — AEEH — Allocation Éducation Enfant Handicapé</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>1 demande qu'elle soit accompagnée ou non d'un complément</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>1 décision quel que soit le contenu (AEEH seule / AEEH+C1 / … / AEEH+C6)</div>
+            <div class="ref-alert"><span class="ref-alert-icon">⚠</span><strong>Exception :</strong> si plusieurs compléments sont attribués lors d'une même séance CDAPH → compter plusieurs décisions. Les décisions sont détaillées dans l'onglet DECISIONS&AVIS;&DMT; (une ligne par niveau de complément).</div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">5.3 — CMI — Carte Mobilité Inclusion</div>
+            <div class="ref-table-wrap"><table class="ref-table">
+              <thead><tr><th>Type CMI</th><th>Règle demandes</th><th>Règle avis/décisions</th></tr></thead>
+              <tbody>
+                <tr><td><strong>CMI invalidité ou priorité</strong></td><td>1 seule demande même si deux mentions demandées</td><td>1 seul avis rendu — 1 décision même si la CDAPH prononce deux décisions en séance</td></tr>
+                <tr><td><strong>CMI stationnement</strong></td><td>Comptage séparé, ventilé par tranche d'âge (&lt; 20 ans / ≥ 20 ans)</td><td>Ventilé par tranche d'âge</td></tr>
+              </tbody>
+            </table></div>
+            <div class="ref-rule rule-exclus"><span class="rule-tag tag-exclus">EXCLUS</span>Duplicatas d'anciennes cartes CI, CP ou CES — sauf droits restants &lt; 1 an (évaluation requise)</div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">5.4 — AAH / RQTH / ORP — Convention en cascade (Maquette §12)</div>
+            <p style="font-size:13px;color:var(--gray-600);margin-bottom:10px;line-height:1.6">Une demande d'AAH peut générer 1 ou 3 demandes / décisions selon la convention CNSA :</p>
+            <div class="ref-table-wrap"><table class="ref-table">
+              <thead><tr><th>Élément</th><th>Condition</th></tr></thead>
+              <tbody>
+                <tr><td><strong>1 demande/décision AAH</strong></td><td>Systématique</td></tr>
+                <tr><td><strong>+ 1 demande/accord RQTH</strong></td><td>Si RQTH attribuée</td></tr>
+                <tr><td><strong>+ 1 demande/accord ORP</strong></td><td>Si RQTH attribuée (orientation professionnelle associée)</td></tr>
+              </tbody>
+            </table></div>
+            <div class="ref-alert"><span class="ref-alert-icon">⚠</span>Si la MDPH ne maintient pas ce comptage en 3, documenter dans l'onglet Qualité des Données. Les décisions AAH sont ventilées entre AAH L.821-1 et AAH L.821-2.</div>
+          </div>
+        </div>
+
+        <!-- 6 -->
+        <div class="ref-section" id="r6">
+          <div class="ref-section-title"><span class="ref-num">6</span>Orientations ESMS et professionnelles</div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">6.1 — Règle de comptage des demandes</div>
+            <p style="font-size:13px;color:var(--gray-600);line-height:1.6;margin-bottom:8px">1 demande même si, sur un même formulaire, une orientation en établissement ET en service sont demandées. Orientation ou formation professionnelle : 1 demande même si orientation et formation figurent dans le même formulaire.</p>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">6.2 — ORP — Orientations et formations professionnelles</div>
+            <div class="ref-formula">Total ORP (ligne 42 Maquette) = CRP/UEROS + ESAT + Marché du travail + Emploi accompagné + Sans autre indication</div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">6.3 — Amendement Creton</div>
+            <div class="ref-rule rule-filtre"><span class="rule-tag tag-filtre">FILTRE</span>Les maintiens en ESMS au titre de l'amendement Creton sont classés dans l'onglet Activité Adultes, même si les bénéficiaires sont des jeunes.</div>
+            <div class="ref-rule rule-exclus"><span class="rule-tag tag-exclus">EXCLUS</span>Décisions de sortie de dispositif — non suivies dans l'onglet DECISIONS&AVIS;&DMT;</div>
+          </div>
+        </div>
+
+        <!-- 7 -->
+        <div class="ref-section" id="r7">
+          <div class="ref-section-title"><span class="ref-num">7</span>Recours — RAPO et contentieux</div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">7.1 — RAPO — Recours Administratif Préalable Obligatoire</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>Recours administratif préalable, instruit par la MDPH (devant la CDAPH)</div>
+            <div class="ref-rule rule-exclus"><span class="rule-tag tag-exclus">EXCLUS</span>Recours contentieux instruits par le Tribunal Judiciaire ou Administratif</div>
+            <p style="font-size:12.5px;color:var(--gray-600);margin:8px 0;line-height:1.55">Depuis le 01/01/2019, tous les recours gracieux sont automatiquement requalifiés en RAPO.</p>
+            <div class="ref-formula">Part RAPO (%) = Nb RAPO ÷ Nb total décisions et avis CDAPH × 100</div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">7.2 — Recours contentieux</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>Recours instruits par une juridiction extérieure (TCI ou Tribunal Administratif)</div>
+            <div class="ref-rule rule-exclus"><span class="rule-tag tag-exclus">EXCLUS</span>RAPO (recours administratifs)</div>
+            <div class="ref-rule rule-exclus"><span class="rule-tag tag-exclus">EXCLUS</span>Résultats de recours contentieux : non comptés dans l'activité de la MDPH</div>
+            <div class="ref-formula">Part contentieux (%) = Nb contentieux ÷ Nb total décisions et avis CDAPH × 100</div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">7.3 — Décisions/avis suite à recours (Maquette §17)</div>
+            <div class="ref-table-wrap"><table class="ref-table">
+              <thead><tr><th>Indicateur</th><th>Définition</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Décisions suite à recours administratif (N)</strong></td><td>Décisions/avis rendus en N portant sur un RAPO — décision initiale et/ou recours pouvant dater d'avant N. Résultat : accord / refus / sursis.</td></tr>
+                <tr><td><strong>Décisions suite à recours contentieux (N)</strong></td><td>Décisions/avis rendus en N portant sur un recours contentieux — résultats relevant des juridictions.</td></tr>
+              </tbody>
+            </table></div>
+            <div class="ref-source">Taux de confirmation calculé uniquement pour les décisions CDAPH et avis devant passer en CDAPH (AVPF + avis CMI).</div>
+          </div>
+        </div>
+
+        <!-- 8 -->
+        <div class="ref-section" id="r8">
+          <div class="ref-section-title"><span class="ref-num">8</span>Ventilation Enfants / Adultes</div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">8.1 — Seuil d'âge — règle critique</div>
+            <div class="ref-alert"><span class="ref-alert-icon">⚠</span>L'âge doit toujours être calculé à la <strong>date de référence</strong>, jamais à l'âge actuel.</div>
+            <div class="ref-table-wrap"><table class="ref-table">
+              <thead><tr><th>Contexte</th><th>Date de référence pour l'âge</th></tr></thead>
+              <tbody>
+                <tr><td>Demandes déposées (tranches d'âge)</td><td>Date de dépôt de la demande</td></tr>
+                <tr><td>Décisions CDAPH (tranches d'âge)</td><td>Date de la décision CDAPH</td></tr>
+                <tr><td>DMT — tranche enfants</td><td>Moins de 20 ans à la date de la décision/avis</td></tr>
+                <tr><td>DMT — tranche adultes</td><td>20 ans et plus à la date de la décision/avis</td></tr>
+                <tr><td>RAPT/DOP (seuil)</td><td>Enfants &lt; 18 ans / Adultes ≥ 18 ans à la date de la décision/PAG</td></tr>
+              </tbody>
+            </table></div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">8.2 — Périmètre Enfants vs Adultes par prestation (Maquette §10)</div>
+            <div class="ref-table-wrap"><table class="ref-table">
+              <thead><tr><th>Prestation</th><th>Onglet demandes</th><th>Onglet décisions/avis</th></tr></thead>
+              <tbody>
+                <tr><td>AEEH et compléments</td><td>Enfants</td><td>Enfants</td></tr>
+                <tr><td>Parcours scolarisation/formation (avec ou sans ESMS)</td><td>Enfants</td><td>Enfants</td></tr>
+                <tr><td>PCH (critère : âge à la date de dépôt/décision)</td><td>&lt; 20 ans → Enfants</td><td>&lt; 20 ans → Enfants</td></tr>
+                <tr><td>CMI stationnement, invalidité/priorité</td><td>Ventilé par âge</td><td>Ventilé par âge</td></tr>
+                <tr><td>AAH, CPR, ACTP, ACFP, RQTH, AVPF</td><td>Adultes</td><td>Adultes</td></tr>
+                <tr><td>Orientation ESMS adultes</td><td>Adultes</td><td>Adultes</td></tr>
+                <tr><td>Orientation/formation professionnelle</td><td>Adultes</td><td>Adultes</td></tr>
+                <tr><td>Amendement Creton</td><td>—</td><td>Adultes (même si jeune)</td></tr>
+                <tr><td>Demande générique</td><td>Ventilé par âge</td><td>Ventilé par âge</td></tr>
+              </tbody>
+            </table></div>
+          </div>
+        </div>
+
+        <!-- 9 -->
+        <div class="ref-section" id="r9">
+          <div class="ref-section-title"><span class="ref-num">9</span>Effectifs (ETP)</div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">9.1 — Périmètre du comptage</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>Personnel interne (salariés de la MDPH)</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>Personnel mis à disposition par les partenaires (gracieux ou avec compensation)</div>
+            <div class="ref-rule rule-exclus"><span class="rule-tag tag-exclus">EXCLUS</span>Partenaires participant aux équipes pluridisciplinaires d'évaluation (EPE)</div>
+            <div class="ref-rule rule-exclus"><span class="rule-tag tag-exclus">EXCLUS</span>Enseignants référents</div>
+            <div class="ref-rule rule-exclus"><span class="rule-tag tag-exclus">EXCLUS</span>Professionnels mobilisés dans le cadre de prestations externalisées</div>
+            <div class="ref-rule rule-filtre"><span class="rule-tag tag-filtre">FILTRE</span>Période : du 1er janvier au 31 décembre de l'année N</div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">9.2 — ETP théorique vs ETP travaillé</div>
+            <div class="ref-table-wrap"><table class="ref-table">
+              <thead><tr><th>Type</th><th>Définition</th></tr></thead>
+              <tbody>
+                <tr><td><strong>ETP théorique</strong></td><td>ETP prévu sur un poste tel qu'inscrit dans les conventions ou contrats de travail</td></tr>
+                <tr><td><strong>ETP travaillé</strong></td><td>Intègre les temps partiels (de droit, thérapeutiques, etc.) ainsi que les absences, congés maladie et périodes de vacance de poste</td></tr>
+              </tbody>
+            </table></div>
+            <p style="font-size:12px;color:var(--gray-400);margin-top:8px">Exemple : 1 ETP théorique d'ergothérapeute à 80 %, départ en retraite fin juin sans remplacement → ETP travaillé = 0,5 × 0,8 = 0,4</p>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">9.3 — Taux de renouvellement (turnover)</div>
+            <div class="ref-formula">Turnover (%) = [(Nb départs N + Nb arrivées N) ÷ 2] ÷ Effectif physique au 1er janv. N × 100</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>Départs : licenciements, démissions, fins de contrat, retraites en année N</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>Arrivées : recrutements en année N</div>
+            <div class="ref-alert"><span class="ref-alert-icon">⚠</span>Format entier obligatoire : saisir 11 pour 11 %, ne pas saisir 0,11.</div>
+          </div>
+        </div>
+
+        <!-- 10 -->
+        <div class="ref-section" id="r10">
+          <div class="ref-section-title"><span class="ref-num">10</span>Règles générales de saisie — valeurs manquantes</div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">10.1 — Référence temporelle</div>
+            <div class="ref-rule rule-filtre"><span class="rule-tag tag-filtre">FILTRE</span>Année N = 2024 (du 1er janvier au 31 décembre inclus)</div>
+            <div class="ref-rule rule-filtre"><span class="rule-tag tag-filtre">FILTRE</span>Année N-1 = 2023 — préremplie automatiquement si renseignée l'année précédente</div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">10.2 — Convention valeurs manquantes — deux systèmes à ne pas confondre</div>
+            <div class="ref-table-wrap"><table class="ref-table">
+              <thead><tr><th>Contexte</th><th>Convention</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Application SI / Rapport d'activité</strong><br><span style="font-size:11px;color:var(--gray-400)">Guide CNSA §13.2</span></td><td>Ne jamais saisir « 0 » si la donnée est inconnue — cocher « Donnée non disponible » (affiche N/A)</td></tr>
+                <tr><td><strong>Maquette Échanges Annuels Excel</strong><br><span style="font-size:11px;color:var(--gray-400)">Maquette §01</span></td><td>Valeur connue et nulle → saisir 0. Valeur inconnue/non disponible → saisir ND en toutes lettres</td></tr>
+              </tbody>
+            </table></div>
+            <div class="ref-alert"><span class="ref-alert-icon">⚠</span>Ces deux conventions s'appliquent à deux interfaces distinctes. Ne pas transposer l'une dans l'autre.</div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">10.3 — Données reprises d'une campagne à l'autre</div>
+            <div class="ref-rule rule-cond"><span class="rule-tag tag-cond">COND.</span>Obligation de relecture à chaque campagne et de cocher la case de conformité</div>
+            <div class="ref-rule rule-cond"><span class="rule-tag tag-cond">COND.</span>La case de confirmation est un champ obligatoire bloquant la transmission à la CNSA</div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">10.4 — Ordre de remplissage recommandé (Maquette §01)</div>
+            <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">
+              <div style="display:flex;gap:10px;align-items:flex-start"><span style="background:var(--navy);color:white;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">1</span><span style="font-size:13px;color:var(--gray-600)">Remplir l'onglet DEMANDES, puis l'onglet DECISIONS&AVIS;&DMT;</span></div>
+              <div style="display:flex;gap:10px;align-items:flex-start"><span style="background:var(--navy);color:white;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">2</span><span style="font-size:13px;color:var(--gray-600)">Ces onglets alimentent automatiquement : ACTIVITE ENFANTS, ACTIVITE ADULTES, ACTIVITE PCH TOTALE</span></div>
+              <div style="display:flex;gap:10px;align-items:flex-start"><span style="background:var(--navy);color:white;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">3</span><span style="font-size:13px;color:var(--gray-600)">ACTIVITE ENFANTS + ACTIVITE ADULTES alimentent ACTIVITE GLOBALE</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 11 -->
+        <div class="ref-section" id="r11">
+          <div class="ref-section-title"><span class="ref-num">11</span>Synthèse des exclusions globales</div>
+          <div class="ref-table-wrap"><table class="ref-table">
+            <thead><tr><th>Élément exclu</th><th>Périmètre et précision</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Avis de transport scolaire</strong></td><td>Tableau dédié uniquement (onglet DEMANDES, section séparée) — jamais dans les autres onglets</td></tr>
+              <tr><td><strong>Recours gracieux / RAPO / contentieux</strong></td><td>Exclus des demandes déposées et recevables</td></tr>
+              <tr><td><strong>Duplicatas CI/CP/CES</strong></td><td>Exclus des demandes CMI (sauf droits restants &lt; 1 an → évaluation requise)</td></tr>
+              <tr><td><strong>Non-attributions supplémentaires</strong></td><td>Ligne 99 de la Maquette uniquement — jamais dans le total (ligne 94) ni dans les onglets ENFANTS/ADULTES/GLOBAL</td></tr>
+              <tr><td><strong>Décisions de sortie de dispositif</strong></td><td>Non suivies dans l'onglet DECISIONS&AVIS;&DMT;</td></tr>
+              <tr><td><strong>Personnes décédées avant le 31/12/N</strong></td><td>Exclues du décompte des droits ouverts</td></tr>
+              <tr><td><strong>Résultats recours contentieux</strong></td><td>Non comptés dans l'activité de la MDPH — relèvent des juridictions</td></tr>
+              <tr><td><strong>Participants EPE</strong></td><td>Exclus du comptage des effectifs ETP</td></tr>
+              <tr><td><strong>Prestataires externalisés</strong></td><td>Exclus du comptage ETP — à saisir dans la tuile Externalisations</td></tr>
+              <tr><td><strong>Dotation CNSA dans montant CD</strong></td><td>Ne pas inscrire les concours CNSA dans le compte 7473 (montant CD)</td></tr>
+            </tbody>
+          </table></div>
+        </div>
+
+        <!-- 12 -->
+        <div class="ref-section" id="r12">
+          <div class="ref-section-title"><span class="ref-num">12</span>Points de vigilance BO/Solis — récapitulatif</div>
+          <p style="font-size:13px;color:var(--gray-600);margin-bottom:14px;line-height:1.6">Consolidation des points de vigilance des deux sources pour la fiabilisation des requêtes SAP BusinessObjects et des extractions Solis/Arche MC2.</p>
+          <div class="ref-table-wrap"><table class="ref-table">
+            <thead><tr><th>Indicateur / Point</th><th>Règle à appliquer</th><th>Réf.</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Dossiers déposés</strong></td><td>Exclure les RAPO — filtrer sur type de demande</td><td style="font-family:var(--font-mono);font-size:11px">§1/§02</td></tr>
+              <tr><td><strong>Reprises de droits</strong></td><td>Inclure reprises en cours et suite à révision tiers</td><td style="font-family:var(--font-mono);font-size:11px">§02</td></tr>
+              <tr><td><strong>Stock dossiers</strong></td><td>Exclure les dossiers clôturés ou décidés — filtrer sur statut</td><td style="font-family:var(--font-mono);font-size:11px">§1/§07</td></tr>
+              <tr><td><strong>Droits ouverts</strong></td><td>Double condition : date_ouv ≤ 31/12/N ET date_fin &gt; 31/12/N</td><td style="font-family:var(--font-mono);font-size:11px">§3/§16</td></tr>
+              <tr><td><strong>Décédés — droits ouverts</strong></td><td>Exclure les personnes décédées avant le 31/12/N</td><td style="font-family:var(--font-mono);font-size:11px">§16</td></tr>
+              <tr><td><strong>Décisions CDAPH</strong></td><td>Compter les personnes uniques, pas les lignes de décision</td><td style="font-family:var(--font-mono);font-size:11px">§2/§04</td></tr>
+              <tr><td><strong>Non-attributions suppl.</strong></td><td>Ligne 99 uniquement — jamais dans le total (ligne 94)</td><td style="font-family:var(--font-mono);font-size:11px">§04</td></tr>
+              <tr><td><strong>Sorties de dispositif</strong></td><td>Ne pas comptabiliser dans DECISIONS&AVIS;&DMT;</td><td style="font-family:var(--font-mono);font-size:11px">§04/§15</td></tr>
+              <tr><td><strong>DMT — point de départ</strong></td><td>Date de recevabilité (≠ date de dépôt)</td><td style="font-family:var(--font-mono);font-size:11px">§4/§06</td></tr>
+              <tr><td><strong>DMT — diviseur</strong></td><td>30,4375 jours/mois (365,25 ÷ 12)</td><td style="font-family:var(--font-mono);font-size:11px">§4/§06</td></tr>
+              <tr><td><strong>Âge — date de référence</strong></td><td>Calculer à la date de dépôt (demandes) ou de décision (décisions)</td><td style="font-family:var(--font-mono);font-size:11px">§09</td></tr>
+              <tr><td><strong>PCH — somme éléments</strong></td><td>Somme éléments &gt; total accords PCH — ne pas confondre</td><td style="font-family:var(--font-mono);font-size:11px">§11</td></tr>
+              <tr><td><strong>AEEH — exception</strong></td><td>Plusieurs compléments en même séance CDAPH → plusieurs décisions</td><td style="font-family:var(--font-mono);font-size:11px">§14</td></tr>
+              <tr><td><strong>CMI — duplicatas</strong></td><td>Exclure duplicatas CI/CP/CES sauf droits restants &lt; 1 an</td><td style="font-family:var(--font-mono);font-size:11px">§13</td></tr>
+              <tr><td><strong>AAH/RQTH/ORP cascade</strong></td><td>1 demande AAH peut générer 3 demandes/décisions — documenter si non appliqué</td><td style="font-family:var(--font-mono);font-size:11px">§12</td></tr>
+              <tr><td><strong>Amendement Creton</strong></td><td>Classé Adultes même si bénéficiaire jeune</td><td style="font-family:var(--font-mono);font-size:11px">§10/§15</td></tr>
+              <tr><td><strong>Turnover — format</strong></td><td>Saisir entier : 11 pour 11 %, pas 0,11</td><td style="font-family:var(--font-mono);font-size:11px">§5</td></tr>
+              <tr><td><strong>ETP — exclusions</strong></td><td>Exclure participants EPE, enseignants référents, prestataires externalisés</td><td style="font-family:var(--font-mono);font-size:11px">§5</td></tr>
+              <tr><td><strong>Valeurs manquantes SI</strong></td><td>Cocher « Donnée non disponible » — ne jamais saisir 0 si inconnu</td><td style="font-family:var(--font-mono);font-size:11px">§13/§01</td></tr>
+              <tr><td><strong>Valeurs manquantes Maquette</strong></td><td>Saisir ND si inconnu, 0 si nul et connu — cellules grisées = auto</td><td style="font-family:var(--font-mono);font-size:11px">§01</td></tr>
+            </tbody>
+          </table></div>
+          <div style="margin-top:16px;padding:12px 16px;background:var(--gray-50);border:0.5px solid var(--gray-100);border-radius:var(--radius-sm);font-size:11.5px;color:var(--gray-400);line-height:1.6">
+            Document à usage interne — MDA de l'Orne. Croise le Guide pratique CNSA (Mars 2026) et la Maquette Échanges Annuels MDPH 2025 (CNSA/LCD). À mettre à jour à chaque nouvelle campagne CNSA. Toute divergence entre les deux sources doit être documentée dans l'onglet Qualité des Données de la Maquette.
+          </div>
+        </div>
+
+      </div><!-- /ref-body -->
+    </div><!-- /ref-page -->
+  </div><!-- /view-ref -->
 
 </main>
 </div>
@@ -843,11 +1376,245 @@ function confirmAct(msg,fn){
 function closeConfirm(){document.getElementById('modal-confirm').style.display='none';}
 
 // ═══════════════ EXPORT/IMPORT ═══════════════
+function toggleExportMenu(e){
+  e.stopPropagation();
+  document.getElementById('export-dropdown').classList.toggle('open');
+}
+function closeExportMenu(){
+  document.getElementById('export-dropdown').classList.remove('open');
+}
+document.addEventListener('click',()=>closeExportMenu());
+
 function exportAll(){
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([JSON.stringify({catalogue:data,config:cfg},null,2)],{type:'application/json'}));
   a.download='catalogue_BO_'+new Date().toISOString().slice(0,10)+'.json';
-  a.click(); showToast('Export téléchargé.','success');
+  a.click(); showToast('Export JSON téléchargé.','success');
+}
+
+function exportExcel(){
+  // Génération XLSX en pur JS — format OpenXML minimal sans dépendance
+  const cols = [
+    {k:'id',       label:'Identifiant BO'},
+    {k:'nom',      label:'Nom de la requête'},
+    {k:'domaine',  label:'Domaine fonctionnel'},
+    {k:'statut',   label:'Statut'},
+    {k:'univers',  label:'Univers BO'},
+    {k:'freq',     label:'Fréquence'},
+    {k:'proprio',  label:'Responsable'},
+    {k:'date',     label:'Date de création'},
+    {k:'desc',     label:'Description / Objet métier'},
+    {k:'tags',     label:'Tags'},
+    {k:'limites',  label:'Limites & précautions'},
+  ];
+
+  const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
+
+  // Palette MDA
+  const ORANGE='FFF07821', NAVY='FF1B3A6B', GRAY='FFF8F7F4', WHITE='FFFFFFFF', DARK='FF2C2C28', MID='FF5F5E58';
+
+  const statusFills = {
+    'Actif':       {fgColor:'FFEAF3DE', fontColor:'FF3B6D11'},
+    'Brouillon':   {fgColor:'FFFAEEDA', fontColor:'FF854F0B'},
+    'En révision': {fgColor:'FFE6F1FB', fontColor:'FF185FA5'},
+    'Obsolète':    {fgColor:'FFFCEBEB', fontColor:'FFA32D2D'},
+  };
+
+  // On construit les <col> widths
+  const colWidths = [14,42,22,14,22,14,18,14,60,28,40];
+
+  // Styles xf (indexed)
+  // 0 = default, 1 = header, 2 = id mono, 3 = actif, 4 = brouillon, 5 = revision, 6 = obsolete, 7 = wrap
+  const styleXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <fonts count="5">
+    <font><sz val="10"/><color rgb="${DARK}"/><name val="Calibri"/></font>
+    <font><sz val="10"/><b/><color rgb="${WHITE}"/><name val="Calibri"/></font>
+    <font><sz val="10"/><color rgb="${MID}"/><name val="Calibri"/><family val="3"/></font>
+    <font><sz val="10"/><b/><color rgb="FF3B6D11"/><name val="Calibri"/></font>
+    <font><sz val="10"/><b/><color rgb="FFA32D2D"/><name val="Calibri"/></font>
+  </fonts>
+  <fills count="8">
+    <fill><patternFill patternType="none"/></fill>
+    <fill><patternFill patternType="gray125"/></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="${NAVY}"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="${GRAY}"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFEAF3DE"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFFAEEDA"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFE6F1FB"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFFCEBEB"/></patternFill></fill>
+  </fills>
+  <borders count="2">
+    <border><left/><right/><top/><bottom/><diagonal/></border>
+    <border><left style="thin"><color rgb="FFD6D4CC"/></left><right style="thin"><color rgb="FFD6D4CC"/></right><top style="thin"><color rgb="FFD6D4CC"/></top><bottom style="thin"><color rgb="FFD6D4CC"/></bottom><diagonal/></border>
+  </borders>
+  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+  <cellXfs count="10">
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0"><alignment vertical="top" wrapText="1"/></xf>
+    <xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0"><alignment horizontal="center" vertical="center"/></xf>
+    <xf numFmtId="0" fontId="2" fillId="3" borderId="1" xfId="0"><alignment vertical="top"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="4" borderId="1" xfId="0"><alignment vertical="top" wrapText="1"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="5" borderId="1" xfId="0"><alignment vertical="top" wrapText="1"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="6" borderId="1" xfId="0"><alignment vertical="top" wrapText="1"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="7" borderId="1" xfId="0"><alignment vertical="top" wrapText="1"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="3" borderId="1" xfId="0"><alignment vertical="top" wrapText="1"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0"><alignment vertical="top" wrapText="1"/></xf>
+    <xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0"><alignment horizontal="left" vertical="center"/></xf>
+  </cellXfs>
+</styleSheet>`;
+
+  // Header row
+  const colLetters = 'ABCDEFGHIJK'.split('');
+  let headerCells = cols.map((c,i)=>`<c r="${colLetters[i]}1" s="1" t="inlineStr"><is><t>${esc(c.label)}</t></is></c>`).join('');
+
+  // Data rows
+  const statusStyle = {'Actif':3,'Brouillon':4,'En révision':5,'Obsolète':6};
+  let dataRows = data.map((r,ri)=>{
+    const row = ri+2;
+    const ss = statusStyle[r.statut]||8;
+    return `<row r="${row}" ht="40" customHeight="1">`+cols.map((c,ci)=>{
+      const letter = colLetters[ci];
+      let val = c.k==='tags' ? (r.tags||[]).join(', ') : (r[c.k]||'');
+      const cellStyle = c.k==='id' ? 2 : c.k==='statut' ? ss : 8;
+      return `<c r="${letter}${row}" s="${cellStyle}" t="inlineStr"><is><t>${esc(val)}</t></is></c>`;
+    }).join('')+`</row>`;
+  }).join('');
+
+  // Sheet
+  const colDefsXml = cols.map((c,i)=>`<col min="${i+1}" max="${i+1}" width="${colWidths[i]}" customWidth="1"/>`).join('');
+  const sheetXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+           xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheetViews><sheetView workbookViewId="0" showGridLines="1"><selection activeCell="A2"/></sheetView></sheetViews>
+  <sheetFormatPr defaultRowHeight="16" customHeight="1"/>
+  <cols>${colDefsXml}</cols>
+  <sheetData>
+    <row r="1" ht="22" customHeight="1">${headerCells}</row>
+    ${dataRows}
+  </sheetData>
+  <autoFilter ref="A1:${colLetters[cols.length-1]}${data.length+1}"/>
+  <sheetProtection sheet="0"/>
+</worksheet>`;
+
+  // Workbook & relations
+  const wbXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+          xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets><sheet name="Catalogue BO" sheetId="1" r:id="rId1"/></sheets>
+</workbook>`;
+
+  const wbRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`;
+
+  const appXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">
+  <Application>MDA de l'Orne — Catalogue BO</Application>
+</Properties>`;
+
+  const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+  <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
+</Types>`;
+
+  const rootRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
+</Relationships>`;
+
+  // ZIP (XLSX = ZIP) — généré manuellement en base64 via structure PK
+  const files = {
+    '[Content_Types].xml': contentTypes,
+    '_rels/.rels': rootRels,
+    'xl/workbook.xml': wbXml,
+    'xl/_rels/workbook.xml.rels': wbRels,
+    'xl/styles.xml': styleXml,
+    'xl/worksheets/sheet1.xml': sheetXml,
+    'docProps/app.xml': appXml,
+  };
+
+  // Encoder UTF-8 → Uint8Array
+  const enc = new TextEncoder();
+  const parts = [];
+
+  function crc32(buf){
+    let c=0xFFFFFFFF;
+    const t=new Uint32Array(256);
+    for(let i=0;i<256;i++){let k=i;for(let j=0;j<8;j++)k=k&1?(0xEDB88320^(k>>>1)):(k>>>1);t[i]=k;}
+    for(const b of buf)c=t[(c^b)&0xFF]^(c>>>8);
+    return (c^0xFFFFFFFF)>>>0;
+  }
+  function u16le(n){return[n&0xFF,(n>>8)&0xFF];}
+  function u32le(n){return[n&0xFF,(n>>8)&0xFF,(n>>16)&0xFF,(n>>24)&0xFF];}
+  function concat(...arrs){
+    const total=arrs.reduce((s,a)=>s+a.length,0);
+    const r=new Uint8Array(total);let o=0;
+    for(const a of arrs){r.set(a,o);o+=a.length;}
+    return r;
+  }
+
+  const centralDir=[];
+  let offset=0;
+
+  for(const [name,content] of Object.entries(files)){
+    const nameBuf=enc.encode(name);
+    const dataBuf=enc.encode(content);
+    const crc=crc32(dataBuf);
+    const sz=dataBuf.length;
+    // Local file header
+    const lfh=new Uint8Array([
+      0x50,0x4B,0x03,0x04,  // sig
+      20,0,                  // version needed
+      0,0,                   // flags
+      0,0,                   // compression: stored
+      0,0,0,0,               // mod time/date
+      ...u32le(crc),
+      ...u32le(sz),...u32le(sz),
+      ...u16le(nameBuf.length),0,0,
+    ]);
+    const localEntry=concat(lfh,nameBuf,dataBuf);
+    parts.push(localEntry);
+
+    // Central dir entry
+    const cde=new Uint8Array([
+      0x50,0x4B,0x01,0x02,
+      20,0,20,0,
+      0,0,0,0,0,0,0,0,
+      ...u32le(crc),
+      ...u32le(sz),...u32le(sz),
+      ...u16le(nameBuf.length),0,0,0,0,0,0,
+      0,0,0,0,
+      ...u32le(offset),
+    ]);
+    centralDir.push(concat(cde,nameBuf));
+    offset+=localEntry.length;
+  }
+
+  const cdBuf=concat(...centralDir);
+  const eocd=new Uint8Array([
+    0x50,0x4B,0x05,0x06,
+    0,0,0,0,
+    ...u16le(centralDir.length),...u16le(centralDir.length),
+    ...u32le(cdBuf.length),
+    ...u32le(offset),
+    0,0,
+  ]);
+
+  const xlsx=concat(...parts,cdBuf,eocd);
+  const blob=new Blob([xlsx],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='catalogue_BO_'+new Date().toISOString().slice(0,10)+'.xlsx';
+  a.click();
+  showToast(`Export Excel — ${data.length} requête(s).`,'success');
 }
 function importData(){document.getElementById('import-input').click();}
 function handleImport(e){
@@ -868,12 +1635,28 @@ function handleImport(e){
 // ═══════════════ SETTINGS NAV ═══════════════
 function goSettings(){
   document.getElementById('view-catalogue').style.display='none';
+  document.getElementById('view-ref').style.display='none';
   document.getElementById('view-settings').style.display='block';
   renderAllSettings(); previewId();
 }
+function goRef(){
+  document.getElementById('view-catalogue').style.display='none';
+  document.getElementById('view-settings').style.display='none';
+  document.getElementById('view-ref').style.display='block';
+  document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
+  document.getElementById('nav-ref').classList.add('active');
+}
 function goBack(){
   document.getElementById('view-settings').style.display='none';
+  document.getElementById('view-ref').style.display='none';
   document.getElementById('view-catalogue').style.display='flex';
+  document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
+  document.getElementById('nav-all').classList.add('active');
+}
+function scrollRef(id, btn){
+  document.querySelectorAll('.toc-item').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'});
 }
 function switchTab(name,btn){
   document.querySelectorAll('.s-tab').forEach(t=>t.classList.remove('active'));btn.classList.add('active');
