@@ -12768,6 +12768,16 @@
       const linkedTaskLabels = (Array.isArray(note.linkedTaskIds) ? note.linkedTaskIds : [])
         .map((taskId) => taskTitleById.get(String(taskId || '').trim()))
         .filter(Boolean);
+      const linkedDocs = (currentProjectState.documents || [])
+        .filter((doc) => Array.isArray(doc?.linkedNoteIds) && doc.linkedNoteIds.some((noteId) => String(noteId || '').trim() === nid))
+        .map((doc) => ({
+          docId: String(doc?.docId || '').trim(),
+          name: String(doc?.name || 'Document').trim() || 'Document',
+          type: String(doc?.type || '').trim(),
+          data: String(doc?.data || ''),
+          createdBy: String(doc?.createdBy || '').trim()
+        }))
+        .filter((doc) => doc.docId);
       const authorName = resolveKnownUserIdentity(
         String(note.createdBy || '').trim(),
         String(note.createdByName || fallbackDirectoryName(note.createdBy || '') || 'Auteur').trim()
@@ -12803,9 +12813,29 @@
           : '<span class="text-xs text-slate-500">Aucun tag</span>';
       }
       if (linksEl) {
-        linksEl.innerHTML = linkedTaskLabels.length
+        const tasksHtml = linkedTaskLabels.length
           ? `<p class="text-xs text-slate-600">Liens taches: ${escapeHtml(linkedTaskLabels.join(' • '))}</p>`
           : '<p class="text-xs text-slate-500">Aucune tache liee</p>';
+        const docsHtml = linkedDocs.length
+          ? `<div class="mt-2 flex flex-col gap-2">${linkedDocs.map((doc) => {
+              const refPayload = encodeURIComponent(JSON.stringify({
+                sourceType: 'project-doc',
+                projectId: String(currentProjectId || ''),
+                docId: doc.docId,
+                sourceProjectName: String(currentProjectState?.project?.name || '')
+              }));
+              const canDeleteDoc = canEditProjectMeta(currentProjectState)
+                || (doc.createdBy && doc.createdBy === String(currentUser?.userId || '').trim())
+                || canManageProjectNote(note, currentProjectState);
+              return `
+                <div class="flex flex-wrap items-center gap-2">
+                  <button type="button" class="workspace-action-inline" data-action-kind="open" data-action-label="Ouvrir le document" onclick="openDocumentPreview('${encodeURIComponent(doc.data || '')}','${encodeURIComponent(doc.name || '')}','${encodeURIComponent(doc.type || '')}','${refPayload}')">${escapeHtml(doc.name)}</button>
+                  ${canDeleteDoc ? `<button type="button" class="workspace-action-inline" data-action-kind="danger" data-action-label="Supprimer le document" onclick="deleteProjectNoteLinkedDocument('${escapeHtml(nid)}','${escapeHtml(doc.docId)}')">Supprimer</button>` : ''}
+                </div>
+              `;
+            }).join('')}</div>`
+          : '<p class="text-xs text-slate-500 mt-1">Aucun document lié</p>';
+        linksEl.innerHTML = `${tasksHtml}${docsHtml}`;
       }
 
       const canManage = canManageProjectNote(note, currentProjectState);
@@ -13196,6 +13226,7 @@
       const tagsInput = document.getElementById('project-note-tags');
       const pinnedInput = document.getElementById('project-note-pinned');
       const shareInput = document.getElementById('project-note-share-feed');
+      const attachmentsInput = document.getElementById('project-note-attachments');
       const modalTitle = document.getElementById('project-note-modal-title');
       if (titleInput) titleInput.value = String(note?.title || '');
       setProjectDescriptionEditorContent(
@@ -13206,6 +13237,8 @@
       if (tagsInput) tagsInput.value = stringifyProjectNoteTags(note?.tags || []);
       if (pinnedInput) pinnedInput.checked = Number(note?.pinnedAt || 0) > 0;
       if (shareInput) shareInput.checked = note?.shareToGlobalFeed === true;
+      if (attachmentsInput) attachmentsInput.value = '';
+      updateProjectNoteAttachmentFilesSummary();
       populateProjectNoteTaskOptions(state, Array.isArray(note?.linkedTaskIds) ? (note.linkedTaskIds[0] || '') : '');
       setProjectNoteSaveButtonLabel(note ? 'Mettre à jour la note' : 'Enregistrer la note');
       if (modalTitle) modalTitle.textContent = note ? 'Modifier la note' : 'Nouvelle note';
@@ -13259,6 +13292,7 @@
       const pinnedInput = document.getElementById('project-note-pinned');
       const shareInput = document.getElementById('project-note-share-feed');
       const taskSelect = document.getElementById('project-note-linked-task');
+      const attachmentsInput = document.getElementById('project-note-attachments');
       const modalTitle = document.getElementById('project-note-modal-title');
       if (projectNoteDraftSaveTimer) {
         clearTimeout(projectNoteDraftSaveTimer);
@@ -13270,6 +13304,8 @@
       if (pinnedInput) pinnedInput.checked = false;
       if (shareInput) shareInput.checked = false;
       if (taskSelect) taskSelect.value = '';
+      if (attachmentsInput) attachmentsInput.value = '';
+      updateProjectNoteAttachmentFilesSummary();
       setProjectNoteSaveButtonLabel('Enregistrer la note');
       if (modalTitle) modalTitle.textContent = 'Nouvelle note';
       updateProjectNoteDraftStatus('Brouillon inactif');
@@ -13423,7 +13459,8 @@
         return;
       }
       const draft = readProjectNoteEditorDraft();
-      if (!draft.title && !draft.content) {
+      const noteAttachmentDocs = await readDocumentFilesFromInput('project-note-attachments');
+      if (!draft.title && !draft.content && (!Array.isArray(noteAttachmentDocs) || noteAttachmentDocs.length === 0)) {
         showToast('Ajoutez un titre ou un contenu');
         return;
       }
@@ -13470,6 +13507,31 @@
       );
       await publishEvent(event);
       if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(currentProjectId, [event]); }
+      if (Array.isArray(noteAttachmentDocs) && noteAttachmentDocs.length > 0) {
+        const validTaskIds = new Set((state.tasks || []).map((task) => String(task?.taskId || '').trim()).filter(Boolean));
+        const safeLinkedTaskIds = (Array.isArray(draft.linkedTaskIds) ? draft.linkedTaskIds : [])
+          .map((taskId) => String(taskId || '').trim())
+          .filter((taskId) => validTaskIds.has(taskId));
+        const noteTheme = String((Array.isArray(draft.tags) && draft.tags.length > 0 ? draft.tags[0] : 'General') || 'General').trim() || 'General';
+        const noteTitleLabel = String(draft.title || existing?.title || 'Note').trim() || 'Note';
+        const docEvents = noteAttachmentDocs.map((docFile) => createEvent(
+          EventTypes.CREATE_DOCUMENT,
+          currentProjectId,
+          currentUser.userId,
+          {
+            ...docFile,
+            linkedTaskIds: safeLinkedTaskIds,
+            linkedNoteIds: [noteId],
+            theme: noteTheme,
+            notes: `Document joint depuis la note: ${noteTitleLabel}`,
+            origin: 'project-note-upload'
+          }
+        ));
+        for (const docEvent of docEvents) {
+          await publishEvent(docEvent);
+        }
+        if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(currentProjectId, docEvents); }
+      }
       saveProjectNoteDraft(null, currentProjectId, existing ? existing.noteId : '');
       saveProjectNoteDraft(null, currentProjectId, '');
       await syncProjectNoteGlobalFeed(currentProjectId, noteId);
@@ -13483,7 +13545,13 @@
         projectNotesFocusNoteId = String(noteId || '');
         renderProjectNotes(latestState);
       }
-      showToast(existing ? 'Note mise à jour' : 'Note créée');
+      const hasNoteAttachments = Array.isArray(noteAttachmentDocs) && noteAttachmentDocs.length > 0;
+      if (hasNoteAttachments) {
+        const label = existing ? 'Note mise à jour' : 'Note créée';
+        showToast(`${label} + ${noteAttachmentDocs.length} document(s) ajouté(s)`);
+      } else {
+        showToast(existing ? 'Note mise à jour' : 'Note créée');
+      }
       await refreshStats();
       if (Number(nowTs) > 0) {
         setTimeout(() => {
@@ -13504,6 +13572,15 @@
         : notesAll.filter((note) => getProjectNoteThemeLabels(note)
           .some((label) => normalizeProjectNoteThemeKey(label) === projectNotesThemeFilter));
       const taskTitleById = new Map((state.tasks || []).map((task) => [String(task.taskId || ''), String(task.title || 'Tâche')]));
+      const noteDocsCountById = new Map();
+      (state.documents || []).forEach((doc) => {
+        const noteIds = Array.isArray(doc?.linkedNoteIds) ? doc.linkedNoteIds : [];
+        noteIds.forEach((noteId) => {
+          const key = String(noteId || '').trim();
+          if (!key) return;
+          noteDocsCountById.set(key, Number(noteDocsCountById.get(key) || 0) + 1);
+        });
+      });
       const authorById = new Map();
       (state.members || []).forEach((member) => {
         const userId = String(member?.userId || '').trim();
@@ -13523,6 +13600,7 @@
           taskTitleById,
           authorById,
           canManageById,
+          noteDocsCountById,
           focusNoteId: projectNotesFocusNoteId
         });
         if (counterEl) {
@@ -19964,6 +20042,7 @@
             sourceProjectId: state.project.projectId,
             docId: doc.docId,
             linkedTaskIds: Array.isArray(doc.linkedTaskIds) ? [...doc.linkedTaskIds] : [],
+            linkedNoteIds: Array.isArray(doc.linkedNoteIds) ? [...doc.linkedNoteIds] : [],
             sourceType: 'project-doc',
             sharingMode: normalizeSharingMode(doc.sharingMode, normalizeSharingMode(state.project.sharingMode, 'shared')),
             notes: doc.notes || '',
@@ -22196,7 +22275,8 @@
               theme: nextTheme,
               notes: doc.notes || '',
               sharingMode: nextSharingMode,
-              linkedTaskIds: selectedTaskId ? [selectedTaskId] : []
+              linkedTaskIds: selectedTaskId ? [selectedTaskId] : [],
+              linkedNoteIds: Array.isArray(doc.linkedNoteIds) ? [...doc.linkedNoteIds] : []
             }
           );
           await publishEvent(createEventDoc);
@@ -22225,6 +22305,7 @@
               theme: nextTheme,
               notes: doc.notes || '',
               sharingMode: nextSharingMode,
+              linkedNoteIds: Array.isArray(doc.linkedNoteIds) ? [...doc.linkedNoteIds] : [],
               createdAt: Date.now(),
               updatedAt: Date.now()
             }, 'id');
@@ -22249,7 +22330,8 @@
                 theme: nextTheme,
                 notes: doc.notes || '',
                 sharingMode: nextSharingMode,
-                linkedTaskIds: selectedTaskId ? [selectedTaskId] : []
+                linkedTaskIds: selectedTaskId ? [selectedTaskId] : [],
+                linkedNoteIds: Array.isArray(doc.linkedNoteIds) ? [...doc.linkedNoteIds] : []
               }
             );
             await publishEvent(createEventDoc);
@@ -29520,6 +29602,8 @@
 
     window.openProjectDocumentEditor = openProjectDocumentEditor;
     window.openGlobalDocumentEditor = openGlobalDocumentEditor;
+    window.openProjectNoteFromDocument = openProjectNoteFromDocument;
+    window.deleteProjectNoteLinkedDocument = deleteProjectNoteLinkedDocument;
 
     function renderDocuments(stateOrTasks) {
       const container = document.getElementById('documents-container');
@@ -29531,6 +29615,7 @@
       const tasks = Array.isArray(state.tasks) ? state.tasks : [];
       const projectDocs = Array.isArray(state.documents) ? state.documents : [];
       const taskTitleById = new Map(tasks.map(t => [t.taskId, t.title || 'Tâche']));
+      const noteTitleById = new Map((Array.isArray(state.notes) ? state.notes : []).map((note) => [String(note.noteId || ''), String(note.title || 'Note') || 'Note']));
 
       const docs = [];
       tasks.forEach(task => {
@@ -29555,8 +29640,11 @@
         docs.push({
           sourceType: 'project-doc',
           docId: doc.docId,
-          taskTitle: (doc.linkedTaskIds || []).length > 0 ? 'Document projet lié' : 'Document indépendant',
+          taskTitle: (Array.isArray(doc.linkedNoteIds) && doc.linkedNoteIds.length > 0)
+            ? 'Document issu d une note'
+            : ((doc.linkedTaskIds || []).length > 0 ? 'Document projet lié' : 'Document indépendant'),
           linkedTaskIds: Array.isArray(doc.linkedTaskIds) ? [...doc.linkedTaskIds] : [],
+          linkedNoteIds: Array.isArray(doc.linkedNoteIds) ? [...doc.linkedNoteIds] : [],
           uploadedAt: doc.uploadedAt || doc.createdAt || 0,
           createdBy: doc.createdBy || null,
           name: doc.name,
@@ -29573,7 +29661,8 @@
         const q = docsFilters.query.trim().toLowerCase();
         filtered = filtered.filter(doc => {
           const linkedTitles = (doc.linkedTaskIds || []).map(id => taskTitleById.get(id) || '').join(' ');
-          return [doc.name, doc.taskTitle, doc.type, doc.notes, doc.theme, linkedTitles]
+          const linkedNoteTitles = (doc.linkedNoteIds || []).map((id) => noteTitleById.get(String(id || '')) || '').join(' ');
+          return [doc.name, doc.taskTitle, doc.type, doc.notes, doc.theme, linkedTitles, linkedNoteTitles]
             .some(v => String(v || '').toLowerCase().includes(q));
         });
       }
@@ -29590,8 +29679,17 @@
       });
 
       if (filtered.length === 0) {
-        const empty = docs.length === 0 ? 'Aucun document partagé' : 'Aucun document ne correspond aux filtres';
-        container.innerHTML = `<p class="text-gray-500 text-center py-8 col-span-full">${empty}</p>`;
+        if (docs.length === 0) {
+          container.innerHTML = buildWorkspaceEmptyState({
+            icon: 'description',
+            title: 'Aucun document partagé',
+            text: 'Ajoutez un document au projet pour commencer.',
+            ctaLabel: 'Ajouter un document',
+            ctaOnclick: "(function(){const btn=document.getElementById('btn-toggle-project-docs-upload');const card=btn?.closest('.docs-upload-card');if(btn&&btn.getAttribute('aria-expanded')==='false'){btn.click();}if(card){card.classList.add('highlight-flash');setTimeout(()=>card.classList.remove('highlight-flash'),1200);card.scrollIntoView({behavior:'smooth',block:'start'});}else{window.scrollTo({top:0,behavior:'smooth'});}})()"
+          });
+        } else {
+          container.innerHTML = '<p class="text-gray-500 text-center py-8 col-span-full">Aucun document ne correspond aux filtres</p>';
+        }
         return;
       }
 
@@ -29599,9 +29697,28 @@
         const linkedTitles = (doc.linkedTaskIds || [])
           .map(id => taskTitleById.get(id))
           .filter(Boolean);
-        const linkedLabel = linkedTitles.length > 0
-          ? `Lié à: ${linkedTitles.join(', ')}`
-          : 'Aucune tâche associée';
+        const linkedNoteTitles = (doc.linkedNoteIds || [])
+          .map((noteId) => noteTitleById.get(String(noteId || '')))
+          .filter(Boolean);
+        const linkedNoteIds = (doc.linkedNoteIds || [])
+          .map((noteId) => String(noteId || '').trim())
+          .filter(Boolean);
+        const linkChunks = [];
+        if (linkedTitles.length > 0) linkChunks.push(`Tâches: ${linkedTitles.join(', ')}`);
+        if (linkedNoteTitles.length > 0) linkChunks.push(`Notes: ${linkedNoteTitles.join(', ')}`);
+        const linkedLabel = linkChunks.length > 0
+          ? `Lié à: ${linkChunks.join(' • ')}`
+          : 'Aucune référence associée';
+        const linkedNotesHtml = linkedNoteIds.length > 0
+          ? `
+            <div class="flex flex-wrap items-center gap-1 mb-2">
+              ${linkedNoteIds.map((noteId) => {
+                const title = noteTitleById.get(noteId) || 'Note';
+                return `<button type="button" class="workspace-action-inline" data-action-kind="open" data-action-label="Ouvrir la note source" onclick="openProjectNoteFromDocument('${escapeHtml(noteId)}')">Note: ${escapeHtml(title)}</button>`;
+              }).join('')}
+            </div>
+          `
+          : '';
         const canDeleteTaskDoc = doc.sourceType === 'task-attachment'
           && canEditTaskInProject((currentProjectState?.tasks || []).find(t => t.taskId === doc.taskId), currentProjectState);
         const canDeleteProjectDoc = doc.sourceType === 'project-doc'
@@ -29620,6 +29737,7 @@
           <h4 class="workspace-card-title font-semibold text-sm truncate mb-1">${escapeHtml(doc.name || `document-${idx + 1}`)}</h4>
           <p class="workspace-card-subtitle text-xs mb-2">Source: ${escapeHtml(doc.taskTitle || 'Tâche')}</p>
           <p class="workspace-card-subtitle text-xs mb-2">Thématique: ${escapeHtml(String(doc.theme || 'General'))}</p>
+          ${linkedNotesHtml}
           <p class="text-[11px] text-slate-500 mb-2 truncate" title="${escapeHtml(linkedLabel)}">${escapeHtml(linkedLabel)}</p>
           <div class="text-[11px] text-slate-500 mb-3">${doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString('fr-FR') : ''}</div>
           <div class="flex items-center justify-between text-xs">
@@ -30700,6 +30818,60 @@
       if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [event]);
       showToast('Document supprime');
       await showProjectDetail(currentProjectId);
+    }
+
+    async function deleteProjectNoteLinkedDocument(noteId, docId) {
+      const nid = String(noteId || '').trim();
+      const did = String(docId || '').trim();
+      if (!currentProjectId || !nid || !did) return;
+      const state = await getProjectState(currentProjectId);
+      if (!state?.project) return;
+      const note = getProjectNotesForState(state).find((item) => String(item?.noteId || '') === nid);
+      const doc = (state.documents || []).find((item) => String(item?.docId || '') === did);
+      if (!note || !doc) {
+        showToast('Document lié introuvable');
+        return;
+      }
+      const canDelete = canEditProjectMeta(state)
+        || (String(doc.createdBy || '').trim() && String(doc.createdBy || '').trim() === String(currentUser?.userId || '').trim())
+        || canManageProjectNote(note, state);
+      if (!canDelete) {
+        showToast('Action non autorisee');
+        return;
+      }
+      if (!confirm('Supprimer ce document lié à la note ?')) return;
+      const event = createEvent(
+        EventTypes.DELETE_DOCUMENT,
+        currentProjectId,
+        currentUser.userId,
+        { docId: did }
+      );
+      await publishEvent(event);
+      if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [event]);
+      const latestState = await getProjectState(currentProjectId);
+      if (latestState?.project) {
+        currentProjectState = latestState;
+        renderDocuments(latestState);
+        renderProjectNotes(latestState);
+      }
+      showToast('Document lié supprimé');
+      openProjectNoteReadModal(nid);
+    }
+
+    function openProjectNoteFromDocument(noteId) {
+      const nid = String(noteId || '').trim();
+      if (!nid || !currentProjectState?.project) return;
+      const note = getProjectNotesForState(currentProjectState).find((item) => String(item?.noteId || '') === nid);
+      if (!note) {
+        showToast('Note source introuvable');
+        return;
+      }
+      projectNotesFocusNoteId = nid;
+      setProjectView('notes');
+      renderProjectNotes(currentProjectState);
+      setTimeout(() => {
+        openProjectNoteReadModal(nid);
+      }, 30);
     }
 
     function setProjectMessageReply(messageId) {
@@ -34903,6 +35075,18 @@
       summary.textContent = files.map(f => `${f.name} (${formatFileSize(f.size)})`).join(' • ');
     }
 
+    function updateProjectNoteAttachmentFilesSummary() {
+      const input = document.getElementById('project-note-attachments');
+      const summary = document.getElementById('project-note-attachments-summary');
+      if (!summary) return;
+      const files = Array.from(input?.files || []);
+      if (files.length === 0) {
+        summary.textContent = 'Aucun fichier sélectionné';
+        return;
+      }
+      summary.textContent = files.map(f => `${f.name} (${formatFileSize(f.size)})`).join(' • ');
+    }
+
     function updateCreateProjectDocFilesSummary() {
       const input = document.getElementById('project-create-doc-files');
       const summary = document.getElementById('project-create-doc-files-summary');
@@ -34928,6 +35112,7 @@
     }
 
     document.getElementById('project-doc-files')?.addEventListener('change', updateProjectDocFilesSummary);
+    document.getElementById('project-note-attachments')?.addEventListener('change', updateProjectNoteAttachmentFilesSummary);
     document.getElementById('project-create-doc-files')?.addEventListener('change', updateCreateProjectDocFilesSummary);
     document.getElementById('edit-project-doc-files')?.addEventListener('change', updateEditProjectDocFilesSummary);
     setProjectDeadlineModeUi('project', document.getElementById('project-deadline-mode')?.value || 'date');

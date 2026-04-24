@@ -54,6 +54,7 @@
   function buildCardHtml(note, ctx) {
     const tags = Array.isArray(note.tags) ? note.tags : [];
     const linkedTaskIds = Array.isArray(note.linkedTaskIds) ? note.linkedTaskIds : [];
+    const linkedDocsCount = Number(ctx.noteDocsCountById.get(String(note.noteId || '')) || 0);
     const taskLabels = linkedTaskIds
       .map((taskId) => ctx.taskTitleById.get(String(taskId || '').trim()))
       .filter(Boolean);
@@ -74,6 +75,7 @@
               ${Number(note.pinnedAt || 0) > 0 ? '<span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-amber-100 text-amber-700 font-semibold">Epinglee</span>' : ''}
               ${note.shareToGlobalFeed ? '<span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-blue-100 text-blue-700 font-semibold">Fil transverse</span>' : ''}
               ${linkedTaskIds.length > 0 ? `<span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-slate-100 text-slate-700 font-semibold">${linkedTaskIds.length} tache(s) liee(s)</span>` : ''}
+              ${linkedDocsCount > 0 ? `<span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-indigo-100 text-indigo-700 font-semibold">${linkedDocsCount} document(s) lie(s)</span>` : ''}
             </div>
             <h4 class="mt-2 text-base font-bold text-slate-800">${escapeHtml(note.title || 'Note sans titre')}</h4>
             <p class="mt-1 text-xs text-slate-500">${escapeHtml(String(ctx.authorById.get(String(note.createdBy || '')) || note.createdByName || 'Auteur'))} • ${escapeHtml(formatDateTime(note.createdAt))}</p>
@@ -109,6 +111,7 @@
     const taskTitleById = options.taskTitleById instanceof Map ? options.taskTitleById : new Map();
     const authorById = options.authorById instanceof Map ? options.authorById : new Map();
     const canManageById = options.canManageById instanceof Map ? options.canManageById : new Map();
+    const noteDocsCountById = options.noteDocsCountById instanceof Map ? options.noteDocsCountById : new Map();
     const focusNoteId = String(options.focusNoteId || '');
 
     const visible = notes
@@ -145,6 +148,7 @@
       taskTitleById,
       authorById,
       canManageById,
+      noteDocsCountById,
       focusNoteId
     })).join('');
     return { total: notes.length, visible: visible.length };
