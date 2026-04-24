@@ -1,0 +1,1514 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Catalogue des requêtes BO — MDA de l'Orne</title>
+<style>
+  :root {
+    --orange: #F07821;
+    --orange-light: #FEF0E6;
+    --orange-dark: #C05A0E;
+    --navy: #1B3A6B;
+    --navy-light: #E8EDF5;
+    --navy-dark: #0F2240;
+    --gray-50: #F8F7F4;
+    --gray-100: #EEECE7;
+    --gray-200: #D6D4CC;
+    --gray-400: #9B9990;
+    --gray-600: #5F5E58;
+    --gray-800: #2C2C28;
+    --green: #3B6D11;
+    --green-bg: #EAF3DE;
+    --red: #A32D2D;
+    --red-bg: #FCEBEB;
+    --amber: #854F0B;
+    --amber-bg: #FAEEDA;
+    --blue: #185FA5;
+    --blue-bg: #E6F1FB;
+    --radius: 10px;
+    --radius-sm: 6px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 0 0 0.5px rgba(0,0,0,0.06);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.1), 0 0 0 0.5px rgba(0,0,0,0.06);
+    --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    --font-mono: 'Cascadia Code', 'Consolas', 'Courier New', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  
+  body {
+    font-family: var(--font);
+    background: var(--gray-50);
+    color: var(--gray-800);
+    min-height: 100vh;
+    font-size: 14px;
+  }
+
+  /* ── LAYOUT ── */
+  .app-shell {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    grid-template-rows: 58px 1fr;
+    min-height: 100vh;
+  }
+
+  /* ── TOPBAR ── */
+  .topbar {
+    grid-column: 1 / -1;
+    background: var(--navy);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 16px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .topbar-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: white;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.2px;
+  }
+  .topbar-logo svg { flex-shrink: 0; }
+  .topbar-title {
+    color: rgba(255,255,255,0.6);
+    font-size: 13px;
+    font-weight: 400;
+    padding-left: 16px;
+    border-left: 1px solid rgba(255,255,255,0.2);
+    margin-left: 4px;
+  }
+  .topbar-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .btn-primary {
+    background: var(--orange);
+    color: white;
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.15s;
+  }
+  .btn-primary:hover { background: var(--orange-dark); }
+
+  .btn-ghost {
+    background: rgba(255,255,255,0.1);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: var(--radius-sm);
+    padding: 8px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.15s;
+  }
+  .btn-ghost:hover { background: rgba(255,255,255,0.18); }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    background: white;
+    border-right: 0.5px solid var(--gray-200);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    position: sticky;
+    top: 58px;
+    height: calc(100vh - 58px);
+  }
+  .sidebar-section {
+    padding: 16px 12px 8px;
+  }
+  .sidebar-section-title {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.8px;
+    color: var(--gray-400);
+    text-transform: uppercase;
+    padding: 0 8px;
+    margin-bottom: 6px;
+  }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--gray-600);
+    transition: all 0.1s;
+    border: none;
+    background: none;
+    width: 100%;
+    text-align: left;
+  }
+  .nav-item:hover { background: var(--gray-50); color: var(--gray-800); }
+  .nav-item.active { background: var(--orange-light); color: var(--orange-dark); font-weight: 500; }
+  .nav-item .nav-count {
+    margin-left: auto;
+    font-size: 11px;
+    background: var(--gray-100);
+    color: var(--gray-600);
+    padding: 1px 7px;
+    border-radius: 20px;
+    font-weight: 500;
+  }
+  .nav-item.active .nav-count { background: var(--orange); color: white; }
+
+  .nav-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  }
+
+  /* ── MAIN ── */
+  .main {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── TOOLBAR ── */
+  .toolbar {
+    background: white;
+    border-bottom: 0.5px solid var(--gray-200);
+    padding: 12px 20px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .search-box {
+    flex: 1;
+    position: relative;
+    max-width: 360px;
+  }
+  .search-box input {
+    width: 100%;
+    padding: 8px 12px 8px 34px;
+    border: 0.5px solid var(--gray-200);
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-family: var(--font);
+    background: var(--gray-50);
+    color: var(--gray-800);
+    outline: none;
+    transition: border 0.15s, box-shadow 0.15s;
+  }
+  .search-box input:focus { border-color: var(--orange); box-shadow: 0 0 0 3px var(--orange-light); background: white; }
+  .search-icon {
+    position: absolute;
+    left: 10px; top: 50%;
+    transform: translateY(-50%);
+    color: var(--gray-400);
+    pointer-events: none;
+  }
+  .filter-select {
+    padding: 8px 10px;
+    border: 0.5px solid var(--gray-200);
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-family: var(--font);
+    background: white;
+    color: var(--gray-800);
+    cursor: pointer;
+    outline: none;
+  }
+  .filter-select:focus { border-color: var(--orange); }
+
+  .view-toggle {
+    display: flex;
+    border: 0.5px solid var(--gray-200);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+  }
+  .view-btn {
+    padding: 7px 11px;
+    border: none;
+    background: white;
+    cursor: pointer;
+    color: var(--gray-400);
+    font-size: 13px;
+    transition: all 0.1s;
+    display: flex;
+    align-items: center;
+  }
+  .view-btn:hover { background: var(--gray-50); color: var(--gray-600); }
+  .view-btn.active { background: var(--navy); color: white; }
+
+  .toolbar-right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  .stat-pill {
+    font-size: 12px;
+    color: var(--gray-400);
+    padding: 4px 10px;
+    background: var(--gray-50);
+    border-radius: 20px;
+    border: 0.5px solid var(--gray-100);
+  }
+
+  /* ── CONTENT ── */
+  .content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+  }
+
+  /* ── CARDS GRID ── */
+  .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 14px;
+  }
+
+  .req-card {
+    background: white;
+    border: 0.5px solid var(--gray-200);
+    border-radius: var(--radius);
+    padding: 16px;
+    cursor: pointer;
+    transition: box-shadow 0.15s, transform 0.1s;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    position: relative;
+  }
+  .req-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+  .req-card.selected { border-color: var(--orange); box-shadow: 0 0 0 2px var(--orange-light); }
+
+  .card-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .card-domain-icon {
+    width: 36px; height: 36px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+  .card-meta { flex: 1; min-width: 0; }
+  .card-title {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--gray-800);
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .card-subtitle {
+    font-size: 11px;
+    color: var(--gray-400);
+    margin-top: 2px;
+    font-family: var(--font-mono);
+  }
+
+  .card-desc {
+    font-size: 12.5px;
+    color: var(--gray-600);
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+  .tag {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-weight: 500;
+  }
+
+  .card-footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-top: 8px;
+    border-top: 0.5px solid var(--gray-100);
+  }
+  .status-badge {
+    font-size: 11px;
+    font-weight: 500;
+    padding: 3px 8px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .status-badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; }
+  .status-actif { background: var(--green-bg); color: var(--green); }
+  .status-actif::before { background: var(--green); }
+  .status-obsolete { background: var(--red-bg); color: var(--red); }
+  .status-obsolete::before { background: var(--red); }
+  .status-draft { background: var(--amber-bg); color: var(--amber); }
+  .status-draft::before { background: var(--amber); }
+  .status-review { background: var(--blue-bg); color: var(--blue); }
+  .status-review::before { background: var(--blue); }
+
+  .card-owner {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    color: var(--gray-400);
+  }
+  .avatar-sm {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: var(--navy-light);
+    color: var(--navy);
+    font-size: 9px;
+    font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  /* ── TABLE VIEW ── */
+  .table-view {
+    background: white;
+    border: 0.5px solid var(--gray-200);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .table-view table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .table-view thead { background: var(--gray-50); }
+  .table-view th {
+    padding: 10px 14px;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    color: var(--gray-400);
+    text-transform: uppercase;
+    border-bottom: 0.5px solid var(--gray-200);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  .table-view th:hover { color: var(--gray-600); }
+  .table-view td {
+    padding: 11px 14px;
+    border-bottom: 0.5px solid var(--gray-100);
+    vertical-align: middle;
+  }
+  .table-view tr:last-child td { border-bottom: none; }
+  .table-view tr:hover td { background: var(--gray-50); }
+  .table-view tr { cursor: pointer; transition: background 0.1s; }
+  .req-name-cell { font-weight: 500; color: var(--gray-800); }
+  .req-id-cell { font-family: var(--font-mono); font-size: 11px; color: var(--gray-400); }
+
+  /* ── TREE VIEW ── */
+  .tree-view { }
+  .tree-domain {
+    margin-bottom: 16px;
+    background: white;
+    border: 0.5px solid var(--gray-200);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .tree-domain-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    cursor: pointer;
+    background: white;
+    border-bottom: 0.5px solid var(--gray-100);
+    transition: background 0.1s;
+    user-select: none;
+  }
+  .tree-domain-header:hover { background: var(--gray-50); }
+  .tree-domain-title {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--gray-800);
+  }
+  .tree-domain-count {
+    font-size: 11px;
+    color: var(--gray-400);
+    background: var(--gray-100);
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-left: auto;
+  }
+  .chevron { transition: transform 0.2s; }
+  .chevron.open { transform: rotate(90deg); }
+  .tree-items { padding: 8px; }
+  .tree-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 12px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .tree-item:hover { background: var(--gray-50); }
+  .tree-item-name { font-size: 13px; font-weight: 500; color: var(--gray-800); flex: 1; }
+  .tree-item-id { font-family: var(--font-mono); font-size: 11px; color: var(--gray-400); }
+
+  /* ── PANEL DÉTAIL ── */
+  .detail-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15,34,64,0.35);
+    z-index: 200;
+    display: flex;
+    justify-content: flex-end;
+    animation: fadeIn 0.15s ease;
+  }
+  @keyframes fadeIn { from { opacity: 0; } }
+  @keyframes slideIn { from { transform: translateX(100%); } }
+
+  .detail-panel {
+    width: 560px;
+    max-width: 95vw;
+    background: white;
+    height: 100%;
+    overflow-y: auto;
+    animation: slideIn 0.2s ease;
+    display: flex;
+    flex-direction: column;
+  }
+  .detail-panel-header {
+    padding: 20px 24px 16px;
+    border-bottom: 0.5px solid var(--gray-200);
+    background: var(--gray-50);
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .detail-panel-close {
+    margin-left: auto;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--gray-400);
+    font-size: 18px;
+    padding: 4px;
+    border-radius: 4px;
+    line-height: 1;
+    transition: color 0.1s;
+  }
+  .detail-panel-close:hover { color: var(--gray-800); }
+  .detail-panel-body { padding: 24px; flex: 1; }
+  .detail-section { margin-bottom: 24px; }
+  .detail-section-title {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.7px;
+    text-transform: uppercase;
+    color: var(--gray-400);
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 0.5px solid var(--gray-100);
+  }
+  .detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .detail-field label {
+    font-size: 11px;
+    color: var(--gray-400);
+    display: block;
+    margin-bottom: 3px;
+  }
+  .detail-field span {
+    font-size: 13px;
+    color: var(--gray-800);
+    font-weight: 500;
+  }
+  .detail-field.full { grid-column: 1 / -1; }
+  .detail-desc {
+    font-size: 13px;
+    color: var(--gray-600);
+    line-height: 1.7;
+    background: var(--gray-50);
+    padding: 12px 14px;
+    border-radius: var(--radius-sm);
+    border: 0.5px solid var(--gray-100);
+  }
+  .detail-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .detail-panel-actions {
+    padding: 16px 24px;
+    border-top: 0.5px solid var(--gray-100);
+    display: flex;
+    gap: 10px;
+    background: var(--gray-50);
+  }
+  .btn-secondary {
+    padding: 9px 18px;
+    border: 0.5px solid var(--gray-200);
+    border-radius: var(--radius-sm);
+    background: white;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    color: var(--gray-600);
+    font-family: var(--font);
+    transition: all 0.1s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn-secondary:hover { border-color: var(--gray-400); color: var(--gray-800); }
+  .btn-danger {
+    padding: 9px 18px;
+    border: 0.5px solid var(--red-bg);
+    border-radius: var(--radius-sm);
+    background: white;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    color: var(--red);
+    font-family: var(--font);
+    transition: all 0.1s;
+    margin-left: auto;
+  }
+  .btn-danger:hover { background: var(--red-bg); }
+
+  /* ── MODAL FORM ── */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15,34,64,0.45);
+    z-index: 300;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.15s ease;
+  }
+  .modal {
+    background: white;
+    border-radius: var(--radius);
+    width: 640px;
+    max-width: 96vw;
+    max-height: 92vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.18);
+    animation: modalIn 0.2s ease;
+  }
+  @keyframes modalIn { from { transform: scale(0.96) translateY(8px); opacity: 0; } }
+  .modal-header {
+    padding: 20px 24px 16px;
+    border-bottom: 0.5px solid var(--gray-100);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .modal-title { font-size: 16px; font-weight: 600; color: var(--gray-800); }
+  .modal-close {
+    margin-left: auto;
+    background: none; border: none;
+    cursor: pointer; font-size: 18px;
+    color: var(--gray-400); padding: 4px; border-radius: 4px;
+    transition: color 0.1s; line-height: 1;
+  }
+  .modal-close:hover { color: var(--gray-800); }
+  .modal-body { padding: 20px 24px; }
+  .modal-footer {
+    padding: 14px 24px;
+    border-top: 0.5px solid var(--gray-100);
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    background: var(--gray-50);
+  }
+
+  .form-row { margin-bottom: 16px; }
+  .form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+  .form-group { display: flex; flex-direction: column; gap: 5px; }
+  .form-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--gray-600);
+  }
+  .form-label .req { color: var(--orange); margin-left: 2px; }
+  .form-control {
+    padding: 9px 12px;
+    border: 0.5px solid var(--gray-200);
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-family: var(--font);
+    color: var(--gray-800);
+    background: white;
+    outline: none;
+    transition: border 0.15s, box-shadow 0.15s;
+    width: 100%;
+  }
+  .form-control:focus { border-color: var(--orange); box-shadow: 0 0 0 3px var(--orange-light); }
+  textarea.form-control { resize: vertical; min-height: 80px; }
+
+  /* ── EMPTY STATE ── */
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--gray-400);
+  }
+  .empty-state-icon { font-size: 40px; margin-bottom: 12px; }
+  .empty-state h3 { font-size: 15px; color: var(--gray-600); margin-bottom: 6px; }
+  .empty-state p { font-size: 13px; }
+
+  /* ── STATS BAR ── */
+  .stats-bar {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .stat-card {
+    background: white;
+    border: 0.5px solid var(--gray-200);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .stat-label { font-size: 11px; color: var(--gray-400); font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-value { font-size: 24px; font-weight: 700; color: var(--gray-800); line-height: 1; }
+  .stat-sub { font-size: 11px; color: var(--gray-400); }
+
+  /* ── TOAST ── */
+  #toast {
+    position: fixed;
+    bottom: 24px; right: 24px;
+    background: var(--gray-800);
+    color: white;
+    padding: 12px 18px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    z-index: 999;
+    transform: translateY(100px);
+    opacity: 0;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+  }
+  #toast.show { transform: translateY(0); opacity: 1; }
+  #toast.success { background: var(--green); }
+  #toast.error { background: var(--red); }
+
+  /* ── CONFIRM DIALOG ── */
+  .confirm-dialog { width: 400px; }
+  .confirm-msg { font-size: 14px; color: var(--gray-600); line-height: 1.6; }
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--gray-200); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--gray-400); }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 768px) {
+    .app-shell { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .stats-bar { grid-template-columns: repeat(2, 1fr); }
+    .detail-panel { width: 100%; }
+    .cards-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <div class="topbar-logo">
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+        <rect width="28" height="28" rx="7" fill="#F07821"/>
+        <path d="M7 20L14 8L21 20H17.5L14 13.5L10.5 20H7Z" fill="white"/>
+      </svg>
+      MDA de l'Orne
+    </div>
+    <span class="topbar-title">Catalogue des requêtes BusinessObjects</span>
+    <div class="topbar-actions">
+      <button class="btn-ghost" onclick="exportData()">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M2 10v2h10v-2H2zm4-8v5.586L4.707 6.293 3.293 7.707 7 11.414l3.707-3.707-1.414-1.414L8 7.586V2H6z"/></svg>
+        Exporter
+      </button>
+      <button class="btn-primary" onclick="openAddModal()">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M6 0h2v6h6v2H8v6H6V8H0V6h6z"/></svg>
+        Nouvelle requête
+      </button>
+    </div>
+  </header>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Navigation</div>
+      <button class="nav-item active" id="nav-all" onclick="filterByNav('all', this)">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><rect x="1" y="1" width="5" height="5" rx="1"/><rect x="8" y="1" width="5" height="5" rx="1"/><rect x="1" y="8" width="5" height="5" rx="1"/><rect x="8" y="8" width="5" height="5" rx="1"/></svg>
+        Toutes les requêtes
+        <span class="nav-count" id="count-all">0</span>
+      </button>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Par domaine</div>
+      <div id="domain-nav"></div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Par statut</div>
+      <button class="nav-item" onclick="filterByNav('statut:Actif', this)">
+        <span class="nav-dot" style="background:var(--green)"></span>
+        Actif
+        <span class="nav-count" id="count-actif">0</span>
+      </button>
+      <button class="nav-item" onclick="filterByNav('statut:Brouillon', this)">
+        <span class="nav-dot" style="background:var(--amber)"></span>
+        Brouillon
+        <span class="nav-count" id="count-draft">0</span>
+      </button>
+      <button class="nav-item" onclick="filterByNav('statut:En révision', this)">
+        <span class="nav-dot" style="background:var(--blue)"></span>
+        En révision
+        <span class="nav-count" id="count-review">0</span>
+      </button>
+      <button class="nav-item" onclick="filterByNav('statut:Obsolète', this)">
+        <span class="nav-dot" style="background:var(--red)"></span>
+        Obsolète
+        <span class="nav-count" id="count-obsolete">0</span>
+      </button>
+    </div>
+    <div class="sidebar-section" style="margin-top:auto; padding-top:20px; border-top: 0.5px solid var(--gray-100);">
+      <button class="nav-item" onclick="importData()">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M2 10v2h10v-2H2zM8 2H6v5.586L4.707 6.293 3.293 7.707 7 11.414l3.707-3.707-1.414-1.414L8 7.586V2z" transform="scale(1,-1) translate(0,-14)"/></svg>
+        Importer JSON
+      </button>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <div class="toolbar">
+      <div class="search-box">
+        <svg class="search-icon" width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M9.5 8.5l3 3-1 1-3-3A5 5 0 1 1 9.5 8.5zM6 9A3 3 0 1 0 6 3a3 3 0 0 0 0 6z"/></svg>
+        <input type="text" id="search-input" placeholder="Rechercher par nom, ID, univers, tag…" oninput="applyFilters()">
+      </div>
+      <select class="filter-select" id="filter-univers" onchange="applyFilters()">
+        <option value="">Tous les univers</option>
+      </select>
+      <select class="filter-select" id="filter-freq" onchange="applyFilters()">
+        <option value="">Toutes fréquences</option>
+        <option>Quotidienne</option>
+        <option>Hebdomadaire</option>
+        <option>Mensuelle</option>
+        <option>Trimestrielle</option>
+        <option>Annuelle</option>
+        <option>À la demande</option>
+      </select>
+      <div class="view-toggle">
+        <button class="view-btn active" id="btn-cards" onclick="setView('cards')" title="Vue cartes">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><rect x="1" y="1" width="5" height="5" rx="1"/><rect x="8" y="1" width="5" height="5" rx="1"/><rect x="1" y="8" width="5" height="5" rx="1"/><rect x="8" y="8" width="5" height="5" rx="1"/></svg>
+        </button>
+        <button class="view-btn" id="btn-table" onclick="setView('table')" title="Vue tableau">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M1 2h12v2H1zm0 4h12v2H1zm0 4h12v2H1z"/></svg>
+        </button>
+        <button class="view-btn" id="btn-tree" onclick="setView('tree')" title="Vue arborescence">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M1 1h4v2H1zm4 1h2v2H5zm2 0h4v2H7zM1 6h4v2H1zm4 1h2v2H5zm2 0h4v2H7zM1 11h4v2H1zm4 1h2v2H5zm2 0h4v2H7z"/></svg>
+        </button>
+      </div>
+      <div class="toolbar-right">
+        <span class="stat-pill" id="result-count">0 requête(s)</span>
+      </div>
+    </div>
+
+    <div class="content" id="content-area">
+      <div class="stats-bar" id="stats-bar"></div>
+      <div id="view-container"></div>
+    </div>
+  </main>
+</div>
+
+<!-- DETAIL PANEL -->
+<div class="detail-overlay" id="detail-overlay" style="display:none" onclick="closeDetail(event)">
+  <div class="detail-panel" id="detail-panel">
+    <div class="detail-panel-header" id="detail-header"></div>
+    <div class="detail-panel-body" id="detail-body"></div>
+    <div class="detail-panel-actions" id="detail-actions"></div>
+  </div>
+</div>
+
+<!-- MODAL ADD/EDIT -->
+<div class="modal-overlay" id="modal-overlay" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" style="color:var(--orange)">
+        <rect width="20" height="20" rx="5" fill="var(--orange-light)"/>
+        <path d="M9 4h2v5h5v2h-5v5H9v-5H4V9h5z" fill="var(--orange)"/>
+      </svg>
+      <span class="modal-title" id="modal-title">Nouvelle requête</span>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row-2">
+        <div class="form-group">
+          <label class="form-label">Nom de la requête <span class="req">*</span></label>
+          <input type="text" class="form-control" id="f-nom" placeholder="Ex: MDPH_CNSA_LCD01_Flux_Annuel">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Identifiant BO</label>
+          <input type="text" class="form-control" id="f-id" placeholder="Ex: REQ-2024-001" style="font-family:var(--font-mono)">
+        </div>
+      </div>
+      <div class="form-row-2">
+        <div class="form-group">
+          <label class="form-label">Domaine fonctionnel <span class="req">*</span></label>
+          <select class="form-control" id="f-domaine">
+            <option value="">— Sélectionner —</option>
+            <option>LCD / CNSA</option>
+            <option>Droits et notifications</option>
+            <option>Orientations</option>
+            <option>Flux et délais</option>
+            <option>Pilotage interne</option>
+            <option>Ressources humaines</option>
+            <option>Autre</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Statut</label>
+          <select class="form-control" id="f-statut">
+            <option>Actif</option>
+            <option>Brouillon</option>
+            <option>En révision</option>
+            <option>Obsolète</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row-2">
+        <div class="form-group">
+          <label class="form-label">Univers BO</label>
+          <input type="text" class="form-control" id="f-univers" placeholder="Ex: Solis_MDPH_Prod">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Fréquence d'utilisation</label>
+          <select class="form-control" id="f-freq">
+            <option>À la demande</option>
+            <option>Quotidienne</option>
+            <option>Hebdomadaire</option>
+            <option>Mensuelle</option>
+            <option>Trimestrielle</option>
+            <option>Annuelle</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row-2">
+        <div class="form-group">
+          <label class="form-label">Propriétaire / Responsable</label>
+          <input type="text" class="form-control" id="f-proprio" placeholder="Ex: J. Dupont">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Date de création</label>
+          <input type="date" class="form-control" id="f-date">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Description / Objet métier</label>
+          <textarea class="form-control" id="f-desc" placeholder="Décrivez le périmètre, les indicateurs produits, les filtres principaux, les destinataires…" rows="4"></textarea>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Tags (séparés par des virgules)</label>
+          <input type="text" class="form-control" id="f-tags" placeholder="Ex: CNSA, LCD01, annuel, droits">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Limites connues / Précautions d'usage</label>
+          <textarea class="form-control" id="f-limites" rows="2" placeholder="Ex: Ne pas exécuter en fin de mois. Données non consolidées après le 15."></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal()">Annuler</button>
+      <button class="btn-primary" onclick="saveRequete()">
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="currentColor"><path d="M1 1h8l3 3v8H1V1zm3 9h4v-4H4v4zm2-9v3h3V1H6z"/></svg>
+        Enregistrer
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRM DIALOG -->
+<div class="modal-overlay" id="confirm-overlay" style="display:none">
+  <div class="modal confirm-dialog">
+    <div class="modal-header">
+      <span class="modal-title" style="color:var(--red)" id="confirm-title">Confirmer la suppression</span>
+    </div>
+    <div class="modal-body">
+      <p class="confirm-msg" id="confirm-msg"></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeConfirm()">Annuler</button>
+      <button class="btn-primary" style="background:var(--red)" id="confirm-ok-btn">Supprimer</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<input type="file" id="import-input" accept=".json" style="display:none" onchange="handleImport(event)">
+
+<script>
+// ── DATA ─────────────────────────────────────────────────────────────
+
+const STORAGE_KEY = 'mda_bo_catalogue_v2';
+let data = [];
+let editingId = null;
+let currentView = 'cards';
+let currentNavFilter = 'all';
+let filteredData = [];
+
+const DOMAIN_ICONS = {
+  'LCD / CNSA': { icon: '📊', bg: '#E8EDF5', color: '#1B3A6B' },
+  'Droits et notifications': { icon: '📋', bg: '#FEF0E6', color: '#C05A0E' },
+  'Orientations': { icon: '🔀', bg: '#EAF3DE', color: '#3B6D11' },
+  'Flux et délais': { icon: '⏱', bg: '#E6F1FB', color: '#185FA5' },
+  'Pilotage interne': { icon: '📈', bg: '#FAEEDA', color: '#854F0B' },
+  'Ressources humaines': { icon: '👥', bg: '#FBEAF0', color: '#993556' },
+  'Autre': { icon: '📁', bg: '#F1EFE8', color: '#5F5E5A' },
+};
+
+const TAG_COLORS = [
+  { bg: '#E8EDF5', color: '#1B3A6B' },
+  { bg: '#FEF0E6', color: '#C05A0E' },
+  { bg: '#EAF3DE', color: '#3B6D11' },
+  { bg: '#E6F1FB', color: '#185FA5' },
+  { bg: '#FAEEDA', color: '#854F0B' },
+  { bg: '#FBEAF0', color: '#993556' },
+];
+
+function tagColor(tag) {
+  let h = 0;
+  for (let i = 0; i < tag.length; i++) h = (h * 31 + tag.charCodeAt(i)) & 0xffffff;
+  return TAG_COLORS[h % TAG_COLORS.length];
+}
+
+// ── DEMO DATA ─────────────────────────────────────────────────────────
+
+const DEMO = [
+  { id:'REQ-001', nom:'LCD01 — Flux annuel CNSA', domaine:'LCD / CNSA', statut:'Actif', univers:'Solis_MDPH_Prod', freq:'Annuelle', proprio:'M. Dupont', date:'2023-01-15', desc:"Extraction des indicateurs de flux entrants et sortants du guichet MDPH pour le reporting LCD01 annuel transmis à la CNSA. Périmètre : dossiers déposés, instruits, décidés sur l'année civile.", tags:['CNSA','LCD01','annuel','droit notifié'], limites:'Ne pas lancer avant clôture de l\'exercice (15 jan). Exclure les dossiers archivés manuellement.' },
+  { id:'REQ-002', nom:'LCD02 — Délais instruction', domaine:'LCD / CNSA', statut:'Actif', univers:'Solis_MDPH_Prod', freq:'Trimestrielle', proprio:'M. Dupont', date:'2023-03-10', desc:'Calcul des délais moyens d\'instruction par type de prestation (PCH, AEEH, AAH…). Indicateurs LCD02 pour tableau de bord CNSA trimestriel.', tags:['CNSA','LCD02','délais','trimestriel'], limites:'Délais calculés en jours ouvrés. Vérifier paramétrage calendrier avant exécution.' },
+  { id:'REQ-003', nom:'Droits notifiés par prestation', domaine:'Droits et notifications', statut:'Actif', univers:'Solis_MDPH_Prod', freq:'Mensuelle', proprio:'C. Martin', date:'2022-11-05', desc:'Volume de droits notifiés par type de prestation et par période. Permet le suivi mensuel des décisions de la CDAPH.', tags:['droits','notification','CDAPH','mensuel'], limites:'' },
+  { id:'REQ-004', nom:'Droits ouverts — suivi annuel', domaine:'Droits et notifications', statut:'En révision', univers:'Solis_MDPH_Prod', freq:'Annuelle', proprio:'C. Martin', date:'2024-02-01', desc:'Extraction des droits effectivement ouverts (démarrage effectif de la prestation) en distinction des droits notifiés. Distinction importante pour les indicateurs CNSA.', tags:['droit ouvert','droit notifié','CNSA'], limites:'Ne pas confondre avec les droits notifiés (REQ-003). Requête en cours de validation métier.' },
+  { id:'REQ-005', nom:'Orientations — taux de réponse ES', domaine:'Orientations', statut:'Actif', univers:'Solis_MDPH_Prod', freq:'Trimestrielle', proprio:'L. Bernard', date:'2023-06-01', desc:'Taux de réponse des établissements aux orientations CDAPH sur la période. Suivi par type d\'établissement et par territoire.', tags:['orientations','ES','ESMS','taux'], limites:'' },
+  { id:'REQ-006', nom:'Orientations expirées sans suite', domaine:'Orientations', statut:'Actif', univers:'Solis_MDPH_Prod', freq:'Mensuelle', proprio:'L. Bernard', date:'2023-09-15', desc:'Liste des orientations dont la date de fin est dépassée et sans orientation de remplacement détectée. Permet une relance ciblée.', tags:['orientations','expiration','alerte'], limites:'Sous-requête avec filtre date dynamique (J-0). Exécuter en début de mois.' },
+  { id:'REQ-007', nom:'Flux entrants — hebdo guichet', domaine:'Flux et délais', statut:'Actif', univers:'Solis_MDPH_Prod', freq:'Hebdomadaire', proprio:'Service Accueil', date:'2022-05-12', desc:'Nombre de dossiers déposés au guichet par semaine, par canal (physique, courrier, dématérialisé). Indicateur de charge pour le planning.', tags:['flux','accueil','hebdo','dépôt'], limites:'' },
+  { id:'REQ-008', nom:'Tableaux de bord DG — synthèse trimestrielle', domaine:'Pilotage interne', statut:'Actif', univers:'Solis_MDPH_Prod', freq:'Trimestrielle', proprio:'Direction', date:'2023-01-01', desc:'Synthèse consolidée à destination de la Direction Générale : flux, délais, droits, orientations. Consolidation des KPIs de toutes les directions.', tags:['pilotage','DG','consolidé','KPI'], limites:'Requête longue (>3 min). Lancer le matin hors pics d\'usage BO.' },
+  { id:'REQ-009', nom:'Suivi absentéisme — mensuel RH', domaine:'Ressources humaines', statut:'Brouillon', univers:'RH_Prod', freq:'Mensuelle', proprio:'DRH', date:'2024-09-01', desc:'Extraction en cours de développement. Objectif : taux d\'absentéisme par direction, type d\'absence, et évolution sur 12 mois glissants.', tags:['RH','absentéisme','brouillon'], limites:'Requête non validée. Ne pas utiliser en production.' },
+  { id:'REQ-010', nom:'AEEH — suivi dossiers actifs', domaine:'Droits et notifications', statut:'Actif', univers:'Solis_MDPH_Prod', freq:'À la demande', proprio:'C. Martin', date:'2022-08-20', desc:'Liste et comptage des dossiers AEEH avec droits en cours de validité. Filtrable par tranche d\'âge et par territoire.', tags:['AEEH','enfant','droits actifs'], limites:'' },
+];
+
+// ── STORAGE ──────────────────────────────────────────────────────────
+
+function loadData() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) data = JSON.parse(raw);
+    else { data = DEMO; saveData(); }
+  } catch(e) { data = DEMO; }
+}
+
+function saveData() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+function genId() {
+  const max = data.reduce((m, r) => {
+    const n = parseInt((r.id || '').replace(/\D/g, '')) || 0;
+    return Math.max(m, n);
+  }, 0);
+  return 'REQ-' + String(max + 1).padStart(3, '0');
+}
+
+// ── FILTERS & RENDERING ──────────────────────────────────────────────
+
+function applyFilters() {
+  const search = document.getElementById('search-input').value.toLowerCase();
+  const univers = document.getElementById('filter-univers').value;
+  const freq = document.getElementById('filter-freq').value;
+
+  filteredData = data.filter(r => {
+    // nav filter
+    if (currentNavFilter !== 'all') {
+      if (currentNavFilter.startsWith('domaine:')) {
+        if (r.domaine !== currentNavFilter.slice(8)) return false;
+      } else if (currentNavFilter.startsWith('statut:')) {
+        if (r.statut !== currentNavFilter.slice(7)) return false;
+      }
+    }
+    // search
+    if (search) {
+      const hay = [r.nom, r.id, r.univers, r.desc, r.proprio, ...(r.tags||[])].join(' ').toLowerCase();
+      if (!hay.includes(search)) return false;
+    }
+    if (univers && r.univers !== univers) return false;
+    if (freq && r.freq !== freq) return false;
+    return true;
+  });
+
+  document.getElementById('result-count').textContent = filteredData.length + ' requête(s)';
+  renderView();
+}
+
+function renderView() {
+  const c = document.getElementById('view-container');
+  if (filteredData.length === 0) {
+    c.innerHTML = `<div class="empty-state">
+      <div class="empty-state-icon">🔍</div>
+      <h3>Aucune requête trouvée</h3>
+      <p>Modifiez vos filtres ou ajoutez une nouvelle requête.</p>
+    </div>`;
+    return;
+  }
+  if (currentView === 'cards') renderCards(c);
+  else if (currentView === 'table') renderTable(c);
+  else renderTree(c);
+}
+
+function renderCards(c) {
+  c.innerHTML = `<div class="cards-grid">${filteredData.map(r => cardHTML(r)).join('')}</div>`;
+}
+
+function cardHTML(r) {
+  const di = DOMAIN_ICONS[r.domaine] || DOMAIN_ICONS['Autre'];
+  const statusClass = { 'Actif':'actif', 'Obsolète':'obsolete', 'Brouillon':'draft', 'En révision':'review' }[r.statut] || 'draft';
+  const tags = (r.tags || []).slice(0, 3).map(t => {
+    const c = tagColor(t);
+    return `<span class="tag" style="background:${c.bg};color:${c.color}">${t}</span>`;
+  }).join('');
+  const initials = (r.proprio || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+  return `<div class="req-card" onclick="openDetail('${r.id}')">
+    <div class="card-header">
+      <div class="card-domain-icon" style="background:${di.bg}; font-size:18px">${di.icon}</div>
+      <div class="card-meta">
+        <div class="card-title" title="${r.nom}">${r.nom}</div>
+        <div class="card-subtitle">${r.id || ''} ${r.univers ? '· '+r.univers : ''}</div>
+      </div>
+    </div>
+    ${r.desc ? `<div class="card-desc">${r.desc}</div>` : ''}
+    ${tags ? `<div class="card-tags">${tags}</div>` : ''}
+    <div class="card-footer">
+      <span class="status-badge status-${statusClass}">${r.statut}</span>
+      <span style="font-size:11px;color:var(--gray-400);margin-left:4px">${r.freq || ''}</span>
+      ${r.proprio ? `<div class="card-owner"><div class="avatar-sm">${initials}</div>${r.proprio}</div>` : ''}
+    </div>
+  </div>`;
+}
+
+function renderTable(c) {
+  const rows = filteredData.map(r => {
+    const di = DOMAIN_ICONS[r.domaine] || DOMAIN_ICONS['Autre'];
+    const statusClass = { 'Actif':'actif', 'Obsolète':'obsolete', 'Brouillon':'draft', 'En révision':'review' }[r.statut] || 'draft';
+    const tags = (r.tags || []).slice(0, 2).map(t => {
+      const cl = tagColor(t);
+      return `<span class="tag" style="background:${cl.bg};color:${cl.color};font-size:10px">${t}</span>`;
+    }).join(' ');
+    return `<tr onclick="openDetail('${r.id}')">
+      <td class="req-id-cell">${r.id || '—'}</td>
+      <td><strong class="req-name-cell">${r.nom}</strong></td>
+      <td><span style="font-size:16px">${di.icon}</span> ${r.domaine}</td>
+      <td>${r.univers || '—'}</td>
+      <td><span class="status-badge status-${statusClass}">${r.statut}</span></td>
+      <td>${r.freq || '—'}</td>
+      <td>${tags}</td>
+      <td>${r.proprio || '—'}</td>
+    </tr>`;
+  }).join('');
+  c.innerHTML = `<div class="table-view"><table>
+    <thead><tr>
+      <th>ID</th><th>Nom</th><th>Domaine</th><th>Univers</th><th>Statut</th><th>Fréquence</th><th>Tags</th><th>Responsable</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+
+function renderTree(c) {
+  const domains = [...new Set(filteredData.map(r => r.domaine))];
+  c.innerHTML = domains.map(d => {
+    const items = filteredData.filter(r => r.domaine === d);
+    const di = DOMAIN_ICONS[d] || DOMAIN_ICONS['Autre'];
+    const statusClass = { 'Actif':'actif', 'Obsolète':'obsolete', 'Brouillon':'draft', 'En révision':'review' };
+    const rows = items.map(r => `
+      <div class="tree-item" onclick="openDetail('${r.id}')">
+        <span style="width:8px;height:8px;border-radius:50%;background:var(--gray-200);flex-shrink:0"></span>
+        <span class="tree-item-name">${r.nom}</span>
+        <span class="tree-item-id">${r.id || ''}</span>
+        <span class="status-badge status-${statusClass[r.statut]||'draft'}" style="font-size:10px;padding:2px 7px">${r.statut}</span>
+      </div>`).join('');
+    const domId = 'tree-' + d.replace(/\W/g, '');
+    return `<div class="tree-domain">
+      <div class="tree-domain-header" onclick="toggleTree('${domId}')">
+        <span style="font-size:20px">${di.icon}</span>
+        <span class="tree-domain-title">${d}</span>
+        <span class="tree-domain-count">${items.length}</span>
+        <svg class="chevron open" id="chev-${domId}" width="14" height="14" viewBox="0 0 14 14" fill="var(--gray-400)"><path d="M5 3l4 4-4 4"/></svg>
+      </div>
+      <div class="tree-items" id="${domId}">${rows}</div>
+    </div>`;
+  }).join('');
+}
+
+function toggleTree(id) {
+  const el = document.getElementById(id);
+  const ch = document.getElementById('chev-' + id);
+  if (el.style.display === 'none') { el.style.display = ''; ch.classList.add('open'); }
+  else { el.style.display = 'none'; ch.classList.remove('open'); }
+}
+
+// ── SIDEBAR ──────────────────────────────────────────────────────────
+
+function renderSidebar() {
+  const domains = [...new Set(data.map(r => r.domaine))];
+  const nav = document.getElementById('domain-nav');
+  nav.innerHTML = domains.map(d => {
+    const di = DOMAIN_ICONS[d] || DOMAIN_ICONS['Autre'];
+    const cnt = data.filter(r => r.domaine === d).length;
+    return `<button class="nav-item" onclick="filterByNav('domaine:${d}', this)">
+      <span style="font-size:14px">${di.icon}</span>
+      ${d}
+      <span class="nav-count">${cnt}</span>
+    </button>`;
+  }).join('');
+
+  document.getElementById('count-all').textContent = data.length;
+  document.getElementById('count-actif').textContent = data.filter(r => r.statut === 'Actif').length;
+  document.getElementById('count-draft').textContent = data.filter(r => r.statut === 'Brouillon').length;
+  document.getElementById('count-review').textContent = data.filter(r => r.statut === 'En révision').length;
+  document.getElementById('count-obsolete').textContent = data.filter(r => r.statut === 'Obsolète').length;
+}
+
+function filterByNav(key, btn) {
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentNavFilter = key;
+  applyFilters();
+}
+
+// ── STATS BAR ────────────────────────────────────────────────────────
+
+function renderStats() {
+  const actif = data.filter(r => r.statut === 'Actif').length;
+  const univers = [...new Set(data.map(r => r.univers).filter(Boolean))].length;
+  const domains = [...new Set(data.map(r => r.domaine))].length;
+  document.getElementById('stats-bar').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-label">Total requêtes</div>
+      <div class="stat-value">${data.length}</div>
+      <div class="stat-sub">catalogue complet</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Actives</div>
+      <div class="stat-value" style="color:var(--green)">${actif}</div>
+      <div class="stat-sub">${Math.round(actif/data.length*100)||0}% du catalogue</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Domaines</div>
+      <div class="stat-value" style="color:var(--navy)">${domains}</div>
+      <div class="stat-sub">fonctionnels</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Univers BO</div>
+      <div class="stat-value" style="color:var(--orange)">${univers}</div>
+      <div class="stat-sub">sources de données</div>
+    </div>`;
+}
+
+// ── UNIVERS FILTER ────────────────────────────────────────────────────
+
+function populateUnivers() {
+  const sel = document.getElementById('filter-univers');
+  const current = sel.value;
+  const univers = [...new Set(data.map(r => r.univers).filter(Boolean))];
+  sel.innerHTML = '<option value="">Tous les univers</option>' +
+    univers.map(u => `<option ${u===current?'selected':''}>${u}</option>`).join('');
+}
+
+// ── VIEW SWITCH ──────────────────────────────────────────────────────
+
+function setView(v) {
+  currentView = v;
+  ['cards','table','tree'].forEach(k => {
+    document.getElementById('btn-'+k).classList.toggle('active', k === v);
+  });
+  renderView();
+}
+
+// ── DETAIL PANEL ─────────────────────────────────────────────────────
+
+function openDetail(id) {
+  const r = data.find(x => x.id === id);
+  if (!r) return;
+  const di = DOMAIN_ICONS[r.domaine] || DOMAIN_ICONS['Autre'];
+  const statusClass = { 'Actif':'actif', 'Obsolète':'obsolete', 'Brouillon':'draft', 'En révision':'review' }[r.statut] || 'draft';
+
+  document.getElementById('detail-header').innerHTML = `
+    <div class="card-domain-icon" style="background:${di.bg};font-size:22px;width:44px;height:44px;border-radius:10px">${di.icon}</div>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:15px;font-weight:600;color:var(--gray-800);line-height:1.3">${r.nom}</div>
+      <div style="font-size:12px;color:var(--gray-400);margin-top:3px;font-family:var(--font-mono)">${r.id || ''}</div>
+    </div>
+    <button class="detail-panel-close" onclick="closeDetail()">✕</button>`;
+
+  const tags = (r.tags || []).map(t => {
+    const c = tagColor(t);
+    return `<span class="tag" style="background:${c.bg};color:${c.color}">${t}</span>`;
+  }).join('');
+
+  document.getElementById('detail-body').innerHTML = `
+    <div class="detail-section">
+      <div class="detail-section-title">Identification</div>
+      <div class="detail-grid">
+        <div class="detail-field"><label>Domaine</label><span>${di.icon} ${r.domaine}</span></div>
+        <div class="detail-field"><label>Statut</label><span class="status-badge status-${statusClass}">${r.statut}</span></div>
+        <div class="detail-field"><label>Univers BO</label><span style="font-family:var(--font-mono);font-size:12px">${r.univers || '—'}</span></div>
+        <div class="detail-field"><label>Fréquence</label><span>${r.freq || '—'}</span></div>
+        <div class="detail-field"><label>Responsable</label><span>${r.proprio || '—'}</span></div>
+        <div class="detail-field"><label>Date de création</label><span>${r.date ? new Date(r.date).toLocaleDateString('fr-FR') : '—'}</span></div>
+      </div>
+    </div>
+    ${r.desc ? `<div class="detail-section">
+      <div class="detail-section-title">Objet métier</div>
+      <div class="detail-desc">${r.desc}</div>
+    </div>` : ''}
+    ${r.limites ? `<div class="detail-section">
+      <div class="detail-section-title">Limites & précautions</div>
+      <div class="detail-desc" style="background:var(--amber-bg);border-color:var(--amber-bg);color:var(--amber)">⚠ ${r.limites}</div>
+    </div>` : ''}
+    ${tags ? `<div class="detail-section">
+      <div class="detail-section-title">Tags</div>
+      <div class="detail-tags">${tags}</div>
+    </div>` : ''}`;
+
+  document.getElementById('detail-actions').innerHTML = `
+    <button class="btn-secondary" onclick="openEditModal('${r.id}')">
+      <svg width="13" height="13" viewBox="0 0 13 13" fill="currentColor"><path d="M9.5 1a1 1 0 0 1 1.414 0l1 1A1 1 0 0 1 12 3.5L4.5 11H2V8.5L9.5 1z"/></svg>
+      Modifier
+    </button>
+    <button class="btn-secondary" onclick="duplicateRequete('${r.id}')">
+      <svg width="13" height="13" viewBox="0 0 13 13" fill="currentColor"><rect x="4" y="4" width="8" height="8" rx="1" stroke="currentColor" stroke-width="1.2" fill="none"/><path d="M2 9V2h7" stroke="currentColor" stroke-width="1.2" fill="none"/></svg>
+      Dupliquer
+    </button>
+    <button class="btn-danger" onclick="confirmDelete('${r.id}')">Supprimer</button>`;
+
+  document.getElementById('detail-overlay').style.display = 'flex';
+}
+
+function closeDetail(e) {
+  if (e && e.target !== document.getElementById('detail-overlay')) return;
+  document.getElementById('detail-overlay').style.display = 'none';
+}
+
+// ── MODAL ────────────────────────────────────────────────────────────
+
+function openAddModal() {
+  editingId = null;
+  document.getElementById('modal-title').textContent = 'Nouvelle requête';
+  clearForm();
+  document.getElementById('f-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('modal-overlay').style.display = 'flex';
+}
+
+function openEditModal(id) {
+  const r = data.find(x => x.id === id);
+  if (!r) return;
+  editingId = id;
+  document.getElementById('modal-title').textContent = 'Modifier la requête';
+  document.getElementById('f-nom').value = r.nom || '';
+  document.getElementById('f-id').value = r.id || '';
+  document.getElementById('f-domaine').value = r.domaine || '';
+  document.getElementById('f-statut').value = r.statut || 'Actif';
+  document.getElementById('f-univers').value = r.univers || '';
+  document.getElementById('f-freq').value = r.freq || 'À la demande';
+  document.getElementById('f-proprio').value = r.proprio || '';
+  document.getElementById('f-date').value = r.date || '';
+  document.getElementById('f-desc').value = r.desc || '';
+  document.getElementById('f-tags').value = (r.tags || []).join(', ');
+  document.getElementById('f-limites').value = r.limites || '';
+  document.getElementById('modal-overlay').style.display = 'flex';
+  document.getElementById('detail-overlay').style.display = 'none';
+}
+
+function clearForm() {
+  ['f-nom','f-id','f-domaine','f-univers','f-proprio','f-date','f-desc','f-tags','f-limites'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('f-statut').value = 'Actif';
+  document.getElementById('f-freq').value = 'À la demande';
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').style.display = 'none';
+}
+
+function saveRequete() {
+  const nom = document.getElementById('f-nom').value.trim();
+  const domaine = document.getElementById('f-domaine').value;
+  if (!nom) { showToast('Le nom est obligatoire.', 'error'); return; }
+  if (!domaine) { showToast('Le domaine est obligatoire.', 'error'); return; }
+
+  const obj = {
+    id: document.getElementById('f-id').value.trim() || (editingId || genId()),
+    nom,
+    domaine,
+    statut: document.getElementById('f-statut').value,
+    univers: document.getElementById('f-univers').value.trim(),
+    freq: document.getElementById('f-freq').value,
+    proprio: document.getElementById('f-proprio').value.trim(),
+    date: document.getElementById('f-date').value,
+    desc: document.getElementById('f-desc').value.trim(),
+    tags: document.getElementById('f-tags').value.split(',').map(t => t.trim()).filter(Boolean),
+    limites: document.getElementById('f-limites').value.trim(),
+  };
+
+  if (editingId) {
+    const idx = data.findIndex(r => r.id === editingId);
+    if (idx >= 0) data[idx] = obj;
+    showToast('Requête mise à jour.', 'success');
+  } else {
+    data.unshift(obj);
+    showToast('Requête ajoutée.', 'success');
+  }
+
+  saveData();
+  closeModal();
+  refresh();
+}
+
+function duplicateRequete(id) {
+  const r = data.find(x => x.id === id);
+  if (!r) return;
+  const copy = { ...r, id: genId(), nom: r.nom + ' (copie)', statut: 'Brouillon' };
+  data.unshift(copy);
+  saveData();
+  refresh();
+  showToast('Requête dupliquée.', 'success');
+  closeDetail();
+}
+
+// ── DELETE ───────────────────────────────────────────────────────────
+
+function confirmDelete(id) {
+  const r = data.find(x => x.id === id);
+  if (!r) return;
+  document.getElementById('confirm-msg').textContent = `Supprimer la requête « ${r.nom} » ? Cette action est irréversible.`;
+  document.getElementById('confirm-ok-btn').onclick = () => {
+    data = data.filter(x => x.id !== id);
+    saveData();
+    refresh();
+    closeConfirm();
+    closeDetail();
+    showToast('Requête supprimée.', 'success');
+  };
+  document.getElementById('confirm-overlay').style.display = 'flex';
+}
+
+function closeConfirm() {
+  document.getElementById('confirm-overlay').style.display = 'none';
+}
+
+// ── EXPORT / IMPORT ──────────────────────────────────────────────────
+
+function exportData() {
+  const json = JSON.stringify(data, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'catalogue_requetes_BO_' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  showToast('Export JSON téléchargé.', 'success');
+}
+
+function importData() {
+  document.getElementById('import-input').click();
+}
+
+function handleImport(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const imported = JSON.parse(ev.target.result);
+      if (!Array.isArray(imported)) throw new Error();
+      data = imported;
+      saveData();
+      refresh();
+      showToast(`${imported.length} requêtes importées.`, 'success');
+    } catch {
+      showToast('Fichier JSON invalide.', 'error');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+// ── TOAST ────────────────────────────────────────────────────────────
+
+let toastTimer;
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'show ' + type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.className = ''; }, 3000);
+}
+
+// ── REFRESH ──────────────────────────────────────────────────────────
+
+function refresh() {
+  renderSidebar();
+  renderStats();
+  populateUnivers();
+  applyFilters();
+}
+
+// ── KEYBOARD ─────────────────────────────────────────────────────────
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    closeModal();
+    closeConfirm();
+    document.getElementById('detail-overlay').style.display = 'none';
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'n') { e.preventDefault(); openAddModal(); }
+});
+
+// ── INIT ─────────────────────────────────────────────────────────────
+
+loadData();
+refresh();
+</script>
+</body>
+</html>
