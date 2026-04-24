@@ -1,0 +1,4028 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Catalogue des requêtes BO — MDA de l'Orne (Sécurisé)</title>
+<style>
+/* VARIABLES CSS */
+:root {
+  --orange:#F07821; --orange-light:#FEF0E6; --orange-dark:#C05A0E;
+  --navy:#1B3A6B; --navy-light:#E8EDF5; --navy-dark:#0F2240;
+  --gray-50:#F8F7F4; --gray-100:#EEECE7; --gray-200:#D6D4CC;
+  --gray-400:#9B9990; --gray-600:#5F5E58; --gray-800:#2C2C28;
+  --green:#3B6D11; --green-bg:#EAF3DE;
+  --red:#A32D2D; --red-bg:#FCEBEB;
+  --amber:#854F0B; --amber-bg:#FAEEDA;
+  --blue:#185FA5; --blue-bg:#E6F1FB;
+  --radius:10px; --radius-sm:6px;
+  --shadow-md:0 4px 16px rgba(0,0,0,0.1),0 0 0 0.5px rgba(0,0,0,0.06);
+  --font:'Segoe UI',system-ui,-apple-system,sans-serif;
+  --font-mono:'Cascadia Code','Consolas','Courier New',monospace;
+}
+
+/* RESET */
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);background:var(--gray-50);color:var(--gray-800);min-height:100vh;font-size:14px}
+
+/* LOCK SCREEN */
+#lock-screen {
+  position:fixed;
+  inset:0;
+  background:linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 100%);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  z-index:9999;
+}
+.lock-container {
+  background:white;
+  border-radius:var(--radius);
+  box-shadow:0 20px 80px rgba(0,0,0,.3);
+  width:420px;
+  max-width:92vw;
+  padding:40px;
+  text-align:center;
+}
+.lock-logo {
+  width:64px;
+  height:64px;
+  background:var(--orange);
+  border-radius:16px;
+  margin:0 auto 20px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:32px;
+}
+#lock-title {
+  font-size:20px;
+  font-weight:700;
+  color:var(--gray-800);
+  margin-bottom:8px;
+}
+#lock-subtitle {
+  font-size:13px;
+  color:var(--gray-400);
+  margin-bottom:28px;
+}
+#lock-password {
+  width:100%;
+  padding:12px 16px;
+  border:0.5px solid var(--gray-200);
+  border-radius:var(--radius-sm);
+  font-size:15px;
+  font-family:var(--font);
+  outline:none;
+  transition:border .2s,box-shadow .2s;
+  margin-bottom:12px;
+}
+#lock-password:focus {
+  border-color:var(--orange);
+  box-shadow:0 0 0 4px var(--orange-light);
+}
+#lock-btn {
+  width:100%;
+  padding:12px 20px;
+  background:var(--orange);
+  color:white;
+  border:none;
+  border-radius:var(--radius-sm);
+  font-size:14px;
+  font-weight:600;
+  cursor:pointer;
+  font-family:var(--font);
+  transition:background .2s;
+}
+#lock-btn:hover:not(:disabled) {
+  background:var(--orange-dark);
+}
+#lock-btn:disabled {
+  opacity:0.6;
+  cursor:not-allowed;
+}
+#lock-error {
+  margin-top:12px;
+  padding:10px 14px;
+  background:var(--red-bg);
+  color:var(--red);
+  border-radius:var(--radius-sm);
+  font-size:13px;
+  display:none;
+}
+.lock-footer {
+  margin-top:24px;
+  font-size:11px;
+  color:var(--gray-400);
+}
+.s-empty{padding:12px 14px;font-size:13px;color:var(--gray-400)}
+.s-used{font-size:11px;color:var(--gray-400);width:40px;text-align:right}
+.app-shell{display:grid;grid-template-columns:260px 1fr;grid-template-rows:58px minmax(0, 1fr);height:100vh;overflow:hidden}
+.topbar{grid-column:1/-1;background:var(--navy);display:flex;align-items:center;padding:0 20px;gap:16px;z-index:100}
+.topbar-logo{display:flex;align-items:center;gap:10px;color:white;font-size:15px;font-weight:600;letter-spacing:-0.2px}
+.topbar-title{color:rgba(255,255,255,.6);font-size:13px;padding-left:16px;border-left:1px solid rgba(255,255,255,.2);margin-left:4px}
+.topbar-actions{margin-left:auto;display:flex;gap:8px;align-items:center}
+.btn-primary{background:var(--orange);color:white;border:none;border-radius:var(--radius-sm);padding:8px 16px;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background .15s;font-family:var(--font)}
+.btn-primary:hover{background:var(--orange-dark)}
+.btn-ghost{background:rgba(255,255,255,.1);color:white;border:1px solid rgba(255,255,255,.2);border-radius:var(--radius-sm);padding:8px 14px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;font-family:var(--font)}
+.btn-ghost:hover{background:rgba(255,255,255,.18)}
+.export-menu{position:relative}
+.export-dropdown{position:absolute;top:calc(100% + 6px);right:0;background:white;border:0.5px solid var(--gray-200);border-radius:var(--radius);box-shadow:var(--shadow-md);min-width:220px;z-index:200;overflow:hidden;display:none;animation:modalIn .15s ease}
+.export-dropdown.open{display:block}
+.export-opt{display:flex;align-items:center;gap:12px;padding:11px 14px;border:none;background:white;cursor:pointer;font-family:var(--font);width:100%;text-align:left;transition:background .1s;border-bottom:0.5px solid var(--gray-100)}
+.export-opt:last-child{border-bottom:none}
+.export-opt:hover{background:var(--gray-50)}
+.export-opt svg{color:var(--gray-400);flex-shrink:0}
+.export-opt-label{font-size:13px;font-weight:500;color:var(--gray-800)}
+.export-opt-sub{font-size:11px;color:var(--gray-400);margin-top:1px}
+.sidebar{background:white;border-right:0.5px solid var(--gray-200);display:flex;flex-direction:column;overflow-y:auto;height:100%}
+.sidebar-section{padding:16px 12px 8px}
+.sidebar-section-title{font-size:10px;font-weight:600;letter-spacing:.8px;color:var(--gray-400);text-transform:uppercase;padding:0 8px;margin-bottom:6px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--radius-sm);cursor:pointer;font-size:13px;color:var(--gray-600);transition:all .1s;border:none;background:none;width:100%;text-align:left;font-family:var(--font)}
+.nav-item:hover{background:var(--gray-50);color:var(--gray-800)}
+.nav-item.active{background:var(--orange-light);color:var(--orange-dark);font-weight:500}
+.nav-item .nav-count{margin-left:auto;font-size:11px;background:var(--gray-100);color:var(--gray-600);padding:1px 7px;border-radius:20px;font-weight:500}
+.nav-item.active .nav-count{background:var(--orange);color:white}
+.nav-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.main{display:flex;flex-direction:column;overflow:hidden;min-height:0;height:100%}
+.toolbar{background:white;border-bottom:0.5px solid var(--gray-200);padding:12px 20px;display:flex;gap:10px;align-items:center;flex-shrink:0}
+.search-box{flex:1;position:relative;max-width:360px}
+.search-box input{width:100%;padding:8px 12px 8px 34px;border:0.5px solid var(--gray-200);border-radius:var(--radius-sm);font-size:13px;font-family:var(--font);background:var(--gray-50);color:var(--gray-800);outline:none;transition:border .15s,box-shadow .15s}
+.search-box input:focus{border-color:var(--orange);box-shadow:0 0 0 3px var(--orange-light);background:white}
+.search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--gray-400);pointer-events:none}
+.filter-select{padding:8px 10px;border:0.5px solid var(--gray-200);border-radius:var(--radius-sm);font-size:13px;font-family:var(--font);background:white;color:var(--gray-800);cursor:pointer;outline:none}
+.filter-select:focus{border-color:var(--orange)}
+.view-toggle{display:flex;border:0.5px solid var(--gray-200);border-radius:var(--radius-sm);overflow:hidden}
+.view-btn{padding:7px 11px;border:none;background:white;cursor:pointer;color:var(--gray-400);font-size:13px;transition:all .1s;display:flex;align-items:center}
+.view-btn:hover{background:var(--gray-50);color:var(--gray-600)}
+.view-btn.active{background:var(--navy);color:white}
+.toolbar-right{margin-left:auto;display:flex;gap:8px;align-items:center}
+.stat-pill{font-size:12px;color:var(--gray-400);padding:4px 10px;background:var(--gray-50);border-radius:20px;border:0.5px solid var(--gray-100)}
+.content{flex:1;overflow-y:auto;padding:20px}
+.cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.req-card{background:white;border:0.5px solid var(--gray-200);border-radius:var(--radius);padding:16px;cursor:pointer;transition:box-shadow .15s,transform .1s;display:flex;flex-direction:column;gap:10px}
+.req-card:hover{box-shadow:var(--shadow-md);transform:translateY(-1px)}
+.card-header{display:flex;align-items:flex-start;gap:10px}
+.card-domain-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.card-meta{flex:1;min-width:0}
+.card-title{font-size:13.5px;font-weight:600;color:var(--gray-800);line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-subtitle{font-size:11px;color:var(--gray-400);margin-top:2px;font-family:var(--font-mono)}
+.card-desc{font-size:12.5px;color:var(--gray-600);line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.card-tags{display:flex;flex-wrap:wrap;gap:5px}
+.tag{font-size:11px;padding:3px 8px;border-radius:4px;font-weight:500}
+.card-footer{display:flex;align-items:center;gap:8px;padding-top:8px;border-top:0.5px solid var(--gray-100)}
+.card-owner{margin-left:auto;display:flex;align-items:center;gap:5px;font-size:11px;color:var(--gray-400)}
+.avatar-sm{width:22px;height:22px;border-radius:50%;background:var(--navy-light);color:var(--navy);font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center}
+.table-view{background:white;border:0.5px solid var(--gray-200);border-radius:var(--radius);overflow:hidden}
+.table-view table{width:100%;border-collapse:collapse;font-size:13px}
+.table-view thead{background:var(--gray-50)}
+.table-view th{padding:10px 14px;text-align:left;font-size:11px;font-weight:600;letter-spacing:.5px;color:var(--gray-400);text-transform:uppercase;border-bottom:0.5px solid var(--gray-200);white-space:nowrap}
+.table-view td{padding:11px 14px;border-bottom:0.5px solid var(--gray-100);vertical-align:middle}
+.table-view tr:last-child td{border-bottom:none}
+.table-view tr:hover td{background:var(--gray-50)}
+.table-view tr{cursor:pointer}
+.tree-domain{margin-bottom:16px;background:white;border:0.5px solid var(--gray-200);border-radius:var(--radius);overflow:hidden}
+.tree-domain-header{display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer;border-bottom:0.5px solid var(--gray-100);transition:background .1s;user-select:none}
+.tree-domain-header:hover{background:var(--gray-50)}
+.tree-domain-count{font-size:11px;color:var(--gray-400);background:var(--gray-100);padding:2px 8px;border-radius:10px;margin-left:auto}
+.chevron{transition:transform .2s}.chevron.open{transform:rotate(90deg)}
+.tree-items{padding:8px}
+.tree-item{display:flex;align-items:center;gap:12px;padding:9px 12px;border-radius:var(--radius-sm);cursor:pointer;transition:background .1s}
+.tree-item:hover{background:var(--gray-50)}
+.tree-item-name{font-size:13px;font-weight:500;color:var(--gray-800);flex:1}
+.tree-item-id{font-family:var(--font-mono);font-size:11px;color:var(--gray-400)}
+.detail-overlay{position:fixed;inset:0;background:rgba(15,34,64,.35);z-index:200;display:flex;justify-content:flex-end;animation:fadeIn .15s ease}
+@keyframes fadeIn{from{opacity:0}}
+@keyframes slideIn{from{transform:translateX(100%)}}
+@keyframes modalIn{from{transform:scale(.96) translateY(8px);opacity:0}}
+.detail-panel{width:560px;max-width:95vw;background:white;height:100%;overflow-y:auto;animation:slideIn .2s ease;display:flex;flex-direction:column}
+.detail-panel-header{padding:20px 24px 16px;border-bottom:0.5px solid var(--gray-200);background:var(--gray-50);display:flex;align-items:flex-start;gap:12px}
+.detail-panel-close{margin-left:auto;background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:18px;padding:4px;border-radius:4px;line-height:1}
+.detail-panel-close:hover{color:var(--gray-800)}
+.detail-panel-body{padding:24px;flex:1}
+.detail-section{margin-bottom:24px}
+.detail-section-title{font-size:11px;font-weight:600;letter-spacing:.7px;text-transform:uppercase;color:var(--gray-400);margin-bottom:10px;padding-bottom:6px;border-bottom:0.5px solid var(--gray-100)}
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.detail-field label{font-size:11px;color:var(--gray-400);display:block;margin-bottom:3px}
+.detail-field span{font-size:13px;color:var(--gray-800);font-weight:500}
+.detail-desc{font-size:13px;color:var(--gray-600);line-height:1.7;background:var(--gray-50);padding:12px 14px;border-radius:var(--radius-sm);border:0.5px solid var(--gray-100)}
+.detail-tags{display:flex;flex-wrap:wrap;gap:6px}
+.detail-panel-actions{padding:16px 24px;border-top:0.5px solid var(--gray-100);display:flex;gap:10px;background:var(--gray-50)}
+.btn-secondary{padding:9px 18px;border:0.5px solid var(--gray-200);border-radius:var(--radius-sm);background:white;font-size:13px;font-weight:500;cursor:pointer;color:var(--gray-600);font-family:var(--font);transition:all .1s;display:flex;align-items:center;gap:6px}
+.btn-secondary:hover{border-color:var(--gray-400);color:var(--gray-800)}
+.btn-danger{padding:9px 18px;border:0.5px solid var(--red-bg);border-radius:var(--radius-sm);background:white;font-size:13px;font-weight:500;cursor:pointer;color:var(--red);font-family:var(--font);transition:all .1s;margin-left:auto}
+.btn-danger:hover{background:var(--red-bg)}
+.btn-icon{padding:5px 9px;border:0.5px solid var(--gray-200);border-radius:var(--radius-sm);background:white;cursor:pointer;color:var(--gray-400);font-family:var(--font);font-size:12px;transition:all .1s}
+.btn-icon:hover{border-color:var(--gray-400);color:var(--gray-600)}
+.btn-icon.del:hover{border-color:var(--red-bg);color:var(--red);background:var(--red-bg)}
+.modal-overlay{position:fixed;inset:0;background:rgba(15,34,64,.45);z-index:300;display:flex;align-items:center;justify-content:center;animation:fadeIn .15s ease}
+.modal{background:white;border-radius:var(--radius);width:640px;max-width:96vw;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.18);animation:modalIn .2s ease}
+.modal-header{padding:20px 24px 16px;border-bottom:0.5px solid var(--gray-100);display:flex;align-items:center;gap:12px}
+.modal-title{font-size:16px;font-weight:600;color:var(--gray-800)}
+.modal-close{margin-left:auto;background:none;border:none;cursor:pointer;font-size:18px;color:var(--gray-400);padding:4px;border-radius:4px;line-height:1}
+.modal-close:hover{color:var(--gray-800)}
+.modal-body{padding:20px 24px}
+.modal-footer{padding:14px 24px;border-top:0.5px solid var(--gray-100);display:flex;gap:10px;justify-content:flex-end;background:var(--gray-50)}
+.form-row{margin-bottom:16px}
+.form-row-2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px}
+.form-group{display:flex;flex-direction:column;gap:5px}
+.form-label{font-size:12px;font-weight:500;color:var(--gray-600)}
+.form-label .req{color:var(--orange);margin-left:2px}
+.form-control{padding:9px 12px;border:0.5px solid var(--gray-200);border-radius:var(--radius-sm);font-size:13px;font-family:var(--font);color:var(--gray-800);background:white;outline:none;transition:border .15s,box-shadow .15s;width:100%}
+.form-control:focus{border-color:var(--orange);box-shadow:0 0 0 3px var(--orange-light)}
+textarea.form-control{resize:vertical;min-height:80px}
+.stats-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+.stat-card{background:white;border:0.5px solid var(--gray-200);border-radius:var(--radius);padding:14px 16px;display:flex;flex-direction:column;gap:4px}
+.stat-label{font-size:11px;color:var(--gray-400);font-weight:500;text-transform:uppercase;letter-spacing:.5px}
+.stat-value{font-size:24px;font-weight:700;color:var(--gray-800);line-height:1}
+.stat-sub{font-size:11px;color:var(--gray-400)}
+
+/* ── PARAMÉTRAGE ── */
+.settings-wrap{overflow-y:auto;flex:1;background:var(--gray-50)}
+.settings-page{padding:24px;max-width:860px}
+.settings-back{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+.settings-back h2{font-size:18px;font-weight:700;color:var(--gray-800)}
+.settings-tabs{display:flex;gap:2px;background:var(--gray-100);border-radius:var(--radius-sm);padding:4px;margin-bottom:24px;flex-wrap:wrap}
+.s-tab{padding:8px 14px;border:none;background:none;font-size:13px;font-family:var(--font);color:var(--gray-400);cursor:pointer;border-radius:5px;font-weight:500;transition:all .15s}
+.s-tab:hover{color:var(--gray-600)}
+.s-tab.active{background:white;color:var(--orange-dark);box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.s-panel{display:none}.s-panel.active{display:block}
+.s-card{background:white;border:0.5px solid var(--gray-200);border-radius:var(--radius);overflow:hidden;margin-bottom:18px}
+.s-card-head{padding:14px 18px;border-bottom:0.5px solid var(--gray-100);background:var(--gray-50)}
+.s-card-title{font-size:14px;font-weight:600;color:var(--gray-800)}
+.s-card-desc{font-size:12px;color:var(--gray-400);margin-top:2px}
+.s-list{padding:6px 8px}
+.s-row{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--radius-sm);transition:background .1s}
+.s-row:hover{background:var(--gray-50)}
+.s-row-icon{font-size:16px;width:24px;text-align:center;flex-shrink:0}
+.s-row-main{flex:1;min-width:0}
+.s-row-label{font-size:13px;font-weight:500;color:var(--gray-800)}
+.s-row-sub{font-size:11px;color:var(--gray-400);font-family:var(--font-mono);margin-top:1px}
+.s-badge{font-size:11px;color:var(--gray-400);background:var(--gray-100);padding:2px 8px;border-radius:10px;white-space:nowrap}
+.s-add{display:flex;gap:8px;padding:10px 10px 12px;border-top:0.5px solid var(--gray-100)}
+.s-input{flex:1;padding:8px 10px;border:0.5px solid var(--gray-200);border-radius:var(--radius-sm);font-size:13px;font-family:var(--font);outline:none;background:white;color:var(--gray-800)}
+.s-input:focus{border-color:var(--orange);box-shadow:0 0 0 3px var(--orange-light)}
+.color-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;border:0.5px solid rgba(0,0,0,.12)}
+.color-swatch{width:26px;height:26px;border-radius:6px;border:0.5px solid var(--gray-200);overflow:hidden;position:relative;flex-shrink:0;cursor:pointer}
+.color-swatch input[type=color]{position:absolute;inset:-4px;width:calc(100%+8px);height:calc(100%+8px);border:none;cursor:pointer;opacity:0}
+.color-preview{position:absolute;inset:0;border-radius:5px;pointer-events:none}
+.emoji-input{width:44px;height:34px;border:0.5px solid var(--gray-200);border-radius:var(--radius-sm);font-size:18px;text-align:center;background:white;outline:none;cursor:text}
+.id-preview-box{background:var(--gray-50);border:0.5px solid var(--gray-100);border-radius:var(--radius-sm);padding:12px 16px;margin-bottom:16px}
+.id-preview-label{font-size:11px;color:var(--gray-400);margin-bottom:4px}
+.id-preview-val{font-family:var(--font-mono);font-size:17px;font-weight:700;color:var(--navy)}
+.danger-zone{padding:14px 18px;display:flex;flex-direction:column;gap:10px}
+.danger-row{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-radius:var(--radius-sm);gap:16px}
+.danger-row.soft{border:0.5px solid var(--gray-100)}
+.danger-row.hard{border:0.5px solid var(--red-bg)}
+.danger-row-text .title{font-size:13px;font-weight:500;color:var(--gray-800)}
+.danger-row.hard .danger-row-text .title{color:var(--red)}
+.danger-row-text .sub{font-size:12px;color:var(--gray-400);margin-top:2px}
+
+.empty-state{text-align:center;padding:60px 20px;color:var(--gray-400)}
+.empty-state-icon{font-size:40px;margin-bottom:12px}
+.empty-state h3{font-size:15px;color:var(--gray-600);margin-bottom:6px}
+
+/* ── RÉFÉRENTIEL CNSA ── */
+.ref-wrap{overflow-y:auto;flex:1;background:var(--gray-50)}
+.ref-page{display:grid;grid-template-columns:220px 1fr;height:100%}
+.ref-toc{background:white;border-right:0.5px solid var(--gray-200);overflow-y:auto;padding:16px 10px;display:flex;flex-direction:column;gap:2px;height:100%}
+.ref-toc-title{font-size:10px;font-weight:600;letter-spacing:.8px;color:var(--gray-400);text-transform:uppercase;padding:0 8px 8px;margin-bottom:4px;border-bottom:0.5px solid var(--gray-100)}
+.toc-item{display:flex;align-items:flex-start;gap:8px;padding:7px 10px;border-radius:var(--radius-sm);cursor:pointer;font-size:12px;color:var(--gray-600);transition:all .1s;border:none;background:none;width:100%;text-align:left;font-family:var(--font);line-height:1.35}
+.toc-item:hover{background:var(--gray-50);color:var(--gray-800)}
+.toc-item.active{background:var(--navy-light);color:var(--navy);font-weight:500}
+.toc-num{font-family:var(--font-mono);font-size:10px;color:var(--gray-400);flex-shrink:0;padding-top:1px;min-width:16px}
+.toc-item.active .toc-num{color:var(--navy)}
+.ref-body{overflow-y:auto;padding:28px 32px;max-width:860px}
+.ref-section{margin-bottom:40px;scroll-margin-top:20px}
+.ref-section-title{font-size:17px;font-weight:700;color:var(--navy);margin-bottom:16px;padding-bottom:10px;border-bottom:2px solid var(--navy-light);display:flex;align-items:center;gap:10px}
+.ref-num{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:7px;background:var(--navy);color:white;font-size:12px;font-weight:700;flex-shrink:0}
+.ref-subsection{margin-bottom:20px}
+.ref-subsection-title{font-size:13.5px;font-weight:600;color:var(--gray-800);margin-bottom:10px;padding-left:10px;border-left:3px solid var(--orange)}
+.ref-rule{display:flex;align-items:flex-start;gap:8px;padding:7px 10px;border-radius:var(--radius-sm);font-size:13px;line-height:1.55;margin-bottom:4px}
+.rule-inclus{background:#EAF3DE;color:#1F4A08}
+.rule-exclus{background:#FCEBEB;color:#7A1F1F}
+.rule-filtre{background:#E6F1FB;color:#0C3D70}
+.rule-calcul{background:#FAEEDA;color:#5C3006}
+.rule-cond{background:#EEEDFE;color:#3A2D8A}
+.rule-tag{font-family:var(--font-mono);font-size:10px;font-weight:700;padding:2px 6px;border-radius:3px;flex-shrink:0;margin-top:2px;letter-spacing:.3px}
+.tag-inclus{background:#C0DD97;color:#1F4A08}
+.tag-exclus{background:#F09595;color:#7A1F1F}
+.tag-filtre{background:#85B7EB;color:#0C3D70}
+.tag-calcul{background:#FAC775;color:#5C3006}
+.tag-cond{background:#AFA9EC;color:#3A2D8A}
+.ref-alert{background:var(--amber-bg);border-left:3px solid var(--orange);border-radius:0 var(--radius-sm) var(--radius-sm) 0;padding:10px 14px;font-size:12.5px;color:var(--amber);line-height:1.55;margin:10px 0;display:flex;gap:8px;align-items:flex-start}
+.ref-alert-icon{flex-shrink:0;font-size:14px;margin-top:1px}
+.ref-formula{background:var(--navy-light);border-radius:var(--radius-sm);padding:10px 14px;font-family:var(--font-mono);font-size:12px;color:var(--navy);margin:8px 0;line-height:1.6;white-space:pre-wrap;word-break:break-word}
+.ref-table{width:100%;border-collapse:collapse;font-size:12.5px;margin:10px 0}
+.ref-table th{background:var(--gray-50);padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--gray-400);text-transform:uppercase;letter-spacing:.4px;border-bottom:0.5px solid var(--gray-200);white-space:nowrap}
+.ref-table td{padding:9px 12px;border-bottom:0.5px solid var(--gray-100);vertical-align:top;line-height:1.45}
+.ref-table tr:last-child td{border-bottom:none}
+.ref-table tr:hover td{background:var(--gray-50)}
+.ref-table-wrap{border:0.5px solid var(--gray-200);border-radius:var(--radius);overflow:hidden;margin:10px 0}
+.ref-source{font-size:11px;color:var(--gray-400);font-style:italic;margin-top:6px;padding-top:6px;border-top:0.5px solid var(--gray-100)}
+.ref-header-card{background:white;border:0.5px solid var(--gray-200);border-radius:var(--radius);padding:18px 22px;margin-bottom:28px;display:flex;align-items:flex-start;gap:16px}
+.ref-header-icon{width:48px;height:48px;border-radius:10px;background:var(--navy);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+.ref-header-title{font-size:16px;font-weight:700;color:var(--gray-800);margin-bottom:4px}
+.ref-header-sub{font-size:12px;color:var(--gray-400);line-height:1.5}
+.ref-badge{display:inline-block;font-size:11px;font-weight:500;padding:3px 8px;border-radius:4px;background:var(--navy-light);color:var(--navy);margin-right:6px;margin-bottom:4px}
+#toast{position:fixed;bottom:24px;right:24px;background:var(--gray-800);color:white;padding:12px 18px;border-radius:var(--radius);font-size:13px;z-index:999;transform:translateY(100px);opacity:0;transition:all .3s;box-shadow:0 4px 20px rgba(0,0,0,.2)}
+#toast.show{transform:translateY(0);opacity:1}
+#toast.success{background:var(--green)}
+#toast.error{background:var(--red)}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--gray-200);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--gray-400)}
+</style>
+</head>
+<body>
+
+<!-- ÉCRAN DE VERROUILLAGE -->
+<div id="lock-screen">
+  <div class="lock-container">
+    <div class="lock-logo">🔒</div>
+    <h1 id="lock-title">Catalogue BO — MDA de l'Orne</h1>
+    <p id="lock-subtitle">Entrez votre mot de passe pour déverrouiller</p>
+    <form onsubmit="event.preventDefault(); AppController.attemptUnlock();">
+      <input type="password" id="lock-password" placeholder="Mot de passe" autocomplete="current-password" autofocus>
+      <button type="submit" id="lock-btn">Déverrouiller</button>
+    </form>
+    <div id="lock-error"></div>
+    <div class="lock-footer">
+      🔐 Chiffré avec AES-256-GCM | IndexedDB
+    </div>
+  </div>
+</div>
+
+<!-- APPLICATION (cachée par défaut) -->
+<div id="app-container" style="display:none">
+<div class="app-shell">
+
+<!-- TOPBAR -->
+<header class="topbar">
+  <div class="topbar-logo">
+    <svg width="28" height="28" viewBox="0 0 28 28" fill="none"><rect width="28" height="28" rx="7" fill="#F07821"/><path d="M7 20L14 8L21 20H17.5L14 13.5L10.5 20H7Z" fill="white"/></svg>
+    MDA de l'Orne
+  </div>
+  <span class="topbar-title">Catalogue des requêtes BusinessObjects</span>
+  <div class="topbar-actions">
+    <div class="export-menu" id="export-menu">
+      <button class="btn-ghost" onclick="toggleExportMenu(event)">
+        <svg width="13" height="13" viewBox="0 0 14 14" fill="currentColor"><path d="M2 10v2h10v-2H2zm4-8v5.586L4.707 6.293 3.293 7.707 7 11.414l3.707-3.707-1.414-1.414L8 7.586V2H6z"/></svg>
+        Exporter
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" style="opacity:.7"><path d="M2 3l3 4 3-4z"/></svg>
+      </button>
+      <div class="export-dropdown" id="export-dropdown">
+        <button class="export-opt" onclick="exportAll();closeExportMenu()">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M2 2h8l2 2v8H2V2zm2 5h4v4H4V7zm1-5v3h3V2H5z"/></svg>
+          <div><div class="export-opt-label">Export JSON</div><div class="export-opt-sub">Catalogue + configuration</div></div>
+        </button>
+        <button class="export-opt" onclick="exportExcel();closeExportMenu()">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M1 1h8l3 3v9H1V1zm2 5l2 3 2-3H5.5L4.5 8 3.5 6H2zm4 0l2 3 2-3H8.5L7.5 8 6.5 6H5z" opacity=".3"/><path d="M1 1h8l3 3v9H1V1zm7 0v3h3M3 6.5l1.5 2.5L3 11.5m2-5l2 2.5L5 11.5m2-5l2 2.5L7 11.5" fill="none" stroke="currentColor" stroke-width=".8"/><path d="M3 7l1 1.5L3 11h1.2l.8-1.5.8 1.5H7L5.8 8.5 7 7H5.8l-.8 1.3L4.2 7H3zm4 0l1 1.5L7 11h1.2l.8-1.5.8 1.5H11L9.8 8.5 11 7H9.8L9 8.3 8.2 7H7z"/></svg>
+          <div><div class="export-opt-label">Export Excel</div><div class="export-opt-sub">Tableau .xlsx des requêtes</div></div>
+        </button>
+      </div>
+    </div>
+    <button class="btn-ghost" onclick="openChangePasswordModal()" title="Changer le mot de passe">
+      <svg width="13" height="13" viewBox="0 0 14 14" fill="currentColor"><path d="M7 0a4 4 0 0 0-4 4v2H2v8h10V6h-1V4a4 4 0 0 0-4-4zm0 1.5A2.5 2.5 0 0 1 9.5 4v2h-5V4A2.5 2.5 0 0 1 7 1.5zM7 9a1 1 0 0 1 1 1v1.5a1 1 0 1 1-2 0V10a1 1 0 0 1 1-1z"/></svg>
+      Mot de passe
+    </button>
+    <button class="btn-primary" onclick="openAddModal()">
+      <svg width="13" height="13" viewBox="0 0 14 14" fill="currentColor"><path d="M6 0h2v6h6v2H8v6H6V8H0V6h6z"/></svg>
+      Nouvelle requête
+    </button>
+  </div>
+</header>
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="sidebar-section">
+    <div class="sidebar-section-title">Navigation</div>
+    <button class="nav-item active" id="nav-all" onclick="filterByNav('all',this)">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><rect x="1" y="1" width="5" height="5" rx="1"/><rect x="8" y="1" width="5" height="5" rx="1"/><rect x="1" y="8" width="5" height="5" rx="1"/><rect x="8" y="8" width="5" height="5" rx="1"/></svg>
+      Toutes les requêtes
+      <span class="nav-count" id="count-all">0</span>
+    </button>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-section-title">Par domaine</div>
+    <div id="domain-nav"></div>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-section-title">Par statut</div>
+    <div id="status-nav"></div>
+  </div>
+  <div class="sidebar-section" style="margin-top:auto;padding-top:16px;border-top:0.5px solid var(--gray-100)">
+    <button class="nav-item" id="nav-ref" onclick="goRef()">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M2 1h7l3 3v9H2V1zm4 4v5m-2-3h4M4 4h3"/><path d="M9 1v3h3" fill="none" stroke="currentColor" stroke-width="1"/></svg>
+      Référentiel CNSA
+    </button>
+    <button class="nav-item" onclick="goSettings()">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M5.7.3l-.4 1.6a5 5 0 0 0-1 .6L2.7 2 1 4.7l1.2 1.1a5.3 5.3 0 0 0 0 1.4L1 8.3 2.7 11l1.6-.5a5 5 0 0 0 1 .6l.4 1.6h2.6l.4-1.6a5 5 0 0 0 1-.6L11.3 11 13 8.3l-1.2-1.1a5.3 5.3 0 0 0 0-1.4L13 4.7 11.3 2l-1.6.5a5 5 0 0 0-1-.6L8.3.3H5.7zM7 5a2 2 0 1 1 0 4A2 2 0 0 1 7 5z"/></svg>
+      Paramétrage
+    </button>
+    <button class="nav-item" onclick="importData()">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M2 10v2h10v-2H2zM8 2H6v5.6L4.7 6.3 3.3 7.7 7 11.4l3.7-3.7-1.4-1.4L8 7.6V2z" transform="scale(1,-1) translate(0,-14)"/></svg>
+      Importer JSON
+    </button>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+
+  <!-- VUE CATALOGUE -->
+  <div id="view-catalogue" style="display:flex;flex-direction:column;height:100%;overflow:hidden">
+    <div class="toolbar">
+      <div class="search-box">
+        <svg class="search-icon" width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M9.5 8.5l3 3-1 1-3-3A5 5 0 1 1 9.5 8.5zM6 9A3 3 0 1 0 6 3a3 3 0 0 0 0 6z"/></svg>
+        <input type="text" id="search-input" placeholder="Rechercher par nom, ID, univers, tag…" oninput="applyFilters()">
+      </div>
+      <select class="filter-select" id="filter-univers" onchange="applyFilters()"><option value="">Tous les univers</option></select>
+      <select class="filter-select" id="filter-freq" onchange="applyFilters()"><option value="">Toutes fréquences</option></select>
+      <div class="view-toggle">
+        <button class="view-btn active" id="btn-cards" onclick="setView('cards')" title="Cartes">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><rect x="1" y="1" width="5" height="5" rx="1"/><rect x="8" y="1" width="5" height="5" rx="1"/><rect x="1" y="8" width="5" height="5" rx="1"/><rect x="8" y="8" width="5" height="5" rx="1"/></svg>
+        </button>
+        <button class="view-btn" id="btn-table" onclick="setView('table')" title="Tableau">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M1 2h12v2H1zm0 4h12v2H1zm0 4h12v2H1z"/></svg>
+        </button>
+        <button class="view-btn" id="btn-tree" onclick="setView('tree')" title="Arborescence">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 2h4v3H2zM8 2h4v3H8zM8 6h4v3H8zM8 10h4v3H8zM4 3.5v8M4 3.5h4M4 7.5h4M4 11.5h4"/></svg>
+        </button>
+      </div>
+      <div class="toolbar-right"><span class="stat-pill" id="result-count">0 requête(s)</span></div>
+    </div>
+    <div class="content" id="content-area">
+      <div class="stats-bar" id="stats-bar"></div>
+      <div id="view-container"></div>
+    </div>
+  </div>
+
+  <!-- VUE PARAMÉTRAGE -->
+  <div id="view-settings" style="display:none;flex:1;overflow-y:auto;background:var(--gray-50)">
+    <div class="settings-page">
+      <div class="settings-back">
+        <button class="btn-secondary" onclick="goBack()" style="padding:6px 12px;font-size:12px">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2L4 6l4 4"/></svg>
+          Retour au catalogue
+        </button>
+        <h2>Paramétrage</h2>
+      </div>
+
+      <div class="settings-tabs">
+        <button class="s-tab active" onclick="switchTab('univers',this)">Univers BO</button>
+        <button class="s-tab" onclick="switchTab('domaines',this)">Domaines</button>
+        <button class="s-tab" onclick="switchTab('statuts',this)">Statuts</button>
+        <button class="s-tab" onclick="switchTab('frequences',this)">Fréquences</button>
+        <button class="s-tab" onclick="switchTab('responsables',this)">Responsables</button>
+        <button class="s-tab" onclick="switchTab('numerotation',this)">Numérotation</button>
+      </div>
+
+      <!-- UNIVERS -->
+      <div class="s-panel active" id="panel-univers">
+        <div class="s-card">
+          <div class="s-card-head">
+            <div class="s-card-title">Univers BusinessObjects</div>
+            <div class="s-card-desc">Couches sémantiques disponibles dans votre environnement BO.</div>
+          </div>
+          <div class="s-list" id="list-univers"></div>
+          <div class="s-add">
+            <input class="s-input" id="ui-name" placeholder="Nom de l'univers (ex : Solis_MDPH_Prod)" style="flex:2;font-family:var(--font-mono)">
+            <input class="s-input" id="ui-desc" placeholder="Description (optionnel)">
+            <button class="btn-primary" onclick="addUnivers()">+ Ajouter</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- DOMAINES -->
+      <div class="s-panel" id="panel-domaines">
+        <div class="s-card">
+          <div class="s-card-head">
+            <div class="s-card-title">Domaines fonctionnels</div>
+            <div class="s-card-desc">Thématiques métier. Chaque domaine a un emoji et une couleur personnalisables.</div>
+          </div>
+          <div class="s-list" id="list-domaines"></div>
+          <div class="s-add">
+            <input class="s-input emoji-input" id="di-icon" placeholder="🗂" maxlength="2" style="width:50px;flex:none;font-size:18px;text-align:center">
+            <input class="s-input" id="di-name" placeholder="Nom du domaine (ex : Gestion financière)">
+            <button class="btn-primary" onclick="addDomaine()">+ Ajouter</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- STATUTS -->
+      <div class="s-panel" id="panel-statuts">
+        <div class="s-card">
+          <div class="s-card-head">
+            <div class="s-card-title">Statuts de requête</div>
+            <div class="s-card-desc">Cycle de vie d'une requête — détermine la couleur dans les vues et la sidebar.</div>
+          </div>
+          <div class="s-list" id="list-statuts"></div>
+          <div class="s-add">
+            <input type="color" id="si-color" value="#3B6D11" style="width:38px;height:36px;border:0.5px solid var(--gray-200);border-radius:var(--radius-sm);padding:2px;cursor:pointer">
+            <input class="s-input" id="si-name" placeholder="Nom du statut (ex : Archivé)">
+            <input class="s-input" id="si-desc" placeholder="Description">
+            <button class="btn-primary" onclick="addStatut()">+ Ajouter</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- FRÉQUENCES -->
+      <div class="s-panel" id="panel-frequences">
+        <div class="s-card">
+          <div class="s-card-head">
+            <div class="s-card-title">Fréquences d'utilisation</div>
+            <div class="s-card-desc">Périodicité d'exécution des requêtes. Disponibles comme filtre dans la barre de recherche.</div>
+          </div>
+          <div class="s-list" id="list-frequences"></div>
+          <div class="s-add">
+            <input class="s-input" id="fi-name" placeholder="Ex : Bi-mensuelle">
+            <button class="btn-primary" onclick="addFrequence()">+ Ajouter</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- RESPONSABLES -->
+      <div class="s-panel" id="panel-responsables">
+        <div class="s-card">
+          <div class="s-card-head">
+            <div class="s-card-title">Responsables / Propriétaires</div>
+            <div class="s-card-desc">Alimente l'auto-complétion du champ "Responsable" dans les fiches.</div>
+          </div>
+          <div class="s-list" id="list-responsables"></div>
+          <div class="s-add">
+            <input class="s-input" id="ri-name" placeholder="Nom (ex : M. Dupont)">
+            <input class="s-input" id="ri-service" placeholder="Service / Direction">
+            <button class="btn-primary" onclick="addResponsable()">+ Ajouter</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- NUMÉROTATION -->
+      <div class="s-panel" id="panel-numerotation">
+        <div class="s-card">
+          <div class="s-card-head">
+            <div class="s-card-title">Format des identifiants</div>
+            <div class="s-card-desc">Paramètre la génération automatique des IDs BO.</div>
+          </div>
+          <div style="padding:18px 20px">
+            <div class="form-row-2">
+              <div class="form-group">
+                <label class="form-label">Préfixe</label>
+                <input type="text" class="form-control" id="cfg-prefix" placeholder="REQ" oninput="previewId()" style="font-family:var(--font-mono)">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Séparateur</label>
+                <select class="form-control" id="cfg-sep" onchange="previewId()">
+                  <option value="-">Tiret  —  REQ-001</option>
+                  <option value="_">Underscore  —  REQ_001</option>
+                  <option value="/">Slash  —  REQ/001</option>
+                  <option value="">Aucun  —  REQ001</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row-2">
+              <div class="form-group">
+                <label class="form-label">Largeur du numéro</label>
+                <select class="form-control" id="cfg-pad" onchange="previewId()">
+                  <option value="3">3 chiffres — 001</option>
+                  <option value="4">4 chiffres — 0001</option>
+                  <option value="5">5 chiffres — 00001</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Forcer le prochain numéro</label>
+                <input type="number" class="form-control" id="cfg-next" min="1" placeholder="Auto" oninput="previewId()">
+              </div>
+            </div>
+            <div class="id-preview-box">
+              <div class="id-preview-label">Aperçu du prochain identifiant généré</div>
+              <div class="id-preview-val" id="id-preview">REQ-001</div>
+            </div>
+            <button class="btn-primary" onclick="saveNumConfig()">Enregistrer</button>
+          </div>
+        </div>
+        <div class="s-card">
+          <div class="s-card-head"><div class="s-card-title">Actions globales</div></div>
+          <div class="danger-zone">
+            <div class="danger-row soft">
+              <div class="danger-row-text">
+                <div class="title">Réinitialiser le paramétrage</div>
+                <div class="sub">Recharge toutes les valeurs par défaut (univers, domaines, statuts, fréquences…)</div>
+              </div>
+              <button class="btn-secondary" onclick="resetConfig()">Réinitialiser</button>
+            </div>
+            <div class="danger-row hard">
+              <div class="danger-row-text">
+                <div class="title">Vider tout le catalogue</div>
+                <div class="sub">Supprime toutes les requêtes — irréversible</div>
+              </div>
+              <button class="btn-danger" style="margin-left:0" onclick="confirmAct('Vider tout le catalogue ? Cette action est irréversible.',()=>{data=[];saveData();refresh();showToast('Catalogue vidé.','success');})">Vider</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+  <!-- VUE RÉFÉRENTIEL CNSA -->
+  <div id="view-ref" style="display:none;flex:1;overflow:hidden">
+    <div class="ref-page">
+
+      <!-- TABLE DES MATIÈRES -->
+      <nav class="ref-toc">
+        <div class="ref-toc-title">Sommaire</div>
+        <button class="toc-item active" onclick="scrollRef('r1',this)"><span class="toc-num">1</span>Dossiers déposés et stocks</button>
+        <button class="toc-item" onclick="scrollRef('r2',this)"><span class="toc-num">2</span>Décisions CDAPH</button>
+        <button class="toc-item" onclick="scrollRef('r3',this)"><span class="toc-num">3</span>Bénéficiaires et droits ouverts</button>
+        <button class="toc-item" onclick="scrollRef('r4',this)"><span class="toc-num">4</span>Délai Moyen de Traitement</button>
+        <button class="toc-item" onclick="scrollRef('r5',this)"><span class="toc-num">5</span>Prestations — PCH, AEEH, CMI, AAH</button>
+        <button class="toc-item" onclick="scrollRef('r6',this)"><span class="toc-num">6</span>Orientations ESMS</button>
+        <button class="toc-item" onclick="scrollRef('r7',this)"><span class="toc-num">7</span>Recours — RAPO et contentieux</button>
+        <button class="toc-item" onclick="scrollRef('r8',this)"><span class="toc-num">8</span>Ventilation Enfants / Adultes</button>
+        <button class="toc-item" onclick="scrollRef('r9',this)"><span class="toc-num">9</span>Effectifs (ETP)</button>
+        <button class="toc-item" onclick="scrollRef('r10',this)"><span class="toc-num">10</span>Valeurs manquantes</button>
+        <button class="toc-item" onclick="scrollRef('r11',this)"><span class="toc-num">11</span>Exclusions globales</button>
+        <button class="toc-item" onclick="scrollRef('r12',this)"><span class="toc-num">12</span>Points de vigilance BO/Solis</button>
+        <div style="margin-top:auto;padding-top:12px;border-top:0.5px solid var(--gray-100)">
+          <button class="toc-item" onclick="goBack()" style="color:var(--gray-400)">
+            <span class="toc-num">←</span>Retour au catalogue
+          </button>
+        </div>
+      </nav>
+
+      <!-- CORPS DU RÉFÉRENTIEL -->
+      <div class="ref-body" id="ref-body">
+
+        <div class="ref-header-card">
+          <div class="ref-header-icon">📐</div>
+          <div>
+            <div class="ref-header-title">Référentiel consolidé — Périmètres statistiques MDPH/CNSA</div>
+            <div class="ref-header-sub">Sources croisées : Guide pratique CNSA (Mars 2026) &amp; Maquette Échanges Annuels MDPH 2025<br>
+              <span class="ref-badge">Campagne 2024 / Année N</span>
+              <span class="ref-badge">Consolidé le 24/04/2026</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 1 -->
+        <div class="ref-section" id="r1">
+          <div class="ref-section-title"><span class="ref-num">1</span>Dossiers déposés et stocks</div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">1.1 — Dossiers déposés (année N)</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>Demandes explicites ou génériques avec date de dépôt renseignée</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>Dossiers CERFA et dossiers téléservice (tous canaux confondus)</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>Dossiers de reprise de droits en cours ou suite à révision par un tiers</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>Comptage unique sans doublon — 1 dossier de demande = 1 seule occurrence</div>
+            <div class="ref-rule rule-exclus"><span class="rule-tag tag-exclus">EXCLUS</span>Recours RAPO, recours gracieux et recours contentieux</div>
+            <div class="ref-alert"><span class="ref-alert-icon">⚠</span>Vérifier dans BO que le filtre sur le type de demande exclut bien les RAPO — ne pas se fier au seul statut du dossier.</div>
+            <div class="ref-source">Guide CNSA §1.1 + Maquette §02 — Les reprises de droits sont explicitement incluses par la Maquette.</div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">1.2 — Stock au 1er janvier (dossiers non décidés)</div>
+            <div class="ref-rule rule-filtre"><span class="rule-tag tag-filtre">FILTRE</span>Photographie au 1er janvier de l'année N</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>Dossiers avec date de dépôt renseignée, sans décision ni clôture</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>Périmètre identique aux dossiers déposés : CERFA + téléservice, sans doublon</div>
+            <div class="ref-rule rule-exclus"><span class="rule-tag tag-exclus">EXCLUS</span>Recours déposés</div>
+            <div class="ref-source">Maquette §07 — Le stock comptabilise les demandes par prestation/orientation/avis figurant dans l'onglet DEMANDES détaillé.</div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">1.3 — Stock au 31 décembre (dossiers non décidés)</div>
+            <div class="ref-rule rule-filtre"><span class="rule-tag tag-filtre">FILTRE</span>Photographie au 31 décembre de l'année N</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>Même périmètre que le stock au 1er janvier</div>
+            <div class="ref-formula">Part stock (%) = Nb dossiers non décidés au 31/12/N ÷ Total dossiers déposés N × 100</div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">1.4 — Contrôles de cohérence (Maquette CNSA)</div>
+            <div class="ref-rule rule-calcul"><span class="rule-tag tag-calcul">CALCUL</span>Total demandes déposées (onglet DEMANDES) = Total onglet ACTIVITE GLOBALE</div>
+            <div class="ref-rule rule-calcul"><span class="rule-tag tag-calcul">CALCUL</span>Nb premières demandes + réexamens = total des demandes recevables</div>
+            <div class="ref-rule rule-calcul"><span class="rule-tag tag-calcul">CALCUL</span>Nb demandes recevables ≤ nb demandes déposées</div>
+          </div>
+        </div>
+
+        <!-- 2 -->
+        <div class="ref-section" id="r2">
+          <div class="ref-section-title"><span class="ref-num">2</span>Décisions CDAPH — périmètre et comptages</div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">2.1 — Définition et périmètre général</div>
+            <p style="font-size:13px;color:var(--gray-600);margin-bottom:10px;line-height:1.6">Une décision = un accord, un refus ou un sursis. Les rejets administratifs (dossier irrecevable) sont des refus.</p>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>Accords, refus, sursis — y compris les rejets administratifs</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>Décisions suite à recours gracieux/RAPO : intégrées dans les décisions CDAPH</div>
+            <div class="ref-rule rule-exclus"><span class="rule-tag tag-exclus">EXCLUS</span>Décisions de sortie de dispositif (orientations ESMS ou ORP)</div>
+            <div class="ref-rule rule-exclus"><span class="rule-tag tag-exclus">EXCLUS</span>Non-attributions supplémentaires : ligne 99 uniquement — jamais dans le total (ligne 94)</div>
+            <div class="ref-formula">Nb de décisions = Accords + Refus + Sursis</div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">2.2 — Comptage en personnes uniques</div>
+            <div class="ref-alert"><span class="ref-alert-icon">⚠</span>Ne pas compter les lignes de décision en base — compter les personnes distinctes (identifiants uniques).</div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">2.3 — Règles spécifiques par prestation (Maquette §04)</div>
+            <div class="ref-table-wrap"><table class="ref-table">
+              <thead><tr><th>Prestation</th><th>Règle de comptage</th></tr></thead>
+              <tbody>
+                <tr><td><strong>PCH</strong></td><td>1 décision d'accord quel que soit le nombre d'éléments accordés</td></tr>
+                <tr><td><strong>AEEH</strong></td><td>1 décision quel que soit le contenu. Exception : plusieurs compléments lors d'une même CDAPH → compter plusieurs décisions</td></tr>
+                <tr><td><strong>CMI invalidité/priorité</strong></td><td>1 décision même si la CDAPH prononce deux décisions en séance</td></tr>
+                <tr><td><strong>Orientation ESMS adultes</strong></td><td>1 décision</td></tr>
+              </tbody>
+            </table></div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">2.4 — Contrôles de cohérence</div>
+            <div class="ref-rule rule-calcul"><span class="rule-tag tag-calcul">CALCUL</span>Total décisions CDAPH = Total onglet ACTIVITE GLOBALE</div>
+            <div class="ref-rule rule-calcul"><span class="rule-tag tag-calcul">CALCUL</span>Total décisions enfants = Total onglet ACTIVITE ENFANTS</div>
+            <div class="ref-rule rule-calcul"><span class="rule-tag tag-calcul">CALCUL</span>Total décisions adultes = Total onglet ACTIVITE ADULTES</div>
+          </div>
+        </div>
+
+        <!-- 3 -->
+        <div class="ref-section" id="r3">
+          <div class="ref-section-title"><span class="ref-num">3</span>Bénéficiaires et droits ouverts</div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">3.1 — Nombre de bénéficiaires avec un droit ouvert au 31/12/N</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>Usagers ayant au moins un droit ouvert au 31 décembre de l'année N</div>
+            <div class="ref-rule rule-filtre"><span class="rule-tag tag-filtre">FILTRE</span>date_ouverture_droit ≤ 31/12/N</div>
+            <div class="ref-rule rule-filtre"><span class="rule-tag tag-filtre">FILTRE</span>date_fin_droit &gt; 31/12/N</div>
+            <div class="ref-rule rule-exclus"><span class="rule-tag tag-exclus">EXCLUS</span>Personnes décédées avant le 31/12 de l'année N</div>
+            <div class="ref-formula">Droit ouvert : date_ouv ≤ 31/12/N  ET  date_fin > 31/12/N</div>
+            <div class="ref-alert"><span class="ref-alert-icon">⚠</span>Distinct du « droit notifié » : un droit notifié peut exister sans être ouvert si sa date de début est postérieure au 31/12/N.</div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">3.2 — Précisions Maquette §16</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>Droits actifs au 31/12/N, qu'ils aient été ouverts en N ou avant</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>Droits sans limitation de durée (droits à vie) — colonne dédiée dans la Maquette</div>
+            <p style="font-size:12.5px;color:var(--gray-600);margin-top:8px;line-height:1.55">Ligne AAH : renseigner les droits à vie appliqués à l'AAH-1 uniquement. Ligne orientations ESMS : une personne bénéficiant d'un établissement ET d'un service n'est comptée qu'une fois. Total droits ouverts (ligne 37) : une personne cumulant plusieurs droits n'est comptée qu'une fois.</p>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">3.3 — Dénombrements de personnes (Maquette §08)</div>
+            <div class="ref-table-wrap"><table class="ref-table">
+              <thead><tr><th>Indicateur</th><th>Définition</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Nb personnes ≥ 1 demande déposée</strong></td><td>Personnes ayant déposé au moins 1 formulaire dans l'année</td></tr>
+                <tr><td><strong>Nb personnes ≥ 1 décision/avis</strong></td><td>Personnes ayant bénéficié d'au moins une décision ou un avis</td></tr>
+                <tr><td><strong>Nb personnes ≥ 1 accord</strong></td><td>Personnes ayant obtenu au moins un droit ouvert dans l'année</td></tr>
+                <tr><td><strong>Nb moyen demandes / personne</strong></td><td>Total demandes ÷ Nb personnes ≥ 1 demande</td></tr>
+                <tr><td><strong>Nb moyen décisions / personne</strong></td><td>(Total décisions + avis) ÷ Nb personnes ≥ 1 décision</td></tr>
+              </tbody>
+            </table></div>
+            <div class="ref-alert"><span class="ref-alert-icon">⚠</span>Total demandeurs (GLOBAL) &lt; Total adultes + Total enfants : les personnes de la tranche 16–25 ans sont intentionnellement comptées dans les deux onglets.</div>
+          </div>
+        </div>
+
+        <!-- 4 -->
+        <div class="ref-section" id="r4">
+          <div class="ref-section-title"><span class="ref-num">4</span>Délai Moyen de Traitement (DMT)</div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">4.1 — Formule officielle CNSA</div>
+            <div class="ref-rule rule-filtre"><span class="rule-tag tag-filtre">FILTRE</span>Point de départ : date de recevabilité (≠ date de dépôt)</div>
+            <div class="ref-rule rule-filtre"><span class="rule-tag tag-filtre">FILTRE</span>Point d'arrivée : date de la décision ou de l'avis</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>Les avis (CMI, AVPF, aide insertion) figurent dans le calcul du DMT</div>
+            <div class="ref-formula">DMT (mois) = [ Σ jours (date recevabilité → date décision/avis) ] ÷ Nb (décisions + avis) ÷ 30,4375
+Diviseur : 30,4375 = 365,25 ÷ 12 (durée moyenne d'un mois calendaire)</div>
+            <div class="ref-alert"><span class="ref-alert-icon">⚠</span>La date de départ peut varier selon les MDPH. La norme CNSA est la <strong>date de recevabilité</strong>. Documenter le choix retenu dans l'onglet Qualité des Données.</div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">4.2 — DMT Enfants vs Adultes</div>
+            <div class="ref-rule rule-filtre"><span class="rule-tag tag-filtre">FILTRE</span>DMT Enfants : personnes de moins de 20 ans à la date de la décision</div>
+            <div class="ref-rule rule-filtre"><span class="rule-tag tag-filtre">FILTRE</span>DMT Adultes : personnes de 20 ans ou plus à la date de la décision</div>
+            <div class="ref-source">Référence : Art. R.241-33 CASF</div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">4.3 — Indicateur complémentaire</div>
+            <p style="font-size:13px;color:var(--gray-600);line-height:1.6">Pourcentage de demandes traitées en ≤ 4 mois : part des demandes instruites dans le délai légal. Calculé séparément pour l'activité globale, le périmètre enfants et le périmètre adultes.</p>
+          </div>
+        </div>
+
+        <!-- 5 -->
+        <div class="ref-section" id="r5">
+          <div class="ref-section-title"><span class="ref-num">5</span>Prestations spécifiques — PCH, AEEH, CMI, AAH/RQTH/ORP</div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">5.1 — PCH — Prestation de Compensation du Handicap</div>
+            <p style="font-size:13px;color:var(--gray-600);margin-bottom:10px;line-height:1.6">1 demande quel que soit le nombre d'éléments demandés. 1 décision d'accord dès lors qu'au moins un élément est accordé.</p>
+            <div class="ref-table-wrap"><table class="ref-table">
+              <thead><tr><th>Élément PCH</th><th>Ce qu'on compte</th><th>Type montant</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Élément 1 — Aide humaine</strong></td><td>Nb d'éléments 1 attribués (y compris parentalité, forfaits cécité/surdité)</td><td>Mensuel</td></tr>
+                <tr><td><strong>Élément 2 — Aides techniques</strong></td><td>Nb d'éléments 2 attribués quel que soit le nombre d'aides</td><td>Ponctuel / mensuel</td></tr>
+                <tr><td><strong>Élément 3a — Logement/déménagement</strong></td><td>Nb d'éléments 3a attribués</td><td>Ponctuel</td></tr>
+                <tr><td><strong>Élément 3b — Véhicule</strong></td><td>Nb d'éléments 3b attribués</td><td>Ponctuel</td></tr>
+                <tr><td><strong>Élément 3c — Surcoûts transport</strong></td><td>Nb d'éléments 3c attribués</td><td>Mensuel / ponctuel</td></tr>
+                <tr><td><strong>Élément 4a — Charges spécifiques</strong></td><td>Nb d'éléments 4a attribués</td><td>Mensuel</td></tr>
+                <tr><td><strong>Élément 4b — Charges exceptionnelles</strong></td><td>Nb d'éléments 4b attribués</td><td>Ponctuel</td></tr>
+                <tr><td><strong>Élément 5 — Aides animalières</strong></td><td>Nb d'éléments 5 attribués quel que soit le contenu</td><td>Mensuel</td></tr>
+              </tbody>
+            </table></div>
+            <div class="ref-alert"><span class="ref-alert-icon">⚠</span>La somme des éléments PCH est SUPÉRIEURE au total des accords PCH — une même personne peut avoir plusieurs éléments sur un seul accord.</div>
+            <div class="ref-formula">Montant moyen / élément = Montant total accordé (période) ÷ Nb éléments attribués (même période)</div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">5.2 — AEEH — Allocation Éducation Enfant Handicapé</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>1 demande qu'elle soit accompagnée ou non d'un complément</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>1 décision quel que soit le contenu (AEEH seule / AEEH+C1 / … / AEEH+C6)</div>
+            <div class="ref-alert"><span class="ref-alert-icon">⚠</span><strong>Exception :</strong> si plusieurs compléments sont attribués lors d'une même séance CDAPH → compter plusieurs décisions. Les décisions sont détaillées dans l'onglet DECISIONS&AVIS;&DMT; (une ligne par niveau de complément).</div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">5.3 — CMI — Carte Mobilité Inclusion</div>
+            <div class="ref-table-wrap"><table class="ref-table">
+              <thead><tr><th>Type CMI</th><th>Règle demandes</th><th>Règle avis/décisions</th></tr></thead>
+              <tbody>
+                <tr><td><strong>CMI invalidité ou priorité</strong></td><td>1 seule demande même si deux mentions demandées</td><td>1 seul avis rendu — 1 décision même si la CDAPH prononce deux décisions en séance</td></tr>
+                <tr><td><strong>CMI stationnement</strong></td><td>Comptage séparé, ventilé par tranche d'âge (&lt; 20 ans / ≥ 20 ans)</td><td>Ventilé par tranche d'âge</td></tr>
+              </tbody>
+            </table></div>
+            <div class="ref-rule rule-exclus"><span class="rule-tag tag-exclus">EXCLUS</span>Duplicatas d'anciennes cartes CI, CP ou CES — sauf droits restants &lt; 1 an (évaluation requise)</div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">5.4 — AAH / RQTH / ORP — Convention en cascade (Maquette §12)</div>
+            <p style="font-size:13px;color:var(--gray-600);margin-bottom:10px;line-height:1.6">Une demande d'AAH peut générer 1 ou 3 demandes / décisions selon la convention CNSA :</p>
+            <div class="ref-table-wrap"><table class="ref-table">
+              <thead><tr><th>Élément</th><th>Condition</th></tr></thead>
+              <tbody>
+                <tr><td><strong>1 demande/décision AAH</strong></td><td>Systématique</td></tr>
+                <tr><td><strong>+ 1 demande/accord RQTH</strong></td><td>Si RQTH attribuée</td></tr>
+                <tr><td><strong>+ 1 demande/accord ORP</strong></td><td>Si RQTH attribuée (orientation professionnelle associée)</td></tr>
+              </tbody>
+            </table></div>
+            <div class="ref-alert"><span class="ref-alert-icon">⚠</span>Si la MDPH ne maintient pas ce comptage en 3, documenter dans l'onglet Qualité des Données. Les décisions AAH sont ventilées entre AAH L.821-1 et AAH L.821-2.</div>
+          </div>
+        </div>
+
+        <!-- 6 -->
+        <div class="ref-section" id="r6">
+          <div class="ref-section-title"><span class="ref-num">6</span>Orientations ESMS et professionnelles</div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">6.1 — Règle de comptage des demandes</div>
+            <p style="font-size:13px;color:var(--gray-600);line-height:1.6;margin-bottom:8px">1 demande même si, sur un même formulaire, une orientation en établissement ET en service sont demandées. Orientation ou formation professionnelle : 1 demande même si orientation et formation figurent dans le même formulaire.</p>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">6.2 — ORP — Orientations et formations professionnelles</div>
+            <div class="ref-formula">Total ORP (ligne 42 Maquette) = CRP/UEROS + ESAT + Marché du travail + Emploi accompagné + Sans autre indication</div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">6.3 — Amendement Creton</div>
+            <div class="ref-rule rule-filtre"><span class="rule-tag tag-filtre">FILTRE</span>Les maintiens en ESMS au titre de l'amendement Creton sont classés dans l'onglet Activité Adultes, même si les bénéficiaires sont des jeunes.</div>
+            <div class="ref-rule rule-exclus"><span class="rule-tag tag-exclus">EXCLUS</span>Décisions de sortie de dispositif — non suivies dans l'onglet DECISIONS&AVIS;&DMT;</div>
+          </div>
+        </div>
+
+        <!-- 7 -->
+        <div class="ref-section" id="r7">
+          <div class="ref-section-title"><span class="ref-num">7</span>Recours — RAPO et contentieux</div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">7.1 — RAPO — Recours Administratif Préalable Obligatoire</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>Recours administratif préalable, instruit par la MDPH (devant la CDAPH)</div>
+            <div class="ref-rule rule-exclus"><span class="rule-tag tag-exclus">EXCLUS</span>Recours contentieux instruits par le Tribunal Judiciaire ou Administratif</div>
+            <p style="font-size:12.5px;color:var(--gray-600);margin:8px 0;line-height:1.55">Depuis le 01/01/2019, tous les recours gracieux sont automatiquement requalifiés en RAPO.</p>
+            <div class="ref-formula">Part RAPO (%) = Nb RAPO ÷ Nb total décisions et avis CDAPH × 100</div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">7.2 — Recours contentieux</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>Recours instruits par une juridiction extérieure (TCI ou Tribunal Administratif)</div>
+            <div class="ref-rule rule-exclus"><span class="rule-tag tag-exclus">EXCLUS</span>RAPO (recours administratifs)</div>
+            <div class="ref-rule rule-exclus"><span class="rule-tag tag-exclus">EXCLUS</span>Résultats de recours contentieux : non comptés dans l'activité de la MDPH</div>
+            <div class="ref-formula">Part contentieux (%) = Nb contentieux ÷ Nb total décisions et avis CDAPH × 100</div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">7.3 — Décisions/avis suite à recours (Maquette §17)</div>
+            <div class="ref-table-wrap"><table class="ref-table">
+              <thead><tr><th>Indicateur</th><th>Définition</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Décisions suite à recours administratif (N)</strong></td><td>Décisions/avis rendus en N portant sur un RAPO — décision initiale et/ou recours pouvant dater d'avant N. Résultat : accord / refus / sursis.</td></tr>
+                <tr><td><strong>Décisions suite à recours contentieux (N)</strong></td><td>Décisions/avis rendus en N portant sur un recours contentieux — résultats relevant des juridictions.</td></tr>
+              </tbody>
+            </table></div>
+            <div class="ref-source">Taux de confirmation calculé uniquement pour les décisions CDAPH et avis devant passer en CDAPH (AVPF + avis CMI).</div>
+          </div>
+        </div>
+
+        <!-- 8 -->
+        <div class="ref-section" id="r8">
+          <div class="ref-section-title"><span class="ref-num">8</span>Ventilation Enfants / Adultes</div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">8.1 — Seuil d'âge — règle critique</div>
+            <div class="ref-alert"><span class="ref-alert-icon">⚠</span>L'âge doit toujours être calculé à la <strong>date de référence</strong>, jamais à l'âge actuel.</div>
+            <div class="ref-table-wrap"><table class="ref-table">
+              <thead><tr><th>Contexte</th><th>Date de référence pour l'âge</th></tr></thead>
+              <tbody>
+                <tr><td>Demandes déposées (tranches d'âge)</td><td>Date de dépôt de la demande</td></tr>
+                <tr><td>Décisions CDAPH (tranches d'âge)</td><td>Date de la décision CDAPH</td></tr>
+                <tr><td>DMT — tranche enfants</td><td>Moins de 20 ans à la date de la décision/avis</td></tr>
+                <tr><td>DMT — tranche adultes</td><td>20 ans et plus à la date de la décision/avis</td></tr>
+                <tr><td>RAPT/DOP (seuil)</td><td>Enfants &lt; 18 ans / Adultes ≥ 18 ans à la date de la décision/PAG</td></tr>
+              </tbody>
+            </table></div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">8.2 — Périmètre Enfants vs Adultes par prestation (Maquette §10)</div>
+            <div class="ref-table-wrap"><table class="ref-table">
+              <thead><tr><th>Prestation</th><th>Onglet demandes</th><th>Onglet décisions/avis</th></tr></thead>
+              <tbody>
+                <tr><td>AEEH et compléments</td><td>Enfants</td><td>Enfants</td></tr>
+                <tr><td>Parcours scolarisation/formation (avec ou sans ESMS)</td><td>Enfants</td><td>Enfants</td></tr>
+                <tr><td>PCH (critère : âge à la date de dépôt/décision)</td><td>&lt; 20 ans → Enfants</td><td>&lt; 20 ans → Enfants</td></tr>
+                <tr><td>CMI stationnement, invalidité/priorité</td><td>Ventilé par âge</td><td>Ventilé par âge</td></tr>
+                <tr><td>AAH, CPR, ACTP, ACFP, RQTH, AVPF</td><td>Adultes</td><td>Adultes</td></tr>
+                <tr><td>Orientation ESMS adultes</td><td>Adultes</td><td>Adultes</td></tr>
+                <tr><td>Orientation/formation professionnelle</td><td>Adultes</td><td>Adultes</td></tr>
+                <tr><td>Amendement Creton</td><td>—</td><td>Adultes (même si jeune)</td></tr>
+                <tr><td>Demande générique</td><td>Ventilé par âge</td><td>Ventilé par âge</td></tr>
+              </tbody>
+            </table></div>
+          </div>
+        </div>
+
+        <!-- 9 -->
+        <div class="ref-section" id="r9">
+          <div class="ref-section-title"><span class="ref-num">9</span>Effectifs (ETP)</div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">9.1 — Périmètre du comptage</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>Personnel interne (salariés de la MDPH)</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>Personnel mis à disposition par les partenaires (gracieux ou avec compensation)</div>
+            <div class="ref-rule rule-exclus"><span class="rule-tag tag-exclus">EXCLUS</span>Partenaires participant aux équipes pluridisciplinaires d'évaluation (EPE)</div>
+            <div class="ref-rule rule-exclus"><span class="rule-tag tag-exclus">EXCLUS</span>Enseignants référents</div>
+            <div class="ref-rule rule-exclus"><span class="rule-tag tag-exclus">EXCLUS</span>Professionnels mobilisés dans le cadre de prestations externalisées</div>
+            <div class="ref-rule rule-filtre"><span class="rule-tag tag-filtre">FILTRE</span>Période : du 1er janvier au 31 décembre de l'année N</div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">9.2 — ETP théorique vs ETP travaillé</div>
+            <div class="ref-table-wrap"><table class="ref-table">
+              <thead><tr><th>Type</th><th>Définition</th></tr></thead>
+              <tbody>
+                <tr><td><strong>ETP théorique</strong></td><td>ETP prévu sur un poste tel qu'inscrit dans les conventions ou contrats de travail</td></tr>
+                <tr><td><strong>ETP travaillé</strong></td><td>Intègre les temps partiels (de droit, thérapeutiques, etc.) ainsi que les absences, congés maladie et périodes de vacance de poste</td></tr>
+              </tbody>
+            </table></div>
+            <p style="font-size:12px;color:var(--gray-400);margin-top:8px">Exemple : 1 ETP théorique d'ergothérapeute à 80 %, départ en retraite fin juin sans remplacement → ETP travaillé = 0,5 × 0,8 = 0,4</p>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">9.3 — Taux de renouvellement (turnover)</div>
+            <div class="ref-formula">Turnover (%) = [(Nb départs N + Nb arrivées N) ÷ 2] ÷ Effectif physique au 1er janv. N × 100</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>Départs : licenciements, démissions, fins de contrat, retraites en année N</div>
+            <div class="ref-rule rule-inclus"><span class="rule-tag tag-inclus">INCLUS</span>Arrivées : recrutements en année N</div>
+            <div class="ref-alert"><span class="ref-alert-icon">⚠</span>Format entier obligatoire : saisir 11 pour 11 %, ne pas saisir 0,11.</div>
+          </div>
+        </div>
+
+        <!-- 10 -->
+        <div class="ref-section" id="r10">
+          <div class="ref-section-title"><span class="ref-num">10</span>Règles générales de saisie — valeurs manquantes</div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">10.1 — Référence temporelle</div>
+            <div class="ref-rule rule-filtre"><span class="rule-tag tag-filtre">FILTRE</span>Année N = 2024 (du 1er janvier au 31 décembre inclus)</div>
+            <div class="ref-rule rule-filtre"><span class="rule-tag tag-filtre">FILTRE</span>Année N-1 = 2023 — préremplie automatiquement si renseignée l'année précédente</div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">10.2 — Convention valeurs manquantes — deux systèmes à ne pas confondre</div>
+            <div class="ref-table-wrap"><table class="ref-table">
+              <thead><tr><th>Contexte</th><th>Convention</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Application SI / Rapport d'activité</strong><br><span style="font-size:11px;color:var(--gray-400)">Guide CNSA §13.2</span></td><td>Ne jamais saisir « 0 » si la donnée est inconnue — cocher « Donnée non disponible » (affiche N/A)</td></tr>
+                <tr><td><strong>Maquette Échanges Annuels Excel</strong><br><span style="font-size:11px;color:var(--gray-400)">Maquette §01</span></td><td>Valeur connue et nulle → saisir 0. Valeur inconnue/non disponible → saisir ND en toutes lettres</td></tr>
+              </tbody>
+            </table></div>
+            <div class="ref-alert"><span class="ref-alert-icon">⚠</span>Ces deux conventions s'appliquent à deux interfaces distinctes. Ne pas transposer l'une dans l'autre.</div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">10.3 — Données reprises d'une campagne à l'autre</div>
+            <div class="ref-rule rule-cond"><span class="rule-tag tag-cond">COND.</span>Obligation de relecture à chaque campagne et de cocher la case de conformité</div>
+            <div class="ref-rule rule-cond"><span class="rule-tag tag-cond">COND.</span>La case de confirmation est un champ obligatoire bloquant la transmission à la CNSA</div>
+          </div>
+
+          <div class="ref-subsection">
+            <div class="ref-subsection-title">10.4 — Ordre de remplissage recommandé (Maquette §01)</div>
+            <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">
+              <div style="display:flex;gap:10px;align-items:flex-start"><span style="background:var(--navy);color:white;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">1</span><span style="font-size:13px;color:var(--gray-600)">Remplir l'onglet DEMANDES, puis l'onglet DECISIONS&AVIS;&DMT;</span></div>
+              <div style="display:flex;gap:10px;align-items:flex-start"><span style="background:var(--navy);color:white;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">2</span><span style="font-size:13px;color:var(--gray-600)">Ces onglets alimentent automatiquement : ACTIVITE ENFANTS, ACTIVITE ADULTES, ACTIVITE PCH TOTALE</span></div>
+              <div style="display:flex;gap:10px;align-items:flex-start"><span style="background:var(--navy);color:white;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">3</span><span style="font-size:13px;color:var(--gray-600)">ACTIVITE ENFANTS + ACTIVITE ADULTES alimentent ACTIVITE GLOBALE</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 11 -->
+        <div class="ref-section" id="r11">
+          <div class="ref-section-title"><span class="ref-num">11</span>Synthèse des exclusions globales</div>
+          <div class="ref-table-wrap"><table class="ref-table">
+            <thead><tr><th>Élément exclu</th><th>Périmètre et précision</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Avis de transport scolaire</strong></td><td>Tableau dédié uniquement (onglet DEMANDES, section séparée) — jamais dans les autres onglets</td></tr>
+              <tr><td><strong>Recours gracieux / RAPO / contentieux</strong></td><td>Exclus des demandes déposées et recevables</td></tr>
+              <tr><td><strong>Duplicatas CI/CP/CES</strong></td><td>Exclus des demandes CMI (sauf droits restants &lt; 1 an → évaluation requise)</td></tr>
+              <tr><td><strong>Non-attributions supplémentaires</strong></td><td>Ligne 99 de la Maquette uniquement — jamais dans le total (ligne 94) ni dans les onglets ENFANTS/ADULTES/GLOBAL</td></tr>
+              <tr><td><strong>Décisions de sortie de dispositif</strong></td><td>Non suivies dans l'onglet DECISIONS&AVIS;&DMT;</td></tr>
+              <tr><td><strong>Personnes décédées avant le 31/12/N</strong></td><td>Exclues du décompte des droits ouverts</td></tr>
+              <tr><td><strong>Résultats recours contentieux</strong></td><td>Non comptés dans l'activité de la MDPH — relèvent des juridictions</td></tr>
+              <tr><td><strong>Participants EPE</strong></td><td>Exclus du comptage des effectifs ETP</td></tr>
+              <tr><td><strong>Prestataires externalisés</strong></td><td>Exclus du comptage ETP — à saisir dans la tuile Externalisations</td></tr>
+              <tr><td><strong>Dotation CNSA dans montant CD</strong></td><td>Ne pas inscrire les concours CNSA dans le compte 7473 (montant CD)</td></tr>
+            </tbody>
+          </table></div>
+        </div>
+
+        <!-- 12 -->
+        <div class="ref-section" id="r12">
+          <div class="ref-section-title"><span class="ref-num">12</span>Points de vigilance BO/Solis — récapitulatif</div>
+          <p style="font-size:13px;color:var(--gray-600);margin-bottom:14px;line-height:1.6">Consolidation des points de vigilance des deux sources pour la fiabilisation des requêtes SAP BusinessObjects et des extractions Solis/Arche MC2.</p>
+          <div class="ref-table-wrap"><table class="ref-table">
+            <thead><tr><th>Indicateur / Point</th><th>Règle à appliquer</th><th>Réf.</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Dossiers déposés</strong></td><td>Exclure les RAPO — filtrer sur type de demande</td><td style="font-family:var(--font-mono);font-size:11px">§1/§02</td></tr>
+              <tr><td><strong>Reprises de droits</strong></td><td>Inclure reprises en cours et suite à révision tiers</td><td style="font-family:var(--font-mono);font-size:11px">§02</td></tr>
+              <tr><td><strong>Stock dossiers</strong></td><td>Exclure les dossiers clôturés ou décidés — filtrer sur statut</td><td style="font-family:var(--font-mono);font-size:11px">§1/§07</td></tr>
+              <tr><td><strong>Droits ouverts</strong></td><td>Double condition : date_ouv ≤ 31/12/N ET date_fin &gt; 31/12/N</td><td style="font-family:var(--font-mono);font-size:11px">§3/§16</td></tr>
+              <tr><td><strong>Décédés — droits ouverts</strong></td><td>Exclure les personnes décédées avant le 31/12/N</td><td style="font-family:var(--font-mono);font-size:11px">§16</td></tr>
+              <tr><td><strong>Décisions CDAPH</strong></td><td>Compter les personnes uniques, pas les lignes de décision</td><td style="font-family:var(--font-mono);font-size:11px">§2/§04</td></tr>
+              <tr><td><strong>Non-attributions suppl.</strong></td><td>Ligne 99 uniquement — jamais dans le total (ligne 94)</td><td style="font-family:var(--font-mono);font-size:11px">§04</td></tr>
+              <tr><td><strong>Sorties de dispositif</strong></td><td>Ne pas comptabiliser dans DECISIONS&AVIS;&DMT;</td><td style="font-family:var(--font-mono);font-size:11px">§04/§15</td></tr>
+              <tr><td><strong>DMT — point de départ</strong></td><td>Date de recevabilité (≠ date de dépôt)</td><td style="font-family:var(--font-mono);font-size:11px">§4/§06</td></tr>
+              <tr><td><strong>DMT — diviseur</strong></td><td>30,4375 jours/mois (365,25 ÷ 12)</td><td style="font-family:var(--font-mono);font-size:11px">§4/§06</td></tr>
+              <tr><td><strong>Âge — date de référence</strong></td><td>Calculer à la date de dépôt (demandes) ou de décision (décisions)</td><td style="font-family:var(--font-mono);font-size:11px">§09</td></tr>
+              <tr><td><strong>PCH — somme éléments</strong></td><td>Somme éléments &gt; total accords PCH — ne pas confondre</td><td style="font-family:var(--font-mono);font-size:11px">§11</td></tr>
+              <tr><td><strong>AEEH — exception</strong></td><td>Plusieurs compléments en même séance CDAPH → plusieurs décisions</td><td style="font-family:var(--font-mono);font-size:11px">§14</td></tr>
+              <tr><td><strong>CMI — duplicatas</strong></td><td>Exclure duplicatas CI/CP/CES sauf droits restants &lt; 1 an</td><td style="font-family:var(--font-mono);font-size:11px">§13</td></tr>
+              <tr><td><strong>AAH/RQTH/ORP cascade</strong></td><td>1 demande AAH peut générer 3 demandes/décisions — documenter si non appliqué</td><td style="font-family:var(--font-mono);font-size:11px">§12</td></tr>
+              <tr><td><strong>Amendement Creton</strong></td><td>Classé Adultes même si bénéficiaire jeune</td><td style="font-family:var(--font-mono);font-size:11px">§10/§15</td></tr>
+              <tr><td><strong>Turnover — format</strong></td><td>Saisir entier : 11 pour 11 %, pas 0,11</td><td style="font-family:var(--font-mono);font-size:11px">§5</td></tr>
+              <tr><td><strong>ETP — exclusions</strong></td><td>Exclure participants EPE, enseignants référents, prestataires externalisés</td><td style="font-family:var(--font-mono);font-size:11px">§5</td></tr>
+              <tr><td><strong>Valeurs manquantes SI</strong></td><td>Cocher « Donnée non disponible » — ne jamais saisir 0 si inconnu</td><td style="font-family:var(--font-mono);font-size:11px">§13/§01</td></tr>
+              <tr><td><strong>Valeurs manquantes Maquette</strong></td><td>Saisir ND si inconnu, 0 si nul et connu — cellules grisées = auto</td><td style="font-family:var(--font-mono);font-size:11px">§01</td></tr>
+            </tbody>
+          </table></div>
+          <div style="margin-top:16px;padding:12px 16px;background:var(--gray-50);border:0.5px solid var(--gray-100);border-radius:var(--radius-sm);font-size:11.5px;color:var(--gray-400);line-height:1.6">
+            Document à usage interne — MDA de l'Orne. Croise le Guide pratique CNSA (Mars 2026) et la Maquette Échanges Annuels MDPH 2025 (CNSA/LCD). À mettre à jour à chaque nouvelle campagne CNSA. Toute divergence entre les deux sources doit être documentée dans l'onglet Qualité des Données de la Maquette.
+          </div>
+        </div>
+
+      </div><!-- /ref-body -->
+    </div><!-- /ref-page -->
+  </div><!-- /view-ref -->
+
+</main>
+</div>
+
+<!-- DETAIL PANEL -->
+<div class="detail-overlay" id="detail-overlay" style="display:none" onclick="closeDetail(event)">
+  <div class="detail-panel">
+    <div class="detail-panel-header" id="dp-head"></div>
+    <div class="detail-panel-body" id="dp-body"></div>
+    <div class="detail-panel-actions" id="dp-act"></div>
+  </div>
+</div>
+
+<!-- MODAL REQUÊTE -->
+<div class="modal-overlay" id="modal-req" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <svg width="20" height="20" viewBox="0 0 20 20"><rect width="20" height="20" rx="5" fill="#FEF0E6"/><path d="M9 4h2v5h5v2h-5v5H9v-5H4V9h5z" fill="#F07821"/></svg>
+      <span class="modal-title" id="m-title">Nouvelle requête</span>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row-2">
+        <div class="form-group"><label class="form-label">Nom <span class="req">*</span></label><input type="text" class="form-control" id="f-nom" placeholder="Ex : MDPH_CNSA_LCD01_Flux"></div>
+        <div class="form-group"><label class="form-label">Identifiant BO</label><input type="text" class="form-control" id="f-id" placeholder="Auto si vide" style="font-family:var(--font-mono)"></div>
+      </div>
+      <div class="form-row-2">
+        <div class="form-group"><label class="form-label">Domaine <span class="req">*</span></label><select class="form-control" id="f-domaine"></select></div>
+        <div class="form-group"><label class="form-label">Statut</label><select class="form-control" id="f-statut"></select></div>
+      </div>
+      <div class="form-row-2">
+        <div class="form-group"><label class="form-label">Univers BO</label><select class="form-control" id="f-univers"></select></div>
+        <div class="form-group"><label class="form-label">Fréquence</label><select class="form-control" id="f-freq"></select></div>
+      </div>
+      <div class="form-row-2">
+        <div class="form-group"><label class="form-label">Responsable</label><input type="text" class="form-control" id="f-proprio" list="resp-dl" placeholder="Ex : J. Dupont"><datalist id="resp-dl"></datalist></div>
+        <div class="form-group"><label class="form-label">Date de création</label><input type="date" class="form-control" id="f-date"></div>
+      </div>
+      <div class="form-row"><div class="form-group"><label class="form-label">Description / Objet métier</label><textarea class="form-control" id="f-desc" rows="4" placeholder="Périmètre, indicateurs, filtres principaux…"></textarea></div></div>
+      <div class="form-row"><div class="form-group"><label class="form-label">Tags (séparés par virgules)</label><input type="text" class="form-control" id="f-tags" placeholder="Ex : CNSA, LCD01, annuel"></div></div>
+      <div class="form-row"><div class="form-group"><label class="form-label">Limites & précautions</label><textarea class="form-control" id="f-limites" rows="2" placeholder="Ex : Ne pas lancer en fin de mois."></textarea></div></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal()">Annuler</button>
+      <button class="btn-primary" onclick="saveRequete()"><svg width="12" height="12" viewBox="0 0 13 13" fill="currentColor"><path d="M1 1h8l3 3v8H1V1zm3 9h4v-4H4v4zm2-9v3h3V1H6z"/></svg>Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRM -->
+<div class="modal-overlay" id="modal-confirm" style="display:none">
+  <div class="modal" style="width:400px">
+    <div class="modal-header"><span class="modal-title" style="color:var(--red)">Confirmer</span></div>
+    <div class="modal-body"><p style="font-size:14px;color:var(--gray-600);line-height:1.6" id="confirm-msg"></p></div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeConfirm()">Annuler</button>
+      <button class="btn-primary" style="background:var(--red)" id="confirm-ok">Confirmer</button>
+    </div>
+  </div>
+</div>
+
+<!-- CHANGEMENT DE MOT DE PASSE -->
+<div class="modal-overlay" id="modal-change-password" style="display:none">
+  <div class="modal" style="width:480px">
+    <div class="modal-header">
+      <svg width="20" height="20" viewBox="0 0 20 20"><rect width="20" height="20" rx="5" fill="#E6F1FB"/><path d="M10 3a4 4 0 0 0-4 4v2H5v8h10V9h-1V7a4 4 0 0 0-4-4zm0 1.5A2.5 2.5 0 0 1 12.5 7v2h-5V7A2.5 2.5 0 0 1 10 4.5zM10 11.5a1 1 0 0 1 1 1v1.5a1 1 0 1 1-2 0V12.5a1 1 0 0 1 1-1z" fill="#185FA5"/></svg>
+      <span class="modal-title">Changer le mot de passe</span>
+      <button class="modal-close" onclick="closeChangePasswordModal()">✕</button>
+    </div>
+    <div class="modal-body" style="padding:20px 24px">
+      <div style="margin-bottom:16px">
+        <label style="display:block;font-size:12px;font-weight:500;color:var(--gray-600);margin-bottom:6px">Mot de passe actuel</label>
+        <input type="password" id="current-password" placeholder="Entrez votre mot de passe actuel" style="width:100%;padding:10px 14px;border:0.5px solid var(--gray-200);border-radius:var(--radius-sm);font-size:14px;font-family:var(--font);outline:none" autocomplete="current-password">
+      </div>
+      <div style="margin-bottom:16px">
+        <label style="display:block;font-size:12px;font-weight:500;color:var(--gray-600);margin-bottom:6px">Nouveau mot de passe</label>
+        <input type="password" id="new-password" placeholder="Entrez un nouveau mot de passe" style="width:100%;padding:10px 14px;border:0.5px solid var(--gray-200);border-radius:var(--radius-sm);font-size:14px;font-family:var(--font);outline:none" autocomplete="new-password">
+      </div>
+      <div style="margin-bottom:20px">
+        <label style="display:block;font-size:12px;font-weight:500;color:var(--gray-600);margin-bottom:6px">Confirmer le nouveau mot de passe</label>
+        <input type="password" id="confirm-password" placeholder="Confirmez le nouveau mot de passe" style="width:100%;padding:10px 14px;border:0.5px solid var(--gray-200);border-radius:var(--radius-sm);font-size:14px;font-family:var(--font);outline:none" autocomplete="new-password">
+      </div>
+      <div id="change-password-error" style="display:none;background:var(--red-bg);color:var(--red);padding:10px 12px;border-radius:var(--radius-sm);font-size:13px;margin-bottom:16px"></div>
+      <div style="background:var(--amber-bg);border-left:3px solid var(--amber);padding:10px 12px;border-radius:var(--radius-sm);font-size:12px;color:var(--gray-600);line-height:1.5">
+        <strong style="display:block;color:var(--amber);margin-bottom:4px">⚠️ Important</strong>
+        Toutes vos données seront re-chiffrées avec le nouveau mot de passe. Ce processus peut prendre quelques secondes.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeChangePasswordModal()">Annuler</button>
+      <button class="btn-primary" onclick="changePassword()">Changer le mot de passe</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<input type="file" id="import-input" accept=".json" style="display:none" onchange="handleImport(event)">
+
+
+</div><!-- Fin app-shell -->
+</div><!-- Fin app-container -->
+
+<!-- INPUT CACHÉ IMPORT -->
+<input type="file" id="import-input" accept=".json" style="display:none">
+
+<!-- TOAST NOTIFICATIONS -->
+<div id="toast"></div>
+
+<!-- MODULES JAVASCRIPT INLINE -->
+<script>
+// ═══════════════════════════════════════════════════════════════
+// MODULE: UTILS
+// ═══════════════════════════════════════════════════════════════
+const Utils = {
+  TAG_COLORS: [
+    {bg:'#E8EDF5',color:'#1B3A6B'}, {bg:'#FEF0E6',color:'#C05A0E'},
+    {bg:'#EAF3DE',color:'#3B6D11'}, {bg:'#E6F1FB',color:'#185FA5'},
+    {bg:'#FAEEDA',color:'#854F0B'}, {bg:'#FBEAF0',color:'#993556'}
+  ],
+  tagColor(t) {
+    let h = 0;
+    for (let i = 0; i < t.length; i++) {
+      h = (h * 31 + t.charCodeAt(i)) & 0xffffff;
+    }
+    return this.TAG_COLORS[h % this.TAG_COLORS.length];
+  },
+  escapeHtml(s) {
+    return String(s || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  },
+  /**
+   * Échappe les caractères pour utilisation dans du code JavaScript inline
+   * @param {string} s - Chaîne à échapper
+   * @returns {string} - Chaîne échappée pour JS
+   */
+  escapeJs(s) {
+    return String(s || '')
+      .replace(/\\/g, '\\\\')
+      .replace(/'/g, "\\'")
+      .replace(/"/g, '\\"')
+      .replace(/\n/g, '\\n')
+      .replace(/\r/g, '\\r');
+  },
+  initials(s) {
+    return (s || '?')
+      .split(' ')
+      .map(w => w[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase();
+  },
+  formatDate(dateStr) {
+    if (!dateStr) return '—';
+    return new Date(dateStr).toLocaleDateString('fr-FR');
+  },
+  generateUUID() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  },
+  debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+      const later = () => {
+        clearTimeout(timeout);
+        func(...args);
+      };
+      clearTimeout(timeout);
+      timeout = setTimeout(later, wait);
+    };
+  },
+  deepClone(obj) {
+    return JSON.parse(JSON.stringify(obj));
+  }
+};
+window.Utils = Utils;
+
+// ═══════════════════════════════════════════════════════════════
+// MODULE: CRYPTO-MANAGER
+// ═══════════════════════════════════════════════════════════════
+
+const CryptoManager = {
+  // Clé de chiffrement (dérivée du mot de passe)
+  cryptoKey: null,
+
+  // Salt pour la dérivation de clé (stocké en base64 dans sessionStorage)
+  salt: null,
+
+  /**
+   * Dérive une clé de chiffrement depuis un mot de passe
+   * @param {string} password - Mot de passe utilisateur
+   * @returns {Promise<CryptoKey>}
+   */
+  async deriveKey(password) {
+    // Générer ou récupérer le salt (doit être persistant pour dériver la même clé)
+    if (!this.salt) {
+      const storedSalt = localStorage.getItem('mda_salt') || sessionStorage.getItem('mda_salt');
+      if (storedSalt) {
+        // Récupérer le salt existant
+        this.salt = Uint8Array.from(atob(storedSalt), c => c.charCodeAt(0));
+        localStorage.setItem('mda_salt', storedSalt); // Assurer la persistance
+      } else {
+        // Générer un nouveau salt
+        this.salt = crypto.getRandomValues(new Uint8Array(16));
+        const encodedSalt = btoa(String.fromCharCode(...this.salt));
+        localStorage.setItem('mda_salt', encodedSalt);
+      }
+    }
+
+    // Encoder le mot de passe
+    const encoder = new TextEncoder();
+    const passwordBuffer = encoder.encode(password);
+
+    // Importer le mot de passe comme clé de base
+    const baseKey = await crypto.subtle.importKey(
+      'raw',
+      passwordBuffer,
+      'PBKDF2',
+      false,
+      ['deriveBits', 'deriveKey']
+    );
+
+    // Dériver une clé AES-GCM
+    const derivedKey = await crypto.subtle.deriveKey(
+      {
+        name: 'PBKDF2',
+        salt: this.salt,
+        iterations: 100000, // 100k itérations pour sécurité
+        hash: 'SHA-256'
+      },
+      baseKey,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['encrypt', 'decrypt']
+    );
+
+    this.cryptoKey = derivedKey;
+    return derivedKey;
+  },
+
+  /**
+   * Chiffre des données
+   * @param {Object} data - Données à chiffrer
+   * @returns {Promise<string>} - Données chiffrées en base64
+   */
+  async encrypt(data) {
+    if (!this.cryptoKey) {
+      throw new Error('Clé de chiffrement non initialisée');
+    }
+
+    // Convertir les données en JSON puis en buffer
+    const encoder = new TextEncoder();
+    const plaintext = encoder.encode(JSON.stringify(data));
+
+    // Générer un IV aléatoire (nonce)
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+
+    // Chiffrer
+    const ciphertext = await crypto.subtle.encrypt(
+      {
+        name: 'AES-GCM',
+        iv: iv
+      },
+      this.cryptoKey,
+      plaintext
+    );
+
+    // Combiner IV + ciphertext
+    const combined = new Uint8Array(iv.length + ciphertext.byteLength);
+    combined.set(iv, 0);
+    combined.set(new Uint8Array(ciphertext), iv.length);
+
+    // Retourner en base64
+    return btoa(String.fromCharCode(...combined));
+  },
+
+  /**
+   * Déchiffre des données
+   * @param {string} encryptedData - Données chiffrées en base64
+   * @returns {Promise<Object>} - Données déchiffrées
+   */
+  async decrypt(encryptedData) {
+    if (!this.cryptoKey) {
+      throw new Error('Clé de chiffrement non initialisée');
+    }
+
+    // Décoder depuis base64
+    const combined = Uint8Array.from(atob(encryptedData), c => c.charCodeAt(0));
+
+    // Extraire IV et ciphertext
+    const iv = combined.slice(0, 12);
+    const ciphertext = combined.slice(12);
+
+    try {
+      // Déchiffrer
+      const plaintext = await crypto.subtle.decrypt(
+        {
+          name: 'AES-GCM',
+          iv: iv
+        },
+        this.cryptoKey,
+        ciphertext
+      );
+
+      // Décoder et parser JSON
+      const decoder = new TextDecoder();
+      const json = decoder.decode(plaintext);
+      return JSON.parse(json);
+    } catch (error) {
+      throw new Error('Échec du déchiffrement - Mot de passe incorrect ou données corrompues');
+    }
+  },
+
+  /**
+   * Vérifie si un mot de passe est correct
+   * @param {string} password - Mot de passe à tester
+   * @param {string} testData - Données chiffrées de test
+   * @returns {Promise<boolean>}
+   */
+  async verifyPassword(password, testData) {
+    try {
+      await this.deriveKey(password);
+      await this.decrypt(testData);
+      return true;
+    } catch {
+      this.cryptoKey = null;
+      return false;
+    }
+  },
+
+  /**
+   * Génère un hash du mot de passe pour vérification
+   * @param {string} password - Mot de passe
+   * @returns {Promise<string>} - Hash en hex
+   */
+  async hashPassword(password) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(password);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  },
+
+  /**
+   * Nettoie les clés en mémoire (lors de la déconnexion)
+   */
+  clear() {
+    this.cryptoKey = null;
+    this.salt = null;
+    // Ne SURTOUT PAS supprimer le salt (localStorage) sinon la clé ne pourra
+    // plus jamais être dérivée à l'identique pour ce mot de passe.
+  }
+};
+
+// Export global
+
+// ═══════════════════════════════════════════════════════════════
+// MODULE: DATA-MANAGER
+// ═══════════════════════════════════════════════════════════════
+
+const DataManager = {
+  // État de l'application
+  data: [],          // Catalogue de requêtes
+  config: {},        // Configuration
+  editingId: null,   // ID en cours d'édition
+  db: null,          // Instance IndexedDB
+  isLocked: true,    // État de verrouillage
+
+  // Configuration IndexedDB
+  DB_NAME: 'MDA_BO_Catalogue',
+  DB_VERSION: 1,
+  STORE_NAME: 'encrypted_data',
+
+  /**
+   * Initialise IndexedDB
+   * @returns {Promise<IDBDatabase>}
+   */
+  async initDB() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(this.DB_NAME, this.DB_VERSION);
+
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        this.db = request.result;
+        resolve(this.db);
+      };
+
+      request.onupgradeneeded = (event) => {
+        const db = event.target.result;
+
+        // Créer l'object store si nécessaire
+        if (!db.objectStoreNames.contains(this.STORE_NAME)) {
+          db.createObjectStore(this.STORE_NAME, { keyPath: 'key' });
+        }
+      };
+    });
+  },
+
+  /**
+   * Sauvegarde des données chiffrées dans IndexedDB
+   * @param {string} key - Clé de stockage
+   * @param {string} encryptedValue - Valeur chiffrée
+   * @returns {Promise<void>}
+   */
+  async saveToIndexedDB(key, encryptedValue) {
+    if (!this.db) await this.initDB();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction([this.STORE_NAME], 'readwrite');
+      const store = transaction.objectStore(this.STORE_NAME);
+      const request = store.put({ key, value: encryptedValue, timestamp: Date.now() });
+
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  },
+
+  /**
+   * Récupère des données chiffrées depuis IndexedDB
+   * @param {string} key - Clé de stockage
+   * @returns {Promise<string|null>}
+   */
+  async loadFromIndexedDB(key) {
+    if (!this.db) await this.initDB();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction([this.STORE_NAME], 'readonly');
+      const store = transaction.objectStore(this.STORE_NAME);
+      const request = store.get(key);
+
+      request.onsuccess = () => {
+        const result = request.result;
+        resolve(result ? result.value : null);
+      };
+      request.onerror = () => reject(request.error);
+    });
+  },
+
+  /**
+   * Sauvegarde le catalogue (chiffré)
+   * @returns {Promise<void>}
+   */
+  async saveData() {
+    try {
+      const encrypted = await CryptoManager.encrypt(this.data);
+      await this.saveToIndexedDB('catalogue', encrypted);
+    } catch (error) {
+      console.error('Erreur sauvegarde données:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Sauvegarde la configuration (chiffrée)
+   * @returns {Promise<void>}
+   */
+  async saveConfig() {
+    try {
+      const encrypted = await CryptoManager.encrypt(this.config);
+      await this.saveToIndexedDB('config', encrypted);
+    } catch (error) {
+      console.error('Erreur sauvegarde config:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Charge toutes les données (après authentification)
+   * @returns {Promise<void>}
+   */
+  async loadAll() {
+    try {
+      // Charger le catalogue
+      const encryptedData = await this.loadFromIndexedDB('catalogue');
+      if (encryptedData) {
+        this.data = await CryptoManager.decrypt(encryptedData);
+      } else {
+        // Première utilisation - charger les données de démo
+        this.data = this.getDemoData();
+        await this.saveData();
+      }
+
+      // Charger la configuration
+      const encryptedConfig = await this.loadFromIndexedDB('config');
+      if (encryptedConfig) {
+        this.config = await CryptoManager.decrypt(encryptedConfig);
+      } else {
+        // Première utilisation - charger la config par défaut
+        this.config = this.getDefaultConfig();
+        await this.saveConfig();
+      }
+
+      this.isLocked = false;
+    } catch (error) {
+      console.error('Erreur chargement données:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Verrouille l'application
+   */
+  lock() {
+    this.data = [];
+    this.config = {};
+    this.isLocked = true;
+    CryptoManager.clear();
+  },
+
+  /**
+   * Ajoute ou met à jour une requête
+   * @param {Object} requete - Objet requête
+   * @returns {Promise<void>}
+   */
+  async saveRequete(requete) {
+    if (this.editingId) {
+      // Mise à jour
+      const index = this.data.findIndex(r => r.id === this.editingId);
+      if (index >= 0) {
+        this.data[index] = requete;
+      }
+    } else {
+      // Ajout
+      this.data.unshift(requete);
+    }
+
+    await this.saveData();
+    this.editingId = null;
+  },
+
+  /**
+   * Supprime une requête
+   * @param {string} id - ID de la requête
+   * @returns {Promise<void>}
+   */
+  async deleteRequete(id) {
+    this.data = this.data.filter(r => r.id !== id);
+    await this.saveData();
+  },
+
+  /**
+   * Duplique une requête
+   * @param {string} id - ID de la requête à dupliquer
+   * @returns {Promise<string>} - ID de la nouvelle requête
+   */
+  async duplicateRequete(id) {
+    const original = this.data.find(r => r.id === id);
+    if (!original) throw new Error('Requête introuvable');
+
+    const duplicate = {
+      ...original,
+      id: this.generateId(),
+      nom: original.nom + ' (copie)',
+      statut: 'Brouillon',
+      date: new Date().toISOString().split('T')[0]
+    };
+
+    this.data.unshift(duplicate);
+    await this.saveData();
+
+    return duplicate.id;
+  },
+
+  /**
+   * Génère un nouvel ID auto-incrémenté
+   * @returns {string}
+   */
+  generateId() {
+    let nextNum = this.config.next;
+
+    if (!nextNum) {
+      // Trouver le plus grand numéro existant
+      nextNum = this.data.reduce((max, r) => {
+        const num = parseInt((r.id || '').replace(/\D/g, '')) || 0;
+        return Math.max(max, num);
+      }, 0) + 1;
+    }
+
+    const prefix = this.config.prefix || 'REQ';
+    const sep = this.config.sep || '-';
+    const pad = parseInt(this.config.pad) || 3;
+
+    const id = prefix + sep + String(nextNum).padStart(pad, '0');
+
+    this.config.next = nextNum + 1;
+    this.saveConfig(); // Fire and forget
+
+    return id;
+  },
+
+  /**
+   * Retourne les données de démo
+   * @returns {Array}
+   */
+  getDemoData() {
+    return [
+      {id:'REQ-001',nom:'LCD01 — Flux annuel CNSA',domaine:'LCD / CNSA',statut:'Actif',univers:'Solis_MDPH_Prod',freq:'Annuelle',proprio:'M. Dupont',date:'2023-01-15',desc:"Indicateurs de flux entrants/sortants du guichet MDPH pour le reporting LCD01 annuel transmis à la CNSA.",tags:['CNSA','LCD01','annuel'],limites:"Ne pas lancer avant clôture de l'exercice."},
+      {id:'REQ-002',nom:'LCD02 — Délais d\'instruction',domaine:'LCD / CNSA',statut:'Actif',univers:'Solis_MDPH_Prod',freq:'Trimestrielle',proprio:'M. Dupont',date:'2023-03-10',desc:'Délais moyens d\'instruction par type de prestation (PCH, AEEH, AAH…).',tags:['CNSA','LCD02','délais'],limites:'Délais en jours ouvrés.'},
+      {id:'REQ-003',nom:'Droits notifiés par prestation',domaine:'Droits et notifications',statut:'Actif',univers:'Solis_MDPH_Prod',freq:'Mensuelle',proprio:'C. Martin',date:'2022-11-05',desc:'Volume de droits notifiés par type de prestation et par période.',tags:['droits','notification','CDAPH'],limites:''},
+      {id:'REQ-004',nom:'Droits ouverts — suivi annuel',domaine:'Droits et notifications',statut:'En révision',univers:'Solis_MDPH_Prod',freq:'Annuelle',proprio:'C. Martin',date:'2024-02-01',desc:'Droits effectivement ouverts (démarrage effectif de la prestation), distincts des droits notifiés.',tags:['droit ouvert','CNSA'],limites:'Requête en cours de validation métier.'},
+      {id:'REQ-005',nom:'Orientations — taux réponse ES',domaine:'Orientations',statut:'Actif',univers:'Solis_MDPH_Prod',freq:'Trimestrielle',proprio:'L. Bernard',date:'2023-06-01',desc:'Taux de réponse des établissements aux orientations CDAPH.',tags:['orientations','ESMS'],limites:''},
+      {id:'REQ-006',nom:'Orientations expirées sans suite',domaine:'Orientations',statut:'Actif',univers:'Solis_MDPH_Prod',freq:'Mensuelle',proprio:'L. Bernard',date:'2023-09-15',desc:'Orientations dont la date de fin est dépassée sans remplacement.',tags:['orientations','expiration','alerte'],limites:'Exécuter en début de mois.'},
+      {id:'REQ-007',nom:'Flux entrants — hebdo guichet',domaine:'Flux et délais',statut:'Actif',univers:'Solis_MDPH_Prod',freq:'Hebdomadaire',proprio:'Service Accueil',date:'2022-05-12',desc:'Dossiers déposés par semaine, par canal (physique, courrier, démat).',tags:['flux','accueil'],limites:''},
+      {id:'REQ-008',nom:'Tableaux de bord DG — trimestriel',domaine:'Pilotage interne',statut:'Actif',univers:'Solis_MDPH_Prod',freq:'Trimestrielle',proprio:'Direction',date:'2023-01-01',desc:'Synthèse consolidée à destination de la Direction Générale.',tags:['pilotage','DG','KPI'],limites:'Lancer hors pics d\'usage BO (>3 min).'},
+      {id:'REQ-009',nom:'Suivi absentéisme — RH mensuel',domaine:'Ressources humaines',statut:'Brouillon',univers:'RH_Prod',freq:'Mensuelle',proprio:'DRH',date:'2024-09-01',desc:'Taux d\'absentéisme par direction sur 12 mois glissants.',tags:['RH','absentéisme','brouillon'],limites:'Ne pas utiliser en production.'},
+      {id:'REQ-010',nom:'AEEH — dossiers actifs',domaine:'Droits et notifications',statut:'Actif',univers:'Solis_MDPH_Prod',freq:'À la demande',proprio:'C. Martin',date:'2022-08-20',desc:'Dossiers AEEH avec droits en cours de validité, filtrables par âge et territoire.',tags:['AEEH','enfant','droits actifs'],limites:''}
+    ];
+  },
+
+  /**
+   * Retourne la configuration par défaut
+   * @returns {Object}
+   */
+  getDefaultConfig() {
+    return {
+      prefix: 'REQ',
+      sep: '-',
+      pad: 3,
+      next: null,
+      univers: [
+        {name:'Solis_MDPH_Prod', desc:'Univers Solis production MDPH'},
+        {name:'Solis_MDPH_Test', desc:'Univers Solis recette/test'},
+        {name:'RH_Prod', desc:'Univers Ressources Humaines'}
+      ],
+      domaines: [
+        {name:'LCD / CNSA', icon:'📊', bg:'#E8EDF5'},
+        {name:'Droits et notifications', icon:'📋', bg:'#FEF0E6'},
+        {name:'Orientations', icon:'🔀', bg:'#EAF3DE'},
+        {name:'Flux et délais', icon:'⏱', bg:'#E6F1FB'},
+        {name:'Pilotage interne', icon:'📈', bg:'#FAEEDA'},
+        {name:'Ressources humaines', icon:'👥', bg:'#FBEAF0'},
+        {name:'Autre', icon:'📁', bg:'#F1EFE8'}
+      ],
+      statuts: [
+        {name:'Actif', color:'#3B6D11', bg:'#EAF3DE', desc:'Requête validée, en production'},
+        {name:'Brouillon', color:'#854F0B', bg:'#FAEEDA', desc:'En cours de conception'},
+        {name:'En révision', color:'#185FA5', bg:'#E6F1FB', desc:'En cours de validation métier'},
+        {name:'Obsolète', color:'#A32D2D', bg:'#FCEBEB', desc:'Hors usage, conservée pour archivage'}
+      ],
+      frequences: ['À la demande','Quotidienne','Hebdomadaire','Mensuelle','Trimestrielle','Annuelle'],
+      responsables: [
+        {name:'M. Dupont', service:'Pôle Statistiques'},
+        {name:'C. Martin', service:'Pôle Droits'},
+        {name:'L. Bernard', service:'Pôle Orientations'},
+        {name:'Service Accueil', service:'Guichet MDPH'},
+        {name:'Direction', service:'DG'},
+        {name:'DRH', service:'Ressources Humaines'}
+      ]
+    };
+  }
+};
+
+// Export global
+
+// ═══════════════════════════════════════════════════════════════
+// MODULE: FILTER-ENGINE
+// ═══════════════════════════════════════════════════════════════
+
+const FilterEngine = {
+  // État des filtres
+  currentView: 'cards',          // cards | table | tree
+  navFilter: 'all',              // all | domaine:xxx | statut:xxx
+  filteredData: [],              // Données filtrées
+
+  /**
+   * Applique tous les filtres actifs
+   * @returns {Array} - Données filtrées
+   */
+  applyFilters() {
+    const searchQuery = document.getElementById('search-input')?.value.toLowerCase() || '';
+    const universeFilter = document.getElementById('filter-univers')?.value || '';
+    const freqFilter = document.getElementById('filter-freq')?.value || '';
+
+    console.log('🔧 applyFilters - navFilter actuel:', this.navFilter);
+
+    this.filteredData = DataManager.data.filter(requete => {
+      // Filtre de navigation (sidebar)
+      if (this.navFilter !== 'all') {
+        if (this.navFilter.startsWith('domaine:')) {
+          const domain = this.navFilter.slice(8);
+          console.log('  🔎 Comparaison domaine:', `"${requete.domaine}" === "${domain}"`, requete.domaine === domain);
+          if (requete.domaine !== domain) return false;
+        } else if (this.navFilter.startsWith('statut:')) {
+          const status = this.navFilter.slice(7);
+          console.log('  🔎 Comparaison statut:', `"${requete.statut}" === "${status}"`, requete.statut === status);
+          if (requete.statut !== status) return false;
+        }
+      }
+
+      // Filtre de recherche textuelle
+      if (searchQuery) {
+        const searchableText = [
+          requete.nom,
+          requete.id,
+          requete.univers,
+          requete.desc,
+          requete.proprio,
+          ...(requete.tags || [])
+        ].join(' ').toLowerCase();
+
+        if (!searchableText.includes(searchQuery)) return false;
+      }
+
+      // Filtre par univers
+      if (universeFilter && requete.univers !== universeFilter) {
+        return false;
+      }
+
+      // Filtre par fréquence
+      if (freqFilter && requete.freq !== freqFilter) {
+        return false;
+      }
+
+      return true;
+    });
+
+    // Mettre à jour le compteur de résultats
+    const countElement = document.getElementById('result-count');
+    if (countElement) {
+      countElement.textContent = `${this.filteredData.length} requête(s)`;
+    }
+
+    return this.filteredData;
+  },
+
+  /**
+   * Filtre par navigation (sidebar)
+   * @param {string} filterKey - Clé du filtre (ex: "domaine:LCD / CNSA")
+   * @param {HTMLElement} buttonElement - Bouton cliqué
+   */
+  filterByNav(filterKey, buttonElement) {
+    console.log('🔍 filterByNav appelé avec:', filterKey);
+
+    // Désactiver tous les boutons de navigation
+    document.querySelectorAll('.nav-item').forEach(btn => {
+      btn.classList.remove('active');
+    });
+
+    // Activer le bouton cliqué
+    if (buttonElement) {
+      buttonElement.classList.add('active');
+    }
+
+    this.navFilter = filterKey;
+    console.log('📌 navFilter défini à:', this.navFilter);
+
+    // Retourner sur la vue catalogue si l'utilisateur était ailleurs
+    document.getElementById('view-settings').style.display = 'none';
+    document.getElementById('view-ref').style.display = 'none';
+    document.getElementById('view-catalogue').style.display = 'flex';
+
+    this.applyFilters();
+    console.log('✅ Données filtrées:', this.filteredData.length, 'requêtes');
+
+    // Déclencher le rendu
+    if (ViewRenderer) {
+      ViewRenderer.render();
+    }
+  },
+
+  /**
+   * Change la vue active (cards, table, tree)
+   * @param {string} viewName - Nom de la vue
+   */
+  setView(viewName) {
+    this.currentView = viewName;
+
+    // Mettre à jour les boutons de vue
+    ['cards', 'table', 'tree'].forEach(view => {
+      const btn = document.getElementById(`btn-${view}`);
+      if (btn) {
+        btn.classList.toggle('active', view === viewName);
+      }
+    });
+
+    // Déclencher le rendu
+    if (ViewRenderer) {
+      ViewRenderer.render();
+    }
+  },
+
+  /**
+   * Peuple les listes déroulantes de filtres
+   */
+  populateFilters() {
+    // Filtre univers
+    const universSelect = document.getElementById('filter-univers');
+    if (universSelect) {
+      const currentValue = universSelect.value;
+      const universes = [...new Set(DataManager.data.map(r => r.univers).filter(Boolean))];
+
+      universSelect.innerHTML = '<option value="">Tous les univers</option>' +
+        universes.map(u => `<option value="${Utils.escapeHtml(u)}" ${u === currentValue ? 'selected' : ''}>${Utils.escapeHtml(u)}</option>`).join('');
+    }
+
+    // Filtre fréquence
+    const freqSelect = document.getElementById('filter-freq');
+    if (freqSelect) {
+      const currentValue = freqSelect.value;
+      const frequencies = DataManager.config.frequences || [];
+
+      freqSelect.innerHTML = '<option value="">Toutes fréquences</option>' +
+        frequencies.map(f => `<option value="${Utils.escapeHtml(f)}" ${f === currentValue ? 'selected' : ''}>${Utils.escapeHtml(f)}</option>`).join('');
+    }
+  },
+
+  /**
+   * Réinitialise tous les filtres
+   */
+  resetFilters() {
+    this.navFilter = 'all';
+
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) searchInput.value = '';
+
+    const universSelect = document.getElementById('filter-univers');
+    if (universSelect) universSelect.value = '';
+
+    const freqSelect = document.getElementById('filter-freq');
+    if (freqSelect) freqSelect.value = '';
+
+    // Réactiver le bouton "Toutes"
+    const allBtn = document.getElementById('nav-all');
+    if (allBtn) {
+      document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+      allBtn.classList.add('active');
+    }
+
+    this.applyFilters();
+
+    if (ViewRenderer) {
+      ViewRenderer.render();
+    }
+  },
+
+  /**
+   * Recherche en temps réel
+   */
+  initSearch() {
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) {
+      const debouncedSearch = Utils.debounce(() => {
+        this.applyFilters();
+        if (ViewRenderer) {
+          ViewRenderer.render();
+        }
+      }, 300);
+
+      searchInput.addEventListener('input', debouncedSearch);
+    }
+  }
+};
+
+// Export global
+
+// ═══════════════════════════════════════════════════════════════
+// MODULE: VIEW-RENDERER
+// ═══════════════════════════════════════════════════════════════
+
+const ViewRenderer = {
+  /**
+   * Rend la vue active
+   */
+  render() {
+    const container = document.getElementById('view-container');
+    if (!container) return;
+
+    const data = FilterEngine.filteredData;
+
+    // État vide
+    if (!data.length) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">🔍</div>
+          <h3>Aucune requête trouvée</h3>
+          <p>Modifiez vos filtres ou créez une nouvelle requête.</p>
+        </div>`;
+      return;
+    }
+
+    // Rendu selon la vue active
+    switch (FilterEngine.currentView) {
+      case 'cards':
+        this.renderCards(container, data);
+        break;
+      case 'table':
+        this.renderTable(container, data);
+        break;
+      case 'tree':
+        this.renderTree(container, data);
+        break;
+    }
+  },
+
+  /**
+   * Rend la vue en cartes
+   */
+  renderCards(container, data) {
+    container.innerHTML = '<div class="cards-grid">' +
+      data.map(r => this.generateCardHTML(r)).join('') +
+      '</div>';
+  },
+
+  /**
+   * Génère le HTML d'une carte
+   */
+  generateCardHTML(requete) {
+    const domain = this.getDomainInfo(requete.domaine);
+    const status = this.getStatusInfo(requete.statut);
+    const tags = (requete.tags || [])
+      .slice(0, 3)
+      .map(t => {
+        const color = Utils.tagColor(t);
+        return `<span class="tag" style="background:${color.bg};color:${color.color}">${Utils.escapeHtml(t)}</span>`;
+      })
+      .join('');
+
+    return `
+      <div class="req-card" onclick="UIComponents.openDetail('${Utils.escapeHtml(requete.id)}')">
+        <div class="card-header">
+          <div class="card-domain-icon" style="background:${domain.bg}">${domain.icon}</div>
+          <div class="card-meta">
+            <div class="card-title" title="${Utils.escapeHtml(requete.nom)}">${Utils.escapeHtml(requete.nom)}</div>
+            <div class="card-subtitle">${Utils.escapeHtml(requete.id || '')} ${requete.univers ? '· ' + Utils.escapeHtml(requete.univers) : ''}</div>
+          </div>
+        </div>
+        ${requete.desc ? `<div class="card-desc">${Utils.escapeHtml(requete.desc)}</div>` : ''}
+        ${tags ? `<div class="card-tags">${tags}</div>` : ''}
+        <div class="card-footer">
+          ${this.generateStatusBadge(requete)}
+          <span style="font-size:11px;color:var(--gray-400);margin-left:4px">${Utils.escapeHtml(requete.freq || '')}</span>
+          ${requete.proprio ? `<div class="card-owner"><div class="avatar-sm">${Utils.initials(requete.proprio)}</div>${Utils.escapeHtml(requete.proprio)}</div>` : ''}
+        </div>
+      </div>`;
+  },
+
+  /**
+   * Rend la vue en tableau
+   */
+  renderTable(container, data) {
+    container.innerHTML = `
+      <div class="table-view">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Nom</th>
+              <th>Domaine</th>
+              <th>Univers</th>
+              <th>Statut</th>
+              <th>Fréquence</th>
+              <th>Tags</th>
+              <th>Responsable</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${data.map(r => this.generateTableRowHTML(r)).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  },
+
+  /**
+   * Génère le HTML d'une ligne de tableau
+   */
+  generateTableRowHTML(requete) {
+    const domain = this.getDomainInfo(requete.domaine);
+    const tags = (requete.tags || [])
+      .slice(0, 2)
+      .map(t => {
+        const color = Utils.tagColor(t);
+        return `<span class="tag" style="background:${color.bg};color:${color.color};font-size:10px">${Utils.escapeHtml(t)}</span>`;
+      })
+      .join(' ');
+
+    return `
+      <tr onclick="UIComponents.openDetail('${Utils.escapeHtml(requete.id)}')">
+        <td style="font-family:var(--font-mono);font-size:11px;color:var(--gray-400)">${Utils.escapeHtml(requete.id || '—')}</td>
+        <td><strong style="color:var(--gray-800)">${Utils.escapeHtml(requete.nom)}</strong></td>
+        <td>${domain.icon} ${Utils.escapeHtml(requete.domaine)}</td>
+        <td style="font-family:var(--font-mono);font-size:11px">${Utils.escapeHtml(requete.univers || '—')}</td>
+        <td>${this.generateStatusBadge(requete)}</td>
+        <td>${Utils.escapeHtml(requete.freq || '—')}</td>
+        <td>${tags}</td>
+        <td>${Utils.escapeHtml(requete.proprio || '—')}</td>
+      </tr>`;
+  },
+
+  /**
+   * Rend la vue en arbre
+   */
+  renderTree(container, data) {
+    const domains = [...new Set(data.map(r => r.domaine))];
+
+    container.innerHTML = domains.map(domainName => {
+      const items = data.filter(r => r.domaine === domainName);
+      const domain = this.getDomainInfo(domainName);
+      const treeId = 'tr' + domainName.replace(/\W/g, '');
+
+      return `
+        <div class="tree-domain">
+          <div class="tree-domain-header" onclick="ViewRenderer.toggleTree('${treeId}')">
+            <span style="font-size:20px">${domain.icon}</span>
+            <span style="font-weight:600;font-size:14px;color:var(--gray-800)">${Utils.escapeHtml(domainName)}</span>
+            <span class="tree-domain-count">${items.length}</span>
+            <svg class="chevron open" id="cv${treeId}" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--gray-400)" stroke-width="2">
+              <path d="M5 3l4 4-4 4"/>
+            </svg>
+          </div>
+          <div class="tree-items" id="${treeId}">
+            ${items.map(r => this.generateTreeItemHTML(r)).join('')}
+          </div>
+        </div>`;
+    }).join('');
+  },
+
+  /**
+   * Génère le HTML d'un élément d'arbre
+   */
+  generateTreeItemHTML(requete) {
+    const status = this.getStatusInfo(requete.statut);
+
+    return `
+      <div class="tree-item" onclick="UIComponents.openDetail('${Utils.escapeHtml(requete.id)}')">
+        <span style="width:8px;height:8px;border-radius:50%;background:${status.color};flex-shrink:0"></span>
+        <span class="tree-item-name">${Utils.escapeHtml(requete.nom)}</span>
+        <span class="tree-item-id">${Utils.escapeHtml(requete.id || '')}</span>
+        ${this.generateStatusBadge(requete)}
+      </div>`;
+  },
+
+  /**
+   * Toggle l'affichage d'une section d'arbre
+   */
+  toggleTree(treeId) {
+    const element = document.getElementById(treeId);
+    const chevron = document.getElementById('cv' + treeId);
+
+    if (element && chevron) {
+      const isVisible = element.style.display !== 'none';
+      element.style.display = isVisible ? 'none' : '';
+      chevron.classList.toggle('open', !isVisible);
+    }
+  },
+
+  /**
+   * Génère un badge de statut
+   */
+  generateStatusBadge(requete) {
+    const status = this.getStatusInfo(requete.statut);
+
+    return `
+      <span style="background:${status.bg};color:${status.color};font-size:11px;font-weight:500;padding:3px 8px;border-radius:4px;display:inline-flex;align-items:center;gap:4px">
+        <span style="width:6px;height:6px;border-radius:50%;background:${status.color}"></span>
+        ${Utils.escapeHtml(requete.statut)}
+      </span>`;
+  },
+
+  /**
+   * Récupère les infos d'un domaine
+   */
+  getDomainInfo(domainName) {
+    return DataManager.config.domaines?.find(d => d.name === domainName) || {
+      icon: '📁',
+      bg: '#F1EFE8'
+    };
+  },
+
+  /**
+   * Récupère les infos d'un statut
+   */
+  getStatusInfo(statusName) {
+    return DataManager.config.statuts?.find(s => s.name === statusName) || {
+      color: '#9B9990',
+      bg: '#F8F7F4'
+    };
+  },
+
+  /**
+   * Rend la sidebar avec les compteurs
+   */
+  renderSidebar() {
+    // Mettre à jour le compteur total
+    const countAll = document.getElementById('count-all');
+    if (countAll) {
+      countAll.textContent = DataManager.data.length;
+    }
+
+    // Rendre la navigation par domaine
+    const domainNav = document.getElementById('domain-nav');
+    if (domainNav && DataManager.config.domaines) {
+      domainNav.innerHTML = DataManager.config.domaines.map(domain => {
+        const count = DataManager.data.filter(r => r.domaine === domain.name).length;
+        return `
+          <button class="nav-item" data-filter-key="domaine:${Utils.escapeHtml(domain.name)}">
+            ${domain.icon} ${Utils.escapeHtml(domain.name)}
+            <span class="nav-count">${count}</span>
+          </button>`;
+      }).join('');
+
+      // Attacher les événements pour les domaines
+      const domainButtons = domainNav.querySelectorAll('.nav-item');
+      console.log(`📎 Attachement de ${domainButtons.length} event listeners pour les domaines`);
+      domainButtons.forEach(btn => {
+        const filterKey = btn.getAttribute('data-filter-key');
+        console.log(`  - Bouton: "${btn.textContent.trim()}" -> filterKey: "${filterKey}"`);
+        btn.addEventListener('click', function() {
+          FilterEngine.filterByNav(this.getAttribute('data-filter-key'), this);
+        });
+      });
+    }
+
+    // Rendre la navigation par statut
+    const statusNav = document.getElementById('status-nav');
+    if (statusNav && DataManager.config.statuts) {
+      statusNav.innerHTML = DataManager.config.statuts.map(status => {
+        const count = DataManager.data.filter(r => r.statut === status.name).length;
+        return `
+          <button class="nav-item" data-filter-key="statut:${Utils.escapeHtml(status.name)}">
+            <span class="nav-dot" style="background:${status.color}"></span>
+            ${Utils.escapeHtml(status.name)}
+            <span class="nav-count">${count}</span>
+          </button>`;
+      }).join('');
+
+      // Attacher les événements pour les statuts
+      const statusButtons = statusNav.querySelectorAll('.nav-item');
+      console.log(`📎 Attachement de ${statusButtons.length} event listeners pour les statuts`);
+      statusButtons.forEach(btn => {
+        const filterKey = btn.getAttribute('data-filter-key');
+        console.log(`  - Bouton: "${btn.textContent.trim()}" -> filterKey: "${filterKey}"`);
+        btn.addEventListener('click', function() {
+          FilterEngine.filterByNav(this.getAttribute('data-filter-key'), this);
+        });
+      });
+    }
+  },
+
+  /**
+   * Rend la barre de statistiques
+   */
+  renderStats() {
+    const statsBar = document.getElementById('stats-bar');
+    if (!statsBar) return;
+
+    const total = DataManager.data.length;
+    const actives = DataManager.data.filter(r => r.statut === 'Actif').length;
+    const uniqueUniverses = [...new Set(DataManager.data.map(r => r.univers).filter(Boolean))].length;
+    const uniqueDomains = [...new Set(DataManager.data.map(r => r.domaine))].length;
+    const percentage = total ? Math.round(actives / total * 100) : 0;
+
+    statsBar.innerHTML = `
+      <div class="stat-card">
+        <div class="stat-label">Total</div>
+        <div class="stat-value">${total}</div>
+        <div class="stat-sub">requêtes</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Actives</div>
+        <div class="stat-value" style="color:var(--green)">${actives}</div>
+        <div class="stat-sub">${percentage}%</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Domaines</div>
+        <div class="stat-value" style="color:var(--navy)">${uniqueDomains}</div>
+        <div class="stat-sub">fonctionnels</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Univers</div>
+        <div class="stat-value" style="color:var(--orange)">${uniqueUniverses}</div>
+        <div class="stat-sub">BO sources</div>
+      </div>`;
+  }
+};
+
+// Export global
+
+// ═══════════════════════════════════════════════════════════════
+// MODULE: EXPORT-HANDLER
+// ═══════════════════════════════════════════════════════════════
+
+const ExportHandler = {
+  /**
+   * Exporte tout en JSON
+   */
+  exportJSON() {
+    const exportData = {
+      catalogue: DataManager.data,
+      config: DataManager.config,
+      exportDate: new Date().toISOString(),
+      version: '2.0'
+    };
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `catalogue_BO_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    UIComponents.showToast('Export JSON téléchargé.', 'success');
+  },
+
+  /**
+   * Exporte en Excel (XLSX) - VERSION CORRIGÉE
+   * Utilise une approche simplifiée avec CSV encodé en UTF-8 BOM
+   */
+  exportExcel() {
+    // Définir les colonnes
+    const columns = [
+      { key: 'id', label: 'Identifiant BO' },
+      { key: 'nom', label: 'Nom de la requête' },
+      { key: 'domaine', label: 'Domaine fonctionnel' },
+      { key: 'statut', label: 'Statut' },
+      { key: 'univers', label: 'Univers BO' },
+      { key: 'freq', label: 'Fréquence' },
+      { key: 'proprio', label: 'Responsable' },
+      { key: 'date', label: 'Date de création' },
+      { key: 'desc', label: 'Description / Objet métier' },
+      { key: 'tags', label: 'Tags' },
+      { key: 'limites', label: 'Limites & précautions' }
+    ];
+
+    // Créer le CSV avec BOM UTF-8
+    const BOM = '\uFEFF';
+
+    // En-têtes
+    let csv = BOM + columns.map(c => this.escapeCSV(c.label)).join('\t') + '\n';
+
+    // Données
+    DataManager.data.forEach(row => {
+      const values = columns.map(col => {
+        let value = row[col.key] || '';
+        if (col.key === 'tags' && Array.isArray(row.tags)) {
+          value = row.tags.join(', ');
+        }
+        return this.escapeCSV(String(value));
+      });
+      csv += values.join('\t') + '\n';
+    });
+
+    // Créer le fichier Excel (format TSV compatible Excel)
+    const blob = new Blob([csv], { type: 'text/tab-separated-values;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `catalogue_BO_${new Date().toISOString().slice(0, 10)}.xls`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    UIComponents.showToast(`Export Excel — ${DataManager.data.length} requête(s).`, 'success');
+  },
+
+  /**
+   * Échappe les valeurs CSV
+   */
+  escapeCSV(value) {
+    if (typeof value !== 'string') value = String(value);
+
+    // Si la valeur contient des guillemets, tabulations ou retours chariot
+    if (value.includes('"') || value.includes('\t') || value.includes('\n')) {
+      return '"' + value.replace(/"/g, '""') + '"';
+    }
+
+    return value;
+  },
+
+  /**
+   * Export XLSX avancé (OpenXML format) - VERSION ALTERNATIVE
+   * Cette version génère un vrai fichier XLSX si nécessaire
+   */
+  async exportExcelAdvanced() {
+    try {
+      const workbook = this.createXLSXWorkbook();
+      const xlsxBlob = await this.generateXLSXBlob(workbook);
+
+      const url = URL.createObjectURL(xlsxBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `catalogue_BO_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      UIComponents.showToast(`Export Excel — ${DataManager.data.length} requête(s).`, 'success');
+    } catch (error) {
+      console.error('Erreur export Excel:', error);
+      UIComponents.showToast('Erreur lors de l\'export Excel.', 'error');
+    }
+  },
+
+  /**
+   * Crée la structure du workbook XLSX
+   */
+  createXLSXWorkbook() {
+    const columns = [
+      'Identifiant BO', 'Nom de la requête', 'Domaine fonctionnel',
+      'Statut', 'Univers BO', 'Fréquence', 'Responsable',
+      'Date de création', 'Description / Objet métier', 'Tags',
+      'Limites & précautions'
+    ];
+
+    // Générer les données
+    const rows = DataManager.data.map(r => [
+      r.id || '',
+      r.nom || '',
+      r.domaine || '',
+      r.statut || '',
+      r.univers || '',
+      r.freq || '',
+      r.proprio || '',
+      r.date || '',
+      r.desc || '',
+      (r.tags || []).join(', '),
+      r.limites || ''
+    ]);
+
+    return { columns, rows };
+  },
+
+  /**
+   * Génère le blob XLSX (format OpenXML simplifié)
+   */
+  async generateXLSXBlob(workbook) {
+    const { columns, rows } = workbook;
+
+    // Créer le XML du worksheet
+    const sheetData = this.createSheetXML(columns, rows);
+
+    // Créer le ZIP avec la structure XLSX
+    const files = {
+      '[Content_Types].xml': this.getContentTypesXML(),
+      '_rels/.rels': this.getRelsXML(),
+      'xl/workbook.xml': this.getWorkbookXML(),
+      'xl/_rels/workbook.xml.rels': this.getWorkbookRelsXML(),
+      'xl/worksheets/sheet1.xml': sheetData,
+      'xl/styles.xml': this.getStylesXML()
+    };
+
+    // Générer le ZIP
+    return this.createZIPBlob(files);
+  },
+
+  /**
+   * Crée le XML de la feuille
+   */
+  createSheetXML(columns, rows) {
+    const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+    let xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <sheetData>
+    <row r="1">`;
+
+    // En-têtes
+    columns.forEach((col, i) => {
+      const cellRef = this.columnToLetter(i) + '1';
+      xml += `<c r="${cellRef}" t="inlineStr"><is><t>${esc(col)}</t></is></c>`;
+    });
+
+    xml += '</row>';
+
+    // Données
+    rows.forEach((row, rowIdx) => {
+      const rowNum = rowIdx + 2;
+      xml += `<row r="${rowNum}">`;
+
+      row.forEach((cell, colIdx) => {
+        const cellRef = this.columnToLetter(colIdx) + rowNum;
+        xml += `<c r="${cellRef}" t="inlineStr"><is><t>${esc(cell)}</t></is></c>`;
+      });
+
+      xml += '</row>';
+    });
+
+    xml += '</sheetData></worksheet>';
+
+    return xml;
+  },
+
+  /**
+   * Convertit un index de colonne en lettre (0 -> A, 1 -> B, etc.)
+   */
+  columnToLetter(num) {
+    let letter = '';
+    while (num >= 0) {
+      letter = String.fromCharCode((num % 26) + 65) + letter;
+      num = Math.floor(num / 26) - 1;
+    }
+    return letter;
+  },
+
+  /**
+   * Fichiers XML requis pour XLSX
+   */
+  getContentTypesXML() {
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+</Types>`;
+  },
+
+  getRelsXML() {
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`;
+  },
+
+  getWorkbookXML() {
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets>
+    <sheet name="Catalogue BO" sheetId="1" r:id="rId1"/>
+  </sheets>
+</workbook>`;
+  },
+
+  getWorkbookRelsXML() {
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`;
+  },
+
+  getStylesXML() {
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>
+  <fills count="1"><fill><patternFill patternType="none"/></fill></fills>
+  <borders count="1"><border/></borders>
+  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+  <cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>
+</styleSheet>`;
+  },
+
+  /**
+   * Crée un fichier ZIP à partir d'un objet de fichiers
+   */
+  async createZIPBlob(files) {
+    const encoder = new TextEncoder();
+    const parts = [];
+    const centralDir = [];
+    let offset = 0;
+
+    // Fonction CRC32
+    const crc32 = (buf) => {
+      let c = 0xFFFFFFFF;
+      const t = new Uint32Array(256);
+      for (let i = 0; i < 256; i++) {
+        let k = i;
+        for (let j = 0; j < 8; j++) {
+          k = (k & 1) ? (0xEDB88320 ^ (k >>> 1)) : (k >>> 1);
+        }
+        t[i] = k;
+      }
+      for (const b of buf) {
+        c = t[(c ^ b) & 0xFF] ^ (c >>> 8);
+      }
+      return (c ^ 0xFFFFFFFF) >>> 0;
+    };
+
+    const u16 = (n) => [n & 0xFF, (n >> 8) & 0xFF];
+    const u32 = (n) => [n & 0xFF, (n >> 8) & 0xFF, (n >> 16) & 0xFF, (n >> 24) & 0xFF];
+
+    // Créer les entrées ZIP
+    for (const [name, content] of Object.entries(files)) {
+      const nameBuf = encoder.encode(name);
+      const dataBuf = encoder.encode(content);
+      const crc = crc32(dataBuf);
+      const size = dataBuf.length;
+
+      // Local file header
+      const lfh = new Uint8Array([
+        0x50, 0x4B, 0x03, 0x04,  // Signature
+        0x0A, 0x00,              // Version
+        0x00, 0x00,              // Flags
+        0x00, 0x00,              // Compression (store)
+        0x00, 0x00, 0x00, 0x00,  // Time & date
+        ...u32(crc),             // CRC32
+        ...u32(size),            // Compressed size
+        ...u32(size),            // Uncompressed size
+        ...u16(nameBuf.length),  // Filename length
+        0x00, 0x00               // Extra field length
+      ]);
+
+      const entry = new Uint8Array(lfh.length + nameBuf.length + dataBuf.length);
+      entry.set(lfh, 0);
+      entry.set(nameBuf, lfh.length);
+      entry.set(dataBuf, lfh.length + nameBuf.length);
+      parts.push(entry);
+
+      // Central directory entry
+      const cde = new Uint8Array([
+        0x50, 0x4B, 0x01, 0x02,  // Signature
+        0x0A, 0x00,              // Version made by
+        0x0A, 0x00,              // Version needed
+        0x00, 0x00,              // Flags
+        0x00, 0x00,              // Compression
+        0x00, 0x00, 0x00, 0x00,  // Time & date
+        ...u32(crc),             // CRC32
+        ...u32(size),            // Compressed size
+        ...u32(size),            // Uncompressed size
+        ...u16(nameBuf.length),  // Filename length
+        0x00, 0x00,              // Extra field length
+        0x00, 0x00,              // Comment length
+        0x00, 0x00,              // Disk number
+        0x00, 0x00,              // Internal attributes
+        0x00, 0x00, 0x00, 0x00,  // External attributes
+        ...u32(offset)           // Offset
+      ]);
+
+      const cdEntry = new Uint8Array(cde.length + nameBuf.length);
+      cdEntry.set(cde, 0);
+      cdEntry.set(nameBuf, cde.length);
+      centralDir.push(cdEntry);
+
+      offset += entry.length;
+    }
+
+    // Concaténer le répertoire central
+    const cdSize = centralDir.reduce((sum, e) => sum + e.length, 0);
+    const cd = new Uint8Array(cdSize);
+    let cdOffset = 0;
+    for (const entry of centralDir) {
+      cd.set(entry, cdOffset);
+      cdOffset += entry.length;
+    }
+
+    // End of central directory
+    const eocd = new Uint8Array([
+      0x50, 0x4B, 0x05, 0x06,    // Signature
+      0x00, 0x00,                // Disk number
+      0x00, 0x00,                // Start disk
+      ...u16(centralDir.length), // Entries on this disk
+      ...u16(centralDir.length), // Total entries
+      ...u32(cdSize),            // Central directory size
+      ...u32(offset),            // Central directory offset
+      0x00, 0x00                 // Comment length
+    ]);
+
+    // Assembler le ZIP
+    const totalSize = parts.reduce((sum, p) => sum + p.length, 0) + cd.length + eocd.length;
+    const zip = new Uint8Array(totalSize);
+    let zipOffset = 0;
+
+    for (const part of parts) {
+      zip.set(part, zipOffset);
+      zipOffset += part.length;
+    }
+    zip.set(cd, zipOffset);
+    zipOffset += cd.length;
+    zip.set(eocd, zipOffset);
+
+    return new Blob([zip], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  },
+
+  /**
+   * Importe des données depuis JSON
+   */
+  async importJSON() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      try {
+        const text = await file.text();
+        const parsed = JSON.parse(text);
+
+        if (Array.isArray(parsed)) {
+          // Format ancien (array simple)
+          DataManager.data = parsed;
+        } else if (parsed.catalogue) {
+          // Format nouveau (object avec catalogue + config)
+          DataManager.data = parsed.catalogue;
+          if (parsed.config) {
+            DataManager.config = { ...DataManager.config, ...parsed.config };
+          }
+        } else {
+          throw new Error('Format JSON invalide');
+        }
+
+        await DataManager.saveData();
+        await DataManager.saveConfig();
+
+        // Rafraîchir l'interface
+        if (window.AppController) {
+          window.AppController.refresh();
+        }
+
+        UIComponents.showToast(`${DataManager.data.length} requêtes importées.`, 'success');
+      } catch (error) {
+        console.error('Erreur import:', error);
+        UIComponents.showToast('Fichier JSON invalide.', 'error');
+      }
+    };
+
+    input.click();
+  }
+};
+
+// Export global
+
+// ═══════════════════════════════════════════════════════════════
+// MODULE: CONFIG-MANAGER
+// ═══════════════════════════════════════════════════════════════
+
+const ConfigManager = {
+  /**
+   * Rend tous les panneaux de configuration
+   */
+  renderAll() {
+    this.renderUniverses();
+    this.renderDomains();
+    this.renderStatuses();
+    this.renderFrequencies();
+    this.renderResponsibles();
+    this.loadNumberingConfig();
+  },
+
+  /**
+   * Compte l'utilisation d'une valeur dans un champ
+   */
+  countUsage(field, value) {
+    return DataManager.data.filter(r => r[field] === value).length;
+  },
+
+  /**
+   * Génère un bouton de suppression
+   */
+  deleteButton(onclick) {
+    return `<button class="btn-icon del" onclick="${onclick}" title="Supprimer">✕</button>`;
+  },
+
+  // ═══════════════ UNIVERS ═══════════════
+  renderUniverses() {
+    const list = document.getElementById('list-univers');
+    if (!list) return;
+
+    const items = DataManager.config.univers || [];
+    list.innerHTML = items.map((u, i) => {
+      const count = this.countUsage('univers', u.name);
+      return `
+        <div class="s-row">
+          <span class="s-row-icon">🗄</span>
+          <div class="s-row-main">
+            <div class="s-row-label">${Utils.escapeHtml(u.name)}</div>
+            ${u.desc ? `<div class="s-row-sub">${Utils.escapeHtml(u.desc)}</div>` : ''}
+          </div>
+          <span class="s-badge">${count} requête${count !== 1 ? 's' : ''}</span>
+          ${this.deleteButton(`ConfigManager.deleteUniverse(${i})`)}
+        </div>`;
+    }).join('') || '<div class="s-empty">Aucun univers configuré.</div>';
+  },
+
+  addUniverse() {
+    const nameInput = document.getElementById('ui-name');
+    const descInput = document.getElementById('ui-desc');
+    const name = nameInput.value.trim();
+    const desc = descInput.value.trim();
+
+    if (!name) {
+      UIComponents.showToast('Nom obligatoire.', 'error');
+      return;
+    }
+
+    if (DataManager.config.univers.find(u => u.name === name)) {
+      UIComponents.showToast('Cet univers existe déjà.', 'error');
+      return;
+    }
+
+    DataManager.config.univers.push({ name, desc });
+    DataManager.saveConfig();
+    this.renderUniverses();
+    FilterEngine.populateFilters();
+
+    nameInput.value = '';
+    descInput.value = '';
+    UIComponents.showToast('Univers ajouté.', 'success');
+  },
+
+  deleteUniverse(index) {
+    DataManager.config.univers.splice(index, 1);
+    DataManager.saveConfig();
+    this.renderUniverses();
+    FilterEngine.populateFilters();
+    UIComponents.showToast('Univers supprimé.', 'success');
+  },
+
+  // ═══════════════ DOMAINES ═══════════════
+  renderDomains() {
+    const list = document.getElementById('list-domaines');
+    if (!list) return;
+
+    const items = DataManager.config.domaines || [];
+    list.innerHTML = items.map((d, i) => {
+      const count = this.countUsage('domaine', d.name);
+      return `
+        <div class="s-row">
+          <input class="emoji-input" type="text" maxlength="2" value="${Utils.escapeHtml(d.icon)}"
+            onchange="DataManager.config.domaines[${i}].icon=this.value;DataManager.saveConfig();AppController.refresh()"
+            style="width:40px;height:30px;font-size:17px" title="Emoji">
+          <div class="color-swatch" title="Couleur de fond">
+            <div class="color-preview" style="background:${d.bg}" id="dp${i}"></div>
+            <input type="color" value="${d.bg}"
+              oninput="DataManager.config.domaines[${i}].bg=this.value;document.getElementById('dp${i}').style.background=this.value"
+              onchange="DataManager.saveConfig();AppController.refresh()">
+          </div>
+          <div class="s-row-main">
+            <div class="s-row-label">${Utils.escapeHtml(d.name)}</div>
+          </div>
+          <span class="s-badge">${count} requête${count !== 1 ? 's' : ''}</span>
+          ${count === 0 ? this.deleteButton(`ConfigManager.deleteDomain(${i})`) : '<span class="s-used">utilisé</span>'}
+        </div>`;
+    }).join('') || '<div class="s-empty">Aucun domaine configuré.</div>';
+  },
+
+  addDomain() {
+    const iconInput = document.getElementById('di-icon');
+    const nameInput = document.getElementById('di-name');
+    const icon = iconInput.value.trim() || '📁';
+    const name = nameInput.value.trim();
+
+    if (!name) {
+      UIComponents.showToast('Nom obligatoire.', 'error');
+      return;
+    }
+
+    if (DataManager.config.domaines.find(d => d.name === name)) {
+      UIComponents.showToast('Ce domaine existe déjà.', 'error');
+      return;
+    }
+
+    DataManager.config.domaines.push({ name, icon, bg: '#F1EFE8' });
+    DataManager.saveConfig();
+    this.renderDomains();
+
+    if (window.AppController) {
+      window.AppController.refresh();
+    }
+
+    iconInput.value = '';
+    nameInput.value = '';
+    UIComponents.showToast('Domaine ajouté.', 'success');
+  },
+
+  deleteDomain(index) {
+    DataManager.config.domaines.splice(index, 1);
+    DataManager.saveConfig();
+    this.renderDomains();
+
+    if (window.AppController) {
+      window.AppController.refresh();
+    }
+
+    UIComponents.showToast('Domaine supprimé.', 'success');
+  },
+
+  // ═══════════════ STATUTS ═══════════════
+  renderStatuses() {
+    const list = document.getElementById('list-statuts');
+    if (!list) return;
+
+    const items = DataManager.config.statuts || [];
+    list.innerHTML = items.map((s, i) => {
+      const count = this.countUsage('statut', s.name);
+      return `
+        <div class="s-row">
+          <span class="color-dot" style="background:${s.color}"></span>
+          <div class="s-row-main">
+            <div class="s-row-label">${Utils.escapeHtml(s.name)}</div>
+            ${s.desc ? `<div class="s-row-sub">${Utils.escapeHtml(s.desc)}</div>` : ''}
+          </div>
+          <span class="s-badge">${count} requête${count !== 1 ? 's' : ''}</span>
+          ${count === 0 ? this.deleteButton(`ConfigManager.deleteStatus(${i})`) : '<span class="s-used">utilisé</span>'}
+        </div>`;
+    }).join('') || '<div class="s-empty">Aucun statut configuré.</div>';
+  },
+
+  addStatus() {
+    const colorInput = document.getElementById('si-color');
+    const nameInput = document.getElementById('si-name');
+    const descInput = document.getElementById('si-desc');
+    const color = colorInput.value;
+    const name = nameInput.value.trim();
+    const desc = descInput.value.trim();
+
+    if (!name) {
+      UIComponents.showToast('Nom obligatoire.', 'error');
+      return;
+    }
+
+    if (DataManager.config.statuts.find(s => s.name === name)) {
+      UIComponents.showToast('Ce statut existe déjà.', 'error');
+      return;
+    }
+
+    DataManager.config.statuts.push({ name, color, bg: color + '20', desc });
+    DataManager.saveConfig();
+    this.renderStatuses();
+
+    if (window.AppController) {
+      window.AppController.refresh();
+    }
+
+    nameInput.value = '';
+    descInput.value = '';
+    UIComponents.showToast('Statut ajouté.', 'success');
+  },
+
+  deleteStatus(index) {
+    DataManager.config.statuts.splice(index, 1);
+    DataManager.saveConfig();
+    this.renderStatuses();
+
+    if (window.AppController) {
+      window.AppController.refresh();
+    }
+
+    UIComponents.showToast('Statut supprimé.', 'success');
+  },
+
+  // ═══════════════ FRÉQUENCES ═══════════════
+  renderFrequencies() {
+    const list = document.getElementById('list-frequences');
+    if (!list) return;
+
+    const items = DataManager.config.frequences || [];
+    list.innerHTML = items.map((f, i) => {
+      const count = this.countUsage('freq', f);
+      return `
+        <div class="s-row">
+          <span class="s-row-icon">🔄</span>
+          <div class="s-row-label">${Utils.escapeHtml(f)}</div>
+          <span class="s-badge">${count} requête${count !== 1 ? 's' : ''}</span>
+          ${count === 0 ? this.deleteButton(`ConfigManager.deleteFrequency(${i})`) : '<span class="s-used">utilisée</span>'}
+        </div>`;
+    }).join('') || '<div class="s-empty">Aucune fréquence.</div>';
+  },
+
+  addFrequency() {
+    const nameInput = document.getElementById('fi-name');
+    const name = nameInput.value.trim();
+
+    if (!name) {
+      UIComponents.showToast('Nom obligatoire.', 'error');
+      return;
+    }
+
+    if (DataManager.config.frequences.includes(name)) {
+      UIComponents.showToast('Déjà existante.', 'error');
+      return;
+    }
+
+    DataManager.config.frequences.push(name);
+    DataManager.saveConfig();
+    this.renderFrequencies();
+    FilterEngine.populateFilters();
+
+    nameInput.value = '';
+    UIComponents.showToast('Fréquence ajoutée.', 'success');
+  },
+
+  deleteFrequency(index) {
+    DataManager.config.frequences.splice(index, 1);
+    DataManager.saveConfig();
+    this.renderFrequencies();
+    FilterEngine.populateFilters();
+    UIComponents.showToast('Fréquence supprimée.', 'success');
+  },
+
+  // ═══════════════ RESPONSABLES ═══════════════
+  renderResponsibles() {
+    const list = document.getElementById('list-responsables');
+    if (!list) return;
+
+    const items = DataManager.config.responsables || [];
+    list.innerHTML = items.map((r, i) => {
+      const count = this.countUsage('proprio', r.name);
+      return `
+        <div class="s-row">
+          <div class="avatar-sm" style="width:28px;height:28px;font-size:10px">${Utils.initials(r.name)}</div>
+          <div class="s-row-main">
+            <div class="s-row-label">${Utils.escapeHtml(r.name)}</div>
+            ${r.service ? `<div class="s-row-sub">${Utils.escapeHtml(r.service)}</div>` : ''}
+          </div>
+          <span class="s-badge">${count} requête${count !== 1 ? 's' : ''}</span>
+          ${this.deleteButton(`ConfigManager.deleteResponsible(${i})`)}
+        </div>`;
+    }).join('') || '<div class="s-empty">Aucun responsable.</div>';
+  },
+
+  addResponsible() {
+    const nameInput = document.getElementById('ri-name');
+    const serviceInput = document.getElementById('ri-service');
+    const name = nameInput.value.trim();
+    const service = serviceInput.value.trim();
+
+    if (!name) {
+      UIComponents.showToast('Nom obligatoire.', 'error');
+      return;
+    }
+
+    DataManager.config.responsables.push({ name, service });
+    DataManager.saveConfig();
+    this.renderResponsibles();
+
+    nameInput.value = '';
+    serviceInput.value = '';
+    UIComponents.showToast('Responsable ajouté.', 'success');
+  },
+
+  deleteResponsible(index) {
+    DataManager.config.responsables.splice(index, 1);
+    DataManager.saveConfig();
+    this.renderResponsibles();
+    UIComponents.showToast('Responsable supprimé.', 'success');
+  },
+
+  // ═══════════════ NUMÉROTATION ═══════════════
+  loadNumberingConfig() {
+    const prefixInput = document.getElementById('cfg-prefix');
+    const sepInput = document.getElementById('cfg-sep');
+    const padInput = document.getElementById('cfg-pad');
+    const nextInput = document.getElementById('cfg-next');
+
+    if (prefixInput) prefixInput.value = DataManager.config.prefix || 'REQ';
+    if (sepInput) sepInput.value = DataManager.config.sep || '-';
+    if (padInput) padInput.value = String(DataManager.config.pad || 3);
+    if (nextInput) nextInput.value = DataManager.config.next || '';
+
+    this.previewId();
+  },
+
+  previewId() {
+    const preview = document.getElementById('id-preview');
+    if (!preview) return;
+
+    const prefix = document.getElementById('cfg-prefix')?.value || DataManager.config.prefix || 'REQ';
+    const sep = document.getElementById('cfg-sep')?.value ?? DataManager.config.sep ?? '-';
+    const pad = parseInt(document.getElementById('cfg-pad')?.value || DataManager.config.pad) || 3;
+    const nextValue = parseInt(document.getElementById('cfg-next')?.value) ||
+      DataManager.data.reduce((max, r) => {
+        const num = parseInt((r.id || '').replace(/\D/g, '')) || 0;
+        return Math.max(max, num);
+      }, 0) + 1;
+
+    preview.textContent = prefix + sep + String(nextValue).padStart(pad, '0');
+  },
+
+  saveNumberingConfig() {
+    DataManager.config.prefix = document.getElementById('cfg-prefix').value || 'REQ';
+    DataManager.config.sep = document.getElementById('cfg-sep').value;
+    DataManager.config.pad = parseInt(document.getElementById('cfg-pad').value) || 3;
+
+    const nextValue = parseInt(document.getElementById('cfg-next').value);
+    DataManager.config.next = isNaN(nextValue) ? null : nextValue;
+
+    DataManager.saveConfig();
+    this.previewId();
+    UIComponents.showToast('Configuration enregistrée.', 'success');
+  },
+
+  resetConfig() {
+    if (!confirm('Réinitialiser toute la configuration aux valeurs par défaut ?')) {
+      return;
+    }
+
+    DataManager.config = DataManager.getDefaultConfig();
+    DataManager.saveConfig();
+    this.renderAll();
+
+    if (window.AppController) {
+      window.AppController.refresh();
+    }
+
+    UIComponents.showToast('Paramétrage réinitialisé.', 'success');
+  }
+};
+
+// Export global
+
+// ═══════════════════════════════════════════════════════════════
+// MODULE: UI-COMPONENTS
+// ═══════════════════════════════════════════════════════════════
+
+const UIComponents = {
+  toastTimer: null,
+
+  // ═══════════════ PANEL DE DÉTAILS ═══════════════
+  openDetail(id) {
+    const requete = DataManager.data.find(r => r.id === id);
+    if (!requete) return;
+
+    const domain = ViewRenderer.getDomainInfo(requete.domaine);
+    const status = ViewRenderer.getStatusInfo(requete.statut);
+
+    // En-tête
+    const header = document.getElementById('dp-head');
+    if (header) {
+      header.innerHTML = `
+        <div class="card-domain-icon" style="background:${domain.bg};font-size:22px;width:44px;height:44px;border-radius:10px">${domain.icon}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:15px;font-weight:600;color:var(--gray-800)">${Utils.escapeHtml(requete.nom)}</div>
+          <div style="font-size:12px;color:var(--gray-400);margin-top:3px;font-family:var(--font-mono)">${Utils.escapeHtml(requete.id || '')}</div>
+        </div>
+        <button class="detail-panel-close" onclick="UIComponents.closeDetail()">✕</button>`;
+    }
+
+    // Corps
+    const tags = (requete.tags || []).map(t => {
+      const color = Utils.tagColor(t);
+      return `<span class="tag" style="background:${color.bg};color:${color.color}">${Utils.escapeHtml(t)}</span>`;
+    }).join('');
+
+    const body = document.getElementById('dp-body');
+    if (body) {
+      body.innerHTML = `
+        <div class="detail-section">
+          <div class="detail-section-title">Identification</div>
+          <div class="detail-grid">
+            <div class="detail-field">
+              <label>Domaine</label>
+              <span>${domain.icon} ${Utils.escapeHtml(requete.domaine)}</span>
+            </div>
+            <div class="detail-field">
+              <label>Statut</label>
+              ${ViewRenderer.generateStatusBadge(requete)}
+            </div>
+            <div class="detail-field">
+              <label>Univers BO</label>
+              <span style="font-family:var(--font-mono);font-size:12px">${Utils.escapeHtml(requete.univers || '—')}</span>
+            </div>
+            <div class="detail-field">
+              <label>Fréquence</label>
+              <span>${Utils.escapeHtml(requete.freq || '—')}</span>
+            </div>
+            <div class="detail-field">
+              <label>Responsable</label>
+              <span>${Utils.escapeHtml(requete.proprio || '—')}</span>
+            </div>
+            <div class="detail-field">
+              <label>Créé le</label>
+              <span>${Utils.formatDate(requete.date)}</span>
+            </div>
+          </div>
+        </div>
+        ${requete.desc ? `
+          <div class="detail-section">
+            <div class="detail-section-title">Objet métier</div>
+            <div class="detail-desc">${Utils.escapeHtml(requete.desc)}</div>
+          </div>` : ''}
+        ${requete.limites ? `
+          <div class="detail-section">
+            <div class="detail-section-title">Limites & précautions</div>
+            <div class="detail-desc" style="background:var(--amber-bg);color:var(--amber)">
+              ⚠ ${Utils.escapeHtml(requete.limites)}
+            </div>
+          </div>` : ''}
+        ${tags ? `
+          <div class="detail-section">
+            <div class="detail-section-title">Tags</div>
+            <div class="detail-tags">${tags}</div>
+          </div>` : ''}`;
+    }
+
+    // Actions
+    const actions = document.getElementById('dp-act');
+    if (actions) {
+      actions.innerHTML = `
+        <button class="btn-secondary" onclick="UIComponents.openEdit('${Utils.escapeHtml(requete.id)}')">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="currentColor">
+            <path d="M9.5 1a1 1 0 0 1 1.414 0l1 1A1 1 0 0 1 12 3.5L4.5 11H2V8.5L9.5 1z"/>
+          </svg>
+          Modifier
+        </button>
+        <button class="btn-secondary" onclick="UIComponents.duplicate('${Utils.escapeHtml(requete.id)}')">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="currentColor">
+            <rect x="4" y="4" width="8" height="8" rx="1" stroke="currentColor" stroke-width="1.2" fill="none"/>
+            <path d="M2 9V2h7" stroke="currentColor" stroke-width="1.2" fill="none"/>
+          </svg>
+          Dupliquer
+        </button>
+        <button class="btn-danger" onclick="UIComponents.confirmDelete('${Utils.escapeHtml(requete.id)}', '${Utils.escapeHtml(requete.nom)}')">
+          Supprimer
+        </button>`;
+    }
+
+    // Afficher l'overlay
+    const overlay = document.getElementById('detail-overlay');
+    if (overlay) {
+      overlay.style.display = 'flex';
+    }
+  },
+
+  closeDetail(event) {
+    if (event && event.target !== document.getElementById('detail-overlay')) {
+      return;
+    }
+
+    const overlay = document.getElementById('detail-overlay');
+    if (overlay) {
+      overlay.style.display = 'none';
+    }
+  },
+
+  // ═══════════════ MODAL REQUÊTE ═══════════════
+  populateFormSelects(requete) {
+    // Domaines
+    const domainSelect = document.getElementById('f-domaine');
+    if (domainSelect) {
+      domainSelect.innerHTML = '<option value="">— Sélectionner —</option>' +
+        DataManager.config.domaines.map(d =>
+          `<option ${requete && requete.domaine === d.name ? 'selected' : ''}>${Utils.escapeHtml(d.name)}</option>`
+        ).join('');
+    }
+
+    // Statuts
+    const statusSelect = document.getElementById('f-statut');
+    if (statusSelect) {
+      statusSelect.innerHTML = DataManager.config.statuts.map(s =>
+        `<option ${requete && requete.statut === s.name ? 'selected' : ''}>${Utils.escapeHtml(s.name)}</option>`
+      ).join('');
+    }
+
+    // Univers
+    const universeSelect = document.getElementById('f-univers');
+    if (universeSelect) {
+      universeSelect.innerHTML = '<option value="">— Sélectionner —</option>' +
+        DataManager.config.univers.map(u =>
+          `<option ${requete && requete.univers === u.name ? 'selected' : ''}>${Utils.escapeHtml(u.name)}</option>`
+        ).join('');
+    }
+
+    // Fréquences
+    const freqSelect = document.getElementById('f-freq');
+    if (freqSelect) {
+      freqSelect.innerHTML = DataManager.config.frequences.map(f =>
+        `<option ${requete && requete.freq === f ? 'selected' : ''}>${Utils.escapeHtml(f)}</option>`
+      ).join('');
+    }
+
+    // Datalist des responsables
+    const respDatalist = document.getElementById('resp-dl');
+    if (respDatalist) {
+      respDatalist.innerHTML = DataManager.config.responsables.map(r =>
+        `<option value="${Utils.escapeHtml(r.name)}">`
+      ).join('');
+    }
+  },
+
+  openAddModal() {
+    DataManager.editingId = null;
+
+    const title = document.getElementById('m-title');
+    if (title) title.textContent = 'Nouvelle requête';
+
+    // Réinitialiser les champs
+    ['f-nom', 'f-id', 'f-proprio', 'f-date', 'f-desc', 'f-tags', 'f-limites'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+
+    // Date du jour par défaut
+    const dateInput = document.getElementById('f-date');
+    if (dateInput) {
+      dateInput.value = new Date().toISOString().split('T')[0];
+    }
+
+    this.populateFormSelects(null);
+
+    const modal = document.getElementById('modal-req');
+    if (modal) modal.style.display = 'flex';
+  },
+
+  openEdit(id) {
+    const requete = DataManager.data.find(r => r.id === id);
+    if (!requete) return;
+
+    DataManager.editingId = id;
+
+    const title = document.getElementById('m-title');
+    if (title) title.textContent = 'Modifier la requête';
+
+    // Remplir les champs
+    const fields = {
+      'f-nom': requete.nom,
+      'f-id': requete.id,
+      'f-proprio': requete.proprio,
+      'f-date': requete.date,
+      'f-desc': requete.desc,
+      'f-tags': (requete.tags || []).join(', '),
+      'f-limites': requete.limites
+    };
+
+    for (const [id, value] of Object.entries(fields)) {
+      const el = document.getElementById(id);
+      if (el) el.value = value || '';
+    }
+
+    this.populateFormSelects(requete);
+
+    const modal = document.getElementById('modal-req');
+    if (modal) modal.style.display = 'flex';
+
+    this.closeDetail();
+  },
+
+  closeModal() {
+    const modal = document.getElementById('modal-req');
+    if (modal) modal.style.display = 'none';
+  },
+
+  async saveRequete() {
+    const nom = document.getElementById('f-nom')?.value.trim();
+    const domaine = document.getElementById('f-domaine')?.value;
+
+    if (!nom) {
+      this.showToast('Le nom est obligatoire.', 'error');
+      return;
+    }
+
+    if (!domaine) {
+      this.showToast('Le domaine est obligatoire.', 'error');
+      return;
+    }
+
+    const requete = {
+      id: document.getElementById('f-id')?.value.trim() || (DataManager.editingId || DataManager.generateId()),
+      nom,
+      domaine,
+      statut: document.getElementById('f-statut')?.value,
+      univers: document.getElementById('f-univers')?.value,
+      freq: document.getElementById('f-freq')?.value,
+      proprio: document.getElementById('f-proprio')?.value.trim(),
+      date: document.getElementById('f-date')?.value,
+      desc: document.getElementById('f-desc')?.value.trim(),
+      tags: document.getElementById('f-tags')?.value.split(',').map(t => t.trim()).filter(Boolean),
+      limites: document.getElementById('f-limites')?.value.trim()
+    };
+
+    try {
+      await DataManager.saveRequete(requete);
+      this.closeModal();
+
+      if (window.AppController) {
+        window.AppController.refresh();
+      }
+
+      const message = DataManager.editingId ? 'Requête mise à jour.' : 'Requête ajoutée.';
+      this.showToast(message, 'success');
+    } catch (error) {
+      console.error('Erreur sauvegarde:', error);
+      this.showToast('Erreur lors de la sauvegarde.', 'error');
+    }
+  },
+
+  async duplicate(id) {
+    try {
+      const newId = await DataManager.duplicateRequete(id);
+
+      if (window.AppController) {
+        window.AppController.refresh();
+      }
+
+      this.closeDetail();
+      this.showToast('Requête dupliquée.', 'success');
+    } catch (error) {
+      console.error('Erreur duplication:', error);
+      this.showToast('Erreur lors de la duplication.', 'error');
+    }
+  },
+
+  // ═══════════════ CONFIRMATION ═══════════════
+  confirmDelete(id, nom) {
+    this.confirm(
+      `Supprimer « ${nom} » ? Cette action est irréversible.`,
+      async () => {
+        try {
+          await DataManager.deleteRequete(id);
+
+          if (window.AppController) {
+            window.AppController.refresh();
+          }
+
+          this.closeDetail();
+          this.showToast('Requête supprimée.', 'success');
+        } catch (error) {
+          console.error('Erreur suppression:', error);
+          this.showToast('Erreur lors de la suppression.', 'error');
+        }
+      }
+    );
+  },
+
+  confirm(message, onConfirm) {
+    const msgElement = document.getElementById('confirm-msg');
+    if (msgElement) {
+      msgElement.textContent = message;
+    }
+
+    const okButton = document.getElementById('confirm-ok');
+    if (okButton) {
+      okButton.onclick = () => {
+        onConfirm();
+        this.closeConfirm();
+      };
+    }
+
+    const modal = document.getElementById('modal-confirm');
+    if (modal) modal.style.display = 'flex';
+  },
+
+  closeConfirm() {
+    const modal = document.getElementById('modal-confirm');
+    if (modal) modal.style.display = 'none';
+  },
+
+  // ═══════════════ TOAST ═══════════════
+  showToast(message, type = '') {
+    const toast = document.getElementById('toast');
+    if (!toast) return;
+
+    toast.textContent = message;
+    toast.className = 'show ' + type;
+
+    clearTimeout(this.toastTimer);
+    this.toastTimer = setTimeout(() => {
+      toast.className = '';
+    }, 3200);
+  },
+
+  // ═══════════════ NAVIGATION ═══════════════
+  goSettings() {
+    document.getElementById('view-catalogue').style.display = 'none';
+    document.getElementById('view-ref').style.display = 'none';
+    document.getElementById('view-settings').style.display = 'block';
+
+    ConfigManager.renderAll();
+    ConfigManager.previewId();
+  },
+
+  goRef() {
+    document.getElementById('view-catalogue').style.display = 'none';
+    document.getElementById('view-settings').style.display = 'none';
+    document.getElementById('view-ref').style.display = 'block';
+
+    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+    const refBtn = document.getElementById('nav-ref');
+    if (refBtn) refBtn.classList.add('active');
+  },
+
+  goBack() {
+    document.getElementById('view-settings').style.display = 'none';
+    document.getElementById('view-ref').style.display = 'none';
+    document.getElementById('view-catalogue').style.display = 'flex';
+
+    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+    const allBtn = document.getElementById('nav-all');
+    if (allBtn) allBtn.classList.add('active');
+  },
+
+  scrollRef(sectionId, button) {
+    document.querySelectorAll('.toc-item').forEach(t => t.classList.remove('active'));
+    if (button) button.classList.add('active');
+
+    const section = document.getElementById(sectionId);
+    if (section) {
+      section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  },
+
+  switchTab(tabName, button) {
+    document.querySelectorAll('.s-tab').forEach(t => t.classList.remove('active'));
+    if (button) button.classList.add('active');
+
+    document.querySelectorAll('.s-panel').forEach(p => p.classList.remove('active'));
+    const panel = document.getElementById('panel-' + tabName);
+    if (panel) panel.classList.add('active');
+
+    if (tabName === 'numerotation') {
+      ConfigManager.previewId();
+    }
+  },
+
+  // ═══════════════ EXPORT MENU ═══════════════
+  toggleExportMenu(event) {
+    event.stopPropagation();
+    const dropdown = document.getElementById('export-dropdown');
+    if (dropdown) {
+      dropdown.classList.toggle('open');
+    }
+  },
+
+  closeExportMenu() {
+    const dropdown = document.getElementById('export-dropdown');
+    if (dropdown) {
+      dropdown.classList.remove('open');
+    }
+  },
+
+  // ═══════════════ CHANGEMENT MOT DE PASSE ═══════════════
+  openChangePasswordModal() {
+    const modal = document.getElementById('modal-change-password');
+    if (!modal) return;
+
+    // Réinitialiser les champs
+    document.getElementById('current-password').value = '';
+    document.getElementById('new-password').value = '';
+    document.getElementById('confirm-password').value = '';
+
+    // Masquer les erreurs
+    const errorDiv = document.getElementById('change-password-error');
+    if (errorDiv) errorDiv.style.display = 'none';
+
+    // Réinitialiser le bouton
+    const changeBtn = modal.querySelector('.btn-primary');
+    if (changeBtn) {
+      changeBtn.disabled = false;
+      changeBtn.textContent = 'Changer le mot de passe';
+    }
+
+    // Afficher le modal
+    modal.style.display = 'flex';
+
+    // Focus sur le premier champ
+    setTimeout(() => {
+      document.getElementById('current-password').focus();
+    }, 100);
+  },
+
+  closeChangePasswordModal() {
+    const modal = document.getElementById('modal-change-password');
+    if (modal) modal.style.display = 'none';
+  }
+};
+
+// Fermer le menu export au clic ailleurs
+document.addEventListener('click', () => {
+  UIComponents.closeExportMenu();
+});
+
+// Export global
+
+// ═══════════════════════════════════════════════════════════════
+// MODULE: APP-CONTROLLER
+// ═══════════════════════════════════════════════════════════════
+
+const AppController = {
+  isAuthenticated: false,
+  passwordHash: null,
+
+  /**
+   * Initialise l'application
+   */
+  async init() {
+    console.log('🚀 Initialisation MDA BO Catalogue v2.0');
+
+    // Vérifier si un mot de passe existe
+    const hasPassword = await this.checkPasswordExists();
+
+    if (!hasPassword) {
+      // Premier démarrage - définir un mot de passe
+      this.showFirstSetup();
+    } else {
+      // Afficher l'écran de connexion
+      this.showLockScreen();
+    }
+  },
+
+  /**
+   * Vérifie si un mot de passe existe en base
+   */
+  async checkPasswordExists() {
+    try {
+      await DataManager.initDB();
+      const storedHash = await DataManager.loadFromIndexedDB('password_hash');
+      this.passwordHash = storedHash;
+      return !!storedHash;
+    } catch (error) {
+      console.error('Erreur vérification mot de passe:', error);
+      return false;
+    }
+  },
+
+  /**
+   * Affiche l'écran de premier démarrage
+   */
+  showFirstSetup() {
+    const lockScreen = document.getElementById('lock-screen');
+    if (!lockScreen) return;
+
+    lockScreen.style.display = 'flex';
+    document.getElementById('lock-title').textContent = 'Premier démarrage';
+    document.getElementById('lock-subtitle').textContent = 'Définissez un mot de passe pour sécuriser vos données';
+    document.getElementById('lock-btn').textContent = 'Créer';
+    document.getElementById('lock-error').style.display = 'none';
+
+    const input = document.getElementById('lock-password');
+    input.value = '';
+    input.focus();
+  },
+
+  /**
+   * Affiche l'écran de verrouillage
+   */
+  showLockScreen() {
+    const lockScreen = document.getElementById('lock-screen');
+    if (!lockScreen) return;
+
+    lockScreen.style.display = 'flex';
+    document.getElementById('lock-title').textContent = 'Catalogue BO — MDA de l\'Orne';
+    document.getElementById('lock-subtitle').textContent = 'Entrez votre mot de passe pour déverrouiller';
+    document.getElementById('lock-btn').textContent = 'Déverrouiller';
+    document.getElementById('lock-error').style.display = 'none';
+
+    const input = document.getElementById('lock-password');
+    input.value = '';
+    input.focus();
+  },
+
+  /**
+   * Tente de se connecter
+   */
+  async attemptUnlock() {
+    const password = document.getElementById('lock-password').value;
+    const errorDiv = document.getElementById('lock-error');
+    const submitBtn = document.getElementById('lock-btn');
+
+    if (!password) {
+      errorDiv.textContent = 'Veuillez entrer un mot de passe.';
+      errorDiv.style.display = 'block';
+      return;
+    }
+
+    // Désactiver le bouton pendant le traitement
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Vérification...';
+    errorDiv.style.display = 'none';
+
+    try {
+      if (!this.passwordHash) {
+        // Premier démarrage - créer le mot de passe
+        await this.createPassword(password);
+      } else {
+        // Vérifier le mot de passe
+        await this.verifyPassword(password);
+      }
+    } catch (error) {
+      console.error('Erreur authentification:', error);
+      errorDiv.textContent = 'Erreur technique. Veuillez réessayer.';
+      errorDiv.style.display = 'block';
+      submitBtn.disabled = false;
+      submitBtn.textContent = this.passwordHash ? 'Déverrouiller' : 'Créer';
+    }
+  },
+
+  /**
+   * Crée un mot de passe (premier démarrage)
+   */
+  async createPassword(password) {
+    const submitBtn = document.getElementById('lock-btn');
+    const errorDiv = document.getElementById('lock-error');
+
+    try {
+      // Générer le hash
+      const hash = await CryptoManager.hashPassword(password);
+
+      // Sauvegarder le hash
+      await DataManager.saveToIndexedDB('password_hash', hash);
+      this.passwordHash = hash;
+
+      // Dériver la clé de chiffrement
+      await CryptoManager.deriveKey(password);
+
+      // Charger les données (cela créera les données de démo chiffrées)
+      await DataManager.loadAll();
+
+      // Déverrouiller
+      this.unlock();
+    } catch (error) {
+      console.error('Erreur création mot de passe:', error);
+      errorDiv.textContent = 'Erreur lors de la création du mot de passe.';
+      errorDiv.style.display = 'block';
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Créer';
+    }
+  },
+
+  /**
+   * Vérifie le mot de passe
+   */
+  async verifyPassword(password) {
+    const submitBtn = document.getElementById('lock-btn');
+    const errorDiv = document.getElementById('lock-error');
+
+    try {
+      // Vérifier le hash
+      const hash = await CryptoManager.hashPassword(password);
+
+      if (hash !== this.passwordHash) {
+        errorDiv.textContent = 'Mot de passe incorrect.';
+        errorDiv.style.display = 'block';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Déverrouiller';
+        document.getElementById('lock-password').value = '';
+        document.getElementById('lock-password').focus();
+        return;
+      }
+
+      // Dériver la clé de chiffrement
+      await CryptoManager.deriveKey(password);
+
+      // Charger les données
+      await DataManager.loadAll();
+
+      // Déverrouiller
+      this.unlock();
+    } catch (error) {
+      console.error('Erreur vérification mot de passe:', error);
+      errorDiv.textContent = 'Mot de passe incorrect ou données corrompues.';
+      errorDiv.style.display = 'block';
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Déverrouiller';
+    }
+  },
+
+  /**
+   * Déverrouille l'application
+   */
+  unlock() {
+    this.isAuthenticated = true;
+
+    // Masquer l'écran de verrouillage
+    document.getElementById('lock-screen').style.display = 'none';
+
+    // Afficher l'application
+    document.getElementById('app-container').style.display = 'block';
+
+    // Initialiser l'interface
+    this.refresh();
+
+    // Initialiser la recherche
+    FilterEngine.initSearch();
+
+    // Initialiser les raccourcis clavier
+    this.initKeyboardShortcuts();
+
+    console.log('✅ Application déverrouillée');
+  },
+
+  /**
+   * Verrouille l'application
+   */
+  lock() {
+    if (!confirm('Verrouiller l\'application ? Les données non sauvegardées seront perdues.')) {
+      return;
+    }
+
+    DataManager.lock();
+    this.isAuthenticated = false;
+
+    // Masquer l'application
+    document.getElementById('app-container').style.display = 'none';
+
+    // Afficher l'écran de verrouillage
+    this.showLockScreen();
+
+    console.log('🔒 Application verrouillée');
+  },
+
+  /**
+   * Change le mot de passe
+   */
+  async changePassword() {
+    const currentPasswordInput = document.getElementById('current-password');
+    const newPasswordInput = document.getElementById('new-password');
+    const confirmPasswordInput = document.getElementById('confirm-password');
+    const errorDiv = document.getElementById('change-password-error');
+
+    const currentPassword = currentPasswordInput.value.trim();
+    const newPassword = newPasswordInput.value.trim();
+    const confirmPassword = confirmPasswordInput.value.trim();
+
+    // Validation
+    errorDiv.style.display = 'none';
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      errorDiv.textContent = 'Veuillez remplir tous les champs.';
+      errorDiv.style.display = 'block';
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      errorDiv.textContent = 'Les nouveaux mots de passe ne correspondent pas.';
+      errorDiv.style.display = 'block';
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      errorDiv.textContent = 'Le nouveau mot de passe doit contenir au moins 6 caractères.';
+      errorDiv.style.display = 'block';
+      return;
+    }
+
+    if (currentPassword === newPassword) {
+      errorDiv.textContent = 'Le nouveau mot de passe doit être différent de l\'ancien.';
+      errorDiv.style.display = 'block';
+      return;
+    }
+
+    try {
+      // Vérifier le mot de passe actuel
+      const currentHash = await CryptoManager.hashPassword(currentPassword);
+      if (currentHash !== this.passwordHash) {
+        errorDiv.textContent = 'Le mot de passe actuel est incorrect.';
+        errorDiv.style.display = 'block';
+        return;
+      }
+
+      // Afficher un indicateur de chargement
+      errorDiv.style.display = 'none';
+      const modal = document.getElementById('modal-change-password');
+      const changeBtn = modal.querySelector('.btn-primary');
+      changeBtn.disabled = true;
+      changeBtn.textContent = 'Re-chiffrement en cours...';
+
+      // Dériver la clé actuelle pour déchiffrer les données
+      await CryptoManager.deriveKey(currentPassword);
+
+      // Récupérer toutes les données déchiffrées
+      const encryptedData = await DataManager.loadFromIndexedDB('catalogue_data');
+      const encryptedConfig = await DataManager.loadFromIndexedDB('config');
+
+      // Déchiffrer avec l'ancienne clé
+      const decryptedData = encryptedData ? await CryptoManager.decrypt(encryptedData) : [];
+      const decryptedConfig = encryptedConfig ? await CryptoManager.decrypt(encryptedConfig) : null;
+
+      // Générer le nouveau hash
+      const newHash = await CryptoManager.hashPassword(newPassword);
+
+      // Réinitialiser le salt pour forcer la création d'un nouveau
+      localStorage.removeItem('mda_salt');
+      sessionStorage.removeItem('mda_salt');
+      CryptoManager.salt = null;
+
+      // Dériver la nouvelle clé
+      await CryptoManager.deriveKey(newPassword);
+
+      // Re-chiffrer toutes les données avec la nouvelle clé
+      const newEncryptedData = await CryptoManager.encrypt(decryptedData);
+      const newEncryptedConfig = decryptedConfig ? await CryptoManager.encrypt(decryptedConfig) : null;
+
+      // Sauvegarder les données re-chiffrées et le nouveau hash
+      await DataManager.saveToIndexedDB('catalogue_data', newEncryptedData);
+      if (newEncryptedConfig) {
+        await DataManager.saveToIndexedDB('config', newEncryptedConfig);
+      }
+      await DataManager.saveToIndexedDB('password_hash', newHash);
+
+      // Mettre à jour le hash en mémoire
+      this.passwordHash = newHash;
+
+      // Recharger les données en mémoire
+      DataManager.data = decryptedData;
+      if (decryptedConfig) {
+        ConfigManager.config = decryptedConfig;
+      }
+
+      // Fermer le modal et afficher un message de succès
+      UIComponents.closeChangePasswordModal();
+      UIComponents.showToast('Mot de passe changé avec succès ! 🔒', 'success');
+
+      console.log('✅ Mot de passe changé avec succès');
+    } catch (error) {
+      console.error('Erreur changement mot de passe:', error);
+      errorDiv.textContent = 'Erreur lors du changement de mot de passe. Veuillez réessayer.';
+      errorDiv.style.display = 'block';
+
+      // Réactiver le bouton
+      const modal = document.getElementById('modal-change-password');
+      const changeBtn = modal.querySelector('.btn-primary');
+      changeBtn.disabled = false;
+      changeBtn.textContent = 'Changer le mot de passe';
+    }
+  },
+
+  /**
+   * Rafraîchit l'interface complète
+   */
+  refresh() {
+    ViewRenderer.renderSidebar();
+    ViewRenderer.renderStats();
+    FilterEngine.populateFilters();
+    FilterEngine.applyFilters();
+    ViewRenderer.render();
+  },
+
+  /**
+   * Initialise les raccourcis clavier
+   */
+  initKeyboardShortcuts() {
+    document.addEventListener('keydown', (e) => {
+      // Échap - Fermer les modales
+      if (e.key === 'Escape') {
+        UIComponents.closeModal();
+        UIComponents.closeConfirm();
+        UIComponents.closeDetail();
+        UIComponents.closeChangePasswordModal();
+      }
+
+      // Ctrl/Cmd + N - Nouvelle requête
+      if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+        e.preventDefault();
+        if (this.isAuthenticated) {
+          UIComponents.openAddModal();
+        }
+      }
+
+      // Ctrl/Cmd + L - Verrouiller
+      if ((e.ctrlKey || e.metaKey) && e.key === 'l') {
+        e.preventDefault();
+        if (this.isAuthenticated) {
+          this.lock();
+        }
+      }
+    });
+  }
+};
+
+// Export global
+window.AppController = AppController;
+
+// Initialisation au chargement
+window.addEventListener('DOMContentLoaded', () => {
+  AppController.init();
+});
+
+// ═══════════════════════════════════════════════════════════════
+// FONCTIONS GLOBALES (compatibilité onclick HTML)
+// ═══════════════════════════════════════════════════════════════
+function toggleExportMenu(e) { UIComponents.toggleExportMenu(e); }
+function closeExportMenu() { UIComponents.closeExportMenu(); }
+function exportAll() { ExportHandler.exportJSON(); }
+function exportExcel() { ExportHandler.exportExcel(); }
+function openAddModal() { UIComponents.openAddModal(); }
+function filterByNav(key, btn) { FilterEngine.filterByNav(key, btn); }
+function goRef() { UIComponents.goRef(); }
+function goSettings() { UIComponents.goSettings(); }
+function importData() { 
+  const input = document.getElementById('import-input');
+  input.onchange = handleImport;
+  input.click(); 
+}
+function applyFilters() { FilterEngine.applyFilters(); ViewRenderer.render(); }
+function setView(v) { FilterEngine.setView(v); }
+function openDetail(id) { UIComponents.openDetail(id); }
+function closeDetail(e) { UIComponents.closeDetail(e); }
+function openEdit(id) { UIComponents.openEdit(id); }
+function dupl(id) { UIComponents.duplicate(id); }
+function confirmAct(msg, fn) { UIComponents.confirm(msg, fn); }
+function closeConfirm() { UIComponents.closeConfirm(); }
+function goBack() { UIComponents.goBack(); }
+function scrollRef(id, btn) { UIComponents.scrollRef(id, btn); }
+function switchTab(name, btn) { UIComponents.switchTab(name, btn); }
+function saveRequete() { UIComponents.saveRequete(); }
+function closeModal() { UIComponents.closeModal(); }
+function openChangePasswordModal() { UIComponents.openChangePasswordModal(); }
+function closeChangePasswordModal() { UIComponents.closeChangePasswordModal(); }
+function changePassword() { AppController.changePassword(); }
+function previewId() { ConfigManager.previewId(); }
+function saveNumConfig() { ConfigManager.saveNumberingConfig(); }
+function resetConfig() { ConfigManager.resetConfig(); }
+function addUnivers() { ConfigManager.addUniverse(); }
+function addDomaine() { ConfigManager.addDomain(); }
+function addStatut() { ConfigManager.addStatus(); }
+function addFrequence() { ConfigManager.addFrequency(); }
+function addResponsable() { ConfigManager.addResponsible(); }
+
+function handleImport(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = async (ev) => {
+    try {
+      const parsed = JSON.parse(ev.target.result);
+      
+      if (Array.isArray(parsed)) {
+        DataManager.data = parsed;
+      } else if (parsed.catalogue) {
+        DataManager.data = parsed.catalogue;
+        if (parsed.config) {
+          DataManager.config = { ...DataManager.config, ...parsed.config };
+        }
+      } else {
+        throw new Error('Format JSON invalide');
+      }
+
+      await DataManager.saveData();
+      await DataManager.saveConfig();
+      AppController.refresh();
+      UIComponents.showToast(`${DataManager.data.length} requêtes importées.`, 'success');
+    } catch (error) {
+      console.error('Erreur import:', error);
+      UIComponents.showToast('Fichier JSON invalide.', 'error');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+// Fermer le menu export au clic ailleurs  
+document.addEventListener('click', () => {
+  UIComponents.closeExportMenu();
+});
+
+console.log('✅ Tous les modules chargés en inline');
+</script>
+
+</body>
+</html>
