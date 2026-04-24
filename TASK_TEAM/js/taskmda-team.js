@@ -43,7 +43,7 @@
     // ============================================================================
 
     const DB_NAME = 'taskmda-team-standalone';
-    const DB_VERSION = 19; // + referentiel workflowJobTitles
+    const DB_VERSION = 20; // + store globalNotes (rubrique Notes transverse/privee)
     const LOCAL_RESET_TS_KEY = 'taskmda_last_local_reset_ts';
     const USER_ID_HISTORY_KEY = 'taskmda_user_id_history';
     const LAST_ACCESSED_PROJECT_STORAGE_KEY = 'taskmda_last_accessed_project_id';
@@ -59,6 +59,7 @@
       globalCalendarItems: 'id',
       globalMessages: 'messageId',
       globalPosts: 'postId',
+      globalNotes: 'noteId',
       globalThemes: 'themeKey',
       globalGroups: 'groupKey',
       softwareVersions: 'softwareId',
@@ -256,6 +257,16 @@
               const globalPosts = db.createObjectStore('globalPosts', { keyPath: 'postId' });
               globalPosts.createIndex('createdAt', 'createdAt');
               globalPosts.createIndex('authorUserId', 'authorUserId');
+            }
+
+            // Notes transverses/privees (hors projet)
+            if (!db.objectStoreNames.contains('globalNotes')) {
+              const globalNotes = db.createObjectStore('globalNotes', { keyPath: 'noteId' });
+              globalNotes.createIndex('createdAt', 'createdAt');
+              globalNotes.createIndex('updatedAt', 'updatedAt');
+              globalNotes.createIndex('createdBy', 'createdBy');
+              globalNotes.createIndex('visibility', 'visibility');
+              globalNotes.createIndex('theme', 'theme');
             }
 
             // Catalogue global des thematiques reutilisables
@@ -2239,6 +2250,7 @@
           workflow: { label: 'Workflow', buttonId: 'nav-workflow' },
           calendar: { label: 'Calendrier', buttonId: 'nav-calendar' },
           docs: { label: 'Documents', buttonId: 'nav-docs' },
+          notes: { label: 'Notes', buttonId: 'nav-notes' },
           messages: { label: 'Messagerie', buttonId: 'nav-messages' },
           feed: { label: "Fil d'info", buttonId: 'nav-feed' },
           rgpd: { label: 'RGPD', buttonId: 'nav-rgpd' },
@@ -2326,7 +2338,7 @@
 
     const DEFAULT_VIEW_OPTIONS = {
       sections: {
-        globalHub: { defaultTab: 'tasks', tabs: { tasks: true, workflow: true, calendar: true, docs: true, messages: true, feed: true, rgpd: true, settings: true } },
+        globalHub: { defaultTab: 'tasks', tabs: { tasks: true, workflow: true, calendar: true, docs: true, notes: true, messages: true, feed: true, rgpd: true, settings: true } },
         globalTasks: { defaultTab: 'kanban', tabs: { cards: true, calendar: true, list: true, kanban: true, timeline: true, archives: true } },
         project: { defaultTab: 'kanban', tabs: { overview: true, cards: true, list: true, kanban: true, gantt: true, timeline: true, notes: true, chat: true, docs: true, activity: true, archives: true } },
         workflow: { defaultTab: 'organigram', tabs: { map: true, organization: true, organigram: true, agents: true, processes: true, templates: true, tasks: true, kanban: true, timeline: true, procedures: true, software: true, contingency: true, analytics: true, governance: true, journal: true } },
@@ -2339,6 +2351,7 @@
         workflowGroupTabsVisible: false,
         iconTooltips: true,
         tabIcons: true,
+        dashboardHeroShortContentMaxChars: 520,
         workflowActionButtonsShape: 'rect',
         workspaceWideSections: {
           dashboard: false,
@@ -2347,6 +2360,7 @@
           workflow: true,
           calendar: true,
           docs: true,
+          notes: true,
           messages: true,
           feed: true,
           rgpd: true,
@@ -2374,7 +2388,7 @@
     };
 
     const VIEW_ESSENTIAL_TABS = {
-      globalHub: ['tasks', 'workflow', 'calendar', 'docs', 'messages', 'feed', 'rgpd', 'settings'],
+      globalHub: ['tasks', 'workflow', 'calendar', 'docs', 'notes', 'messages', 'feed', 'rgpd', 'settings'],
       globalTasks: ['cards', 'kanban', 'timeline'],
       project: ['overview', 'cards', 'kanban', 'timeline', 'notes'],
       workflow: ['organigram', 'organization', 'processes', 'tasks'],
@@ -2390,6 +2404,7 @@
       workflow: { label: 'Workflow' },
       calendar: { label: 'Calendrier transverse' },
       docs: { label: 'Documents transverses' },
+      notes: { label: 'Notes transverses' },
       messages: { label: 'Messagerie' },
       feed: { label: "Fil d'info" },
       rgpd: { label: 'RGPD' },
@@ -2424,6 +2439,12 @@
       return 'rect';
     }
 
+    function normalizeDashboardHeroShortContentMaxChars(rawValue) {
+      const parsed = Number.parseInt(String(rawValue ?? ''), 10);
+      if (!Number.isFinite(parsed)) return 520;
+      return Math.min(4000, Math.max(80, parsed));
+    }
+
     function normalizeWorkspaceWideSections(rawSections = {}) {
       const normalized = {};
       Object.keys(WORKSPACE_WIDTH_SECTION_META).forEach((sectionKey) => {
@@ -2438,6 +2459,10 @@
 
     function getWorkflowActionButtonsShape() {
       return normalizeWorkflowActionButtonsShape(viewOptions?.ui?.workflowActionButtonsShape);
+    }
+
+    function getDashboardHeroShortContentMaxChars() {
+      return normalizeDashboardHeroShortContentMaxChars(viewOptions?.ui?.dashboardHeroShortContentMaxChars);
     }
 
     function isWorkflowGroupTabsVisible() {
@@ -2467,6 +2492,7 @@
         'nav-workflow': 'workflow',
         'nav-calendar': 'calendar',
         'nav-docs': 'docs',
+        'nav-notes': 'notes',
         'nav-messages': 'messages',
         'nav-feed': 'feed',
         'nav-rgpd': 'rgpd',
@@ -3442,6 +3468,7 @@
         workflowGroupTabsVisible: raw?.ui?.workflowGroupTabsVisible === true,
         iconTooltips: raw?.ui?.iconTooltips !== false,
         tabIcons: raw?.ui?.tabIcons !== false,
+        dashboardHeroShortContentMaxChars: normalizeDashboardHeroShortContentMaxChars(raw?.ui?.dashboardHeroShortContentMaxChars ?? defaults?.ui?.dashboardHeroShortContentMaxChars),
         workflowActionButtonsShape: normalizeWorkflowActionButtonsShape(raw?.ui?.workflowActionButtonsShape || defaults?.ui?.workflowActionButtonsShape),
         workspaceWideSections: normalizeWorkspaceWideSections(raw?.ui?.workspaceWideSections || defaults?.ui?.workspaceWideSections)
       };
@@ -3837,6 +3864,9 @@
       if (workspaceMode === 'global' && globalWorkspaceView === 'calendar') {
         renderGlobalCalendar().catch(() => null);
       }
+      if (workspaceMode === 'global' && globalWorkspaceView === 'notes') {
+        renderGlobalNotes().catch(() => null);
+      }
       if (workspaceMode === 'global' && globalWorkspaceView === 'feed') {
         renderGlobalFeed().catch(() => null);
       }
@@ -4216,6 +4246,8 @@
     let loadingShowTimer = null;
     let loadingHideTimer = null;
     let loadingLastShownAt = 0;
+    let loadingSuppressedDepth = 0;
+    const inlineSaveIndicatorTimers = new Map();
     const LOADING_SHOW_DELAY_MS = 120;
     const LOADING_MIN_VISIBLE_MS = 220;
 
@@ -4260,6 +4292,9 @@
     }
 
     async function runWithLoading(action) {
+      if (loadingSuppressedDepth > 0) {
+        return await action();
+      }
       loadingCounter += 1;
       showLoading(true);
       try {
@@ -4267,6 +4302,77 @@
       } finally {
         loadingCounter = Math.max(0, loadingCounter - 1);
         showLoading(loadingCounter > 0);
+      }
+    }
+
+    async function runWithoutGlobalLoading(action) {
+      loadingSuppressedDepth += 1;
+      try {
+        return await action();
+      } finally {
+        loadingSuppressedDepth = Math.max(0, loadingSuppressedDepth - 1);
+      }
+    }
+
+    function resolveInlineSaveIndicatorHost(scope) {
+      if (scope === 'task-detail') return document.querySelector('#modal-global-task-details .task-detail-modal-panel');
+      if (scope === 'project-inline') return document.getElementById('project-overview-panel');
+      if (scope === 'calendar-detail') return document.querySelector('#modal-calendar-info-details .task-detail-modal-panel');
+      if (scope === 'doc-binding') return document.querySelector('#modal-doc-binding > div');
+      if (scope === 'doc-preview') return document.querySelector('#modal-doc-preview > div');
+      return null;
+    }
+
+    function ensureInlineSaveIndicator(scope) {
+      const host = resolveInlineSaveIndicatorHost(scope);
+      if (!host) return null;
+      if (!host.classList.contains('inline-save-indicator-host')) {
+        host.classList.add('inline-save-indicator-host');
+      }
+      let indicator = host.querySelector(`.inline-save-indicator[data-inline-save-scope="${scope}"]`);
+      if (!indicator) {
+        indicator = document.createElement('div');
+        indicator.className = 'inline-save-indicator';
+        indicator.setAttribute('data-inline-save-scope', scope);
+        indicator.setAttribute('aria-live', 'polite');
+        indicator.textContent = '';
+        host.appendChild(indicator);
+      }
+      return indicator;
+    }
+
+    function setInlineSaveIndicator(scope, state) {
+      const indicator = ensureInlineSaveIndicator(scope);
+      if (!indicator) return;
+      const timerKey = `hide::${scope}`;
+      if (inlineSaveIndicatorTimers.has(timerKey)) {
+        clearTimeout(inlineSaveIndicatorTimers.get(timerKey));
+        inlineSaveIndicatorTimers.delete(timerKey);
+      }
+      indicator.classList.remove('is-saving', 'is-saved', 'is-error', 'is-visible');
+      if (state === 'saving') {
+        indicator.textContent = 'Enregistrement...';
+        indicator.classList.add('is-saving', 'is-visible');
+        return;
+      }
+      if (state === 'saved') {
+        indicator.textContent = 'Enregistré';
+        indicator.classList.add('is-saved', 'is-visible');
+        inlineSaveIndicatorTimers.set(timerKey, setTimeout(() => {
+          indicator.classList.remove('is-visible', 'is-saved');
+          indicator.textContent = '';
+          inlineSaveIndicatorTimers.delete(timerKey);
+        }, 1200));
+        return;
+      }
+      if (state === 'error') {
+        indicator.textContent = 'Erreur de sauvegarde';
+        indicator.classList.add('is-error', 'is-visible');
+        inlineSaveIndicatorTimers.set(timerKey, setTimeout(() => {
+          indicator.classList.remove('is-visible', 'is-error');
+          indicator.textContent = '';
+          inlineSaveIndicatorTimers.delete(timerKey);
+        }, 2200));
       }
     }
 
@@ -5841,8 +5947,11 @@
       const workflowActionsModeSelect = document.getElementById('view-option-workflow-actions-mode');
       const workflowGroupTabsVisibleToggle = document.getElementById('view-option-workflow-group-tabs-visible');
       const workflowActionsShapeSelect = document.getElementById('view-option-workflow-actions-shape');
+      const dashboardHeroShortCharsInput = document.getElementById('view-option-dashboard-hero-short-chars');
+      const dashboardHeroShortCharsCurrent = document.getElementById('view-option-dashboard-hero-short-chars-current');
       const taskAutoArchiveSettings = await getTaskAutoArchiveSettings();
       const taskAutoArchiveMonths = taskAutoArchiveSettings.months;
+      const dashboardHeroShortChars = getDashboardHeroShortContentMaxChars();
       renderViewOptionsMatrix(canManageBranding);
       if (workflowActionsModeSelect) {
         workflowActionsModeSelect.value = getWorkflowActionButtonsMode();
@@ -5855,6 +5964,13 @@
       if (workflowActionsShapeSelect) {
         workflowActionsShapeSelect.value = getWorkflowActionButtonsShape();
         workflowActionsShapeSelect.disabled = !canManageBranding;
+      }
+      if (dashboardHeroShortCharsInput) {
+        dashboardHeroShortCharsInput.value = String(dashboardHeroShortChars);
+        dashboardHeroShortCharsInput.disabled = !canManageBranding;
+      }
+      if (dashboardHeroShortCharsCurrent) {
+        dashboardHeroShortCharsCurrent.textContent = `Seuil actuel: ${dashboardHeroShortChars} caractères`;
       }
       applyWorkflowGroupTabsVisibility();
       if (profanityModeSelect) {
@@ -5978,6 +6094,7 @@
         tasks: document.getElementById('nav-tasks'),
         calendar: document.getElementById('nav-calendar'),
         docs: document.getElementById('nav-docs'),
+        notes: document.getElementById('nav-notes'),
         messages: document.getElementById('nav-messages'),
         feed: document.getElementById('nav-feed'),
         rgpd: document.getElementById('nav-rgpd'),
@@ -6206,6 +6323,14 @@
         await renderGlobalDocs();
         return;
       }
+      if (item.action === 'open-global-note') {
+        await showGlobalWorkspace('notes');
+        if (item.noteId) {
+          globalNotesFocusNoteId = String(item.noteId || '').trim();
+          openGlobalNoteEditor(item.noteId);
+        }
+        return;
+      }
       if (item.action === 'open-global-message') {
         await showGlobalWorkspace('messages');
         const channelId = String(item.hint || '').trim();
@@ -6237,6 +6362,7 @@
         { view: 'tasks', label: 'Taches', badge: 'Rubrique', icon: 'assignment' },
         { view: 'calendar', label: 'Calendrier', badge: 'Rubrique', icon: 'calendar_today' },
         { view: 'docs', label: 'Documents', badge: 'Rubrique', icon: 'description' },
+        { view: 'notes', label: 'Notes', badge: 'Rubrique', icon: 'sticky_note_2' },
         { view: 'messages', label: 'Messagerie', badge: 'Rubrique', icon: 'chat' },
         { view: 'feed', label: "Fil d'info", badge: 'Rubrique', icon: 'campaign' },
         { view: 'settings', label: 'Referentiels', badge: 'Rubrique', icon: 'tune' }
@@ -6342,6 +6468,22 @@
           title: doc.name || 'Document hors projet',
           meta: 'Documents > Tous projets',
           badge: 'Hors projet'
+        });
+      });
+
+      const globalNotes = await getAllDecrypted('globalNotes', 'noteId');
+      (globalNotes || []).forEach((note) => {
+        if (Number(note?.archivedAt || 0) > 0) return;
+        if (!matchesQuery([note.title, note.content, note.theme, ...(Array.isArray(note.tags) ? note.tags : [])], q)) return;
+        const visibility = String(note.visibility || 'private') === 'transverse' ? 'Transverse' : 'Privee';
+        push({
+          key: `global-note:${note.noteId}`,
+          action: 'open-global-note',
+          noteId: note.noteId,
+          icon: 'sticky_note_2',
+          title: note.title || 'Note',
+          meta: `Notes > ${visibility}`,
+          badge: 'Note'
         });
       });
 
@@ -8613,6 +8755,22 @@
         .trim();
     }
 
+    function shouldRenderDashboardHeroFullContent(plainText, htmlContent, hasImage = false) {
+      const plain = String(plainText || '').trim();
+      const html = String(htmlContent || '').trim();
+      if (!plain) return false;
+      const lineCount = plain.split(/\r?\n/).filter((line) => String(line || '').trim()).length;
+      const plainLength = plain.length;
+      const htmlLength = html.length;
+      const baseMaxChars = getDashboardHeroShortContentMaxChars();
+      // Seuil court: on affiche tout le contenu riche de la Une sans troncature.
+      // Si une image est présente, on reste un peu plus strict pour éviter une carte trop lourde.
+      const maxPlain = hasImage ? Math.max(80, Math.round(baseMaxChars * 0.5)) : baseMaxChars;
+      const maxLines = hasImage ? 7 : 12;
+      const maxHtml = hasImage ? 2200 : 4200;
+      return plainLength <= maxPlain && lineCount <= maxLines && htmlLength <= maxHtml;
+    }
+
     function extractFirstImageSrcFromHtml(html) {
       if (!html) return null;
       try {
@@ -8638,6 +8796,11 @@
 
       const posts = await getAllDecrypted('globalPosts', 'postId') || [];
       const items = getDashboardMajorNewsItems(posts, 4);
+      let mentionCatalog = globalFeedMentionCatalogCache;
+      if (!mentionCatalog) {
+        mentionCatalog = await buildGlobalMentionCatalog();
+        globalFeedMentionCatalogCache = mentionCatalog;
+      }
       if (!items.length) {
         panel.classList.remove('hidden');
         list.innerHTML = '<div class="dashboard-news-empty">Aucune actualité majeure pour le moment.</div>';
@@ -8670,6 +8833,7 @@
             })
             .slice(0, 3);
         })();
+        const richContentHtml = renderGlobalFeedContentHtml(post.content || '', mentionCatalog);
         const plainText = getProjectDescriptionPlainText(post.content || '');
         const content = stripMentionMarkupForDashboard(plainText);
         let [headlineRaw, ...subtitleRaws] = content.split('\\n');
@@ -8682,11 +8846,12 @@
         const subtitle = stripMentionMarkupForDashboard(subtitleSrc);
         
         const imgSrc = extractFirstImageSrcFromHtml(post.content);
+        const useFullHeroContent = isHero && shouldRenderDashboardHeroFullContent(plainText, richContentHtml, !!imgSrc);
         let imgHtml = '';
         if (imgSrc) {
           // Si limage est un base64 très long, il fonctionnera comme nimporte quelle URL
           imgHtml = `<img src="${escapeHtml(imgSrc)}" class="dashboard-news-image" alt="" loading="lazy">`;
-        } else if (isHero) {
+        } else if (isHero && !useFullHeroContent) {
           // Visuel par défaut pour la Une quand il n'y a pas d'image
           const firstLetter = headline.charAt(0).toUpperCase() || 'A';
           const gradients = [
@@ -8718,7 +8883,7 @@
         });
         
         const heroClass = isHero ? 'dashboard-news-item-hero' : '';
-        const hasDefaultHero = isHero && !imgSrc;  // Visuel par défaut utilisé
+        const hasDefaultHero = isHero && !imgSrc && !useFullHeroContent;  // Visuel par défaut utilisé
         const refsHtml = directRefs.length > 0
           ? `<div class="dashboard-news-refs">${directRefs.map((ref) => `
               <button
@@ -8746,8 +8911,11 @@
             </div>
             ${imgHtml}
             <div class="dashboard-news-item-main">
-              ${!hasDefaultHero ? `<div class="dashboard-news-text">${escapeHtml(headline)}</div>` : ''}
-              ${subtitle ? `<div class="dashboard-news-sub">${escapeHtml(subtitle)}</div>` : ''}
+              ${useFullHeroContent
+                ? `<div class="dashboard-news-rich feed-item-body">${richContentHtml}</div>`
+                : `${!hasDefaultHero ? `<div class="dashboard-news-text">${escapeHtml(headline)}</div>` : ''}
+                   ${subtitle ? `<div class="dashboard-news-sub">${escapeHtml(subtitle)}</div>` : ''}`
+              }
               ${refsHtml}
             </div>
             <time class="dashboard-news-time">${escapeHtml(timeText)}</time>
@@ -9352,7 +9520,7 @@
     let currentProjectState = null;
     let currentProjectEvents = [];
     let workspaceMode = 'dashboard'; // dashboard | project | global
-    let globalWorkspaceView = 'tasks'; // tasks | workflow | calendar | docs | messages | feed | rgpd | settings
+    let globalWorkspaceView = 'tasks'; // tasks | workflow | calendar | docs | notes | messages | feed | rgpd | settings
     let workflowRuntime = null;
     let globalSettingsTab = localStorage.getItem('taskmda_global_settings_tab') || 'branding'; // branding | themes | groups | roles | views
     let globalSettingsHelpOpen = false;
@@ -9372,7 +9540,7 @@
     let projectNoteModalLastFocusedElement = null;
     let projectNoteReadModalLastFocusedElement = null;
     let projectNoteReadModalNoteId = '';
-    let projectNoteSelectionMenuPayload = { text: '', noteId: '' };
+    let projectNoteSelectionMenuPayload = { text: '', html: '', noteId: '' };
     const PROJECT_NOTE_DRAFT_STORAGE_KEY = 'taskmda_project_note_draft_v1';
     let projectTaskPresentationMode = localStorage.getItem('taskmda_project_task_presentation') === 'list' ? 'list' : 'cards';
     let editingTaskId = null;
@@ -9395,6 +9563,12 @@
     let projectMessageFilesPanelOpen = false;
     let globalMessageFilesPanelOpen = false;
     let messageFilters = { query: '', onlyMine: false };
+    let globalNotesSearchQuery = '';
+    let globalNotesScopeFilter = 'all';
+    let globalNotesSortMode = 'recent';
+    let globalNotesTabMode = 'all';
+    let editingGlobalNoteId = '';
+    let globalNotesFocusNoteId = '';
     let globalSearchQuery = '';
     let projectsFilters = { query: '', theme: '', priority: 'all', status: 'all', sharing: 'all', ownership: 'all', sort: 'recent' };
     let projectsBulkSelectionMode = false;
@@ -9487,7 +9661,9 @@
     };
     let projectsPage = 1;
     let tasksPage = 1;
+    let archivedTasksPage = 1;
     let globalTasksPage = 1;
+    let globalArchivedTasksPage = 1;
     const GLOBAL_MESSAGE_BROADCAST_TARGET = '__all__';
     const GLOBAL_MESSAGE_BROADCAST_USER_ID = '*';
     const GLOBAL_MESSAGE_GROUP_TARGET_PREFIX = '__group__:';
@@ -10648,7 +10824,14 @@
       return dueDate ? dueDate.getTime() : Number.POSITIVE_INFINITY;
     }
 
+    function isTaskDeadlineIgnored(task) {
+      return String(task?.status || '').trim().toLowerCase() === 'suspendu';
+    }
+
     function getTaskDueStatus(task) {
+      if (isTaskDeadlineIgnored(task)) {
+        return { isDueToday: false, isOverdue: false, daysUntilDue: null };
+      }
       const dueKey = getTaskEffectiveDueDateKey(task);
       if (!dueKey) return { isDueToday: false, isOverdue: false, daysUntilDue: null };
       const dueDate = parseYmdLocalToDate(dueKey);
@@ -11026,8 +11209,18 @@
       renderTasks(currentProjectState?.tasks || []);
     }
 
+    async function setArchivedTasksPage(page) {
+      archivedTasksPage = Math.max(1, Number(page) || 1);
+      renderArchivedTasks(currentProjectState?.tasks || []);
+    }
+
     async function setGlobalTasksPage(page) {
       globalTasksPage = Math.max(1, Number(page) || 1);
+      await renderGlobalTasks();
+    }
+
+    async function setGlobalArchivedTasksPage(page) {
+      globalArchivedTasksPage = Math.max(1, Number(page) || 1);
       await renderGlobalTasks();
     }
 
@@ -11525,6 +11718,10 @@
         .split(/\n{2,}/)
         .map(chunk => `<p>${escapeHtml(chunk).replace(/\n/g, '<br>')}</p>`)
         .join('');
+    }
+
+    function sanitizeRichTextHtmlPreserve(htmlInput) {
+      return sanitizeProjectDescriptionHtml(htmlInput, { allowRichTextInlineStyles: true });
     }
 
     function sanitizeProjectDescriptionHtml(htmlInput, options = {}) {
@@ -12802,7 +12999,7 @@
         badgesEl.innerHTML = badges.join('');
       }
       if (contentEl) {
-        const safeHtml = sanitizeProjectDescriptionHtml(String(note.contentHtml || '').trim() || plainTextToRichHtml(String(note.content || '').trim()));
+        const safeHtml = sanitizeRichTextHtmlPreserve(String(note.contentHtml || '').trim() || plainTextToRichHtml(String(note.content || '').trim()));
         contentEl.dataset.noteContentEmpty = safeHtml ? '0' : '1';
         contentEl.innerHTML = safeHtml || '<p class="text-slate-500">Aucun contenu.</p>';
       }
@@ -12861,14 +13058,27 @@
       menu.classList.add('hidden');
     }
 
-    function getProjectNoteReadSelectedText() {
+    function getProjectNoteReadSelectedSnippet() {
       const contentEl = document.getElementById('project-note-read-content');
       const selection = window.getSelection?.();
-      if (!contentEl || !selection || selection.rangeCount <= 0 || selection.isCollapsed) return '';
+      if (!contentEl || !selection || selection.rangeCount <= 0 || selection.isCollapsed) return null;
       const range = selection.getRangeAt(0);
-      const anchorNode = range.commonAncestorContainer;
-      if (!contentEl.contains(anchorNode)) return '';
-      return String(selection.toString() || '').replace(/\s+/g, ' ').trim();
+      const startNode = range.startContainer;
+      const endNode = range.endContainer;
+      if (!contentEl.contains(startNode) || !contentEl.contains(endNode)) return null;
+      const text = String(selection.toString() || '').trim();
+      if (!text) return null;
+      const fragment = range.cloneContents();
+      const tmp = document.createElement('div');
+      tmp.appendChild(fragment);
+      let html = sanitizeRichTextHtmlPreserve(String(tmp.innerHTML || '').trim());
+      if (!html) {
+        html = plainTextToRichHtml(text);
+      }
+      return {
+        text,
+        html: sanitizeRichTextHtmlPreserve(String(html || '').trim())
+      };
     }
 
     async function copyTextToClipboard(text) {
@@ -12898,25 +13108,46 @@
       }
     }
 
-    function buildSnippetAppendHtml(existingHtml = '', snippetText = '') {
-      const safeExisting = sanitizeProjectDescriptionHtml(String(existingHtml || ''));
-      const snippetHtml = plainTextToRichHtml(String(snippetText || '').trim());
+    function normalizeProjectNoteSelectionSnippet(snippetValue = null) {
+      if (!snippetValue) return { text: '', html: '' };
+      if (typeof snippetValue === 'string') {
+        const text = String(snippetValue || '').trim();
+        return {
+          text,
+          html: text ? sanitizeRichTextHtmlPreserve(plainTextToRichHtml(text)) : ''
+        };
+      }
+      const text = String(snippetValue.text || '').trim();
+      let html = sanitizeRichTextHtmlPreserve(String(snippetValue.html || '').trim());
+      if (!html && text) html = sanitizeRichTextHtmlPreserve(plainTextToRichHtml(text));
+      return { text, html };
+    }
+
+    function buildSnippetAppendHtml(existingHtml = '', snippetValue = null) {
+      const safeExisting = sanitizeRichTextHtmlPreserve(String(existingHtml || ''));
+      const snippet = normalizeProjectNoteSelectionSnippet(snippetValue);
+      const snippetHtml = String(snippet.html || '').trim();
       if (!snippetHtml) return safeExisting;
       if (!safeExisting) return snippetHtml;
       return `${safeExisting}<p><br></p>${snippetHtml}`;
     }
 
-    async function appendProjectNoteSelectionToProjectDescription(snippetText, options = {}) {
+    async function appendProjectNoteSelectionToProjectDescription(snippetValue, options = {}) {
       const silent = Boolean(options && options.silent);
       const projectId = String(currentProjectId || '').trim();
       if (!projectId) return false;
+      const snippet = normalizeProjectNoteSelectionSnippet(snippetValue);
+      if (!snippet.text && !snippet.html) {
+        if (!silent) showToast('Aucun texte sélectionné');
+        return false;
+      }
       const state = await getProjectState(projectId);
       if (!state?.project) return false;
       if (!canEditProjectMeta(state)) {
         if (!silent) showToast('Action non autorisee');
         return false;
       }
-      const nextHtml = buildSnippetAppendHtml(state.project.description || '', snippetText);
+      const nextHtml = buildSnippetAppendHtml(state.project.description || '', snippet);
       await persistProjectInlineField(projectId, 'description', nextHtml, { force: true });
       if (currentProjectState?.project && String(currentProjectState.project.projectId || '') === projectId) {
         currentProjectState.project.description = nextHtml;
@@ -12931,11 +13162,12 @@
       if (!modal) return;
       modal.classList.add('hidden');
       modal.removeAttribute('data-snippet-text');
+      modal.removeAttribute('data-snippet-html');
       modal.removeAttribute('data-note-id');
       modal.removeAttribute('data-copy-mode');
     }
 
-    function openNoteSelectionTaskTargetModal(snippetText, noteId = '', options = {}) {
+    function openNoteSelectionTaskTargetModal(snippetValue, noteId = '', options = {}) {
       const modal = document.getElementById('modal-note-selection-task-target');
       const select = document.getElementById('note-selection-task-target-select');
       const preview = document.getElementById('note-selection-task-target-preview');
@@ -12943,6 +13175,7 @@
       const subtitle = document.getElementById('note-selection-task-target-subtitle');
       const confirmLabel = document.getElementById('note-selection-task-target-confirm-label');
       if (!modal || !select || !preview || !currentProjectState?.project) return;
+      const snippet = normalizeProjectNoteSelectionSnippet(snippetValue);
       const copyMode = String(options?.copyMode || 'task').toLowerCase() === 'both' ? 'both' : 'task';
       if (title) {
         title.textContent = copyMode === 'both'
@@ -12970,8 +13203,9 @@
           taskOptions.push(`<option value="${escapeHtml(taskId)}" ${taskId === preferredTaskId ? 'selected' : ''}>${escapeHtml(task.title || 'Tâche')}</option>`);
         });
       select.innerHTML = taskOptions.join('');
-      preview.textContent = String(snippetText || '').trim() || '(Aucun texte sélectionné)';
-      modal.dataset.snippetText = String(snippetText || '');
+      preview.textContent = String(snippet.text || '').trim() || '(Aucun texte sélectionné)';
+      modal.dataset.snippetText = String(snippet.text || '');
+      modal.dataset.snippetHtml = String(snippet.html || '');
       modal.dataset.noteId = String(noteId || '');
       modal.dataset.copyMode = copyMode;
       modal.classList.remove('hidden');
@@ -12981,11 +13215,16 @@
       });
     }
 
-    async function appendProjectNoteSelectionToTaskDescription(taskId, snippetText, options = {}) {
+    async function appendProjectNoteSelectionToTaskDescription(taskId, snippetValue, options = {}) {
       const silent = Boolean(options && options.silent);
       const projectId = String(currentProjectId || '').trim();
       const tid = String(taskId || '').trim();
       if (!projectId || !tid) return false;
+      const snippet = normalizeProjectNoteSelectionSnippet(snippetValue);
+      if (!snippet.text && !snippet.html) {
+        if (!silent) showToast('Aucun texte sélectionné');
+        return false;
+      }
       const state = await getProjectState(projectId);
       if (!state?.project) return false;
       const task = (state.tasks || []).find((row) => String(row?.taskId || '') === tid);
@@ -12998,7 +13237,7 @@
         return false;
       }
       const baseHtml = String(task.descriptionHtml || '').trim() || plainTextToRichHtml(String(task.description || '').trim());
-      const nextHtml = buildSnippetAppendHtml(baseHtml, snippetText);
+      const nextHtml = buildSnippetAppendHtml(baseHtml, snippet);
       const changes = {
         descriptionHtml: nextHtml,
         description: getProjectDescriptionPlainText(nextHtml).trim()
@@ -13027,10 +13266,13 @@
       const modal = document.getElementById('modal-note-selection-task-target');
       const select = document.getElementById('note-selection-task-target-select');
       if (!modal || !select) return;
-      const snippetText = String(modal.dataset.snippetText || '').trim();
+      const snippet = normalizeProjectNoteSelectionSnippet({
+        text: String(modal.dataset.snippetText || '').trim(),
+        html: String(modal.dataset.snippetHtml || '')
+      });
       const taskId = String(select.value || '').trim();
       const copyMode = String(modal.dataset.copyMode || 'task').toLowerCase() === 'both' ? 'both' : 'task';
-      if (!snippetText) {
+      if (!snippet.text && !snippet.html) {
         showToast('Aucun texte sélectionné');
         return;
       }
@@ -13039,14 +13281,14 @@
         return;
       }
       if (copyMode === 'both') {
-        const projectOk = await appendProjectNoteSelectionToProjectDescription(snippetText, { silent: true });
-        const taskOk = await appendProjectNoteSelectionToTaskDescription(taskId, snippetText, { silent: true });
+        const projectOk = await appendProjectNoteSelectionToProjectDescription(snippet, { silent: true });
+        const taskOk = await appendProjectNoteSelectionToTaskDescription(taskId, snippet, { silent: true });
         if (projectOk && taskOk) showToast('Texte copié vers la description du projet et de la tâche');
         else if (projectOk) showToast('Texte copié vers la description du projet (échec côté tâche)');
         else if (taskOk) showToast('Texte copié vers la description de la tâche (échec côté projet)');
         else showToast('Copie impossible');
       } else {
-        await appendProjectNoteSelectionToTaskDescription(taskId, snippetText);
+        await appendProjectNoteSelectionToTaskDescription(taskId, snippet);
       }
       closeNoteSelectionTaskTargetModal();
     }
@@ -13056,9 +13298,10 @@
       if (!menu) return;
       projectNoteSelectionMenuPayload = {
         text: String(payload.text || '').trim(),
+        html: String(payload.html || ''),
         noteId: String(payload.noteId || '').trim()
       };
-      if (!projectNoteSelectionMenuPayload.text) return;
+      if (!projectNoteSelectionMenuPayload.text && !projectNoteSelectionMenuPayload.html) return;
       menu.classList.remove('hidden');
       const vw = window.innerWidth || document.documentElement.clientWidth || 0;
       const vh = window.innerHeight || document.documentElement.clientHeight || 0;
@@ -13459,6 +13702,7 @@
         return;
       }
       const draft = readProjectNoteEditorDraft();
+      const noteTheme = String((Array.isArray(draft.tags) && draft.tags.length > 0 ? draft.tags[0] : 'General') || 'General').trim() || 'General';
       const noteAttachmentDocs = await readDocumentFilesFromInput('project-note-attachments', {
         projectId: currentProjectId,
         scope: 'project',
@@ -13517,7 +13761,6 @@
         const safeLinkedTaskIds = (Array.isArray(draft.linkedTaskIds) ? draft.linkedTaskIds : [])
           .map((taskId) => String(taskId || '').trim())
           .filter((taskId) => validTaskIds.has(taskId));
-        const noteTheme = String((Array.isArray(draft.tags) && draft.tags.length > 0 ? draft.tags[0] : 'General') || 'General').trim() || 'General';
         const noteTitleLabel = String(draft.title || existing?.title || 'Note').trim() || 'Note';
         const docEvents = noteAttachmentDocs.map((docFile) => createEvent(
           EventTypes.CREATE_DOCUMENT,
@@ -13817,6 +14060,377 @@
       currentProjectState = await getProjectState(currentProjectId);
       renderProjectNotes(currentProjectState);
       showToast('Tâche créée depuis la note');
+    }
+
+    function getGlobalNotePostId(noteId) {
+      return `global-note-${String(noteId || '').trim()}`;
+    }
+
+    function canManageGlobalNote(note) {
+      if (!note) return false;
+      if (isAppAdmin(currentUser?.userId)) return true;
+      return String(note.createdBy || '').trim() === String(currentUser?.userId || '').trim();
+    }
+
+    function normalizeGlobalNoteVisibility(value) {
+      return String(value || '').trim().toLowerCase() === 'transverse' ? 'transverse' : 'private';
+    }
+
+    function readGlobalNoteEditorDraft() {
+      const title = String(document.getElementById('global-note-title')?.value || '').trim();
+      const contentHtml = getProjectDescriptionHtmlForStorage('global-note-content-editor', 'global-note-content');
+      const content = getProjectDescriptionPlainText(contentHtml);
+      const tags = normalizeProjectNoteTags(document.getElementById('global-note-tags')?.value || '');
+      const themeInput = String(document.getElementById('global-note-theme')?.value || '').trim();
+      const visibility = document.getElementById('global-note-transverse')?.checked ? 'transverse' : 'private';
+      const shareToGlobalFeed = !!document.getElementById('global-note-share-feed')?.checked;
+      const theme = themeInput || (tags.length > 0 ? String(tags[0] || '').trim() : '');
+      return {
+        title,
+        content,
+        contentHtml,
+        tags,
+        theme,
+        visibility: normalizeGlobalNoteVisibility(visibility),
+        shareToGlobalFeed
+      };
+    }
+
+    async function upsertGlobalNoteFeedPost(note) {
+      const noteId = String(note?.noteId || '').trim();
+      if (!noteId) return;
+      const postId = getGlobalNotePostId(noteId);
+      const existing = await getDecrypted('globalPosts', postId, 'postId');
+      const title = String(note?.title || '').trim() || 'Note transverse';
+      const content = String(note?.content || '').trim();
+      const authorIdentity = resolveKnownUserIdentity(
+        String(note?.createdBy || ''),
+        String(note?.createdByName || fallbackDirectoryName(note?.createdBy || ''))
+      );
+      const post = {
+        postId,
+        authorUserId: String(note?.createdBy || currentUser?.userId || ''),
+        authorName: String(authorIdentity?.name || note?.createdByName || currentUser?.name || 'Utilisateur'),
+        content: `🗒️ ${title}${content ? `\n\n${content}` : ''}`,
+        mentions: [],
+        refs: [{ type: 'global-note', id: noteId, label: title }],
+        createdAt: Number(existing?.createdAt || note?.createdAt || Date.now()) || Date.now(),
+        updatedAt: Date.now(),
+        source: sharedFolderHandle ? 'shared' : 'local',
+        isAuto: false,
+        sourceEventId: `global-note:${noteId}`,
+        deletedAt: null
+      };
+      await putEncrypted('globalPosts', post, 'postId');
+      knownGlobalPostIds.add(post.postId);
+      if (sharedFolderHandle) {
+        await writeGlobalFeedPostToSharedFolder(post);
+      }
+    }
+
+    async function removeGlobalNoteFromFeed(noteId) {
+      const postId = getGlobalNotePostId(noteId);
+      const existing = await getDecrypted('globalPosts', postId, 'postId');
+      if (!existing || existing.deletedAt) return;
+      existing.deletedAt = Date.now();
+      existing.updatedAt = Date.now();
+      await putEncrypted('globalPosts', existing, 'postId');
+      if (sharedFolderHandle) {
+        await writeGlobalFeedPostToSharedFolder(existing);
+      }
+    }
+
+    async function syncGlobalNoteFeed(note) {
+      if (!note) return;
+      const shouldPublish = normalizeGlobalNoteVisibility(note.visibility) === 'transverse'
+        && !Number(note.archivedAt || 0)
+        && note.shareToGlobalFeed === true;
+      if (shouldPublish) {
+        await upsertGlobalNoteFeedPost(note);
+      } else {
+        await removeGlobalNoteFromFeed(note.noteId);
+      }
+    }
+
+    function closeGlobalNoteEditor() {
+      const modal = document.getElementById('modal-global-note');
+      if (!modal) return;
+      modal.classList.add('hidden');
+      document.body.classList.remove('overflow-hidden');
+      editingGlobalNoteId = '';
+      const titleEl = document.getElementById('global-note-modal-title');
+      if (titleEl) titleEl.textContent = 'Nouvelle note transverse';
+      const titleInput = document.getElementById('global-note-title');
+      const themeInput = document.getElementById('global-note-theme');
+      const tagsInput = document.getElementById('global-note-tags');
+      const transverseInput = document.getElementById('global-note-transverse');
+      const shareInput = document.getElementById('global-note-share-feed');
+      const deleteBtn = document.getElementById('btn-global-note-delete');
+      const saveBtn = document.getElementById('btn-global-note-save');
+      const digestBtn = document.getElementById('btn-global-note-digest');
+      if (titleInput) titleInput.value = '';
+      if (themeInput) themeInput.value = '';
+      if (tagsInput) tagsInput.value = '';
+      if (transverseInput) transverseInput.checked = true;
+      if (shareInput) shareInput.checked = false;
+      if (deleteBtn) deleteBtn.classList.add('hidden');
+      if (saveBtn) saveBtn.classList.remove('hidden');
+      if (digestBtn) digestBtn.classList.remove('hidden');
+      [titleInput, themeInput, tagsInput, transverseInput, shareInput].forEach((el) => {
+        if (el) el.disabled = false;
+      });
+      const quill = projectDescriptionQuillEditors.get('global-note-content-editor');
+      if (quill) quill.enable(true);
+      setProjectDescriptionEditorContent('global-note-content-editor', 'global-note-content', '');
+    }
+
+    async function openGlobalNoteEditor(noteId = '') {
+      const modal = document.getElementById('modal-global-note');
+      if (!modal) return;
+      const nid = String(noteId || '').trim();
+      const notes = await getAllDecrypted('globalNotes', 'noteId');
+      const note = nid
+        ? (notes || []).find((item) => String(item?.noteId || '').trim() === nid)
+        : null;
+      if (nid && !note) {
+        showToast('Note introuvable');
+        return;
+      }
+      const canManage = note ? canManageGlobalNote(note) : true;
+      editingGlobalNoteId = note ? String(note.noteId || '').trim() : '';
+      const titleEl = document.getElementById('global-note-modal-title');
+      const titleInput = document.getElementById('global-note-title');
+      const themeInput = document.getElementById('global-note-theme');
+      const tagsInput = document.getElementById('global-note-tags');
+      const transverseInput = document.getElementById('global-note-transverse');
+      const shareInput = document.getElementById('global-note-share-feed');
+      const deleteBtn = document.getElementById('btn-global-note-delete');
+      const saveBtn = document.getElementById('btn-global-note-save');
+      const digestBtn = document.getElementById('btn-global-note-digest');
+      if (titleEl) titleEl.textContent = note ? (canManage ? 'Modifier la note' : 'Lecture de la note') : 'Nouvelle note transverse';
+      if (titleInput) titleInput.value = String(note?.title || '');
+      if (themeInput) themeInput.value = String(note?.theme || '');
+      if (tagsInput) tagsInput.value = stringifyProjectNoteTags(note?.tags || []);
+      if (transverseInput) transverseInput.checked = normalizeGlobalNoteVisibility(note?.visibility || 'transverse') === 'transverse';
+      if (shareInput) shareInput.checked = note?.shareToGlobalFeed === true;
+      if (deleteBtn) deleteBtn.classList.toggle('hidden', !note || !canManage);
+      if (saveBtn) saveBtn.classList.toggle('hidden', !canManage);
+      if (digestBtn) digestBtn.classList.toggle('hidden', !canManage);
+      [titleInput, themeInput, tagsInput, transverseInput, shareInput].forEach((el) => {
+        if (el) el.disabled = !canManage;
+      });
+      setProjectDescriptionEditorContent(
+        'global-note-content-editor',
+        'global-note-content',
+        String(note?.contentHtml || '').trim() || plainTextToRichHtml(String(note?.content || '').trim())
+      );
+      const quill = projectDescriptionQuillEditors.get('global-note-content-editor');
+      if (quill) {
+        quill.enable(canManage);
+      } else {
+        const editor = document.getElementById('global-note-content-editor');
+        if (editor) editor.setAttribute('contenteditable', canManage ? 'true' : 'false');
+      }
+      modal.classList.remove('hidden');
+      document.body.classList.add('overflow-hidden');
+      requestAnimationFrame(() => titleInput?.focus());
+    }
+
+    async function saveGlobalNoteFromEditor() {
+      const draft = readGlobalNoteEditorDraft();
+      if (!draft.title && !draft.content) {
+        showToast('Ajoutez un titre ou un contenu');
+        return;
+      }
+      const nowTs = Date.now();
+      const notes = await getAllDecrypted('globalNotes', 'noteId');
+      const existing = editingGlobalNoteId
+        ? (notes || []).find((item) => String(item?.noteId || '').trim() === String(editingGlobalNoteId || '').trim())
+        : null;
+      if (existing && !canManageGlobalNote(existing)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const note = {
+        ...(existing || {}),
+        noteId: String(existing?.noteId || uuidv4()),
+        title: draft.title,
+        content: draft.content,
+        contentHtml: draft.contentHtml,
+        tags: draft.tags,
+        theme: String(draft.theme || '').trim(),
+        visibility: normalizeGlobalNoteVisibility(draft.visibility),
+        shareToGlobalFeed: draft.shareToGlobalFeed === true,
+        createdBy: String(existing?.createdBy || currentUser?.userId || ''),
+        createdByName: String(existing?.createdByName || currentUser?.name || ''),
+        createdAt: Number(existing?.createdAt || nowTs) || nowTs,
+        updatedAt: nowTs,
+        archivedAt: null
+      };
+      await putEncrypted('globalNotes', note, 'noteId');
+      await syncGlobalNoteFeed(note);
+      if (workspaceMode === 'global' && globalWorkspaceView === 'feed') {
+        await renderGlobalFeed();
+      }
+      closeGlobalNoteEditor();
+      globalNotesFocusNoteId = String(note.noteId || '');
+      await renderGlobalNotes();
+      showToast(existing ? 'Note mise a jour' : 'Note creee');
+    }
+
+    async function deleteGlobalNote(noteId = '') {
+      const nid = String(noteId || editingGlobalNoteId || '').trim();
+      if (!nid) return;
+      const note = await getDecrypted('globalNotes', nid, 'noteId');
+      if (!note) return;
+      if (!canManageGlobalNote(note)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const noteTitle = String(note.title || '').trim() || 'cette note';
+      if (!window.confirm(`Supprimer definitivement "${noteTitle}" ?`)) return;
+      await deleteFromStore('globalNotes', nid);
+      await removeGlobalNoteFromFeed(nid);
+      if (workspaceMode === 'global' && globalWorkspaceView === 'feed') {
+        await renderGlobalFeed();
+      }
+      if (String(editingGlobalNoteId || '') === nid) {
+        closeGlobalNoteEditor();
+      }
+      await renderGlobalNotes();
+      showToast('Note supprimee');
+    }
+
+    async function toggleGlobalNoteFeedPublish(noteId) {
+      const nid = String(noteId || '').trim();
+      if (!nid) return;
+      const note = await getDecrypted('globalNotes', nid, 'noteId');
+      if (!note) return;
+      if (!canManageGlobalNote(note)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const next = {
+        ...note,
+        shareToGlobalFeed: !note.shareToGlobalFeed,
+        updatedAt: Date.now()
+      };
+      await putEncrypted('globalNotes', next, 'noteId');
+      await syncGlobalNoteFeed(next);
+      if (workspaceMode === 'global' && globalWorkspaceView === 'feed') {
+        await renderGlobalFeed();
+      }
+      await renderGlobalNotes();
+      showToast(next.shareToGlobalFeed ? 'Note publiee dans le fil' : 'Note retiree du fil');
+    }
+
+    function buildGlobalNoteCardHtml(note, options = {}) {
+      const canManage = !!options.canManage;
+      const author = String(options.authorName || note.createdByName || fallbackDirectoryName(note.createdBy || '') || 'Auteur');
+      const visibility = normalizeGlobalNoteVisibility(note.visibility);
+      const theme = String(note.theme || '').trim();
+      const tags = Array.isArray(note.tags) ? note.tags.map((tag) => String(tag || '').trim()).filter(Boolean) : [];
+      const previewText = getProjectDescriptionPlainText(String(note.contentHtml || '').trim() || plainTextToRichHtml(String(note.content || '').trim()))
+        .replace(/\s+/g, ' ')
+        .trim();
+      const isFocused = String(globalNotesFocusNoteId || '').trim() === String(note.noteId || '').trim();
+      return `
+        <article id="global-note-${escapeHtml(note.noteId)}" class="rounded-xl border ${isFocused ? 'border-blue-400 shadow-[0_0_0_2px_rgba(59,130,246,0.14)]' : 'border-slate-200'} bg-white p-4 cursor-pointer" onclick="openGlobalNoteEditor('${escapeHtml(note.noteId)}')">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="inline-flex text-[10px] px-2 py-1 rounded-full ${visibility === 'transverse' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'} font-semibold">${visibility === 'transverse' ? 'Transverse' : 'Privee'}</span>
+                ${note.shareToGlobalFeed ? '<span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-indigo-100 text-indigo-700 font-semibold">Dans le fil</span>' : ''}
+                ${theme ? `<span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 font-semibold">${escapeHtml(theme)}</span>` : ''}
+              </div>
+              <h4 class="mt-2 text-base font-bold text-slate-800">${escapeHtml(note.title || 'Note sans titre')}</h4>
+              <p class="mt-1 text-xs text-slate-500">${escapeHtml(author)} • ${new Date(Number(note.createdAt || Date.now())).toLocaleString('fr-FR')}</p>
+            </div>
+            ${canManage ? `
+              <div class="flex items-center gap-1" onclick="event.stopPropagation();">
+                <button type="button" class="workspace-action-inline" data-action-kind="edit" data-action-label="Modifier la note" onclick="openGlobalNoteEditor('${escapeHtml(note.noteId)}')">Editer</button>
+                <button type="button" class="workspace-action-inline" data-action-kind="notify" data-action-label="Publier dans le fil" onclick="toggleGlobalNoteFeedPublish('${escapeHtml(note.noteId)}')">${note.shareToGlobalFeed ? 'Retirer fil' : 'Publier fil'}</button>
+                <button type="button" class="workspace-action-inline" data-action-kind="danger" data-action-label="Supprimer la note" onclick="deleteGlobalNote('${escapeHtml(note.noteId)}')">Supprimer</button>
+              </div>
+            ` : ''}
+          </div>
+          ${tags.length ? `<div class="mt-3 flex flex-wrap gap-1">${tags.map((tag) => `<span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-slate-100 text-slate-700 font-semibold">#${escapeHtml(tag)}</span>`).join('')}</div>` : ''}
+          <p class="mt-3 text-sm text-slate-600">${escapeHtml(previewText.length > 280 ? `${previewText.slice(0, 280)}...` : (previewText || 'Aucun contenu.'))}</p>
+        </article>
+      `;
+    }
+
+    async function renderGlobalNotes() {
+      const host = document.getElementById('global-notes-list');
+      const countEl = document.getElementById('global-notes-count');
+      if (!host) return;
+      const allNotesRaw = await getAllDecrypted('globalNotes', 'noteId');
+      const notes = (Array.isArray(allNotesRaw) ? allNotesRaw : []).filter((note) => !Number(note?.archivedAt || 0));
+      const me = String(currentUser?.userId || '').trim();
+      const queryNeedle = normalizeSearch(globalNotesSearchQuery);
+      const filtered = notes
+        .filter((note) => {
+          const visibility = normalizeGlobalNoteVisibility(note.visibility);
+          if (visibility === 'private' && !isAppAdmin(currentUser?.userId) && String(note.createdBy || '').trim() !== me) return false;
+          if (globalNotesScopeFilter === 'private' && visibility !== 'private') return false;
+          if (globalNotesScopeFilter === 'transverse' && visibility !== 'transverse') return false;
+          if (globalNotesTabMode === 'mine' && String(note.createdBy || '').trim() !== me) return false;
+          if (globalNotesTabMode === 'private' && visibility !== 'private') return false;
+          if (globalNotesTabMode === 'transverse' && visibility !== 'transverse') return false;
+          if (globalNotesTabMode === 'published' && note.shareToGlobalFeed !== true) return false;
+          if (!queryNeedle) return true;
+          const blob = normalizeSearch([
+            note.title,
+            note.content,
+            note.theme,
+            ...(Array.isArray(note.tags) ? note.tags : [])
+          ].join(' '));
+          return blob.includes(queryNeedle);
+        })
+        .sort((a, b) => {
+          if (globalNotesSortMode === 'oldest') return Number(a.updatedAt || a.createdAt || 0) - Number(b.updatedAt || b.createdAt || 0);
+          if (globalNotesSortMode === 'alpha') return String(a.title || '').localeCompare(String(b.title || ''), 'fr');
+          return Number(b.updatedAt || b.createdAt || 0) - Number(a.updatedAt || a.createdAt || 0);
+        });
+      if (countEl) {
+        const n = filtered.length;
+        countEl.textContent = `${n} note${n > 1 ? 's' : ''}`;
+      }
+      if (!filtered.length) {
+        host.innerHTML = `
+          <div class="workspace-empty-state">
+            <span class="workspace-empty-icon material-symbols-outlined" aria-hidden="true">sticky_note_2</span>
+            <p class="workspace-empty-title">Aucune note pour ces criteres</p>
+            <p class="workspace-empty-text">Essayez un autre filtre ou creez une nouvelle note.</p>
+          </div>
+        `;
+      } else {
+        host.innerHTML = filtered.map((note) => {
+          const identity = resolveKnownUserIdentity(String(note.createdBy || ''), String(note.createdByName || fallbackDirectoryName(note.createdBy || '')));
+          return buildGlobalNoteCardHtml(note, {
+            canManage: canManageGlobalNote(note),
+            authorName: identity?.name || note.createdByName || fallbackDirectoryName(note.createdBy || '')
+          });
+        }).join('');
+      }
+      const tabs = {
+        all: document.getElementById('global-notes-tab-all'),
+        mine: document.getElementById('global-notes-tab-mine'),
+        private: document.getElementById('global-notes-tab-private'),
+        transverse: document.getElementById('global-notes-tab-transverse'),
+        published: document.getElementById('global-notes-tab-published')
+      };
+      Object.entries(tabs).forEach(([key, btn]) => {
+        if (!btn) return;
+        btn.classList.toggle('view-tab-active', key === globalNotesTabMode);
+      });
+      if (globalNotesFocusNoteId) {
+        const focusId = String(globalNotesFocusNoteId || '').trim();
+        globalNotesFocusNoteId = '';
+        setTimeout(() => {
+          document.getElementById(`global-note-${focusId}`)?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+        }, 40);
+      }
     }
 
     async function resolveUserRowsByIds(userIds = []) {
@@ -14972,17 +15586,25 @@
         clearTimeout(taskDetailInlineDebounceTimers.get(timerKey));
       }
       taskDetailInlineDebounceTimers.set(timerKey, setTimeout(() => {
-        persistTaskDetailDescriptionHtml(taskRef, safeHtml).catch((error) => {
-          console.error('inline description save failed', error);
-        });
+        setInlineSaveIndicator('task-detail', 'saving');
+        runWithoutGlobalLoading(() => persistTaskDetailDescriptionHtml(taskRef, safeHtml))
+          .then(() => setInlineSaveIndicator('task-detail', 'saved'))
+          .catch((error) => {
+            setInlineSaveIndicator('task-detail', 'error');
+            console.error('inline description save failed', error);
+          });
       }, debounceDelay));
       if (taskDetailInlineFinalizeTimers.has(timerKey)) {
         clearTimeout(taskDetailInlineFinalizeTimers.get(timerKey));
       }
       taskDetailInlineFinalizeTimers.set(timerKey, setTimeout(() => {
-        persistTaskDetailDescriptionHtml(taskRef, safeHtml, { force: true }).catch((error) => {
-          console.error('inline description finalize save failed', error);
-        });
+        setInlineSaveIndicator('task-detail', 'saving');
+        runWithoutGlobalLoading(() => persistTaskDetailDescriptionHtml(taskRef, safeHtml, { force: true }))
+          .then(() => setInlineSaveIndicator('task-detail', 'saved'))
+          .catch((error) => {
+            setInlineSaveIndicator('task-detail', 'error');
+            console.error('inline description finalize save failed', error);
+          });
       }, 900));
     }
 
@@ -15082,15 +15704,23 @@
       const timerKey = 'recurring';
       if (taskDetailInlineDebounceTimers.has(timerKey)) clearTimeout(taskDetailInlineDebounceTimers.get(timerKey));
       taskDetailInlineDebounceTimers.set(timerKey, setTimeout(() => {
-        persistTaskDetailRecurring(taskRef, normalizedConfig).catch((error) => {
-          console.error('inline recurring save failed', error);
-        });
+        setInlineSaveIndicator('task-detail', 'saving');
+        runWithoutGlobalLoading(() => persistTaskDetailRecurring(taskRef, normalizedConfig))
+          .then(() => setInlineSaveIndicator('task-detail', 'saved'))
+          .catch((error) => {
+            setInlineSaveIndicator('task-detail', 'error');
+            console.error('inline recurring save failed', error);
+          });
       }, options.immediate ? 0 : 220));
       if (taskDetailInlineFinalizeTimers.has(timerKey)) clearTimeout(taskDetailInlineFinalizeTimers.get(timerKey));
       taskDetailInlineFinalizeTimers.set(timerKey, setTimeout(() => {
-        persistTaskDetailRecurring(taskRef, normalizedConfig, { force: true }).catch((error) => {
-          console.error('inline recurring finalize save failed', error);
-        });
+        setInlineSaveIndicator('task-detail', 'saving');
+        runWithoutGlobalLoading(() => persistTaskDetailRecurring(taskRef, normalizedConfig, { force: true }))
+          .then(() => setInlineSaveIndicator('task-detail', 'saved'))
+          .catch((error) => {
+            setInlineSaveIndicator('task-detail', 'error');
+            console.error('inline recurring finalize save failed', error);
+          });
       }, 900));
     }
 
@@ -15485,18 +16115,26 @@
         clearTimeout(taskDetailInlineDebounceTimers.get(field));
       }
       taskDetailInlineDebounceTimers.set(field, setTimeout(() => {
-        persistTaskDetailInlineField(taskRef, field, normalizedValue).catch((error) => {
-          console.error('inline save failed', error);
-        });
+        setInlineSaveIndicator('task-detail', 'saving');
+        runWithoutGlobalLoading(() => persistTaskDetailInlineField(taskRef, field, normalizedValue))
+          .then(() => setInlineSaveIndicator('task-detail', 'saved'))
+          .catch((error) => {
+            setInlineSaveIndicator('task-detail', 'error');
+            console.error('inline save failed', error);
+          });
       }, debounceDelay));
 
       if (taskDetailInlineFinalizeTimers.has(field)) {
         clearTimeout(taskDetailInlineFinalizeTimers.get(field));
       }
       taskDetailInlineFinalizeTimers.set(field, setTimeout(() => {
-        persistTaskDetailInlineField(taskRef, field, normalizedValue, { force: true }).catch((error) => {
-          console.error('inline finalize save failed', error);
-        });
+        setInlineSaveIndicator('task-detail', 'saving');
+        runWithoutGlobalLoading(() => persistTaskDetailInlineField(taskRef, field, normalizedValue, { force: true }))
+          .then(() => setInlineSaveIndicator('task-detail', 'saved'))
+          .catch((error) => {
+            setInlineSaveIndicator('task-detail', 'error');
+            console.error('inline finalize save failed', error);
+          });
       }, 900));
     }
 
@@ -15668,10 +16306,17 @@
         bind();
       };
       const autosave = async (immediate = false, quiet = true) => {
-        await persistTaskDetailDocuments(currentGlobalTaskDetailRef, {
-          attachments: attachmentsDraft,
-          linkedProjectDocIds: Array.from(linkedDocIdsDraft)
-        }, { quiet });
+        setInlineSaveIndicator('task-detail', 'saving');
+        try {
+          await runWithoutGlobalLoading(() => persistTaskDetailDocuments(currentGlobalTaskDetailRef, {
+            attachments: attachmentsDraft,
+            linkedProjectDocIds: Array.from(linkedDocIdsDraft)
+          }, { quiet }));
+          setInlineSaveIndicator('task-detail', 'saved');
+        } catch (error) {
+          setInlineSaveIndicator('task-detail', 'error');
+          throw error;
+        }
         if (immediate) {
           refreshTaskDetailInlineDisplay('documents', '');
         }
@@ -15982,7 +16627,7 @@
 
     function renderTaskDescriptionToElement(task = {}, targetEl = null) {
       if (!targetEl) return;
-      const html = sanitizeProjectDescriptionHtml(task.descriptionHtml || '');
+      const html = sanitizeRichTextHtmlPreserve(task.descriptionHtml || '');
       if (html) {
         targetEl.innerHTML = html;
         return;
@@ -16320,14 +16965,18 @@
         if (attachments.length === 0) {
           attachmentsEl.innerHTML = '<p class="text-slate-500">Aucun document lié.</p>';
         } else {
+          const canDeleteAttachment = canEdit;
           attachmentsEl.innerHTML = attachments.map((file, index) => {
             const safeHref = sanitizeDownloadHref(file?.data || '', String(file?.type || ''));
             const href = safeHref ? safeHref.replace(/"/g, '&quot;') : '#';
             return `
-            <a class="inline-flex items-center gap-1 text-primary hover:underline mr-3 ${safeHref ? '' : 'opacity-60 pointer-events-none'}" href="${href}" ${safeHref ? `download="${escapeHtml(file?.name || `piece-jointe-${index + 1}`)}"` : ''}>
-              <span class="material-symbols-outlined text-sm">attach_file</span>
-              <span>${escapeHtml(file?.name || `piece-jointe-${index + 1}`)}</span>
-            </a>
+            <span class="inline-flex items-center gap-2 mr-3 mb-1">
+              <a class="inline-flex items-center gap-1 text-primary hover:underline ${safeHref ? '' : 'opacity-60 pointer-events-none'}" href="${href}" ${safeHref ? `download="${escapeHtml(file?.name || `piece-jointe-${index + 1}`)}"` : ''}>
+                <span class="material-symbols-outlined text-sm">attach_file</span>
+                <span>${escapeHtml(file?.name || `piece-jointe-${index + 1}`)}</span>
+              </a>
+              ${canDeleteAttachment ? `<button type="button" class="task-action-btn task-action-btn-danger" onclick="removeAttachment('${escapeHtml(task.taskId)}', ${index})">Supprimer</button>` : ''}
+            </span>
           `;
           }).join('');
         }
@@ -16494,10 +17143,13 @@
               const safeHref = sanitizeDownloadHref(file?.data || '', String(file?.type || ''));
               const href = safeHref ? safeHref.replace(/"/g, '&quot;') : '#';
               return `
-                <a class="inline-flex items-center gap-1 text-primary hover:underline mr-3 ${safeHref ? '' : 'opacity-60 pointer-events-none'}" href="${href}" ${safeHref ? `download="${escapeHtml(file?.name || `piece-jointe-${item.index + 1}`)}"` : ''}>
-                  <span class="material-symbols-outlined text-sm">attach_file</span>
-                  <span>${escapeHtml(file?.name || `piece-jointe-${item.index + 1}`)}</span>
-                </a>
+                <span class="inline-flex items-center gap-2 mr-3 mb-1">
+                  <a class="inline-flex items-center gap-1 text-primary hover:underline ${safeHref ? '' : 'opacity-60 pointer-events-none'}" href="${href}" ${safeHref ? `download="${escapeHtml(file?.name || `piece-jointe-${item.index + 1}`)}"` : ''}>
+                    <span class="material-symbols-outlined text-sm">attach_file</span>
+                    <span>${escapeHtml(file?.name || `piece-jointe-${item.index + 1}`)}</span>
+                  </a>
+                  ${canEdit ? `<button type="button" class="task-action-btn task-action-btn-danger" onclick="removeAttachment('${escapeHtml(task.taskId)}', ${item.index})">Supprimer</button>` : ''}
+                </span>
               `;
             }
             const doc = item.doc || {};
@@ -18550,7 +19202,7 @@
       const toggleBtn = document.getElementById('btn-toggle-project-description');
       if (!descEl || !toggleBtn) return;
 
-      const html = sanitizeProjectDescriptionHtml(descriptionText || '');
+      const html = sanitizeRichTextHtmlPreserve(descriptionText || '');
       descEl.innerHTML = html || '<p>&nbsp;</p>';
 
       const plain = (descEl.textContent || '').trim();
@@ -18582,7 +19234,7 @@
     function normalizeProjectInlineFieldValue(field, rawValue) {
       const value = rawValue === null || rawValue === undefined ? '' : String(rawValue);
       if (field === 'title') return value.trim();
-      if (field === 'description') return sanitizeProjectDescriptionHtml(value || '');
+      if (field === 'description') return sanitizeRichTextHtmlPreserve(value || '');
       return value.trim();
     }
 
@@ -18666,17 +19318,25 @@
         clearTimeout(projectInlineDebounceTimers.get(field));
       }
       projectInlineDebounceTimers.set(field, setTimeout(() => {
-        persistProjectInlineField(projectId, field, normalizedValue).catch((error) => {
-          console.error('project inline save failed', error);
-        });
+        setInlineSaveIndicator('project-inline', 'saving');
+        runWithoutGlobalLoading(() => persistProjectInlineField(projectId, field, normalizedValue))
+          .then(() => setInlineSaveIndicator('project-inline', 'saved'))
+          .catch((error) => {
+            setInlineSaveIndicator('project-inline', 'error');
+            console.error('project inline save failed', error);
+          });
       }, options.immediate ? 0 : 220));
       if (projectInlineFinalizeTimers.has(field)) {
         clearTimeout(projectInlineFinalizeTimers.get(field));
       }
       projectInlineFinalizeTimers.set(field, setTimeout(() => {
-        persistProjectInlineField(projectId, field, normalizedValue, { force: true }).catch((error) => {
-          console.error('project inline finalize save failed', error);
-        });
+        setInlineSaveIndicator('project-inline', 'saving');
+        runWithoutGlobalLoading(() => persistProjectInlineField(projectId, field, normalizedValue, { force: true }))
+          .then(() => setInlineSaveIndicator('project-inline', 'saved'))
+          .catch((error) => {
+            setInlineSaveIndicator('project-inline', 'error');
+            console.error('project inline finalize save failed', error);
+          });
       }, 900));
     }
 
@@ -18881,6 +19541,7 @@
         closeProjectNoteEditor();
       }
       tasksPage = 1;
+      archivedTasksPage = 1;
       const state = await getProjectState(projectId);
       closeMobileSidebar();
 
@@ -20083,6 +20744,7 @@
       const container = document.getElementById('global-tasks-container');
       const paginationContainer = document.getElementById('global-tasks-pagination');
       if (!container) return;
+      updateTaskCardsLayoutLabel('global-task-layout-label', 0);
       if (paginationContainer) paginationContainer.innerHTML = '';
       updateGlobalTasksViewButtons();
       const all = await getGlobalTasksList();
@@ -20119,12 +20781,13 @@
       }
       if (mode === 'archives') {
         toggleGlobalTasksInlineCalendar(false);
-        if (paginationContainer) paginationContainer.classList.add('hidden');
+        if (paginationContainer) paginationContainer.classList.remove('hidden');
         renderGlobalArchivedTasks(all, stateByProjectId, container);
         return;
       }
 
       filtered = filtered.filter(task => !task.archivedAt);
+      updateTaskCardsLayoutLabel('global-task-layout-label', filtered.length);
       toggleGlobalTasksInlineCalendar(false);
       if (paginationContainer) paginationContainer.classList.toggle('hidden', mode === 'kanban' || mode === 'timeline');
 
@@ -20650,6 +21313,7 @@
 
     function renderGlobalArchivedTasks(allTasks, stateByProjectId, targetContainer) {
       const container = targetContainer || document.getElementById('global-tasks-container');
+      const paginationContainer = document.getElementById('global-tasks-pagination');
       if (!container) return;
 
       const query = `${globalSearchQuery} ${document.getElementById('global-task-search')?.value || ''}`.trim();
@@ -20675,11 +21339,14 @@
       if (archived.length === 0) {
         container.className = 'space-y-3';
         container.innerHTML = '<p class="text-slate-500 text-center py-8">Aucune tâche archivée</p>';
+        if (paginationContainer) paginationContainer.innerHTML = '';
         return;
       }
 
+      const pagination = paginateItems(archived, globalArchivedTasksPage, paginationConfig.globalTasksPerPage);
+      globalArchivedTasksPage = pagination.currentPage;
       container.className = 'space-y-2';
-      container.innerHTML = archived.map((task) => {
+      container.innerHTML = pagination.pageItems.map((task) => {
         const taskRef = buildGlobalTaskRef(task);
         let canEdit = task.sourceType === 'standalone';
         let canDelete = task.sourceType === 'standalone';
@@ -21362,6 +22029,7 @@
     window.convertTaskToProject = convertTaskToProject;
     window.openGlobalTaskDetails = openGlobalTaskDetails;
     window.openProjectTaskDetails = openProjectTaskDetails;
+    window.removeAttachment = removeAttachment;
     window.openProjectTaskCreateModalWithStatus = openProjectTaskCreateModalWithStatus;
     window.openGlobalTaskCreateModalWithStatus = openGlobalTaskCreateModalWithStatus;
     window.closeGlobalTaskDetails = closeGlobalTaskDetails;
@@ -21374,6 +22042,9 @@
     window.archiveProjectNote = archiveProjectNote;
     window.restoreProjectNote = restoreProjectNote;
     window.deleteProjectNote = deleteProjectNote;
+    window.openGlobalNoteEditor = openGlobalNoteEditor;
+    window.deleteGlobalNote = deleteGlobalNote;
+    window.toggleGlobalNoteFeedPublish = toggleGlobalNoteFeedPublish;
     window.deleteGlobalDocument = deleteGlobalDocument;
     window.openDocumentBindingModal = openDocumentBindingModal;
 
@@ -21531,17 +22202,25 @@
         clearTimeout(calendarDetailInlineDebounceTimers.get(field));
       }
       calendarDetailInlineDebounceTimers.set(field, setTimeout(() => {
-        persistCalendarDetailInlineField(id, field, rawValue).catch((error) => {
-          console.error('calendar inline save failed', error);
-        });
+        setInlineSaveIndicator('calendar-detail', 'saving');
+        runWithoutGlobalLoading(() => persistCalendarDetailInlineField(id, field, rawValue))
+          .then(() => setInlineSaveIndicator('calendar-detail', 'saved'))
+          .catch((error) => {
+            setInlineSaveIndicator('calendar-detail', 'error');
+            console.error('calendar inline save failed', error);
+          });
       }, debounceDelay));
       if (calendarDetailInlineFinalizeTimers.has(field)) {
         clearTimeout(calendarDetailInlineFinalizeTimers.get(field));
       }
       calendarDetailInlineFinalizeTimers.set(field, setTimeout(() => {
-        persistCalendarDetailInlineField(id, field, rawValue, { force: true }).catch((error) => {
-          console.error('calendar inline finalize save failed', error);
-        });
+        setInlineSaveIndicator('calendar-detail', 'saving');
+        runWithoutGlobalLoading(() => persistCalendarDetailInlineField(id, field, rawValue, { force: true }))
+          .then(() => setInlineSaveIndicator('calendar-detail', 'saved'))
+          .catch((error) => {
+            setInlineSaveIndicator('calendar-detail', 'error');
+            console.error('calendar inline finalize save failed', error);
+          });
       }, 900));
     }
 
@@ -21913,17 +22592,19 @@
         showToast('Référence document invalide');
         return;
       }
-      const resolved = await resolveDocumentPreviewContext(ref);
-      if (!resolved?.doc) {
-        showToast('Document introuvable');
-        return;
-      }
-      await openDocumentPreview(
-        encodeURIComponent(String(resolved.doc.data || '')),
-        encodeURIComponent(String(resolved.doc.name || 'document')),
-        encodeURIComponent(String(resolved.doc.type || '')),
-        refEncoded
-      );
+      await runWithLoading(async () => {
+        const resolved = await resolveDocumentPreviewContext(ref);
+        if (!resolved?.doc) {
+          showToast('Document introuvable');
+          return;
+        }
+        await openDocumentPreview(
+          encodeURIComponent(String(resolved.doc.data || '')),
+          encodeURIComponent(String(resolved.doc.name || 'document')),
+          encodeURIComponent(String(resolved.doc.type || '')),
+          refEncoded
+        );
+      });
     }
 
     async function downloadDocumentByRef(refEncoded = '') {
@@ -21932,23 +22613,25 @@
         showToast('Référence document invalide');
         return;
       }
-      const resolved = await resolveDocumentPreviewContext(ref);
-      if (!resolved?.doc) {
-        showToast('Document introuvable');
-        return;
-      }
-      const safeHref = sanitizeDownloadHref(resolved.doc.data || '', String(resolved.doc.type || ''));
-      if (!safeHref) {
-        showToast('Téléchargement indisponible');
-        return;
-      }
-      const link = document.createElement('a');
-      link.href = safeHref;
-      link.download = String(resolved.doc.name || 'document');
-      link.rel = 'noopener';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      await runWithLoading(async () => {
+        const resolved = await resolveDocumentPreviewContext(ref);
+        if (!resolved?.doc) {
+          showToast('Document introuvable');
+          return;
+        }
+        const safeHref = sanitizeDownloadHref(resolved.doc.data || '', String(resolved.doc.type || ''));
+        if (!safeHref) {
+          showToast('Téléchargement indisponible');
+          return;
+        }
+        const link = document.createElement('a');
+        link.href = safeHref;
+        link.download = String(resolved.doc.name || 'document');
+        link.rel = 'noopener';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      });
     }
 
     async function renderGlobalDocs() {
@@ -22034,12 +22717,13 @@
       `).join('');
     }
 
-    async function populateDocBindingTaskOptions(projectId, selectedTaskId = '') {
+    async function populateDocBindingTaskOptions(projectId, selectedTaskIds = []) {
       const taskSelect = document.getElementById('doc-binding-task');
       if (!taskSelect) return;
       const pid = String(projectId || '').trim();
       if (!pid) {
         taskSelect.innerHTML = '<option value="">Aucune (hors projet)</option>';
+        taskSelect.size = 1;
         taskSelect.disabled = true;
         return;
       }
@@ -22048,13 +22732,18 @@
       taskSelect.disabled = false;
       if (tasks.length === 0) {
         taskSelect.innerHTML = '<option value="">Aucune tâche active</option>';
+        taskSelect.size = 1;
         return;
       }
-      const selected = String(selectedTaskId || '').trim();
-      taskSelect.innerHTML = [
-        '<option value="">Aucune (document projet)</option>',
-        ...tasks.map(task => `<option value="${escapeHtml(task.taskId)}" ${selected === String(task.taskId) ? 'selected' : ''}>${escapeHtml(task.title || 'Tâche')}</option>`)
-      ].join('');
+      const selectedSet = new Set(
+        (Array.isArray(selectedTaskIds) ? selectedTaskIds : [selectedTaskIds])
+          .map((taskId) => String(taskId || '').trim())
+          .filter(Boolean)
+      );
+      taskSelect.innerHTML = tasks
+        .map(task => `<option value="${escapeHtml(task.taskId)}" ${selectedSet.has(String(task.taskId || '')) ? 'selected' : ''}>${escapeHtml(task.title || 'Tâche')}</option>`)
+        .join('');
+      taskSelect.size = Math.min(10, Math.max(4, tasks.length));
     }
 
     async function resolveDocumentForBinding(docId) {
@@ -22139,15 +22828,23 @@
       const key = 'binding';
       if (docBindingInlineDebounceTimers.has(key)) clearTimeout(docBindingInlineDebounceTimers.get(key));
       docBindingInlineDebounceTimers.set(key, setTimeout(() => {
-        saveDocumentBindingChanges({ keepOpen: true, silent: true, inlineAutosave: true }).catch((error) => {
-          console.error('document binding inline save failed', error);
-        });
+        setInlineSaveIndicator('doc-binding', 'saving');
+        runWithoutGlobalLoading(() => saveDocumentBindingChanges({ keepOpen: true, silent: true, inlineAutosave: true }))
+          .then(() => setInlineSaveIndicator('doc-binding', 'saved'))
+          .catch((error) => {
+            setInlineSaveIndicator('doc-binding', 'error');
+            console.error('document binding inline save failed', error);
+          });
       }, options.immediate ? 0 : 220));
       if (docBindingInlineFinalizeTimers.has(key)) clearTimeout(docBindingInlineFinalizeTimers.get(key));
       docBindingInlineFinalizeTimers.set(key, setTimeout(() => {
-        saveDocumentBindingChanges({ keepOpen: true, silent: true, inlineAutosave: true }).catch((error) => {
-          console.error('document binding inline finalize save failed', error);
-        });
+        setInlineSaveIndicator('doc-binding', 'saving');
+        runWithoutGlobalLoading(() => saveDocumentBindingChanges({ keepOpen: true, silent: true, inlineAutosave: true }))
+          .then(() => setInlineSaveIndicator('doc-binding', 'saved'))
+          .catch((error) => {
+            setInlineSaveIndicator('doc-binding', 'error');
+            console.error('document binding inline finalize save failed', error);
+          });
       }, 900));
     }
 
@@ -22204,63 +22901,65 @@
       const id = String(docId || '').trim();
       if (!id) return;
       resetDocumentBindingInlineEditingState();
-      const doc = await resolveDocumentForBinding(id);
-      if (!doc) {
-        showToast('Document introuvable');
-        return;
-      }
-      if (doc.sourceType === 'project') {
-        showToast('Ce document est une pièce jointe de tâche: modifiez la tâche pour le déplacer.');
-        return;
-      }
-      if (!['standalone', 'project-doc'].includes(doc.sourceType)) {
-        showToast('Gestion indisponible pour ce type de document.');
-        return;
-      }
-      if (doc.sourceType === 'project-doc') {
-        const sourceState = await getProjectState(doc.sourceProjectId);
-        if (!sourceState?.project || !canEditProjectMeta(sourceState)) {
-          showToast('Action non autorisée');
+      await runWithLoading(async () => {
+        const doc = await resolveDocumentForBinding(id);
+        if (!doc) {
+          showToast('Document introuvable');
           return;
         }
-      }
+        if (doc.sourceType === 'project') {
+          showToast('Ce document est une pièce jointe de tâche: modifiez la tâche pour le déplacer.');
+          return;
+        }
+        if (!['standalone', 'project-doc'].includes(doc.sourceType)) {
+          showToast('Gestion indisponible pour ce type de document.');
+          return;
+        }
+        if (doc.sourceType === 'project-doc') {
+          const sourceState = await getProjectState(doc.sourceProjectId);
+          if (!sourceState?.project || !canEditProjectMeta(sourceState)) {
+            showToast('Action non autorisée');
+            return;
+          }
+        }
 
-      const projectSelect = document.getElementById('doc-binding-project');
-      const modeSelect = document.getElementById('doc-binding-mode');
-      const themeInput = document.getElementById('doc-binding-theme');
-      const storagePathInput = document.getElementById('doc-binding-storage-path');
-      const nameEl = document.getElementById('doc-binding-name');
-      const sourceEl = document.getElementById('doc-binding-current-source');
-      const modal = document.getElementById('modal-doc-binding');
-      if (!projectSelect || !modeSelect || !themeInput || !storagePathInput || !nameEl || !sourceEl || !modal) return;
+        const projectSelect = document.getElementById('doc-binding-project');
+        const modeSelect = document.getElementById('doc-binding-mode');
+        const themeInput = document.getElementById('doc-binding-theme');
+        const storagePathInput = document.getElementById('doc-binding-storage-path');
+        const nameEl = document.getElementById('doc-binding-name');
+        const sourceEl = document.getElementById('doc-binding-current-source');
+        const modal = document.getElementById('modal-doc-binding');
+        if (!projectSelect || !modeSelect || !themeInput || !storagePathInput || !nameEl || !sourceEl || !modal) return;
 
-      const states = await getAllProjectStates();
-      const editableProjects = (states || []).filter(state => state?.project && canEditProjectMeta(state));
-      const sourceProjectId = String(doc.sourceProjectId || '').trim();
-      const themeCatalog = [
-        ...((states || []).flatMap((state) => (state?.themes || []))),
-        ...((states || []).flatMap((state) => (state?.tasks || []).map((task) => String(task?.theme || '').trim()))),
-        ...((globalThemeCatalog || []).map((theme) => String(theme?.name || '').trim()))
-      ];
-      projectSelect.innerHTML = [
-        '<option value="">Hors projet</option>',
-        ...editableProjects.map(state => `<option value="${escapeHtml(state.project.projectId)}" ${String(state.project.projectId) === sourceProjectId ? 'selected' : ''}>${escapeHtml(state.project.name || 'Projet')}</option>`)
-      ].join('');
-      modeSelect.value = normalizeSharingMode(doc.sharingMode, 'private');
-      themeInput.value = String(doc.theme || '').trim();
-      fillThemePicker('doc-binding-theme-known', 'doc-binding-theme', themeCatalog, 'Thématiques existantes...');
-      nameEl.textContent = doc.name || 'Document';
-      sourceEl.textContent = `Source: ${doc.sourceProjectName || 'Hors projet'}`;
-      storagePathInput.value = formatDocumentStoragePathForDisplay(doc);
-      storagePathInput.setAttribute('title', storagePathInput.value);
+        const states = await getAllProjectStates();
+        const editableProjects = (states || []).filter(state => state?.project && canEditProjectMeta(state));
+        const sourceProjectId = String(doc.sourceProjectId || '').trim();
+        const themeCatalog = [
+          ...((states || []).flatMap((state) => (state?.themes || []))),
+          ...((states || []).flatMap((state) => (state?.tasks || []).map((task) => String(task?.theme || '').trim()))),
+          ...((globalThemeCatalog || []).map((theme) => String(theme?.name || '').trim()))
+        ];
+        projectSelect.innerHTML = [
+          '<option value="">Hors projet</option>',
+          ...editableProjects.map(state => `<option value="${escapeHtml(state.project.projectId)}" ${String(state.project.projectId) === sourceProjectId ? 'selected' : ''}>${escapeHtml(state.project.name || 'Projet')}</option>`)
+        ].join('');
+        modeSelect.value = normalizeSharingMode(doc.sharingMode, 'private');
+        themeInput.value = String(doc.theme || '').trim();
+        fillThemePicker('doc-binding-theme-known', 'doc-binding-theme', themeCatalog, 'Thématiques existantes...');
+        nameEl.textContent = doc.name || 'Document';
+        sourceEl.textContent = `Source: ${doc.sourceProjectName || 'Hors projet'}`;
+        storagePathInput.value = formatDocumentStoragePathForDisplay(doc);
+        storagePathInput.setAttribute('title', storagePathInput.value);
 
-      currentDocBindingContext = {
-        doc
-      };
-      await populateDocBindingTaskOptions(sourceProjectId, Array.isArray(doc.linkedTaskIds) ? (doc.linkedTaskIds[0] || '') : '');
-      initDocumentBindingInlineEditing(true);
-      setDocumentBindingReadModeAll(false);
-      modal.classList.remove('hidden');
+        currentDocBindingContext = {
+          doc
+        };
+        await populateDocBindingTaskOptions(sourceProjectId, Array.isArray(doc.linkedTaskIds) ? doc.linkedTaskIds : []);
+        initDocumentBindingInlineEditing(true);
+        setDocumentBindingReadModeAll(false);
+        modal.classList.remove('hidden');
+      });
     }
 
     function closeDocumentBindingModal() {
@@ -22288,7 +22987,9 @@
       if (!projectSelect || !taskSelect || !modeSelect || !themeInput) return;
 
       const targetProjectId = String(projectSelect.value || '').trim();
-      const selectedTaskId = String(taskSelect.value || '').trim();
+      const selectedTaskIds = Array.from(taskSelect?.selectedOptions || [])
+        .map((opt) => String(opt.value || '').trim())
+        .filter(Boolean);
       const nextSharingMode = normalizeSharingMode(modeSelect.value, 'private');
       const nextTheme = String(themeInput.value || '').trim() || 'General';
       let changed = false;
@@ -22352,7 +23053,7 @@
               theme: nextTheme,
               notes: doc.notes || '',
               sharingMode: nextSharingMode,
-              linkedTaskIds: selectedTaskId ? [selectedTaskId] : [],
+              linkedTaskIds: targetProjectId ? selectedTaskIds : [],
               linkedNoteIds: Array.isArray(doc.linkedNoteIds) ? [...doc.linkedNoteIds] : []
             }
           );
@@ -22421,7 +23122,7 @@
                 theme: nextTheme,
                 notes: doc.notes || '',
                 sharingMode: nextSharingMode,
-                linkedTaskIds: selectedTaskId ? [selectedTaskId] : [],
+                linkedTaskIds: targetProjectId ? selectedTaskIds : [],
                 linkedNoteIds: Array.isArray(doc.linkedNoteIds) ? [...doc.linkedNoteIds] : []
               }
             );
@@ -22463,8 +23164,8 @@
           if (refreshed) {
             currentDocBindingContext = { doc: refreshed };
             const sourceProjectId = String(refreshed.sourceProjectId || '').trim();
-            const selectedTask = Array.isArray(refreshed.linkedTaskIds) ? (refreshed.linkedTaskIds[0] || '') : '';
-            await populateDocBindingTaskOptions(sourceProjectId, selectedTask);
+            const selectedTasks = Array.isArray(refreshed.linkedTaskIds) ? refreshed.linkedTaskIds : [];
+            await populateDocBindingTaskOptions(sourceProjectId, selectedTasks);
             const modeSelect = document.getElementById('doc-binding-mode');
             const projectSelect = document.getElementById('doc-binding-project');
             const themeInput = document.getElementById('doc-binding-theme');
@@ -24394,6 +25095,152 @@
       return rows.join('\n').trim();
     }
 
+    function normalizeEmailAddressField(value) {
+      if (!value) return '';
+      if (typeof value === 'string') return decodeMimeEncodedWords(value);
+      if (Array.isArray(value)) {
+        return value
+          .map((entry) => normalizeEmailAddressField(entry))
+          .filter(Boolean)
+          .join(', ');
+      }
+      if (typeof value === 'object') {
+        const singleName = String(value?.name || '').trim();
+        const singleAddress = String(value?.address || '').trim();
+        if (singleAddress) {
+          return singleName ? `${singleName} <${singleAddress}>` : singleAddress;
+        }
+        if (Array.isArray(value?.value)) {
+          return value.value
+            .map((entry) => normalizeEmailAddressField(entry))
+            .filter(Boolean)
+            .join(', ');
+        }
+      }
+      return '';
+    }
+
+    function stringifyPostalMimeHeaders(headers) {
+      const rows = [];
+      if (headers instanceof Map) {
+        headers.forEach((value, key) => {
+          rows.push(`${String(key || '')}: ${decodeMimeEncodedWords(String(value || ''))}`);
+        });
+      } else if (Array.isArray(headers)) {
+        headers.forEach((entry) => {
+          const key = String(entry?.key || entry?.name || '').trim().toLowerCase();
+          const value = entry?.value ?? entry?.line ?? '';
+          if (!key) return;
+          rows.push(`${key}: ${decodeMimeEncodedWords(String(value || ''))}`);
+        });
+      }
+      return rows.join('\n').trim();
+    }
+
+    const POSTAL_MIME_CDN_URL = 'https://esm.sh/postal-mime@2.4.4?bundle';
+    let postalMimeModulePromise = null;
+
+    async function ensurePostalMimeModule() {
+      if (postalMimeModulePromise) return postalMimeModulePromise;
+      postalMimeModulePromise = import(POSTAL_MIME_CDN_URL)
+        .then((mod) => mod?.default || mod)
+        .catch((error) => {
+          console.warn('postal-mime CDN unavailable, fallback parser used:', error);
+          return null;
+        });
+      return postalMimeModulePromise;
+    }
+
+    async function parseEmlDigestWithPostalMime(rawBytesOrText) {
+      try {
+        const PostalMime = await ensurePostalMimeModule();
+        if (!PostalMime || typeof PostalMime.parse !== 'function') return null;
+        const parsed = await PostalMime.parse(rawBytesOrText);
+        if (!parsed || typeof parsed !== 'object') return null;
+        const sourceHtml = String(parsed.html || '').trim();
+        const plainText = normalizeDigestText(String(parsed.text || '').trim());
+        const htmlText = sourceHtml ? normalizeDigestText(stripHtmlTagsForDigest(sourceHtml)) : '';
+        const text = plainText || htmlText;
+        const subject = decodeMimeEncodedWords(String(parsed.subject || '').trim());
+        const author = normalizeEmailAddressField(parsed.from);
+        const recipients = [
+          normalizeEmailAddressField(parsed.to),
+          normalizeEmailAddressField(parsed.cc)
+        ].filter(Boolean).join(', ');
+        const date = String(parsed.date || parsed.headers?.get?.('date') || '').trim();
+        const headersDump = stringifyPostalMimeHeaders(parsed.headers);
+        const attachments = Array.isArray(parsed.attachments)
+          ? parsed.attachments.map((att) => ({
+              mimeType: String(att?.mimeType || att?.contentType || 'application/octet-stream').trim(),
+              fileName: String(att?.filename || '').trim(),
+              disposition: String(att?.disposition || '').trim(),
+              transferEncoding: String(att?.encoding || '').trim().toLowerCase(),
+              payloadChars: Number(att?.content?.byteLength || att?.content?.length || 0) || 0
+            }))
+          : [];
+        return {
+          title: subject,
+          author,
+          recipients,
+          date,
+          text,
+          sourceHtml,
+          headersDump,
+          attachments
+        };
+      } catch (error) {
+        console.warn('postal-mime parse failed, fallback parser used:', error);
+        return null;
+      }
+    }
+
+    function extractRfc822CandidateFromMsgRaw(raw) {
+      const source = String(raw || '').replace(/\0+/g, '');
+      if (!source.trim()) return '';
+      const starters = ['\nFrom:', '\nDate:', '\nSubject:', '\nReturn-Path:', '\nMIME-Version:', '\nContent-Type:'];
+      let startIdx = -1;
+      for (const marker of starters) {
+        const idx = source.indexOf(marker);
+        if (idx >= 0 && (startIdx < 0 || idx < startIdx)) startIdx = idx;
+      }
+      if (startIdx < 0) {
+        const alt = source.match(/(?:^|\n)(From|Date|Subject|Return-Path|MIME-Version|Content-Type):/i);
+        startIdx = alt && typeof alt.index === 'number' ? alt.index : -1;
+      }
+      if (startIdx < 0) return '';
+      let candidate = source.slice(Math.max(0, startIdx)).replace(/\r\n/g, '\n');
+      const eofMarkers = ['\nFrom ???@???', '\n--__', '\n------=_Part_'];
+      for (const marker of eofMarkers) {
+        const idx = candidate.indexOf(marker);
+        if (idx > 0 && idx > 1024) {
+          candidate = candidate.slice(0, idx);
+          break;
+        }
+      }
+      if (!/\nContent-Type:/i.test(candidate) && !/\nMIME-Version:/i.test(candidate)) return '';
+      if (!/\n\n/.test(candidate)) return '';
+      return candidate.trim();
+    }
+
+    function extractHtmlFragmentFromMsgRaw(raw) {
+      const source = String(raw || '').replace(/\0+/g, '');
+      const lower = source.toLowerCase();
+      let start = lower.indexOf('<html');
+      if (start < 0) start = lower.indexOf('<!doctype html');
+      if (start < 0) return '';
+      let end = lower.indexOf('</html>', start);
+      if (end >= 0) end += '</html>'.length;
+      if (end < 0) end = Math.min(source.length, start + 400000);
+      return String(source.slice(start, end) || '').trim();
+    }
+
+    function extractMsgHeaderField(raw, fieldName) {
+      const source = String(raw || '').replace(/\0+/g, '');
+      const re = new RegExp(`(?:^|\\n)${String(fieldName || '').replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}\\s*:\\s*([^\\n\\r]+)`, 'i');
+      const match = source.match(re);
+      return match ? decodeMimeEncodedWords(String(match[1] || '').trim()) : '';
+    }
+
     function buildPdfStructuredPage(pageItems, options = {}) {
       const items = Array.isArray(pageItems) ? pageItems : [];
       const pageHeight = Number(options?.pageHeight || 0);
@@ -24719,6 +25566,14 @@
       `;
     }
 
+    function updateTaskCardsLayoutLabel(elementId, cardsCount) {
+      const el = document.getElementById(elementId);
+      if (!el) return;
+      const count = Math.max(0, Number(cardsCount) || 0);
+      const noun = count > 1 ? 'cartes' : 'carte';
+      el.textContent = `Affichage des ${count} ${noun}`;
+    }
+
     function linkifyPdfMarkersToPageLinksSection(html, links = [], pageNo = 1, anchorPrefix = 'feed-digest-pdf') {
       const source = String(html || '');
       const list = Array.isArray(links) ? links.filter(Boolean) : [];
@@ -24795,6 +25650,55 @@
       return sanitizeProjectDescriptionHtml(renderSafeMarkdown(source));
     }
 
+    function splitEmailBodyAndSignatureFromText(text) {
+      const source = normalizeDigestText(text);
+      if (!source) return { bodyText: '', signatureText: '' };
+      const lines = source.split('\n');
+      const markerPatterns = [
+        /^--\s*$/,
+        /^--\s+/,
+        /^cordialement[,.\s]*$/i,
+        /^bien cordialement[,.\s]*$/i,
+        /^merci[,.\s]*$/i,
+        /^thanks[,.\s]*$/i,
+        /^best regards[,.\s]*$/i,
+        /^kind regards[,.\s]*$/i,
+        /^sent from my/i
+      ];
+      let markerIndex = -1;
+      for (let i = Math.max(0, lines.length - 14); i < lines.length; i += 1) {
+        const line = String(lines[i] || '').trim();
+        if (!line) continue;
+        if (markerPatterns.some((re) => re.test(line))) {
+          markerIndex = i;
+          break;
+        }
+      }
+      if (markerIndex < 0) return { bodyText: source, signatureText: '' };
+      const bodyText = normalizeDigestText(lines.slice(0, markerIndex).join('\n'));
+      const signatureText = normalizeDigestText(lines.slice(markerIndex).join('\n'));
+      return { bodyText, signatureText };
+    }
+
+    function splitEmailBodyAndSignatureFromHtml(html) {
+      const source = String(html || '').trim();
+      if (!source) return { bodyHtml: '', signatureHtml: '' };
+      const root = document.createElement('div');
+      root.innerHTML = source;
+      const signatureNode = root.querySelector('.gmail_signature, .moz-signature, [data-smartmail="gmail_signature"], blockquote[type="cite"]');
+      if (!signatureNode) {
+        const plain = splitEmailBodyAndSignatureFromText(stripHtmlTagsForDigest(source));
+        return {
+          bodyHtml: source,
+          signatureHtml: plain.signatureText ? `<p>${escapeHtml(plain.signatureText).replace(/\n/g, '<br>')}</p>` : ''
+        };
+      }
+      const signatureHtml = String(signatureNode.outerHTML || '').trim();
+      signatureNode.remove();
+      const bodyHtml = String(root.innerHTML || '').trim();
+      return { bodyHtml, signatureHtml };
+    }
+
     function buildDigestContentHtml(digest, file, displayMode = 'compact') {
       const effectiveMode = normalizeGlobalFeedDigestView(displayMode, 'compact');
       const sourceLabel = digest.kind === 'email'
@@ -24811,21 +25715,36 @@
       let compactPanelHtml = '';
       let fullPanelHtml = '';
       if (digest.kind === 'email') {
-        const headersDump = String(digest.headersDump || '').trim();
         const htmlFragment = String(digest.sourceHtml || '').trim();
-        const sanitizedHtmlFragment = sanitizeDigestHtmlFragment(htmlFragment);
-        const compactText = trimDigestTextForCompact(digest.text || '', FEED_DIGEST_COMPACT_TEXT_MAX_CHARS, FEED_DIGEST_COMPACT_TEXT_MAX_LINES);
+        const subject = String(digest.title || file?.name || 'Sans objet').trim();
+        const sender = String(digest.sourceAuthor || '').trim() || '-';
+        const recipients = String(digest.sourceRecipients || '').trim() || '-';
+        const splitText = splitEmailBodyAndSignatureFromText(String(digest.text || ''));
+        const splitHtml = splitEmailBodyAndSignatureFromHtml(htmlFragment);
+        const bodyHtmlRaw = String(splitHtml.bodyHtml || '').trim();
+        const signatureHtmlRaw = String(splitHtml.signatureHtml || '').trim();
+        const bodyHtml = sanitizeDigestHtmlFragment(bodyHtmlRaw) || (splitText.bodyText ? `<p>${escapeHtml(splitText.bodyText).replace(/\n/g, '<br>')}</p>` : '');
+        const signatureHtml = sanitizeDigestHtmlFragment(signatureHtmlRaw) || (splitText.signatureText ? `<p>${escapeHtml(splitText.signatureText).replace(/\n/g, '<br>')}</p>` : '');
+        const compactBody = trimDigestTextForCompact(splitText.bodyText || digest.text || '', FEED_DIGEST_COMPACT_TEXT_MAX_CHARS, FEED_DIGEST_COMPACT_TEXT_MAX_LINES);
+        const compactSig = trimDigestTextForCompact(splitText.signatureText || '', 420, 8);
         compactPanelHtml = `
-          ${renderDigestDetailsList(details)}
-          ${compactText.text ? `<pre class="feed-digest-excerpt">${escapeHtml(compactText.text)}</pre>` : '<p>Aucun contenu textuel detecte.</p>'}
-          ${compactText.truncated || sanitizedHtmlFragment ? '<p class="feed-digest-compact-note">Mode compact: contenu complet disponible en mode "Complet".</p>' : ''}
+          <p><strong>Expediteur:</strong> ${escapeHtml(sender)}</p>
+          <p><strong>Destinataires:</strong> ${escapeHtml(recipients)}</p>
+          <p><strong>Objet:</strong> ${escapeHtml(subject || '-')}</p>
+          <p><strong>Message:</strong></p>
+          ${compactBody.text ? `<pre class="feed-digest-excerpt">${escapeHtml(compactBody.text)}</pre>` : '<p>Aucun message detecte.</p>'}
+          <p><strong>Signature:</strong></p>
+          ${compactSig.text ? `<pre class="feed-digest-excerpt">${escapeHtml(compactSig.text)}</pre>` : '<p>-</p>'}
+          ${compactBody.truncated ? '<p class="feed-digest-compact-note">Mode compact: message complet en mode "Complet".</p>' : ''}
         `;
         fullPanelHtml = `
-          ${renderDigestDetailsList(details)}
-          ${headersDump ? `<details open><summary>En-tetes complets</summary><pre class="feed-digest-excerpt">${escapeHtml(headersDump)}</pre></details>` : ''}
-          ${sanitizedHtmlFragment ? `<details open><summary>Structure HTML complete du mail</summary><section class="feed-digest-mail-html">${sanitizedHtmlFragment}</section></details>` : ''}
-          ${digest.text ? `<details><summary>Version texte complete</summary><pre class="feed-digest-excerpt">${escapeHtml(String(digest.text || ''))}</pre></details>` : `<p>Aucun contenu textuel detecte.</p>`}
-          ${Array.isArray(digest.attachments) && digest.attachments.length ? `<details><summary>Pieces jointes detectees (${digest.attachments.length})</summary><ul>${digest.attachments.map((att) => `<li>${escapeHtml(`${att.fileName || '(sans nom)'} • ${att.mimeType || 'application/octet-stream'} • encodage ${att.transferEncoding || 'n/a'} • ${Number(att.payloadChars || 0)} caracteres` )}</li>`).join('')}</ul></details>` : ''}
+          <p><strong>Expediteur:</strong> ${escapeHtml(sender)}</p>
+          <p><strong>Destinataires:</strong> ${escapeHtml(recipients)}</p>
+          <p><strong>Objet:</strong> ${escapeHtml(subject || '-')}</p>
+          <p><strong>Message:</strong></p>
+          ${bodyHtml || (splitText.bodyText ? `<pre class="feed-digest-excerpt">${escapeHtml(splitText.bodyText)}</pre>` : '<p>Aucun message detecte.</p>')}
+          <p><strong>Signature:</strong></p>
+          ${signatureHtml || (splitText.signatureText ? `<pre class="feed-digest-excerpt">${escapeHtml(splitText.signatureText)}</pre>` : '<p>-</p>')}
         `;
       } else if (digest.kind === 'pdf') {
         const metadataLines = Array.isArray(digest.metadataLines) ? digest.metadataLines.filter(Boolean) : [];
@@ -24894,7 +25813,12 @@
       `);
     }
 
-    function parseEmlDigest(raw) {
+    async function parseEmlDigest(raw, options = {}) {
+      const rawBytes = options?.rawBytes;
+      const postalParsed = await parseEmlDigestWithPostalMime(rawBytes instanceof Uint8Array ? rawBytes : String(raw || ''));
+      if (postalParsed && (postalParsed.text || postalParsed.sourceHtml || postalParsed.title || postalParsed.author)) {
+        return postalParsed;
+      }
       const source = String(raw || '');
       const { headerText } = splitMimeHeaderAndBody(source);
       const headers = parseMimeHeaders(headerText);
@@ -24906,6 +25830,7 @@
       return {
         title: decodeMimeEncodedWords(headers.get('subject') || ''),
         author: decodeMimeEncodedWords(headers.get('from') || ''),
+        recipients: decodeMimeEncodedWords(headers.get('to') || ''),
         date: decodeMimeEncodedWords(headers.get('date') || ''),
         text: normalizeDigestText(text),
         sourceHtml,
@@ -24930,17 +25855,61 @@
 
       if (ext === 'eml' || type === 'message/rfc822') {
         const buffer = await file.arrayBuffer();
-        const raw = byteArrayToLatin1String(new Uint8Array(buffer));
-        const parsed = parseEmlDigest(raw);
+        const bytes = new Uint8Array(buffer);
+        const raw = byteArrayToLatin1String(bytes);
+        const parsed = await parseEmlDigest(raw, { rawBytes: bytes });
         return {
           kind: 'email',
           title: parsed.title || name,
           sourceAuthor: parsed.author || '',
+          sourceRecipients: parsed.recipients || '',
           sourceDate: parsed.date || '',
           text: parsed.text,
           sourceHtml: parsed.sourceHtml || '',
           headersDump: parsed.headersDump || '',
           attachments: Array.isArray(parsed.attachments) ? parsed.attachments : []
+        };
+      }
+
+      if (ext === 'msg' || type.includes('vnd.ms-outlook')) {
+        const buffer = await file.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        const raw = byteArrayToLatin1String(bytes);
+        const mimeCandidate = extractRfc822CandidateFromMsgRaw(raw);
+        if (mimeCandidate) {
+          const parsed = await parseEmlDigest(mimeCandidate);
+          if (parsed && (parsed.text || parsed.sourceHtml)) {
+            return {
+              kind: 'email',
+              title: parsed.title || name,
+              sourceAuthor: parsed.author || '',
+              sourceRecipients: parsed.recipients || '',
+              sourceDate: parsed.date || '',
+              text: parsed.text,
+              sourceHtml: parsed.sourceHtml || '',
+              headersDump: parsed.headersDump || '',
+              attachments: Array.isArray(parsed.attachments) ? parsed.attachments : []
+            };
+          }
+        }
+
+        const htmlFragment = extractHtmlFragmentFromMsgRaw(raw);
+        const printable = extractPrintableStringsFromBinary(buffer);
+        const htmlText = normalizeDigestText(stripHtmlTagsForDigest(htmlFragment));
+        const printableText = normalizeDigestText(printable);
+        const text = htmlText || printableText;
+        return {
+          kind: 'email',
+          title: extractMsgHeaderField(raw, 'Subject') || name,
+          sourceAuthor: extractMsgHeaderField(raw, 'From'),
+          sourceRecipients: extractMsgHeaderField(raw, 'To'),
+          sourceDate: extractMsgHeaderField(raw, 'Date'),
+          text,
+          sourceHtml: htmlFragment || '',
+          headersDump: '',
+          attachments: [],
+          degraded: true,
+          unavailableReason: 'MSG parse heuristique (sans parser natif)'
         };
       }
 
@@ -25185,6 +26154,99 @@
       showToast(`${digestBlocks.length} digest importe(s) dans la note.`);
     }
 
+    function appendDigestBlocksToEditorById(editorId, fallbackInputId, digestBlocks = []) {
+      const safeEditorId = String(editorId || '').trim();
+      if (!safeEditorId) return false;
+      const safeFallbackId = String(fallbackInputId || '').trim();
+      const blocks = Array.isArray(digestBlocks) ? digestBlocks.filter(Boolean) : [];
+      if (!blocks.length) return false;
+
+      const inserted = appendDigestBlocksToRichEditor(safeEditorId, safeFallbackId, blocks);
+      if (inserted) return true;
+
+      const host = document.getElementById(safeEditorId);
+      if (!host) return false;
+      const importedHtml = blocks.join('<p><br></p><hr><p><br></p>');
+      const quillRoot = host.classList.contains('ql-editor')
+        ? host
+        : host.querySelector('.ql-editor');
+      const quillFromDom = quillRoot && window.Quill && typeof window.Quill.find === 'function'
+        ? window.Quill.find(quillRoot)
+        : null;
+      if (quillFromDom && quillFromDom.clipboard) {
+        const currentHtml = String(quillFromDom.root?.innerHTML || '').trim();
+        const hasExistingDraft = !!currentHtml && currentHtml !== '<p><br></p>';
+        const nextHtml = hasExistingDraft
+          ? `${currentHtml}<p><br></p><hr><p><br></p>${importedHtml}`
+          : importedHtml;
+        quillFromDom.clipboard.dangerouslyPasteHTML(nextHtml || '<p><br></p>');
+        const len = Math.max(0, quillFromDom.getLength() - 1);
+        quillFromDom.setSelection(len, 0, 'user');
+        quillFromDom.focus();
+        return true;
+      }
+
+      if (host.isContentEditable || host.getAttribute('contenteditable') === 'true') {
+        host.focus();
+        if (typeof insertHtmlAtCursor === 'function') {
+          const ok = insertHtmlAtCursor(importedHtml);
+          if (ok) return true;
+        }
+        host.insertAdjacentHTML('beforeend', importedHtml);
+        host.dispatchEvent(new Event('input', { bubbles: true }));
+        return true;
+      }
+      return false;
+    }
+
+    async function requestDigestImportForEditor(editorId, fallbackInputId = '', options = {}) {
+      const safeEditorId = String(editorId || '').trim();
+      if (!safeEditorId) return false;
+      const digestViewMode = normalizeGlobalFeedDigestView(options?.digestView || pickGlobalFeedDigestImportMode(), globalFeedDigestViewMode);
+      const picker = document.createElement('input');
+      picker.type = 'file';
+      picker.multiple = true;
+      picker.accept = '.eml,.msg,.txt,.md,.html,.htm,.pdf,.doc,.docx,.odt,.rtf';
+      picker.className = 'hidden';
+      document.body.appendChild(picker);
+
+      const files = await new Promise((resolve) => {
+        picker.addEventListener('change', () => {
+          const selected = Array.from(picker.files || []).filter(Boolean);
+          resolve(selected);
+        }, { once: true });
+        picker.click();
+      });
+      picker.remove();
+      if (!Array.isArray(files) || files.length === 0) return false;
+
+      const digestBlocks = [];
+      for (const file of files) {
+        try {
+          const digest = await extractFeedDigestFromFile(file);
+          digestBlocks.push(buildDigestContentHtml(digest, file, digestViewMode));
+        } catch (error) {
+          console.warn('Editor digest import failed:', error);
+          showToast(`Digest impossible pour ${file?.name || 'fichier'}`);
+        }
+      }
+      if (!digestBlocks.length) return false;
+      const inserted = appendDigestBlocksToEditorById(safeEditorId, fallbackInputId, digestBlocks);
+      if (!inserted) {
+        showToast('Impossible d inserer le digest dans cet editeur');
+        return false;
+      }
+
+      if (safeEditorId === 'global-feed-editor') {
+        await updateGlobalFeedMentionCounter();
+      }
+      if (safeEditorId === 'project-note-content-editor') {
+        scheduleProjectNoteDraftSave();
+      }
+      showToast(`${digestBlocks.length} digest importe(s) dans l editeur.`);
+      return true;
+    }
+
     async function publishGlobalFeedPost() {
       const input = document.getElementById('global-feed-input');
       const projectSelect = document.getElementById('global-feed-project-ref');
@@ -25295,6 +26357,12 @@
         projectNotesFocusNoteId = noteId;
         await showProjectDetail(projectId, { resetScroll: true });
         setProjectView('notes');
+        return;
+      }
+      if (t === 'global-note') {
+        globalNotesFocusNoteId = id;
+        await showGlobalWorkspace('notes');
+        openGlobalNoteEditor(id);
         return;
       }
       if (t === 'calendar-info') {
@@ -25489,6 +26557,7 @@
     window.cancelEditGlobalFeedPost = cancelEditGlobalFeedPost;
     window.deleteGlobalFeedPost = deleteGlobalFeedPost;
     window.openGlobalFeedComposerForNewPost = openGlobalFeedComposerForNewPost;
+    window.TaskMDARequestDigestForEditor = requestDigestImportForEditor;
 
     async function sendGlobalMessage() {
       const input = document.getElementById('global-message-input');
@@ -26871,6 +27940,7 @@
         workflow: ['Workflow', 'Organisation metier: carte, agents, taches, procedures et logiciels.'],
         calendar: ['Vue Calendrier (Tous projets)', 'Dates limites consolidées avec recherche thématique/titre.'],
         docs: ['Vue Documents (Tous projets)', 'Référentiel documentaire projet + thématique hors projet.'],
+        notes: ['Notes transverses', 'Notes privees et notes transverses, avec publication optionnelle dans le fil d information.'],
         messages: ['Messagerie hors projet', 'Canal general (tous) ou discussion privee entre agents connus du dossier collaboratif.'],
         feed: ["Fil d'information transverse", 'Activités automatiques (créations projet/tâche) + posts manuels, mentions et références croisées.'],
         rgpd: ['RGPD', 'Registre, détection semi-automatique, contrôles de conformité et journal des activités.'],
@@ -26883,6 +27953,7 @@
       document.getElementById('global-workflow-section')?.classList.toggle('hidden', view !== 'workflow');
       document.getElementById('global-calendar-section')?.classList.toggle('hidden', view !== 'calendar');
       document.getElementById('global-docs-section')?.classList.toggle('hidden', view !== 'docs');
+      document.getElementById('global-notes-section')?.classList.toggle('hidden', view !== 'notes');
       document.getElementById('global-messages-section')?.classList.toggle('hidden', view !== 'messages');
       document.getElementById('global-feed-section')?.classList.toggle('hidden', view !== 'feed');
       document.getElementById('global-rgpd-section')?.classList.toggle('hidden', view !== 'rgpd');
@@ -26929,6 +28000,7 @@
       }
       workspaceMode = 'global';
       globalTasksPage = 1;
+      globalArchivedTasksPage = 1;
       currentProjectId = null;
       currentProjectState = null;
       document.getElementById('project-detail').classList.add('hidden');
@@ -26951,6 +28023,8 @@
             ? 'calendar'
             : view === 'docs'
               ? 'docs'
+              : view === 'notes'
+                ? 'notes'
               : view === 'messages'
                 ? 'messages'
                 : view === 'feed'
@@ -26975,6 +28049,7 @@
       }
       if (view === 'calendar') await renderGlobalCalendar();
       if (view === 'docs') await renderGlobalDocs();
+      if (view === 'notes') await renderGlobalNotes();
       if (view === 'messages') {
         resetGlobalMessageRenderLimits();
         await renderGlobalMessages();
@@ -27004,6 +28079,7 @@
      * Basé sur le ratio : (Maintenant - Création) / (Échéance - Création)
      */
     function calculateTaskProgress(task) {
+      if (isTaskDeadlineIgnored(task)) return 0;
       if (!task.dueDate) return 0;
       const start = task.createdAt || (task.requestDate ? new Date(task.requestDate).getTime() : Date.now() - (7 * 24 * 3600 * 1000));
       const end = new Date(task.dueDate).getTime();
@@ -27018,7 +28094,7 @@
     }
 
     function buildTaskProgressBarHtml(task) {
-      if (!task.dueDate || task.status === 'termine') return '';
+      if (!task.dueDate || task.status === 'termine' || isTaskDeadlineIgnored(task)) return '';
       
       const percent = calculateTaskProgress(task);
       const dueStatus = getTaskDueStatus(task);
@@ -27255,6 +28331,7 @@
       const container = document.getElementById('tasks-container');
       const paginationContainer = document.getElementById('tasks-pagination');
       const layoutToolbar = document.querySelector('#task-list-section .project-task-layout-toolbar');
+      updateTaskCardsLayoutLabel('project-task-layout-label', 0);
       if (layoutToolbar) {
         layoutToolbar.classList.toggle('hidden', projectTaskPresentationMode !== 'cards');
       }
@@ -27262,6 +28339,7 @@
       applyProjectTaskCardsLayoutClass();
       updateProjectTaskLayoutButtons();
       const filteredTasks = filterProjectTasksByControls(tasks);
+      updateTaskCardsLayoutLabel('project-task-layout-label', filteredTasks.length);
 
       if (filteredTasks.length === 0) {
         container.innerHTML = '<p class="text-gray-500 text-center py-8">Aucune tâche pour le moment</p>';
@@ -27412,6 +28490,7 @@
     function renderArchivedTasks(tasks) {
       const countEl = document.getElementById('archived-tasks-count');
       const container = document.getElementById('archived-tasks-container');
+      const paginationContainer = document.getElementById('archived-tasks-pagination');
       const archived = (tasks || []).filter(task => task?.archivedAt);
       if (countEl) {
         countEl.textContent = `(${archived.length})`;
@@ -27421,11 +28500,14 @@
 
       if (archived.length === 0) {
         container.innerHTML = '<p class="text-sm text-slate-500">Aucune tâche archivée.</p>';
+        if (paginationContainer) paginationContainer.innerHTML = '';
         return;
       }
 
-      container.innerHTML = archived
-        .sort((a, b) => (b.archivedAt || 0) - (a.archivedAt || 0))
+      const sortedArchived = [...archived].sort((a, b) => (b.archivedAt || 0) - (a.archivedAt || 0));
+      const pagination = paginateItems(sortedArchived, archivedTasksPage, paginationConfig.tasksPerPage);
+      archivedTasksPage = pagination.currentPage;
+      container.innerHTML = pagination.pageItems
         .map(task => {
           const canEdit = canEditTaskInProject(task, currentProjectState);
           const canDelete = canDeleteTaskInProject(task, currentProjectState);
@@ -27444,6 +28526,7 @@
             </div>
           `;
         }).join('');
+      renderPagination('archived-tasks-pagination', pagination, 'setArchivedTasksPage', 'taches archivees');
     }
 
     async function restoreArchivedTask(taskId) {
@@ -27570,6 +28653,7 @@
           </div>
         `;
       }).join('');
+      renderPagination('global-tasks-pagination', pagination, 'setGlobalArchivedTasksPage', 'taches archivees');
     }
 
     function parseTaskDateOrNull(rawDate) {
@@ -28575,17 +29659,25 @@
         clearTimeout(docPreviewInlineDebounceTimers.get(field));
       }
       docPreviewInlineDebounceTimers.set(field, setTimeout(() => {
-        persistDocumentPreviewInlineField(field, normalizedValue, { expectedContext: contextSnapshot }).catch((error) => {
-          console.error('document preview inline save failed', error);
-        });
+        setInlineSaveIndicator('doc-preview', 'saving');
+        runWithoutGlobalLoading(() => persistDocumentPreviewInlineField(field, normalizedValue, { expectedContext: contextSnapshot }))
+          .then(() => setInlineSaveIndicator('doc-preview', 'saved'))
+          .catch((error) => {
+            setInlineSaveIndicator('doc-preview', 'error');
+            console.error('document preview inline save failed', error);
+          });
       }, options.immediate ? 0 : 220));
       if (docPreviewInlineFinalizeTimers.has(field)) {
         clearTimeout(docPreviewInlineFinalizeTimers.get(field));
       }
       docPreviewInlineFinalizeTimers.set(field, setTimeout(() => {
-        persistDocumentPreviewInlineField(field, normalizedValue, { force: true, expectedContext: contextSnapshot }).catch((error) => {
-          console.error('document preview inline finalize save failed', error);
-        });
+        setInlineSaveIndicator('doc-preview', 'saving');
+        runWithoutGlobalLoading(() => persistDocumentPreviewInlineField(field, normalizedValue, { force: true, expectedContext: contextSnapshot }))
+          .then(() => setInlineSaveIndicator('doc-preview', 'saved'))
+          .catch((error) => {
+            setInlineSaveIndicator('doc-preview', 'error');
+            console.error('document preview inline finalize save failed', error);
+          });
       }, 900));
     }
 
@@ -30835,9 +31927,21 @@
     }
 
     async function removeAttachment(taskId, attachmentIndex) {
-      if (!currentProjectId) return;
-      const state = await getProjectState(currentProjectId);
-      const task = state.tasks.find(t => t.taskId === taskId);
+      const normalizedTaskId = String(taskId || '').trim();
+      const normalizedIndex = Number.parseInt(String(attachmentIndex), 10);
+      if (!normalizedTaskId || !Number.isFinite(normalizedIndex) || normalizedIndex < 0) return;
+
+      let projectId = String(currentProjectId || '').trim();
+      if (!projectId && currentGlobalTaskDetailResolved?.sourceType === 'project') {
+        const ctxTaskId = String(currentGlobalTaskDetailResolved?.task?.taskId || '').trim();
+        if (ctxTaskId && ctxTaskId === normalizedTaskId) {
+          projectId = String(currentGlobalTaskDetailResolved?.projectId || '').trim();
+        }
+      }
+      if (!projectId) return;
+
+      const state = await getProjectState(projectId);
+      const task = state.tasks.find(t => t.taskId === normalizedTaskId);
       if (!task) return;
       if (!canEditTaskInProject(task, state)) {
         showToast('Action non autorisee');
@@ -30845,18 +31949,23 @@
       }
 
       const attachments = [...(task.attachments || [])];
-      attachments.splice(attachmentIndex, 1);
+      if (normalizedIndex >= attachments.length) return;
+      attachments.splice(normalizedIndex, 1);
 
       const event = createEvent(
         EventTypes.UPDATE_TASK,
-        currentProjectId,
+        projectId,
         currentUser.userId,
-        { taskId, changes: { attachments } }
+        { taskId: normalizedTaskId, changes: { attachments } }
       );
       await publishEvent(event);
-      if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [event]);
+      if (sharedFolderHandle) void syncProjectEventsToSharedSpace(projectId, [event]);
       showToast('✅ Document supprimé');
-      await showProjectDetail(currentProjectId);
+      if (workspaceMode === 'project' && String(currentProjectId || '').trim() === projectId) {
+        await showProjectDetail(projectId);
+      } else if (currentGlobalTaskDetailRef) {
+        await openGlobalTaskDetails(currentGlobalTaskDetailRef);
+      }
     }
 
     async function readDocumentFilesFromInput(inputId, options = {}) {
@@ -31581,6 +32690,26 @@
           : 'Dernier archivage auto exécuté le : jamais';
       }
     });
+    document.getElementById('view-option-dashboard-hero-short-chars')?.addEventListener('change', async (e) => {
+      if (!isAppAdmin()) {
+        showToast('Action reservee a l admin application');
+        await renderGlobalSettings();
+        return;
+      }
+      const target = e.target;
+      const chars = normalizeDashboardHeroShortContentMaxChars(target?.value);
+      if (target) target.value = String(chars);
+      const next = deepClone(viewOptions || DEFAULT_VIEW_OPTIONS);
+      next.ui = next.ui || {};
+      next.ui.dashboardHeroShortContentMaxChars = chars;
+      await saveViewOptions(next);
+      const current = document.getElementById('view-option-dashboard-hero-short-chars-current');
+      if (current) current.textContent = `Seuil actuel: ${chars} caractères`;
+      if (workspaceMode === 'dashboard') {
+        await renderDashboardNews();
+      }
+      showToast(`Seuil de la Une mis à jour: ${chars} caractères`);
+    });
     document.getElementById('btn-via-annuaire-ror-save')?.addEventListener('click', async () => {
       if (!isAppAdmin()) {
         showToast('Action reservee a l admin application');
@@ -32023,11 +33152,13 @@
       if (workspaceMode === 'global') {
         if (globalWorkspaceView === 'tasks') {
           globalTasksPage = 1;
+          globalArchivedTasksPage = 1;
           await renderGlobalTasks();
         }
       if (globalWorkspaceView === 'workflow') await renderWorkflowWorkspace();
       if (globalWorkspaceView === 'calendar') await renderGlobalCalendar();
       if (globalWorkspaceView === 'docs') await renderGlobalDocs();
+      if (globalWorkspaceView === 'notes') await renderGlobalNotes();
       if (globalWorkspaceView === 'messages') await renderGlobalMessages();
       if (globalWorkspaceView === 'rgpd') await renderRgpdWorkspace();
       if (globalWorkspaceView === 'settings') await renderGlobalSettings();
@@ -32233,7 +33364,7 @@
       closeDocumentBindingModal();
     });
     document.getElementById('doc-binding-project')?.addEventListener('change', async (e) => {
-      await populateDocBindingTaskOptions(e.target?.value || '', '');
+      await populateDocBindingTaskOptions(e.target?.value || '', []);
       setDocumentBindingFieldReadMode('task', true);
       await scheduleDocumentBindingInlineSave();
       setDocumentBindingFieldReadMode('project', true);
@@ -32251,7 +33382,6 @@
     });
     document.getElementById('doc-binding-task')?.addEventListener('change', async () => {
       await scheduleDocumentBindingInlineSave();
-      setDocumentBindingFieldReadMode('task', true);
     });
     document.getElementById('doc-binding-task')?.addEventListener('blur', () => {
       setDocumentBindingFieldReadMode('task', true);
@@ -32484,7 +33614,11 @@
           next.sections[sectionInfo].pinned[tabInfo] = !currentPinned;
           await saveViewOptions(next);
           renderViewOptionsMatrix(true);
-          updateAppChrome();
+          if (typeof updateAppChrome === 'function') {
+            updateAppChrome();
+          } else if (typeof applyAppBrandingToHeader === 'function') {
+            applyAppBrandingToHeader();
+          }
         }
         return;
       }
@@ -34612,6 +35746,9 @@
     registerSafeBackdropClose('modal-project-note-read', () => {
       closeProjectNoteReadModal();
     });
+    registerSafeBackdropClose('modal-global-note', () => {
+      closeGlobalNoteEditor();
+    });
     registerSafeBackdropClose('modal-app-help', () => {
       document.getElementById('modal-app-help')?.classList.add('hidden');
     });
@@ -34724,6 +35861,51 @@
       const key = String(btn.getAttribute('data-note-theme-tab') || 'all').trim() || 'all';
       setProjectNotesThemeFilter(key);
     });
+    document.getElementById('global-notes-search')?.addEventListener('input', async () => {
+      globalNotesSearchQuery = String(document.getElementById('global-notes-search')?.value || '').trim();
+      await renderGlobalNotes();
+    });
+    document.getElementById('global-notes-scope-filter')?.addEventListener('change', async () => {
+      globalNotesScopeFilter = String(document.getElementById('global-notes-scope-filter')?.value || 'all').trim() || 'all';
+      await renderGlobalNotes();
+    });
+    document.getElementById('global-notes-sort')?.addEventListener('change', async () => {
+      globalNotesSortMode = String(document.getElementById('global-notes-sort')?.value || 'recent').trim() || 'recent';
+      await renderGlobalNotes();
+    });
+    const globalNotesTabs = [
+      ['global-notes-tab-all', 'all'],
+      ['global-notes-tab-mine', 'mine'],
+      ['global-notes-tab-private', 'private'],
+      ['global-notes-tab-transverse', 'transverse'],
+      ['global-notes-tab-published', 'published']
+    ];
+    globalNotesTabs.forEach(([id, mode]) => {
+      document.getElementById(id)?.addEventListener('click', async () => {
+        globalNotesTabMode = mode;
+        await renderGlobalNotes();
+      });
+    });
+    document.getElementById('btn-global-note-new')?.addEventListener('click', async () => {
+      await openGlobalNoteEditor('');
+    });
+    document.getElementById('btn-global-note-save')?.addEventListener('click', async () => {
+      await saveGlobalNoteFromEditor();
+    });
+    document.getElementById('btn-global-note-delete')?.addEventListener('click', async () => {
+      await deleteGlobalNote();
+    });
+    document.getElementById('btn-global-note-cancel')?.addEventListener('click', () => {
+      closeGlobalNoteEditor();
+    });
+    document.getElementById('btn-close-global-note-modal')?.addEventListener('click', () => {
+      closeGlobalNoteEditor();
+    });
+    document.getElementById('btn-global-note-digest')?.addEventListener('click', async () => {
+      const chosenMode = pickGlobalFeedDigestImportMode();
+      if (chosenMode !== 'compact' && chosenMode !== 'full') return;
+      await requestDigestImportForEditor('global-note-content-editor', 'global-note-content', { digestView: chosenMode });
+    });
     document.getElementById('btn-project-note-new')?.addEventListener('click', () => openProjectNoteEditor(''));
     document.getElementById('btn-project-note-cancel')?.addEventListener('click', () => closeProjectNoteEditor());
     document.getElementById('btn-close-project-note-modal')?.addEventListener('click', () => closeProjectNoteEditor());
@@ -34738,40 +35920,40 @@
     });
     document.getElementById('btn-note-selection-to-project')?.addEventListener('click', async () => {
       hideProjectNoteSelectionMenu();
-      const snippetText = String(projectNoteSelectionMenuPayload.text || '').trim();
-      if (!snippetText) {
+      const snippet = normalizeProjectNoteSelectionSnippet(projectNoteSelectionMenuPayload);
+      if (!snippet.text && !snippet.html) {
         showToast('Aucun texte sélectionné');
         return;
       }
-      await appendProjectNoteSelectionToProjectDescription(snippetText);
+      await appendProjectNoteSelectionToProjectDescription(snippet);
     });
     document.getElementById('btn-note-selection-copy')?.addEventListener('click', async () => {
       hideProjectNoteSelectionMenu();
-      const snippetText = String(projectNoteSelectionMenuPayload.text || '').trim();
-      if (!snippetText) {
+      const snippet = normalizeProjectNoteSelectionSnippet(projectNoteSelectionMenuPayload);
+      if (!snippet.text) {
         showToast('Aucun texte sélectionné');
         return;
       }
-      const copied = await copyTextToClipboard(snippetText);
+      const copied = await copyTextToClipboard(snippet.text);
       showToast(copied ? 'Texte copié' : 'Copie impossible');
     });
     document.getElementById('btn-note-selection-to-task')?.addEventListener('click', () => {
       hideProjectNoteSelectionMenu();
-      const snippetText = String(projectNoteSelectionMenuPayload.text || '').trim();
-      if (!snippetText) {
+      const snippet = normalizeProjectNoteSelectionSnippet(projectNoteSelectionMenuPayload);
+      if (!snippet.text && !snippet.html) {
         showToast('Aucun texte sélectionné');
         return;
       }
-      openNoteSelectionTaskTargetModal(snippetText, projectNoteSelectionMenuPayload.noteId || projectNoteReadModalNoteId, { copyMode: 'task' });
+      openNoteSelectionTaskTargetModal(snippet, projectNoteSelectionMenuPayload.noteId || projectNoteReadModalNoteId, { copyMode: 'task' });
     });
     document.getElementById('btn-note-selection-to-project-and-task')?.addEventListener('click', () => {
       hideProjectNoteSelectionMenu();
-      const snippetText = String(projectNoteSelectionMenuPayload.text || '').trim();
-      if (!snippetText) {
+      const snippet = normalizeProjectNoteSelectionSnippet(projectNoteSelectionMenuPayload);
+      if (!snippet.text && !snippet.html) {
         showToast('Aucun texte sélectionné');
         return;
       }
-      openNoteSelectionTaskTargetModal(snippetText, projectNoteSelectionMenuPayload.noteId || projectNoteReadModalNoteId, { copyMode: 'both' });
+      openNoteSelectionTaskTargetModal(snippet, projectNoteSelectionMenuPayload.noteId || projectNoteReadModalNoteId, { copyMode: 'both' });
     });
     document.getElementById('btn-close-note-selection-task-target')?.addEventListener('click', () => closeNoteSelectionTaskTargetModal());
     document.getElementById('btn-cancel-note-selection-task-target')?.addEventListener('click', () => closeNoteSelectionTaskTargetModal());
@@ -34835,16 +36017,35 @@
         }
       });
     }
+    const globalNoteModal = document.getElementById('modal-global-note');
+    if (globalNoteModal && globalNoteModal.dataset.globalNoteShortcutsBound !== '1') {
+      globalNoteModal.dataset.globalNoteShortcutsBound = '1';
+      globalNoteModal.addEventListener('keydown', (event) => {
+        if (globalNoteModal.classList.contains('hidden')) return;
+        const key = String(event.key || '').toLowerCase();
+        if ((event.ctrlKey || event.metaKey) && key === 's') {
+          event.preventDefault();
+          void saveGlobalNoteFromEditor();
+          return;
+        }
+        if (key === 'escape') {
+          event.preventDefault();
+          event.stopPropagation();
+          closeGlobalNoteEditor();
+        }
+      });
+    }
     document.getElementById('project-note-read-content')?.addEventListener('contextmenu', (event) => {
-      const snippetText = getProjectNoteReadSelectedText();
-      if (!snippetText) {
+      const snippet = getProjectNoteReadSelectedSnippet();
+      if (!snippet?.text && !snippet?.html) {
         hideProjectNoteSelectionMenu();
         return;
       }
       event.preventDefault();
       event.stopPropagation();
       showProjectNoteSelectionMenu(event.clientX, event.clientY, {
-        text: snippetText,
+        text: snippet.text,
+        html: snippet.html,
         noteId: projectNoteReadModalNoteId
       });
     });

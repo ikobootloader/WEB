@@ -222,7 +222,7 @@
         <a href="#" id="nav-tasks" class="nav-link"><span class="material-symbols-outlined">assignment</span><span class="nav-link-label">Tâches</span></a>
         <a href="#" id="nav-calendar" class="nav-link"><span class="material-symbols-outlined">calendar_today</span><span class="nav-link-label">Calendrier</span></a>
         <div class="sidebar-workflow-row">
-          <a href="#" id="nav-workflow" class="nav-link"><span class="material-symbols-outlined">schema</span><span class="nav-link-label">Workflow</span></a>
+        <a href="#" id="nav-workflow" class="nav-link"><span class="material-symbols-outlined">schema</span><span class="nav-link-label">Workflow</span></a>
           <button id="nav-workflow-subnav-toggle" class="sidebar-workflow-toggle" type="button" aria-label="Afficher les sous-rubriques Workflow" aria-expanded="false" title="Afficher les sous-rubriques Workflow">
             <span id="nav-workflow-subnav-toggle-icon" class="material-symbols-outlined">keyboard_arrow_down</span>
           </button>
@@ -235,6 +235,7 @@
           <a href="#" id="nav-workflow-group-supervision" class="sidebar-subnav-link"><span class="material-symbols-outlined">monitoring</span><span class="nav-link-label">Supervision</span></a>
         </div>
         <a href="#" id="nav-docs" class="nav-link"><span class="material-symbols-outlined">description</span><span class="nav-link-label">Documents</span></a>
+        <a href="#" id="nav-notes" class="nav-link"><span class="material-symbols-outlined">sticky_note_2</span><span class="nav-link-label">Notes</span></a>
         <a href="#" id="nav-messages" class="nav-link"><span class="material-symbols-outlined">chat</span><span class="nav-link-label">Messagerie</span></a>
         <a href="#" id="nav-feed" class="nav-link"><span class="material-symbols-outlined">campaign</span><span class="nav-link-label">Fil d'info</span></a>
         <a href="#" id="nav-rgpd" class="nav-link"><span class="material-symbols-outlined">gpp_good</span><span class="nav-link-label">RGPD</span></a>
@@ -501,7 +502,7 @@
               </div>
             </div>
             <div id="global-task-layout-toolbar" class="project-task-layout-toolbar mb-3 hidden">
-              <span class="project-task-layout-label">Affichage cartes</span>
+              <span id="global-task-layout-label" class="project-task-layout-label">Affichage cartes</span>
               <div class="project-task-layout-buttons" role="group" aria-label="Densité d'affichage des tâches transverses">
                 <button id="global-task-view-1" type="button" class="project-task-layout-btn view-tab-active" title="Vue détaillée 1 colonne" aria-label="Vue 1 colonne"><span class="material-symbols-outlined">view_agenda</span></button>
                 <button id="global-task-view-2" type="button" class="project-task-layout-btn" title="Vue 2 colonnes" aria-label="Vue 2 colonnes"><span class="material-symbols-outlined">view_column_2</span></button>
@@ -1010,6 +1011,43 @@
             </div>
           </div>
 
+          <div id="global-notes-section" class="panel p-3 hidden">
+            <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 mb-3">
+              <div class="grid grid-cols-1 xl:grid-cols-[1fr_auto_auto_auto] gap-2 items-center">
+                <input id="global-notes-search" type="text" placeholder="Rechercher une note (titre, contenu, tags, thématique)" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                <select id="global-notes-scope-filter" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  <option value="all">Toutes les portées</option>
+                  <option value="private">Privées</option>
+                  <option value="transverse">Transverses</option>
+                </select>
+                <select id="global-notes-sort" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  <option value="recent">Plus récentes</option>
+                  <option value="oldest">Plus anciennes</option>
+                  <option value="alpha">Titre A-Z</option>
+                </select>
+                <button id="btn-global-note-new" type="button" class="btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold inline-flex items-center justify-center gap-2 taskmda-create-cta" data-action-kind="create" data-action-label="Nouvelle note">
+                  <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">add_circle</span>
+                  <span class="taskmda-action-label">Nouvelle note</span>
+                </button>
+              </div>
+              <div class="mt-2 flex flex-wrap items-center gap-2">
+                <button id="global-notes-tab-all" type="button" class="feed-filter-btn view-tab-active">Toutes</button>
+                <button id="global-notes-tab-mine" type="button" class="feed-filter-btn">Mes notes</button>
+                <button id="global-notes-tab-private" type="button" class="feed-filter-btn">Privées</button>
+                <button id="global-notes-tab-transverse" type="button" class="feed-filter-btn">Transverses</button>
+                <button id="global-notes-tab-published" type="button" class="feed-filter-btn">Publiées dans le fil</button>
+                <div id="global-notes-count" class="ml-auto px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs text-slate-600">0 note</div>
+              </div>
+            </div>
+            <div id="global-notes-list" class="space-y-3">
+              <div class="workspace-empty-state">
+                <span class="workspace-empty-icon material-symbols-outlined" aria-hidden="true">sticky_note_2</span>
+                <p class="workspace-empty-title">Aucune note</p>
+                <p class="workspace-empty-text">Créez des notes privées ou transverses, puis publiez-les au besoin dans le fil d'information.</p>
+              </div>
+            </div>
+          </div>
+
           <div id="global-rgpd-section" class="panel p-3 hidden">
             <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div class="flex items-center gap-2">
@@ -1351,6 +1389,14 @@
                     </select>
                   </div>
                   <div class="mt-4 pt-4 border-t border-slate-200">
+                    <label for="view-option-dashboard-hero-short-chars" class="block text-sm font-semibold text-slate-800 mb-1">Dashboard: seuil “article court” (À la Une)</label>
+                    <p class="text-xs text-slate-500 mb-2">Si l’article principal du fil d’info est plus court que ce seuil, il est affiché en entier avec sa mise en forme.</p>
+                    <div class="grid grid-cols-1 sm:grid-cols-[160px_1fr] gap-2 items-center">
+                      <input id="view-option-dashboard-hero-short-chars" type="number" min="80" max="4000" step="10" value="520" class="px-3 py-2 border border-slate-300 rounded-lg text-sm" aria-label="Nombre max de caractères pour afficher la Une en entier">
+                      <span id="view-option-dashboard-hero-short-chars-current" class="px-3 py-2 rounded-lg bg-white border border-slate-200 text-xs font-semibold text-slate-600">Seuil actuel: 520 caractères</span>
+                    </div>
+                  </div>
+                  <div class="mt-4 pt-4 border-t border-slate-200">
                     <label for="profanity-filter-mode-select" class="block text-sm font-semibold text-slate-800 mb-1">Modération du langage</label>
                     <p class="text-xs text-slate-500 mb-2">Traitement automatique des vulgarités dans la messagerie, les descriptions et le fil d'info.</p>
                     <div class="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
@@ -1646,7 +1692,7 @@
                 <div id="task-list-section" class="project-view-section">
               <div id="project-work-commandbar" class="project-work-commandbar">
                 <div class="project-task-layout-toolbar mb-3">
-                  <span class="project-task-layout-label">Affichage cartes</span>
+                  <span id="project-task-layout-label" class="project-task-layout-label">Affichage cartes</span>
                   <div class="project-task-layout-buttons" role="group" aria-label="Densité d'affichage des tâches">
                     <button id="project-task-view-1" type="button" class="project-task-layout-btn view-tab-active" title="Vue détaillée 1 colonne" aria-label="Vue 1 colonne"><span class="material-symbols-outlined">view_agenda</span></button>
                     <button id="project-task-view-2" type="button" class="project-task-layout-btn" title="Vue 2 colonnes" aria-label="Vue 2 colonnes"><span class="material-symbols-outlined">view_column_2</span></button>
@@ -1945,6 +1991,7 @@
                 <div id="archived-tasks-container" class="space-y-2">
                   <p class="text-sm text-slate-500">Aucune tâche archivée.</p>
                 </div>
+                <div id="archived-tasks-pagination" class="mt-3 flex items-center justify-between gap-3 text-xs text-slate-500"></div>
               </div>
                 </div>
               </div>
@@ -2188,6 +2235,67 @@
           <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">delete</span>
           <span class="taskmda-action-label">Supprimer</span>
         </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-global-note" class="hidden fixed inset-0 bg-black/55 flex items-start md:items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
+    <div class="project-note-modal-panel bg-white rounded-2xl p-6 sm:p-8 max-w-5xl w-full mx-auto my-2 sm:my-4 md:my-0 max-h-[92vh] overflow-y-auto overscroll-contain">
+      <div class="flex items-center justify-between gap-3 mb-3">
+        <h3 id="global-note-modal-title" class="section-title text-2xl font-extrabold">Nouvelle note transverse</h3>
+        <button id="btn-close-global-note-modal" type="button" class="taskmda-modal-close-btn" data-action-kind="close" data-action-label="Fermer" aria-label="Fermer">
+          <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <div class="space-y-3">
+        <input id="global-note-title" type="text" placeholder="Titre de la note" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <input id="global-note-theme" type="text" placeholder="Thématique (optionnel)" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+          <input id="global-note-tags" type="text" placeholder="Tags: budget, RH, projet..." class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+        </div>
+        <div class="project-editor-wrap">
+          <input id="global-note-content-image-input" type="file" accept="image/*" multiple class="hidden">
+          <div class="project-editor-toolbar project-editor-toolbar-fallback">
+            <button type="button" class="project-editor-btn" data-editor-target="global-note-content-editor" data-editor-action="bold" title="Gras"><span class="material-symbols-outlined">format_bold</span></button>
+            <button type="button" class="project-editor-btn" data-editor-target="global-note-content-editor" data-editor-action="italic" title="Italique"><span class="material-symbols-outlined">format_italic</span></button>
+            <button type="button" class="project-editor-btn project-editor-btn-text" data-editor-target="global-note-content-editor" data-editor-action="h1" title="Titre 1">H1</button>
+            <button type="button" class="project-editor-btn project-editor-btn-text" data-editor-target="global-note-content-editor" data-editor-action="h2" title="Titre 2">H2</button>
+            <button type="button" class="project-editor-btn project-editor-btn-text" data-editor-target="global-note-content-editor" data-editor-action="h3" title="Titre 3">H3</button>
+            <button type="button" class="project-editor-btn" data-editor-target="global-note-content-editor" data-editor-action="ul" title="Liste"><span class="material-symbols-outlined">format_list_bulleted</span></button>
+            <button type="button" class="project-editor-btn" data-editor-target="global-note-content-editor" data-editor-action="ol" title="Liste numérotée"><span class="material-symbols-outlined">format_list_numbered</span></button>
+            <button type="button" class="project-editor-btn" data-editor-target="global-note-content-editor" data-editor-action="emoji" title="Emoji"><span class="material-symbols-outlined">sentiment_satisfied</span></button>
+            <button type="button" class="project-editor-btn" data-editor-target="global-note-content-editor" data-editor-file-input="global-note-content-image-input" data-editor-action="image" title="Insérer image"><span class="material-symbols-outlined">image</span></button>
+            <button type="button" class="project-editor-btn" data-editor-target="global-note-content-editor" data-editor-action="video" title="Insérer vidéo"><span class="material-symbols-outlined">smart_display</span></button>
+            <button type="button" class="project-editor-btn" data-editor-target="global-note-content-editor" data-editor-action="align-left" title="Aligner à gauche"><span class="material-symbols-outlined">format_align_left</span></button>
+            <button type="button" class="project-editor-btn" data-editor-target="global-note-content-editor" data-editor-action="align-center" title="Centrer"><span class="material-symbols-outlined">format_align_center</span></button>
+            <button type="button" class="project-editor-btn" data-editor-target="global-note-content-editor" data-editor-action="align-right" title="Aligner à droite"><span class="material-symbols-outlined">format_align_right</span></button>
+          </div>
+          <div id="global-note-content-editor" class="project-description-editor task-description-editor" contenteditable="true" aria-label="Contenu de la note transverse"></div>
+          <textarea id="global-note-content" rows="5" class="hidden"></textarea>
+        </div>
+        <div class="flex flex-wrap items-center gap-4 text-sm">
+          <label class="inline-flex items-center gap-2"><input id="global-note-transverse" type="checkbox" checked> <span>Note transverse</span></label>
+          <label class="inline-flex items-center gap-2"><input id="global-note-share-feed" type="checkbox"> <span>Publier aussi dans le fil</span></label>
+          <button id="btn-global-note-digest" type="button" class="task-action-btn task-action-btn-subtle" data-action-kind="convert" data-action-label="Digérer document">
+            <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">description</span>
+            <span class="taskmda-action-label">Digérer document</span>
+          </button>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="btn-global-note-save" type="button" class="task-action-btn" data-action-kind="save" data-action-label="Enregistrer la note" aria-label="Enregistrer la note">
+            <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">save</span>
+            <span class="taskmda-action-label">Enregistrer la note</span>
+          </button>
+          <button id="btn-global-note-delete" type="button" class="task-action-btn task-action-btn-danger hidden" data-action-kind="danger" data-action-label="Supprimer la note" aria-label="Supprimer la note">
+            <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">delete</span>
+            <span class="taskmda-action-label">Supprimer</span>
+          </button>
+          <button id="btn-global-note-cancel" type="button" class="task-action-btn task-action-btn-subtle" data-action-kind="close" data-action-label="Fermer" aria-label="Fermer">
+            <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">undo</span>
+            <span class="taskmda-action-label">Fermer</span>
+          </button>
+        </div>
+        <input id="global-note-digest-files" type="file" class="hidden" accept=".eml,.msg,.txt,.md,.html,.htm,.pdf,.doc,.docx,.odt,.rtf" multiple>
       </div>
     </div>
   </div>
@@ -2557,11 +2665,11 @@
           </div>
         </div>
         <div>
-          <label for="doc-binding-task" class="block text-sm font-semibold mb-1">Lier à une tâche (optionnel)</label>
+          <label for="doc-binding-task" class="block text-sm font-semibold mb-1">Lier à une ou plusieurs tâches (optionnel)</label>
           <div id="doc-binding-field-task" data-inline-doc-binding-field="task" class="rounded-lg">
-            <select id="doc-binding-task" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"></select>
+            <select id="doc-binding-task" multiple size="6" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"></select>
           </div>
-          <p class="text-[11px] text-slate-500 mt-1">Sans tâche, le document reste rattaché au projet uniquement.</p>
+          <p class="text-[11px] text-slate-500 mt-1">Sans tâche sélectionnée, le document reste rattaché au projet uniquement. Utilisez Ctrl/Cmd + clic pour une sélection multiple.</p>
         </div>
       </div>
       <div class="flex items-center justify-end gap-2 mt-4">
@@ -3137,7 +3245,7 @@
   <script src="js/taskmda-hierarchy.js?v=20260420-01"></script>
   <script src="js/taskmda-project-notes.js?v=20260422-01"></script>
   <script src="js/taskmda-document-storage.js?v=20260424-01"></script>
-  <script src="js/taskmda-team.js?v=20260423-10"></script>
+  <script src="js/taskmda-team.js?v=20260424-01"></script>
 </body>
 </html>
 

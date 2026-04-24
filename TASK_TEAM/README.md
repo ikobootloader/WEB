@@ -11,6 +11,17 @@ Nom d interface par defaut: `NEXUS MDA`.
 
 ## Mises a jour recentes (Avril 2026)
 
+- Nouvelle rubrique `Notes` (transverse + privee):
+  - ajout d une section dediee `Notes` dans la navigation globale,
+  - creation/edition en modale confortable (editeur riche Quill/fallback),
+  - filtres combines (portee, onglets rapides, tri, recherche),
+  - notes privees (auteur) vs notes transverses (visibles equipe),
+  - publication optionnelle d une note dans le `Fil d info` (reference cliquable retour vers la note).
+- Documents (lot technique 1):
+  - ajout du module `js/taskmda-document-storage.js` (stockage fichier decouple de l orchestrateur principal),
+  - stockage par defaut sur disque partage quand le dossier est connecte (avec fallback local `data:`),
+  - structure de chemin horodatee et classee par rubrique/scope/projet/thematique,
+  - apercu/telechargement/edition compatibles avec chargement a la demande depuis `storagePath`.
 - Rubrique `Projets` harmonisee en panneaux:
   - panneau `project-overview-panel` (resume + actions + filtres),
   - panneau `project-work-panel` (cartes projets / pagination),

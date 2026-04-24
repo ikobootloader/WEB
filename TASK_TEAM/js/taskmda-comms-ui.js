@@ -48,6 +48,7 @@
     }
 
     bindGlobalNav('nav-docs', 'docs');
+    bindGlobalNav('nav-notes', 'notes');
     bindGlobalNav('nav-messages', 'messages');
     bindGlobalNav('nav-feed', 'feed');
 

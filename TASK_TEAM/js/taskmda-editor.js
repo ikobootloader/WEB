@@ -1,4 +1,4 @@
-// ============================================================================
+﻿// ============================================================================
 // TASKMDA TEAM - MODULE EDITEUR PROJET
 // Extrait de taskmda-team.js pour alleger le fichier principal
 // ============================================================================
@@ -420,6 +420,47 @@
       placeCaretAtEnd(replacement);
     }
 
+    function resolveProjectEditorFallbackInputId(editorId) {
+      const map = {
+        'project-description-editor': 'project-description-input',
+        'edit-project-description-editor': 'edit-project-description',
+        'task-description-editor': 'task-description',
+        'global-feed-editor': 'global-feed-input',
+        'project-note-content-editor': 'project-note-content',
+        'global-note-content-editor': 'global-note-content',
+        'wf-procedure-editor': ''
+      };
+      return map[String(editorId || '').trim()] || '';
+    }
+
+    function requestDigestImportForEditor(editorId, fallbackInputId = '') {
+      const handler = window.TaskMDARequestDigestForEditor;
+      if (typeof handler === 'function') {
+        handler(String(editorId || ''), String(fallbackInputId || ''));
+        return;
+      }
+      showToast('Digest indisponible');
+    }
+
+    function ensureProjectEditorDigestButtons() {
+      document.querySelectorAll('.project-editor-toolbar-fallback').forEach((toolbar) => {
+        const anyBtn = toolbar.querySelector('.project-editor-btn[data-editor-target]');
+        if (!anyBtn) return;
+        const editorId = String(anyBtn.getAttribute('data-editor-target') || '').trim();
+        if (!editorId) return;
+        const hasDigest = !!toolbar.querySelector(`.project-editor-btn[data-editor-target="${editorId}"][data-editor-action="digest"]`);
+        if (hasDigest) return;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'project-editor-btn';
+        btn.setAttribute('data-editor-target', editorId);
+        btn.setAttribute('data-editor-action', 'digest');
+        btn.setAttribute('title', 'Digerer document');
+        btn.innerHTML = '<span class="material-symbols-outlined">description</span>';
+        toolbar.appendChild(btn);
+      });
+    }
+
     function applyProjectDescriptionEditorAction(action, editor, fileInputId = '') {
       if (!editor) return;
       const quill = projectDescriptionQuillEditors.get(editor.id || '');
@@ -468,8 +509,11 @@
             quill.setSelection(selection.index + 2, 0, 'user');
             return;
           }
+          case 'digest':
+            requestDigestImportForEditor(editor.id || '', resolveProjectEditorFallbackInputId(editor.id || ''));
+            return;
           case 'image-size':
-            showToast("Redimensionnement Quill actif: cliquez l'image puis utilisez les poignées.");
+            showToast("Redimensionnement Quill actif: cliquez l'image puis utilisez les poignees.");
             return;
           case 'align-left':
             applyProjectEditorAlignment(editor, 'desc-img-align-left');
@@ -484,6 +528,7 @@
             return;
         }
       }
+
       editor.focus();
       switch (action) {
         case 'bold':
@@ -509,16 +554,7 @@
           break;
         case 'emoji': {
           const emoji = pickProjectEditorEmoji();
-          if (emoji) {
-            document.execCommand('insertText', false, emoji);
-          }
-          break;
-        }
-        case 'emoji': {
-          const emoji = window.prompt('Emoji à insérer', '😊');
-          if (emoji) {
-            document.execCommand('insertText', false, emoji);
-          }
+          if (emoji) document.execCommand('insertText', false, emoji);
           break;
         }
         case 'image':
@@ -531,6 +567,9 @@
           insertHtmlAtCursor(html);
           break;
         }
+        case 'digest':
+          requestDigestImportForEditor(editor.id || '', resolveProjectEditorFallbackInputId(editor.id || ''));
+          break;
         case 'image-size':
           applyProjectEditorImageSize(editor);
           break;
@@ -566,7 +605,7 @@
             [{ list: 'ordered' }, { list: 'bullet' }],
             [{ align: [] }],
             [{ background: [] }],
-            ['link', 'image', 'video', 'emoji', 'clean']
+            ['link', 'image', 'video', 'emoji', 'digest', 'clean']
           ],
           handlers: {
             emoji() {
@@ -575,6 +614,9 @@
               const selection = this.quill.getSelection(true) || { index: this.quill.getLength(), length: 0 };
               this.quill.insertText(selection.index, emoji, 'user');
               this.quill.setSelection(selection.index + emoji.length, 0, 'user');
+            },
+            digest() {
+              requestDigestImportForEditor(editorId, resolveProjectEditorFallbackInputId(editorId));
             }
           }
         },
@@ -601,12 +643,20 @@
           emojiButton.textContent = '🙂';
         }
       }
+      const digestButton = host.parentElement?.querySelector('.ql-digest');
+      if (digestButton) {
+        digestButton.setAttribute('aria-label', 'Digerer document');
+        digestButton.setAttribute('title', 'Digerer document');
+        digestButton.classList.add('ql-digest-icon');
+        digestButton.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">description</span>';
+      }
       projectDescriptionQuillEditors.set(editorId, quill);
       return quill;
     }
 
     function initProjectDescriptionEditors() {
-      ['project-description-editor', 'edit-project-description-editor', 'task-description-editor', 'global-feed-editor', 'project-note-content-editor'].forEach((editorId) => {
+      ensureProjectEditorDigestButtons();
+      ['project-description-editor', 'edit-project-description-editor', 'task-description-editor', 'global-feed-editor', 'project-note-content-editor', 'global-note-content-editor'].forEach((editorId) => {
         const quill = ensureProjectDescriptionQuillEditor(editorId);
         const fallbackToolbar = document.querySelector(`.project-editor-toolbar-fallback [data-editor-target="${editorId}"]`)?.closest('.project-editor-toolbar-fallback');
         if (fallbackToolbar) {
@@ -632,7 +682,8 @@
         { editorId: 'edit-project-description-editor', inputId: 'edit-project-description-image-input' },
         { editorId: 'task-description-editor', inputId: 'task-description-image-input' },
         { editorId: 'global-feed-editor', inputId: 'global-feed-image-input' },
-        { editorId: 'project-note-content-editor', inputId: 'project-note-content-image-input' }
+        { editorId: 'project-note-content-editor', inputId: 'project-note-content-image-input' },
+        { editorId: 'global-note-content-editor', inputId: 'global-note-content-image-input' }
       ];
       imageBindings.forEach(({ editorId, inputId }) => {
         const editor = document.getElementById(editorId);

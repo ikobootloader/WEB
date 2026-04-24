@@ -2,6 +2,38 @@
 
 ## Version actuelle - Avril 2026
 
+### Mise a jour incrementale - Avril 2026 (Rubrique Notes transverse + privee)
+
+- Navigation:
+  - ajout d une rubrique globale `Notes` dans la sidebar transverse.
+- Stockage:
+  - nouveau store IndexedDB `globalNotes` (DB_VERSION `20`) avec indexes `createdAt/updatedAt/createdBy/visibility/theme`.
+- UX Notes:
+  - liste de notes avec recherche, filtres de portee (`privee/transverse`), onglets rapides (`Toutes`, `Mes notes`, `Publiees dans le fil`) et tri.
+  - creation/edition via modale dediee avec editeur riche (Quill/fallback), tags, thematique et mode de visibilite.
+  - mode lecture pour les notes transverses non proprietaire (edition reservee auteur/admin).
+- Integration Fil d info:
+  - publication optionnelle d une note globale dans le fil via un post lie (`ref global-note`).
+  - references `global-note` cliquables depuis le fil (ouverture directe de la note).
+- Recherche globale:
+  - indexation des notes transverses/privees dans la recherche d en-tete avec ouverture contextuelle.
+
+### Mise a jour incrementale - Avril 2026 (Lot technique 1 - stockage documents sur disque)
+
+- Documents:
+  - ajout d un module dedie `js/taskmda-document-storage.js` pour isoler la logique de stockage fichier.
+  - nouvel enregistrement par defaut sur disque partage (quand le dossier est lie) avec chemin structure:
+    - horodatage,
+    - rubrique source (upload projet/note/global),
+    - scope (projet/global),
+    - projet,
+    - thematique.
+  - fallback automatique vers stockage `data:` en base locale si ecriture disque indisponible.
+- Compatibilite:
+  - apercu et telechargement hydrates a la demande depuis le chemin disque (`storagePath`) si `data` absent.
+  - edition document: ouverture compatible avec hydratation automatique du contenu.
+  - re-liaison/rattachement de document conserve les metadonnees de stockage (`storageMode`, `storagePath`, etc.).
+
 ### Mise a jour incrementale - Avril 2026 (Deadlines flexibles Projets + Taches)
 
 - Projets:

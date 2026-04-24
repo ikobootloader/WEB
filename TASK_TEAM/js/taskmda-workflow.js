@@ -8111,6 +8111,7 @@ ${clone.outerHTML}
               <button type="button" class="project-editor-btn" data-editor-target="wf-procedure-editor" data-editor-action="italic" title="Italique"><span class="material-symbols-outlined">format_italic</span></button>
               <button type="button" class="project-editor-btn project-editor-btn-text" data-editor-target="wf-procedure-editor" data-editor-action="h2" title="Titre 2">H2</button>
               <button type="button" class="project-editor-btn" data-editor-target="wf-procedure-editor" data-editor-action="ul" title="Liste"><span class="material-symbols-outlined">format_list_bulleted</span></button>
+              <button type="button" class="project-editor-btn" data-editor-target="wf-procedure-editor" data-editor-action="digest" title="Digerer document"><span class="material-symbols-outlined">description</span></button>
               <button type="button" id="btn-wf-wiki-insert-section" class="project-editor-btn project-editor-btn-text" title="Nouvelle section">Section</button>
               <button type="button" id="btn-wf-wiki-insert-link" class="project-editor-btn" title="Lien interne wiki"><span class="material-symbols-outlined">link</span></button>
               <button type="button" id="btn-wf-wiki-toggle-preview" class="project-editor-btn project-editor-btn-text" title="Apercu wiki">Apercu</button>
@@ -9956,6 +9957,9 @@ ${clone.outerHTML}
             if (action === 'italic') quill.format('italic', !formats.italic);
             if (action === 'h2') quill.format('header', formats.header === 2 ? false : 2);
             if (action === 'ul') quill.format('list', formats.list === 'bullet' ? false : 'bullet');
+            if (action === 'digest' && typeof window.TaskMDARequestDigestForEditor === 'function') {
+              window.TaskMDARequestDigestForEditor('wf-procedure-editor', '');
+            }
             return;
           }
           const host = document.getElementById('wf-procedure-editor');
@@ -9965,6 +9969,9 @@ ${clone.outerHTML}
           if (action === 'italic') document.execCommand('italic', false, null);
           if (action === 'h2') document.execCommand('formatBlock', false, 'H2');
           if (action === 'ul') document.execCommand('insertUnorderedList', false, null);
+          if (action === 'digest' && typeof window.TaskMDARequestDigestForEditor === 'function') {
+            window.TaskMDARequestDigestForEditor('wf-procedure-editor', '');
+          }
         });
       });
     }

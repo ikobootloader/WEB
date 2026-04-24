@@ -2307,10 +2307,10 @@ html.dark #project-overview-panel {
 #project-overview-panel > .mb-4,
 #project-rgpd-impact,
 #project-lock-warning {
-  max-height: 480px;
+  max-height: none;
   opacity: 1;
-  overflow: hidden;
-  transition: max-height 160ms cubic-bezier(0.2, 0, 0, 1), opacity 160ms cubic-bezier(0.2, 0, 0, 1);
+  overflow: visible;
+  transition: opacity 160ms cubic-bezier(0.2, 0, 0, 1);
 }
 
 #project-kpis > div {
@@ -4327,6 +4327,28 @@ html[data-wf-action-buttons="icon"] .taskmda-create-cta:not(#btn-add-task):not(#
   line-height: 1;
 }
 
+.project-editor-wrap .ql-toolbar.ql-snow .ql-digest.ql-digest-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.project-editor-wrap .ql-toolbar.ql-snow .ql-digest.ql-digest-icon .material-symbols-outlined {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.task-detail-inline-quill-host .ql-toolbar .ql-digest.ql-digest-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.task-detail-inline-quill-host .ql-toolbar .ql-digest.ql-digest-icon .material-symbols-outlined {
+  font-size: 17px;
+  line-height: 1;
+}
+
 .project-description-editor h1,
 .markdown-content h1 {
   font-size: 1.6rem;
@@ -6333,6 +6355,21 @@ textarea:focus {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.dashboard-news-rich {
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.dashboard-news-item-hero .dashboard-news-rich {
+  font-size: 1.02rem;
+}
+
+.dashboard-news-rich img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 10px;
 }
 
 .dashboard-news-item-top {
@@ -13156,4 +13193,84 @@ html.dark .project-notes-theme-tab.is-active {
   color: #dbeafe;
   border-color: rgba(125, 167, 255, 0.7);
   border-bottom-color: rgba(147, 197, 253, 0.9);
+}
+
+/* Inline autosave feedback */
+.inline-save-indicator-host {
+  position: relative;
+}
+
+.inline-save-indicator {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 6;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-3px);
+  transition: opacity 140ms ease, transform 140ms ease;
+  border-radius: 9999px;
+  padding: 4px 9px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  border: 1px solid transparent;
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.inline-save-indicator.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.inline-save-indicator.is-saving {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.inline-save-indicator.is-saved {
+  background: #ecfdf5;
+  border-color: #bbf7d0;
+  color: #047857;
+}
+
+.inline-save-indicator.is-error {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.inline-save-indicator[data-inline-save-scope="task-detail"],
+.inline-save-indicator[data-inline-save-scope="calendar-detail"],
+.inline-save-indicator[data-inline-save-scope="doc-binding"],
+.inline-save-indicator[data-inline-save-scope="doc-preview"] {
+  top: auto;
+  bottom: 12px;
+  right: 12px;
+}
+
+html.dark .inline-save-indicator {
+  background: #1e293b;
+  color: #e2e8f0;
+  border-color: rgba(148, 163, 184, 0.45);
+}
+
+html.dark .inline-save-indicator.is-saving {
+  background: rgba(30, 64, 175, 0.35);
+  border-color: rgba(147, 197, 253, 0.6);
+  color: #dbeafe;
+}
+
+html.dark .inline-save-indicator.is-saved {
+  background: rgba(6, 95, 70, 0.45);
+  border-color: rgba(110, 231, 183, 0.55);
+  color: #d1fae5;
+}
+
+html.dark .inline-save-indicator.is-error {
+  background: rgba(127, 29, 29, 0.45);
+  border-color: rgba(252, 165, 165, 0.55);
+  color: #fee2e2;
 }
