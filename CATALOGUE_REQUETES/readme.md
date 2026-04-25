@@ -5,7 +5,7 @@
 ![Sécurité](https://img.shields.io/badge/sécurité-AES--256--GCM-orange)
 ![Sync](https://img.shields.io/badge/synchro-Auto_XLSX-brightgreen)
 
-Application locale, hautement sécurisée et autonome permettant de cataloguer, gérer et consulter les requêtes BusinessObjects (BO) de la MDA de l'Orne.
+Application locale, hautement sécurisée et autonome permettant de cataloguer, gérer et consulter les requêtes BusinessObjects (BO) de la MDA.
 
 > **Note de conception :** Cette application est conçue pour fonctionner **100% en local, sans serveur, sans dépendances (zéro NPM)**. Elle garantit la confidentialité des données grâce à un chiffrement de niveau militaire et un stockage hybride (IndexedDB + Synchronisation locale).
 
