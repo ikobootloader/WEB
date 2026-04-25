@@ -70,3 +70,5 @@ Bien que la synchronisation automatique soit recommandée, vous pouvez effectuer
 
 ---
 *Conçu et développé pour la MDA de l'Orne.*
+
+**Créé par Frédérick MURAT - Licence MIT - 2026**
