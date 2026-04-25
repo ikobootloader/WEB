@@ -248,6 +248,48 @@ textarea.form-control{resize:vertical;min-height:80px}
 .settings-back{display:flex;align-items:center;gap:12px;margin-bottom:20px}
 .settings-back h2{font-size:18px;font-weight:700;color:var(--gray-800)}
 .settings-tabs{display:flex;gap:2px;background:var(--gray-100);border-radius:var(--radius-sm);padding:4px;margin-bottom:24px;flex-wrap:wrap}
+
+/* ── ACTIONS GROUPÉES ── */
+.bulk-bar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(120%);
+  background: #1e293b;
+  color: white;
+  padding: 10px 24px;
+  border-radius: 100px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+  z-index: 1000;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.bulk-bar.active { transform: translateX(-50%) translateY(0); }
+.bulk-info { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 500; }
+.bulk-count-badge { background: var(--orange); color: white; min-width: 24px; height: 24px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
+.bulk-actions { display: flex; gap: 8px; border-left: 1px solid rgba(255,255,255,0.2); padding-left: 20px; }
+.btn-bulk-del { background: #ef4444; color: white; border: none; padding: 7px 16px; border-radius: 50px; cursor: pointer; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px; transition: background 0.2s; }
+.btn-bulk-del:hover { background: #dc2626; }
+.btn-bulk-cancel { background: transparent; color: rgba(255,255,255,0.7); border: none; padding: 7px 16px; border-radius: 50px; cursor: pointer; font-size: 13px; transition: color 0.2s; }
+.btn-bulk-cancel:hover { color: white; }
+
+.req-card { position: relative; }
+.card-selection { position: absolute; top: 12px; right: 12px; z-index: 20; display: flex; align-items: center; justify-content: center; width: 22px; height: 22px; background: white; border: 1.5px solid var(--gray-200); border-radius: 6px; cursor: pointer; opacity: 0; transition: all 0.2s; }
+.req-card:hover .card-selection, .req-card.selected .card-selection { opacity: 1; }
+.req-card.selected { border-color: var(--orange); box-shadow: 0 0 0 2px var(--orange-light); background: var(--orange-light) !important; }
+.card-selection.selected { background: var(--orange); border-color: var(--orange); color: white; }
+.card-selection svg { width: 14px; height: 14px; display: none; }
+.card-selection.selected svg { display: block; }
+
+.row-selection { width: 44px; text-align: center !important; }
+.check-custom { width: 18px; height: 18px; border-radius: 4px; border: 1.5px solid var(--gray-300); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; background: white; }
+.check-custom.selected { background: var(--orange); border-color: var(--orange); color: white; }
+.check-custom svg { width: 12px; height: 12px; display: none; }
+.check-custom.selected svg { display: block; }
+
 .s-tab{padding:8px 14px;border:none;background:none;font-size:13px;font-family:var(--font);color:var(--gray-400);cursor:pointer;border-radius:5px;font-weight:500;transition:all .15s}
 .s-tab:hover{color:var(--gray-600)}
 .s-tab.active{background:white;color:var(--orange-dark);box-shadow:0 1px 4px rgba(0,0,0,.08)}
@@ -354,6 +396,16 @@ textarea.form-control{resize:vertical;min-height:80px}
         <button type="button" id="lock-pwd-btn" onclick="toggleLockPassword()" style="position:absolute; right:8px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; padding:4px; display:flex; align-items:center; justify-content:center; color:var(--gray-500);" title="Afficher/Masquer le mot de passe">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
         </button>
+      </div>
+      
+      <div id="setup-demo-wrap" style="display:none; margin: 15px 0; text-align: left; background: var(--gray-50); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--gray-100);">
+        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 13px; color: var(--gray-600);">
+          <input type="checkbox" id="setup-load-demo" checked style="width: 16px; height: 16px; accent-color: var(--orange);">
+          <span>Charger le jeu de données de démonstration</span>
+        </label>
+        <p style="font-size: 11px; color: var(--gray-400); margin-top: 5px; margin-left: 26px;">
+          Inclut des exemples de requêtes pour découvrir l'outil.
+        </p>
       </div>
       <button type="submit" id="lock-btn">Déverrouiller</button>
       <div style="margin-top:12px; font-size:13px;">
@@ -474,7 +526,13 @@ textarea.form-control{resize:vertical;min-height:80px}
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 2h4v3H2zM8 2h4v3H8zM8 6h4v3H8zM8 10h4v3H8zM4 3.5v8M4 3.5h4M4 7.5h4M4 11.5h4"/></svg>
         </button>
       </div>
-      <div class="toolbar-right"><span class="stat-pill" id="result-count">0 requête(s)</span></div>
+      <div class="toolbar-right">
+        <button id="btn-select-all" class="btn-secondary" style="padding:6px 10px;font-size:11px;gap:4px" onclick="AppController.selectAll()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          Tout sélectionner
+        </button>
+        <span class="stat-pill" id="result-count">0 requête(s)</span>
+      </div>
     </div>
     <div class="content" id="content-area">
       <div class="stats-bar" id="stats-bar"></div>
@@ -658,6 +716,13 @@ textarea.form-control{resize:vertical;min-height:80px}
             <div class="danger-row hard">
               <div class="danger-row-text">
                 <div class="title">Vider tout le catalogue</div>
+            <div class="danger-row hard" style="background: var(--red-bg); border: 1px solid var(--red); margin-top: 10px;">
+              <div class="danger-row-text">
+                <div class="title" style="color: var(--red); font-weight: 700;">RÉINITIALISATION TOTALE</div>
+                <div class="sub">Supprime tout : requêtes, paramètres, mot de passe et accès fichiers. L'application reviendra à son état d'origine.</div>
+              </div>
+              <button class="btn-danger" style="background: var(--red); color: white;" onclick="AppController.confirmFullReset()">Réinitialiser tout</button>
+            </div>
                 <div class="sub">Supprime toutes les requêtes — irréversible</div>
               </div>
               <button class="btn-danger" style="margin-left:0" onclick="confirmAct('Vider tout le catalogue ? Cette action est irréversible.',()=>{data=[];saveData();refresh();showToast('Catalogue vidé.','success');})">Vider</button>
@@ -1135,6 +1200,21 @@ Diviseur : 30,4375 = 365,25 ÷ 12 (durée moyenne d'un mois calendaire)</div>
 </main>
 </div>
 
+  <!-- Barre d'actions groupées -->
+  <div id="bulk-bar" class="bulk-bar">
+    <div class="bulk-info">
+      <div id="bulk-count" class="bulk-count-badge">0</div>
+      <span>élément(s) sélectionné(s)</span>
+    </div>
+    <div class="bulk-actions">
+      <button class="btn-bulk-cancel" onclick="AppController.clearSelection()">Annuler</button>
+      <button class="btn-bulk-del" onclick="AppController.confirmBulkDelete()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+        Supprimer
+      </button>
+    </div>
+  </div>
+
 <!-- DETAIL PANEL -->
 <div class="detail-overlay" id="detail-overlay" style="display:none" onclick="closeDetail(event)">
   <div class="detail-panel">
@@ -1262,9 +1342,14 @@ if(v[1]==="/"){if((s=i.pop())[0]!==v[3])throw"Bad state: "+s}else if(v[0].charAt
 
 <!-- MODULES JAVASCRIPT INLINE -->
 <script>
+try {
+    
+    
+
+
 // MODULE: UTILS
 // ═══════════════════════════════════════════════════════════════
-const Utils = {
+var Utils = {
   TAG_COLORS: [
     {bg:'#E8EDF5',color:'#1B3A6B'}, {bg:'#FEF0E6',color:'#C05A0E'},
     {bg:'#EAF3DE',color:'#3B6D11'}, {bg:'#E6F1FB',color:'#185FA5'},
@@ -1338,7 +1423,7 @@ window.Utils = Utils;
 // MODULE: CRYPTO-MANAGER
 // ═══════════════════════════════════════════════════════════════
 
-const CryptoManager = {
+var CryptoManager = {
   // Clé de chiffrement (dérivée du mot de passe)
   cryptoKey: null,
 
@@ -1583,7 +1668,7 @@ const CryptoManager = {
 // MODULE: DATA-MANAGER
 // ═══════════════════════════════════════════════════════════════
 
-const DataManager = {
+var DataManager = {
   // État de l'application
   data: [],          // Catalogue de requêtes
   config: {},        // Configuration
@@ -1645,6 +1730,17 @@ const DataManager = {
    * @param {string} key - Clé de stockage
    * @returns {Promise<string|null>}
    */
+  
+  async deleteFromIndexedDB(key) {
+    if (!this.db) await this.initDB();
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction([this.STORE_NAME], 'readwrite');
+      const store = transaction.objectStore(this.STORE_NAME);
+      const request = store.delete(key);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  },
   async loadFromIndexedDB(key) {
     if (!this.db) await this.initDB();
 
@@ -1702,9 +1798,7 @@ const DataManager = {
       if (encryptedData) {
         this.data = await CryptoManager.decrypt(encryptedData);
       } else {
-        // Première utilisation - charger les données de démo
-        this.data = this.getDemoData();
-        await this.saveData();
+        this.data = [];
       }
 
       // Charger la configuration
@@ -1712,9 +1806,7 @@ const DataManager = {
       if (encryptedConfig) {
         this.config = await CryptoManager.decrypt(encryptedConfig);
       } else {
-        // Première utilisation - charger la config par défaut
         this.config = this.getDefaultConfig();
-        await this.saveConfig();
       }
 
       this.isLocked = false;
@@ -1722,6 +1814,41 @@ const DataManager = {
       console.error('Erreur chargement données:', error);
       throw error;
     }
+  },
+  /**
+   * Réinitialise complètement l'application (vidage total)
+   */
+  async resetAllData() {
+    if (!this.db) await this.initDB();
+    
+    // 1. Supprimer toutes les clés d'IndexedDB
+    const keys = ['catalogue', 'config', 'password_hash', 'recovery_data', 'sync_handle'];
+    for (const key of keys) {
+      await this.deleteFromIndexedDB(key);
+    }
+    
+    // 2. Réinitialiser l'état mémoire
+    this.data = [];
+    this.config = this.getDefaultConfig();
+    
+    // 3. Recharger la page pour revenir à l'écran de création
+    window.location.reload();
+  },
+
+  /**
+   * Initialisation forcée lors du premier démarrage
+   * @param {boolean} loadDemo - Charger ou non les données de démo
+   */
+  async initializeFirstTime(loadDemo) {
+    this.config = this.getDefaultConfig();
+    await this.saveConfig();
+    
+    if (loadDemo) {
+      this.data = this.getDemoData();
+    } else {
+      this.data = [];
+    }
+    await this.saveData();
   },
 
   /**
@@ -1883,7 +2010,7 @@ const DataManager = {
 // MODULE: FILTER-ENGINE
 // ═══════════════════════════════════════════════════════════════
 
-const FilterEngine = {
+var FilterEngine = {
   // État des filtres
   currentView: 'cards',          // cards | table | tree
   navFilter: 'all',              // all | domaine:xxx | statut:xxx
@@ -1982,6 +2109,7 @@ const FilterEngine = {
     // Déclencher le rendu
     if (ViewRenderer) {
       ViewRenderer.render();
+    this.updateBulkBar();
     }
   },
 
@@ -2084,7 +2212,7 @@ const FilterEngine = {
 // MODULE: VIEW-RENDERER
 // ═══════════════════════════════════════════════════════════════
 
-const ViewRenderer = {
+var ViewRenderer = {
   /**
    * Rend la vue active
    */
@@ -2143,7 +2271,11 @@ const ViewRenderer = {
       .join('');
 
     return `
-      <div class="req-card" onclick="UIComponents.openDetail('${Utils.escapeHtml(requete.id)}')">
+      
+      <div class="req-card ${AppController.selectedIds.includes(requete.id) ? 'selected' : ''}" onclick="UIComponents.openDetail('${Utils.escapeHtml(requete.id)}')">
+        <div class="card-selection ${AppController.selectedIds.includes(requete.id) ? 'selected' : ''}" onclick="AppController.toggleSelection('${Utils.escapeHtml(requete.id)}', event)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        </div>
         <div class="card-header">
           <div class="card-domain-icon" style="background:${domain.bg}">${domain.icon}</div>
           <div class="card-meta">
@@ -2170,6 +2302,12 @@ const ViewRenderer = {
         <table>
           <thead>
             <tr>
+              
+              <th class="row-selection">
+                <div class="check-custom ${AppController.selectedIds.length === data.length && data.length > 0 ? 'selected' : ''}" onclick="AppController.selectAll()">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                </div>
+              </th>
               <th>ID</th>
               <th>Nom</th>
               <th>Domaine</th>
@@ -2191,6 +2329,7 @@ const ViewRenderer = {
    * Génère le HTML d'une ligne de tableau
    */
   generateTableRowHTML(requete) {
+    const isSelected = AppController.selectedIds.includes(requete.id);
     const domain = this.getDomainInfo(requete.domaine);
     const tags = (requete.tags || [])
       .slice(0, 2)
@@ -2201,7 +2340,13 @@ const ViewRenderer = {
       .join(' ');
 
     return `
-      <tr onclick="UIComponents.openDetail('${Utils.escapeHtml(requete.id)}')">
+      
+      <tr class="${isSelected ? 'selected' : ''}" onclick="UIComponents.openDetail('${Utils.escapeHtml(requete.id)}')">
+        <td class="row-selection" onclick="AppController.toggleSelection('${Utils.escapeHtml(requete.id)}', event)">
+          <div class="check-custom ${isSelected ? 'selected' : ''}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          </div>
+        </td>
         <td style="font-family:var(--font-mono);font-size:11px;color:var(--gray-400)">${Utils.escapeHtml(requete.id || '—')}</td>
         <td><strong style="color:var(--gray-800)">${Utils.escapeHtml(requete.nom)}</strong></td>
         <td>${domain.icon} ${Utils.escapeHtml(requete.domaine)}</td>
@@ -2406,7 +2551,7 @@ const ViewRenderer = {
 // MODULE: EXPORT-HANDLER
 // ═══════════════════════════════════════════════════════════════
 
-const ExportHandler = {
+var ExportHandler = {
   /**
    * Exporte tout en JSON
    */
@@ -2626,7 +2771,7 @@ const ExportHandler = {
 // MODULE: CONFIG-MANAGER
 // ═══════════════════════════════════════════════════════════════
 
-const ConfigManager = {
+var ConfigManager = {
   /**
    * Rend tous les panneaux de configuration
    */
@@ -3005,7 +3150,7 @@ const ConfigManager = {
 // MODULE: UI-COMPONENTS
 // ═══════════════════════════════════════════════════════════════
 
-const UIComponents = {
+var UIComponents = {
   toastTimer: null,
 
   // ═══════════════ PANEL DE DÉTAILS ═══════════════
@@ -3467,11 +3612,61 @@ document.addEventListener('click', () => {
 // MODULE: SYNC-MANAGER
 // ═══════════════════════════════════════════════════════════════
 
-const SyncManager = {
+var SyncManager = {
   fileHandle: null,
   isSyncEnabled: false,
   syncTimeout: null,
 
+  
+  toggleSelection(id, event) {
+    if (event) event.stopPropagation();
+    const index = this.selectedIds.indexOf(id);
+    if (index === -1) {
+      this.selectedIds.push(id);
+    } else {
+      this.selectedIds.splice(index, 1);
+    }
+    this.refresh();
+  },
+
+  clearSelection() {
+    this.selectedIds = [];
+    this.refresh();
+  },
+
+  selectAll() {
+    const data = FilterEngine.filteredData;
+    if (this.selectedIds.length === data.length) {
+      this.selectedIds = [];
+    } else {
+      this.selectedIds = data.map(r => r.id);
+    }
+    this.refresh();
+  },
+
+  async confirmBulkDelete() {
+    if (!this.selectedIds.length) return;
+    
+    if (confirm(`Supprimer définitivement les ${this.selectedIds.length} requêtes sélectionnées ?`)) {
+      await DataManager.deleteBulk(this.selectedIds);
+      this.selectedIds = [];
+      this.refresh();
+      UIComponents.showToast('Suppression effectuée.', 'success');
+    }
+  },
+
+  updateBulkBar() {
+    const bar = document.getElementById('bulk-bar');
+    const countEl = document.getElementById('bulk-count');
+    if (!bar || !countEl) return;
+
+    if (this.selectedIds.length > 0) {
+      countEl.textContent = this.selectedIds.length;
+      bar.classList.add('active');
+    } else {
+      bar.classList.remove('active');
+    }
+  },
   async init() {
     try {
       if (!window.showSaveFilePicker) return;
@@ -3650,13 +3845,68 @@ const SyncManager = {
 // MODULE: APP-CONTROLLER
 // ═══════════════════════════════════════════════════════════════
 
-const AppController = {
+var AppController = {
   isAuthenticated: false,
+  selectedIds: [],
   passwordHash: null,
 
   /**
    * Initialise l'application
    */
+  
+  toggleSelection(id, event) {
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+    const index = this.selectedIds.indexOf(id);
+    if (index === -1) {
+      this.selectedIds.push(id);
+    } else {
+      this.selectedIds.splice(index, 1);
+    }
+    this.refresh();
+  },
+
+  clearSelection() {
+    this.selectedIds = [];
+    this.refresh();
+  },
+
+  selectAll() {
+    const data = FilterEngine.filteredData;
+    if (this.selectedIds.length === data.length && data.length > 0) {
+      this.selectedIds = [];
+    } else {
+      this.selectedIds = data.map(r => r.id);
+    }
+    this.refresh();
+  },
+
+  async confirmBulkDelete() {
+    if (!this.selectedIds.length) return;
+    
+    if (confirm(`Supprimer définitivement les ${this.selectedIds.length} requêtes sélectionnées ?`)) {
+      await DataManager.deleteBulk(this.selectedIds);
+      this.selectedIds = [];
+      this.refresh();
+      UIComponents.showToast('Suppression effectuée.', 'success');
+    }
+  },
+
+  updateBulkBar() {
+    const bar = document.getElementById('bulk-bar');
+    const countEl = document.getElementById('bulk-count');
+    if (!bar || !countEl) return;
+
+    if (this.selectedIds.length > 0) {
+      countEl.textContent = this.selectedIds.length;
+      bar.classList.add('active');
+    } else {
+      bar.classList.remove('active');
+    }
+  },
+
   async init() {
     console.log('🚀 Initialisation MDA BO Catalogue v2.0');
 
@@ -3698,6 +3948,7 @@ const AppController = {
     document.getElementById('lock-title').textContent = 'Premier démarrage';
     document.getElementById('lock-subtitle').textContent = 'Définissez un mot de passe pour sécuriser vos données';
     document.getElementById('lock-btn').textContent = 'Créer';
+    document.getElementById('setup-demo-wrap').style.display = 'block';
     document.getElementById('lock-error').style.display = 'none';
 
     const input = document.getElementById('lock-password');
@@ -3716,6 +3967,7 @@ const AppController = {
     document.getElementById('lock-title').textContent = 'Catalogue BO — MDA de l\'Orne';
     document.getElementById('lock-subtitle').textContent = 'Entrez votre mot de passe pour déverrouiller';
     document.getElementById('lock-btn').textContent = 'Déverrouiller';
+    document.getElementById('setup-demo-wrap').style.display = 'none';
     document.getElementById('lock-error').style.display = 'none';
 
     const input = document.getElementById('lock-password');
@@ -3783,7 +4035,8 @@ const AppController = {
       await CryptoManager.deriveKey(password);
 
       // Charger les données (cela créera les données de démo chiffrées)
-      await DataManager.loadAll();
+      const loadDemo = document.getElementById('setup-load-demo')?.checked || false;
+      await DataManager.initializeFirstTime(loadDemo);
 
       // Afficher la clé de récupération et déverrouiller
       showRecoveryKeyModal(recoveryKey, () => {
@@ -3823,7 +4076,8 @@ const AppController = {
       await CryptoManager.deriveKey(password);
 
       // Charger les données
-      await DataManager.loadAll();
+      const loadDemo = document.getElementById('setup-load-demo')?.checked || false;
+      await DataManager.initializeFirstTime(loadDemo);
 
       // Déverrouiller
       this.unlock();
@@ -4016,6 +4270,7 @@ const AppController = {
     FilterEngine.populateFilters();
     FilterEngine.applyFilters();
     ViewRenderer.render();
+    this.updateBulkBar();
   },
 
   /**
@@ -4047,10 +4302,20 @@ const AppController = {
         }
       }
     });
-  }
+  },
+
+
+  confirmFullReset() {
+    const confirm1 = confirm("⚠️ ATTENTION : Cette action va supprimer INTÉGRALEMENT vos données, vos paramètres et votre mot de passe.\n\nSouhaitez-vous vraiment continuer ?");
+    if (confirm1) {
+      const confirm2 = confirm("DERNIÈRE CHANCE : Toutes les données chiffrées seront perdues définitivement si vous n'avez pas d'export. Confirmer la réinitialisation totale ?");
+      if (confirm2) {
+        DataManager.resetAllData();
+      }
+    }
+  },
 };
 
-// Export global
 window.AppController = AppController;
 
 // Initialisation au chargement
@@ -4326,6 +4591,22 @@ document.addEventListener('click', () => {
 // Export global
 
 console.log('✅ Tous les modules chargés en inline');
+
+} catch (e) {
+    console.error("CRITICAL ERROR IN SCRIPT 2:", e);
+    alert("Erreur critique lors du chargement du script : " + e.message);
+}
+
+window.Utils = Utils;
+window.CryptoManager = CryptoManager;
+window.DataManager = DataManager;
+window.FilterEngine = FilterEngine;
+window.ViewRenderer = ViewRenderer;
+window.ExportHandler = ExportHandler;
+window.ConfigManager = ConfigManager;
+window.UIComponents = UIComponents;
+window.SyncManager = SyncManager;
+window.AppController = AppController;
 </script>
 
 </body>
