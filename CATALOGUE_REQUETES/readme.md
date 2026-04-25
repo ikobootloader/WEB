@@ -1,4 +1,4 @@
-# 📂 Catalogue des Requêtes BO — MDA de l'Orne
+# 📂 Catalogue des Requêtes BO — MDA
 
 ![Version](https://img.shields.io/badge/version-3.0.0-blue)
 ![Statut](https://img.shields.io/badge/statut-Production_Ready-success)
