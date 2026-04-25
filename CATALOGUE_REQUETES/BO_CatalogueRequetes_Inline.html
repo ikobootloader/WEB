@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Catalogue des requêtes BO — MDA de l'Orne (Sécurisé)</title>
+<title>Catalogue des requêtes BO — MDA (Sécurisé)</title>
 <style>
   @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
   .sync-indicator { color: var(--gray-400); display: none; align-items: center; margin-right: 15px; }
@@ -388,7 +388,7 @@ textarea.form-control{resize:vertical;min-height:80px}
 <div id="lock-screen">
   <div class="lock-container">
     <div class="lock-logo">🔒</div>
-    <h1 id="lock-title">Catalogue BO — MDA de l'Orne</h1>
+    <h1 id="lock-title">Catalogue BO — MDA</h1>
     <p id="lock-subtitle">Entrez votre mot de passe pour déverrouiller</p>
     <form onsubmit="event.preventDefault(); AppController.attemptUnlock();">
       <div style="position:relative; margin-bottom:12px;">
@@ -427,7 +427,7 @@ textarea.form-control{resize:vertical;min-height:80px}
 <header class="topbar">
   <div class="topbar-logo">
     <svg width="28" height="28" viewBox="0 0 28 28" fill="none"><rect width="28" height="28" rx="7" fill="#F07821"/><path d="M7 20L14 8L21 20H17.5L14 13.5L10.5 20H7Z" fill="white"/></svg>
-    MDA de l'Orne
+    MDA
   </div>
   <span class="topbar-title">Catalogue des requêtes BusinessObjects</span>
   <div class="topbar-actions">
@@ -1189,7 +1189,7 @@ Diviseur : 30,4375 = 365,25 ÷ 12 (durée moyenne d'un mois calendaire)</div>
             </tbody>
           </table></div>
           <div style="margin-top:16px;padding:12px 16px;background:var(--gray-50);border:0.5px solid var(--gray-100);border-radius:var(--radius-sm);font-size:11.5px;color:var(--gray-400);line-height:1.6">
-            Document à usage interne — MDA de l'Orne. Croise le Guide pratique CNSA (Mars 2026) et la Maquette Échanges Annuels MDPH 2025 (CNSA/LCD). À mettre à jour à chaque nouvelle campagne CNSA. Toute divergence entre les deux sources doit être documentée dans l'onglet Qualité des Données de la Maquette.
+            Document à usage interne — MDA. Croise le Guide pratique CNSA (Mars 2026) et la Maquette Échanges Annuels MDPH 2025 (CNSA/LCD). À mettre à jour à chaque nouvelle campagne CNSA. Toute divergence entre les deux sources doit être documentée dans l'onglet Qualité des Données de la Maquette.
           </div>
         </div>
 
@@ -3964,7 +3964,7 @@ var AppController = {
     if (!lockScreen) return;
 
     lockScreen.style.display = 'flex';
-    document.getElementById('lock-title').textContent = 'Catalogue BO — MDA de l\'Orne';
+    document.getElementById('lock-title').textContent = 'Catalogue BO — MDA';
     document.getElementById('lock-subtitle').textContent = 'Entrez votre mot de passe pour déverrouiller';
     document.getElementById('lock-btn').textContent = 'Déverrouiller';
     document.getElementById('setup-demo-wrap').style.display = 'none';
