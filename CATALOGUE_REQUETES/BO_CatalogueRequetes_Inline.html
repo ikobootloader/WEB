@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Catalogue des requêtes BO — MDA de l'Orne (Sécurisé)</title>
 <style>
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  .sync-indicator { color: var(--gray-400); display: none; align-items: center; margin-right: 15px; }
+  .sync-indicator.active { display: inline-flex; }
+  .sync-indicator svg { animation: spin 2s linear infinite; color: var(--orange); }
+
 /* VARIABLES CSS */
 :root {
   --orange:#F07821; --orange-light:#FEF0E6; --orange-dark:#C05A0E;
@@ -374,6 +379,13 @@ textarea.form-control{resize:vertical;min-height:80px}
   </div>
   <span class="topbar-title">Catalogue des requêtes BusinessObjects</span>
   <div class="topbar-actions">
+    <div id="sync-indicator" class="sync-indicator" title="Synchronisation Excel en cours...">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="23 4 23 10 17 10"></polyline>
+        <polyline points="1 20 1 14 7 14"></polyline>
+        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+      </svg>
+    </div>
     <div class="export-menu" id="export-menu">
       <button class="btn-ghost" onclick="toggleExportMenu(event)">
         <svg width="13" height="13" viewBox="0 0 14 14" fill="currentColor"><path d="M2 10v2h10v-2H2zm4-8v5.586L4.707 6.293 3.293 7.707 7 11.414l3.707-3.707-1.414-1.414L8 7.586V2H6z"/></svg>
@@ -3469,6 +3481,8 @@ const SyncManager = {
         this.fileHandle = handle;
         this.isSyncEnabled = true;
         this.updateUIStatus();
+        // Déclencher une vérification immédiate
+        this.triggerSync();
       }
     } catch (e) {
       console.error("Erreur init SyncManager:", e);
@@ -3531,6 +3545,10 @@ const SyncManager = {
   },
 
   showPermissionBanner() {
+    const statusEl = document.getElementById('sync-status-text');
+    if (statusEl) {
+      statusEl.innerHTML = '<span style="color:var(--orange)">⚠️ Permission requise (cliquez sur la bannière)</span>';
+    }
     let banner = document.getElementById('sync-permission-banner');
     if (!banner) {
       banner = document.createElement('div');
@@ -3569,9 +3587,15 @@ const SyncManager = {
   },
 
   async performSync(retries = 3) {
+    const indicator = document.getElementById('sync-indicator');
+    if (indicator) indicator.classList.add('active');
+    
     try {
       const hasPermission = await this.verifyPermission();
-      if (!hasPermission) return;
+      if (!hasPermission) {
+        if (indicator) indicator.classList.remove('active');
+        return;
+      }
 
       const blob = ExportHandler.generateExcelBlob(); 
 
@@ -3594,6 +3618,11 @@ const SyncManager = {
         if (statusEl) {
           statusEl.innerHTML = `<span style="color:var(--red)">Erreur de synchronisation</span>`;
         }
+      }
+    } finally {
+      if (indicator) {
+        // Laisser l'icône visible 500ms de plus pour que l'utilisateur voit l'action
+        setTimeout(() => indicator.classList.remove('active'), 800);
       }
     }
   },
