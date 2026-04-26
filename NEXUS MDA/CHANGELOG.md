@@ -2,6 +2,179 @@
 
 ## Version actuelle - Avril 2026
 
+### Correctif - Avril 2026 (Workflow: fin du seed automatique)
+
+- Workflow:
+  - suppression de l injection automatique du jeu d exemple au demarrage (`ensureSeedData` n est plus appele dans `init`),
+  - apres reinitialisation locale complete, la vue Workflow reste vide (plus de reliquat `Maison de l autonomie / Service Evaluation / Pole instruction / Agent referent`).
+  - le bouton d injection manuelle du jeu exemple reste disponible si besoin.
+
+### Micro-lot securite - Avril 2026 (seed exemple Workflow verrouille)
+
+- Workflow:
+  - ajout d un flag admin explicite local (`mode seed`) avant toute possibilite d injection de jeu exemple,
+  - bouton `Injecter jeu d exemple` masque par defaut, visible uniquement si:
+    - utilisateur admin,
+    - flag `mode seed` active.
+  - ajout d un bouton admin `Activer/Désactiver mode seed`.
+  - double confirmation renforcee:
+    - activation du mode seed: confirmation + saisie du token `ACTIVER_SEED`,
+    - injection du jeu exemple: confirmation + saisie du token `INJECTER`.
+
+### Mise a jour incrementale - Avril 2026 (Notes globales - mini lot qualite UX)
+
+- Rubrique `Notes` (transverse/privee):
+  - ajout de l onglet `Favoris` dans les filtres rapides,
+  - ajout d un marquage `Favori` par note (action directe depuis la carte),
+  - ajout d une action `Exporter` (HTML) depuis chaque carte.
+- Selection multiple:
+  - ajout du mode `Selection multiple` dans la barre Notes globale,
+  - ajout du bouton `Tout selectionner` (toggle auto vers `Tout deselectionner`),
+  - suppression en masse des notes selectionnees (avec controle des droits).
+- Export multi-notes:
+  - remplacement des deux actions directes par un bouton unique `Export ZIP`,
+  - ajout d une modale compacte de choix de format (`ZIP HTML` ou `ZIP TXT`),
+  - generation d un ZIP local sans serveur/npm (format ZIP standard, non compresse).
+- Pagination:
+  - pagination dediee a la liste des notes globales (`global-notes-pagination`) pour garder une navigation fluide sur gros volumes.
+- Tri:
+  - nouveau tri `Favoris d abord` dans la liste des notes globales.
+- Navigation:
+  - la rubrique `Notes` est placee juste apres `Taches` dans la sidebar.
+
+### Mise a jour incrementale - Avril 2026 (Rubrique Notes transverse + privee)
+
+- Navigation:
+  - ajout d une rubrique globale `Notes` dans la sidebar transverse.
+- Stockage:
+  - nouveau store IndexedDB `globalNotes` (DB_VERSION `20`) avec indexes `createdAt/updatedAt/createdBy/visibility/theme`.
+- UX Notes:
+  - liste de notes avec recherche, filtres de portee (`privee/transverse`), onglets rapides (`Toutes`, `Mes notes`, `Publiees dans le fil`) et tri.
+  - creation/edition via modale dediee avec editeur riche (Quill/fallback), tags, thematique et mode de visibilite.
+  - mode lecture pour les notes transverses non proprietaire (edition reservee auteur/admin).
+- Integration Fil d info:
+  - publication optionnelle d une note globale dans le fil via un post lie (`ref global-note`).
+  - references `global-note` cliquables depuis le fil (ouverture directe de la note).
+- Recherche globale:
+  - indexation des notes transverses/privees dans la recherche d en-tete avec ouverture contextuelle.
+
+### Mise a jour incrementale - Avril 2026 (Lot technique 1 - stockage documents sur disque)
+
+- Documents:
+  - ajout d un module dedie `js/taskmda-document-storage.js` pour isoler la logique de stockage fichier.
+  - nouvel enregistrement par defaut sur disque partage (quand le dossier est lie) avec chemin structure:
+    - horodatage,
+    - rubrique source (upload projet/note/global),
+    - scope (projet/global),
+    - projet,
+    - thematique.
+  - fallback automatique vers stockage `data:` en base locale si ecriture disque indisponible.
+- Compatibilite:
+  - apercu et telechargement hydrates a la demande depuis le chemin disque (`storagePath`) si `data` absent.
+  - edition document: ouverture compatible avec hydratation automatique du contenu.
+  - re-liaison/rattachement de document conserve les metadonnees de stockage (`storageMode`, `storagePath`, etc.).
+
+### Mise a jour incrementale - Avril 2026 (Deadlines flexibles Projets + Taches)
+
+- Projets:
+  - ajout d un bloc d echeance configurable a la creation et a l edition:
+    - `Date precise`
+    - `Mois`
+    - `Annee`
+    - `Periode (debut / fin)`
+  - affichage de l echeance dans l entete projet et sur les cartes projet (dashboard / vue projets).
+  - stockage harmonise (`deadlineMode`, `deadlineDate`, `deadlineMonth`, `deadlineYear`, `deadlineStart`, `deadlineEnd`, `deadlineAt`).
+- Taches:
+  - ajout d un mode d echeance flexible dans la modale de creation/edition avec les memes 4 formats.
+  - conservation de la compatibilite avec la logique existante (tri, focus/chrono, timeline, calendrier) via `dueDate` derive automatiquement.
+  - affichage adapte dans les rendus (cartes, listes, timeline, detail) pour montrer le format choisi (mois/annee/periode).
+  - edition inline de la date limite convertie explicitement en mode `date precise`.
+- Import:
+  - normalisation des taches importees pour conserver/deriver le nouveau modele d echeance.
+
+### Mise a jour incrementale - Avril 2026 (Workflow UX - alignement filtres Carte)
+
+- Workflow / Carte:
+  - correction CSS de la zone filtres des liaisons pour afficher `Rechercher une liaison...` et `Tri` sur la meme ligne en desktop.
+  - comportement responsive conserve: retour en empilement sur petits ecrans.
+  - ajustement applique dans `css/taskmda-workflow.css` (source de style active Workflow).
+
+### Mise a jour incrementale - Avril 2026 (Hierarchie Epic/Feature finalisee)
+
+- Projets / Structure:
+  - KPIs hierarchiques ajoutes dans l onglet `Structure` (taches actives, avec/sans feature, terminees, completion).
+  - actions rapides ajoutees:
+    - deplacement `Feature -> Epic`
+    - reassignment `Tache -> Feature`
+  - drag & drop natif dans `Structure`:
+    - `Feature -> Epic` par glisser-deposer
+    - `Tache -> Feature` via liste de taches draggable et zones de depot par feature
+    - zone `Sans feature` pour detacher rapidement une tache
+- Taches projet/transverses:
+  - affichage du badge `Epic` en plus du badge `Feature` sur les cartes et details.
+  - filtres projet enrichis `Epic` + `Feature` (avec dependance dynamique Epic -> Features).
+- Exports CSV:
+  - export projets enrichi (`epics`, `features`, `taches_avec_feature`, `taches_sans_feature`).
+  - export taches enrichi (`epic_id`, `epic`, `feature_id`, `feature`).
+
+### Mise a jour incrementale - Avril 2026 (Annuaire ESMS + Audit divergences + UX)
+
+- Referentiels / Annuaire ESMS:
+  - stabilisation du connecteur Annuaire Sante FHIR (`gateway.api.esante.gouv.fr`) avec support endpoint configure + cle API optionnelle selon plan.
+  - normalisation automatique des endpoints gateway (`/fhir` converti en `/fhir/v2`).
+  - renforcement des requetes FHIR `Organization` (construction via `URLSearchParams`, variantes de recherche FINESS nettoyees).
+  - garde-fous anti-bruit reseau:
+    - pre-check unique de disponibilite/authentification avant enrichissement,
+    - arret des appels d enrichissement en cas de `401/403` ou `400` persistant,
+    - affichage explicite de la raison d indisponibilite.
+  - ajout d un panneau de configuration API repliable/depliable (toggle) avec persistance locale de l etat.
+  - libelle du toggle clarifie avec icones (`Afficher config API` / `Masquer config API`).
+- Audit divergences FINESS vs FHIR:
+  - ajout d un mode `Audit` activable depuis l annuaire.
+  - badge par ligne + detail au clic des champs compares (nom, ville, adresse, telephone, email).
+  - statuts introduits: `OK`, `Proche`, `Incomplet`, `Different`.
+  - recapitulatif des compteurs par ligne (OK / Proche / Incomplet / Different).
+  - moteur de proximite semantique pour limiter les faux positifs:
+    - normalisation casse/accents/ponctuation,
+    - similarite texte (Dice),
+    - overlap de tokens,
+    - detection d inclusion.
+  - ajout d une recommandation `adresse enrichie` et action locale `Utiliser l adresse enrichie` quand l adresse FHIR est plus informative.
+  - correction d un bug de boucle de rendu/audit (stabilisation UX en mode audit ON).
+- UI Referentiels:
+  - barre d onglets ajustee pour integrer le bouton d aide sur la meme ligne, a droite.
+- Taches:
+  - animation de completion sur carte (`pouce leve` flottant + fade) lors d un passage a `termine`.
+
+### Mise a jour incrementale - Avril 2026 (UX/UI + Workflow KPI)
+
+- Projets:
+  - harmonisation de la vue `Projets` en panneaux separes (zone overview/filtres/actions + zone cartes).
+  - fiabilisation du mode `Archives` (bascule, retour dashboard -> projets, etat d affichage).
+  - ajustements visuels des cartes (barre top, coherence panel et filtres).
+- Projet detail:
+  - corrections de visibilite des actions contextuelles (ex: `Restaurer` uniquement pour les archives).
+  - harmonisation des fonds `#project-overview-panel` et `#project-work-panel` selon les styles demandes.
+- Sidebar/header:
+  - integration visuelle du bloc marque dans la sidebar.
+  - sidebar etendue sur toute la hauteur de page.
+- Fil d info:
+  - bloc `Nouveau post d'information` remonte au-dessus du fil et de la recherche.
+  - bloc replie par defaut, depliage a la demande.
+- Messagerie:
+  - panneau `Agents connus` en mode toggle (ouvrir/reduire).
+  - ajustement des proportions (panneau agents + zone conversation).
+  - barre d envoi modernisee avec bouton `Envoyer` rectangulaire a bords arrondis.
+- Onglet `Plus (x)`:
+  - menu complementaire epingle au clic.
+  - fermeture au second clic.
+  - suppression de l ouverture au survol.
+- Workflow:
+  - ajout de la vue `KPI` dans `Pilotage`.
+  - KPI: synthese volume, completion, bloquees, a valider, en cours, priorite haute.
+  - KPI: repartitions par statut/priorite + charge par agent (top 8).
+  - styles dedies clairs/sombres (`css/taskmda-workflow.css`).
+
 ### ✨ Nouvelles fonctionnalités
 #### Workflow (MVP integre)
 - Ajout de la rubrique principale `Workflow` dans la navigation.
