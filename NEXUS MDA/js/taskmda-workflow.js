@@ -1,4 +1,4 @@
-﻿
+
 (function initTaskMdaWorkflowModule(global) {
   'use strict';
 
@@ -955,7 +955,12 @@ ${flows.map((f)=>`<tr><td>${esc(maps.stepById.get(f.fromStepId)?.title || f.from
     }
 
     function printHtmlWithPopupOrIframe(html, options = {}) {
-      const popupFeatures = String(options.popupFeatures || 'noopener,noreferrer,width=1320,height=920');
+      // Retirer les scripts d'auto-print embarques dans le HTML pour eviter les doubles impressions
+      const cleanHtml = html.replace(/<script[^>]*>[\s\S]*?window\.print\(\)[\s\S]*?<\/script>/gi, '');
+
+      // Ouvrir popup SANS noopener pour garder acces a popup.document
+      const rawFeatures = String(options.popupFeatures || 'width=1320,height=920');
+      const popupFeatures = rawFeatures.replace(/noopener,?/gi, '').replace(/noreferrer,?/gi, '').replace(/,\s*$/, '');
       let popup = null;
       try {
         popup = global.open('', '_blank', popupFeatures);
@@ -963,13 +968,21 @@ ${flows.map((f)=>`<tr><td>${esc(maps.stepById.get(f.fromStepId)?.title || f.from
         popup = null;
       }
 
-      if (popup) {
+      if (popup && popup.document) {
         popup.document.open();
-        popup.document.write(html);
+        popup.document.write(cleanHtml);
         popup.document.close();
+        // Lancer print une seule fois apres rendu complet
+        setTimeout(() => {
+          try {
+            popup.focus();
+            popup.print();
+          } catch (_) {}
+        }, 350);
         return true;
       }
 
+      // Fallback iframe si popup bloquee
       const frame = document.createElement('iframe');
       frame.style.position = 'fixed';
       frame.style.right = '0';
@@ -1001,14 +1014,14 @@ ${flows.map((f)=>`<tr><td>${esc(maps.stepById.get(f.fromStepId)?.title || f.from
         return false;
       }
       doc.open();
-      doc.write(html);
+      doc.write(cleanHtml);
       doc.close();
       return true;
     }
 
     function printSheetHtml(html) {
       return printHtmlWithPopupOrIframe(html, {
-        popupFeatures: 'noopener,noreferrer,width=1320,height=920'
+        popupFeatures: 'width=1320,height=920'
       });
     }
 
@@ -4718,32 +4731,30 @@ ${clone.outerHTML}
         toast('Aucune carte metier a exporter');
         return;
       }
+
+      if (typeof global.html2canvas !== 'function') {
+        toast('Export PNG indisponible (html2canvas non charge)');
+        return;
+      }
+
       try {
-        const clone = canvasSource.cloneNode(true);
-        clone.style.transform = 'none';
-        clone.style.padding = '10px';
-        const width = Math.max(900, Number(clone.scrollWidth || canvasSource.scrollWidth || 900));
-        const height = Math.max(560, Number(clone.scrollHeight || canvasSource.scrollHeight || 560));
-        const html = `<div xmlns="http://www.w3.org/1999/xhtml" style="font-family:Arial,sans-serif;background:#ffffff;color:#0f172a;width:${width}px;height:${height}px;">${clone.outerHTML}</div>`;
-        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><foreignObject x="0" y="0" width="100%" height="100%">${html}</foreignObject></svg>`;
-        const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const image = await new Promise((resolve, reject) => {
-          const img = new Image();
-          img.onload = () => resolve(img);
-          img.onerror = reject;
-          img.src = url;
+        // Sauvegarder et neutraliser le transform pour capturer le contenu complet
+        const savedTransform = canvasSource.style.transform;
+        canvasSource.style.transform = 'none';
+
+        const rendered = await global.html2canvas(canvasSource, {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#ffffff',
+          width: canvasSource.scrollWidth,
+          height: canvasSource.scrollHeight
         });
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) throw new Error('Canvas 2D indisponible');
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, width, height);
-        ctx.drawImage(image, 0, 0);
-        URL.revokeObjectURL(url);
-        canvas.toBlob((pngBlob) => {
+
+        // Restaurer le transform
+        canvasSource.style.transform = savedTransform;
+
+        rendered.toBlob((pngBlob) => {
           if (!pngBlob) {
             toast('Echec export image');
             return;

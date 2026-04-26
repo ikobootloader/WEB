@@ -13275,3 +13275,44 @@ html.dark .inline-save-indicator.is-error {
   border-color: rgba(252, 165, 165, 0.55);
   color: #fee2e2;
 }
+
+/* ========================================
+   MENU DÉROULANT D'EXPORT (Notes)
+   ======================================== */
+
+.export-menu-item {
+  transition: background-color 0.15s ease;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  color: #334155;
+}
+
+.export-menu-item:hover {
+  background-color: #f8fafc;
+}
+
+.export-menu-item:active {
+  background-color: #e2e8f0;
+}
+
+.export-menu-item .material-symbols-outlined {
+  color: #64748b;
+}
+
+/* Mode sombre */
+html.dark .export-menu-item {
+  color: #e2e8f0;
+}
+
+html.dark .export-menu-item:hover {
+  background-color: rgba(51, 65, 85, 0.3);
+}
+
+html.dark .export-menu-item:active {
+  background-color: rgba(51, 65, 85, 0.5);
+}
+
+html.dark .export-menu-item .material-symbols-outlined {
+  color: #94a3b8;
+}

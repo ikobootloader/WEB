@@ -1,4 +1,4 @@
-﻿    // ============================================================================
+    // ============================================================================
     // TASKMDA TEAM - STANDALONE VERSION
     // Toutes les fonctionnalités event-sourcing dans un seul fichier HTML
     // ============================================================================
@@ -14367,6 +14367,63 @@
       showToast(isFavorite ? 'Note retirée des favoris' : 'Note ajoutée aux favoris');
     }
 
+    // ========================================
+    // FONCTIONS UTILITAIRES EXPORT PDF/DOCX
+    // ========================================
+
+    /**
+     * Échappe les caractères spéciaux XML
+     * @param {string} text - Texte à échapper
+     * @returns {string} Texte sécurisé pour XML
+     */
+    function escapeXml(text) {
+      const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&apos;'
+      };
+      return String(text || '').replace(/[&<>"']/g, (c) => map[c]);
+    }
+
+    /**
+     * Convertit une chaîne base64 en Uint8Array
+     * @param {string} base64 - Chaîne base64 à convertir
+     * @returns {Uint8Array} Tableau d'octets
+     */
+    function base64ToUint8Array(base64) {
+      try {
+        const cleaned = String(base64 || '').replace(/\s/g, '');
+        // Limite 5MB (base64 ~1.37x binaire, donc ~6.7MB encodé)
+        if (cleaned.length > 6700000) {
+          console.warn('Image trop volumineuse (> 5MB), ignorée');
+          return new Uint8Array(0);
+        }
+        const binaryString = atob(cleaned);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        return bytes;
+      } catch (error) {
+        console.error('Erreur décodage base64:', error);
+        return new Uint8Array(0);
+      }
+    }
+
+    /**
+     * Extrait l'extension depuis une data URL
+     * @param {string} dataUrl - URL de données (data:image/png;base64,...)
+     * @returns {string} Extension (png, jpg, gif, etc.)
+     */
+    function getMimeExtension(dataUrl) {
+      const match = String(dataUrl || '').match(/data:image\/([^;]+);/);
+      if (!match) return 'png';
+      const type = match[1].toLowerCase();
+      return type === 'jpeg' ? 'jpg' : type;
+    }
+
     async function exportGlobalNote(noteId = '', format = 'html') {
       const nid = String(noteId || '').trim();
       if (!nid) return;
@@ -14392,6 +14449,708 @@
       showToast('Note exportée (HTML)');
     }
 
+    // ========================================
+    // EXPORT PDF
+    // ========================================
+
+    /**
+     * Exporte une note individuelle au format PDF
+     * @param {string} noteId - ID de la note à exporter
+     */
+    async function exportGlobalNoteAsPdf(noteId = '') {
+      const nid = String(noteId || '').trim();
+      if (!nid) return;
+
+      const note = await getDecrypted('globalNotes', nid, 'noteId');
+      if (!note) {
+        showToast('Note introuvable');
+        return;
+      }
+
+      const title = String(note.title || '').trim() || 'Note';
+      const contentHtml = sanitizeRichTextHtmlPreserve(
+        String(note.contentHtml || '').trim() || plainTextToRichHtml(String(note.content || '').trim())
+      );
+      const tags = Array.isArray(note.tags) ? note.tags.map(t => String(t || '').trim()).filter(Boolean) : [];
+      const dateFormatted = new Date(Number(note.updatedAt || note.createdAt || Date.now())).toLocaleString('fr-FR');
+
+      const printHtml = `<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>
+<style>
+body{font-family:'Segoe UI',Arial,sans-serif;padding:24px;color:#1e293b;max-width:800px;margin:0 auto}
+h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
+.meta{color:#64748b;font-size:12px;margin-bottom:12px}
+.tags{margin-bottom:14px}
+.tag{display:inline-block;font-size:10px;border:1px solid #cbd5e1;border-radius:999px;padding:3px 8px;background:#f8fafc;color:#334155;margin-right:6px;margin-bottom:4px}
+.content{margin-top:20px;line-height:1.6;color:#1e293b}
+.content img{max-width:100%;height:auto}
+@media print{body{padding:0}}
+</style></head><body>
+<h1>${escapeHtml(title)}</h1>
+<p class="meta">${escapeHtml(dateFormatted)}</p>
+${tags.length ? `<div class="tags">${tags.map(tag => `<span class="tag">#${escapeHtml(tag)}</span>`).join('')}</div>` : ''}
+<div class="content">${contentHtml || '<p>Cette note ne contient aucun contenu.</p>'}</div>
+</body></html>`;
+
+      // Ouvrir popup sans noopener pour garder acces au document
+      let popup = null;
+      try {
+        popup = window.open('', '_blank', 'width=900,height=700');
+      } catch (_) {
+        popup = null;
+      }
+
+      if (popup && popup.document) {
+        popup.document.open();
+        popup.document.write(printHtml);
+        popup.document.close();
+        // Lancer print une seule fois apres rendu
+        setTimeout(() => {
+          try { popup.print(); } catch (_) {}
+        }, 300);
+        showToast('Impression ouverte - choisissez Enregistrer en PDF');
+      } else {
+        showToast('Impossible d\'ouvrir la fenetre d\'impression (popup bloquee ?)');
+      }
+    }
+
+    /**
+     * Génère un blob PDF pour une note (utilisé pour export ZIP multiple)
+     * @param {object} noteData - Données de la note {title, contentHtml, tags, dateFormatted}
+     * @returns {Promise<Blob|null>} Blob PDF ou null si erreur
+     */
+    async function generatePdfBlobForNote({ title, contentHtml, tags, dateFormatted }) {
+      const tempDiv = document.createElement('div');
+      tempDiv.style.position = 'fixed';
+      tempDiv.style.left = '0';
+      tempDiv.style.top = '0';
+      tempDiv.style.width = '800px';
+      tempDiv.style.zIndex = '-1';
+      tempDiv.style.fontFamily = "'Segoe UI', Arial, sans-serif";
+      tempDiv.style.padding = '20px';
+      tempDiv.style.color = '#1e293b';
+      tempDiv.style.background = '#fff';
+
+      const styleBlock = document.createElement('style');
+      styleBlock.textContent = `
+        .pdf-title { margin: 0 0 8px; font-size: 24px; font-weight: bold; color: #1e293b; }
+        .pdf-meta { color: #64748b; font-size: 12px; margin-bottom: 12px; }
+        .pdf-tags { margin-bottom: 14px; }
+        .pdf-tag { display: inline-block; font-size: 10px; border: 1px solid #cbd5e1; border-radius: 999px; padding: 3px 8px; background: #f8fafc; color: #334155; margin-right: 6px; margin-bottom: 4px; }
+        .pdf-content { margin-top: 20px; line-height: 1.6; color: #1e293b; }
+        .pdf-content img { max-width: 100%; height: auto; }
+      `;
+      tempDiv.appendChild(styleBlock);
+
+      const h1 = document.createElement('h1');
+      h1.className = 'pdf-title';
+      h1.textContent = title;
+      tempDiv.appendChild(h1);
+
+      const meta = document.createElement('p');
+      meta.className = 'pdf-meta';
+      meta.textContent = dateFormatted;
+      tempDiv.appendChild(meta);
+
+      if (tags.length) {
+        const tagsDiv = document.createElement('div');
+        tagsDiv.className = 'pdf-tags';
+        tags.forEach(tag => {
+          const span = document.createElement('span');
+          span.className = 'pdf-tag';
+          span.textContent = '#' + tag;
+          tagsDiv.appendChild(span);
+        });
+        tempDiv.appendChild(tagsDiv);
+      }
+
+      const contentDiv = document.createElement('div');
+      contentDiv.className = 'pdf-content';
+      contentDiv.innerHTML = contentHtml || '<p>Cette note ne contient aucun contenu.</p>';
+      tempDiv.appendChild(contentDiv);
+
+      document.body.appendChild(tempDiv);
+
+      const pdfOpts = {
+        margin: [10, 10, 10, 10],
+        image: { type: 'jpeg', quality: 0.92 },
+        html2canvas: {
+          scale: 1.5,
+          useCORS: true,
+          logging: false,
+          width: 800
+        },
+        jsPDF: {
+          unit: 'mm',
+          format: 'a4',
+          orientation: 'portrait'
+        }
+      };
+
+      try {
+        await new Promise(resolve => setTimeout(resolve, 150));
+        const pdfBlob = await html2pdf().set(pdfOpts).from(tempDiv).outputPdf('blob');
+        return pdfBlob;
+      } catch (error) {
+        console.error('Erreur génération PDF:', error);
+        return null;
+      } finally {
+        setTimeout(() => {
+          if (tempDiv && tempDiv.parentNode) {
+            document.body.removeChild(tempDiv);
+          }
+        }, 1000);
+      }
+    }
+
+    // ========================================
+    // EXPORT DOCX - TEMPLATES XML
+    // ========================================
+
+    /**
+     * Génère le fichier [Content_Types].xml
+     * @param {Array} images - Liste des images (métadonnées)
+     * @returns {string} Contenu XML
+     */
+    function generateContentTypesXml(images = []) {
+      const imageExtensions = new Set();
+      images.forEach(img => {
+        const ext = (img.filename || '').split('.').pop().toLowerCase();
+        if (ext) imageExtensions.add(ext);
+      });
+
+      let imageDefaults = '';
+      imageExtensions.forEach(ext => {
+        const mimeType = ext === 'png' ? 'image/png' :
+                        ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' :
+                        ext === 'gif' ? 'image/gif' : 'image/png';
+        imageDefaults += `<Default Extension="${ext}" ContentType="${mimeType}"/>`;
+      });
+
+      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  ${imageDefaults}
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+</Types>`;
+    }
+
+    /**
+     * Génère le fichier _rels/.rels
+     * @returns {string} Contenu XML
+     */
+    function generateRootRelsXml() {
+      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`;
+    }
+
+    /**
+     * Génère le fichier word/document.xml
+     * @param {object} noteData - {title, author, dateFormatted, tags}
+     * @param {string} wordMLContent - Contenu WordML converti
+     * @returns {string} Contenu XML
+     */
+    function generateDocumentXml(noteData, wordMLContent) {
+      const { title, author, dateFormatted, tags } = noteData;
+      const tagsText = Array.isArray(tags) ? tags.map(t => '#' + t).join(' ') : '';
+
+      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+            xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+            xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+            xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
+  <w:body>
+    <w:p>
+      <w:pPr><w:pStyle w:val="Title"/></w:pPr>
+      <w:r><w:t>${escapeXml(title)}</w:t></w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:rPr><w:sz w:val="20"/><w:color w:val="666666"/></w:rPr>
+        <w:t>${escapeXml(author)} | ${escapeXml(dateFormatted)}</w:t>
+      </w:r>
+    </w:p>
+    ${tagsText ? `<w:p><w:r><w:rPr><w:sz w:val="18"/></w:rPr><w:t>${escapeXml(tagsText)}</w:t></w:r></w:p>` : ''}
+    ${wordMLContent}
+    <w:sectPr>
+      <w:pgSz w:w="11906" w:h="16838"/>
+      <w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/>
+    </w:sectPr>
+  </w:body>
+</w:document>`;
+    }
+
+    /**
+     * Génère le fichier word/_rels/document.xml.rels
+     * @param {Array} relationships - Liste des relations {id, type, target}
+     * @returns {string} Contenu XML
+     */
+    function generateDocumentRelsXml(relationships = []) {
+      const relsXml = relationships.map(rel =>
+        `<Relationship Id="${rel.id}" Type="${rel.type}" Target="${rel.target}"/>`
+      ).join('\n  ');
+
+      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+  ${relsXml}
+</Relationships>`;
+    }
+
+    /**
+     * Génère le fichier word/styles.xml
+     * @returns {string} Contenu XML
+     */
+    function generateStylesXml() {
+      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:style w:type="paragraph" w:styleId="Normal">
+    <w:name w:val="Normal"/>
+    <w:qFormat/>
+    <w:pPr><w:spacing w:after="160"/></w:pPr>
+    <w:rPr><w:sz w:val="22"/></w:rPr>
+  </w:style>
+  <w:style w:type="paragraph" w:styleId="Title">
+    <w:name w:val="Title"/>
+    <w:basedOn w:val="Normal"/>
+    <w:qFormat/>
+    <w:pPr><w:spacing w:before="240" w:after="120"/></w:pPr>
+    <w:rPr><w:b/><w:sz w:val="32"/></w:rPr>
+  </w:style>
+  <w:style w:type="paragraph" w:styleId="Heading1">
+    <w:name w:val="Heading 1"/>
+    <w:basedOn w:val="Normal"/>
+    <w:qFormat/>
+    <w:pPr><w:spacing w:before="240" w:after="120"/></w:pPr>
+    <w:rPr><w:b/><w:sz w:val="28"/></w:rPr>
+  </w:style>
+  <w:style w:type="paragraph" w:styleId="Heading2">
+    <w:name w:val="Heading 2"/>
+    <w:basedOn w:val="Normal"/>
+    <w:qFormat/>
+    <w:pPr><w:spacing w:before="200" w:after="100"/></w:pPr>
+    <w:rPr><w:b/><w:sz w:val="24"/></w:rPr>
+  </w:style>
+  <w:style w:type="paragraph" w:styleId="Heading3">
+    <w:name w:val="Heading 3"/>
+    <w:basedOn w:val="Normal"/>
+    <w:qFormat/>
+    <w:pPr><w:spacing w:before="160" w:after="80"/></w:pPr>
+    <w:rPr><w:b/><w:sz w:val="22"/></w:rPr>
+  </w:style>
+</w:styles>`;
+    }
+
+    // ========================================
+    // EXPORT DOCX - CONVERTISSEUR HTML→WORDML
+    // ========================================
+
+    /**
+     * Extrait les images d'un contenu HTML
+     * @param {string} htmlContent - Contenu HTML
+     * @returns {Array} Liste des images {index, rId, filename, mimeType, base64, width, height}
+     */
+    function extractImagesFromHtml(htmlContent) {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(`<div>${htmlContent}</div>`, 'text/html');
+      const images = [];
+
+      doc.querySelectorAll('img').forEach((img, index) => {
+        const src = img.getAttribute('src');
+        if (!src) return;
+
+        if (src.startsWith('data:')) {
+          const match = src.match(/^data:([^;]+);base64,(.+)$/);
+          if (match) {
+            const mimeType = match[1];
+            const base64Data = match[2];
+            const extension = getMimeExtension(src);
+
+            images.push({
+              index,
+              rId: `rId${index + 5}`,
+              filename: `image${index + 1}.${extension}`,
+              mimeType,
+              base64: base64Data,
+              width: img.width || 400,
+              height: img.height || 300,
+              element: img
+            });
+
+            // Marquer l'élément pour la conversion
+            img.setAttribute('data-docx-rid', `rId${index + 5}`);
+          }
+        }
+      });
+
+      return images;
+    }
+
+    /**
+     * Génère le WordML pour une image
+     * @param {object} image - Métadonnées image
+     * @returns {string} WordML de l'image
+     */
+    function generateImageWordML(image) {
+      // Redimensionner proportionnellement si trop grand
+      const maxWidthPx = 600;
+      const maxHeightPx = 800;
+
+      let width = image.width;
+      let height = image.height;
+
+      if (width > maxWidthPx) {
+        height = Math.round(height * maxWidthPx / width);
+        width = maxWidthPx;
+      }
+      if (height > maxHeightPx) {
+        width = Math.round(width * maxHeightPx / height);
+        height = maxHeightPx;
+      }
+
+      // Conversion en EMU (914400 EMU = 1 pouce, 96 DPI)
+      const widthEmu = Math.round(width * 9525);
+      const heightEmu = Math.round(height * 9525);
+
+      return `
+<w:p>
+  <w:r>
+    <w:drawing>
+      <wp:inline>
+        <wp:extent cx="${widthEmu}" cy="${heightEmu}"/>
+        <wp:docPr id="${image.index + 1}" name="${escapeXml(image.filename)}"/>
+        <a:graphic>
+          <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+            <pic:pic>
+              <pic:nvPicPr>
+                <pic:cNvPr id="${image.index + 1}" name="${escapeXml(image.filename)}"/>
+                <pic:cNvPicPr/>
+              </pic:nvPicPr>
+              <pic:blipFill>
+                <a:blip r:embed="${image.rId}"/>
+                <a:stretch><a:fillRect/></a:stretch>
+              </pic:blipFill>
+              <pic:spPr>
+                <a:xfrm>
+                  <a:off x="0" y="0"/>
+                  <a:ext cx="${widthEmu}" cy="${heightEmu}"/>
+                </a:xfrm>
+                <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+              </pic:spPr>
+            </pic:pic>
+          </a:graphicData>
+        </a:graphic>
+      </wp:inline>
+    </w:drawing>
+  </w:r>
+</w:p>`;
+    }
+
+    /**
+     * Convertit du HTML en WordML (WordProcessingML)
+     * @param {string} htmlContent - Contenu HTML Quill
+     * @returns {object} {wordML, images, relationships}
+     */
+    function convertHtmlToWordML(htmlContent) {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(`<div>${htmlContent}</div>`, 'text/html');
+      const root = doc.body.firstElementChild;
+
+      // Extraire les images
+      const images = extractImagesFromHtml(htmlContent);
+      const relationships = images.map(img => ({
+        id: img.rId,
+        type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image',
+        target: `media/${img.filename}`
+      }));
+
+      const wordMLParagraphs = [];
+
+      // Fonction récursive de conversion
+      function processNode(node, context = {}) {
+        if (!node) return [];
+
+        const nodeName = node.nodeName ? node.nodeName.toLowerCase() : '';
+
+        // Texte brut
+        if (node.nodeType === Node.TEXT_NODE) {
+          const text = node.textContent || '';
+          if (!text.trim()) return [];
+          return [`<w:r>${context.format || ''}<w:t xml:space="preserve">${escapeXml(text)}</w:t></w:r>`];
+        }
+
+        // Éléments inline avec formatage
+        if (nodeName === 'strong' || nodeName === 'b') {
+          const newFormat = (context.format || '') + '<w:rPr><w:b/></w:rPr>';
+          return Array.from(node.childNodes).flatMap(child => processNode(child, { ...context, format: newFormat }));
+        }
+
+        if (nodeName === 'em' || nodeName === 'i') {
+          const newFormat = (context.format || '') + '<w:rPr><w:i/></w:rPr>';
+          return Array.from(node.childNodes).flatMap(child => processNode(child, { ...context, format: newFormat }));
+        }
+
+        if (nodeName === 'u') {
+          const newFormat = (context.format || '') + '<w:rPr><w:u w:val="single"/></w:rPr>';
+          return Array.from(node.childNodes).flatMap(child => processNode(child, { ...context, format: newFormat }));
+        }
+
+        if (nodeName === 's' || nodeName === 'strike') {
+          const newFormat = (context.format || '') + '<w:rPr><w:strike/></w:rPr>';
+          return Array.from(node.childNodes).flatMap(child => processNode(child, { ...context, format: newFormat }));
+        }
+
+        // Image
+        if (nodeName === 'img') {
+          const rId = node.getAttribute('data-docx-rid');
+          if (rId) {
+            const img = images.find(i => i.rId === rId);
+            if (img) {
+              return [generateImageWordML(img)];
+            }
+          }
+          return [];
+        }
+
+        // Paragraphe
+        if (nodeName === 'p') {
+          const runs = Array.from(node.childNodes).flatMap(child => processNode(child, context));
+          if (runs.length === 0) return ['<w:p><w:r><w:t> </w:t></w:r></w:p>'];
+          return [`<w:p>${runs.join('')}</w:p>`];
+        }
+
+        // Titres
+        if (nodeName === 'h1') {
+          const runs = Array.from(node.childNodes).flatMap(child => processNode(child, context));
+          return [`<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr>${runs.join('')}</w:p>`];
+        }
+
+        if (nodeName === 'h2') {
+          const runs = Array.from(node.childNodes).flatMap(child => processNode(child, context));
+          return [`<w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr>${runs.join('')}</w:p>`];
+        }
+
+        if (nodeName === 'h3') {
+          const runs = Array.from(node.childNodes).flatMap(child => processNode(child, context));
+          return [`<w:p><w:pPr><w:pStyle w:val="Heading3"/></w:pPr>${runs.join('')}</w:p>`];
+        }
+
+        // Listes non ordonnées
+        if (nodeName === 'ul') {
+          return Array.from(node.children).flatMap((li, idx) => {
+            if (li.nodeName.toLowerCase() === 'li') {
+              const runs = Array.from(li.childNodes).flatMap(child => processNode(child, context));
+              return [`<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>${runs.join('')}</w:p>`];
+            }
+            return [];
+          });
+        }
+
+        // Listes ordonnées
+        if (nodeName === 'ol') {
+          return Array.from(node.children).flatMap((li, idx) => {
+            if (li.nodeName.toLowerCase() === 'li') {
+              const runs = Array.from(li.childNodes).flatMap(child => processNode(child, context));
+              return [`<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="2"/></w:numPr></w:pPr>${runs.join('')}</w:p>`];
+            }
+            return [];
+          });
+        }
+
+        // Saut de ligne
+        if (nodeName === 'br') {
+          return ['<w:r><w:br/></w:r>'];
+        }
+
+        // Conteneur générique (div, span, etc.)
+        return Array.from(node.childNodes).flatMap(child => processNode(child, context));
+      }
+
+      // Traiter tous les enfants du root
+      Array.from(root.childNodes).forEach(node => {
+        const paragraphs = processNode(node);
+        wordMLParagraphs.push(...paragraphs);
+      });
+
+      // Si aucun contenu, ajouter un paragraphe vide
+      if (wordMLParagraphs.length === 0) {
+        wordMLParagraphs.push('<w:p><w:r><w:t>Cette note ne contient aucun contenu.</w:t></w:r></w:p>');
+      }
+
+      return {
+        wordML: wordMLParagraphs.join('\n'),
+        images,
+        relationships
+      };
+    }
+
+    // ========================================
+    // EXPORT DOCX - FONCTION PRINCIPALE
+    // ========================================
+
+    /**
+     * Exporte une note individuelle au format DOCX
+     * @param {string} noteId - ID de la note à exporter
+     */
+    async function exportGlobalNoteAsDocx(noteId = '') {
+      const nid = String(noteId || '').trim();
+      if (!nid) return;
+
+      // 1. Récupérer la note
+      const note = await getDecrypted('globalNotes', nid, 'noteId');
+      if (!note) {
+        showToast('Note introuvable');
+        return;
+      }
+
+      // 2. Préparer les données
+      const title = String(note.title || '').trim() || 'Note';
+      const safeTitle = sanitizeFilenameSegment(title);
+      const contentHtml = sanitizeRichTextHtmlPreserve(
+        String(note.contentHtml || '').trim() || plainTextToRichHtml(String(note.content || '').trim())
+      );
+      const tags = Array.isArray(note.tags) ? note.tags.map(t => String(t || '').trim()).filter(Boolean) : [];
+      const author = String(note.createdByName || fallbackDirectoryName(note.createdBy || ''));
+      const dateFormatted = new Date(Number(note.updatedAt || note.createdAt || Date.now())).toLocaleString('fr-FR');
+
+      // 3. Convertir HTML → WordML
+      const { wordML, images, relationships } = convertHtmlToWordML(contentHtml);
+
+      // 4. Générer tous les fichiers XML
+      const files = [
+        {
+          name: '[Content_Types].xml',
+          data: generateContentTypesXml(images),
+          mtime: Date.now()
+        },
+        {
+          name: '_rels/.rels',
+          data: generateRootRelsXml(),
+          mtime: Date.now()
+        },
+        {
+          name: 'word/document.xml',
+          data: generateDocumentXml({ title, author, dateFormatted, tags }, wordML),
+          mtime: Date.now()
+        },
+        {
+          name: 'word/styles.xml',
+          data: generateStylesXml(),
+          mtime: Date.now()
+        }
+      ];
+
+      // 5. Ajouter les relationships si images présentes
+      if (images.length > 0) {
+        files.push({
+          name: 'word/_rels/document.xml.rels',
+          data: generateDocumentRelsXml(relationships),
+          mtime: Date.now()
+        });
+
+        // 6. Ajouter les images décodées
+        images.forEach(img => {
+          files.push({
+            name: `word/media/${img.filename}`,
+            data: base64ToUint8Array(img.base64),
+            mtime: Date.now()
+          });
+        });
+      }
+
+      // 7. Créer le ZIP (fichier DOCX)
+      const zipBytes = buildZipStoreArchive(files);
+
+      // 8. Télécharger
+      const tag = formatExportDateTag();
+      downloadBlobFile(
+        new Blob([zipBytes], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }),
+        `note_${safeTitle}_${tag}.docx`,
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      );
+
+      showToast('Note exportée (DOCX)');
+    }
+
+    // ========================================
+    // GESTION DU MENU DÉROULANT D'EXPORT
+    // ========================================
+
+    /**
+     * Toggle (afficher/masquer) le menu d'export d'une note
+     * @param {string} noteId - ID de la note
+     */
+    function toggleGlobalNoteExportMenu(noteId, event) {
+      // Empêcher la propagation vers l'article parent
+      if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+      }
+
+      const nid = String(noteId || '').trim();
+      if (!nid) return;
+
+      const menu = document.getElementById(`export-menu-${nid}`);
+      const btn = document.getElementById(`export-menu-btn-${nid}`);
+      if (!menu || !btn) return;
+
+      // Fermer tous les autres menus ouverts (exclure les boutons trigger)
+      document.querySelectorAll('[id^="export-menu-"]:not([id^="export-menu-btn-"])').forEach(otherMenu => {
+        if (otherMenu.id !== menu.id && !otherMenu.classList.contains('hidden')) {
+          otherMenu.classList.add('hidden');
+          const otherId = otherMenu.id.replace('export-menu-', '');
+          const otherBtn = document.getElementById(`export-menu-btn-${otherId}`);
+          if (otherBtn) otherBtn.setAttribute('aria-expanded', 'false');
+        }
+      });
+
+      // Toggle le menu actuel
+      const isHidden = menu.classList.contains('hidden');
+      if (isHidden) {
+        menu.classList.remove('hidden');
+        btn.setAttribute('aria-expanded', 'true');
+      } else {
+        menu.classList.add('hidden');
+        btn.setAttribute('aria-expanded', 'false');
+      }
+    }
+
+    /**
+     * Ferme le menu d'export d'une note
+     * @param {string} noteId - ID de la note
+     */
+    function closeGlobalNoteExportMenu(noteId) {
+      const nid = String(noteId || '').trim();
+      if (!nid) return;
+
+      const menu = document.getElementById(`export-menu-${nid}`);
+      const btn = document.getElementById(`export-menu-btn-${nid}`);
+      if (menu) menu.classList.add('hidden');
+      if (btn) btn.setAttribute('aria-expanded', 'false');
+    }
+
+    // Event listener global pour fermer les menus au clic extérieur
+    document.addEventListener('click', (event) => {
+      const isMenuButton = event.target.closest('[id^="export-menu-btn-"]');
+      const isMenu = event.target.closest('[id^="export-menu-"]');
+
+      if (!isMenuButton && !isMenu) {
+        document.querySelectorAll('[id^="export-menu-"]:not([id^="export-menu-btn-"])').forEach(menu => {
+          if (!menu.classList.contains('hidden')) {
+            menu.classList.add('hidden');
+            const noteId = menu.id.replace('export-menu-', '');
+            const btn = document.getElementById(`export-menu-btn-${noteId}`);
+            if (btn) btn.setAttribute('aria-expanded', 'false');
+          }
+        });
+      }
+    });
+
     async function exportSelectedGlobalNotesAsZip(format = 'html') {
       if (!globalNotesBulkSelectionMode) return;
       const selectedIds = Array.from(selectedGlobalNoteIdsForBulkDelete).map((id) => String(id || '').trim()).filter(Boolean);
@@ -14408,21 +15167,98 @@
         showToast('Aucune note exportable dans la sélection');
         return;
       }
-      const mode = String(format || 'html').toLowerCase() === 'txt' ? 'txt' : 'html';
-      const files = selectedNotes.map((note) => {
-        const title = String(note.title || '').trim() || 'Note';
-        const safeTitle = sanitizeFilenameSegment(title);
-        const baseName = `${String(note.createdAt || Date.now())}_${safeTitle}`;
-        const tags = Array.isArray(note.tags) ? note.tags.map((entry) => String(entry || '').trim()).filter(Boolean) : [];
-        const contentHtml = sanitizeRichTextHtmlPreserve(String(note.contentHtml || '').trim() || plainTextToRichHtml(String(note.content || '').trim()));
-        if (mode === 'txt') {
-          const plain = getProjectDescriptionPlainText(contentHtml);
-          const payload = `${title}\nAuteur: ${String(note.createdByName || fallbackDirectoryName(note.createdBy || '') || 'Auteur')}\nMise a jour: ${new Date(Number(note.updatedAt || note.createdAt || Date.now())).toLocaleString('fr-FR')}\nTags: ${tags.join(', ')}\n\n${plain}\n`;
-          return { name: `${baseName}.txt`, data: payload, mtime: Number(note.updatedAt || note.createdAt || Date.now()) };
+
+      const mode = String(format || 'html').toLowerCase();
+      const files = [];
+
+      // Cas PDF : génération asynchrone des blobs
+      if (mode === 'pdf') {
+        showToast('Export PDF multiple en cours...');
+        for (const note of selectedNotes) {
+          const title = String(note.title || '').trim() || 'Note';
+          const safeTitle = sanitizeFilenameSegment(title);
+          const baseName = `${String(note.createdAt || Date.now())}_${safeTitle}`;
+          const contentHtml = sanitizeRichTextHtmlPreserve(
+            String(note.contentHtml || '').trim() || plainTextToRichHtml(String(note.content || '').trim())
+          );
+          const tags = Array.isArray(note.tags) ? note.tags.map(t => String(t || '').trim()).filter(Boolean) : [];
+          const dateFormatted = new Date(Number(note.updatedAt || note.createdAt || Date.now())).toLocaleString('fr-FR');
+
+          const pdfBlob = await generatePdfBlobForNote({ title, contentHtml, tags, dateFormatted });
+          if (pdfBlob) {
+            files.push({
+              name: `${baseName}.pdf`,
+              data: new Uint8Array(await pdfBlob.arrayBuffer()),
+              mtime: Number(note.updatedAt || note.createdAt || Date.now())
+            });
+          }
         }
-        const payload = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>body{font-family:Segoe UI,Arial,sans-serif;margin:24px;color:#1e293b}h1{margin:0 0 8px}.meta{color:#64748b;font-size:13px;margin-bottom:12px}.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}.chip{font-size:11px;border:1px solid #cbd5e1;border-radius:999px;padding:3px 8px;background:#f8fafc;color:#334155}</style></head><body><h1>${escapeHtml(title)}</h1><p class="meta">${escapeHtml(new Date(Number(note.updatedAt || note.createdAt || Date.now())).toLocaleString('fr-FR'))}</p><div class="chips">${tags.map((entry) => `<span class="chip">#${escapeHtml(entry)}</span>`).join('')}</div><article>${contentHtml || '<p>Aucun contenu.</p>'}</article></body></html>`;
-        return { name: `${baseName}.html`, data: payload, mtime: Number(note.updatedAt || note.createdAt || Date.now()) };
-      });
+      }
+
+      // Cas DOCX : génération de ZIP complets (DOCX = ZIP de XML)
+      else if (mode === 'docx') {
+        showToast('Export DOCX multiple en cours...');
+        for (const note of selectedNotes) {
+          const title = String(note.title || '').trim() || 'Note';
+          const safeTitle = sanitizeFilenameSegment(title);
+          const baseName = `${String(note.createdAt || Date.now())}_${safeTitle}`;
+          const contentHtml = sanitizeRichTextHtmlPreserve(
+            String(note.contentHtml || '').trim() || plainTextToRichHtml(String(note.content || '').trim())
+          );
+          const tags = Array.isArray(note.tags) ? note.tags.map(t => String(t || '').trim()).filter(Boolean) : [];
+          const author = String(note.createdByName || fallbackDirectoryName(note.createdBy || ''));
+          const dateFormatted = new Date(Number(note.updatedAt || note.createdAt || Date.now())).toLocaleString('fr-FR');
+
+          // Convertir HTML → WordML
+          const { wordML, images, relationships } = convertHtmlToWordML(contentHtml);
+
+          // Générer tous les fichiers XML du DOCX
+          const docxFiles = [
+            { name: '[Content_Types].xml', data: generateContentTypesXml(images), mtime: Date.now() },
+            { name: '_rels/.rels', data: generateRootRelsXml(), mtime: Date.now() },
+            { name: 'word/document.xml', data: generateDocumentXml({ title, author, dateFormatted, tags }, wordML), mtime: Date.now() },
+            { name: 'word/styles.xml', data: generateStylesXml(), mtime: Date.now() }
+          ];
+
+          if (images.length > 0) {
+            docxFiles.push({ name: 'word/_rels/document.xml.rels', data: generateDocumentRelsXml(relationships), mtime: Date.now() });
+            images.forEach(img => {
+              docxFiles.push({ name: `word/media/${img.filename}`, data: base64ToUint8Array(img.base64), mtime: Date.now() });
+            });
+          }
+
+          // Créer le ZIP DOCX
+          const docxZip = buildZipStoreArchive(docxFiles);
+          files.push({
+            name: `${baseName}.docx`,
+            data: docxZip,
+            mtime: Number(note.updatedAt || note.createdAt || Date.now())
+          });
+        }
+      }
+
+      // Cas HTML et TXT : génération synchrone simple
+      else {
+        selectedNotes.forEach(note => {
+          const title = String(note.title || '').trim() || 'Note';
+          const safeTitle = sanitizeFilenameSegment(title);
+          const baseName = `${String(note.createdAt || Date.now())}_${safeTitle}`;
+          const tags = Array.isArray(note.tags) ? note.tags.map(t => String(t || '').trim()).filter(Boolean) : [];
+          const contentHtml = sanitizeRichTextHtmlPreserve(
+            String(note.contentHtml || '').trim() || plainTextToRichHtml(String(note.content || '').trim())
+          );
+
+          if (mode === 'txt') {
+            const plain = getProjectDescriptionPlainText(contentHtml);
+            const payload = `${title}\nAuteur: ${String(note.createdByName || fallbackDirectoryName(note.createdBy || '') || 'Auteur')}\nMise a jour: ${new Date(Number(note.updatedAt || note.createdAt || Date.now())).toLocaleString('fr-FR')}\nTags: ${tags.join(', ')}\n\n${plain}\n`;
+            files.push({ name: `${baseName}.txt`, data: payload, mtime: Number(note.updatedAt || note.createdAt || Date.now()) });
+          } else {
+            const payload = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>body{font-family:Segoe UI,Arial,sans-serif;margin:24px;color:#1e293b}h1{margin:0 0 8px}.meta{color:#64748b;font-size:13px;margin-bottom:12px}.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}.chip{font-size:11px;border:1px solid #cbd5e1;border-radius:999px;padding:3px 8px;background:#f8fafc;color:#334155}</style></head><body><h1>${escapeHtml(title)}</h1><p class="meta">${escapeHtml(new Date(Number(note.updatedAt || note.createdAt || Date.now())).toLocaleString('fr-FR'))}</p><div class="chips">${tags.map(entry => `<span class="chip">#${escapeHtml(entry)}</span>`).join('')}</div><article>${contentHtml || '<p>Aucun contenu.</p>'}</article></body></html>`;
+            files.push({ name: `${baseName}.html`, data: payload, mtime: Number(note.updatedAt || note.createdAt || Date.now()) });
+          }
+        });
+      }
+
       const zipBytes = buildZipStoreArchive(files);
       const exportTag = formatExportDateTag();
       downloadBlobFile(new Blob([zipBytes], { type: 'application/zip' }), `notes_selection_${mode}_${exportTag}.zip`, 'application/zip');
@@ -14719,7 +15555,30 @@
                 <button type="button" class="workspace-action-inline" data-action-kind="edit" data-action-label="Modifier la note" onclick="openGlobalNoteEditor('${escapeHtml(note.noteId)}')">Editer</button>
                 <button type="button" class="workspace-action-inline" data-action-kind="manage" data-action-label="${isFavorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}" onclick="toggleGlobalNoteFavorite('${escapeHtml(note.noteId)}')">${isFavorite ? 'Defavoriser' : 'Favori'}</button>
                 <button type="button" class="workspace-action-inline" data-action-kind="notify" data-action-label="Publier dans le fil" onclick="toggleGlobalNoteFeedPublish('${escapeHtml(note.noteId)}')">${note.shareToGlobalFeed ? 'Retirer fil' : 'Publier fil'}</button>
-                <button type="button" class="workspace-action-inline" data-action-kind="export" data-action-label="Exporter la note" onclick="exportGlobalNote('${escapeHtml(note.noteId)}', 'html')">Exporter</button>
+                <div class="relative inline-block">
+                  <button type="button" class="workspace-action-inline" data-action-kind="export" data-action-label="Menu d'export" onclick="toggleGlobalNoteExportMenu('${escapeHtml(note.noteId)}', event)" aria-haspopup="true" aria-expanded="false" id="export-menu-btn-${escapeHtml(note.noteId)}">
+                    Exporter
+                    <span class="material-symbols-outlined" style="font-size: 14px; margin-left: 2px; vertical-align: middle;">expand_more</span>
+                  </button>
+                  <div id="export-menu-${escapeHtml(note.noteId)}" class="hidden absolute right-0 mt-1 w-44 bg-white rounded-lg shadow-lg border border-slate-200 z-50 overflow-hidden" role="menu" onclick="event.stopPropagation();">
+                    <button type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2" onclick="exportGlobalNote('${escapeHtml(note.noteId)}', 'html'); closeGlobalNoteExportMenu('${escapeHtml(note.noteId)}');" role="menuitem">
+                      <span class="material-symbols-outlined" style="font-size: 16px;">code</span>
+                      Export HTML
+                    </button>
+                    <button type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2" onclick="exportGlobalNoteAsPdf('${escapeHtml(note.noteId)}'); closeGlobalNoteExportMenu('${escapeHtml(note.noteId)}');" role="menuitem">
+                      <span class="material-symbols-outlined" style="font-size: 16px;">picture_as_pdf</span>
+                      Export PDF
+                    </button>
+                    <button type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2" onclick="exportGlobalNoteAsDocx('${escapeHtml(note.noteId)}'); closeGlobalNoteExportMenu('${escapeHtml(note.noteId)}');" role="menuitem">
+                      <span class="material-symbols-outlined" style="font-size: 16px;">description</span>
+                      Export DOCX
+                    </button>
+                    <button type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2" onclick="exportGlobalNote('${escapeHtml(note.noteId)}', 'txt'); closeGlobalNoteExportMenu('${escapeHtml(note.noteId)}');" role="menuitem">
+                      <span class="material-symbols-outlined" style="font-size: 16px;">text_snippet</span>
+                      Export TXT
+                    </button>
+                  </div>
+                </div>
                 <button type="button" class="workspace-action-inline" data-action-kind="danger" data-action-label="Supprimer la note" onclick="deleteGlobalNote('${escapeHtml(note.noteId)}')">Supprimer</button>
               </div>
             ` : ''}
