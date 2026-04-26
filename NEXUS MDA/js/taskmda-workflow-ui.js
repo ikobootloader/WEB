@@ -20,6 +20,9 @@
     const type = String(options.type || '');
     const editable = options.editable !== false;
     const list = Array.isArray(rows) ? rows : [];
+    const pagination = options?.pagination && typeof options.pagination === 'object'
+      ? options.pagination
+      : null;
     const formatValue = (value) => {
       if (value === undefined) return '(absent)';
       if (value === null) return 'null';
@@ -43,7 +46,16 @@
     }
     return `
       <div class="workflow-map-col">
-        <h6>Historique</h6>
+        <div class="workflow-history-head">
+          <h6>Historique</h6>
+          ${pagination && Number(pagination.totalPages || 1) > 1 ? `
+            <div class="workflow-history-pager">
+              <button type="button" class="workflow-btn-light" data-wf-history-page-action="prev" ${pagination.currentPage <= 1 ? 'disabled' : ''}>Precedent</button>
+              <span class="workflow-card-sub">${safeEsc(String(pagination.start || 0))}-${safeEsc(String(pagination.end || 0))} / ${safeEsc(String(pagination.totalItems || list.length || 0))}</span>
+              <button type="button" class="workflow-btn-light" data-wf-history-page-action="next" ${pagination.currentPage >= pagination.totalPages ? 'disabled' : ''}>Suivant</button>
+            </div>
+          ` : ''}
+        </div>
         <ul class="workflow-history-list">
           ${list.map((row) => {
             const when = Number(row?.createdAt || 0);
