@@ -1239,6 +1239,7 @@
                   <button id="global-settings-tab-groups" role="tab" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">groups</span> Groupes</button>
                   <button id="global-settings-tab-roles" role="tab" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">admin_panel_settings</span> Habilitations</button>
                   <button id="global-settings-tab-annuaire" role="tab" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">location_city</span> Annuaire ESMS</button>
+                  <button id="global-settings-tab-file-watcher" role="tab" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">folder_supervised</span> Surveillance fichiers</button>
                   <button id="global-settings-tab-views" role="tab" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">tune</span> Options de vues</button>
                 </div>
                 <button id="btn-global-settings-help" type="button" class="global-settings-help-btn" aria-label="Aide" aria-expanded="false" aria-controls="global-settings-help-box" data-tooltip="Aide">
@@ -1453,6 +1454,21 @@
                     <li>Gardez les thématiques courtes et stables pour faciliter la recherche.</li>
                     <li>Pilotez les versions logicielles directement dans Workflow, onglet Logiciels métiers.</li>
                   </ul>
+                </div>
+              </div>
+              <div class="global-settings-card-file-watcher rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div class="flex items-center justify-between gap-2 mb-3">
+                  <h4 class="font-bold text-slate-800">Surveillance de fichiers</h4>
+                  <button id="btn-create-file-watcher" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold taskmda-create-cta" data-action-kind="create" data-action-label="Créer observateur" aria-label="Créer observateur">
+                    <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">add_circle</span>
+                    <span class="taskmda-action-label">Créer observateur</span>
+                  </button>
+                </div>
+                <p class="text-xs text-slate-500 mb-3">Surveillez automatiquement les modifications de fichiers (Excel, Word, PDF, CSV...) dans un dossier et recevez des notifications. Le système vérifie périodiquement les changements (polling).</p>
+                <div id="file-watchers-list" class="grid grid-cols-1 lg:grid-cols-2 gap-3"></div>
+                <div id="file-watchers-empty" class="text-center py-8">
+                  <span class="material-symbols-outlined text-6xl text-slate-300 mb-2">folder_supervised</span>
+                  <p class="text-sm text-slate-500">Aucun observateur configuré</p>
                 </div>
               </div>
             </div>
@@ -3293,6 +3309,200 @@
     </div>
   </div>
 
+  <!-- Modal: Créer/Éditer observateur de fichiers -->
+  <div id="modal-file-watcher-edit" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl p-6 sm:p-8 max-w-2xl w-full mx-auto my-2 sm:my-4 max-h-[92vh] overflow-y-auto overscroll-contain">
+      <div class="flex items-center justify-between gap-3 mb-4">
+        <h3 id="file-watcher-edit-title" class="section-title text-2xl font-extrabold">Créer un observateur</h3>
+        <button id="btn-close-file-watcher-edit" class="taskmda-modal-close-btn" type="button" data-action-kind="close" data-action-label="Fermer" aria-label="Fermer">
+          <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">close</span>
+          <span class="taskmda-action-label">Fermer</span>
+        </button>
+      </div>
+      <form id="file-watcher-edit-form" class="space-y-4">
+        <input type="hidden" id="file-watcher-edit-id">
+
+        <div>
+          <label for="file-watcher-name" class="block text-sm font-semibold text-slate-800 mb-1">Nom de l'observateur</label>
+          <input type="text" id="file-watcher-name" required maxlength="100" placeholder="Ex: Suivi budgets" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+        </div>
+
+        <div>
+          <label class="block text-sm font-semibold text-slate-800 mb-1">Dossier à observer</label>
+          <div class="flex gap-2">
+            <input type="text" id="file-watcher-folder-name" readonly placeholder="Aucun dossier sélectionné" class="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm bg-slate-50">
+            <button type="button" id="btn-select-watcher-folder" class="px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm font-semibold hover:bg-slate-50">
+              Sélectionner
+            </button>
+          </div>
+          <p class="text-xs text-slate-500 mt-1">Le navigateur vous demandera la permission d'accéder au dossier.</p>
+        </div>
+
+        <div>
+          <label class="block text-sm font-semibold text-slate-800 mb-1">Types de fichiers à surveiller</label>
+          <div class="grid grid-cols-2 gap-2 mb-2">
+            <label class="inline-flex items-center gap-2 text-sm text-slate-700">
+              <input type="checkbox" class="file-pattern-check" value="excel" checked> Excel (.xlsx, .xls)
+            </label>
+            <label class="inline-flex items-center gap-2 text-sm text-slate-700">
+              <input type="checkbox" class="file-pattern-check" value="word" checked> Word (.docx, .doc)
+            </label>
+            <label class="inline-flex items-center gap-2 text-sm text-slate-700">
+              <input type="checkbox" class="file-pattern-check" value="pdf" checked> PDF (.pdf)
+            </label>
+            <label class="inline-flex items-center gap-2 text-sm text-slate-700">
+              <input type="checkbox" class="file-pattern-check" value="csv" checked> CSV (.csv)
+            </label>
+            <label class="inline-flex items-center gap-2 text-sm text-slate-700">
+              <input type="checkbox" class="file-pattern-check" value="text"> Texte (.txt, .md)
+            </label>
+            <label class="inline-flex items-center gap-2 text-sm text-slate-700">
+              <input type="checkbox" class="file-pattern-check" value="image"> Images (.png, .jpg)
+            </label>
+          </div>
+          <input type="text" id="file-watcher-custom-patterns" placeholder="Patterns personnalisés (ex: rapport*.pdf)" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+        </div>
+
+        <div>
+          <label for="file-watcher-poll-interval" class="block text-sm font-semibold text-slate-800 mb-1">Fréquence de vérification</label>
+          <select id="file-watcher-poll-interval" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+            <option value="30000">30 secondes (rapide)</option>
+            <option value="60000" selected>1 minute</option>
+            <option value="300000">5 minutes</option>
+            <option value="900000">15 minutes</option>
+            <option value="1800000">30 minutes</option>
+            <option value="3600000">1 heure</option>
+          </select>
+          <p class="text-xs text-slate-500 mt-1">Plus la fréquence est élevée, plus les changements seront détectés rapidement.</p>
+        </div>
+
+        <div>
+          <label class="flex items-center gap-2 text-sm text-slate-700">
+            <input type="checkbox" id="file-watcher-recursive" class="w-4 h-4">
+            <span>Observer aussi les sous-dossiers</span>
+          </label>
+        </div>
+
+        <div class="pt-3 border-t border-slate-200">
+          <label class="block text-sm font-semibold text-slate-800 mb-2">Notifications</label>
+          <label class="flex items-center gap-2 text-sm text-slate-700 mb-1">
+            <input type="checkbox" id="file-watcher-notify-create" checked class="w-4 h-4">
+            <span>Nouveau fichier créé</span>
+          </label>
+          <label class="flex items-center gap-2 text-sm text-slate-700 mb-1">
+            <input type="checkbox" id="file-watcher-notify-modify" checked class="w-4 h-4">
+            <span>Fichier modifié</span>
+          </label>
+          <label class="flex items-center gap-2 text-sm text-slate-700">
+            <input type="checkbox" id="file-watcher-notify-delete" checked class="w-4 h-4">
+            <span>Fichier supprimé</span>
+          </label>
+        </div>
+
+        <div class="pt-3 border-t border-slate-200">
+          <label class="block text-sm font-semibold text-slate-800 mb-2">Notification navigateur (temps réel)</label>
+          <label class="flex items-center gap-2 text-sm text-slate-700">
+            <input type="checkbox" id="file-watcher-realtime-notify" class="w-4 h-4">
+            <span>Activer les alertes bureau du navigateur</span>
+          </label>
+          <p class="text-xs text-slate-500 mt-1">Si activé, une notification native du navigateur s'affichera à chaque changement détecté, même si l'onglet est en arrière-plan.</p>
+        </div>
+
+        <div class="flex gap-2 pt-4">
+          <button type="submit" class="flex-1 btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold">
+            Enregistrer
+          </button>
+          <button type="button" id="btn-cancel-file-watcher-edit" class="px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm font-semibold hover:bg-slate-50">
+            Annuler
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Détail observateur de fichiers -->
+  <div id="modal-file-watcher-detail" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl p-6 sm:p-8 max-w-4xl w-full mx-auto my-2 sm:my-4 max-h-[92vh] overflow-y-auto overscroll-contain">
+      <div class="flex items-center justify-between gap-3 mb-4">
+        <h3 id="file-watcher-detail-title" class="section-title text-2xl font-extrabold"></h3>
+        <button id="btn-close-file-watcher-detail" class="taskmda-modal-close-btn" type="button" data-action-kind="close" data-action-label="Fermer" aria-label="Fermer">
+          <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">close</span>
+          <span class="taskmda-action-label">Fermer</span>
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+        <div class="panel p-3">
+          <h4 class="font-bold text-slate-800 mb-2">Informations</h4>
+          <dl class="space-y-1 text-sm">
+            <div class="flex justify-between">
+              <dt class="text-slate-500">Statut:</dt>
+              <dd id="file-watcher-detail-status" class="font-semibold"></dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-slate-500">Fréquence:</dt>
+              <dd id="file-watcher-detail-interval"></dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-slate-500">Récursif:</dt>
+              <dd id="file-watcher-detail-recursive"></dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-slate-500">Dernière vérification:</dt>
+              <dd id="file-watcher-detail-last-check"></dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-slate-500">Alerte bureau:</dt>
+              <dd id="file-watcher-detail-realtime"></dd>
+            </div>
+          </dl>
+        </div>
+
+        <div class="panel p-3">
+          <h4 class="font-bold text-slate-800 mb-2">Actions</h4>
+          <div class="flex flex-wrap gap-2">
+            <button id="btn-watcher-toggle" class="task-action-btn" data-action-kind="default">
+              <span class="material-symbols-outlined">pause</span>
+              <span id="btn-watcher-toggle-label">Mettre en pause</span>
+            </button>
+            <button id="btn-watcher-check-now" class="task-action-btn" data-action-kind="sync">
+              <span class="material-symbols-outlined">refresh</span>
+              <span>Vérifier maintenant</span>
+            </button>
+            <button id="btn-watcher-edit" class="task-action-btn" data-action-kind="edit">
+              Modifier
+            </button>
+            <button id="btn-watcher-delete" class="task-action-btn task-action-btn-danger" data-action-kind="danger">
+              Supprimer
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="mb-4">
+        <h4 class="font-bold text-slate-800 mb-2">Fichiers surveillés (<span id="file-watcher-files-count">0</span>)</h4>
+        <div id="file-watcher-files-list" class="max-h-48 overflow-y-auto border border-slate-200 rounded-lg">
+          <p class="text-sm text-slate-500 p-3">Aucun fichier détecté</p>
+        </div>
+      </div>
+
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <h4 class="font-bold text-slate-800">Historique des changements (<span id="file-watcher-events-count">0</span>)</h4>
+          <div class="flex gap-2 text-xs">
+            <button class="px-2 py-1 rounded border border-slate-300 filter-event-btn" data-filter="all">Tous</button>
+            <button class="px-2 py-1 rounded border border-slate-300 filter-event-btn" data-filter="created">Créés</button>
+            <button class="px-2 py-1 rounded border border-slate-300 filter-event-btn" data-filter="modified">Modifiés</button>
+            <button class="px-2 py-1 rounded border border-slate-300 filter-event-btn" data-filter="deleted">Supprimés</button>
+          </div>
+        </div>
+        <div id="file-watcher-events-list" class="max-h-64 overflow-y-auto border border-slate-200 rounded-lg">
+          <p class="text-sm text-slate-500 p-3">Aucun changement détecté</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="loading" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50"><div class="spinner"></div></div>
   <div id="toast" class="hidden fixed bottom-6 right-6 bg-primary text-white px-6 py-4 rounded-lg shadow-xl z-50"></div>
 
@@ -3320,6 +3530,8 @@
   <script src="js/taskmda-global-docs.js?v=20260425-01"></script>
   <script src="js/taskmda-global-feed.js?v=20260425-01"></script>
   <script src="js/taskmda-global-messages.js?v=20260425-01"></script>
+  <script src="js/taskmda-file-watcher.js"></script>
+  <script src="js/taskmda-file-watcher-ui.js"></script>
   <script src="js/taskmda-team.js?v=20260424-01"></script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-﻿:root {
+:root {
   --topbar-height: 78px;
   --app-chrome-bg-light: rgb(236, 239, 248);
   --app-chrome-bg-dark: rgb(15, 21, 37);
@@ -4197,6 +4197,10 @@ html[data-wf-action-buttons="icon"] .taskmda-create-cta:not(#btn-add-task):not(#
   background: linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 1));
 }
 
+html.dark .project-description.is-collapsed::after {
+  background: linear-gradient(180deg, rgba(22, 33, 58, 0), rgba(22, 33, 58, 1));
+}
+
 .project-description-toggle {
   margin-top: 6px;
   font-size: 0.82rem;
@@ -4208,6 +4212,46 @@ html[data-wf-action-buttons="icon"] .taskmda-create-cta:not(#btn-add-task):not(#
 
 .project-description-toggle:hover {
   color: #1e40af;
+}
+
+/* Generic Collapsible Content System */
+.collapsible-wrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.collapsible-content {
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+
+.collapsible-content.is-collapsed {
+  display: none;
+}
+
+.collapsible-toggle {
+  margin-top: 8px;
+  align-self: flex-start;
+  font-size: 12px;
+  font-weight: 700;
+  color: #2563eb;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.collapsible-toggle:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+
+.collapsible-toggle .material-symbols-outlined {
+  font-size: 16px;
 }
 
 #project-title {

@@ -43,7 +43,7 @@
     // ============================================================================
 
     const DB_NAME = 'taskmda-team-standalone';
-    const DB_VERSION = 20; // + store globalNotes (rubrique Notes transverse/privee)
+    const DB_VERSION = 21; // + stores file watcher (surveillance fichiers)
     const LOCAL_RESET_TS_KEY = 'taskmda_last_local_reset_ts';
     const USER_ID_HISTORY_KEY = 'taskmda_user_id_history';
     const LAST_ACCESSED_PROJECT_STORAGE_KEY = 'taskmda_last_accessed_project_id';
@@ -98,7 +98,10 @@
       rgpdTemplates: 'id',
       rgpdLinks: 'id',
       rgpdAudit: 'id',
-      rgpdExports: 'id'
+      rgpdExports: 'id',
+      fileWatchers: 'id',
+      fileWatcherSnapshots: 'id',
+      fileWatcherEvents: 'id'
     };
     let dbInstance = null;
     let currentUserIdAliases = new Set();
@@ -503,6 +506,29 @@
               const store = db.createObjectStore('rgpdExports', { keyPath: 'id' });
               store.createIndex('createdAt', 'createdAt');
               store.createIndex('format', 'format');
+            }
+
+            // File Watcher: surveillance de fichiers avec polling
+            if (!db.objectStoreNames.contains('fileWatchers')) {
+              const store = db.createObjectStore('fileWatchers', { keyPath: 'id' });
+              store.createIndex('name', 'name');
+              store.createIndex('enabled', 'enabled');
+              store.createIndex('createdAt', 'createdAt');
+              store.createIndex('createdBy', 'createdBy');
+            }
+            if (!db.objectStoreNames.contains('fileWatcherSnapshots')) {
+              const store = db.createObjectStore('fileWatcherSnapshots', { keyPath: 'id' });
+              store.createIndex('watcherId', 'watcherId');
+              store.createIndex('filePath', 'filePath');
+              store.createIndex('status', 'status');
+              store.createIndex('lastCheckedAt', 'lastCheckedAt');
+            }
+            if (!db.objectStoreNames.contains('fileWatcherEvents')) {
+              const store = db.createObjectStore('fileWatcherEvents', { keyPath: 'id' });
+              store.createIndex('watcherId', 'watcherId');
+              store.createIndex('eventType', 'eventType');
+              store.createIndex('detectedAt', 'detectedAt');
+              store.createIndex('notified', 'notified');
             }
 
             debugLog('Database initialized');
@@ -6712,6 +6738,7 @@
         targetId: payload.targetId || null,
         targetView: payload.targetView || null,
         linkLabel: payload.linkLabel || null,
+        actorIcon: payload.actorIcon || null,
         timestamp: Date.now(),
         read: false
       };
@@ -6925,8 +6952,8 @@
           <div class="mt-1 flex flex-wrap items-center gap-2 text-[11px]">
             ${item.read ? '' : '<span class="inline-block w-2 h-2 rounded-full bg-blue-500" aria-hidden="true"></span>'}
             <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
-              <span class="material-symbols-outlined text-[13px]">person</span>
-              <span>${escapeHtml(item.actorName || 'Systeme')}</span>
+              <span class="material-symbols-outlined text-[13px]">${item.actorIcon || 'person'}</span>
+              <span>${escapeHtml(item.actorName || 'Système')}</span>
             </span>
             ${item.linkLabel ? `
               <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">
@@ -6958,6 +6985,15 @@
       }
       addNotificationBase(title, body, projectId, { ...payload, dedupeKey });
     };
+
+    // Bridge pour les modules externes (ex: file watcher) vers le panneau Notifications
+    window.addEventListener('taskmda:inject-notification', (e) => {
+      const d = e.detail || {};
+      addNotification(d.title || '', d.body || '', d.projectId || null, {
+        ...(d.meta || {}),
+        actorIcon: d.actorIcon || d.meta?.actorIcon || null
+      });
+    });
 
     const buildCollaboratorNotificationFromEventBase = buildCollaboratorNotificationFromEvent;
     buildCollaboratorNotificationFromEvent = function buildCollaboratorNotificationFromEventWithDedupe(event, state) {
@@ -15532,9 +15568,9 @@ ${tags.length ? `<div class="tags">${tags.map(tag => `<span class="tag">#${escap
         .trim();
       const isFocused = String(globalNotesFocusNoteId || '').trim() === String(note.noteId || '').trim();
       return `
-        <article id="global-note-${escapeHtml(note.noteId)}" class="global-note-card rounded-xl border ${isFocused ? 'border-blue-400 shadow-[0_0_0_2px_rgba(59,130,246,0.14)]' : 'border-slate-200'} bg-white p-4 cursor-pointer ${isSelectedForBulkDelete ? 'is-bulk-selected' : ''}" onclick="openGlobalNoteEditor('${escapeHtml(note.noteId)}')">
+        <article id="global-note-${escapeHtml(note.noteId)}" class="global-note-card rounded-xl border ${isFocused ? 'border-blue-400 shadow-[0_0_0_2px_rgba(59,130,246,0.14)]' : 'border-slate-200'} bg-white p-4 cursor-pointer ${isSelectedForBulkDelete ? 'is-bulk-selected' : ''}" onclick="toggleCollapsibleContent(this.querySelector('.collapsible-toggle'))">
           <div class="flex items-start justify-between gap-3">
-            <div class="min-w-0">
+            <div class="min-w-0 flex-1">
               <div class="flex flex-wrap items-center gap-2">
                 ${bulkSelectionMode ? `
                   <label class="taskmda-bulk-checkbox-wrap" onclick="event.stopPropagation()">
@@ -15549,6 +15585,21 @@ ${tags.length ? `<div class="tags">${tags.map(tag => `<span class="tag">#${escap
               </div>
               <h4 class="mt-2 text-base font-bold text-slate-800">${escapeHtml(note.title || 'Note sans titre')}</h4>
               <p class="mt-1 text-xs text-slate-500">${escapeHtml(author)} • ${new Date(Number(note.createdAt || Date.now())).toLocaleString('fr-FR')}</p>
+
+              <div class="collapsible-wrapper">
+                <div class="collapsible-content is-collapsed">
+                  <div class="mt-3 ql-snow">
+                    <div class="ql-editor p-0 text-sm text-slate-600 markdown-content" style="min-height: auto; overflow-y: hidden; cursor: inherit;">
+                      ${note.contentHtml || plainTextToRichHtml(note.content || 'Aucun contenu.')}
+                    </div>
+                  </div>
+                </div>
+                <button type="button" class="collapsible-toggle hidden">
+                  <span class="label">Afficher le descriptif</span>
+                </button>
+              </div>
+
+              ${tags.length ? `<div class="mt-3 flex flex-wrap gap-1">${tags.map((tag) => `<span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-slate-100 text-slate-700 font-semibold">#${escapeHtml(tag)}</span>`).join('')}</div>` : ''}
             </div>
             ${canManage ? `
               <div class="flex items-center gap-1" onclick="event.stopPropagation();">
@@ -15583,8 +15634,7 @@ ${tags.length ? `<div class="tags">${tags.map(tag => `<span class="tag">#${escap
               </div>
             ` : ''}
           </div>
-          ${tags.length ? `<div class="mt-3 flex flex-wrap gap-1">${tags.map((tag) => `<span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-slate-100 text-slate-700 font-semibold">#${escapeHtml(tag)}</span>`).join('')}</div>` : ''}
-          <p class="mt-3 text-sm text-slate-600">${escapeHtml(previewText.length > 280 ? `${previewText.slice(0, 280)}...` : (previewText || 'Aucun contenu.'))}</p>
+          </div>
         </article>
       `;
     }
@@ -27378,7 +27428,7 @@ ${tags.length ? `<div class="tags">${tags.map(tag => `<span class="tag">#${escap
         const identity = resolveKnownUserIdentity(post.authorUserId || '', post.authorName || fallbackDirectoryName(post.authorUserId || ''));
         const avatarStyle = safeAvatarInlineStyle(identity.avatarDataUrl, stringToColor(post.authorUserId || post.authorName || ''));
         return `
-          <article id="global-feed-post-${postId}" class="feed-item ${isFocused ? 'border-blue-400 shadow-[0_0_0_2px_rgba(59,130,246,0.15)]' : ''}">
+          <article id="global-feed-post-${postId}" class="feed-item ${isFocused ? 'border-blue-400 shadow-[0_0_0_2px_rgba(59,130,246,0.15)]' : ''} cursor-pointer" onclick="toggleCollapsibleContent(this.querySelector('.collapsible-toggle'))">
             <div class="feed-item-head">
               <div class="feed-item-meta">
                 <span class="discussion-avatar" style="${avatarStyle}">${escapeHtml(getInitials(post.authorName || 'U'))}</span>
@@ -27389,14 +27439,27 @@ ${tags.length ? `<div class="tags">${tags.map(tag => `<span class="tag">#${escap
               </div>
               <div class="flex items-center gap-2">
                 ${!isAuto && String(post.authorUserId || '') === String(currentUser?.userId || '') ? `
-                  <button onclick="startEditGlobalFeedPost('${postId}')" class="workspace-action-inline" data-action-kind="edit" title="Éditer">Éditer</button>
-                  <button onclick="deleteGlobalFeedPost('${postId}')" class="workspace-action-inline" data-action-kind="danger" title="Supprimer">Supprimer</button>
+                  <button onclick="event.stopPropagation(); startEditGlobalFeedPost('${postId}')" class="workspace-action-inline" data-action-kind="edit" title="Éditer">Éditer</button>
+                  <button onclick="event.stopPropagation(); deleteGlobalFeedPost('${postId}')" class="workspace-action-inline" data-action-kind="danger" title="Supprimer">Supprimer</button>
                   <span class="text-slate-300">|</span>
                 ` : ''}
                 <span class="feed-item-type ${typeClass}">${typeLabel}</span>
               </div>
             </div>
-            <div class="feed-item-body">${renderGlobalFeedContentHtml(post.content || '', mentionCatalog)}</div>
+            <div class="feed-item-body">
+              <div class="collapsible-wrapper">
+                <div class="collapsible-content is-collapsed">
+                  <div class="ql-snow">
+                    <div class="ql-editor p-0 text-sm text-slate-600 markdown-content" style="min-height: auto; overflow-y: hidden; cursor: inherit;">
+                      ${renderGlobalFeedContentHtml(post.content || '', mentionCatalog)}
+                    </div>
+                  </div>
+                </div>
+                <button type="button" class="collapsible-toggle hidden" onclick="event.stopPropagation(); toggleCollapsibleContent(this)">
+                  <span class="label">Afficher le contenu</span>
+                </button>
+              </div>
+            </div>
             ${mentions.length > 0 ? `
               <div class="feed-item-mentions">
                 ${mentions.map((u) => `<span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-blue-100 text-blue-700 font-semibold">@${escapeHtml(u.name)}</span>`).join('')}
@@ -27404,7 +27467,7 @@ ${tags.length ? `<div class="tags">${tags.map(tag => `<span class="tag">#${escap
             ` : ''}
             ${refs.length > 0 ? `
               <div class="feed-item-refs">
-                ${refs.map((ref) => `<button onclick="openGlobalFeedReference('${escapeHtml(ref.type || '')}','${encodeURIComponent(String(ref.id || ''))}')" class="feed-ref-btn">${escapeHtml(ref.label || 'Référence')}</button>`).join('')}
+                ${refs.map((ref) => `<button onclick="event.stopPropagation(); openGlobalFeedReference('${escapeHtml(ref.type || '')}','${encodeURIComponent(String(ref.id || ''))}')" class="feed-ref-btn">${escapeHtml(ref.label || 'Référence')}</button>`).join('')}
               </div>
             ` : ''}
           </article>
@@ -28096,14 +28159,36 @@ ${tags.length ? `<div class="tags">${tags.map(tag => `<span class="tag">#${escap
       const isHidden = content.classList.contains('hidden');
       content.classList.toggle('hidden', !isHidden);
 
-      // Rotation de l'icône
       const icon = toggleBtn.querySelector('.material-symbols-outlined');
       if (icon) {
         icon.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
       }
     }
 
+    function toggleCollapsibleContent(btn) {
+      if (!btn) return;
+      const wrapper = btn.closest('.collapsible-wrapper');
+      if (!wrapper) return;
+      const content = wrapper.querySelector('.collapsible-content');
+      const label = btn.querySelector('.label');
+      const icon = btn.querySelector('.material-symbols-outlined');
+      if (!content) return;
+
+      const isCollapsed = content.classList.contains('is-collapsed');
+      content.classList.toggle('is-collapsed', !isCollapsed);
+
+      if (label) {
+        if (wrapper.closest('.global-note-card')) {
+          label.textContent = isCollapsed ? 'Masquer le descriptif' : 'Afficher le descriptif';
+        } else {
+          label.textContent = isCollapsed ? 'Masquer le contenu' : 'Afficher le contenu';
+        }
+      }
+      if (icon) icon.textContent = isCollapsed ? 'expand_less' : 'expand_more';
+    }
+
     window.toggleRgpdImpactCard = toggleRgpdImpactCard;
+    window.toggleCollapsibleContent = toggleCollapsibleContent;
 
     async function renderProjectRgpdImpactCard(project) {
       const container = document.getElementById('project-rgpd-impact');
