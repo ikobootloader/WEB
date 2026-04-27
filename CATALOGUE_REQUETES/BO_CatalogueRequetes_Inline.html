@@ -254,7 +254,7 @@ textarea.form-control{resize:vertical;min-height:80px}
   position: fixed;
   bottom: 24px;
   left: 50%;
-  transform: translateX(-50%) translateY(120%);
+  transform: translateX(-50%) translateY(calc(100% + 40px));
   background: #1e293b;
   color: white;
   padding: 10px 24px;
@@ -2109,7 +2109,7 @@ var FilterEngine = {
     // Déclencher le rendu
     if (ViewRenderer) {
       ViewRenderer.render();
-    this.updateBulkBar();
+    AppController.updateBulkBar();
     }
   },
 
@@ -3617,56 +3617,6 @@ var SyncManager = {
   isSyncEnabled: false,
   syncTimeout: null,
 
-  
-  toggleSelection(id, event) {
-    if (event) event.stopPropagation();
-    const index = this.selectedIds.indexOf(id);
-    if (index === -1) {
-      this.selectedIds.push(id);
-    } else {
-      this.selectedIds.splice(index, 1);
-    }
-    this.refresh();
-  },
-
-  clearSelection() {
-    this.selectedIds = [];
-    this.refresh();
-  },
-
-  selectAll() {
-    const data = FilterEngine.filteredData;
-    if (this.selectedIds.length === data.length) {
-      this.selectedIds = [];
-    } else {
-      this.selectedIds = data.map(r => r.id);
-    }
-    this.refresh();
-  },
-
-  async confirmBulkDelete() {
-    if (!this.selectedIds.length) return;
-    
-    if (confirm(`Supprimer définitivement les ${this.selectedIds.length} requêtes sélectionnées ?`)) {
-      await DataManager.deleteBulk(this.selectedIds);
-      this.selectedIds = [];
-      this.refresh();
-      UIComponents.showToast('Suppression effectuée.', 'success');
-    }
-  },
-
-  updateBulkBar() {
-    const bar = document.getElementById('bulk-bar');
-    const countEl = document.getElementById('bulk-count');
-    if (!bar || !countEl) return;
-
-    if (this.selectedIds.length > 0) {
-      countEl.textContent = this.selectedIds.length;
-      bar.classList.add('active');
-    } else {
-      bar.classList.remove('active');
-    }
-  },
   async init() {
     try {
       if (!window.showSaveFilePicker) return;
