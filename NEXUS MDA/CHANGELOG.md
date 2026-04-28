@@ -1,5 +1,67 @@
 # Changelog - TaskMDA Team
 
+## Mise a jour incrementale - Avril 2026 (Fil d info / Notes / Dashboard / Activite / UX cartes)
+
+- Fil d info:
+  - ajout d un titre optionnel sur les posts manuels (`global-feed-title`) avec persistance creation/edition,
+  - affichage du titre dans les cartes + integration dans la recherche du fil,
+  - ajout d un bouton `Lire` (modale de lecture confortable, sans edition),
+  - ajout d un menu `Exporter` par post avec formats `HTML`, `PDF`, `DOCX`, `TXT`.
+- Notes globales:
+  - ajout d un bouton `Lire` sur les cartes de notes pour ouverture en modale de lecture.
+- Dashboard:
+  - ajustement de la logique `Une`:
+    - la Une ne peut provenir que d un post manuel redige par un utilisateur,
+    - en absence de post manuel, pas de Une; affichage des infos compactes automatiques uniquement.
+- Activite projet:
+  - correction d un bug de recuperation des evenements en mode chiffre:
+    - conservation de champs indexables en clair dans `events` (`projectId`, `timestamp`, `type`, `author`),
+    - fallback retrocompatibilite pour anciens enregistrements non indexables.
+  - ajout de la pagination du journal d activite (avec conservation des filtres).
+- Harmonisation des cartes projet:
+  - actions masquables/affichables au survol-focus sur les cartes de taches (liste + kanban),
+  - kanban projet aligne sur le comportement de la rubrique `Taches` (actions en overlay, sans espace reserve),
+  - extension du meme comportement overlay aux cartes `Documents` (projet + documents transverses).
+
+## Version actuelle - Avril 2026
+
+### Nouvelle fonctionnalité - Avril 2026 (Surveillance de fichiers)
+
+- **Référentiels / Surveillance fichiers**:
+  - ajout d'un nouvel onglet `Surveillance fichiers` dans la section Référentiels,
+  - création d'observateurs pour surveiller automatiquement les modifications de fichiers dans un dossier,
+  - système de polling configurable (intervalle de 30 secondes à 1 heure),
+  - détection de 3 types d'événements: création, modification, suppression de fichiers,
+  - support de multiples formats de fichiers:
+    - Excel (`.xlsx`, `.xls`, `.xlsm`, `.xlsb`)
+    - Word (`.docx`, `.doc`, `.docm`)
+    - PDF (`.pdf`)
+    - CSV (`.csv`)
+    - Texte (`.txt`, `.md`)
+    - Images (`.png`, `.jpg`, `.jpeg`, `.gif`, `.svg`)
+    - Patterns personnalisés (ex: `rapport_*.pdf`)
+  - mode récursif pour observer les sous-dossiers,
+  - notifications automatiques intégrées au centre de notifications,
+  - configuration fine des notifications par type d'événement,
+  - interface complète:
+    - liste en cartes avec statut visuel (actif/pausé),
+    - modale de création/édition avec sélection de dossier (File System Access API),
+    - modale de détail avec:
+      - informations (statut, fréquence, récursif, dernière vérification),
+      - actions rapides (pause/reprise, vérification manuelle, modifier, supprimer),
+      - liste des fichiers surveillés (nom, taille),
+      - historique complet des changements avec filtres (tous, créés, modifiés, supprimés),
+  - modules autonomes:
+    - `js/taskmda-file-watcher.js`: moteur de surveillance (polling, détection, notifications),
+    - `js/taskmda-file-watcher-ui.js`: interface utilisateur (modales, actions, rendu),
+  - migration DB_VERSION 21 avec 3 nouveaux stores IndexedDB:
+    - `fileWatchers`: configuration des observateurs,
+    - `fileWatcherSnapshots`: état de référence des fichiers (métadonnées),
+    - `fileWatcherEvents`: historique des changements détectés,
+  - documentation complète:
+    - `docs/FILE_WATCHER.md`: documentation technique et architecture,
+    - `docs/QUICKSTART_FILE_WATCHER.md`: guide rapide utilisateur avec exemples.
+
 ## Version actuelle - Avril 2026
 
 ### Correctif - Avril 2026 (Workflow: fin du seed automatique)
@@ -331,4 +393,3 @@
 - Rotation des clés
 - Révocation de membres
 - Notifications en temps réel
-

@@ -1,4 +1,4 @@
-﻿# NEXUS MDA (TaskMDA Team)
+﻿# NEXUS MDA ()
 
 Application web locale de pilotage projets/taches, utilisable en mode solo et collaboratif, sans serveur.
 Nom d interface par defaut: `NEXUS MDA`.
@@ -11,6 +11,33 @@ Nom d interface par defaut: `NEXUS MDA`.
 
 ## Mises a jour recentes (Avril 2026)
 
+- **Fil d info / Notes / Dashboard (lot UX recent)**:
+  - Fil d info: ajout d un champ `Titre du post (optionnel)` dans le composeur, persistance en creation/edition, affichage sur la carte et prise en compte dans la recherche.
+  - Fil d info: ajout d un bouton `Lire` ouvrant une modale de lecture confortable (sans edition).
+  - Notes globales: ajout d un bouton `Lire` ouvrant la meme modale de lecture confortable.
+  - Fil d info: export par post en plusieurs formats (`HTML`, `PDF`, `DOCX`, `TXT`) via menu `Exporter`.
+  - Dashboard: la `Une` est maintenant reservee aux posts manuels rediges par un utilisateur; en absence de post manuel, seules les infos compactes automatiques sont affichees.
+- **Taches / Documents (harmonisation actions sur cartes)**:
+  - harmonisation de l affichage des boutons d actions dans les cartes du projet (liste + kanban): apparition au survol/focus, en overlay.
+  - alignement du kanban projet sur le comportement de la rubrique `Taches` (actions flottantes sur la carte, sans espace reserve inutile).
+  - extension du meme comportement overlay aux cartes `Documents` (rubrique projet + rubrique documents transverse).
+- **Activite projet**:
+  - correction de recuperation des evenements en mode chiffre:
+    - conservation des champs indexables (`projectId`, `timestamp`, `type`, `author`) en clair dans le store `events`,
+    - fallback retrocompatibilite quand les anciens evenements ne sont pas indexables par `projectId`.
+  - ajout de la pagination du journal d activite (navigation page par page, avec filtres conserves).
+
+- **Surveillance de fichiers** (nouveau):
+  - nouvel onglet `Surveillance fichiers` dans `Referentiels`,
+  - observateurs configurables pour surveiller les modifications de fichiers dans un dossier,
+  - polling automatique (30s a 1h) avec detection creation/modification/suppression,
+  - support multi-formats: Excel, Word, PDF, CSV, texte, images + patterns personnalises,
+  - mode recursif pour observer les sous-dossiers,
+  - notifications automatiques en temps reel lors de changements detectes,
+  - historique complet des evenements avec filtres par type,
+  - actions: pause/reprise, verification manuelle, edition, suppression,
+  - modules dedies: `taskmda-file-watcher.js` (core) + `taskmda-file-watcher-ui.js` (interface),
+  - DB_VERSION 21: nouveaux stores `fileWatchers`, `fileWatcherSnapshots`, `fileWatcherEvents`.
 - Nouvelle rubrique `Notes` (transverse + privee):
   - ajout d une section dediee `Notes` dans la navigation globale,
   - creation/edition en modale confortable (editeur riche Quill/fallback),
