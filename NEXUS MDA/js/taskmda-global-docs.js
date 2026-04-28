@@ -137,10 +137,10 @@
         const modeSelect = document.getElementById('doc-binding-mode');
         const themeInput = document.getElementById('doc-binding-theme');
         const storagePathInput = document.getElementById('doc-binding-storage-path');
-        const nameEl = document.getElementById('doc-binding-name');
+        const nameInput = document.getElementById('doc-binding-name');
         const sourceEl = document.getElementById('doc-binding-current-source');
         const modal = document.getElementById('modal-doc-binding');
-        if (!projectSelect || !modeSelect || !themeInput || !storagePathInput || !nameEl || !sourceEl || !modal) return;
+        if (!projectSelect || !modeSelect || !themeInput || !storagePathInput || !nameInput || !sourceEl || !modal) return;
 
         const states = await actions.getAllProjectStates?.();
         const editableProjects = (states || []).filter((row) => row?.project && actions.canEditProjectMeta?.(row));
@@ -160,7 +160,7 @@
         modeSelect.value = normalizeSharingMode(doc.sharingMode, 'private');
         themeInput.value = String(doc.theme || '').trim();
         helpers.fillThemePicker?.('doc-binding-theme-known', 'doc-binding-theme', themeCatalog, 'Thématiques existantes...');
-        nameEl.textContent = doc.name || 'Document';
+        nameInput.value = String(doc.name || 'Document').trim();
         sourceEl.textContent = `Source: ${doc.sourceProjectName || 'Hors projet'}`;
         storagePathInput.value = helpers.formatDocumentStoragePathForDisplay?.(doc) || '-';
         storagePathInput.setAttribute('title', storagePathInput.value);
@@ -183,7 +183,8 @@
       const taskSelect = document.getElementById('doc-binding-task');
       const modeSelect = document.getElementById('doc-binding-mode');
       const themeInput = document.getElementById('doc-binding-theme');
-      if (!projectSelect || !taskSelect || !modeSelect || !themeInput) return;
+      const nameInput = document.getElementById('doc-binding-name');
+      if (!projectSelect || !taskSelect || !modeSelect || !themeInput || !nameInput) return;
 
       const targetProjectId = String(projectSelect.value || '').trim();
       const selectedTaskIds = Array.from(taskSelect?.selectedOptions || [])
@@ -191,6 +192,9 @@
         .filter(Boolean);
       const nextSharingMode = (helpers.normalizeSharingMode?.(modeSelect.value, 'private')) || 'private';
       const nextTheme = String(themeInput.value || '').trim() || 'General';
+      const nextName = String(nameInput.value || '').trim() || String(doc.name || 'Document').trim() || 'Document';
+      const normalizeNameForCompare = (value) => String(value || '').trim();
+      const nameChangedFromDoc = normalizeNameForCompare(nextName) !== normalizeNameForCompare(doc?.name || '');
       let changed = false;
       let nextBindingId = '';
       const silent = options?.silent === true;
@@ -206,14 +210,21 @@
               if (!silent) helpers.showToast?.('Document introuvable');
               return;
             }
-            const relocated = await actions.maybeRelocateStoredDocumentByTheme?.(current, nextTheme, {
+            const nameChangedFromCurrent = normalizeNameForCompare(nextName) !== normalizeNameForCompare(current?.name || '');
+            const currentWithNextName = {
+              ...(current || {}),
+              name: nextName
+            };
+            const relocated = await actions.maybeRelocateStoredDocumentByTheme?.(currentWithNextName, nextTheme, {
               scope: 'global',
               projectId: 'global',
-              rubric: actions.inferStorageRubricFromPath?.(current?.storagePath || '', 'global-doc-upload')
+              rubric: actions.inferStorageRubricFromPath?.(current?.storagePath || '', 'global-doc-upload'),
+              force: nameChangedFromCurrent
             });
             await actions.putEncrypted?.('globalDocs', {
               ...current,
               ...relocated,
+              name: nextName,
               sharingMode: nextSharingMode,
               theme: nextTheme,
               updatedAt: Date.now()
@@ -229,7 +240,10 @@
             if (!silent) helpers.showToast?.('Action non autorisée sur le projet cible');
             return;
           }
-          const relocationForTarget = await actions.maybeRelocateStoredDocumentByTheme?.(doc, nextTheme, {
+          const relocationForTarget = await actions.maybeRelocateStoredDocumentByTheme?.({
+            ...(doc || {}),
+            name: nextName
+          }, nextTheme, {
             scope: 'project',
             projectId: targetProjectId,
             rubric: actions.inferStorageRubricFromPath?.(doc?.storagePath || '', 'project-doc-upload'),
@@ -242,7 +256,7 @@
             helpers.getCurrentUserId?.(),
             {
               docId: newDocId,
-              name: doc.name,
+              name: nextName,
               type: doc.type,
               size: doc.size,
               data: relocationForTarget?.data || docData || doc.data || '',
@@ -274,18 +288,21 @@
             if (!silent) helpers.showToast?.('Action non autorisée');
             return;
           }
-          const relocationForTarget = await actions.maybeRelocateStoredDocumentByTheme?.(doc, nextTheme, {
+          const relocationForTarget = await actions.maybeRelocateStoredDocumentByTheme?.({
+            ...(doc || {}),
+            name: nextName
+          }, nextTheme, {
             scope: targetProjectId ? 'project' : 'global',
             projectId: targetProjectId || 'global',
             rubric: actions.inferStorageRubricFromPath?.(doc?.storagePath || '', targetProjectId ? 'project-doc-upload' : 'global-doc-upload'),
-            force: String(targetProjectId || '').trim() !== String(doc.sourceProjectId || '').trim()
+            force: String(targetProjectId || '').trim() !== String(doc.sourceProjectId || '').trim() || nameChangedFromDoc
           });
 
           if (!targetProjectId) {
             const newGlobalId = helpers.uuidv4?.() || String(Date.now());
             await actions.putEncrypted?.('globalDocs', {
               id: newGlobalId,
-              name: doc.name,
+              name: nextName,
               type: doc.type,
               size: doc.size,
               data: relocationForTarget?.data || docData || doc.data || '',
@@ -314,7 +331,7 @@
               helpers.getCurrentUserId?.(),
               {
                 docId: newDocId,
-                name: doc.name,
+                name: nextName,
                 type: doc.type,
                 size: doc.size,
                 data: relocationForTarget?.data || docData || doc.data || '',
@@ -378,13 +395,13 @@
             const modeSelect = document.getElementById('doc-binding-mode');
             const projectSelect = document.getElementById('doc-binding-project');
             const themeInput = document.getElementById('doc-binding-theme');
-            const nameEl = document.getElementById('doc-binding-name');
+            const nameInput = document.getElementById('doc-binding-name');
             const sourceEl = document.getElementById('doc-binding-current-source');
             const storagePathInput = document.getElementById('doc-binding-storage-path');
             if (modeSelect) modeSelect.value = (helpers.normalizeSharingMode?.(refreshed.sharingMode, 'private')) || 'private';
             if (projectSelect) projectSelect.value = sourceProjectId;
             if (themeInput) themeInput.value = String(refreshed.theme || '').trim();
-            if (nameEl) nameEl.textContent = refreshed.name || 'Document';
+            if (nameInput) nameInput.value = String(refreshed.name || 'Document').trim();
             if (sourceEl) sourceEl.textContent = `Source: ${refreshed.sourceProjectName || 'Hors projet'}`;
             if (storagePathInput) {
               storagePathInput.value = helpers.formatDocumentStoragePathForDisplay?.(refreshed) || '-';

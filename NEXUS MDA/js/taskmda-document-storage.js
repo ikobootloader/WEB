@@ -60,6 +60,30 @@
     return dir.getFileHandle(fileName, { create: options.create === true });
   }
 
+  function splitFileName(fileName = '') {
+    const safe = sanitizeFileName(fileName);
+    const idx = safe.lastIndexOf('.');
+    if (idx <= 0 || idx === safe.length - 1) return { base: safe, ext: '' };
+    return { base: safe.slice(0, idx), ext: safe.slice(idx) };
+  }
+
+  async function ensureUniqueFileName(rootHandle, relativeDirPath, fileName) {
+    const dir = await ensureDirectory(rootHandle, relativeDirPath);
+    const { base, ext } = splitFileName(fileName);
+    let candidate = `${base}${ext}`;
+    let attempt = 1;
+    while (attempt < 5000) {
+      try {
+        await dir.getFileHandle(candidate, { create: false });
+        attempt += 1;
+        candidate = `${base} (${attempt})${ext}`;
+      } catch (_) {
+        return candidate;
+      }
+    }
+    return `${base}-${Date.now()}${ext}`;
+  }
+
   function buildStoragePath(meta = {}) {
     const now = new Date(Number(meta.timestamp || Date.now()) || Date.now());
     const year = String(now.getFullYear());
@@ -70,8 +94,7 @@
     const project = slugifySegment(meta.projectId || 'none', 'none');
     const theme = slugifySegment(meta.theme || 'general', 'general');
     const fileName = sanitizeFileName(meta.fileName || 'document.bin');
-    const stampedName = `${Date.now()}_${fileName}`;
-    return `${ROOT_DIR}/${rubric}/${scope}/${project}/${theme}/${year}/${month}/${day}/${stampedName}`;
+    return `${ROOT_DIR}/${rubric}/${scope}/${project}/${theme}/${year}/${month}/${day}/${fileName}`;
   }
 
   async function readFileAsDataUrl(file) {
@@ -85,7 +108,7 @@
 
   async function writeFile(rootHandle, file, meta = {}) {
     if (!rootHandle || !file) throw new Error('invalid-storage-input');
-    const storagePath = buildStoragePath({
+    const desiredPath = buildStoragePath({
       rubric: meta.rubric,
       scope: meta.scope,
       projectId: meta.projectId,
@@ -93,6 +116,11 @@
       fileName: file.name,
       timestamp: meta.timestamp
     });
+    const parts = splitRelativePath(desiredPath);
+    const desiredFileName = parts.pop();
+    const relativeDirPath = parts.join('/');
+    const uniqueFileName = await ensureUniqueFileName(rootHandle, relativeDirPath, desiredFileName);
+    const storagePath = `${relativeDirPath}/${uniqueFileName}`;
     const fileHandle = await resolveFileHandle(rootHandle, storagePath, { create: true });
     if (!fileHandle) throw new Error('invalid-storage-path');
     const writable = await fileHandle.createWritable();

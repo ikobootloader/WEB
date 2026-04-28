@@ -1,4 +1,4 @@
-    // ============================================================================
+﻿    // ============================================================================
     // TASKMDA TEAM - STANDALONE VERSION
     // Toutes les fonctionnalités event-sourcing dans un seul fichier HTML
     // ============================================================================
@@ -566,6 +566,17 @@
       return await runWithLoading(async () => {
       if (window.TaskMDACrypto && window.TaskMDACrypto.isUnlocked()) {
         const encrypted = await window.TaskMDACrypto.encryptForDB(obj, idField);
+        // Conserver certains champs d'index en clair pour permettre les requêtes IndexedDB
+        // sur des stores chiffrés (ex: events.projectId).
+        if (storeName === 'events') {
+          encrypted.projectId = String(obj?.projectId || '').trim();
+          encrypted.timestamp = Number(obj?.timestamp || 0) || Date.now();
+          encrypted.type = String(obj?.type || '').trim();
+          encrypted.author = String(obj?.author || '').trim();
+        } else if (storeName === 'snapshots') {
+          encrypted.projectId = String(obj?.projectId || '').trim();
+          encrypted.timestamp = Number(obj?.timestamp || 0) || Date.now();
+        }
         return await db.put(storeName, encrypted);
       } else {
         // Fallback sans chiffrement si non déverrouillé
@@ -1315,8 +1326,15 @@
 
     async function getProjectEvents(projectId) {
       try {
-        const events = await getAllFromIndexDecrypted('events', 'projectId', projectId, 'eventId');
-        return events.sort((a, b) => b.timestamp - a.timestamp);
+        const normalizedProjectId = String(projectId || '').trim();
+        if (!normalizedProjectId) return [];
+        let events = await getAllFromIndexDecrypted('events', 'projectId', normalizedProjectId, 'eventId');
+        // Rétrocompatibilité: anciens événements chiffrés sans projectId en clair (index vide)
+        if (!Array.isArray(events) || events.length === 0) {
+          const allEvents = await getAllDecrypted('events', 'eventId');
+          events = (allEvents || []).filter((evt) => String(evt?.projectId || '').trim() === normalizedProjectId);
+        }
+        return (events || []).sort((a, b) => Number(b?.timestamp || 0) - Number(a?.timestamp || 0));
       } catch (error) {
         console.error('Error getting project events:', error);
         return [];
@@ -2294,6 +2312,17 @@
           archives: { label: 'Archives', buttonId: 'global-tasks-view-archives' }
         }
       },
+      globalNotes: {
+        label: 'Notes transverses',
+        tabs: {
+          all: { label: 'Toutes', buttonId: 'global-notes-tab-all' },
+          mine: { label: 'Mes notes', buttonId: 'global-notes-tab-mine' },
+          favorites: { label: 'Favoris', buttonId: 'global-notes-tab-favorites' },
+          private: { label: 'Privées', buttonId: 'global-notes-tab-private' },
+          transverse: { label: 'Transverses', buttonId: 'global-notes-tab-transverse' },
+          published: { label: 'Publiées dans le fil', buttonId: 'global-notes-tab-published' }
+        }
+      },
       project: {
         label: 'Projet',
         tabs: {
@@ -2357,6 +2386,7 @@
           groups: { label: 'Groupes', buttonId: 'global-settings-tab-groups' },
           roles: { label: 'Habilitations', buttonId: 'global-settings-tab-roles' },
           annuaire: { label: 'Annuaire ESMS', buttonId: 'global-settings-tab-annuaire' },
+          'file-watcher': { label: 'Surveillance fichiers', buttonId: 'global-settings-tab-file-watcher' },
           views: { label: 'Options de vues', buttonId: 'global-settings-tab-views' }
         }
       }
@@ -2366,11 +2396,12 @@
       sections: {
         globalHub: { defaultTab: 'tasks', tabs: { tasks: true, notes: true, workflow: true, calendar: true, docs: true, messages: true, feed: true, rgpd: true, settings: true } },
         globalTasks: { defaultTab: 'kanban', tabs: { cards: true, calendar: true, list: true, kanban: true, timeline: true, archives: true } },
+        globalNotes: { defaultTab: 'all', tabs: { all: true, mine: true, favorites: true, private: true, transverse: true, published: true } },
         project: { defaultTab: 'kanban', tabs: { overview: true, cards: true, list: true, kanban: true, gantt: true, timeline: true, notes: true, chat: true, docs: true, activity: true, archives: true } },
         workflow: { defaultTab: 'organigram', tabs: { map: true, organization: true, organigram: true, agents: true, processes: true, templates: true, tasks: true, kanban: true, timeline: true, procedures: true, software: true, contingency: true, analytics: true, governance: true, journal: true } },
         globalCalendar: { defaultTab: 'grid', tabs: { grid: true, year: true, list: true } },
         globalFeed: { defaultTab: 'all', tabs: { all: true, mentions: true, auto: true, manual: true, 'project-refs': true, 'task-refs': true } },
-        globalSettings: { defaultTab: 'branding', tabs: { branding: true, themes: true, groups: true, roles: true, annuaire: true, views: true } }
+        globalSettings: { defaultTab: 'branding', tabs: { branding: true, themes: true, groups: true, roles: true, annuaire: true, 'file-watcher': true, views: true } }
       },
       ui: {
         workflowActionButtons: 'icon',
@@ -2416,11 +2447,12 @@
     const VIEW_ESSENTIAL_TABS = {
       globalHub: ['tasks', 'notes', 'workflow', 'calendar', 'docs', 'messages', 'feed', 'rgpd', 'settings'],
       globalTasks: ['cards', 'kanban', 'timeline'],
+      globalNotes: ['all', 'mine'],
       project: ['overview', 'cards', 'kanban', 'timeline', 'notes'],
       workflow: ['organigram', 'organization', 'processes', 'tasks'],
       globalCalendar: ['grid', 'year'],
       globalFeed: ['all', 'mentions'],
-      globalSettings: ['branding', 'themes', 'groups', 'roles', 'views']
+      globalSettings: ['branding', 'themes', 'groups', 'roles', 'file-watcher', 'views']
     };
 
     const WORKSPACE_WIDTH_SECTION_META = Object.freeze({
@@ -3837,6 +3869,9 @@
         globalTasksViewMode = getDefaultTab('globalTasks') || 'cards';
         localStorage.setItem('taskmda_global_tasks_view', globalTasksViewMode);
       }
+      if (!isTabEnabled('globalNotes', globalNotesTabMode)) {
+        globalNotesTabMode = getDefaultTab('globalNotes') || 'all';
+      }
       if (!isTabEnabled('globalCalendar', globalCalendarViewMode)) {
         globalCalendarViewMode = getDefaultTab('globalCalendar') || 'grid';
       }
@@ -3910,48 +3945,53 @@
       const disabledAttr = isAdmin ? '' : 'disabled';
       const disabledClass = isAdmin ? '' : ' opacity-60';
       const sectionCardsHtml = Object.entries(VIEW_SECTION_META).map(([sectionKey, sectionMeta]) => {
-        const enabledTabs = getEnabledTabs(sectionKey);
-        const defaultTab = getDefaultTab(sectionKey);
-        const tabRows = Object.entries(sectionMeta.tabs).map(([tabKey, tabMeta]) => {
-          const checked = isTabEnabled(sectionKey, tabKey) ? 'checked' : '';
-          const isPinned = Boolean(viewOptions?.sections?.[sectionKey]?.pinned?.[tabKey]);
-          const pinClass = isPinned ? 'text-blue-600' : 'text-slate-400 opacity-50 hover:opacity-100';
-          const pinTitle = isPinned ? 'Détacher (envoyer dans Plus)' : 'Épingler sur la barre';
-          const isMandatory = sectionKey === 'globalHub' && (tabKey === 'settings' || tabKey === 'dashboard');
-          const itemDisabledAttr = (disabledAttr || isMandatory) ? 'disabled' : '';
-          const itemPinDisabledAttr = (disabledAttr || isMandatory) ? 'disabled' : '';
-          
+        try {
+          const enabledTabs = getEnabledTabs(sectionKey);
+          const defaultTab = getDefaultTab(sectionKey);
+          const tabRows = Object.entries(sectionMeta.tabs).map(([tabKey, tabMeta]) => {
+            const checked = isTabEnabled(sectionKey, tabKey) ? 'checked' : '';
+            const isPinned = Boolean(viewOptions?.sections?.[sectionKey]?.pinned?.[tabKey]);
+            const pinClass = isPinned ? 'text-blue-600' : 'text-slate-400 opacity-50 hover:opacity-100';
+            const pinTitle = isPinned ? 'Détacher (envoyer dans Plus)' : 'Épingler sur la barre';
+            const isMandatory = sectionKey === 'globalHub' && (tabKey === 'settings' || tabKey === 'dashboard');
+            const itemDisabledAttr = (disabledAttr || isMandatory) ? 'disabled' : '';
+            const itemPinDisabledAttr = (disabledAttr || isMandatory) ? 'disabled' : '';
+
+            return `
+              <div class="flex items-center gap-1 hover:bg-white/80 p-1 rounded-lg${disabledClass}">
+                <label class="flex items-center gap-2 cursor-pointer flex-1 min-w-0 ${isMandatory ? 'cursor-not-allowed opacity-70' : ''}">
+                  <input type="checkbox" class="view-option-checkbox w-4 h-4 shrink-0" data-view-section="${escapeHtml(sectionKey)}" data-view-tab="${escapeHtml(tabKey)}" ${checked} ${itemDisabledAttr}>
+                  <span class="text-sm text-slate-700 font-medium truncate">${escapeHtml(tabMeta.label)} ${isMandatory ? '<span class="text-[10px] text-blue-500 font-bold">(Système)</span>' : ''}</span>
+                </label>
+                <button type="button" class="view-option-pin-btn p-1 flex items-center justify-center rounded hover:bg-slate-200 transition-colors ${pinClass}" data-view-section="${escapeHtml(sectionKey)}" data-view-tab="${escapeHtml(tabKey)}" title="${isMandatory ? 'Obligatoire sur la barre' : pinTitle}" ${itemPinDisabledAttr}>
+                  <span class="material-symbols-outlined text-[16px]">${isPinned ? 'push_pin' : 'keep_off'}</span>
+                </button>
+              </div>
+            `;
+          }).join('');
+          const selectOptions = Object.entries(sectionMeta.tabs)
+            .filter(([tabKey]) => isTabEnabled(sectionKey, tabKey))
+            .map(([tabKey, tabMeta]) => `<option value="${escapeHtml(tabKey)}" ${defaultTab === tabKey ? 'selected' : ''}>${escapeHtml(tabMeta.label)}</option>`)
+            .join('');
           return `
-            <div class="flex items-center gap-1 hover:bg-white/80 p-1 rounded-lg${disabledClass}">
-              <label class="flex items-center gap-2 cursor-pointer flex-1 min-w-0 ${isMandatory ? 'cursor-not-allowed opacity-70' : ''}">
-                <input type="checkbox" class="view-option-checkbox w-4 h-4 shrink-0" data-view-section="${escapeHtml(sectionKey)}" data-view-tab="${escapeHtml(tabKey)}" ${checked} ${itemDisabledAttr}>
-                <span class="text-sm text-slate-700 font-medium truncate">${escapeHtml(tabMeta.label)} ${isMandatory ? '<span class="text-[10px] text-blue-500 font-bold">(Système)</span>' : ''}</span>
-              </label>
-              <button type="button" class="view-option-pin-btn p-1 flex items-center justify-center rounded hover:bg-slate-200 transition-colors ${pinClass}" data-view-section="${escapeHtml(sectionKey)}" data-view-tab="${escapeHtml(tabKey)}" title="${isMandatory ? 'Obligatoire sur la barre' : pinTitle}" ${itemPinDisabledAttr}>
-                <span class="material-symbols-outlined text-[16px]">${isPinned ? 'push_pin' : 'keep_off'}</span>
-              </button>
+            <div class="rounded-lg border border-slate-200 bg-white p-3">
+              <div class="flex items-center justify-between gap-2 mb-2">
+                <h5 class="text-sm font-bold text-slate-800">${escapeHtml(sectionMeta.label)}</h5>
+                <label class="text-xs text-slate-600 inline-flex items-center gap-2${disabledClass}">
+                  <span>Onglet par défaut</span>
+                  <select class="view-option-default px-2 py-1 border border-slate-300 rounded-lg text-xs" data-view-section="${escapeHtml(sectionKey)}" ${disabledAttr}>
+                    ${selectOptions}
+                  </select>
+                </label>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-1">${tabRows}</div>
+              <p class="text-[11px] text-slate-500 mt-2">${enabledTabs.length} onglet(s) actif(s)</p>
             </div>
           `;
-        }).join('');
-        const selectOptions = Object.entries(sectionMeta.tabs)
-          .filter(([tabKey]) => isTabEnabled(sectionKey, tabKey))
-          .map(([tabKey, tabMeta]) => `<option value="${escapeHtml(tabKey)}" ${defaultTab === tabKey ? 'selected' : ''}>${escapeHtml(tabMeta.label)}</option>`)
-          .join('');
-        return `
-          <div class="rounded-lg border border-slate-200 bg-white p-3">
-            <div class="flex items-center justify-between gap-2 mb-2">
-              <h5 class="text-sm font-bold text-slate-800">${escapeHtml(sectionMeta.label)}</h5>
-              <label class="text-xs text-slate-600 inline-flex items-center gap-2${disabledClass}">
-                <span>Onglet par défaut</span>
-                <select class="view-option-default px-2 py-1 border border-slate-300 rounded-lg text-xs" data-view-section="${escapeHtml(sectionKey)}" ${disabledAttr}>
-                  ${selectOptions}
-                </select>
-              </label>
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-1">${tabRows}</div>
-            <p class="text-[11px] text-slate-500 mt-2">${enabledTabs.length} onglet(s) actif(s)</p>
-          </div>
-        `;
+        } catch (error) {
+          console.error('Erreur rendu section options de vues:', sectionKey, error);
+          return '';
+        }
       }).join('');
       const workspaceWideEnabledCount = Object.keys(WORKSPACE_WIDTH_SECTION_META)
         .filter((sectionKey) => isWorkspaceWideEnabledForView(sectionKey))
@@ -3982,6 +4022,9 @@
           ${workspaceWidthPanelHtml}
         </div>
       `;
+      if (!String(matrix.innerHTML || '').trim()) {
+        matrix.innerHTML = '<div class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">Impossible de rendre les options de vues. Rechargez la page puis réessayez.</div>';
+      }
 
       if (summary) {
         const sectionCount = Object.keys(VIEW_SECTION_META).length;
@@ -8767,6 +8810,18 @@
       return { label: 'Post', icon: 'campaign' };
     }
 
+    function isAutoGlobalFeedPost(post) {
+      return Boolean(post?.isAuto || post?.sourceEventId);
+    }
+
+    function isManualUserWrittenGlobalFeedPost(post) {
+      if (!post || post.deletedAt) return false;
+      if (isAutoGlobalFeedPost(post)) return false;
+      const content = stripMentionMarkupForDashboard(getProjectDescriptionPlainText(post.content || ''));
+      const title = String(post.title || '').trim();
+      return content.length > 0 || title.length > 0;
+    }
+
     function getDashboardMajorNewsItems(posts, limit = 4) {
       const source = Array.isArray(posts) ? posts : [];
       return source
@@ -8831,7 +8886,14 @@
       }
 
       const posts = await getAllDecrypted('globalPosts', 'postId') || [];
-      const items = getDashboardMajorNewsItems(posts, 4);
+      const majorItems = getDashboardMajorNewsItems(posts, 8);
+      const latestManualPost = (Array.isArray(posts) ? posts : [])
+        .filter((post) => isManualUserWrittenGlobalFeedPost(post))
+        .sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0))[0] || null;
+      const showHero = Boolean(latestManualPost);
+      const items = showHero
+        ? [latestManualPost, ...majorItems.filter((post) => String(post?.postId || '') !== String(latestManualPost?.postId || ''))].slice(0, 4)
+        : majorItems.filter((post) => isAutoGlobalFeedPost(post)).slice(0, 4);
       let mentionCatalog = globalFeedMentionCatalogCache;
       if (!mentionCatalog) {
         mentionCatalog = await buildGlobalMentionCatalog();
@@ -8844,7 +8906,7 @@
       }
 
       list.innerHTML = items.map((post, index) => {
-        const isHero = index === 0;
+        const isHero = showHero && index === 0;
         const postId = String(post.postId || '').trim();
         const directRefs = (() => {
           const rawRefs = Array.isArray(post.refs) ? post.refs : [];
@@ -9558,7 +9620,7 @@
     let workspaceMode = 'dashboard'; // dashboard | project | global
     let globalWorkspaceView = 'tasks'; // tasks | workflow | calendar | docs | notes | messages | feed | rgpd | settings
     let workflowRuntime = null;
-    let globalSettingsTab = localStorage.getItem('taskmda_global_settings_tab') || 'branding'; // branding | themes | groups | roles | views
+    let globalSettingsTab = localStorage.getItem('taskmda_global_settings_tab') || 'branding'; // branding | themes | groups | roles | annuaire | file-watcher | views
     let globalSettingsHelpOpen = false;
     let globalDocsUploadCollapsed = true;
     let projectDetailMode = 'work'; // work | settings
@@ -9618,6 +9680,7 @@
     let headerSearchRequestToken = 0;
     let docsFilters = { query: '', type: 'all', sort: 'recent' };
     let activityFilters = { type: 'all', author: '', period: 'all' };
+    let activityPage = 1;
     let notifications = [];
     let notificationsOpen = false;
     let notifiedCollaboratorEventIds = new Set();
@@ -11028,42 +11091,59 @@
     }
 
     function renderPagination(containerId, pagination, setPageFunctionName, label) {
-      const container = document.getElementById(containerId);
-      if (!container) return;
+  const container = document.getElementById(containerId);
+  if (!container) return;
 
-      const { totalItems, totalPages, currentPage, start, end } = pagination;
-      if (totalItems === 0) {
-        container.innerHTML = '';
-        return;
-      }
+  const { totalItems, totalPages, currentPage, start, end } = pagination;
+  if (totalItems === 0) {
+    container.innerHTML = '';
+    return;
+  }
 
-      const info = `Affichage ${start + 1}-${end} sur ${totalItems} ${label}`;
-      if (totalPages <= 1) {
-        container.innerHTML = `<span>${info}</span><span></span>`;
-        return;
-      }
+  const info = `Affichage ${start + 1}-${end} sur ${totalItems} ${label}`;
+  if (totalPages <= 1) {
+    container.innerHTML = `<span>${info}</span><span></span>`;
+    return;
+  }
 
-      container.innerHTML = `
-        <span>${info}</span>
-        <div class="flex items-center gap-2">
-          <button
-            class="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 ${currentPage <= 1 ? 'opacity-50 cursor-not-allowed' : ''}"
-            ${currentPage <= 1 ? 'disabled' : `onclick="${setPageFunctionName}(${currentPage - 1})"`}
-          >
-            Précédent
-          </button>
-          <span class="text-xs text-slate-500">Page ${currentPage}/${totalPages}</span>
-          <button
-            class="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 ${currentPage >= totalPages ? 'opacity-50 cursor-not-allowed' : ''}"
-            ${currentPage >= totalPages ? 'disabled' : `onclick="${setPageFunctionName}(${currentPage + 1})"`}
-          >
-            Suivant
-          </button>
-        </div>
-      `;
-    }
+  const showEdgeButtons = setPageFunctionName === 'setGlobalTasksPage';
 
-    async function setProjectsPage(page) {
+  container.innerHTML = `
+    <span>${info}</span>
+    <div class="flex items-center gap-2">
+      ${showEdgeButtons ? `
+      <button
+        class="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 ${currentPage <= 1 ? 'opacity-50 cursor-not-allowed' : ''}"
+        ${currentPage <= 1 ? 'disabled' : `onclick="${setPageFunctionName}(1)"`}
+      >
+        Premiere
+      </button>
+      ` : ''}
+      <button
+        class="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 ${currentPage <= 1 ? 'opacity-50 cursor-not-allowed' : ''}"
+        ${currentPage <= 1 ? 'disabled' : `onclick="${setPageFunctionName}(${currentPage - 1})"`}
+      >
+        Precedent
+      </button>
+      <span class="text-xs text-slate-500">Page ${currentPage}/${totalPages}</span>
+      <button
+        class="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 ${currentPage >= totalPages ? 'opacity-50 cursor-not-allowed' : ''}"
+        ${currentPage >= totalPages ? 'disabled' : `onclick="${setPageFunctionName}(${currentPage + 1})"`}
+      >
+        Suivant
+      </button>
+      ${showEdgeButtons ? `
+      <button
+        class="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 ${currentPage >= totalPages ? 'opacity-50 cursor-not-allowed' : ''}"
+        ${currentPage >= totalPages ? 'disabled' : `onclick="${setPageFunctionName}(${totalPages})"`}
+      >
+        Derniere
+      </button>
+      ` : ''}
+    </div>
+  `;
+}
+async function setProjectsPage(page) {
       projectsPage = Math.max(1, Number(page) || 1);
       await renderProjects();
     }
@@ -11262,6 +11342,11 @@
     async function setGlobalArchivedTasksPage(page) {
       globalArchivedTasksPage = Math.max(1, Number(page) || 1);
       await renderGlobalTasks();
+    }
+
+    async function setActivityPage(page) {
+      activityPage = Math.max(1, Number(page) || 1);
+      await renderActivity(currentProjectEvents);
     }
 
     async function setProjectKanbanPage(statusKey, page) {
@@ -11486,6 +11571,10 @@
           title: 'Aide: Annuaire ESMS',
           text: "Interrogez l'annuaire public FINESS en lecture seule (PA/PH) avec filtres et tri, puis ouvrez la fiche ViaTrajectoire associée via FINESS."
         },
+        'file-watcher': {
+          title: 'Aide: Surveillance fichiers',
+          text: "Configurez des observateurs sur des dossiers pour détecter automatiquement les créations, modifications et suppressions de fichiers, avec notifications."
+        },
         views: {
           title: 'Aide: Options de vues',
           text: "Administrez les sous-onglets visibles pour chaque rubrique et fixez un onglet par défaut. Les vues désactivées basculent automatiquement vers une vue autorisée."
@@ -11522,6 +11611,7 @@
         groups: document.getElementById('global-settings-tab-groups'),
         roles: document.getElementById('global-settings-tab-roles'),
         annuaire: document.getElementById('global-settings-tab-annuaire'),
+        'file-watcher': document.getElementById('global-settings-tab-file-watcher'),
         views: document.getElementById('global-settings-tab-views')
       };
       Object.entries(tabButtons).forEach(([key, btn]) => {
@@ -11532,22 +11622,22 @@
         btn.setAttribute('aria-selected', active ? 'true' : 'false');
       });
 
-      const brandingCard = document.querySelector('#global-settings-section .global-settings-card-branding');
-      const themesCard = document.querySelector('#global-settings-section .global-settings-card-themes');
-      const groupsCard = document.querySelector('#global-settings-section .global-settings-card-groups');
-      const rolesCard = document.querySelector('#global-settings-section .global-settings-card-roles');
-      const annuaireCard = document.querySelector('#global-settings-section .global-settings-card-annuaire');
-      const viewsCard = document.querySelector('#global-settings-section .global-settings-card-views');
-      const softwareTipsCard = document.querySelector('#global-settings-section .global-settings-card-software-tips');
+      const panelsByTab = {
+        branding: ['.global-settings-card-branding'],
+        themes: ['.global-settings-card-themes'],
+        groups: ['.global-settings-card-groups'],
+        roles: ['.global-settings-card-roles'],
+        annuaire: ['.global-settings-card-annuaire'],
+        'file-watcher': ['.global-settings-card-file-watcher'],
+        views: ['.global-settings-card-views-wrap', '.global-settings-card-views', '.global-settings-card-software-tips']
+      };
       const globalSettingsSection = document.getElementById('global-settings-section');
-
-      if (brandingCard) brandingCard.classList.toggle('hidden', globalSettingsTab !== 'branding');
-      if (themesCard) themesCard.classList.toggle('hidden', globalSettingsTab !== 'themes');
-      if (groupsCard) groupsCard.classList.toggle('hidden', globalSettingsTab !== 'groups');
-      if (rolesCard) rolesCard.classList.toggle('hidden', globalSettingsTab !== 'roles');
-      if (annuaireCard) annuaireCard.classList.toggle('hidden', globalSettingsTab !== 'annuaire');
-      if (viewsCard) viewsCard.classList.toggle('hidden', globalSettingsTab !== 'views');
-      if (softwareTipsCard) softwareTipsCard.classList.toggle('hidden', globalSettingsTab !== 'views');
+      Object.entries(panelsByTab).forEach(([tabKey, selectors]) => {
+        (selectors || []).forEach((selector) => {
+          const nodes = document.querySelectorAll(`#global-settings-section ${selector}`);
+          nodes.forEach((node) => node.classList.toggle('hidden', tabKey !== globalSettingsTab));
+        });
+      });
       globalSettingsSection?.classList.toggle('software-tab-active', false);
       renderGlobalSettingsHelpBox();
       refreshManagedTabOverflow();
@@ -11564,6 +11654,9 @@
       globalSettingsTab = next;
       localStorage.setItem('taskmda_global_settings_tab', next);
       applyGlobalSettingsTabView();
+      if (next === 'views') {
+        renderViewOptionsMatrix(isAppAdmin());
+      }
     }
 
     function getViewButtons() {
@@ -15170,17 +15263,188 @@ ${tags.length ? `<div class="tags">${tags.map(tag => `<span class="tag">#${escap
       if (btn) btn.setAttribute('aria-expanded', 'false');
     }
 
+    async function exportGlobalFeedPost(postId = '', format = 'html') {
+      const pid = String(postId || '').trim();
+      if (!pid) return;
+      const post = await getDecrypted('globalPosts', pid, 'postId');
+      if (!post || post.deletedAt) {
+        showToast('Post introuvable');
+        return;
+      }
+      const title = String(post.title || '').trim() || 'Post';
+      const safeTitle = sanitizeFilenameSegment(title);
+      const tag = formatExportDateTag();
+      const contentHtml = sanitizeRichTextHtmlPreserve(String(post.content || '').trim());
+      if (String(format || '').toLowerCase() === 'txt') {
+        const plain = getProjectDescriptionPlainText(contentHtml);
+        const payload = `${title}\n\n${plain}\n`;
+        downloadBlobFile(payload, `post_${safeTitle}_${tag}.txt`, 'text/plain;charset=utf-8');
+        showToast('Post exporte (TXT)');
+        return;
+      }
+      const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>body{font-family:Segoe UI,Arial,sans-serif;margin:24px;color:#1e293b}h1{margin:0 0 8px}.meta{color:#64748b;font-size:13px;margin-bottom:14px}</style></head><body><h1>${escapeHtml(title)}</h1><p class="meta">${escapeHtml(String(post.authorName || fallbackDirectoryName(post.authorUserId || '')))} | ${escapeHtml(new Date(Number(post.updatedAt || post.createdAt || Date.now())).toLocaleString('fr-FR'))}</p><article>${contentHtml || '<p>Aucun contenu.</p>'}</article></body></html>`;
+      downloadBlobFile(html, `post_${safeTitle}_${tag}.html`, 'text/html;charset=utf-8');
+      showToast('Post exporte (HTML)');
+    }
+
+    async function exportGlobalFeedPostAsPdf(postId = '') {
+      const pid = String(postId || '').trim();
+      if (!pid) return;
+      const post = await getDecrypted('globalPosts', pid, 'postId');
+      if (!post || post.deletedAt) {
+        showToast('Post introuvable');
+        return;
+      }
+
+      const title = String(post.title || '').trim() || 'Post';
+      const contentHtml = sanitizeRichTextHtmlPreserve(String(post.content || '').trim());
+      const author = String(post.authorName || fallbackDirectoryName(post.authorUserId || '')).trim() || 'Auteur inconnu';
+      const dateFormatted = new Date(Number(post.updatedAt || post.createdAt || Date.now())).toLocaleString('fr-FR');
+
+      const printHtml = `<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>
+<style>
+body{font-family:'Segoe UI',Arial,sans-serif;padding:24px;color:#1e293b;max-width:800px;margin:0 auto}
+h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
+.meta{color:#64748b;font-size:12px;margin-bottom:12px}
+.content{margin-top:20px;line-height:1.6;color:#1e293b}
+.content img{max-width:100%;height:auto}
+@media print{body{padding:0}}
+</style></head><body>
+<h1>${escapeHtml(title)}</h1>
+<p class="meta">${escapeHtml(author)} | ${escapeHtml(dateFormatted)}</p>
+<div class="content">${contentHtml || '<p>Ce post ne contient aucun contenu.</p>'}</div>
+</body></html>`;
+
+      let popup = null;
+      try {
+        popup = window.open('', '_blank', 'width=900,height=700');
+      } catch (_) {
+        popup = null;
+      }
+
+      if (popup && popup.document) {
+        popup.document.open();
+        popup.document.write(printHtml);
+        popup.document.close();
+        setTimeout(() => {
+          try { popup.print(); } catch (_) {}
+        }, 300);
+        showToast('Impression ouverte - choisissez Enregistrer en PDF');
+      } else {
+        showToast('Impossible d ouvrir la fenetre d impression (popup bloquee ?)');
+      }
+    }
+
+    async function exportGlobalFeedPostAsDocx(postId = '') {
+      const pid = String(postId || '').trim();
+      if (!pid) return;
+      const post = await getDecrypted('globalPosts', pid, 'postId');
+      if (!post || post.deletedAt) {
+        showToast('Post introuvable');
+        return;
+      }
+
+      const title = String(post.title || '').trim() || 'Post';
+      const safeTitle = sanitizeFilenameSegment(title);
+      const contentHtml = sanitizeRichTextHtmlPreserve(String(post.content || '').trim());
+      const author = String(post.authorName || fallbackDirectoryName(post.authorUserId || '')).trim() || 'Auteur inconnu';
+      const dateFormatted = new Date(Number(post.updatedAt || post.createdAt || Date.now())).toLocaleString('fr-FR');
+
+      const { wordML, images, relationships } = convertHtmlToWordML(contentHtml);
+      const files = [
+        { name: '[Content_Types].xml', data: generateContentTypesXml(images), mtime: Date.now() },
+        { name: '_rels/.rels', data: generateRootRelsXml(), mtime: Date.now() },
+        { name: 'word/document.xml', data: generateDocumentXml({ title, author, dateFormatted, tags: [] }, wordML), mtime: Date.now() },
+        { name: 'word/styles.xml', data: generateStylesXml(), mtime: Date.now() }
+      ];
+
+      if (images.length > 0) {
+        files.push({
+          name: 'word/_rels/document.xml.rels',
+          data: generateDocumentRelsXml(relationships),
+          mtime: Date.now()
+        });
+        images.forEach((img) => {
+          files.push({
+            name: `word/media/${img.filename}`,
+            data: base64ToUint8Array(img.base64),
+            mtime: Date.now()
+          });
+        });
+      }
+
+      const zipBytes = buildZipStoreArchive(files);
+      const tag = formatExportDateTag();
+      downloadBlobFile(
+        new Blob([zipBytes], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }),
+        `post_${safeTitle}_${tag}.docx`,
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      );
+      showToast('Post exporte (DOCX)');
+    }
+
+    function toggleGlobalFeedExportMenu(postId, event) {
+      if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+      }
+      const pid = String(postId || '').trim();
+      if (!pid) return;
+
+      const menu = document.getElementById(`feed-export-menu-${pid}`);
+      const btn = document.getElementById(`feed-export-menu-btn-${pid}`);
+      if (!menu || !btn) return;
+
+      document.querySelectorAll('[id^="feed-export-menu-"]:not([id^="feed-export-menu-btn-"])').forEach((otherMenu) => {
+        if (otherMenu.id !== menu.id && !otherMenu.classList.contains('hidden')) {
+          otherMenu.classList.add('hidden');
+          const otherId = otherMenu.id.replace('feed-export-menu-', '');
+          const otherBtn = document.getElementById(`feed-export-menu-btn-${otherId}`);
+          if (otherBtn) otherBtn.setAttribute('aria-expanded', 'false');
+        }
+      });
+
+      const isHidden = menu.classList.contains('hidden');
+      if (isHidden) {
+        menu.classList.remove('hidden');
+        btn.setAttribute('aria-expanded', 'true');
+      } else {
+        menu.classList.add('hidden');
+        btn.setAttribute('aria-expanded', 'false');
+      }
+    }
+
+    function closeGlobalFeedExportMenu(postId) {
+      const pid = String(postId || '').trim();
+      if (!pid) return;
+      const menu = document.getElementById(`feed-export-menu-${pid}`);
+      const btn = document.getElementById(`feed-export-menu-btn-${pid}`);
+      if (menu) menu.classList.add('hidden');
+      if (btn) btn.setAttribute('aria-expanded', 'false');
+    }
+
     // Event listener global pour fermer les menus au clic extérieur
     document.addEventListener('click', (event) => {
       const isMenuButton = event.target.closest('[id^="export-menu-btn-"]');
       const isMenu = event.target.closest('[id^="export-menu-"]');
+      const isFeedMenuButton = event.target.closest('[id^="feed-export-menu-btn-"]');
+      const isFeedMenu = event.target.closest('[id^="feed-export-menu-"]');
 
-      if (!isMenuButton && !isMenu) {
+      if (!isMenuButton && !isMenu && !isFeedMenuButton && !isFeedMenu) {
         document.querySelectorAll('[id^="export-menu-"]:not([id^="export-menu-btn-"])').forEach(menu => {
           if (!menu.classList.contains('hidden')) {
             menu.classList.add('hidden');
             const noteId = menu.id.replace('export-menu-', '');
             const btn = document.getElementById(`export-menu-btn-${noteId}`);
+            if (btn) btn.setAttribute('aria-expanded', 'false');
+          }
+        });
+        document.querySelectorAll('[id^="feed-export-menu-"]:not([id^="feed-export-menu-btn-"])').forEach((menu) => {
+          if (!menu.classList.contains('hidden')) {
+            menu.classList.add('hidden');
+            const postId = menu.id.replace('feed-export-menu-', '');
+            const btn = document.getElementById(`feed-export-menu-btn-${postId}`);
             if (btn) btn.setAttribute('aria-expanded', 'false');
           }
         });
@@ -15554,6 +15818,91 @@ ${tags.length ? `<div class="tags">${tags.map(tag => `<span class="tag">#${escap
       showToast(next.shareToGlobalFeed ? 'Note publiee dans le fil' : 'Note retiree du fil');
     }
 
+    function closeGlobalReadModal() {
+      const modal = document.getElementById('modal-global-read');
+      if (!modal) return;
+      modal.classList.add('hidden');
+      document.body.classList.remove('overflow-hidden');
+    }
+
+    async function openGlobalNoteReadModal(noteId = '') {
+      const nid = String(noteId || '').trim();
+      if (!nid) return;
+      const note = await getDecrypted('globalNotes', nid, 'noteId');
+      if (!note) {
+        showToast('Note introuvable');
+        return;
+      }
+      const modal = document.getElementById('modal-global-read');
+      const titleEl = document.getElementById('global-read-title');
+      const metaEl = document.getElementById('global-read-meta');
+      const badgesEl = document.getElementById('global-read-badges');
+      const contentEl = document.getElementById('global-read-content');
+      const linksEl = document.getElementById('global-read-links');
+      if (!modal || !titleEl || !metaEl || !badgesEl || !contentEl || !linksEl) return;
+
+      const identity = resolveKnownUserIdentity(String(note.createdBy || ''), String(note.createdByName || fallbackDirectoryName(note.createdBy || '')));
+      const author = String(identity?.name || note.createdByName || fallbackDirectoryName(note.createdBy || '')).trim() || 'Auteur';
+      const visibility = normalizeGlobalNoteVisibility(note.visibility);
+      const theme = String(note.theme || '').trim();
+      const tags = Array.isArray(note.tags) ? note.tags.map((tag) => String(tag || '').trim()).filter(Boolean) : [];
+      const contentHtml = sanitizeRichTextHtmlPreserve(String(note.contentHtml || '').trim() || plainTextToRichHtml(String(note.content || '').trim()));
+
+      titleEl.textContent = String(note.title || '').trim() || 'Note sans titre';
+      metaEl.textContent = `${author} • ${new Date(Number(note.updatedAt || note.createdAt || Date.now())).toLocaleString('fr-FR')}`;
+      badgesEl.innerHTML = [
+        `<span class="inline-flex text-[10px] px-2 py-1 rounded-full ${visibility === 'transverse' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'} font-semibold">${visibility === 'transverse' ? 'Transverse' : 'Privee'}</span>`,
+        note.shareToGlobalFeed ? '<span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-indigo-100 text-indigo-700 font-semibold">Dans le fil</span>' : '',
+        theme ? `<span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 font-semibold">${escapeHtml(theme)}</span>` : '',
+        ...tags.map((tag) => `<span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-slate-100 text-slate-700 font-semibold">#${escapeHtml(tag)}</span>`)
+      ].filter(Boolean).join('');
+      contentEl.innerHTML = contentHtml || '<p>Aucun contenu.</p>';
+      linksEl.innerHTML = '';
+
+      modal.classList.remove('hidden');
+      document.body.classList.add('overflow-hidden');
+    }
+
+    async function openGlobalFeedPostReadModal(postId = '') {
+      const pid = String(postId || '').trim();
+      if (!pid) return;
+      const post = await getDecrypted('globalPosts', pid, 'postId');
+      if (!post || post.deletedAt) {
+        showToast('Post introuvable');
+        return;
+      }
+      const modal = document.getElementById('modal-global-read');
+      const titleEl = document.getElementById('global-read-title');
+      const metaEl = document.getElementById('global-read-meta');
+      const badgesEl = document.getElementById('global-read-badges');
+      const contentEl = document.getElementById('global-read-content');
+      const linksEl = document.getElementById('global-read-links');
+      if (!modal || !titleEl || !metaEl || !badgesEl || !contentEl || !linksEl) return;
+
+      let mentionCatalog = globalFeedMentionCatalogCache;
+      if (!mentionCatalog) {
+        mentionCatalog = await buildGlobalMentionCatalog();
+        globalFeedMentionCatalogCache = mentionCatalog;
+      }
+      const title = String(post.title || '').trim() || 'Information';
+      const author = String(post.authorName || fallbackDirectoryName(post.authorUserId || '')).trim() || 'Auteur';
+      const typeMeta = getDashboardNewsTypeMeta(post);
+      const refs = Array.isArray(post.refs) ? post.refs : [];
+
+      titleEl.textContent = title;
+      metaEl.textContent = `${author} • ${new Date(Number(post.updatedAt || post.createdAt || Date.now())).toLocaleString('fr-FR')}`;
+      badgesEl.innerHTML = `<span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-slate-100 text-slate-700 font-semibold">${escapeHtml(typeMeta.label)}</span>`;
+      contentEl.innerHTML = renderGlobalFeedContentHtml(post.content || '', mentionCatalog) || '<p>Aucun contenu.</p>';
+      linksEl.innerHTML = refs.map((ref) => `
+        <button type="button" class="workspace-action-inline" data-action-kind="open" data-action-label="Ouvrir la reference" onclick="openGlobalFeedReference('${escapeHtml(String(ref?.type || ''))}','${encodeURIComponent(String(ref?.id || ''))}')">
+          ${escapeHtml(String(ref?.label || 'Reference'))}
+        </button>
+      `).join('');
+
+      modal.classList.remove('hidden');
+      document.body.classList.add('overflow-hidden');
+    }
+
     function buildGlobalNoteCardHtml(note, options = {}) {
       const canManage = !!options.canManage;
       const bulkSelectionMode = !!options.bulkSelectionMode;
@@ -15603,6 +15952,7 @@ ${tags.length ? `<div class="tags">${tags.map(tag => `<span class="tag">#${escap
             </div>
             ${canManage ? `
               <div class="flex items-center gap-1" onclick="event.stopPropagation();">
+                <button type="button" class="workspace-action-inline" data-action-kind="open" data-action-label="Lire la note" onclick="openGlobalNoteReadModal('${escapeHtml(note.noteId)}')">Lire</button>
                 <button type="button" class="workspace-action-inline" data-action-kind="edit" data-action-label="Modifier la note" onclick="openGlobalNoteEditor('${escapeHtml(note.noteId)}')">Editer</button>
                 <button type="button" class="workspace-action-inline" data-action-kind="manage" data-action-label="${isFavorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}" onclick="toggleGlobalNoteFavorite('${escapeHtml(note.noteId)}')">${isFavorite ? 'Defavoriser' : 'Favori'}</button>
                 <button type="button" class="workspace-action-inline" data-action-kind="notify" data-action-label="Publier dans le fil" onclick="toggleGlobalNoteFeedPublish('${escapeHtml(note.noteId)}')">${note.shareToGlobalFeed ? 'Retirer fil' : 'Publier fil'}</button>
@@ -21972,12 +22322,6 @@ ${tags.length ? `<div class="tags">${tags.map(tag => `<span class="tag">#${escap
       const states = await getAllProjectStates();
       const docs = [];
       states.forEach(state => {
-        const isPublicProject = normalizeProjectReadAccess(
-          state?.project?.readAccess,
-          normalizeSharingMode(state?.project?.sharingMode, 'private') === 'private' ? 'private' : 'members'
-        ) === 'public';
-        if (!isPublicProject) return;
-
         (state.tasks || []).forEach(task => {
           (task.attachments || []).forEach((file, attachmentIndex) => {
             if (file.shareToDocs !== false) {
@@ -25647,12 +25991,14 @@ ${tags.length ? `<div class="tags">${tags.map(tag => `<span class="tag">#${escap
       if (quill) quill.root.innerHTML = '';
       
       const input = document.getElementById('global-feed-input');
+      const titleInput = document.getElementById('global-feed-title');
       const projectSelect = document.getElementById('global-feed-project-ref');
       const taskSelect = document.getElementById('global-feed-task-ref');
       const calendarSelect = document.getElementById('global-feed-calendar-ref');
       const mentionSelect = document.getElementById('global-feed-mention-select');
       
       if (input) input.value = '';
+      if (titleInput) titleInput.value = '';
       if (projectSelect) projectSelect.value = '';
       if (taskSelect) taskSelect.value = '';
       if (calendarSelect) calendarSelect.value = '';
@@ -25679,11 +26025,13 @@ ${tags.length ? `<div class="tags">${tags.map(tag => `<span class="tag">#${escap
 
       const quill = projectDescriptionQuillEditors.get('global-feed-editor');
       const input = document.getElementById('global-feed-input');
+      const titleInput = document.getElementById('global-feed-title');
       if (quill) {
         quill.clipboard.dangerouslyPasteHTML(existing.content || '');
       } else if (input) {
         input.value = existing.content || '';
       }
+      if (titleInput) titleInput.value = String(existing.title || '').trim();
       
       const projectSelect = document.getElementById('global-feed-project-ref');
       const taskSelect = document.getElementById('global-feed-task-ref');
@@ -26367,9 +26715,9 @@ ${tags.length ? `<div class="tags">${tags.map(tag => `<span class="tag">#${escap
       function lineLooksLikeHeading(line) {
         const txt = String(line?.text || '').trim();
         if (!txt || txt.length > 140) return false;
-        if (/^[•\-–]\s/.test(txt) || /^\d+\./.test(txt)) return false;
-        const letters = txt.replace(/[^A-Za-zÀ-ÖØ-öø-ÿ]/g, '');
-        const upper = txt.replace(/[^A-ZÀ-ÖØ-Þ]/g, '');
+        if (/^[\u2022\-�]\s/u.test(txt) || /^\d+\./.test(txt)) return false;
+        const letters = txt.replace(/[^\p{L}]/gu, '');
+        const upper = txt.replace(/[^\p{Lu}]/gu, '');
         const upperRatio = letters.length ? upper.length / letters.length : 0;
         const bigFont = Number(line.avgHeight || 0) >= medianHeight * 1.24;
         const boldish = Number(line.boldRatio || 0) >= 0.5;
@@ -27187,10 +27535,12 @@ ${tags.length ? `<div class="tags">${tags.map(tag => `<span class="tag">#${escap
 
     async function publishGlobalFeedPost() {
       const input = document.getElementById('global-feed-input');
+      const titleInput = document.getElementById('global-feed-title');
       const projectSelect = document.getElementById('global-feed-project-ref');
       const taskSelect = document.getElementById('global-feed-task-ref');
       const calendarSelect = document.getElementById('global-feed-calendar-ref');
       if (!input || !projectSelect || !taskSelect || !calendarSelect) return;
+      const title = String(titleInput?.value || '').trim();
       const quill = projectDescriptionQuillEditors.get('global-feed-editor');
       let content = '';
       if (quill) {
@@ -27225,6 +27575,7 @@ ${tags.length ? `<div class="tags">${tags.map(tag => `<span class="tag">#${escap
       if (typeof editingGlobalFeedPostId !== 'undefined' && editingGlobalFeedPostId) {
         const existing = await getDecrypted('globalPosts', editingGlobalFeedPostId, 'postId');
         if (existing) {
+          existing.title = title;
           existing.content = applyProfanityFilterToHtml(content);
           existing.mentions = mentions;
           existing.refs = refs;
@@ -27234,6 +27585,7 @@ ${tags.length ? `<div class="tags">${tags.map(tag => `<span class="tag">#${escap
           
           if (typeof quill !== 'undefined' && quill) quill.root.innerHTML = '';
           input.value = '';
+          if (titleInput) titleInput.value = '';
           projectSelect.value = '';
           taskSelect.value = '';
           calendarSelect.value = '';
@@ -27252,6 +27604,7 @@ ${tags.length ? `<div class="tags">${tags.map(tag => `<span class="tag">#${escap
         postId: uuidv4(),
         authorUserId: String(currentUser?.userId || ''),
         authorName: String(currentUser?.name || fallbackDirectoryName(currentUser?.userId || '')),
+        title,
         content,
         mentions,
         refs,
@@ -27261,6 +27614,7 @@ ${tags.length ? `<div class="tags">${tags.map(tag => `<span class="tag">#${escap
       await putEncrypted('globalPosts', post, 'postId');
       knownGlobalPostIds.add(post.postId);
       input.value = '';
+      if (titleInput) titleInput.value = '';
       if (typeof quill !== 'undefined' && quill) quill.root.innerHTML = '';
       projectSelect.value = '';
       taskSelect.value = '';
@@ -27376,6 +27730,7 @@ ${tags.length ? `<div class="tags">${tags.map(tag => `<span class="tag">#${escap
       const postsAll = (await getAllDecrypted('globalPosts', 'postId') || [])
         .filter((p) => !p.deletedAt)
         .filter((p) => matchesQuery([
+          p.title,
           p.content,
           p.authorName,
           ...(Array.isArray(p.refs) ? p.refs.map((r) => r?.label) : []),
@@ -27439,14 +27794,40 @@ ${tags.length ? `<div class="tags">${tags.map(tag => `<span class="tag">#${escap
               </div>
               <div class="flex items-center gap-2">
                 ${!isAuto && String(post.authorUserId || '') === String(currentUser?.userId || '') ? `
+                  <button onclick="event.stopPropagation(); openGlobalFeedPostReadModal('${postId}')" class="workspace-action-inline" data-action-kind="open" title="Lire">Lire</button>
                   <button onclick="event.stopPropagation(); startEditGlobalFeedPost('${postId}')" class="workspace-action-inline" data-action-kind="edit" title="Éditer">Éditer</button>
                   <button onclick="event.stopPropagation(); deleteGlobalFeedPost('${postId}')" class="workspace-action-inline" data-action-kind="danger" title="Supprimer">Supprimer</button>
-                  <span class="text-slate-300">|</span>
                 ` : ''}
+                ${String(post.authorUserId || '') !== String(currentUser?.userId || '') ? `<button onclick="event.stopPropagation(); openGlobalFeedPostReadModal('${postId}')" class="workspace-action-inline" data-action-kind="open" title="Lire">Lire</button>` : ''}
+                <div class="relative inline-block">
+                  <button type="button" class="workspace-action-inline" data-action-kind="export" data-action-label="Menu d'export" onclick="toggleGlobalFeedExportMenu('${escapeHtml(postId)}', event)" aria-haspopup="true" aria-expanded="false" id="feed-export-menu-btn-${escapeHtml(postId)}">
+                    Exporter
+                  </button>
+                  <div id="feed-export-menu-${escapeHtml(postId)}" class="hidden absolute right-0 mt-1 w-44 bg-white rounded-lg shadow-lg border border-slate-200 z-50 overflow-hidden" role="menu" onclick="event.stopPropagation();">
+                    <button type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2" onclick="exportGlobalFeedPost('${escapeHtml(postId)}', 'html'); closeGlobalFeedExportMenu('${escapeHtml(postId)}');" role="menuitem">
+                      <span class="material-symbols-outlined text-[16px]">code</span>
+                      <span>HTML</span>
+                    </button>
+                    <button type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2" onclick="exportGlobalFeedPostAsPdf('${escapeHtml(postId)}'); closeGlobalFeedExportMenu('${escapeHtml(postId)}');" role="menuitem">
+                      <span class="material-symbols-outlined text-[16px]">picture_as_pdf</span>
+                      <span>PDF</span>
+                    </button>
+                    <button type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2" onclick="exportGlobalFeedPostAsDocx('${escapeHtml(postId)}'); closeGlobalFeedExportMenu('${escapeHtml(postId)}');" role="menuitem">
+                      <span class="material-symbols-outlined text-[16px]">description</span>
+                      <span>DOCX</span>
+                    </button>
+                    <button type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2" onclick="exportGlobalFeedPost('${escapeHtml(postId)}', 'txt'); closeGlobalFeedExportMenu('${escapeHtml(postId)}');" role="menuitem">
+                      <span class="material-symbols-outlined text-[16px]">notes</span>
+                      <span>TXT</span>
+                    </button>
+                  </div>
+                </div>
+                <span class="text-slate-300">|</span>
                 <span class="feed-item-type ${typeClass}">${typeLabel}</span>
               </div>
             </div>
             <div class="feed-item-body">
+              ${String(post.title || '').trim() ? `<h4 class="text-base font-semibold text-slate-800 mb-2">${escapeHtml(String(post.title || '').trim())}</h4>` : ''}
               <div class="collapsible-wrapper">
                 <div class="collapsible-content is-collapsed">
                   <div class="ql-snow">
@@ -27507,6 +27888,14 @@ ${tags.length ? `<div class="tags">${tags.map(tag => `<span class="tag">#${escap
     window.startEditGlobalFeedPost = startEditGlobalFeedPost;
     window.cancelEditGlobalFeedPost = cancelEditGlobalFeedPost;
     window.deleteGlobalFeedPost = deleteGlobalFeedPost;
+    window.openGlobalFeedPostReadModal = openGlobalFeedPostReadModal;
+    window.openGlobalNoteReadModal = openGlobalNoteReadModal;
+    window.closeGlobalReadModal = closeGlobalReadModal;
+    window.toggleGlobalFeedExportMenu = toggleGlobalFeedExportMenu;
+    window.closeGlobalFeedExportMenu = closeGlobalFeedExportMenu;
+    window.exportGlobalFeedPost = exportGlobalFeedPost;
+    window.exportGlobalFeedPostAsPdf = exportGlobalFeedPostAsPdf;
+    window.exportGlobalFeedPostAsDocx = exportGlobalFeedPostAsDocx;
     window.openGlobalFeedComposerForNewPost = openGlobalFeedComposerForNewPost;
     window.TaskMDARequestDigestForEditor = requestDigestImportForEditor;
 
@@ -28175,6 +28564,21 @@ ${tags.length ? `<div class="tags">${tags.map(tag => `<span class="tag">#${escap
       if (!content) return;
 
       const isCollapsed = content.classList.contains('is-collapsed');
+      const feedList = wrapper.closest('#global-feed-list');
+      if (isCollapsed && feedList) {
+        const otherToggles = feedList.querySelectorAll('.collapsible-toggle');
+        otherToggles.forEach((otherBtn) => {
+          if (!otherBtn || otherBtn === btn) return;
+          const otherWrapper = otherBtn.closest('.collapsible-wrapper');
+          const otherContent = otherWrapper?.querySelector('.collapsible-content');
+          if (!otherContent || otherContent.classList.contains('is-collapsed')) return;
+          otherContent.classList.add('is-collapsed');
+          const otherLabel = otherBtn.querySelector('.label');
+          if (otherLabel) otherLabel.textContent = 'Afficher le contenu';
+          const otherIcon = otherBtn.querySelector('.material-symbols-outlined');
+          if (otherIcon) otherIcon.textContent = 'expand_more';
+        });
+      }
       content.classList.toggle('is-collapsed', !isCollapsed);
 
       if (label) {
@@ -29591,7 +29995,7 @@ ${tags.length ? `<div class="tags">${tags.map(tag => `<span class="tag">#${escap
                 <span>${formatTaskDeadline(task)}</span>
               </div>
               ${buildProjectLockHintHtml(currentProjectState, LOCK_SCOPE_TASK, task.taskId, true)}
-              <div class="mt-2 flex flex-wrap items-center gap-2 text-xs">
+              <div class="task-hover-actions mt-2 flex flex-wrap items-center gap-2 text-xs">
                 ${(task.status || 'todo') !== 'termine' && canChangeTaskStatus(task, currentProjectState) ? `<button onclick="event.stopPropagation(); markProjectTaskDone('${task.taskId}')" class="task-action-btn task-action-btn-subtle" data-action-kind="success">Réalisé</button>` : ''}
                 ${canEditTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); editTask('${task.taskId}')" class="task-action-btn">Modifier</button>` : ''}
                 ${canEditTaskInProject(task, currentProjectState) ? `<button onclick="event.stopPropagation(); convertTaskToProject('${buildGlobalTaskRef({ sourceType: 'project', sourceProjectId: currentProjectId, taskId: task.taskId })}')" class="task-action-btn">Convertir</button>` : ''}
@@ -29626,7 +30030,6 @@ ${tags.length ? `<div class="tags">${tags.map(tag => `<span class="tag">#${escap
           </div>
         `;
       }).join('');
-      renderPagination('global-tasks-pagination', pagination, 'setGlobalArchivedTasksPage', 'taches archivees');
     }
 
     function parseTaskDateOrNull(rawDate) {
@@ -32077,6 +32480,7 @@ ${tags.length ? `<div class="tags">${tags.map(tag => `<span class="tag">#${escap
 
     async function renderActivity(events) {
       const container = document.getElementById('activity-container');
+      const paginationContainer = document.getElementById('activity-pagination');
       if (!container) return;
       if (!canReadProjectActivity(currentProjectState)) {
         container.innerHTML = buildWorkspaceEmptyState({
@@ -32085,16 +32489,31 @@ ${tags.length ? `<div class="tags">${tags.map(tag => `<span class="tag">#${escap
           text: 'Cette vue est disponible pour les Managers et Propriétaires.',
           compact: true
         });
+        if (paginationContainer) paginationContainer.innerHTML = '';
         return;
       }
 
-      if (!events || events.length === 0) {
+      let effectiveEvents = Array.isArray(events) ? events : [];
+      if (effectiveEvents.length === 0 && currentProjectId) {
+        try {
+          const reloadedEvents = await getProjectEvents(currentProjectId);
+          if (Array.isArray(reloadedEvents) && reloadedEvents.length > 0) {
+            effectiveEvents = reloadedEvents;
+            currentProjectEvents = reloadedEvents;
+          }
+        } catch (error) {
+          console.warn('Activity fallback reload failed:', error);
+        }
+      }
+
+      if (effectiveEvents.length === 0) {
         container.innerHTML = buildWorkspaceEmptyState({
           icon: 'history',
           title: 'Aucune activité',
           text: 'Les événements du projet apparaîtront ici.',
           compact: true
         });
+        if (paginationContainer) paginationContainer.innerHTML = '';
         return;
       }
 
@@ -32130,10 +32549,11 @@ ${tags.length ? `<div class="tags">${tags.map(tag => `<span class="tag">#${escap
       };
 
       const now = Date.now();
-      let filtered = [...events];
+      let filtered = [...effectiveEvents];
 
       if (activityFilters.type !== 'all') {
-        filtered = filtered.filter(evt => evt.type === activityFilters.type);
+        const wantedType = String(activityFilters.type || '').trim().toUpperCase();
+        filtered = filtered.filter((evt) => String(evt?.type || '').trim().toUpperCase() === wantedType);
       }
       if (activityFilters.author.trim()) {
         const q = activityFilters.author.trim().toLowerCase();
@@ -32158,8 +32578,12 @@ ${tags.length ? `<div class="tags">${tags.map(tag => `<span class="tag">#${escap
           text: 'Modifiez vos filtres pour élargir le résultat.',
           compact: true
         });
+        if (paginationContainer) paginationContainer.innerHTML = '';
         return;
       }
+
+      const pagination = paginateItems(filtered, activityPage, paginationConfig.globalNotesPerPage);
+      activityPage = pagination.currentPage;
 
       const metaByType = {
         CREATE_PROJECT: { icon: 'folder_open', chipClass: 'workspace-chip workspace-chip-status-active' },
@@ -32180,19 +32604,23 @@ ${tags.length ? `<div class="tags">${tags.map(tag => `<span class="tag">#${escap
         DELETE_NOTE: { icon: 'delete', chipClass: 'workspace-chip workspace-chip-status-urgent' }
       };
 
-      container.innerHTML = filtered.slice(0, 120).map(evt => `
+      container.innerHTML = pagination.pageItems.map((evt) => {
+        const eventType = String(evt?.type || '').trim().toUpperCase();
+        return `
         <div class="activity-card workspace-card-shell bg-surface-container-low rounded-lg p-3 border border-slate-100">
           <div class="flex items-center justify-between gap-3">
             <div class="flex items-center gap-2 min-w-0">
-              <span class="material-symbols-outlined text-base text-primary shrink-0">${escapeHtml(metaByType[evt.type]?.icon || 'event')}</span>
-              <span class="${metaByType[evt.type]?.chipClass || 'workspace-chip workspace-chip-private'}">${escapeHtml(labels[evt.type] || evt.type)}</span>
+              <span class="material-symbols-outlined text-base text-primary shrink-0">${escapeHtml(metaByType[eventType]?.icon || 'event')}</span>
+              <span class="${metaByType[eventType]?.chipClass || 'workspace-chip workspace-chip-private'}">${escapeHtml(labels[eventType] || eventType)}</span>
             </div>
             <span class="text-xs text-slate-500 shrink-0">${new Date(evt.timestamp).toLocaleString('fr-FR')}</span>
           </div>
           <p class="workspace-card-subtitle text-xs mt-2">Auteur: ${escapeHtml(usersById.get(evt.author) || evt.payload?.authorName || evt.author || 'inconnu')}</p>
           <p class="text-[11px] text-slate-500 mt-1 break-all font-mono">eventId: ${escapeHtml(evt.eventId || '')}</p>
         </div>
-      `).join('');
+      `;
+      }).join('');
+      renderPagination('activity-pagination', pagination, 'setActivityPage', 'evenements');
     }
 
     function renderMessageAttachments(attachments) {
@@ -36748,6 +37176,9 @@ ${tags.length ? `<div class="tags">${tags.map(tag => `<span class="tag">#${escap
     registerSafeBackdropClose('modal-global-note', () => {
       closeGlobalNoteEditor();
     });
+    registerSafeBackdropClose('modal-global-read', () => {
+      closeGlobalReadModal();
+    });
     registerSafeBackdropClose('modal-app-help', () => {
       document.getElementById('modal-app-help')?.classList.add('hidden');
     });
@@ -36863,6 +37294,7 @@ ${tags.length ? `<div class="tags">${tags.map(tag => `<span class="tag">#${escap
     document.getElementById('btn-project-note-cancel')?.addEventListener('click', () => closeProjectNoteEditor());
     document.getElementById('btn-close-project-note-modal')?.addEventListener('click', () => closeProjectNoteEditor());
     document.getElementById('btn-close-project-note-read-modal')?.addEventListener('click', () => closeProjectNoteReadModal());
+    document.getElementById('btn-close-global-read-modal')?.addEventListener('click', () => closeGlobalReadModal());
     document.getElementById('btn-project-note-read-edit')?.addEventListener('click', () => {
       const noteId = String(document.getElementById('btn-project-note-read-edit')?.getAttribute('data-note-id') || '').trim();
       openProjectNoteEditorFromReadModal(noteId);
@@ -37094,6 +37526,7 @@ ${tags.length ? `<div class="tags">${tags.map(tag => `<span class="tag">#${escap
       }
       setProjectView('activity');
       if (!currentProjectId) return;
+      activityPage = 1;
       currentProjectEvents = await getProjectEvents(currentProjectId);
       await renderActivity(currentProjectEvents);
     });
@@ -37553,18 +37986,22 @@ ${tags.length ? `<div class="tags">${tags.map(tag => `<span class="tag">#${escap
 
     document.getElementById('activity-filter-type')?.addEventListener('change', async (e) => {
       activityFilters.type = e.target.value;
+      activityPage = 1;
       await renderActivity(currentProjectEvents);
     });
     document.getElementById('activity-filter-author')?.addEventListener('input', async (e) => {
       activityFilters.author = e.target.value;
+      activityPage = 1;
       await renderActivity(currentProjectEvents);
     });
     document.getElementById('activity-filter-period')?.addEventListener('change', async (e) => {
       activityFilters.period = e.target.value;
+      activityPage = 1;
       await renderActivity(currentProjectEvents);
     });
     document.getElementById('activity-filter-reset')?.addEventListener('click', async () => {
       activityFilters = { type: 'all', author: '', period: 'all' };
+      activityPage = 1;
       document.getElementById('activity-filter-type').value = 'all';
       document.getElementById('activity-filter-author').value = '';
       document.getElementById('activity-filter-period').value = 'all';
@@ -38215,6 +38652,8 @@ ${tags.length ? `<div class="tags">${tags.map(tag => `<span class="tag">#${escap
         });
       });
     }
+
+
 
 
 

@@ -8328,9 +8328,33 @@ html[data-wf-action-buttons="icon"] [data-action-kind="danger"]:hover {
     transform: translateY(0);
   }
 
+  .doc-card {
+    position: relative;
+  }
+
+  .doc-card .doc-hover-actions {
+    position: absolute;
+    right: 12px;
+    bottom: 10px;
+    margin: 0;
+    z-index: 3;
+    background: var(--ui-hover-actions-bg);
+    border: 1px solid var(--ui-hover-actions-border);
+    border-radius: 999px;
+    padding: 4px;
+    box-shadow: var(--ui-hover-actions-shadow);
+    transform: translateY(4px);
+  }
+
+  .doc-card:hover .doc-hover-actions,
+  .doc-card:focus-within .doc-hover-actions {
+    transform: translateY(0);
+  }
+
   html[data-wf-action-buttons="icon"][data-wf-action-shape="rect"] .project-card-interactive .card-hover-actions,
   html[data-wf-action-buttons="icon"][data-wf-action-shape="rect"] .task-list-card .task-hover-actions,
-  html[data-wf-action-buttons="icon"][data-wf-action-shape="rect"] .global-task-card .task-hover-actions {
+  html[data-wf-action-buttons="icon"][data-wf-action-shape="rect"] .global-task-card .task-hover-actions,
+  html[data-wf-action-buttons="icon"][data-wf-action-shape="rect"] .doc-card .doc-hover-actions {
     border-radius: 12px;
   }
 }
@@ -8409,6 +8433,55 @@ html.dark .project-task-layout-btn:hover {
     opacity: 1;
     pointer-events: auto;
     transform: none;
+  }
+}
+
+/* Harmonisation projet: masquer les actions des cartes taches par defaut,
+   puis les afficher au survol/focus comme dans la rubrique Taches. */
+#project-work-panel .task-list-card .task-hover-actions,
+#project-work-panel .task-list-row .task-hover-actions,
+#project-work-panel .kanban-card .task-hover-actions {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transform: translateY(-4px);
+}
+
+#project-work-panel .task-list-card:hover .task-hover-actions,
+#project-work-panel .task-list-card:focus-within .task-hover-actions,
+#project-work-panel .task-list-row:hover .task-hover-actions,
+#project-work-panel .task-list-row:focus-within .task-hover-actions,
+#project-work-panel .kanban-card:hover .task-hover-actions,
+#project-work-panel .kanban-card:focus-within .task-hover-actions {
+  max-height: 120px;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+@media (hover: hover) and (min-width: 768px) {
+  #project-work-panel .kanban-card {
+    position: relative;
+  }
+
+  #project-work-panel .kanban-card .task-hover-actions {
+    position: absolute;
+    right: 12px;
+    bottom: 10px;
+    margin: 0;
+    z-index: 3;
+    background: var(--ui-hover-actions-bg);
+    border: 1px solid var(--ui-hover-actions-border);
+    border-radius: 999px;
+    padding: 4px;
+    box-shadow: var(--ui-hover-actions-shadow);
+    transform: translateY(4px);
+  }
+
+  #project-work-panel .kanban-card:hover .task-hover-actions,
+  #project-work-panel .kanban-card:focus-within .task-hover-actions {
+    transform: translateY(0);
   }
 }
 
