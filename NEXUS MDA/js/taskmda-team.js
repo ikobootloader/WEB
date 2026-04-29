@@ -25216,9 +25216,10 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     }
 
     function openGlobalDocUploadModal() {
+      const notesShared = window.TaskMDANotesShared;
       const modal = document.getElementById('modal-global-doc-upload');
       if (!modal) return;
-      notesShared?.openModal?.('modal-project-note');
+      notesShared?.openModal?.('modal-global-doc-upload');
       if (!notesShared) {
         modal.classList.remove('hidden');
         document.body.classList.add('overflow-hidden');
