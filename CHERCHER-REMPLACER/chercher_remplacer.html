@@ -1,0 +1,338 @@
+
+<style>
+  :root {
+    --mda-blue: #1D3F8E;
+    --mda-blue-light: #EEF2FA;
+    --mda-blue-mid: #3558B0;
+    --mda-blue-dark: #152D6A;
+    --mda-orange: #E8601C;
+    --mda-orange-light: #FDF0EA;
+    --mda-border: #D8DFF0;
+    --mda-gray: #F4F4F4;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  .app { font-family: var(--font-sans); font-size: 15px; color: var(--color-text-primary); }
+
+  .topbar {
+    background: var(--mda-blue);
+    padding: 0 1.25rem;
+    display: flex; align-items: center; gap: 12px;
+    height: 48px;
+    border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
+  }
+  .topbar-title { font-size: 14px; font-weight: 500; color: #fff; }
+  .topbar-sub { font-size: 11px; color: rgba(255,255,255,0.6); border-left: 1px solid rgba(255,255,255,0.2); padding-left: 10px; margin-left: 4px; }
+
+  .body {
+    padding: 1.25rem;
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--mda-border);
+    border-top: none;
+    border-radius: 0 0 var(--border-radius-lg) var(--border-radius-lg);
+    display: flex; flex-direction: column; gap: 1rem;
+  }
+
+  .section-label { font-size: 11px; font-weight: 500; color: var(--mda-blue); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 5px; }
+
+  .file-drop {
+    border: 1.5px dashed var(--mda-border);
+    border-radius: var(--border-radius-md);
+    padding: 10px 14px;
+    display: flex; align-items: center; gap: 10px;
+    cursor: pointer; font-size: 13px;
+    color: var(--color-text-secondary);
+    transition: background 0.12s, border-color 0.12s;
+  }
+  .file-drop:hover { background: var(--mda-blue-light); border-color: var(--mda-blue-mid); }
+  #file-input { display: none; }
+  .file-name { font-size: 12px; color: var(--mda-blue); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  textarea {
+    width: 100%; height: 170px; padding: 10px;
+    font-size: 13.5px; line-height: 1.6;
+    border: 1px solid var(--mda-border);
+    border-radius: var(--border-radius-md);
+    background: var(--color-background-primary);
+    color: var(--color-text-primary);
+    resize: vertical; outline: none;
+    font-family: var(--font-mono);
+    transition: border-color 0.15s;
+  }
+  textarea:focus { border-color: var(--mda-blue-mid); box-shadow: 0 0 0 3px rgba(29,63,142,0.1); }
+  #result-area { background: var(--color-background-secondary); }
+
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+  .field-label { font-size: 12px; color: var(--color-text-secondary); display: block; margin-bottom: 4px; font-weight: 500; }
+
+  input[type="text"] {
+    width: 100%; padding: 8px 11px; font-size: 14px;
+    border: 1px solid var(--mda-border);
+    border-radius: var(--border-radius-md);
+    background: var(--color-background-primary);
+    color: var(--color-text-primary);
+    outline: none; font-family: var(--font-sans);
+    transition: border-color 0.15s;
+  }
+  input[type="text"]:focus { border-color: var(--mda-blue-mid); box-shadow: 0 0 0 3px rgba(29,63,142,0.1); }
+
+  .divider { border: none; border-top: 1px solid var(--mda-border); }
+
+  .opts { display: flex; align-items: center; gap: 1.25rem; flex-wrap: wrap; }
+  .checkbox-label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--color-text-secondary); cursor: pointer; user-select: none; }
+  input[type="checkbox"] { accent-color: var(--mda-blue); width: 14px; height: 14px; cursor: pointer; }
+
+  .info-bar {
+    background: var(--mda-blue-light);
+    border: 1px solid var(--mda-border);
+    border-left: 3px solid var(--mda-blue);
+    border-radius: 0 var(--border-radius-md) var(--border-radius-md) 0;
+    padding: 8px 12px;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 36px;
+  }
+  .info-status { font-size: 12px; color: var(--color-text-secondary); font-style: italic; }
+  .badge { font-size: 11px; padding: 3px 9px; border-radius: 20px; font-weight: 500; }
+  .badge-blue { background: var(--mda-blue); color: #fff; }
+  .badge-orange { background: var(--mda-orange); color: #fff; }
+
+  .actions { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+
+  .btn {
+    padding: 8px 15px; font-size: 13px;
+    border-radius: var(--border-radius-md);
+    cursor: pointer;
+    transition: background 0.12s, transform 0.1s;
+    font-family: var(--font-sans);
+    font-weight: 400;
+    border: 0.5px solid var(--mda-border);
+  }
+  .btn:active { transform: scale(0.98); }
+
+  .btn-primary { background: var(--mda-blue); color: #fff; border-color: var(--mda-blue-dark); font-weight: 500; }
+  .btn-primary:hover { background: var(--mda-blue-dark); }
+
+  .btn-secondary { background: var(--mda-orange-light); color: #000; border-color: #F0C0A0; }
+  .btn-secondary:hover { background: #FAE0D0; }
+
+  .btn-sm { padding: 6px 11px; font-size: 12px; }
+
+  .btn-ghost { background: var(--color-background-primary); color: #000; border-color: var(--mda-border); }
+  .btn-ghost:hover { background: var(--mda-gray); }
+</style>
+
+<div class="app">
+  <div class="topbar">
+    <svg width="28" height="28" viewBox="0 0 60 60" fill="none">
+      <path d="M10 30 A20 20 0 0 1 30 10" stroke="#E8601C" stroke-width="7" stroke-linecap="round" fill="none"/>
+      <path d="M30 10 A20 20 0 1 1 10 30" stroke="white" stroke-width="7" stroke-linecap="round" fill="none" opacity="0.3"/>
+      <circle cx="44" cy="14" r="5" fill="#E8601C"/>
+      <path d="M38 22 Q44 18 50 22 L47 34 L41 34 Z" fill="white" opacity="0.85"/>
+      <path d="M38 22 L34 30" stroke="#E8601C" stroke-width="3" stroke-linecap="round"/>
+      <path d="M50 22 L54 30" stroke="#E8601C" stroke-width="3" stroke-linecap="round"/>
+      <path d="M44 34 L42 44 M44 34 L46 44" stroke="white" stroke-width="3" stroke-linecap="round" opacity="0.85"/>
+    </svg>
+    <span class="topbar-title">MDA</span>
+    <span class="topbar-sub">Chercher / Remplacer en masse</span>
+  </div>
+
+  <div class="body">
+    <div>
+      <div class="section-label">Charger un fichier</div>
+      <label for="file-input" class="file-drop" id="drop-zone">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M5 7l3 3 3-3" stroke="#1D3F8E" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><rect x="2" y="11" width="12" height="3" rx="1" stroke="#1D3F8E" stroke-width="1.2"/></svg>
+        <span id="drop-label">Cliquer pour charger un fichier texte — ou glisser-déposer</span>
+        <span class="file-name" id="file-name-display" style="display:none"></span>
+        <input type="file" id="file-input" accept=".txt,.csv,.md,.log,.json,.xml,.html,.js,.ts,.css,.py">
+      </label>
+    </div>
+
+    <div>
+      <div class="section-label">Texte source</div>
+      <textarea id="source" placeholder="Collez ou saisissez votre texte ici…"></textarea>
+    </div>
+
+    <hr class="divider">
+
+    <div class="row">
+      <div>
+        <label class="field-label" for="search-input">Expression à rechercher</label>
+        <input type="text" id="search-input" placeholder="Texte ou regex…">
+      </div>
+      <div>
+        <label class="field-label" for="replace-input">Remplacer par</label>
+        <input type="text" id="replace-input" placeholder="Laisser vide pour supprimer">
+      </div>
+    </div>
+
+    <div class="opts">
+      <label class="checkbox-label"><input type="checkbox" id="opt-regex"> Expression régulière</label>
+      <label class="checkbox-label"><input type="checkbox" id="opt-case"> Respecter la casse</label>
+      <label class="checkbox-label"><input type="checkbox" id="opt-word"> Mot entier</label>
+      <label class="checkbox-label"><input type="checkbox" id="opt-multiline" checked> Multiligne</label>
+    </div>
+
+    <div class="info-bar">
+      <span class="info-status" id="status-text">Aucune recherche en cours</span>
+      <div id="stats-wrap" style="display:none; gap:6px; align-items:center;">
+        <span class="badge badge-blue" id="badge-found"></span>
+        <span class="badge badge-orange" id="badge-replaced" style="display:none"></span>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-primary" id="btn-replace">Remplacer tout</button>
+      <button class="btn btn-secondary" id="btn-preview">Aperçu des occurrences</button>
+      <button class="btn btn-ghost btn-sm" id="btn-copy" style="margin-left:auto">Copier le résultat</button>
+      <button class="btn btn-ghost btn-sm" id="btn-download">Télécharger .txt</button>
+      <button class="btn btn-ghost btn-sm" id="btn-reset">Réinitialiser</button>
+    </div>
+
+    <div>
+      <div class="section-label">Résultat</div>
+      <textarea id="result-area" placeholder="Le résultat apparaîtra ici…" readonly></textarea>
+    </div>
+  </div>
+</div>
+
+<script>
+const sourceEl = document.getElementById('source');
+const searchEl = document.getElementById('search-input');
+const replaceEl = document.getElementById('replace-input');
+const resultEl = document.getElementById('result-area');
+const fileInput = document.getElementById('file-input');
+const dropZone = document.getElementById('drop-zone');
+const fileNameDisplay = document.getElementById('file-name-display');
+const dropLabel = document.getElementById('drop-label');
+const statusText = document.getElementById('status-text');
+const statsWrap = document.getElementById('stats-wrap');
+const badgeFound = document.getElementById('badge-found');
+const badgeReplaced = document.getElementById('badge-replaced');
+const optRegex = document.getElementById('opt-regex');
+const optCase = document.getElementById('opt-case');
+const optWord = document.getElementById('opt-word');
+const optMultiline = document.getElementById('opt-multiline');
+let lastFilename = 'resultat.txt';
+
+function buildRegex(pattern) {
+  if (!pattern) return null;
+  let p = pattern;
+  if (!optRegex.checked) p = p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (optWord.checked) p = '\\b' + p + '\\b';
+  let flags = 'g';
+  if (!optCase.checked) flags += 'i';
+  if (optMultiline.checked) flags += 'm';
+  try { return new RegExp(p, flags); } catch(e) { return null; }
+}
+
+function countMatches(text, rx) {
+  return (text.match(rx) || []).length;
+}
+
+function setStatus(found, replaced, hasSearch, invalid) {
+  if (invalid) {
+    statusText.style.display = '';
+    statusText.textContent = 'Expression régulière invalide';
+    statsWrap.style.display = 'none';
+    return;
+  }
+  if (!hasSearch) {
+    statusText.style.display = '';
+    statusText.textContent = 'Aucune recherche en cours';
+    statsWrap.style.display = 'none';
+    return;
+  }
+  statusText.style.display = 'none';
+  statsWrap.style.display = 'flex';
+  badgeFound.textContent = found + ' occurrence' + (found !== 1 ? 's' : '') + ' trouvée' + (found !== 1 ? 's' : '');
+  if (replaced !== null) {
+    badgeReplaced.style.display = '';
+    badgeReplaced.textContent = replaced + ' remplacement' + (replaced !== 1 ? 's' : '') + ' effectué' + (replaced !== 1 ? 's' : '');
+  } else {
+    badgeReplaced.style.display = 'none';
+  }
+}
+
+document.getElementById('btn-replace').addEventListener('click', () => {
+  const text = sourceEl.value;
+  const pattern = searchEl.value;
+  if (!text || !pattern) { setStatus(0, null, !!pattern); return; }
+  const rx = buildRegex(pattern);
+  if (!rx) { setStatus(0, null, true, true); return; }
+  const found = countMatches(text, rx);
+  resultEl.value = text.replace(rx, replaceEl.value);
+  setStatus(found, found, true);
+});
+
+document.getElementById('btn-preview').addEventListener('click', () => {
+  const text = sourceEl.value;
+  const pattern = searchEl.value;
+  if (!text || !pattern) { setStatus(0, null, !!pattern); return; }
+  const rx = buildRegex(pattern);
+  if (!rx) { setStatus(0, null, true, true); return; }
+  const found = countMatches(text, rx);
+  setStatus(found, null, true);
+  resultEl.value = found > 0
+    ? 'Aperçu — ' + found + ' occurrence' + (found !== 1 ? 's' : '') + ' trouvée' + (found !== 1 ? 's' : '') + '. Cliquez sur "Remplacer tout" pour appliquer.'
+    : 'Aucune occurrence trouvée pour cette expression.';
+});
+
+function liveCount() {
+  const text = sourceEl.value;
+  const pattern = searchEl.value;
+  if (!pattern || !text) { setStatus(0, null, !!pattern); return; }
+  const rx = buildRegex(pattern);
+  if (!rx) { setStatus(0, null, true, true); return; }
+  setStatus(countMatches(text, rx), null, true);
+  badgeReplaced.style.display = 'none';
+}
+
+[searchEl, optRegex, optCase, optWord, optMultiline].forEach(el => el.addEventListener('change', liveCount));
+searchEl.addEventListener('input', liveCount);
+
+document.getElementById('btn-copy').addEventListener('click', () => {
+  if (!resultEl.value) return;
+  navigator.clipboard.writeText(resultEl.value).then(() => {
+    const btn = document.getElementById('btn-copy');
+    const orig = btn.textContent;
+    btn.textContent = 'Copié !';
+    setTimeout(() => btn.textContent = orig, 1600);
+  });
+});
+
+document.getElementById('btn-download').addEventListener('click', () => {
+  if (!resultEl.value) return;
+  const blob = new Blob([resultEl.value], { type: 'text/plain;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = lastFilename.replace(/(\.[^.]+)?$/, '_modifié$1');
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+document.getElementById('btn-reset').addEventListener('click', () => {
+  sourceEl.value = ''; searchEl.value = ''; replaceEl.value = ''; resultEl.value = '';
+  fileNameDisplay.style.display = 'none'; dropLabel.style.display = '';
+  lastFilename = 'resultat.txt';
+  setStatus(0, null, false);
+});
+
+function loadFile(file) {
+  if (!file) return;
+  lastFilename = file.name;
+  const reader = new FileReader();
+  reader.onload = e => {
+    sourceEl.value = e.target.result;
+    fileNameDisplay.textContent = file.name;
+    fileNameDisplay.style.display = ''; dropLabel.style.display = 'none';
+    setStatus(0, null, false);
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+fileInput.addEventListener('change', e => loadFile(e.target.files[0]));
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.style.background = '#EEF2FA'; dropZone.style.borderColor = '#3558B0'; });
+dropZone.addEventListener('dragleave', () => { dropZone.style.background = ''; dropZone.style.borderColor = ''; });
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.style.background = ''; dropZone.style.borderColor = '';
+  loadFile(e.dataTransfer.files[0]);
+});
+</script>
