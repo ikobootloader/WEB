@@ -1,4 +1,4 @@
-
+﻿
 (function initTaskMdaWorkflowModule(global) {
   'use strict';
 
@@ -3182,7 +3182,7 @@ ${reviews.map((row)=>`<tr><td>${esc(row.reviewDate || '-')}</td><td>${esc(row.ne
               reviewDate,
               decision: 'pending',
               reviewerUserId: null,
-              comments: 'Revue automatique gÃ©nÃ©rÃ©e',
+              comments: 'Revue automatique générée',
               createdAt: now(),
               updatedAt: now()
             });
@@ -5080,9 +5080,9 @@ ${clone.outerHTML}
             </div>
           </div>
           <div class="workflow-map-links">
-            ${state.mapOptions.showStructure ? relationSectionHtml('Liaisons structurelles', preparedRelations.structure, 'â†’', 'showAllStructure', 'structureVisible', 'structure', 'is-structure') : ''}
-            ${state.mapOptions.showTransverse ? relationSectionHtml('Liaisons transverses', preparedRelations.transverse, 'â†”', 'showAllTransverse', 'transverseVisible', 'transverse', 'is-transverse') : ''}
-            ${state.mapOptions.showApplicative ? relationSectionHtml('Liaisons applicatives', preparedRelations.applicative, 'â†’', 'showAllApplicative', 'applicativeVisible', 'applicative', 'is-applicative') : ''}
+            ${state.mapOptions.showStructure ? relationSectionHtml('Liaisons structurelles', preparedRelations.structure, '→', 'showAllStructure', 'structureVisible', 'structure', 'is-structure') : ''}
+            ${state.mapOptions.showTransverse ? relationSectionHtml('Liaisons transverses', preparedRelations.transverse, '⟶', 'showAllTransverse', 'transverseVisible', 'transverse', 'is-transverse') : ''}
+            ${state.mapOptions.showApplicative ? relationSectionHtml('Liaisons applicatives', preparedRelations.applicative, '→', 'showAllApplicative', 'applicativeVisible', 'applicative', 'is-applicative') : ''}
           </div>
           <div class="workflow-map-minimap-wrap ${state.mapOptions.showMinimap === false ? 'hidden' : ''}" data-wf-map-minimap>
             <div class="workflow-map-minimap-surface" data-wf-map-minimap-surface title="Cliquer pour recentrer">
@@ -5175,7 +5175,7 @@ ${clone.outerHTML}
             <article class="workflow-org-card" data-wf-type="${esc(type)}" data-wf-id="${esc(id)}">
               <div class="workflow-org-head">
                 <p class="workflow-org-title">${esc(title || 'Element')}</p>
-                ${hasChildren ? `<button class="workflow-org-toggle" type="button" data-wf-branch-toggle aria-expanded="${branchState === 'open' ? 'true' : 'false'}" title="Replier ou deplier">â–¾</button>` : ''}
+                ${hasChildren ? `<button class="workflow-org-toggle" type="button" data-wf-branch-toggle aria-expanded="${branchState === 'open' ? 'true' : 'false'}" title="Replier ou deplier">▾</button>` : ''}
               </div>
               ${subtitle ? `<p class="workflow-org-sub">${esc(subtitle)}</p>` : ''}
               ${(chips || []).length ? `<div class="workflow-chip-row">${chips.map((chip) => {
@@ -5212,7 +5212,7 @@ ${clone.outerHTML}
         chips.push(...getAgentContactParts(agent));
         if (inconsistentGroupIds.length > 0) {
           chips.push({
-            label: 'âš  incoherence service/groupe',
+            label: '⚠ incoherence service/groupe',
             className: 'workflow-chip-warning',
             title: `${inconsistentGroupIds.length} rattachement(s) groupe hors service`
           });
@@ -5261,7 +5261,7 @@ ${clone.outerHTML}
 
       refs.content.innerHTML = `
         <section class="workflow-org">
-          <p class="workflow-org-hint">Vue arbre de l'organisation avec liaisons communaute â†’ service â†’ groupe â†’ agent.</p>
+          <p class="workflow-org-hint">Vue arbre de l'organisation avec liaisons communaute → service → groupe → agent.</p>
           <div class="workflow-org-actions">
             <button class="workflow-org-action" type="button" data-wf-org-action="expand_all">Tout deplier</button>
             <button class="workflow-org-action" type="button" data-wf-org-action="collapse_all">Tout replier</button>
@@ -6930,11 +6930,11 @@ ${clone.outerHTML}
                     type="button"
                     class="workflow-btn-light workflow-kanban-add-btn taskmda-create-cta"
                     data-action-kind="create"
-                    data-action-label="Ajouter une tÃ¢che workflow"
-                    data-ui-tooltip="Ajouter une tÃ¢che workflow"
+                    data-action-label="Ajouter une tâche workflow"
+                    data-ui-tooltip="Ajouter une tâche workflow"
                     data-wf-kanban-add="1"
                     data-wf-target-status="${esc(lane.key)}"
-                    aria-label="Ajouter une tÃ¢che workflow dans ${esc(lane.label)}"
+                    aria-label="Ajouter une tâche workflow dans ${esc(lane.label)}"
                   >
                     <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">add</span>
                     <span class="taskmda-action-label">Ajouter</span>
@@ -7866,7 +7866,7 @@ ${clone.outerHTML}
             groupId: null,
             ownerAgentId: action.ownerAgentId || plan.ownerAgentId || null,
             title: `[Urgence] ${action.title || 'Action contingence'}`,
-            description: `Action generÃ©e automatiquement par le dÃ©clenchement du plan de contingence: ${plan.title || plan.id}.`,
+            description: `Action générée automatiquement par le déclenchement du plan de contingence: ${plan.title || plan.id}.`,
             status: 'todo',
             priority: 'high',
             approvalStatus: 'pending',
@@ -7891,7 +7891,7 @@ ${clone.outerHTML}
       renderServiceFilter();
       renderContent();
       openDetail('contingencyPlan', planId);
-      toast('Plan declenche et taches genÃ©rees.');
+      toast('Plan declenche et taches générées.');
     }
 
     async function closeContingencyActivation(activationId) {
@@ -8200,7 +8200,7 @@ ${clone.outerHTML}
       const editable = canEdit && !isLocked;
 
       if (isLocked) {
-        refs.detailTitle.innerHTML += ` <span class="badge badge-error ml-2" title="Ce contenu est verrouillÃ© par un autre utilisateur">VERROUILLÃ‰</span>`;
+        refs.detailTitle.innerHTML += ` <span class="badge badge-error ml-2" title="Ce contenu est verrouillé par un autre utilisateur">VERROUILLÉ</span>`;
       }
       let crossLinksHtml = '';
       if (type === 'task' || type === 'procedure') {
@@ -10795,32 +10795,32 @@ ${clone.outerHTML}
       if (!refs.modalBody) return;
       const hintsByKind = {
         process: [
-          ['wf-create-process-title', 'Donnez un titre orientÃ© action, clair et court.'],
+          ['wf-create-process-title', 'Donnez un titre orienté action, clair et court.'],
           ['wf-create-process-service', 'Le service pilote simplifie le suivi et la gouvernance.']
         ],
         template: [
-          ['wf-create-template-name', 'Un modÃ¨le sert de base rÃ©utilisable pour lancer des processus.'],
-          ['wf-create-template-source-process', 'Depuis un processus: structure prÃ©remplie en un clic.']
+          ['wf-create-template-name', 'Un modèle sert de base réutilisable pour lancer des processus.'],
+          ['wf-create-template-source-process', 'Depuis un processus: structure préremplie en un clic.']
         ],
         step: [
-          ['wf-create-step-title', 'Une Ã©tape = une action mÃ©tier mesurable et attribuable.'],
+          ['wf-create-step-title', 'Une étape = une action métier mesurable et attribuable.'],
           ['wf-create-step-type', 'Choisissez le type pour clarifier la logique du flux.']
         ],
         flow: [
-          ['wf-create-flow-process', 'Un flux relie des Ã©tapes d un mÃªme processus.'],
-          ['wf-create-flow-type', 'Utilisez condition/parallÃ¨le pour dÃ©crire les bifurcations.']
+          ['wf-create-flow-process', 'Un flux relie des étapes d un même processus.'],
+          ['wf-create-flow-type', 'Utilisez condition/parallèle pour décrire les bifurcations.']
         ],
         task: [
-          ['wf-create-task-title', 'Titre court, prÃ©cis et actionnable.'],
-          ['wf-create-task-process', 'Lier au processus facilite le suivi transverse immÃ©diat.']
+          ['wf-create-task-title', 'Titre court, précis et actionnable.'],
+          ['wf-create-task-process', 'Lier au processus facilite le suivi transverse immédiat.']
         ],
         procedure: [
-          ['wf-create-procedure-title', 'La procÃ©dure dÃ©crit clairement le mode opÃ©ratoire.'],
-          ['wf-create-procedure-trigger', 'Le dÃ©clencheur standardise le dÃ©marrage.']
+          ['wf-create-procedure-title', 'La procédure décrit clairement le mode opératoire.'],
+          ['wf-create-procedure-trigger', 'Le déclencheur standardise le démarrage.']
         ],
         software: [
-          ['wf-create-software-name', 'Utilisez le nom mÃ©tier connu des Ã©quipes.'],
-          ['wf-create-software-category', 'La catÃ©gorie facilite la recherche dans les rÃ©fÃ©rentiels.']
+          ['wf-create-software-name', 'Utilisez le nom métier connu des équipes.'],
+          ['wf-create-software-category', 'La catégorie facilite la recherche dans les référentiels.']
         ]
       };
       const hints = hintsByKind[String(kind || '').trim()] || [];
@@ -10840,7 +10840,7 @@ ${clone.outerHTML}
         shortcutHint.className = 'workflow-card-sub';
         shortcutHint.style.marginTop = '0.35rem';
         shortcutHint.setAttribute('data-wf-create-shortcuts', '1');
-        shortcutHint.textContent = 'Raccourcis: EntrÃ©e pour enregistrer, Ã‰chap pour fermer.';
+        shortcutHint.textContent = 'Raccourcis: Entrée pour enregistrer, Échap pour fermer.';
         refs.modalBody.appendChild(shortcutHint);
       }
     }
@@ -12429,7 +12429,7 @@ ${clone.outerHTML}
             const toggle = node.querySelector('[data-wf-branch-toggle]');
             if (toggle) {
               toggle.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
-              toggle.textContent = shouldOpen ? 'â–¾' : 'â–¸';
+              toggle.textContent = shouldOpen ? '▾' : '▸';
             }
           });
           persistLayout().catch(() => null);
@@ -12447,7 +12447,7 @@ ${clone.outerHTML}
           const branchKey = String(node.getAttribute('data-wf-branch-key') || '').trim();
           if (branchKey) state.orgBranchState[branchKey] = nextState;
           toggle.setAttribute('aria-expanded', nextState === 'open' ? 'true' : 'false');
-          toggle.textContent = nextState === 'open' ? 'â–¾' : 'â–¸';
+          toggle.textContent = nextState === 'open' ? '▾' : '▸';
           persistLayout().catch(() => null);
           return;
         }
@@ -12687,8 +12687,8 @@ ${clone.outerHTML}
         }
       });
 
-      // Utiliser la dÃ©lÃ©gation d'Ã©vÃ©nements sur le menu parent
-      // Cela Ã©vite que les listeners soient perdus si les boutons sont modifiÃ©s
+      // Utiliser la délégation d'événements sur le menu parent
+      // Cela évite que les listeners soient perdus si les boutons sont modifiés
       if (refs.quickAddMenu) {
         refs.quickAddMenu.addEventListener('click', (e) => {
           const button = e.target.closest('button[id^="btn-workflow-add-"]');
@@ -12698,7 +12698,7 @@ ${clone.outerHTML}
           e.stopPropagation();
           refs.quickAddMenu.classList.add('hidden');
 
-          // Mapper l'ID du bouton Ã  l'action correspondante
+          // Mapper l'ID du bouton à l'action correspondante
           const actionMap = {
             'btn-workflow-add-community': 'community',
             'btn-workflow-add-service': 'service',

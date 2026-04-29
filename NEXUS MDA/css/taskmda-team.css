@@ -4205,7 +4205,8 @@ html.dark .project-description.is-collapsed::after {
   margin-top: 6px;
   font-size: 0.82rem;
   font-weight: 700;
-  color: #1d4ed8;
+  --tw-text-opacity: 1;
+  color: rgb(100 116 139 / var(--tw-text-opacity, 1));
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -4341,10 +4342,16 @@ html.dark .project-description.is-collapsed::after {
   min-height: 180px;
   max-height: min(46vh, 460px);
   overflow: auto;
-  padding: 12px;
+  padding: 12px 12px calc(12px + 2.4em);
+  scroll-padding-bottom: 2.4em;
   color: #0f172a;
   font-size: 1.02rem;
   line-height: 1.62;
+}
+
+.project-editor-wrap .ql-container .ql-editor {
+  padding-bottom: calc(12px + 2.4em);
+  scroll-padding-bottom: 2.4em;
 }
 
 .project-description-editor.ql-container.ql-snow {
@@ -5790,6 +5797,8 @@ html.dark .global-kanban-col-count {
 
 .task-detail-inline-quill-host .ql-editor {
   min-height: 120px;
+  padding-bottom: calc(12px + 2.4em);
+  scroll-padding-bottom: 2.4em;
   font-size: 1rem;
   line-height: 1.58;
 }
@@ -11324,6 +11333,11 @@ html.dark .emoji-picker-btn:focus-visible {
   order: 4;
 }
 
+.docs-search-controls #global-doc-theme-filter { order: 1; }
+.docs-search-controls #global-doc-search { order: 2; }
+.docs-search-controls #global-doc-reset { order: 3; }
+.docs-search-controls #btn-open-global-doc-upload-modal { order: 4; }
+
 .global-doc-toolbar > p:nth-of-type(2) {
   order: 5;
   margin-top: 6px;
@@ -12711,14 +12725,15 @@ html.dark .view-preset-btn:hover:not(:disabled) {
     font-size: 1.55rem;
   }
 
-  .docs-search-card .grid {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  .docs-search-controls {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto;
     gap: 10px;
   }
 
   #global-doc-search,
-  #global-doc-theme,
-  #global-doc-reset {
+  #global-doc-theme-filter,
+  #global-doc-reset,
+  #btn-open-global-doc-upload-modal {
     min-height: 42px;
   }
 
@@ -12761,8 +12776,8 @@ html.dark .view-preset-btn:hover:not(:disabled) {
     height: 44px;
   }
 
-  .docs-search-card .grid {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  .docs-search-controls {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto;
     gap: 12px;
   }
 
@@ -12792,8 +12807,8 @@ html.dark .view-preset-btn:hover:not(:disabled) {
     font-size: 1.72rem;
   }
 
-  .docs-search-card .grid {
-    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) auto;
+  .docs-search-controls {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) auto auto;
     gap: 12px;
   }
 
@@ -13235,6 +13250,58 @@ html.dark .is-overdue-card {
   outline: 2px solid rgba(0, 43, 107, 0.45);
   outline-offset: 0;
   box-shadow: 0 0 0 3px rgba(0, 43, 107, 0.12);
+}
+
+/* Notes/Feed visual harmonization (pass 3) */
+:root {
+  --taskmda-note-card-radius: 14px;
+  --taskmda-note-card-padding: 14px;
+  --taskmda-note-chip-font-size: 10px;
+  --taskmda-note-chip-padding-y: 4px;
+  --taskmda-note-chip-padding-x: 8px;
+  --taskmda-note-action-height: 26px;
+  --taskmda-note-action-gap: 6px;
+}
+
+#project-notes-list > article,
+#global-notes-list .global-note-card,
+#global-feed-list .feed-item {
+  border-radius: var(--taskmda-note-card-radius) !important;
+  padding: var(--taskmda-note-card-padding) !important;
+}
+
+#project-notes-list [class*="text-[10px]"],
+#global-notes-list [class*="text-[10px]"],
+#global-feed-list [class*="text-[10px]"],
+#project-note-read-badges > span,
+#global-read-badges > span {
+  font-size: var(--taskmda-note-chip-font-size) !important;
+  line-height: 1.05 !important;
+  padding: var(--taskmda-note-chip-padding-y) var(--taskmda-note-chip-padding-x) !important;
+  border-radius: 999px !important;
+  font-weight: 700 !important;
+}
+
+#project-notes-list .workspace-action-inline,
+#global-notes-list .workspace-action-inline,
+#global-feed-list .workspace-action-inline,
+#project-note-read-links .workspace-action-inline,
+#global-read-links .workspace-action-inline {
+  min-height: var(--taskmda-note-action-height);
+  padding: 4px 9px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--taskmda-note-action-gap);
+}
+
+#global-feed-list .feed-item-head,
+#global-feed-list .feed-item-body,
+#global-feed-list .feed-item-mentions,
+#global-feed-list .feed-item-refs,
+#project-notes-list > article .mt-3,
+#global-notes-list .global-note-card .mt-3 {
+  margin-top: 10px;
 }
 
 tr.is-bulk-selected > td {

@@ -11,6 +11,13 @@ Nom d interface par defaut: `NEXUS MDA`.
 
 ## Mises a jour recentes (Avril 2026)
 
+- **Referentiels / Generateur email (nouveau)**:
+  - ajout d un onglet dedie `Generateur email` dans `Referentiels`,
+  - templates parametrables (destinataires, objet, corps riche, nom du template),
+  - variables dynamiques: `{{app_name}}`, `{{user_name}}`, `{{date}}`, `{{project_name}}`, `{{task_title}}`, `{{status}}`,
+  - actions rapides: copie HTML, copie texte, ouverture `mailto:`,
+  - persistance locale des templates dans `appSettings` (sans serveur, sans npm).
+
 - **Fil d info / Notes / Dashboard (lot UX recent)**:
   - Fil d info: ajout d un champ `Titre du post (optionnel)` dans le composeur, persistance en creation/edition, affichage sur la carte et prise en compte dans la recherche.
   - Fil d info: ajout d un bouton `Lire` ouvrant une modale de lecture confortable (sans edition).

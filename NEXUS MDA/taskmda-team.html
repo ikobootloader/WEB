@@ -945,6 +945,10 @@
                       <span class="material-symbols-outlined text-[18px]">description</span>
                       <span>Digérer document</span>
                     </button>
+                    <button id="btn-global-feed-attach-doc" class="ml-2 px-4 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold flex items-center gap-2" type="button">
+                      <span class="material-symbols-outlined text-[18px]">attach_file</span>
+                      <span>Joindre document</span>
+                    </button>
                   </div>
                   <div class="project-editor-wrap border border-slate-300 rounded-xl bg-white overflow-hidden">
                     <div class="project-editor-toolbar project-editor-toolbar-fallback">
@@ -990,6 +994,7 @@
                     </button>
                   </div>
                   <input id="global-feed-digest-files" type="file" class="hidden" accept=".eml,.msg,.txt,.md,.html,.htm,.pdf,.doc,.docx,.odt,.rtf" multiple>
+                  <input id="global-feed-attach-doc-files" type="file" class="hidden" multiple>
                 </div>
               </aside>
               <section class="feed-stream">
@@ -1065,6 +1070,8 @@
                 <button id="global-notes-tab-published" type="button" class="feed-filter-btn">Publiées dans le fil</button>
                 <div id="global-notes-count" class="ml-auto px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs text-slate-600">0 note</div>
               </div>
+              <div id="global-notes-theme-tabs" class="project-notes-theme-tabs mt-3"></div>
+              <p class="mt-2 text-xs text-slate-500">Astuce: utilisez "Nouvelle note" pour ouvrir l'éditeur confortable en modale.</p>
             </div>
             <div id="global-notes-list" class="space-y-3">
               <div class="workspace-empty-state">
@@ -1174,46 +1181,6 @@
           </div>
 
             <div id="global-docs-section" class="panel p-3 hidden">
-              <!-- Section Charger un document -->
-              <div class="docs-upload-card mb-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <button id="btn-toggle-docs-upload" type="button" class="docs-header-toggle flex items-center justify-between gap-3 mb-3 w-full" aria-expanded="false" aria-controls="docs-upload-body" title="Développer">
-                  <div class="flex items-center gap-3">
-                    <div class="docs-icon-circle">
-                      <span class="material-symbols-outlined text-white">folder</span>
-                    </div>
-                    <h3 class="text-lg font-bold text-slate-800">Charger un document</h3>
-                  </div>
-                  <span id="docs-upload-toggle-icon" class="material-symbols-outlined text-slate-500">expand_more</span>
-                </button>
-                <div id="docs-upload-body" class="global-doc-drop-host docs-dropzone-border rounded-lg p-4 mb-3 hidden">
-                  <div class="grid grid-cols-1 md:grid-cols-[auto_1fr_auto] gap-3 items-center mb-3">
-                    <label for="global-doc-files" class="btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold cursor-pointer inline-flex items-center gap-2">
-                      <span class="material-symbols-outlined text-[18px]">add_circle</span>
-                      <span>Sélect. fichiers</span>
-                    </label>
-                    <input id="global-doc-files" type="file" multiple class="hidden js-file-drop-input" data-drop-host=".global-doc-drop-host" data-drop-label="Deposez des documents hors projet ici" data-drop-decor="false">
-                    <span id="global-doc-files-label" class="text-sm text-slate-500">Aucun fichier choisi</span>
-                    <select id="global-doc-mode" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                      <option value="private">Privée</option>
-                      <option value="shared">Collaborative</option>
-                    </select>
-                  </div>
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                    <input id="global-doc-upload-theme" type="text" placeholder="Thématique du document (optionnel)" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                    <select id="global-doc-upload-theme-known" class="px-3 py-2 border border-slate-300 rounded-lg text-sm" title="Choisir parmi les thématiques du référentiel et des projets">
-                      <option value="">Thématiques existantes...</option>
-                    </select>
-                  </div>
-                  <p class="text-sm text-slate-500 mb-3">Déposez des documents hors projet ici...</p>
-                  <div class="text-right">
-                    <button id="btn-global-doc-add" class="btn-primary px-5 py-2 rounded-lg text-white text-sm font-semibold inline-flex items-center gap-2">
-                      <span class="material-symbols-outlined text-[18px]">upload</span>
-                      <span>Charger le document</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
               <!-- Section Rechercher des documents -->
               <div class="docs-search-card rounded-xl border border-slate-200 bg-slate-50 p-4 mb-4">
                 <div class="flex items-center gap-3 mb-3">
@@ -1222,13 +1189,55 @@
                   </div>
                   <h3 class="text-lg font-bold text-slate-800">Rechercher des documents</h3>
                 </div>
-                <div class="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3 mb-3">
-                  <input id="global-doc-search" type="text" placeholder="Recherche document/projet/thématique" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                  <input id="global-doc-theme-filter" type="text" placeholder="Filtre thématique" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                <div class="docs-search-controls grid grid-cols-1 md:grid-cols-[minmax(220px,1fr)_minmax(280px,1fr)_auto_auto] gap-3 mb-3">
+                  <input id="global-doc-theme-filter" type="text" placeholder="Filtre thématique" class="px-3 py-2 border border-slate-300 rounded-lg text-sm min-w-0">
+                  <input id="global-doc-search" type="text" placeholder="Recherche document/projet/thématique" class="px-3 py-2 border border-slate-300 rounded-lg text-sm min-w-0">
                   <button id="global-doc-reset" class="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold whitespace-nowrap">Réinitialiser</button>
+                  <button id="btn-open-global-doc-upload-modal" type="button" class="btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold inline-flex items-center gap-2 whitespace-nowrap justify-center taskmda-create-cta" data-action-kind="create" data-action-label="Ajouter un document">
+                    <span class="material-symbols-outlined text-[18px]">add_circle</span>
+                    <span>Ajouter un document</span>
+                  </button>
                 </div>
                 <div id="global-docs-container" class="docs-results-container"></div>
               </div>
+          </div>
+
+          <div id="modal-global-doc-upload" class="hidden fixed inset-0 bg-black/55 flex items-start md:items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
+            <div class="bg-white rounded-2xl p-6 sm:p-8 max-w-4xl w-full mx-auto my-2 sm:my-4 max-h-[92vh] overflow-y-auto overscroll-contain">
+              <div class="flex items-center justify-between gap-3 mb-3">
+                <h3 class="section-title text-2xl font-extrabold">Charger un document</h3>
+                <button id="btn-close-global-doc-upload-modal" type="button" class="taskmda-modal-close-btn" data-action-kind="close" data-action-label="Fermer" aria-label="Fermer">
+                  <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">close</span>
+                </button>
+              </div>
+              <div class="global-doc-drop-host docs-dropzone-border rounded-lg p-4 mb-3">
+                <div class="grid grid-cols-1 md:grid-cols-[auto_1fr_auto] gap-3 items-center mb-3">
+                  <label for="global-doc-files" class="btn-primary px-4 py-2 rounded-lg text-white text-sm font-semibold cursor-pointer inline-flex items-center gap-2">
+                    <span class="material-symbols-outlined text-[18px]">add_circle</span>
+                    <span>Sélect. fichiers</span>
+                  </label>
+                  <input id="global-doc-files" type="file" multiple class="hidden js-file-drop-input" data-drop-host=".global-doc-drop-host" data-drop-label="Deposez des documents hors projet ici" data-drop-decor="false">
+                  <span id="global-doc-files-label" class="text-sm text-slate-500">Aucun fichier choisi</span>
+                  <select id="global-doc-mode" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    <option value="private">Privée</option>
+                    <option value="shared">Collaborative</option>
+                  </select>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                  <input id="global-doc-upload-theme" type="text" placeholder="Thématique du document (optionnel)" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  <select id="global-doc-upload-theme-known" class="px-3 py-2 border border-slate-300 rounded-lg text-sm" title="Choisir parmi les thématiques du référentiel et des projets">
+                    <option value="">Thématiques existantes...</option>
+                  </select>
+                </div>
+                <p class="text-sm text-slate-500 mb-3">Déposez des documents hors projet ici...</p>
+                <div class="text-right">
+                  <button id="btn-global-doc-add" class="btn-primary px-5 py-2 rounded-lg text-white text-sm font-semibold inline-flex items-center gap-2">
+                    <span class="material-symbols-outlined text-[18px]">upload</span>
+                    <span>Charger le document</span>
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
 
         <div id="global-settings-section" class="panel p-3 hidden">
@@ -1241,6 +1250,8 @@
                   <button id="global-settings-tab-roles" role="tab" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">admin_panel_settings</span> Habilitations</button>
                   <button id="global-settings-tab-annuaire" role="tab" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">location_city</span> Annuaire ESMS</button>
                   <button id="global-settings-tab-file-watcher" role="tab" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">folder_supervised</span> Surveillance fichiers</button>
+                  <button id="global-settings-tab-email" role="tab" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">alternate_email</span> Generateur email</button>
+                  <button id="global-settings-tab-quick-links" role="tab" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">public</span> Acces rapide web</button>
                   <button id="global-settings-tab-views" role="tab" aria-selected="false" class="project-view-tab px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"><span class="material-symbols-outlined tab-icon">tune</span> Options de vues</button>
                 </div>
                 <button id="btn-global-settings-help" type="button" class="global-settings-help-btn" aria-label="Aide" aria-expanded="false" aria-controls="global-settings-help-box" data-tooltip="Aide">
@@ -1391,7 +1402,7 @@
               <div class="global-settings-card-views-wrap grid grid-cols-1 gap-4">
                 <div class="global-settings-card-views rounded-xl border border-slate-200 bg-slate-50 p-4">
                   <h4 class="font-bold text-slate-800 mb-3">Options d'affichage des vues</h4>
-                  <p class="text-xs text-slate-500 mb-3">Administrez les sous-onglets visibles par rubrique et définissez l'onglet par défaut.</p>
+                  <p class="text-xs text-slate-500 mb-3">Administrez les sous-onglets visibles par rubrique et définissez l'onglet par défaut. Épinglé = visible dans la barre latérale, non épinglé = envoyé dans « Plus (x) ».</p>
                   <div id="view-options-summary" class="text-[11px] text-slate-500 mb-3"></div>
                   <div id="view-options-matrix" class="space-y-3"></div>
                   <div class="mt-4 pt-4 border-t border-slate-200">
@@ -1426,6 +1437,18 @@
                     </div>
                   </div>
                   <div class="mt-4 pt-4 border-t border-slate-200">
+                    <label for="view-option-feed-summary-words" class="block text-sm font-semibold text-slate-800 mb-1">Dashboard: résumé auto du fil d'info</label>
+                    <p class="text-xs text-slate-500 mb-2">Le dashboard affiche un résumé automatique du contenu des posts manuels. Vous pouvez régler sa longueur.</p>
+                    <label class="inline-flex items-center gap-2 text-sm text-slate-700 mb-2">
+                      <input id="view-option-feed-summary-enabled" type="checkbox" class="w-4 h-4" checked>
+                      <span>Activer le résumé automatique</span>
+                    </label>
+                    <div class="grid grid-cols-1 sm:grid-cols-[160px_1fr] gap-2 items-center">
+                      <input id="view-option-feed-summary-words" type="number" min="40" max="1200" step="10" value="300" class="px-3 py-2 border border-slate-300 rounded-lg text-sm" aria-label="Nombre de mots du résumé automatique">
+                      <span id="view-option-feed-summary-words-current" class="px-3 py-2 rounded-lg bg-white border border-slate-200 text-xs font-semibold text-slate-600">Longueur actuelle: 300 mots</span>
+                    </div>
+                  </div>
+                  <div class="mt-4 pt-4 border-t border-slate-200">
                     <label for="profanity-filter-mode-select" class="block text-sm font-semibold text-slate-800 mb-1">Modération du langage</label>
                     <p class="text-xs text-slate-500 mb-2">Traitement automatique des vulgarités dans la messagerie, les descriptions et le fil d'info.</p>
                     <div class="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
@@ -1449,11 +1472,11 @@
                   </div>
                 </div>
                 <div class="global-settings-card-software-tips rounded-xl border border-slate-200 bg-slate-50 p-4">
-                  <h4 class="font-bold text-slate-800 mb-3">Conseils dâ€™usage</h4>
+                  <h4 class="font-bold text-slate-800 mb-3">Conseils d?usage</h4>
                   <ul class="text-sm text-slate-600 space-y-2">
                     <li>Utilisez les groupes globaux pour standardiser les attributions entre projets.</li>
-                    <li>Gardez les thématiques courtes et stables pour faciliter la recherche.</li>
-                    <li>Pilotez les versions logicielles directement dans Workflow, onglet Logiciels métiers.</li>
+                    <li>Gardez les th?matiques courtes et stables pour faciliter la recherche.</li>
+                    <li>Pilotez les versions logicielles directement dans Workflow, onglet Logiciels m?tiers.</li>
                   </ul>
                 </div>
               </div>
@@ -1471,6 +1494,70 @@
                   <span class="material-symbols-outlined text-6xl text-slate-300 mb-2">folder_supervised</span>
                   <p class="text-sm text-slate-500">Aucun observateur configuré</p>
                 </div>
+              </div>
+              <div class="global-settings-card-email rounded-xl border border-slate-200 bg-slate-50 p-4 hidden">
+                <div class="flex items-center justify-between gap-2 mb-3">
+                  <h4 class="font-bold text-slate-800">Generateur email</h4>
+                  <span class="text-[11px] font-semibold px-2 py-1 rounded-full bg-slate-200 text-slate-700">Local sans serveur</span>
+                </div>
+                <p class="text-xs text-slate-500 mb-3">Composez un email avec mise en forme, variables dynamiques et templates reutilisables.</p>
+                <div class="grid grid-cols-1 xl:grid-cols-[1fr_auto_auto_auto] gap-2 mb-2">
+                  <select id="email-generator-template-select" class="px-3 py-2 border border-slate-300 rounded-lg text-sm"></select>
+                  <button id="btn-email-generator-new-template" class="px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold">Nouveau</button>
+                  <button id="btn-email-generator-save-template" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Enregistrer</button>
+                  <button id="btn-email-generator-delete-template" class="px-3 py-2 rounded-lg border border-red-300 bg-red-50 text-red-700 text-sm font-semibold">Supprimer</button>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-[1fr_1fr] gap-2 mb-2">
+                  <input id="email-generator-template-name" type="text" maxlength="120" placeholder="Nom du template" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  <input id="email-generator-subject" type="text" maxlength="220" placeholder="Objet de l'email" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-[1fr_1fr] gap-2 mb-2">
+                  <input id="email-generator-to" type="text" placeholder="Destinataires (separes par ;)" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  <input id="email-generator-cc" type="text" placeholder="Cc (optionnel)" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                </div>
+                <div class="grid grid-cols-1 gap-2 mb-2">
+                  <input id="email-generator-bcc" type="text" placeholder="Bcc (optionnel)" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                </div>
+                <div class="rounded-lg border border-slate-300 overflow-hidden bg-white">
+                  <div id="email-generator-toolbar" class="flex flex-wrap items-center gap-1 p-2 border-b border-slate-200 bg-slate-50">
+                    <button type="button" data-email-cmd="bold" class="px-2 py-1 rounded border border-slate-300 bg-white text-xs font-semibold">Gras</button>
+                    <button type="button" data-email-cmd="italic" class="px-2 py-1 rounded border border-slate-300 bg-white text-xs font-semibold">Italique</button>
+                    <button type="button" data-email-cmd="underline" class="px-2 py-1 rounded border border-slate-300 bg-white text-xs font-semibold">Souligne</button>
+                    <button type="button" data-email-cmd="insertUnorderedList" class="px-2 py-1 rounded border border-slate-300 bg-white text-xs font-semibold">Liste</button>
+                    <button type="button" data-email-cmd="insertOrderedList" class="px-2 py-1 rounded border border-slate-300 bg-white text-xs font-semibold">Liste numerotee</button>
+                    <button type="button" data-email-cmd="createLink" class="px-2 py-1 rounded border border-slate-300 bg-white text-xs font-semibold">Lien</button>
+                    <button type="button" data-email-cmd="removeFormat" class="px-2 py-1 rounded border border-slate-300 bg-white text-xs font-semibold">Nettoyer</button>
+                    <button type="button" id="btn-email-generator-insert-var" class="px-2 py-1 rounded border border-slate-300 bg-white text-xs font-semibold">Inserer variable</button>
+                  </div>
+                  <div id="email-generator-editor" contenteditable="true" class="min-h-[180px] p-3 text-sm text-slate-800 focus:outline-none"></div>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-2 mb-2">Variables: {{app_name}}, {{user_name}}, {{date}}, {{project_name}}, {{task_title}}, {{status}}</p>
+                <div class="grid grid-cols-1 md:grid-cols-[auto_auto_auto_1fr] gap-2 mb-3">
+                  <button id="btn-email-generator-copy-html" class="px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold">Copier HTML</button>
+                  <button id="btn-email-generator-copy-text" class="px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold">Copier texte</button>
+                  <button id="btn-email-generator-open-mailto" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Ouvrir mailto</button>
+                </div>
+                <div class="rounded-lg border border-slate-200 bg-white p-3">
+                  <h5 class="font-semibold text-slate-700 text-sm mb-2">Apercu rendu</h5>
+                  <div id="email-generator-preview" class="prose prose-sm max-w-none text-slate-800"></div>
+                </div>
+              </div>
+              <div class="global-settings-card-quick-links rounded-xl border border-slate-200 bg-slate-50 p-4 hidden">
+                <div class="flex items-center justify-between gap-2 mb-3">
+                  <h4 class="font-bold text-slate-800">Acces rapide web</h4>
+                  <span class="text-[11px] font-semibold px-2 py-1 rounded-full bg-slate-200 text-slate-700">Local sans serveur</span>
+                </div>
+                <p class="text-xs text-slate-500 mb-3">Centralisez des raccourcis vers vos sites outils (intranet, portail, docs, support...).</p>
+                <div class="grid grid-cols-1 md:grid-cols-[1fr_1fr] gap-2 mb-2">
+                  <input id="quick-link-name-input" type="text" maxlength="120" placeholder="Nom du raccourci" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  <input id="quick-link-url-input" type="text" maxlength="500" placeholder="URL (https://...)" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-2 mb-3">
+                  <input id="quick-link-description-input" type="text" maxlength="240" placeholder="Description (optionnelle)" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  <button id="btn-quick-link-save" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Ajouter</button>
+                  <button id="btn-quick-link-reset" class="px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold">Réinitialiser</button>
+                </div>
+                <div id="quick-links-admin-list" class="space-y-2"></div>
               </div>
             </div>
           </div>
@@ -2272,6 +2359,18 @@
       <div class="flex flex-wrap items-center gap-2 mb-2" id="project-note-read-tags"></div>
       <div id="project-note-read-links"></div>
       <div class="flex items-center justify-end gap-2 mt-4">
+        <div class="relative inline-block">
+          <button id="btn-project-note-read-export-menu" type="button" class="task-action-btn task-action-btn-subtle" data-action-kind="export" data-action-label="Exporter" aria-haspopup="true" aria-expanded="false">
+            <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">ios_share</span>
+            <span class="taskmda-action-label">Exporter</span>
+          </button>
+          <div id="project-note-read-export-dropdown" class="hidden absolute right-0 mt-1 w-44 bg-white rounded-lg shadow-lg border border-slate-200 z-50 overflow-hidden">
+            <button id="btn-project-note-export-html" type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50">Exporter HTML</button>
+            <button id="btn-project-note-export-pdf" type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50">Exporter PDF</button>
+            <button id="btn-project-note-export-docx" type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50">Exporter DOCX</button>
+            <button id="btn-project-note-export-txt" type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50">Exporter TXT</button>
+          </div>
+        </div>
         <button id="btn-project-note-read-edit" type="button" class="task-action-btn hidden" data-action-kind="edit" data-action-label="Modifier la note" aria-label="Modifier la note">
           <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">edit</span>
           <span class="taskmda-action-label">Modifier</span>
@@ -2292,12 +2391,8 @@
           <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">close</span>
         </button>
       </div>
-      <div class="space-y-3">
-        <input id="global-note-title" type="text" placeholder="Titre de la note" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-          <input id="global-note-theme" type="text" placeholder="Thématique (optionnel)" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
-          <input id="global-note-tags" type="text" placeholder="Tags: budget, RH, projet..." class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
-        </div>
+      <div class="space-y-4">
+        <input id="global-note-title" type="text" placeholder="Titre de la note (optionnel)" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
         <div class="project-editor-wrap">
           <input id="global-note-content-image-input" type="file" accept="image/*" multiple class="hidden">
           <div class="project-editor-toolbar project-editor-toolbar-fallback">
@@ -2318,27 +2413,46 @@
           <div id="global-note-content-editor" class="project-description-editor task-description-editor" contenteditable="true" aria-label="Contenu de la note transverse"></div>
           <textarea id="global-note-content" rows="5" class="hidden"></textarea>
         </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <input id="global-note-tags" type="text" placeholder="Tags: budget, gouvernance, priorite..." class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+          <select id="global-note-linked-task" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+            <option value="">Aucune tâche liée</option>
+          </select>
+        </div>
+        <div>
+          <label for="global-note-attach-doc-files" class="block text-sm font-semibold mb-2">Joindre des fichiers (optionnel)</label>
+          <div class="global-note-drop-host docs-dropzone-border rounded-lg p-3 bg-slate-50">
+            <div class="flex flex-wrap items-center gap-3">
+              <label for="global-note-attach-doc-files" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold cursor-pointer inline-flex items-center gap-2">
+                <span class="material-symbols-outlined text-[18px]" aria-hidden="true">attach_file</span>
+                <span>Sélect. fichiers</span>
+              </label>
+              <input id="global-note-attach-doc-files" type="file" class="hidden js-file-drop-input" data-drop-host=".global-note-drop-host" data-drop-label="Déposez des fichiers pour cette note" data-drop-decor="false" multiple>
+              <span id="global-note-attachments-summary" class="text-xs text-slate-500">Aucun fichier sélectionné</span>
+            </div>
+          </div>
+        </div>
+        <input id="global-note-theme" type="hidden" value="">
         <div class="flex flex-wrap items-center gap-4 text-sm">
           <label class="inline-flex items-center gap-2"><input id="global-note-transverse" type="checkbox" checked> <span>Note transverse</span></label>
-          <label class="inline-flex items-center gap-2"><input id="global-note-share-feed" type="checkbox"> <span>Publier aussi dans le fil</span></label>
+          <label class="inline-flex items-center gap-2"><input id="global-note-share-feed" type="checkbox"> <span>Publier aussi dans le fil transverse</span></label>
           <button id="btn-global-note-digest" type="button" class="task-action-btn task-action-btn-subtle" data-action-kind="convert" data-action-label="Digérer document">
             <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">description</span>
-            <span class="taskmda-action-label">Digérer document</span>
           </button>
         </div>
         <div class="flex items-center gap-2">
           <button id="btn-global-note-save" type="button" class="task-action-btn" data-action-kind="save" data-action-label="Enregistrer la note" aria-label="Enregistrer la note">
             <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">save</span>
-            <span class="taskmda-action-label">Enregistrer la note</span>
+            <span class="taskmda-action-label">Enregistrer</span>
           </button>
           <button id="btn-global-note-delete" type="button" class="task-action-btn task-action-btn-danger hidden" data-action-kind="danger" data-action-label="Supprimer la note" aria-label="Supprimer la note">
             <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">delete</span>
             <span class="taskmda-action-label">Supprimer</span>
           </button>
-          <button id="btn-global-note-cancel" type="button" class="task-action-btn task-action-btn-subtle" data-action-kind="close" data-action-label="Fermer" aria-label="Fermer">
-            <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">undo</span>
-            <span class="taskmda-action-label">Fermer</span>
+          <button id="btn-global-note-cancel" type="button" class="taskmda-modal-close-btn" data-action-kind="close" data-action-label="Fermer" aria-label="Fermer">
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
           </button>
+          <span id="global-note-draft-status" class="text-xs text-slate-500 ml-auto">Édition en cours</span>
         </div>
         <input id="global-note-digest-files" type="file" class="hidden" accept=".eml,.msg,.txt,.md,.html,.htm,.pdf,.doc,.docx,.odt,.rtf" multiple>
       </div>
@@ -2361,7 +2475,30 @@
       <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 mb-3">
         <div id="global-read-content" class="markdown-content text-sm text-slate-700"></div>
       </div>
+      <div class="flex flex-wrap items-center gap-2 mb-2" id="global-read-tags"></div>
       <div id="global-read-links" class="flex flex-wrap items-center gap-2"></div>
+      <div class="flex flex-wrap items-center justify-end gap-2 mt-3">
+        <div class="relative">
+          <button id="btn-global-read-export-menu" type="button" class="task-action-btn task-action-btn-subtle" data-action-kind="export" data-action-label="Exporter" aria-haspopup="true" aria-expanded="false">
+            <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">ios_share</span>
+            <span class="taskmda-action-label">Exporter</span>
+          </button>
+          <div id="global-read-export-dropdown" class="hidden absolute right-0 mt-1 w-44 bg-white rounded-lg shadow-lg border border-slate-200 z-50 overflow-hidden">
+            <button id="btn-global-read-export-html" type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50">Exporter HTML</button>
+            <button id="btn-global-read-export-pdf" type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50">Exporter PDF</button>
+            <button id="btn-global-read-export-docx" type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50">Exporter DOCX</button>
+            <button id="btn-global-read-export-txt" type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50">Exporter TXT</button>
+          </div>
+        </div>
+        <button id="btn-global-read-edit" type="button" class="task-action-btn hidden" data-action-kind="edit" data-action-label="Modifier la note" aria-label="Modifier la note">
+          <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">edit</span>
+          <span class="taskmda-action-label">Modifier</span>
+        </button>
+        <button id="btn-global-read-delete" type="button" class="task-action-btn task-action-btn-danger hidden" data-action-kind="danger" data-action-label="Supprimer la note" aria-label="Supprimer la note">
+          <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">delete</span>
+          <span class="taskmda-action-label">Supprimer</span>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -3210,14 +3347,14 @@
         </div>
         <div>
           <label class="block text-sm font-semibold mb-2">Ajouter des documents au projet</label>
-          <input id="edit-project-doc-files" type="file" multiple class="js-file-drop-input w-full px-3 py-2 border border-slate-300 rounded-lg bg-white text-sm" data-drop-label="Déposez les documents à ajouter au projet">
-          <p id="edit-project-doc-files-summary" class="text-xs text-slate-500 mt-2">Aucun fichier sélectionné</p>
-          <p class="text-[11px] text-slate-500 mt-1">Ces documents seront ajoutés automatiquement dans lâ€™onglet Documents après enregistrement.</p>
+          <input id="edit-project-doc-files" type="file" multiple class="js-file-drop-input w-full px-3 py-2 border border-slate-300 rounded-lg bg-white text-sm" data-drop-label="D?posez les documents ? ajouter au projet">
+          <p id="edit-project-doc-files-summary" class="text-xs text-slate-500 mt-2">Aucun fichier s?lectionn?</p>
+          <p class="text-[11px] text-slate-500 mt-1">Ces documents seront ajout?s automatiquement dans l?onglet Documents apr?s enregistrement.</p>
         </div>
-        <div><label class="block text-sm font-semibold mb-2">Statut projet</label><select id="edit-project-status" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"><option value="en-cours">En cours</option><option value="planifie">Planifié</option><option value="urgent">Urgent</option><option value="termine">Terminé</option></select></div>
-        <div><label class="block text-sm font-semibold mb-2">Priorité projet</label><select id="edit-project-priority" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"><option value="normale">Normale</option><option value="haute">Haute</option><option value="critique">Critique</option><option value="basse">Basse</option></select></div>
+        <div><label class="block text-sm font-semibold mb-2">Statut projet</label><select id="edit-project-status" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"><option value="en-cours">En cours</option><option value="planifie">Planifi?</option><option value="urgent">Urgent</option><option value="termine">Termin?</option></select></div>
+        <div><label class="block text-sm font-semibold mb-2">Priorit? projet</label><select id="edit-project-priority" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"><option value="normale">Normale</option><option value="haute">Haute</option><option value="critique">Critique</option><option value="basse">Basse</option></select></div>
         <div id="edit-project-deadline-wrap" class="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-3">
-          <label class="block text-sm font-semibold mb-1">Échéance projet (optionnel)</label>
+          <label class="block text-sm font-semibold mb-1">?ch?ance projet (optionnel)</label>
           <select id="edit-project-deadline-mode" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
             <option value="date">Date précise</option>
             <option value="month">Mois</option>
@@ -3545,6 +3682,7 @@
   <script src="js/taskmda-comms-ui.js?v=20260423-02"></script>
   <script src="js/taskmda-admin-ui.js?v=20260406-01"></script>
   <script src="js/taskmda-hierarchy.js?v=20260420-01"></script>
+  <script src="js/taskmda-notes-shared.js?v=20260429-01"></script>
   <script src="js/taskmda-project-notes.js?v=20260422-01"></script>
   <script src="js/taskmda-document-storage.js?v=20260424-01"></script>
   <script src="js/taskmda-global-notes.js?v=20260425-01"></script>
@@ -3552,9 +3690,10 @@
   <script src="js/taskmda-global-docs.js?v=20260425-01"></script>
   <script src="js/taskmda-global-feed.js?v=20260425-01"></script>
   <script src="js/taskmda-global-messages.js?v=20260425-01"></script>
+  <script src="js/taskmda-email-generator.js?v=20260428-01"></script>
   <script src="js/taskmda-file-watcher.js"></script>
   <script src="js/taskmda-file-watcher-ui.js"></script>
-  <script src="js/taskmda-team.js?v=20260424-11"></script>
+  <script src="js/taskmda-team.js?v=20260428-01"></script>
 </body>
 </html>
 

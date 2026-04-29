@@ -186,7 +186,7 @@
     document.getElementById('global-settings-tab-roles')?.addEventListener('click', () => opts.setGlobalSettingsTab?.('roles'));
     document.getElementById('global-settings-tab-annuaire')?.addEventListener('click', () => opts.setGlobalSettingsTab?.('annuaire'));
     document.getElementById('global-settings-tab-file-watcher')?.addEventListener('click', () => opts.setGlobalSettingsTab?.('file-watcher'));
-    document.getElementById('global-settings-tab-software')?.addEventListener('click', () => opts.setGlobalSettingsTab?.('software'));
+    document.getElementById('global-settings-tab-email')?.addEventListener('click', () => opts.setGlobalSettingsTab?.('email'));
     document.getElementById('global-settings-tab-views')?.addEventListener('click', () => opts.setGlobalSettingsTab?.('views'));
 
     document.getElementById('btn-global-settings-help')?.addEventListener('click', () => {

@@ -10,6 +10,14 @@
         if (event?.target?.closest?.('.tab-overflow-wrap')) return;
         setTimeout(() => actions.refreshManagedTabOverflow?.(), 0);
       });
+      document.getElementById('btn-global-feed-attach-doc')?.addEventListener('click', () => {
+        document.getElementById('global-feed-attach-doc-files')?.click();
+      });
+      document.getElementById('global-feed-attach-doc-files')?.addEventListener('change', async (event) => {
+        const files = Array.from(event?.target?.files || []);
+        if (!files.length) return;
+        await actions.importDocumentsIntoGlobalFeedEditor?.();
+      });
     }
 
     return {

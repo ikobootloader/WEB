@@ -1,5 +1,15 @@
 # Changelog - TaskMDA Team
 
+## Mise a jour incrementale - Avril 2026 (Referentiels: Generateur email)
+
+- Referentiels:
+  - ajout d un nouvel onglet `Generateur email`,
+  - ajout d un module dedie `js/taskmda-email-generator.js` pour eviter de surcharger l orchestrateur principal,
+  - templates email parametrables (to/cc/bcc, objet, contenu riche),
+  - support de variables dynamiques (`{{app_name}}`, `{{user_name}}`, `{{date}}`, `{{project_name}}`, `{{task_title}}`, `{{status}}`),
+  - actions d export pratique: copier HTML, copier texte, ouverture pre-remplie via `mailto:`,
+  - persistance locale des templates dans `appSettings` (application locale sans serveur/npm).
+
 ## Mise a jour incrementale - Avril 2026 (Fil d info / Notes / Dashboard / Activite / UX cartes)
 
 - Fil d info:

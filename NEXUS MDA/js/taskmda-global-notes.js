@@ -128,6 +128,9 @@
         if (chosenMode !== 'compact' && chosenMode !== 'full') return;
         await actions.requestDigestImportForEditor?.('global-note-content-editor', 'global-note-content', { digestView: chosenMode });
       });
+      document.getElementById('btn-global-note-attach-doc')?.addEventListener('click', () => {
+        document.getElementById('global-note-attach-doc-files')?.click();
+      });
 
       const globalNoteModal = document.getElementById('modal-global-note');
       if (globalNoteModal && globalNoteModal.dataset.globalNoteShortcutsBound !== '1') {

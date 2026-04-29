@@ -2387,6 +2387,8 @@
           roles: { label: 'Habilitations', buttonId: 'global-settings-tab-roles' },
           annuaire: { label: 'Annuaire ESMS', buttonId: 'global-settings-tab-annuaire' },
           'file-watcher': { label: 'Surveillance fichiers', buttonId: 'global-settings-tab-file-watcher' },
+          email: { label: 'Generateur email', buttonId: 'global-settings-tab-email' },
+          'quick-links': { label: 'Acces rapide web', buttonId: 'global-settings-tab-quick-links' },
           views: { label: 'Options de vues', buttonId: 'global-settings-tab-views' }
         }
       }
@@ -2401,7 +2403,7 @@
         workflow: { defaultTab: 'organigram', tabs: { map: true, organization: true, organigram: true, agents: true, processes: true, templates: true, tasks: true, kanban: true, timeline: true, procedures: true, software: true, contingency: true, analytics: true, governance: true, journal: true } },
         globalCalendar: { defaultTab: 'grid', tabs: { grid: true, year: true, list: true } },
         globalFeed: { defaultTab: 'all', tabs: { all: true, mentions: true, auto: true, manual: true, 'project-refs': true, 'task-refs': true } },
-        globalSettings: { defaultTab: 'branding', tabs: { branding: true, themes: true, groups: true, roles: true, annuaire: true, 'file-watcher': true, views: true } }
+        globalSettings: { defaultTab: 'branding', tabs: { branding: true, themes: true, groups: true, roles: true, annuaire: true, 'file-watcher': true, email: true, 'quick-links': true, views: true } }
       },
       ui: {
         workflowActionButtons: 'icon',
@@ -2410,6 +2412,8 @@
         tabIcons: true,
         dashboardHeroShortContentMaxChars: 520,
         workflowActionButtonsShape: 'rect',
+        feedSummaryAutoEnabled: true,
+        feedSummaryWordCount: 300,
         workspaceWideSections: {
           dashboard: false,
           projects: true,
@@ -2452,7 +2456,7 @@
       workflow: ['organigram', 'organization', 'processes', 'tasks'],
       globalCalendar: ['grid', 'year'],
       globalFeed: ['all', 'mentions'],
-      globalSettings: ['branding', 'themes', 'groups', 'roles', 'file-watcher', 'views']
+      globalSettings: ['branding', 'themes', 'groups', 'roles', 'file-watcher', 'email', 'quick-links', 'views']
     };
 
     const WORKSPACE_WIDTH_SECTION_META = Object.freeze({
@@ -2503,6 +2507,12 @@
       return Math.min(4000, Math.max(80, parsed));
     }
 
+    function normalizeFeedSummaryWordCount(rawValue) {
+      const parsed = Number.parseInt(String(rawValue ?? ''), 10);
+      if (!Number.isFinite(parsed)) return 300;
+      return Math.min(1200, Math.max(40, parsed));
+    }
+
     function normalizeWorkspaceWideSections(rawSections = {}) {
       const normalized = {};
       Object.keys(WORKSPACE_WIDTH_SECTION_META).forEach((sectionKey) => {
@@ -2517,6 +2527,14 @@
 
     function getWorkflowActionButtonsShape() {
       return normalizeWorkflowActionButtonsShape(viewOptions?.ui?.workflowActionButtonsShape);
+    }
+
+    function getFeedSummaryWordCount() {
+      return normalizeFeedSummaryWordCount(viewOptions?.ui?.feedSummaryWordCount);
+    }
+
+    function isFeedSummaryAutoEnabled() {
+      return viewOptions?.ui?.feedSummaryAutoEnabled !== false;
     }
 
     function getDashboardHeroShortContentMaxChars() {
@@ -3528,6 +3546,8 @@
         tabIcons: raw?.ui?.tabIcons !== false,
         dashboardHeroShortContentMaxChars: normalizeDashboardHeroShortContentMaxChars(raw?.ui?.dashboardHeroShortContentMaxChars ?? defaults?.ui?.dashboardHeroShortContentMaxChars),
         workflowActionButtonsShape: normalizeWorkflowActionButtonsShape(raw?.ui?.workflowActionButtonsShape || defaults?.ui?.workflowActionButtonsShape),
+        feedSummaryAutoEnabled: raw?.ui?.feedSummaryAutoEnabled !== false,
+        feedSummaryWordCount: normalizeFeedSummaryWordCount(raw?.ui?.feedSummaryWordCount ?? defaults?.ui?.feedSummaryWordCount),
         workspaceWideSections: normalizeWorkspaceWideSections(raw?.ui?.workspaceWideSections || defaults?.ui?.workspaceWideSections)
       };
       next.policy = {
@@ -3596,6 +3616,12 @@
 
     function isTabEnabled(sectionKey, tabKey) {
       return viewOptions?.sections?.[sectionKey]?.tabs?.[tabKey] !== false;
+    }
+
+    function isTabPinned(sectionKey, tabKey) {
+      if (sectionKey !== 'globalHub') return true;
+      if (tabKey === 'settings') return true;
+      return viewOptions?.sections?.[sectionKey]?.pinned?.[tabKey] !== false;
     }
 
     function isViewOverridesLocked() {
@@ -3861,9 +3887,20 @@
         Object.entries(sectionMeta.tabs).forEach(([tabKey, tabMeta]) => {
           const btn = document.getElementById(tabMeta.buttonId);
           if (!btn) return;
-          btn.classList.toggle('hidden', !isTabEnabled(sectionKey, tabKey));
+          // Le pinning ne concerne que la barre laterale transverse (globalHub).
+          // Les onglets internes restent accessibles tant qu'ils sont actives.
+          const visible = sectionKey === 'globalHub'
+            ? (isTabEnabled(sectionKey, tabKey) && isTabPinned(sectionKey, tabKey))
+            : isTabEnabled(sectionKey, tabKey);
+          btn.classList.toggle('hidden', !visible);
         });
       });
+      const workflowMainLink = document.getElementById('nav-workflow');
+      const workflowToggleBtn = document.getElementById('nav-workflow-subnav-toggle');
+      const workflowSubnavPanel = document.getElementById('workflow-sidebar-subnav');
+      const workflowVisible = workflowMainLink && !workflowMainLink.classList.contains('hidden');
+      if (workflowToggleBtn) workflowToggleBtn.classList.toggle('hidden', !workflowVisible);
+      if (!workflowVisible) workflowSubnavPanel?.classList.add('hidden');
 
       if (!isTabEnabled('globalTasks', globalTasksViewMode)) {
         globalTasksViewMode = getDefaultTab('globalTasks') || 'cards';
@@ -5727,6 +5764,179 @@
       await renderGlobalSettings();
     }
 
+    const QUICK_ACCESS_LINKS_SETTINGS_KEY = 'quickAccessLinks';
+
+    function normalizeQuickAccessUrl(rawUrl) {
+      let value = String(rawUrl || '').trim();
+      if (!value) return '';
+      if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(value)) {
+        value = `https://${value}`;
+      }
+      try {
+        const parsed = new URL(value);
+        if (!/^https?:$/i.test(parsed.protocol)) return '';
+        return parsed.toString();
+      } catch (_) {
+        return '';
+      }
+    }
+
+    function normalizeQuickAccessLinkEntry(raw, fallbackIndex = 0) {
+      const row = raw && typeof raw === 'object' ? raw : {};
+      const name = String(row.name || row.title || '').trim();
+      const url = normalizeQuickAccessUrl(row.url || row.href || '');
+      if (!name || !url) return null;
+      return {
+        id: String(row.id || `quick-link-${fallbackIndex}-${uuidv4()}`),
+        name: name.slice(0, 120),
+        url: url.slice(0, 500),
+        description: String(row.description || '').trim().slice(0, 240),
+        createdAt: Number(row.createdAt || Date.now()) || Date.now(),
+        updatedAt: Number(row.updatedAt || Date.now()) || Date.now()
+      };
+    }
+
+    function normalizeQuickAccessLinks(rawList) {
+      const list = Array.isArray(rawList) ? rawList : [];
+      const seen = new Set();
+      const rows = [];
+      list.forEach((item, index) => {
+        const normalized = normalizeQuickAccessLinkEntry(item, index);
+        if (!normalized) return;
+        if (seen.has(normalized.id)) normalized.id = `quick-link-${index}-${uuidv4()}`;
+        seen.add(normalized.id);
+        rows.push(normalized);
+      });
+      return rows.sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
+    }
+
+    async function getQuickAccessLinks() {
+      const row = await getDecrypted('appSettings', QUICK_ACCESS_LINKS_SETTINGS_KEY, 'key');
+      return normalizeQuickAccessLinks(row?.value);
+    }
+
+    async function saveQuickAccessLinks(list) {
+      const value = normalizeQuickAccessLinks(list);
+      await putEncrypted('appSettings', {
+        key: QUICK_ACCESS_LINKS_SETTINGS_KEY,
+        value,
+        updatedAt: Date.now()
+      }, 'key');
+      return value;
+    }
+
+    function resetQuickAccessLinkForm() {
+      quickLinkEditingId = '';
+      const nameInput = document.getElementById('quick-link-name-input');
+      const urlInput = document.getElementById('quick-link-url-input');
+      const descriptionInput = document.getElementById('quick-link-description-input');
+      const saveBtn = document.getElementById('btn-quick-link-save');
+      if (nameInput) nameInput.value = '';
+      if (urlInput) urlInput.value = '';
+      if (descriptionInput) descriptionInput.value = '';
+      if (saveBtn) saveBtn.textContent = 'Ajouter';
+    }
+
+    async function saveQuickAccessLinkFromForm() {
+      const nameInput = document.getElementById('quick-link-name-input');
+      const urlInput = document.getElementById('quick-link-url-input');
+      const descriptionInput = document.getElementById('quick-link-description-input');
+      const name = String(nameInput?.value || '').trim();
+      const url = normalizeQuickAccessUrl(urlInput?.value || '');
+      const description = String(descriptionInput?.value || '').trim();
+      if (!name) {
+        showToast('Nom du raccourci requis');
+        nameInput?.focus();
+        return;
+      }
+      if (!url) {
+        showToast('URL invalide (utiliser http/https)');
+        urlInput?.focus();
+        return;
+      }
+      const rows = await getQuickAccessLinks();
+      const now = Date.now();
+      if (quickLinkEditingId) {
+        const index = rows.findIndex((row) => String(row.id) === String(quickLinkEditingId));
+        if (index >= 0) {
+          rows[index] = {
+            ...rows[index],
+            name: name.slice(0, 120),
+            url: url.slice(0, 500),
+            description: description.slice(0, 240),
+            updatedAt: now
+          };
+        } else {
+          rows.unshift({
+            id: `quick-link-${uuidv4()}`,
+            name: name.slice(0, 120),
+            url: url.slice(0, 500),
+            description: description.slice(0, 240),
+            createdAt: now,
+            updatedAt: now
+          });
+        }
+      } else {
+        rows.unshift({
+          id: `quick-link-${uuidv4()}`,
+          name: name.slice(0, 120),
+          url: url.slice(0, 500),
+          description: description.slice(0, 240),
+          createdAt: now,
+          updatedAt: now
+        });
+      }
+      await saveQuickAccessLinks(rows);
+      resetQuickAccessLinkForm();
+      showToast('Raccourci enregistré');
+      await renderGlobalSettings();
+    }
+
+    async function editQuickAccessLink(linkId) {
+      const id = String(linkId || '').trim();
+      if (!id) return;
+      const rows = await getQuickAccessLinks();
+      const row = rows.find((item) => String(item.id) === id);
+      if (!row) return;
+      quickLinkEditingId = row.id;
+      const nameInput = document.getElementById('quick-link-name-input');
+      const urlInput = document.getElementById('quick-link-url-input');
+      const descriptionInput = document.getElementById('quick-link-description-input');
+      const saveBtn = document.getElementById('btn-quick-link-save');
+      if (nameInput) nameInput.value = row.name || '';
+      if (urlInput) urlInput.value = row.url || '';
+      if (descriptionInput) descriptionInput.value = row.description || '';
+      if (saveBtn) saveBtn.textContent = 'Mettre à jour';
+      nameInput?.focus();
+    }
+
+    async function deleteQuickAccessLink(linkId) {
+      const id = String(linkId || '').trim();
+      if (!id) return;
+      const rows = await getQuickAccessLinks();
+      const row = rows.find((item) => String(item.id) === id);
+      if (!row) return;
+      if (!confirm(`Supprimer le raccourci "${row.name}" ?`)) return;
+      const next = rows.filter((item) => String(item.id) !== id);
+      await saveQuickAccessLinks(next);
+      if (quickLinkEditingId === id) resetQuickAccessLinkForm();
+      showToast('Raccourci supprimé');
+      await renderGlobalSettings();
+    }
+
+    function openQuickAccessLink(url) {
+      const normalized = normalizeQuickAccessUrl(url || '');
+      if (!normalized) {
+        showToast('URL invalide');
+        return;
+      }
+      window.open(normalized, '_blank', 'noopener,noreferrer');
+    }
+
+    window.editQuickAccessLink = editQuickAccessLink;
+    window.deleteQuickAccessLink = deleteQuickAccessLink;
+    window.openQuickAccessLink = openQuickAccessLink;
+
     async function renderGlobalSettings() {
       await refreshGlobalTaxonomyCache();
       const repairedGroupsCount = await repairGlobalGroupsMembersFromProjects();
@@ -5737,6 +5947,12 @@
       const themesList = document.getElementById('global-themes-admin-list');
       const groupsList = document.getElementById('global-groups-admin-list');
       const rolesList = document.getElementById('global-roles-admin-list');
+      const quickLinksList = document.getElementById('quick-links-admin-list');
+      const quickLinkNameInput = document.getElementById('quick-link-name-input');
+      const quickLinkUrlInput = document.getElementById('quick-link-url-input');
+      const quickLinkDescriptionInput = document.getElementById('quick-link-description-input');
+      const quickLinkSaveBtn = document.getElementById('btn-quick-link-save');
+      const quickLinkResetBtn = document.getElementById('btn-quick-link-reset');
       const roleNameInput = document.getElementById('global-role-name-input');
       const roleBaseInput = document.getElementById('global-role-base-input');
       const roleAddBtn = document.getElementById('btn-global-role-add');
@@ -5768,7 +5984,7 @@
       const viaAnnuaireLivePrevBtn = document.getElementById('btn-via-annuaire-live-prev');
       const viaAnnuaireLiveNextBtn = document.getElementById('btn-via-annuaire-live-next');
       renderLocalResetInfo();
-      if (!themesList || !groupsList || !rolesList) return;
+      if (!themesList || !groupsList || !rolesList || !quickLinksList) return;
       if (!appBranding) {
         await loadAppBrandingConfig({ ensureRemote: false });
       }
@@ -5906,6 +6122,9 @@
         .filter(item => matchesQuery([item?.name, item?.description], globalSearchQuery));
       const filteredRoles = getProjectRoleCatalog()
         .filter(item => matchesQuery([item?.label, item?.baseRole, item?.roleKey], globalSearchQuery));
+      const quickLinks = await getQuickAccessLinks();
+      const filteredQuickLinks = quickLinks
+        .filter((item) => matchesQuery([item?.name, item?.url, item?.description], globalSearchQuery));
 
       if (roleBaseInput) {
         roleBaseInput.innerHTML = ['owner', 'manager', 'member'].map((baseRole) => `
@@ -6004,6 +6223,44 @@
             </div>
           `).join('');
 
+      if (quickLinkNameInput) quickLinkNameInput.disabled = !canManageBranding;
+      if (quickLinkUrlInput) quickLinkUrlInput.disabled = !canManageBranding;
+      if (quickLinkDescriptionInput) quickLinkDescriptionInput.disabled = !canManageBranding;
+      if (quickLinkSaveBtn) quickLinkSaveBtn.disabled = !canManageBranding;
+      if (quickLinkResetBtn) quickLinkResetBtn.disabled = !canManageBranding;
+
+      quickLinksList.innerHTML = filteredQuickLinks.length === 0
+        ? buildWorkspaceEmptyState({
+            icon: 'public',
+            title: 'Aucun raccourci web',
+            text: 'Ajoutez un accès rapide vers vos sites internet utiles au quotidien.',
+            ctaLabel: canManageBranding ? 'Ajouter un raccourci' : '',
+            ctaOnclick: canManageBranding ? "focusElementById('quick-link-name-input')" : '',
+            compact: true
+          })
+        : filteredQuickLinks.map((item) => `
+            <div class="rounded-lg border border-slate-200 bg-white p-3">
+              <div class="flex items-start justify-between gap-2">
+                <div class="min-w-0">
+                  <p class="text-sm font-semibold text-slate-800 truncate">${escapeHtml(item.name)}</p>
+                  <p class="text-xs text-slate-500 break-all">${escapeHtml(item.url)}</p>
+                  ${item.description ? `<p class="text-xs text-slate-600 mt-1">${escapeHtml(item.description)}</p>` : ''}
+                </div>
+                <div class="flex items-center gap-1 shrink-0">
+                  <button onclick="openQuickAccessLink(decodeURIComponent('${encodeURIComponent(item.url)}'))" class="task-action-btn task-action-btn-subtle" data-action-kind="open">Ouvrir</button>
+                  ${canManageBranding
+                    ? `<button onclick="editQuickAccessLink('${escapeHtml(item.id)}')" class="task-action-btn task-action-btn-subtle" data-action-kind="edit">Modifier</button>
+                       <button onclick="deleteQuickAccessLink('${escapeHtml(item.id)}')" class="task-action-btn task-action-btn-danger" data-action-kind="danger">Supprimer</button>`
+                    : '<button class="task-action-btn task-action-btn-subtle opacity-50 cursor-not-allowed" data-action-kind="edit" disabled>Modifier</button>'
+                  }
+                </div>
+              </div>
+            </div>
+          `).join('');
+      if (quickLinkEditingId && !quickLinks.some((item) => String(item.id) === String(quickLinkEditingId))) {
+        resetQuickAccessLinkForm();
+      }
+
       bindGlobalGroupMemberSearchInputs();
       bindGlobalGroupMemberSelectsToggle();
       
@@ -6018,9 +6275,14 @@
       const workflowActionsShapeSelect = document.getElementById('view-option-workflow-actions-shape');
       const dashboardHeroShortCharsInput = document.getElementById('view-option-dashboard-hero-short-chars');
       const dashboardHeroShortCharsCurrent = document.getElementById('view-option-dashboard-hero-short-chars-current');
+      const feedSummaryEnabledToggle = document.getElementById('view-option-feed-summary-enabled');
+      const feedSummaryWordsInput = document.getElementById('view-option-feed-summary-words');
+      const feedSummaryWordsCurrent = document.getElementById('view-option-feed-summary-words-current');
       const taskAutoArchiveSettings = await getTaskAutoArchiveSettings();
       const taskAutoArchiveMonths = taskAutoArchiveSettings.months;
       const dashboardHeroShortChars = getDashboardHeroShortContentMaxChars();
+      const feedSummaryEnabled = isFeedSummaryAutoEnabled();
+      const feedSummaryWords = getFeedSummaryWordCount();
       renderViewOptionsMatrix(canManageBranding);
       if (workflowActionsModeSelect) {
         workflowActionsModeSelect.value = getWorkflowActionButtonsMode();
@@ -6040,6 +6302,19 @@
       }
       if (dashboardHeroShortCharsCurrent) {
         dashboardHeroShortCharsCurrent.textContent = `Seuil actuel: ${dashboardHeroShortChars} caractères`;
+      }
+      if (feedSummaryEnabledToggle) {
+        feedSummaryEnabledToggle.checked = feedSummaryEnabled;
+        feedSummaryEnabledToggle.disabled = !canManageBranding;
+      }
+      if (feedSummaryWordsInput) {
+        feedSummaryWordsInput.value = String(feedSummaryWords);
+        feedSummaryWordsInput.disabled = !canManageBranding || !feedSummaryEnabled;
+      }
+      if (feedSummaryWordsCurrent) {
+        feedSummaryWordsCurrent.textContent = feedSummaryEnabled
+          ? `Longueur actuelle: ${feedSummaryWords} mots`
+          : 'Résumé auto désactivé';
       }
       applyWorkflowGroupTabsVisibility();
       if (profanityModeSelect) {
@@ -8874,6 +9149,23 @@
       }
     }
 
+    function buildFeedAutoSummaryFromText(rawText, maxWords = 300) {
+      const text = String(rawText || '').replace(/\s+/g, ' ').trim();
+      if (!text) return '';
+      const safeMaxWords = normalizeFeedSummaryWordCount(maxWords);
+      const words = text.split(' ').filter(Boolean);
+      if (words.length <= safeMaxWords) return text;
+      return `${words.slice(0, safeMaxWords).join(' ')}...`;
+    }
+
+    function computeGlobalFeedPostAutoSummary(post, overrideWords = null) {
+      const words = normalizeFeedSummaryWordCount(
+        overrideWords == null ? getFeedSummaryWordCount() : overrideWords
+      );
+      const plainText = getProjectDescriptionPlainText(post?.content || '');
+      return buildFeedAutoSummaryFromText(plainText, words);
+    }
+
     async function renderDashboardNews() {
       const panel = document.getElementById('dashboard-news');
       const list = document.getElementById('dashboard-news-list');
@@ -8941,9 +9233,14 @@
         if (!subtitleSrc) {
           subtitleSrc = (post.refs || []).map((ref) => ref?.label).filter(Boolean).slice(0, 2).join(' • ');
         }
-        const subtitle = stripMentionMarkupForDashboard(subtitleSrc);
+        const summaryForDashboard = isFeedSummaryAutoEnabled()
+          ? stripMentionMarkupForDashboard(computeGlobalFeedPostAutoSummary(post))
+          : '';
+        const subtitle = summaryForDashboard || stripMentionMarkupForDashboard(subtitleSrc);
         
         const imgSrc = extractFirstImageSrcFromHtml(post.content);
+        const postTitle = String(post?.title || '').trim();
+        const heroTitleText = postTitle || headline || 'Mise à jour';
         const useFullHeroContent = isHero && shouldRenderDashboardHeroFullContent(plainText, richContentHtml, !!imgSrc);
         let imgHtml = '';
         if (imgSrc) {
@@ -8951,7 +9248,7 @@
           imgHtml = `<img src="${escapeHtml(imgSrc)}" class="dashboard-news-image" alt="" loading="lazy">`;
         } else if (isHero && !useFullHeroContent) {
           // Visuel par défaut pour la Une quand il n'y a pas d'image
-          const firstLetter = headline.charAt(0).toUpperCase() || 'A';
+          const firstLetter = heroTitleText.charAt(0).toUpperCase() || 'A';
           const gradients = [
             'linear-gradient(135deg, #1e3a8a 0%, #3730a3 100%)',
             'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
@@ -8969,7 +9266,7 @@
           imgHtml = `
             <div class="dashboard-news-hero-default" style="background: ${gradient}">
               <div class="dashboard-news-hero-letter">${escapeHtml(firstLetter)}</div>
-              <div class="dashboard-news-hero-title">${escapeHtml(headline)}</div>
+              <div class="dashboard-news-hero-title">${escapeHtml(heroTitleText)}</div>
             </div>
           `;
         }
@@ -9620,8 +9917,9 @@
     let workspaceMode = 'dashboard'; // dashboard | project | global
     let globalWorkspaceView = 'tasks'; // tasks | workflow | calendar | docs | notes | messages | feed | rgpd | settings
     let workflowRuntime = null;
-    let globalSettingsTab = localStorage.getItem('taskmda_global_settings_tab') || 'branding'; // branding | themes | groups | roles | annuaire | file-watcher | views
+    let globalSettingsTab = localStorage.getItem('taskmda_global_settings_tab') || 'branding'; // branding | themes | groups | roles | annuaire | file-watcher | email | quick-links | views
     let globalSettingsHelpOpen = false;
+    let quickLinkEditingId = '';
     let globalDocsUploadCollapsed = true;
     let projectDetailMode = 'work'; // work | settings
     let projectSettingsTab = 'members'; // members | collab | permissions
@@ -9664,7 +9962,9 @@
     let globalNotesSearchQuery = '';
     let globalNotesScopeFilter = 'all';
     let globalNotesSortMode = 'recent';
+    let globalNotesInlineDocsMigrationDone = false;
     let globalNotesTabMode = 'all';
+    let globalNotesThemeFilter = 'all';
     let globalNotesPage = 1;
     let globalNotesBulkSelectionMode = false;
     let selectedGlobalNoteIdsForBulkDelete = new Set();
@@ -9809,6 +10109,7 @@
     const GLOBAL_MESSAGE_HIDDEN_GROUPS_STORAGE_KEY = 'taskmda_global_hidden_group_channels_v1';
     const GLOBAL_MESSAGE_HIDDEN_PEERS_STORAGE_KEY = 'taskmda_global_hidden_peer_conversations_v1';
     const GLOBAL_FEED_DIGEST_VIEW_STORAGE_KEY = 'taskmda_global_feed_digest_view_v1';
+    const GLOBAL_NOTES_INLINE_DOCS_MIGRATION_KEY = 'taskmda_global_notes_inline_docs_migrated_v1';
     const PROJECT_OVERVIEW_COLLAPSED_STORAGE_KEY = 'taskmda_project_overview_collapsed_v1';
     let globalMessagePeerUserId = GLOBAL_MESSAGE_BROADCAST_TARGET;
     let globalMessageActiveGroupConversationId = '';
@@ -10857,17 +11158,23 @@
       const referenceTs = Number(options.referenceTs || Date.now()) || Date.now();
       const referenceDate = startOfDay(new Date(referenceTs));
       const referenceKey = toYmd(referenceDate);
-      const fromKey = taskDueDateKey(task) || referenceKey;
+      const currentDueKey = taskDueDateKey(task);
+      const fromKey = currentDueKey || referenceKey;
 
       if (typeof recurrenceApi.getNextOccurrence === 'function') {
         const next = String(recurrenceApi.getNextOccurrence(fromKey, normalized) || '').trim();
-        if (/^\d{4}-\d{2}-\d{2}$/.test(next)) return next;
+        if (/^\d{4}-\d{2}-\d{2}$/.test(next)) {
+          if (!currentDueKey || next > currentDueKey) return next;
+          const strictNext = String(recurrenceApi.getNextOccurrence(currentDueKey, normalized) || '').trim();
+          if (/^\d{4}-\d{2}-\d{2}$/.test(strictNext) && strictNext > currentDueKey) return strictNext;
+        }
       }
 
       if (typeof recurrenceApi.generateOccurrenceDates === 'function') {
         const occurrences = recurrenceApi.generateOccurrenceDates(normalized);
         if (Array.isArray(occurrences)) {
-          const next = occurrences.find((dateKey) => String(dateKey || '').trim() > fromKey);
+          const threshold = currentDueKey || fromKey;
+          const next = occurrences.find((dateKey) => String(dateKey || '').trim() > threshold);
           if (next && /^\d{4}-\d{2}-\d{2}$/.test(String(next))) return String(next);
         }
       }
@@ -11575,9 +11882,17 @@ async function setProjectsPage(page) {
           title: 'Aide: Surveillance fichiers',
           text: "Configurez des observateurs sur des dossiers pour détecter automatiquement les créations, modifications et suppressions de fichiers, avec notifications."
         },
+        email: {
+          title: 'Aide: Generateur email',
+          text: "Créez des templates d'emails avec mise en forme, variables dynamiques et actions rapides (copie HTML/texte, ouverture mailto)."
+        },
+        'quick-links': {
+          title: 'Aide: Acces rapide web',
+          text: "Constituez une liste locale de raccourcis internet (outils, portails, documentation) accessibles en un clic depuis Référentiels."
+        },
         views: {
           title: 'Aide: Options de vues',
-          text: "Administrez les sous-onglets visibles pour chaque rubrique et fixez un onglet par défaut. Les vues désactivées basculent automatiquement vers une vue autorisée."
+          text: "Administrez les sous-onglets visibles pour chaque rubrique et fixez un onglet par défaut. Épinglé = visible dans la barre latérale, non épinglé = envoyé dans « Plus (x) ». Les vues désactivées basculent automatiquement vers une vue autorisée."
         }
       };
       return helpByTab[tabKey] || helpByTab.branding;
@@ -11600,11 +11915,17 @@ async function setProjectsPage(page) {
       btn.setAttribute('aria-expanded', globalSettingsHelpOpen ? 'true' : 'false');
     }
 
-    function applyGlobalSettingsTabView() {
+    function applyGlobalSettingsTabView(forcedTabKey = null) {
+      const forced = String(forcedTabKey || '').trim();
       const allowed = new Set(Object.keys(VIEW_SECTION_META.globalSettings?.tabs || {}));
-      if (!allowed.has(String(globalSettingsTab || '')) || !isTabEnabled('globalSettings', globalSettingsTab)) {
-        globalSettingsTab = getDefaultTab('globalSettings') || 'branding';
+      let activeTab = String(globalSettingsTab || '').trim();
+      if (forced && allowed.has(forced)) {
+        activeTab = forced;
       }
+      if (!allowed.has(activeTab) || !isTabEnabled('globalSettings', activeTab)) {
+        activeTab = getDefaultTab('globalSettings') || 'branding';
+      }
+      globalSettingsTab = activeTab;
       const tabButtons = {
         branding: document.getElementById('global-settings-tab-branding'),
         themes: document.getElementById('global-settings-tab-themes'),
@@ -11612,12 +11933,14 @@ async function setProjectsPage(page) {
         roles: document.getElementById('global-settings-tab-roles'),
         annuaire: document.getElementById('global-settings-tab-annuaire'),
         'file-watcher': document.getElementById('global-settings-tab-file-watcher'),
+        email: document.getElementById('global-settings-tab-email'),
+        'quick-links': document.getElementById('global-settings-tab-quick-links'),
         views: document.getElementById('global-settings-tab-views')
       };
       Object.entries(tabButtons).forEach(([key, btn]) => {
         if (!btn) return;
         btn.classList.toggle('hidden', !isTabEnabled('globalSettings', key));
-        const active = key === globalSettingsTab;
+        const active = key === activeTab;
         btn.classList.toggle('view-tab-active', active);
         btn.setAttribute('aria-selected', active ? 'true' : 'false');
       });
@@ -11629,16 +11952,25 @@ async function setProjectsPage(page) {
         roles: ['.global-settings-card-roles'],
         annuaire: ['.global-settings-card-annuaire'],
         'file-watcher': ['.global-settings-card-file-watcher'],
-        views: ['.global-settings-card-views-wrap', '.global-settings-card-views', '.global-settings-card-software-tips']
+        email: ['.global-settings-card-email'],
+        'quick-links': ['.global-settings-card-quick-links'],
+        views: ['.global-settings-card-views-wrap']
       };
       const globalSettingsSection = document.getElementById('global-settings-section');
       Object.entries(panelsByTab).forEach(([tabKey, selectors]) => {
         (selectors || []).forEach((selector) => {
           const nodes = document.querySelectorAll(`#global-settings-section ${selector}`);
-          nodes.forEach((node) => node.classList.toggle('hidden', tabKey !== globalSettingsTab));
+          nodes.forEach((node) => node.classList.toggle('hidden', tabKey !== activeTab));
         });
       });
       globalSettingsSection?.classList.toggle('software-tab-active', false);
+      if (activeTab === 'views') {
+        const viewsWrap = globalSettingsSection?.querySelector('.global-settings-card-views-wrap');
+        viewsWrap?.classList?.remove('hidden');
+        viewsWrap?.querySelector('.global-settings-card-views')?.classList?.remove('hidden');
+        viewsWrap?.querySelector('.global-settings-card-software-tips')?.classList?.remove('hidden');
+        renderViewOptionsMatrix(isAppAdmin());
+      }
       renderGlobalSettingsHelpBox();
       refreshManagedTabOverflow();
     }
@@ -11647,15 +11979,23 @@ async function setProjectsPage(page) {
       const requested = String(tabKey || '').trim();
       const allowed = new Set(Object.keys(VIEW_SECTION_META.globalSettings?.tabs || {}));
       let next = allowed.has(requested) ? requested : 'branding';
-      next = resolveViewWithLock('globalSettings', next, 'branding');
       if (!isTabEnabled('globalSettings', next)) {
         next = getDefaultTab('globalSettings') || 'branding';
       }
       globalSettingsTab = next;
       localStorage.setItem('taskmda_global_settings_tab', next);
-      applyGlobalSettingsTabView();
+      applyGlobalSettingsTabView(next);
+      if (next === 'email') {
+        void globalEmailRuntime?.render?.();
+      }
       if (next === 'views') {
-        renderViewOptionsMatrix(isAppAdmin());
+        requestAnimationFrame(() => {
+          renderViewOptionsMatrix(isAppAdmin());
+          const matrix = document.getElementById('view-options-matrix');
+          if (!matrix || !String(matrix.innerHTML || '').trim()) {
+            renderGlobalSettings().catch(() => null);
+          }
+        });
       }
     }
 
@@ -11995,6 +12335,7 @@ async function setProjectsPage(page) {
         const raw = String(value || '').trim();
         if (!raw) return '';
         const lower = raw.toLowerCase();
+        if (raw === '#') return raw;
         if (/^#[a-z0-9][a-z0-9:_-]{0,120}$/i.test(raw)) return raw;
         if (lower.startsWith('http://') || lower.startsWith('https://') || lower.startsWith('mailto:')) return raw;
         return '';
@@ -12070,6 +12411,16 @@ async function setProjectsPage(page) {
               out.setAttribute('target', '_blank');
               out.setAttribute('rel', 'noopener noreferrer');
             }
+          }
+          const openDocRef = String(node.getAttribute('data-open-doc-ref') || '').trim();
+          if (openDocRef) out.setAttribute('data-open-doc-ref', openDocRef);
+          const downloadDocRef = String(node.getAttribute('data-download-doc-ref') || '').trim();
+          if (downloadDocRef) out.setAttribute('data-download-doc-ref', downloadDocRef);
+          const docId = String(node.getAttribute('data-doc-id') || '').trim();
+          if (docId) out.setAttribute('data-doc-id', docId);
+          const cls = String(node.getAttribute('class') || '').split(/\s+/).filter(Boolean);
+          if (cls.includes('workspace-action-inline')) {
+            out.setAttribute('class', 'workspace-action-inline');
           }
         } else if (tag === 'img') {
           const src = safeImageSrc(node.getAttribute('src'));
@@ -13074,8 +13425,15 @@ async function setProjectsPage(page) {
       if (!modal || modal.classList.contains('hidden')) return;
       hideProjectNoteSelectionMenu();
       closeNoteSelectionTaskTargetModal();
-      modal.classList.add('hidden');
-      document.body.classList.remove('overflow-hidden');
+      const exportDropdown = document.getElementById('project-note-read-export-dropdown');
+      const exportBtn = document.getElementById('btn-project-note-read-export-menu');
+      if (exportDropdown) exportDropdown.classList.add('hidden');
+      if (exportBtn) exportBtn.setAttribute('aria-expanded', 'false');
+      window.TaskMDANotesShared?.closeModal?.('modal-project-note-read');
+      if (!window.TaskMDANotesShared?.closeModal) {
+        modal.classList.add('hidden');
+        document.body.classList.remove('overflow-hidden');
+      }
       projectNoteReadModalNoteId = '';
       const focusBack = projectNoteReadModalLastFocusedElement;
       projectNoteReadModalLastFocusedElement = null;
@@ -13087,6 +13445,7 @@ async function setProjectsPage(page) {
     }
 
     function openProjectNoteReadModal(noteId) {
+      const notesShared = window.TaskMDANotesShared;
       const modal = document.getElementById('modal-project-note-read');
       if (!modal || !currentProjectState?.project) return;
       const nid = String(noteId || '').trim();
@@ -13122,32 +13481,32 @@ async function setProjectsPage(page) {
       const editBtn = document.getElementById('btn-project-note-read-edit');
       const deleteBtn = document.getElementById('btn-project-note-read-delete');
 
-      if (titleEl) titleEl.textContent = String(note.title || 'Note sans titre');
-      if (metaEl) metaEl.textContent = `${authorName} • ${new Date(Number(note.createdAt || Date.now())).toLocaleString('fr-FR')}`;
-      if (badgesEl) {
-        const badges = [];
-        if (Number(note.archivedAt || 0) > 0) badges.push('<span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-slate-200 text-slate-700 font-semibold">Archivee</span>');
-        if (Number(note.pinnedAt || 0) > 0) badges.push('<span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-amber-100 text-amber-700 font-semibold">Epinglee</span>');
-        if (note.shareToGlobalFeed) badges.push('<span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-blue-100 text-blue-700 font-semibold">Fil transverse</span>');
-        badgesEl.innerHTML = badges.join('');
+      const titleText = String(note.title || 'Note sans titre');
+      const metaText = `${authorName} • ${new Date(Number(note.createdAt || Date.now())).toLocaleString('fr-FR')}`;
+      if (notesShared) {
+        notesShared.setText('project-note-read-title', titleText);
+        notesShared.setText('project-note-read-meta', metaText);
+      } else {
+        if (titleEl) titleEl.textContent = titleText;
+        if (metaEl) metaEl.textContent = metaText;
       }
-      if (contentEl) {
-        const safeHtml = sanitizeRichTextHtmlPreserve(String(note.contentHtml || '').trim() || plainTextToRichHtml(String(note.content || '').trim()));
-        contentEl.dataset.noteContentEmpty = safeHtml ? '0' : '1';
-        contentEl.innerHTML = safeHtml || '<p class="text-slate-500">Aucun contenu.</p>';
-      }
-      if (tagsEl) {
-        const tags = Array.isArray(note.tags) ? note.tags.map((tag) => String(tag || '').trim()).filter(Boolean) : [];
-        tagsEl.innerHTML = tags.length
+      const badges = [];
+      if (Number(note.archivedAt || 0) > 0) badges.push({ label: 'Archivee', className: 'bg-slate-200 text-slate-700' });
+      if (Number(note.pinnedAt || 0) > 0) badges.push({ label: 'Epinglee', className: 'bg-amber-100 text-amber-700' });
+      if (note.shareToGlobalFeed) badges.push({ label: 'Fil transverse', className: 'bg-blue-100 text-blue-700' });
+      const safeHtml = sanitizeRichTextHtmlPreserve(String(note.contentHtml || '').trim() || plainTextToRichHtml(String(note.content || '').trim()));
+      if (contentEl) contentEl.dataset.noteContentEmpty = safeHtml ? '0' : '1';
+      const tags = Array.isArray(note.tags) ? note.tags.map((tag) => String(tag || '').trim()).filter(Boolean) : [];
+      const tagsHtml = notesShared?.renderTagChips
+        ? notesShared.renderTagChips(tags, 'Aucun tag')
+        : (tags.length
           ? tags.map((tag) => `<span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-slate-100 text-slate-700 font-semibold">#${escapeHtml(tag)}</span>`).join('')
-          : '<span class="text-xs text-slate-500">Aucun tag</span>';
-      }
-      if (linksEl) {
-        const tasksHtml = linkedTaskLabels.length
-          ? `<p class="text-xs text-slate-600">Liens taches: ${escapeHtml(linkedTaskLabels.join(' • '))}</p>`
-          : '<p class="text-xs text-slate-500">Aucune tache liee</p>';
-        const docsHtml = linkedDocs.length
-          ? `<div class="mt-2 flex flex-col gap-2">${linkedDocs.map((doc) => {
+          : '<span class="text-xs text-slate-500">Aucun tag</span>');
+      const tasksHtml = linkedTaskLabels.length
+        ? `<p class="text-xs text-slate-600">Liens taches: ${escapeHtml(linkedTaskLabels.join(' • '))}</p>`
+        : '<p class="text-xs text-slate-500">Aucune tache liee</p>';
+      const docsHtml = linkedDocs.length
+        ? `<div class="mt-2 flex flex-col gap-2">${linkedDocs.map((doc) => {
               const refPayload = encodeURIComponent(JSON.stringify({
                 sourceType: 'project-doc',
                 projectId: String(currentProjectId || ''),
@@ -13157,15 +13516,38 @@ async function setProjectsPage(page) {
               const canDeleteDoc = canEditProjectMeta(currentProjectState)
                 || (doc.createdBy && doc.createdBy === String(currentUser?.userId || '').trim())
                 || canManageProjectNote(note, currentProjectState);
-              return `
-                <div class="flex flex-wrap items-center gap-2">
-                  <button type="button" class="workspace-action-inline" data-action-kind="open" data-action-label="Ouvrir le document" onclick="openDocumentPreviewByRef('${refPayload}')">${escapeHtml(doc.name)}</button>
-                  ${canDeleteDoc ? `<button type="button" class="workspace-action-inline" data-action-kind="danger" data-action-label="Supprimer le document" onclick="deleteProjectNoteLinkedDocument('${escapeHtml(nid)}','${escapeHtml(doc.docId)}')">Supprimer</button>` : ''}
-                </div>
-              `;
+              if (notesShared?.renderInlineDocLinks) {
+                return notesShared.renderInlineDocLinks([{
+                  name: doc.name,
+                  previewAction: `openDocumentPreviewByRef('${refPayload}')`,
+                  downloadAction: `downloadDocumentByRef('${refPayload}')`,
+                  deleteAction: canDeleteDoc ? `deleteProjectNoteLinkedDocument('${escapeHtml(nid)}','${escapeHtml(doc.docId)}')` : ''
+                }], { previewLabel: 'Ouvrir', downloadLabel: 'Télécharger' });
+              }
+              return `<div class="flex flex-wrap items-center gap-2"><span class="inline-flex text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-700 font-semibold">${escapeHtml(doc.name)}</span></div>`;
             }).join('')}</div>`
-          : '<p class="text-xs text-slate-500 mt-1">Aucun document lié</p>';
-        linksEl.innerHTML = `${tasksHtml}${docsHtml}`;
+        : '<p class="text-xs text-slate-500 mt-1">Aucun document lié</p>';
+      const linksHtml = `${tasksHtml}${docsHtml}`;
+      if (notesShared?.applyReadModalContent) {
+        notesShared.applyReadModalContent({
+          titleId: 'project-note-read-title',
+          titleText,
+          metaId: 'project-note-read-meta',
+          metaText,
+          badgesId: 'project-note-read-badges',
+          badgesHtml: notesShared?.renderBadgeChips ? notesShared.renderBadgeChips(badges) : badges.join(''),
+          contentId: 'project-note-read-content',
+          contentHtml: safeHtml || '<p class="text-slate-500">Aucun contenu.</p>',
+          tagsId: 'project-note-read-tags',
+          tagsHtml,
+          linksId: 'project-note-read-links',
+          linksHtml
+        });
+      } else {
+        if (badgesEl) badgesEl.innerHTML = badges.join('');
+        if (contentEl) contentEl.innerHTML = safeHtml || '<p class="text-slate-500">Aucun contenu.</p>';
+        if (tagsEl) tagsEl.innerHTML = tagsHtml;
+        if (linksEl) linksEl.innerHTML = linksHtml;
       }
 
       const canManage = canManageProjectNote(note, currentProjectState);
@@ -13181,8 +13563,11 @@ async function setProjectsPage(page) {
 
       projectNoteReadModalLastFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       projectNoteReadModalNoteId = nid;
-      modal.classList.remove('hidden');
-      document.body.classList.add('overflow-hidden');
+      notesShared?.openModal?.('modal-project-note-read');
+      if (!notesShared) {
+        modal.classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
+      }
     }
 
     function hideProjectNoteSelectionMenu() {
@@ -13523,6 +13908,32 @@ async function setProjectsPage(page) {
       renderProjectNotes(currentProjectState);
     }
 
+    function renderGlobalNotesThemeTabs(notes = []) {
+      const host = document.getElementById('global-notes-theme-tabs');
+      if (!host) return;
+      const total = Array.isArray(notes) ? notes.length : 0;
+      const buckets = new Map();
+      (Array.isArray(notes) ? notes : []).forEach((note) => {
+        const label = String(note?.theme || '').trim() || 'Sans thematique';
+        const key = normalizeCatalogKey(label);
+        if (!key) return;
+        const prev = buckets.get(key);
+        if (prev) {
+          prev.count += 1;
+        } else {
+          buckets.set(key, { key, label, count: 1 });
+        }
+      });
+      const sorted = Array.from(buckets.values()).sort((a, b) => a.label.localeCompare(b.label, 'fr'));
+      const html = [
+        `<button type="button" class="project-notes-theme-tab ${globalNotesThemeFilter === 'all' ? 'is-active' : ''}" data-global-note-theme-tab="all">Toutes <span>${total}</span></button>`,
+        ...sorted.map((item) =>
+          `<button type="button" class="project-notes-theme-tab ${globalNotesThemeFilter === item.key ? 'is-active' : ''}" data-global-note-theme-tab="${escapeHtml(item.key)}">${escapeHtml(item.label)} <span>${item.count}</span></button>`
+        )
+      ].join('');
+      host.innerHTML = html;
+    }
+
     function populateProjectNoteTaskOptions(state = currentProjectState, selectedTaskId = '') {
       const select = document.getElementById('project-note-linked-task');
       if (!select) return;
@@ -13581,6 +13992,7 @@ async function setProjectsPage(page) {
     }
 
     function openProjectNoteEditor(noteId = '') {
+      const notesShared = window.TaskMDANotesShared;
       const modal = document.getElementById('modal-project-note');
       if (!modal) return;
       projectNoteModalLastFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -13604,20 +14016,36 @@ async function setProjectsPage(page) {
       const shareInput = document.getElementById('project-note-share-feed');
       const attachmentsInput = document.getElementById('project-note-attachments');
       const modalTitle = document.getElementById('project-note-modal-title');
-      if (titleInput) titleInput.value = String(note?.title || '');
+      if (notesShared?.applyEditorForm) {
+        notesShared.applyEditorForm({
+          modalTitleId: 'project-note-modal-title',
+          modalTitle: note ? 'Modifier la note' : 'Nouvelle note',
+          titleInputId: 'project-note-title',
+          title: String(note?.title || ''),
+          tagsInputId: 'project-note-tags',
+          tags: stringifyProjectNoteTags(note?.tags || []),
+          visibilityInputId: 'project-note-pinned',
+          isVisible: Number(note?.pinnedAt || 0) > 0,
+          shareInputId: 'project-note-share-feed',
+          share: note?.shareToGlobalFeed === true,
+          disabled: false
+        });
+      } else {
+        if (titleInput) titleInput.value = String(note?.title || '');
+        if (tagsInput) tagsInput.value = stringifyProjectNoteTags(note?.tags || []);
+        if (pinnedInput) pinnedInput.checked = Number(note?.pinnedAt || 0) > 0;
+        if (shareInput) shareInput.checked = note?.shareToGlobalFeed === true;
+      }
       setProjectDescriptionEditorContent(
         'project-note-content-editor',
         'project-note-content',
         String(note?.contentHtml || '').trim() || plainTextToRichHtml(String(note?.content || '').trim())
       );
-      if (tagsInput) tagsInput.value = stringifyProjectNoteTags(note?.tags || []);
-      if (pinnedInput) pinnedInput.checked = Number(note?.pinnedAt || 0) > 0;
-      if (shareInput) shareInput.checked = note?.shareToGlobalFeed === true;
       if (attachmentsInput) attachmentsInput.value = '';
       updateProjectNoteAttachmentFilesSummary();
       populateProjectNoteTaskOptions(state, Array.isArray(note?.linkedTaskIds) ? (note.linkedTaskIds[0] || '') : '');
       setProjectNoteSaveButtonLabel(note ? 'Mettre à jour la note' : 'Enregistrer la note');
-      if (modalTitle) modalTitle.textContent = note ? 'Modifier la note' : 'Nouvelle note';
+      if (!notesShared?.applyEditorForm && modalTitle) modalTitle.textContent = note ? 'Modifier la note' : 'Nouvelle note';
       applyProjectNoteModalFullscreen(false);
       ensureProjectNoteDraftAutosaveBindings();
       modal.classList.remove('hidden');
@@ -13650,6 +14078,7 @@ async function setProjectsPage(page) {
     }
 
     function closeProjectNoteEditor(options = {}) {
+      const notesShared = window.TaskMDANotesShared;
       const modal = document.getElementById('modal-project-note');
       const isOpen = !!modal && !modal.classList.contains('hidden');
       if (!isOpen) return;
@@ -13661,8 +14090,11 @@ async function setProjectsPage(page) {
           updateProjectNoteDraftStatus(`Brouillon enregistré à ${new Date().toLocaleTimeString('fr-FR')}`);
         }
       }
-      if (modal) modal.classList.add('hidden');
-      document.body.classList.remove('overflow-hidden');
+      notesShared?.closeModal?.('modal-project-note');
+      if (!notesShared && modal) {
+        modal.classList.add('hidden');
+        document.body.classList.remove('overflow-hidden');
+      }
       const titleInput = document.getElementById('project-note-title');
       const tagsInput = document.getElementById('project-note-tags');
       const pinnedInput = document.getElementById('project-note-pinned');
@@ -13674,16 +14106,34 @@ async function setProjectsPage(page) {
         clearTimeout(projectNoteDraftSaveTimer);
         projectNoteDraftSaveTimer = null;
       }
-      if (titleInput) titleInput.value = '';
+      if (notesShared?.applyEditorForm) {
+        notesShared.applyEditorForm({
+          modalTitleId: 'project-note-modal-title',
+          modalTitle: 'Nouvelle note',
+          titleInputId: 'project-note-title',
+          title: '',
+          tagsInputId: 'project-note-tags',
+          tags: '',
+          visibilityInputId: 'project-note-pinned',
+          isVisible: false,
+          shareInputId: 'project-note-share-feed',
+          share: false,
+          disabled: false
+        });
+      } else if (titleInput) {
+        titleInput.value = '';
+      }
       setProjectDescriptionEditorContent('project-note-content-editor', 'project-note-content', '');
-      if (tagsInput) tagsInput.value = '';
-      if (pinnedInput) pinnedInput.checked = false;
-      if (shareInput) shareInput.checked = false;
+      if (!notesShared?.applyEditorForm) {
+        if (tagsInput) tagsInput.value = '';
+        if (pinnedInput) pinnedInput.checked = false;
+        if (shareInput) shareInput.checked = false;
+      }
       if (taskSelect) taskSelect.value = '';
       if (attachmentsInput) attachmentsInput.value = '';
       updateProjectNoteAttachmentFilesSummary();
       setProjectNoteSaveButtonLabel('Enregistrer la note');
-      if (modalTitle) modalTitle.textContent = 'Nouvelle note';
+      if (!notesShared?.applyEditorForm && modalTitle) modalTitle.textContent = 'Nouvelle note';
       updateProjectNoteDraftStatus('Brouillon inactif');
       applyProjectNoteModalFullscreen(false);
       editingProjectNoteId = '';
@@ -15649,11 +16099,40 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     function closeGlobalNoteEditor() {
       const modal = document.getElementById('modal-global-note');
       if (!modal) return;
-      modal.classList.add('hidden');
-      document.body.classList.remove('overflow-hidden');
+      window.TaskMDANotesShared?.closeModal?.('modal-global-note');
+      if (!window.TaskMDANotesShared?.closeModal) {
+        modal.classList.add('hidden');
+        document.body.classList.remove('overflow-hidden');
+      }
       editingGlobalNoteId = '';
       const titleEl = document.getElementById('global-note-modal-title');
-      if (titleEl) titleEl.textContent = 'Nouvelle note transverse';
+      if (window.TaskMDANotesShared?.applyEditorForm) {
+        window.TaskMDANotesShared.applyEditorForm({
+          modalTitleId: 'global-note-modal-title',
+          modalTitle: 'Nouvelle note transverse',
+          titleInputId: 'global-note-title',
+          title: '',
+          themeInputId: 'global-note-theme',
+          theme: '',
+          tagsInputId: 'global-note-tags',
+          tags: '',
+          visibilityInputId: 'global-note-transverse',
+          isVisible: true,
+          shareInputId: 'global-note-share-feed',
+          share: false,
+          deleteBtnId: 'btn-global-note-delete',
+          showDelete: false,
+          saveBtnId: 'btn-global-note-save',
+          showSave: true,
+          digestBtnId: 'btn-global-note-digest',
+          showDigest: true,
+          attachBtnId: 'btn-global-note-attach-doc',
+          showAttach: true,
+          disabled: false
+        });
+      } else if (titleEl) {
+        titleEl.textContent = 'Nouvelle note transverse';
+      }
       const titleInput = document.getElementById('global-note-title');
       const themeInput = document.getElementById('global-note-theme');
       const tagsInput = document.getElementById('global-note-tags');
@@ -15662,14 +16141,21 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       const deleteBtn = document.getElementById('btn-global-note-delete');
       const saveBtn = document.getElementById('btn-global-note-save');
       const digestBtn = document.getElementById('btn-global-note-digest');
-      if (titleInput) titleInput.value = '';
-      if (themeInput) themeInput.value = '';
-      if (tagsInput) tagsInput.value = '';
-      if (transverseInput) transverseInput.checked = true;
-      if (shareInput) shareInput.checked = false;
-      if (deleteBtn) deleteBtn.classList.add('hidden');
-      if (saveBtn) saveBtn.classList.remove('hidden');
-      if (digestBtn) digestBtn.classList.remove('hidden');
+      const attachBtn = document.getElementById('btn-global-note-attach-doc');
+      const attachInput = document.getElementById('global-note-attach-doc-files');
+      if (!window.TaskMDANotesShared?.applyEditorForm) {
+        if (titleInput) titleInput.value = '';
+        if (themeInput) themeInput.value = '';
+        if (tagsInput) tagsInput.value = '';
+        if (transverseInput) transverseInput.checked = true;
+        if (shareInput) shareInput.checked = false;
+        if (deleteBtn) deleteBtn.classList.add('hidden');
+        if (saveBtn) saveBtn.classList.remove('hidden');
+        if (digestBtn) digestBtn.classList.remove('hidden');
+      }
+      if (attachInput) attachInput.value = '';
+      updateGlobalNoteAttachmentFilesSummary();
+      if (attachBtn) attachBtn.disabled = false;
       [titleInput, themeInput, tagsInput, transverseInput, shareInput].forEach((el) => {
         if (el) el.disabled = false;
       });
@@ -15681,6 +16167,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     async function openGlobalNoteEditor(noteId = '') {
       const modal = document.getElementById('modal-global-note');
       if (!modal) return;
+      const notesShared = window.TaskMDANotesShared;
       const nid = String(noteId || '').trim();
       const notes = await getAllDecrypted('globalNotes', 'noteId');
       const note = nid
@@ -15701,15 +16188,44 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       const deleteBtn = document.getElementById('btn-global-note-delete');
       const saveBtn = document.getElementById('btn-global-note-save');
       const digestBtn = document.getElementById('btn-global-note-digest');
-      if (titleEl) titleEl.textContent = note ? (canManage ? 'Modifier la note' : 'Lecture de la note') : 'Nouvelle note transverse';
-      if (titleInput) titleInput.value = String(note?.title || '');
-      if (themeInput) themeInput.value = String(note?.theme || '');
-      if (tagsInput) tagsInput.value = stringifyProjectNoteTags(note?.tags || []);
-      if (transverseInput) transverseInput.checked = normalizeGlobalNoteVisibility(note?.visibility || 'transverse') === 'transverse';
-      if (shareInput) shareInput.checked = note?.shareToGlobalFeed === true;
+      const attachBtn = document.getElementById('btn-global-note-attach-doc');
+      if (notesShared?.applyEditorForm) {
+        notesShared.applyEditorForm({
+          modalTitleId: 'global-note-modal-title',
+          modalTitle: note ? (canManage ? 'Modifier la note' : 'Lecture de la note') : 'Nouvelle note transverse',
+          titleInputId: 'global-note-title',
+          title: String(note?.title || ''),
+          themeInputId: 'global-note-theme',
+          theme: String(note?.theme || ''),
+          tagsInputId: 'global-note-tags',
+          tags: stringifyProjectNoteTags(note?.tags || []),
+          visibilityInputId: 'global-note-transverse',
+          isVisible: normalizeGlobalNoteVisibility(note?.visibility || 'transverse') === 'transverse',
+          shareInputId: 'global-note-share-feed',
+          share: note?.shareToGlobalFeed === true,
+          deleteBtnId: 'btn-global-note-delete',
+          showDelete: !!note && canManage,
+          saveBtnId: 'btn-global-note-save',
+          showSave: canManage,
+          digestBtnId: 'btn-global-note-digest',
+          showDigest: canManage,
+          attachBtnId: 'btn-global-note-attach-doc',
+          showAttach: canManage,
+          disabled: !canManage
+        });
+      } else {
+        if (titleEl) titleEl.textContent = note ? (canManage ? 'Modifier la note' : 'Lecture de la note') : 'Nouvelle note transverse';
+        if (titleInput) titleInput.value = String(note?.title || '');
+        if (themeInput) themeInput.value = String(note?.theme || '');
+        if (tagsInput) tagsInput.value = stringifyProjectNoteTags(note?.tags || []);
+        if (transverseInput) transverseInput.checked = normalizeGlobalNoteVisibility(note?.visibility || 'transverse') === 'transverse';
+        if (shareInput) shareInput.checked = note?.shareToGlobalFeed === true;
+      }
       if (deleteBtn) deleteBtn.classList.toggle('hidden', !note || !canManage);
       if (saveBtn) saveBtn.classList.toggle('hidden', !canManage);
       if (digestBtn) digestBtn.classList.toggle('hidden', !canManage);
+      if (attachBtn) attachBtn.classList.toggle('hidden', !canManage);
+      if (attachBtn) attachBtn.disabled = !canManage;
       [titleInput, themeInput, tagsInput, transverseInput, shareInput].forEach((el) => {
         if (el) el.disabled = !canManage;
       });
@@ -15725,15 +16241,25 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         const editor = document.getElementById('global-note-content-editor');
         if (editor) editor.setAttribute('contenteditable', canManage ? 'true' : 'false');
       }
-      modal.classList.remove('hidden');
-      document.body.classList.add('overflow-hidden');
+      notesShared?.openModal?.('modal-global-note');
+      if (!notesShared) {
+        modal.classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
+      }
       requestAnimationFrame(() => titleInput?.focus());
     }
 
     async function saveGlobalNoteFromEditor() {
       const draft = readGlobalNoteEditorDraft();
-      if (!draft.title && !draft.content) {
-        showToast('Ajoutez un titre ou un contenu');
+      const noteTheme = String((Array.isArray(draft.tags) && draft.tags.length > 0 ? draft.tags[0] : (draft.theme || 'General')) || 'General').trim() || 'General';
+      const noteAttachmentDocs = await readDocumentFilesFromInput('global-note-attach-doc-files', {
+        projectId: 'global',
+        scope: 'global',
+        rubric: 'global-note-attachment',
+        theme: noteTheme
+      });
+      if (!draft.title && !draft.content && (!Array.isArray(noteAttachmentDocs) || noteAttachmentDocs.length === 0)) {
+        showToast('Ajoutez un titre, un contenu ou une pièce jointe');
         return;
       }
       const nowTs = Date.now();
@@ -15745,14 +16271,43 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         showToast('Action non autorisee');
         return;
       }
+      const noteId = String(existing?.noteId || uuidv4());
+      const existingLinkedDocIds = Array.isArray(existing?.linkedDocIds)
+        ? existing.linkedDocIds.map((id) => String(id || '').trim()).filter(Boolean)
+        : [];
+      const createdDocIds = [];
+      if (Array.isArray(noteAttachmentDocs) && noteAttachmentDocs.length > 0) {
+        for (const docFile of noteAttachmentDocs) {
+          const docId = uuidv4();
+          createdDocIds.push(docId);
+          await putEncrypted('globalDocs', {
+            id: docId,
+            name: String(docFile?.name || 'Document').trim() || 'Document',
+            type: String(docFile?.type || 'application/octet-stream').trim() || 'application/octet-stream',
+            size: Number(docFile?.size || 0) || 0,
+            data: docFile?.data || '',
+            storageMode: docFile?.storageMode || '',
+            storageProvider: docFile?.storageProvider || '',
+            storagePath: docFile?.storagePath || '',
+            storedAt: Number(docFile?.storedAt || 0) || null,
+            linkedNoteIds: [noteId],
+            theme: noteTheme,
+            sharingMode: normalizeGlobalNoteVisibility(draft.visibility) === 'transverse' ? 'shared' : 'private',
+            createdAt: nowTs,
+            updatedAt: nowTs
+          }, 'id');
+        }
+      }
+      const linkedDocIds = Array.from(new Set([...existingLinkedDocIds, ...createdDocIds]));
       const note = {
         ...(existing || {}),
-        noteId: String(existing?.noteId || uuidv4()),
+        noteId,
         title: draft.title,
         content: draft.content,
         contentHtml: draft.contentHtml,
         tags: draft.tags,
         theme: String(draft.theme || '').trim(),
+        linkedDocIds,
         visibility: normalizeGlobalNoteVisibility(draft.visibility),
         shareToGlobalFeed: draft.shareToGlobalFeed === true,
         createdBy: String(existing?.createdBy || currentUser?.userId || ''),
@@ -15762,6 +16317,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         archivedAt: null
       };
       await putEncrypted('globalNotes', note, 'noteId');
+      await syncGlobalNoteLinkedDocuments(note.noteId, note.linkedDocIds);
       await syncGlobalNoteFeed(note);
       if (workspaceMode === 'global' && globalWorkspaceView === 'feed') {
         await renderGlobalFeed();
@@ -15769,7 +16325,12 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       closeGlobalNoteEditor();
       globalNotesFocusNoteId = String(note.noteId || '');
       await renderGlobalNotes();
-      showToast(existing ? 'Note mise a jour' : 'Note creee');
+      if (Array.isArray(noteAttachmentDocs) && noteAttachmentDocs.length > 0) {
+        const label = existing ? 'Note mise a jour' : 'Note creee';
+        showToast(`${label} + ${noteAttachmentDocs.length} document(s) ajoute(s)`);
+      } else {
+        showToast(existing ? 'Note mise a jour' : 'Note creee');
+      }
     }
 
     async function deleteGlobalNote(noteId = '') {
@@ -15784,6 +16345,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       const noteTitle = String(note.title || '').trim() || 'cette note';
       if (!window.confirm(`Supprimer definitivement "${noteTitle}" ?`)) return;
       await deleteFromStore('globalNotes', nid);
+      await syncGlobalNoteLinkedDocuments(nid, []);
       await removeGlobalNoteFromFeed(nid);
       if (workspaceMode === 'global' && globalWorkspaceView === 'feed') {
         await renderGlobalFeed();
@@ -15793,6 +16355,34 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       }
       await renderGlobalNotes();
       showToast('Note supprimee');
+    }
+
+    async function deleteGlobalNoteLinkedDocument(noteId = '', docId = '') {
+      const nid = String(noteId || '').trim();
+      const did = String(docId || '').trim();
+      if (!nid || !did) return;
+      const note = await getDecrypted('globalNotes', nid, 'noteId');
+      if (!note || !canManageGlobalNote(note)) {
+        showToast('Action non autorisee');
+        return;
+      }
+      const doc = await getDecrypted('globalDocs', did, 'id');
+      if (!doc) return;
+      const linkedNoteIds = Array.isArray(doc.linkedNoteIds)
+        ? doc.linkedNoteIds.map((id) => String(id || '').trim()).filter(Boolean)
+        : [];
+      const nextLinked = linkedNoteIds.filter((id) => id !== nid);
+      if (nextLinked.length > 0) {
+        await putEncrypted('globalDocs', { ...doc, linkedNoteIds: nextLinked }, 'id');
+      } else {
+        await deleteFromStore('globalDocs', did);
+      }
+      if (String(editingGlobalNoteId || '').trim() === nid) {
+        const refreshed = await getDecrypted('globalNotes', nid, 'noteId');
+        if (refreshed) await syncGlobalNoteLinkedDocuments(nid, refreshed.linkedDocIds || []);
+      }
+      await openGlobalNoteReadModal(nid);
+      showToast('Document retiré de la note');
     }
 
     async function toggleGlobalNoteFeedPublish(noteId) {
@@ -15819,13 +16409,82 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     }
 
     function closeGlobalReadModal() {
+      window.TaskMDANotesShared?.closeModal?.('modal-global-read');
       const modal = document.getElementById('modal-global-read');
-      if (!modal) return;
-      modal.classList.add('hidden');
-      document.body.classList.remove('overflow-hidden');
+      if (!window.TaskMDANotesShared?.closeModal && modal) {
+        modal.classList.add('hidden');
+        document.body.classList.remove('overflow-hidden');
+      }
+    }
+
+    async function migrateLegacyInlineGlobalNoteAttachmentsOnce() {
+      if (globalNotesInlineDocsMigrationDone) return;
+      globalNotesInlineDocsMigrationDone = true;
+      try {
+        if (localStorage.getItem(GLOBAL_NOTES_INLINE_DOCS_MIGRATION_KEY) === '1') return;
+      } catch (_) {}
+      const notes = await getAllDecrypted('globalNotes', 'noteId');
+      if (!Array.isArray(notes) || notes.length === 0) {
+        try { localStorage.setItem(GLOBAL_NOTES_INLINE_DOCS_MIGRATION_KEY, '1'); } catch (_) {}
+        return;
+      }
+      const docs = await getAllDecrypted('globalDocs', 'id');
+      const docsById = new Map((Array.isArray(docs) ? docs : [])
+        .map((doc) => [String(doc?.id || '').trim(), doc])
+        .filter(([id]) => !!id));
+      let changedCount = 0;
+      for (const note of notes) {
+        const noteId = String(note?.noteId || '').trim();
+        if (!noteId) continue;
+        const rawContentHtml = String(note?.contentHtml || '').trim();
+        const inlineDocIds = extractLinkedGlobalDocIdsFromHtml(rawContentHtml);
+        const cleanedContentHtml = sanitizeRichTextHtmlPreserve(stripInlineAttachedDocumentBlocksFromHtml(rawContentHtml));
+        const cleanedContentText = getProjectDescriptionPlainText(cleanedContentHtml);
+        const storedLinked = Array.isArray(note?.linkedDocIds)
+          ? note.linkedDocIds.map((id) => String(id || '').trim()).filter(Boolean)
+          : [];
+        const inferredLinked = (Array.isArray(docs) ? docs : [])
+          .filter((doc) => Array.isArray(doc?.linkedNoteIds) && doc.linkedNoteIds.map((id) => String(id || '').trim()).includes(noteId))
+          .map((doc) => String(doc?.id || '').trim())
+          .filter(Boolean);
+        const mergedLinked = Array.from(new Set([...storedLinked, ...inlineDocIds, ...inferredLinked]));
+        const htmlChanged = cleanedContentHtml !== rawContentHtml;
+        const linksChanged = mergedLinked.length !== storedLinked.length
+          || mergedLinked.some((id) => !storedLinked.includes(id));
+        if (!htmlChanged && !linksChanged) continue;
+        const updatedNote = {
+          ...note,
+          contentHtml: cleanedContentHtml,
+          content: cleanedContentText,
+          linkedDocIds: mergedLinked
+        };
+        await putEncrypted('globalNotes', updatedNote, 'noteId');
+        await syncGlobalNoteLinkedDocuments(noteId, mergedLinked);
+        for (const docId of inlineDocIds) {
+          const row = docsById.get(String(docId || '').trim());
+          if (!row) continue;
+          const currentLinks = Array.isArray(row?.linkedNoteIds)
+            ? row.linkedNoteIds.map((id) => String(id || '').trim()).filter(Boolean)
+            : [];
+          if (!currentLinks.includes(noteId)) {
+            await putEncrypted('globalDocs', {
+              ...row,
+              linkedNoteIds: Array.from(new Set([...currentLinks, noteId])),
+              updatedAt: Date.now()
+            }, 'id');
+          }
+        }
+        changedCount += 1;
+      }
+      try { localStorage.setItem(GLOBAL_NOTES_INLINE_DOCS_MIGRATION_KEY, '1'); } catch (_) {}
+      if (changedCount > 0) {
+        showToast(`Nettoyage notes globales: ${changedCount} note(s) migree(s)`);
+      }
     }
 
     async function openGlobalNoteReadModal(noteId = '') {
+      await migrateLegacyInlineGlobalNoteAttachmentsOnce();
+      const notesShared = window.TaskMDANotesShared;
       const nid = String(noteId || '').trim();
       if (!nid) return;
       const note = await getDecrypted('globalNotes', nid, 'noteId');
@@ -15838,7 +16497,10 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       const metaEl = document.getElementById('global-read-meta');
       const badgesEl = document.getElementById('global-read-badges');
       const contentEl = document.getElementById('global-read-content');
+      const tagsEl = document.getElementById('global-read-tags');
       const linksEl = document.getElementById('global-read-links');
+      const editBtn = document.getElementById('btn-global-read-edit');
+      const deleteBtn = document.getElementById('btn-global-read-delete');
       if (!modal || !titleEl || !metaEl || !badgesEl || !contentEl || !linksEl) return;
 
       const identity = resolveKnownUserIdentity(String(note.createdBy || ''), String(note.createdByName || fallbackDirectoryName(note.createdBy || '')));
@@ -15846,21 +16508,198 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       const visibility = normalizeGlobalNoteVisibility(note.visibility);
       const theme = String(note.theme || '').trim();
       const tags = Array.isArray(note.tags) ? note.tags.map((tag) => String(tag || '').trim()).filter(Boolean) : [];
+      const rawContentHtml = String(note.contentHtml || '').trim() || plainTextToRichHtml(String(note.content || '').trim());
+      const contentHtml = sanitizeRichTextHtmlPreserve(stripInlineAttachedDocumentBlocksFromHtml(rawContentHtml));
+      const inlineDocIds = new Set(extractLinkedGlobalDocIdsFromHtml(rawContentHtml));
+      const storedLinkedDocIds = new Set(
+        (Array.isArray(note.linkedDocIds) ? note.linkedDocIds : [])
+          .map((id) => String(id || '').trim())
+          .filter(Boolean)
+      );
+      const linkedDocs = (await getAllDecrypted('globalDocs', 'id') || [])
+        .filter((doc) => {
+          const docId = String(doc?.id || '').trim();
+          if (!docId) return false;
+          if (inlineDocIds.has(docId) || storedLinkedDocIds.has(docId)) return true;
+          return Array.isArray(doc?.linkedNoteIds) && doc.linkedNoteIds.map((id) => String(id || '').trim()).includes(nid);
+        })
+        .map((doc) => ({ id: String(doc?.id || '').trim(), name: String(doc?.name || 'Document').trim() || 'Document' }))
+        .filter((doc) => doc.id);
+
+      const titleText = String(note.title || '').trim() || 'Note sans titre';
+      const metaText = `${author} • ${new Date(Number(note.updatedAt || note.createdAt || Date.now())).toLocaleString('fr-FR')}`;
+      const badgeItems = [
+        { label: visibility === 'transverse' ? 'Transverse' : 'Privee', className: visibility === 'transverse' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700' },
+        note.shareToGlobalFeed ? { label: 'Dans le fil', className: 'bg-indigo-100 text-indigo-700' } : null,
+        theme ? { label: theme, className: 'bg-emerald-100 text-emerald-700' } : null
+      ].filter(Boolean);
+      const badgesHtml = notesShared?.renderBadgeChips ? notesShared.renderBadgeChips(badgeItems) : '';
+      const tagsHtml = notesShared?.renderTagChips ? notesShared.renderTagChips(tags, 'Aucun tag') : '<span class="text-xs text-slate-500">Aucun tag</span>';
+      const docsHtml = linkedDocs.length
+        ? `<div class="mt-2 flex flex-col gap-2">${linkedDocs.map((doc) => {
+            const ref = encodeDocumentPreviewRef({
+              sourceType: 'standalone',
+              id: doc.id,
+              sourceProjectName: 'Hors projet'
+            });
+            return `
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="inline-flex text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-700 font-semibold">${escapeHtml(doc.name)}</span>
+                <button type="button" class="workspace-action-inline" data-action-kind="open" data-action-label="Ouvrir le document" onclick="openDocumentPreviewByRef('${escapeHtml(ref)}')">Ouvrir</button>
+                <button type="button" class="workspace-action-inline" data-action-kind="export" data-action-label="Télécharger le document" onclick="downloadDocumentByRef('${escapeHtml(ref)}')">Télécharger</button>
+                ${canManageGlobalNote(note) ? `<button type="button" class="workspace-action-inline" data-action-kind="danger" data-action-label="Supprimer le document" onclick="deleteGlobalNoteLinkedDocument('${escapeHtml(nid)}','${escapeHtml(doc.id)}')">Supprimer</button>` : ''}
+              </div>
+            `;
+          }).join('')}</div>`
+        : '<p class="text-xs text-slate-500 mt-1">Aucun document lié</p>';
+      const linksHtml = `<p class="text-xs text-slate-500">Aucune tache liee</p>${docsHtml}`;
+      if (notesShared?.applyReadModalContent) {
+        notesShared.applyReadModalContent({
+          titleId: 'global-read-title',
+          titleText,
+          metaId: 'global-read-meta',
+          metaText,
+          badgesId: 'global-read-badges',
+          badgesHtml,
+          contentId: 'global-read-content',
+          contentHtml: contentHtml || '<p>Aucun contenu.</p>',
+          tagsId: 'global-read-tags',
+          tagsHtml,
+          linksId: 'global-read-links',
+          linksHtml
+        });
+      } else {
+        titleEl.textContent = titleText;
+        metaEl.textContent = metaText;
+        badgesEl.innerHTML = badgesHtml;
+        contentEl.innerHTML = contentHtml || '<p>Aucun contenu.</p>';
+        if (tagsEl) tagsEl.innerHTML = tagsHtml;
+        linksEl.innerHTML = linksHtml;
+      }
+      const canManage = canManageGlobalNote(note);
+      if (editBtn) {
+        editBtn.classList.toggle('hidden', !canManage);
+        editBtn.setAttribute('data-note-id', nid);
+      }
+      if (deleteBtn) {
+        deleteBtn.classList.toggle('hidden', !canManage);
+        deleteBtn.setAttribute('data-note-id', nid);
+      }
+      const exportButtons = ['btn-global-read-export-html', 'btn-global-read-export-pdf', 'btn-global-read-export-docx', 'btn-global-read-export-txt'];
+      exportButtons.forEach((id) => document.getElementById(id)?.setAttribute('data-note-id', nid));
+
+      notesShared?.openModal?.('modal-global-read');
+      if (!notesShared) {
+        modal.classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
+      }
+    }
+
+    function getProjectNoteByIdForExport(noteId = '') {
+      const nid = String(noteId || '').trim();
+      if (!nid || !currentProjectState?.project) return null;
+      return getProjectNotesForState(currentProjectState).find((row) => String(row?.noteId || '').trim() === nid) || null;
+    }
+
+    async function exportProjectNote(noteId = '', format = 'html') {
+      const note = getProjectNoteByIdForExport(noteId);
+      if (!note) {
+        showToast('Note introuvable');
+        return;
+      }
+      const title = String(note.title || '').trim() || 'Note';
+      const safeTitle = sanitizeFilenameSegment(title);
+      const tag = formatExportDateTag();
       const contentHtml = sanitizeRichTextHtmlPreserve(String(note.contentHtml || '').trim() || plainTextToRichHtml(String(note.content || '').trim()));
+      const tags = Array.isArray(note.tags) ? note.tags.map((entry) => String(entry || '').trim()).filter(Boolean) : [];
+      const author = resolveKnownUserIdentity(
+        String(note.createdBy || '').trim(),
+        String(note.createdByName || fallbackDirectoryName(note.createdBy || '') || 'Auteur').trim()
+      )?.name || String(note.createdByName || 'Auteur');
+      const dateFormatted = new Date(Number(note.updatedAt || note.createdAt || Date.now())).toLocaleString('fr-FR');
 
-      titleEl.textContent = String(note.title || '').trim() || 'Note sans titre';
-      metaEl.textContent = `${author} • ${new Date(Number(note.updatedAt || note.createdAt || Date.now())).toLocaleString('fr-FR')}`;
-      badgesEl.innerHTML = [
-        `<span class="inline-flex text-[10px] px-2 py-1 rounded-full ${visibility === 'transverse' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'} font-semibold">${visibility === 'transverse' ? 'Transverse' : 'Privee'}</span>`,
-        note.shareToGlobalFeed ? '<span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-indigo-100 text-indigo-700 font-semibold">Dans le fil</span>' : '',
-        theme ? `<span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 font-semibold">${escapeHtml(theme)}</span>` : '',
-        ...tags.map((tag) => `<span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-slate-100 text-slate-700 font-semibold">#${escapeHtml(tag)}</span>`)
-      ].filter(Boolean).join('');
-      contentEl.innerHTML = contentHtml || '<p>Aucun contenu.</p>';
-      linksEl.innerHTML = '';
+      const targetFormat = String(format || '').trim().toLowerCase();
+      if (targetFormat === 'txt') {
+        const plain = getProjectDescriptionPlainText(contentHtml);
+        const payload = `${title}\n\n${plain}\n`;
+        downloadBlobFile(payload, `note_projet_${safeTitle}_${tag}.txt`, 'text/plain;charset=utf-8');
+        showToast('Note projet exportee (TXT)');
+        return;
+      }
+      if (targetFormat === 'html') {
+        const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>body{font-family:Segoe UI,Arial,sans-serif;margin:24px;color:#1e293b}h1{margin:0 0 8px}.meta{color:#64748b;font-size:13px;margin-bottom:12px}.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}.chip{font-size:11px;border:1px solid #cbd5e1;border-radius:999px;padding:3px 8px;background:#f8fafc;color:#334155}</style></head><body><h1>${escapeHtml(title)}</h1><p class="meta">${escapeHtml(author)} | ${escapeHtml(dateFormatted)}</p><div class="chips">${tags.map((entry) => `<span class="chip">#${escapeHtml(entry)}</span>`).join('')}</div><article>${contentHtml || '<p>Aucun contenu.</p>'}</article></body></html>`;
+        downloadBlobFile(html, `note_projet_${safeTitle}_${tag}.html`, 'text/html;charset=utf-8');
+        showToast('Note projet exportee (HTML)');
+        return;
+      }
+      if (targetFormat === 'pdf') {
+        const printHtml = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>body{font-family:'Segoe UI',Arial,sans-serif;padding:24px;color:#1e293b;max-width:800px;margin:0 auto}h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}.meta{color:#64748b;font-size:12px;margin-bottom:12px}.tags{margin-bottom:14px}.tag{display:inline-block;font-size:10px;border:1px solid #cbd5e1;border-radius:999px;padding:3px 8px;background:#f8fafc;color:#334155;margin-right:6px;margin-bottom:4px}.content{margin-top:20px;line-height:1.6;color:#1e293b}.content img{max-width:100%;height:auto}@media print{body{padding:0}}</style></head><body><h1>${escapeHtml(title)}</h1><p class="meta">${escapeHtml(author)} | ${escapeHtml(dateFormatted)}</p>${tags.length ? `<div class="tags">${tags.map(t => `<span class="tag">#${escapeHtml(t)}</span>`).join('')}</div>` : ''}<div class="content">${contentHtml || '<p>Cette note ne contient aucun contenu.</p>'}</div></body></html>`;
+        let popup = null;
+        try { popup = window.open('', '_blank', 'width=900,height=700'); } catch (_) { popup = null; }
+        if (popup && popup.document) {
+          popup.document.open();
+          popup.document.write(printHtml);
+          popup.document.close();
+          setTimeout(() => { try { popup.print(); } catch (_) {} }, 300);
+          showToast('Impression ouverte - choisissez Enregistrer en PDF');
+        } else {
+          showToast('Impossible d ouvrir la fenetre d impression');
+        }
+        return;
+      }
+      if (targetFormat === 'docx') {
+        const { wordML, images, relationships } = convertHtmlToWordML(contentHtml);
+        const files = [
+          { name: '[Content_Types].xml', data: generateContentTypesXml(images), mtime: Date.now() },
+          { name: '_rels/.rels', data: generateRootRelsXml(), mtime: Date.now() },
+          { name: 'word/document.xml', data: generateDocumentXml({ title, author, dateFormatted, tags }, wordML), mtime: Date.now() },
+          { name: 'word/styles.xml', data: generateStylesXml(), mtime: Date.now() }
+        ];
+        if (images.length > 0) {
+          files.push({ name: 'word/_rels/document.xml.rels', data: generateDocumentRelsXml(relationships), mtime: Date.now() });
+          images.forEach((img) => {
+            files.push({ name: `word/media/${img.filename}`, data: base64ToUint8Array(img.base64), mtime: Date.now() });
+          });
+        }
+        const zipBytes = buildZipStoreArchive(files);
+        downloadBlobFile(
+          new Blob([zipBytes], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }),
+          `note_projet_${safeTitle}_${tag}.docx`,
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        );
+        showToast('Note projet exportee (DOCX)');
+      }
+    }
 
-      modal.classList.remove('hidden');
-      document.body.classList.add('overflow-hidden');
+    function toggleProjectNoteExportMenu(noteId, event) {
+      if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+      }
+      const nid = String(noteId || '').trim();
+      if (!nid) return;
+      const menu = document.getElementById(`project-note-export-menu-${nid}`);
+      const btn = document.getElementById(`project-note-export-menu-btn-${nid}`);
+      if (!menu || !btn) return;
+      document.querySelectorAll('[id^="project-note-export-menu-"]').forEach((otherMenu) => {
+        if (otherMenu.id === menu.id || otherMenu.id.startsWith('project-note-export-menu-btn-')) return;
+        otherMenu.classList.add('hidden');
+        const otherId = otherMenu.id.replace('project-note-export-menu-', '');
+        const otherBtn = document.getElementById(`project-note-export-menu-btn-${otherId}`);
+        if (otherBtn) otherBtn.setAttribute('aria-expanded', 'false');
+      });
+      const isHidden = menu.classList.contains('hidden');
+      menu.classList.toggle('hidden', !isHidden);
+      btn.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+    }
+
+    function closeProjectNoteExportMenu(noteId) {
+      const nid = String(noteId || '').trim();
+      if (!nid) return;
+      const menu = document.getElementById(`project-note-export-menu-${nid}`);
+      const btn = document.getElementById(`project-note-export-menu-btn-${nid}`);
+      if (menu) menu.classList.add('hidden');
+      if (btn) btn.setAttribute('aria-expanded', 'false');
     }
 
     async function openGlobalFeedPostReadModal(postId = '') {
@@ -15888,19 +16727,36 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       const author = String(post.authorName || fallbackDirectoryName(post.authorUserId || '')).trim() || 'Auteur';
       const typeMeta = getDashboardNewsTypeMeta(post);
       const refs = Array.isArray(post.refs) ? post.refs : [];
+      const allDocs = await getAllDecrypted('globalDocs', 'id');
+      const linkedDocs = await resolveLinkedDocsForFeedPost(post, allDocs);
 
       titleEl.textContent = title;
       metaEl.textContent = `${author} • ${new Date(Number(post.updatedAt || post.createdAt || Date.now())).toLocaleString('fr-FR')}`;
       badgesEl.innerHTML = `<span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-slate-100 text-slate-700 font-semibold">${escapeHtml(typeMeta.label)}</span>`;
       contentEl.innerHTML = renderGlobalFeedContentHtml(post.content || '', mentionCatalog) || '<p>Aucun contenu.</p>';
-      linksEl.innerHTML = refs.map((ref) => `
+      const refsHtml = refs.map((ref) => `
         <button type="button" class="workspace-action-inline" data-action-kind="open" data-action-label="Ouvrir la reference" onclick="openGlobalFeedReference('${escapeHtml(String(ref?.type || ''))}','${encodeURIComponent(String(ref?.id || ''))}')">
           ${escapeHtml(String(ref?.label || 'Reference'))}
         </button>
       `).join('');
+      const docsHtml = linkedDocs.map((doc) => {
+        const ref = String(doc?.ref || '').trim();
+        if (!ref) return '';
+        return `
+          <div class="inline-flex items-center gap-1 mr-2 mb-1">
+            <span class="inline-flex items-center text-xs text-slate-700">📎 ${escapeHtml(doc.name)}</span>
+            <button type="button" class="workspace-action-inline" data-action-kind="preview" data-action-label="Aperçu" onclick="event.stopPropagation(); openDocumentPreviewByRef('${escapeHtml(ref)}')">Aperçu</button>
+            <button type="button" class="workspace-action-inline" data-action-kind="export" data-action-label="Télécharger" onclick="event.stopPropagation(); downloadDocumentByRef('${escapeHtml(ref)}')">Télécharger</button>
+          </div>
+        `;
+      }).join('');
+      linksEl.innerHTML = `${refsHtml}${docsHtml}`;
 
-      modal.classList.remove('hidden');
-      document.body.classList.add('overflow-hidden');
+      notesShared?.openModal?.('modal-project-note-read');
+      if (!notesShared) {
+        modal.classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
+      }
     }
 
     function buildGlobalNoteCardHtml(note, options = {}) {
@@ -15911,13 +16767,16 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       const visibility = normalizeGlobalNoteVisibility(note.visibility);
       const theme = String(note.theme || '').trim();
       const tags = Array.isArray(note.tags) ? note.tags.map((tag) => String(tag || '').trim()).filter(Boolean) : [];
+      const linkedDocs = Array.isArray(options.linkedDocs) ? options.linkedDocs : [];
       const isFavorite = Number(note.favoriteAt || 0) > 0;
-      const previewText = getProjectDescriptionPlainText(String(note.contentHtml || '').trim() || plainTextToRichHtml(String(note.content || '').trim()))
+      const rawContentHtml = String(note.contentHtml || '').trim() || plainTextToRichHtml(String(note.content || '').trim());
+      const cleanedContentHtml = sanitizeRichTextHtmlPreserve(stripInlineAttachedDocumentBlocksFromHtml(rawContentHtml));
+      const previewText = getProjectDescriptionPlainText(cleanedContentHtml || plainTextToRichHtml(String(note.content || '').trim()))
         .replace(/\s+/g, ' ')
         .trim();
       const isFocused = String(globalNotesFocusNoteId || '').trim() === String(note.noteId || '').trim();
       return `
-        <article id="global-note-${escapeHtml(note.noteId)}" class="global-note-card rounded-xl border ${isFocused ? 'border-blue-400 shadow-[0_0_0_2px_rgba(59,130,246,0.14)]' : 'border-slate-200'} bg-white p-4 cursor-pointer ${isSelectedForBulkDelete ? 'is-bulk-selected' : ''}" onclick="toggleCollapsibleContent(this.querySelector('.collapsible-toggle'))">
+        <article id="global-note-${escapeHtml(note.noteId)}" class="global-note-card rounded-xl border ${isFocused ? 'border-blue-400 shadow-[0_0_0_2px_rgba(59,130,246,0.14)]' : 'border-slate-200'} bg-white p-4 cursor-pointer ${isSelectedForBulkDelete ? 'is-bulk-selected' : ''}" onclick="openGlobalNoteReadModal('${escapeHtml(note.noteId)}')">
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0 flex-1">
               <div class="flex flex-wrap items-center gap-2">
@@ -15939,7 +16798,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
                 <div class="collapsible-content is-collapsed">
                   <div class="mt-3 ql-snow">
                     <div class="ql-editor p-0 text-sm text-slate-600 markdown-content" style="min-height: auto; overflow-y: hidden; cursor: inherit;">
-                      ${note.contentHtml || plainTextToRichHtml(note.content || 'Aucun contenu.')}
+                      ${cleanedContentHtml || plainTextToRichHtml(note.content || 'Aucun contenu.')}
                     </div>
                   </div>
                 </div>
@@ -15949,38 +16808,46 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
               </div>
 
               ${tags.length ? `<div class="mt-3 flex flex-wrap gap-1">${tags.map((tag) => `<span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-slate-100 text-slate-700 font-semibold">#${escapeHtml(tag)}</span>`).join('')}</div>` : ''}
+              ${linkedDocs.length ? `
+                <div class="mt-3">
+                  <p class="text-xs font-semibold text-slate-600 mb-1">Documents lies (${linkedDocs.length})</p>
+                  <div class="flex flex-wrap items-center gap-2">
+                    ${linkedDocs.slice(0, 4).map((doc) => {
+                      const ref = encodeDocumentPreviewRef({
+                        sourceType: 'standalone',
+                        id: doc.id,
+                        sourceProjectName: 'Hors projet'
+                      });
+                      return `
+                        <span class="inline-flex items-center gap-1" onclick="event.stopPropagation();">
+                          <span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-slate-100 text-slate-700 font-semibold">${escapeHtml(String(doc.name || 'Document'))}</span>
+                          <button type="button" class="workspace-action-inline" data-action-kind="preview" data-action-label="Aperçu" onclick="event.stopPropagation(); openDocumentPreviewByRef('${escapeHtml(ref)}')">Aperçu</button>
+                          <button type="button" class="workspace-action-inline" data-action-kind="export" data-action-label="Télécharger" onclick="event.stopPropagation(); downloadDocumentByRef('${escapeHtml(ref)}')">Télécharger</button>
+                        </span>
+                      `;
+                    }).join('')}
+                    ${linkedDocs.length > 4 ? `<span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-slate-100 text-slate-700 font-semibold">+${linkedDocs.length - 4}</span>` : ''}
+                  </div>
+                </div>
+              ` : ''}
             </div>
             ${canManage ? `
               <div class="flex items-center gap-1" onclick="event.stopPropagation();">
-                <button type="button" class="workspace-action-inline" data-action-kind="open" data-action-label="Lire la note" onclick="openGlobalNoteReadModal('${escapeHtml(note.noteId)}')">Lire</button>
-                <button type="button" class="workspace-action-inline" data-action-kind="edit" data-action-label="Modifier la note" onclick="openGlobalNoteEditor('${escapeHtml(note.noteId)}')">Editer</button>
-                <button type="button" class="workspace-action-inline" data-action-kind="manage" data-action-label="${isFavorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}" onclick="toggleGlobalNoteFavorite('${escapeHtml(note.noteId)}')">${isFavorite ? 'Defavoriser' : 'Favori'}</button>
-                <button type="button" class="workspace-action-inline" data-action-kind="notify" data-action-label="Publier dans le fil" onclick="toggleGlobalNoteFeedPublish('${escapeHtml(note.noteId)}')">${note.shareToGlobalFeed ? 'Retirer fil' : 'Publier fil'}</button>
+                <button type="button" class="task-action-btn" data-action-kind="edit" data-action-label="Modifier la note" aria-label="Modifier la note" title="Modifier" onclick="openGlobalNoteEditor('${escapeHtml(note.noteId)}')"><span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">edit</span></button>
+                <button type="button" class="task-action-btn task-action-btn-subtle" data-action-kind="manage" data-action-label="${isFavorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}" aria-label="${isFavorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}" title="${isFavorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}" onclick="toggleGlobalNoteFavorite('${escapeHtml(note.noteId)}')"><span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">tune</span></button>
+                <button type="button" class="task-action-btn task-action-btn-subtle" data-action-kind="notify" data-action-label="Publier dans le fil" aria-label="Publier dans le fil" title="${note.shareToGlobalFeed ? 'Retirer du fil' : 'Publier dans le fil'}" onclick="toggleGlobalNoteFeedPublish('${escapeHtml(note.noteId)}')"><span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">mail</span></button>
+                <button type="button" class="task-action-btn task-action-btn-subtle" data-action-kind="export" data-action-label="Exporter TXT" aria-label="Exporter TXT" title="Exporter TXT" onclick="exportGlobalNote('${escapeHtml(note.noteId)}', 'txt')"><span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">download</span></button>
+                <button type="button" class="task-action-btn task-action-btn-subtle" data-action-kind="open" data-action-label="Ouvrir la note" aria-label="Ouvrir la note" title="Ouvrir" onclick="openGlobalNoteReadModal('${escapeHtml(note.noteId)}')"><span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">sync_alt</span></button>
                 <div class="relative inline-block">
-                  <button type="button" class="workspace-action-inline" data-action-kind="export" data-action-label="Menu d'export" onclick="toggleGlobalNoteExportMenu('${escapeHtml(note.noteId)}', event)" aria-haspopup="true" aria-expanded="false" id="export-menu-btn-${escapeHtml(note.noteId)}">
-                    Exporter
-                    <span class="material-symbols-outlined" style="font-size: 14px; margin-left: 2px; vertical-align: middle;">expand_more</span>
-                  </button>
+                  <button type="button" class="task-action-btn task-action-btn-subtle" data-action-kind="export" data-action-label="Menu d'export" aria-label="Menu d'export" title="Exporter (HTML/PDF/DOCX/TXT)" onclick="toggleGlobalNoteExportMenu('${escapeHtml(note.noteId)}', event)" aria-haspopup="true" aria-expanded="false" id="export-menu-btn-${escapeHtml(note.noteId)}"><span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">inventory_2</span></button>
                   <div id="export-menu-${escapeHtml(note.noteId)}" class="hidden absolute right-0 mt-1 w-44 bg-white rounded-lg shadow-lg border border-slate-200 z-50 overflow-hidden" role="menu" onclick="event.stopPropagation();">
-                    <button type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2" onclick="exportGlobalNote('${escapeHtml(note.noteId)}', 'html'); closeGlobalNoteExportMenu('${escapeHtml(note.noteId)}');" role="menuitem">
-                      <span class="material-symbols-outlined" style="font-size: 16px;">code</span>
-                      Export HTML
-                    </button>
-                    <button type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2" onclick="exportGlobalNoteAsPdf('${escapeHtml(note.noteId)}'); closeGlobalNoteExportMenu('${escapeHtml(note.noteId)}');" role="menuitem">
-                      <span class="material-symbols-outlined" style="font-size: 16px;">picture_as_pdf</span>
-                      Export PDF
-                    </button>
-                    <button type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2" onclick="exportGlobalNoteAsDocx('${escapeHtml(note.noteId)}'); closeGlobalNoteExportMenu('${escapeHtml(note.noteId)}');" role="menuitem">
-                      <span class="material-symbols-outlined" style="font-size: 16px;">description</span>
-                      Export DOCX
-                    </button>
-                    <button type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2" onclick="exportGlobalNote('${escapeHtml(note.noteId)}', 'txt'); closeGlobalNoteExportMenu('${escapeHtml(note.noteId)}');" role="menuitem">
-                      <span class="material-symbols-outlined" style="font-size: 16px;">text_snippet</span>
-                      Export TXT
-                    </button>
+                    <button type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2" onclick="exportGlobalNote('${escapeHtml(note.noteId)}', 'html'); closeGlobalNoteExportMenu('${escapeHtml(note.noteId)}');" role="menuitem"><span class="material-symbols-outlined" style="font-size: 16px;">code</span>Exporter HTML</button>
+                    <button type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2" onclick="exportGlobalNoteAsPdf('${escapeHtml(note.noteId)}'); closeGlobalNoteExportMenu('${escapeHtml(note.noteId)}');" role="menuitem"><span class="material-symbols-outlined" style="font-size: 16px;">picture_as_pdf</span>Exporter PDF</button>
+                    <button type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2" onclick="exportGlobalNoteAsDocx('${escapeHtml(note.noteId)}'); closeGlobalNoteExportMenu('${escapeHtml(note.noteId)}');" role="menuitem"><span class="material-symbols-outlined" style="font-size: 16px;">description</span>Exporter DOCX</button>
+                    <button type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2" onclick="exportGlobalNote('${escapeHtml(note.noteId)}', 'txt'); closeGlobalNoteExportMenu('${escapeHtml(note.noteId)}');" role="menuitem"><span class="material-symbols-outlined" style="font-size: 16px;">text_snippet</span>Exporter TXT</button>
                   </div>
                 </div>
-                <button type="button" class="workspace-action-inline" data-action-kind="danger" data-action-label="Supprimer la note" onclick="deleteGlobalNote('${escapeHtml(note.noteId)}')">Supprimer</button>
+                <button type="button" class="task-action-btn task-action-btn-danger" data-action-kind="danger" data-action-label="Supprimer la note" aria-label="Supprimer la note" title="Supprimer" onclick="deleteGlobalNote('${escapeHtml(note.noteId)}')"><span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">delete</span></button>
               </div>
             ` : ''}
           </div>
@@ -15990,12 +16857,28 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     }
 
     async function renderGlobalNotes() {
+      await migrateLegacyInlineGlobalNoteAttachmentsOnce();
       const host = document.getElementById('global-notes-list');
       const countEl = document.getElementById('global-notes-count');
       const paginationContainer = document.getElementById('global-notes-pagination');
       if (!host) return;
       const allNotesRaw = await getAllDecrypted('globalNotes', 'noteId');
+      const allGlobalDocsRaw = await getAllDecrypted('globalDocs', 'id');
+      const linkedDocsByNoteId = new Map();
+      (Array.isArray(allGlobalDocsRaw) ? allGlobalDocsRaw : []).forEach((doc) => {
+        const docId = String(doc?.id || '').trim();
+        if (!docId) return;
+        const docName = String(doc?.name || 'Document').trim() || 'Document';
+        const linkedNoteIds = Array.isArray(doc?.linkedNoteIds) ? doc.linkedNoteIds : [];
+        linkedNoteIds.forEach((noteId) => {
+          const nid = String(noteId || '').trim();
+          if (!nid) return;
+          if (!linkedDocsByNoteId.has(nid)) linkedDocsByNoteId.set(nid, []);
+          linkedDocsByNoteId.get(nid).push({ id: docId, name: docName });
+        });
+      });
       const notes = (Array.isArray(allNotesRaw) ? allNotesRaw : []).filter((note) => !Number(note?.archivedAt || 0));
+      renderGlobalNotesThemeTabs(notes);
       const me = String(currentUser?.userId || '').trim();
       const queryNeedle = normalizeSearch(globalNotesSearchQuery);
       const filtered = notes
@@ -16009,6 +16892,10 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
           if (globalNotesTabMode === 'private' && visibility !== 'private') return false;
           if (globalNotesTabMode === 'transverse' && visibility !== 'transverse') return false;
           if (globalNotesTabMode === 'published' && note.shareToGlobalFeed !== true) return false;
+          if (globalNotesThemeFilter !== 'all') {
+            const themeKey = normalizeCatalogKey(String(note?.theme || '').trim() || 'Sans thematique');
+            if (themeKey !== globalNotesThemeFilter) return false;
+          }
           if (!queryNeedle) return true;
           const blob = normalizeSearch([
             note.title,
@@ -16049,15 +16936,79 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       } else {
         const pagination = paginateItems(filtered, globalNotesPage, paginationConfig.globalNotesPerPage);
         globalNotesPage = pagination.currentPage;
-        host.innerHTML = pagination.pageItems.map((note) => {
-          const identity = resolveKnownUserIdentity(String(note.createdBy || ''), String(note.createdByName || fallbackDirectoryName(note.createdBy || '')));
-          return buildGlobalNoteCardHtml(note, {
-            canManage: canManageGlobalNote(note),
-            authorName: identity?.name || note.createdByName || fallbackDirectoryName(note.createdBy || ''),
-            bulkSelectionMode: globalNotesBulkSelectionMode,
-            isSelectedForBulkDelete: selectedGlobalNoteIdsForBulkDelete.has(String(note.noteId || '').trim())
-          });
-        }).join('');
+        if (globalNotesBulkSelectionMode) {
+          host.innerHTML = pagination.pageItems.map((note) => {
+            const identity = resolveKnownUserIdentity(String(note.createdBy || ''), String(note.createdByName || fallbackDirectoryName(note.createdBy || '')));
+            return buildGlobalNoteCardHtml(note, {
+              canManage: canManageGlobalNote(note),
+              authorName: identity?.name || note.createdByName || fallbackDirectoryName(note.createdBy || ''),
+              bulkSelectionMode: globalNotesBulkSelectionMode,
+              isSelectedForBulkDelete: selectedGlobalNoteIdsForBulkDelete.has(String(note.noteId || '').trim()),
+              linkedDocs: linkedDocsByNoteId.get(String(note.noteId || '').trim()) || []
+            });
+          }).join('');
+        } else {
+          const renderer = window.TaskMDAProjectNotes?.renderUnifiedNotesList;
+          if (typeof renderer === 'function') {
+            const authorById = new Map();
+            const canManageById = new Map();
+            pagination.pageItems.forEach((note) => {
+              const noteId = String(note?.noteId || '').trim();
+              if (!noteId) return;
+              const identity = resolveKnownUserIdentity(String(note.createdBy || ''), String(note.createdByName || fallbackDirectoryName(note.createdBy || '')));
+              authorById.set(noteId, identity?.name || note.createdByName || fallbackDirectoryName(note.createdBy || ''));
+              canManageById.set(noteId, canManageGlobalNote(note));
+            });
+            renderer(host, {
+              notes: pagination.pageItems,
+              mode: 'all',
+              query: '',
+              currentUserId: String(currentUser?.userId || ''),
+              taskTitleById: new Map(),
+              authorById,
+              canManageById,
+              noteDocsCountById: linkedDocsByNoteId,
+              focusNoteId: String(globalNotesFocusNoteId || ''),
+              cardIdPrefix: 'global-note',
+              openFn: 'openGlobalNoteReadModal',
+              showTaskLinks: false,
+              actionsRenderer: (note, actionCtx) => {
+                const noteId = escapeHtml(String(note?.noteId || ''));
+                if (!actionCtx?.canManage) return '';
+                return `
+                  <button type="button" class="task-action-btn" data-action-kind="edit" data-action-label="Modifier la note" aria-label="Modifier la note" title="Modifier" onclick="openGlobalNoteEditor('${noteId}')"><span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">edit</span></button>
+                  <button type="button" class="task-action-btn task-action-btn-subtle" data-action-kind="manage" data-action-label="${Number(note.favoriteAt || 0) > 0 ? 'Retirer des favoris' : 'Ajouter aux favoris'}" aria-label="${Number(note.favoriteAt || 0) > 0 ? 'Retirer des favoris' : 'Ajouter aux favoris'}" title="${Number(note.favoriteAt || 0) > 0 ? 'Retirer des favoris' : 'Ajouter aux favoris'}" onclick="toggleGlobalNoteFavorite('${noteId}')"><span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">tune</span></button>
+                  <button type="button" class="task-action-btn task-action-btn-subtle" data-action-kind="notify" data-action-label="Publier dans le fil" aria-label="Publier dans le fil" title="${note.shareToGlobalFeed ? 'Retirer du fil' : 'Publier dans le fil'}" onclick="toggleGlobalNoteFeedPublish('${noteId}')"><span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">mail</span></button>
+                  <button type="button" class="task-action-btn task-action-btn-subtle" data-action-kind="export" data-action-label="Exporter TXT" aria-label="Exporter TXT" title="Exporter TXT" onclick="exportGlobalNote('${noteId}', 'txt')"><span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">download</span></button>
+                  <button type="button" class="task-action-btn task-action-btn-subtle" data-action-kind="open" data-action-label="Ouvrir la note" aria-label="Ouvrir la note" title="Ouvrir" onclick="openGlobalNoteReadModal('${noteId}')"><span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">sync_alt</span></button>
+                  <div class="relative inline-block">
+                    <button type="button" class="task-action-btn task-action-btn-subtle" data-action-kind="export" data-action-label="Menu d'export" aria-label="Menu d'export" title="Exporter (HTML/PDF/DOCX/TXT)" onclick="toggleGlobalNoteExportMenu('${noteId}', event)" aria-haspopup="true" aria-expanded="false" id="export-menu-btn-${noteId}">
+                      <span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">inventory_2</span>
+                    </button>
+                    <div id="export-menu-${noteId}" class="hidden absolute right-0 mt-1 w-44 bg-white rounded-lg shadow-lg border border-slate-200 z-50 overflow-hidden" role="menu" onclick="event.stopPropagation();">
+                      <button type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2" onclick="exportGlobalNote('${noteId}', 'html'); closeGlobalNoteExportMenu('${noteId}');" role="menuitem"><span class="material-symbols-outlined" style="font-size: 16px;">code</span>Exporter HTML</button>
+                      <button type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2" onclick="exportGlobalNoteAsPdf('${noteId}'); closeGlobalNoteExportMenu('${noteId}');" role="menuitem"><span class="material-symbols-outlined" style="font-size: 16px;">picture_as_pdf</span>Exporter PDF</button>
+                      <button type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2" onclick="exportGlobalNoteAsDocx('${noteId}'); closeGlobalNoteExportMenu('${noteId}');" role="menuitem"><span class="material-symbols-outlined" style="font-size: 16px;">description</span>Exporter DOCX</button>
+                      <button type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2" onclick="exportGlobalNote('${noteId}', 'txt'); closeGlobalNoteExportMenu('${noteId}');" role="menuitem"><span class="material-symbols-outlined" style="font-size: 16px;">text_snippet</span>Exporter TXT</button>
+                    </div>
+                  </div>
+                  <button type="button" class="task-action-btn task-action-btn-danger" data-action-kind="danger" data-action-label="Supprimer la note" aria-label="Supprimer la note" title="Supprimer" onclick="deleteGlobalNote('${noteId}')"><span class="material-symbols-outlined taskmda-action-icon" aria-hidden="true">delete</span></button>
+                `;
+              }
+            });
+          } else {
+            host.innerHTML = pagination.pageItems.map((note) => {
+              const identity = resolveKnownUserIdentity(String(note.createdBy || ''), String(note.createdByName || fallbackDirectoryName(note.createdBy || '')));
+              return buildGlobalNoteCardHtml(note, {
+                canManage: canManageGlobalNote(note),
+                authorName: identity?.name || note.createdByName || fallbackDirectoryName(note.createdBy || ''),
+                bulkSelectionMode: globalNotesBulkSelectionMode,
+                isSelectedForBulkDelete: selectedGlobalNoteIdsForBulkDelete.has(String(note.noteId || '').trim()),
+                linkedDocs: linkedDocsByNoteId.get(String(note.noteId || '').trim()) || []
+              });
+            }).join('');
+          }
+        }
         renderPagination('global-notes-pagination', pagination, 'setGlobalNotesPage', 'notes');
       }
       const tabs = {
@@ -17261,23 +18212,32 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       const cfg = rawConfig && typeof rawConfig === 'object' ? rawConfig : {};
       const enabled = !!cfg.enabled;
       if (!enabled) return null;
-      const frequency = ['weekly', 'monthly', 'yearly'].includes(String(cfg.frequency || ''))
-        ? String(cfg.frequency)
+      const rawFrequency = String(cfg.frequency || cfg.type || '').trim();
+      const frequency = ['weekly', 'monthly', 'yearly'].includes(rawFrequency)
+        ? rawFrequency
         : 'weekly';
       const interval = Math.max(1, Number.parseInt(String(cfg.interval || '1'), 10) || 1);
       const startDate = /^\d{4}-\d{2}-\d{2}$/.test(String(cfg.startDate || '')) ? String(cfg.startDate) : toYmd(new Date());
-      const endType = ['infinite', 'count', 'until'].includes(String(cfg.endType || ''))
-        ? String(cfg.endType)
+      const rawEndType = String(cfg.endType || '').trim();
+      const mappedEndType = rawEndType === 'never'
+        ? 'infinite'
+        : rawEndType === 'date'
+          ? 'until'
+          : rawEndType === 'occurrences'
+            ? 'count'
+            : rawEndType;
+      const endType = ['infinite', 'count', 'until'].includes(mappedEndType)
+        ? mappedEndType
         : 'infinite';
+      const rawDays = Array.isArray(cfg.days) ? cfg.days : [];
       const weekdays = Array.isArray(cfg.weekdays)
         ? [...new Set(cfg.weekdays.map((v) => Number.parseInt(String(v), 10)).filter((v) => Number.isInteger(v) && v >= 0 && v <= 6))]
-        : [];
+        : [...new Set(rawDays.map((v) => Number.parseInt(String(v), 10)).filter((v) => Number.isInteger(v) && v >= 0 && v <= 6))];
       const monthDays = Array.isArray(cfg.monthDays)
         ? [...new Set(cfg.monthDays.map((v) => Number.parseInt(String(v), 10)).filter((v) => Number.isInteger(v) && v >= 1 && v <= 31))]
-        : [];
-      const yearDates = Array.isArray(cfg.yearDates)
-        ? [...new Set(cfg.yearDates.map((v) => String(v || '').trim()).filter((v) => /^\d{2}-\d{2}$/.test(v)))]
-        : [];
+        : [...new Set(rawDays.map((v) => Number.parseInt(String(v), 10)).filter((v) => Number.isInteger(v) && v >= 1 && v <= 31))];
+      const rawYearDates = Array.isArray(cfg.yearDates) ? cfg.yearDates : (Array.isArray(cfg.dates) ? cfg.dates : []);
+      const yearDates = [...new Set(rawYearDates.map((v) => String(v || '').trim()).filter((v) => /^\d{2}-\d{2}$/.test(v)))];
       const normalized = {
         enabled: true,
         frequency,
@@ -17289,10 +18249,11 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         startDate
       };
       if (endType === 'count') {
-        normalized.endCount = Math.max(1, Number.parseInt(String(cfg.endCount || '10'), 10) || 10);
+        normalized.endCount = Math.max(1, Number.parseInt(String((cfg.endCount ?? cfg.count) || '10'), 10) || 10);
       } else if (endType === 'until') {
-        normalized.endDate = /^\d{4}-\d{2}-\d{2}$/.test(String(cfg.endDate || ''))
-          ? String(cfg.endDate)
+        const endDateRaw = String(cfg.endDate || cfg.untilDate || '');
+        normalized.endDate = /^\d{4}-\d{2}-\d{2}$/.test(endDateRaw)
+          ? endDateRaw
           : startDate;
       }
       return normalized;
@@ -18943,7 +19904,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       return String(value || '')
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[â€™â€˜]/g, "'")
+        .replace(/[’‘]/g, "'")
         .replace(/[“”]/g, '"')
         .replace(/\u2026/g, '...');
     }
@@ -24147,11 +25108,11 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         return;
       }
       if ((startTime && !endTime) || (!startTime && endTime)) {
-        showToast('Renseignez lâ€™heure de début et lâ€™heure de fin');
+        showToast('Renseignez l’heure de début et l’heure de fin');
         return;
       }
       if (startDate === endDate && startTime && endTime && endTime <= startTime) {
-        showToast('Sur la même journée, lâ€™heure de fin doit être après lâ€™heure de début');
+        showToast('Sur la même journée, l’heure de fin doit être après l’heure de début');
         return;
       }
       const editId = String(editingGlobalCalendarItemId || '').trim();
@@ -24187,13 +25148,33 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       const body = document.getElementById('docs-upload-body');
       const toggleBtn = document.getElementById('btn-toggle-docs-upload');
       const toggleIcon = document.getElementById('docs-upload-toggle-icon');
-      if (!body || !toggleBtn || !toggleIcon) return;
+      if (!body || !toggleBtn || !toggleIcon) {
+        globalDocsUploadCollapsed = Boolean(collapsed);
+        return;
+      }
       const shouldCollapse = Boolean(collapsed);
       globalDocsUploadCollapsed = shouldCollapse;
       body.classList.toggle('hidden', shouldCollapse);
       toggleBtn.setAttribute('aria-expanded', shouldCollapse ? 'false' : 'true');
       toggleBtn.title = shouldCollapse ? 'Développer' : 'Replier';
       toggleIcon.textContent = shouldCollapse ? 'expand_more' : 'expand_less';
+    }
+
+    function openGlobalDocUploadModal() {
+      const modal = document.getElementById('modal-global-doc-upload');
+      if (!modal) return;
+      notesShared?.openModal?.('modal-project-note');
+      if (!notesShared) {
+        modal.classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
+      }
+    }
+
+    function closeGlobalDocUploadModal() {
+      const modal = document.getElementById('modal-global-doc-upload');
+      if (!modal) return;
+      modal.classList.add('hidden');
+      document.body.classList.remove('overflow-hidden');
     }
 
     async function openDocumentPreviewByRef(refEncoded = '') {
@@ -24264,7 +25245,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
           title: 'Aucun document trouvé',
           text: 'Importez un document transverse ou modifiez vos filtres.',
           ctaLabel: 'Ajouter un document',
-          ctaOnclick: "(function(){const btn=document.getElementById('btn-toggle-docs-upload');const card=btn?.closest('.docs-upload-card');if(btn&&btn.getAttribute('aria-expanded')==='false'){btn.click();if(card){card.classList.add('highlight-flash');setTimeout(()=>card.classList.remove('highlight-flash'),1200);}}window.scrollTo({top:0,behavior:'smooth'});})()"
+          ctaOnclick: "(function(){document.getElementById('btn-open-global-doc-upload-modal')?.click();})()"
         });
         return;
       }
@@ -24607,6 +25588,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       });
       showToast('Documents hors projet ajoutés');
       addNotification('Documents', `${files.length} document(s) hors projet ajouté(s)`, null);
+      closeGlobalDocUploadModal();
       await renderGlobalDocs();
     }
 
@@ -26715,7 +27697,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       function lineLooksLikeHeading(line) {
         const txt = String(line?.text || '').trim();
         if (!txt || txt.length > 140) return false;
-        if (/^[\u2022\-�]\s/u.test(txt) || /^\d+\./.test(txt)) return false;
+        if (/^[\u2022\-*]\s/u.test(txt) || /^\d+\./.test(txt)) return false;
         const letters = txt.replace(/[^\p{L}]/gu, '');
         const upper = txt.replace(/[^\p{Lu}]/gu, '');
         const upperRatio = letters.length ? upper.length / letters.length : 0;
@@ -27533,6 +28515,227 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       return true;
     }
 
+    function buildInlineAttachedDocumentHtml(doc = {}) {
+      const docId = String(doc?.id || '').trim();
+      if (!docId) return '';
+      const ref = encodeDocumentPreviewRef({
+        sourceType: 'standalone',
+        id: docId,
+        sourceProjectName: 'Hors projet'
+      });
+      const label = escapeHtml(String(doc?.name || 'Document').trim() || 'Document');
+      const safeRef = escapeHtml(ref);
+      const safeDocId = escapeHtml(docId);
+      return `
+        <p data-doc-id="${safeDocId}">
+          <span class="inline-flex items-center gap-2 flex-wrap">
+            <span>📎 ${label}</span>
+            <a href="#" data-open-doc-ref="${safeRef}" data-doc-id="${safeDocId}" class="workspace-action-inline" data-action-kind="preview" data-action-label="Aperçu">Aperçu</a>
+            <a href="#" data-download-doc-ref="${safeRef}" data-doc-id="${safeDocId}" class="workspace-action-inline" data-action-kind="export" data-action-label="Télécharger">Télécharger</a>
+          </span>
+        </p>
+      `;
+    }
+
+    function extractLinkedGlobalDocIdsFromHtml(html = '') {
+      const source = String(html || '').trim();
+      if (!source) return [];
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = source;
+      const ids = new Set();
+      wrapper.querySelectorAll('[data-doc-id]').forEach((node) => {
+        const id = String(node.getAttribute('data-doc-id') || '').trim();
+        if (id) ids.add(id);
+      });
+      return Array.from(ids);
+    }
+
+    function stripInlineAttachedDocumentBlocksFromHtml(html = '') {
+      const source = String(html || '').trim();
+      if (!source) return '';
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = source;
+      wrapper.querySelectorAll('[data-doc-id]').forEach((node) => node.remove());
+      wrapper.querySelectorAll('[data-open-doc-ref],[data-download-doc-ref]').forEach((node) => {
+        const block = node.closest('p,div,li');
+        if (block) block.remove();
+      });
+      wrapper.querySelectorAll('p,div,li').forEach((node) => {
+        const txt = String(node.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        if (!txt) return;
+        if (txt.includes('aperçu') && txt.includes('télécharger') && txt.includes('📎'.toLowerCase())) {
+          node.remove();
+        }
+      });
+      return String(wrapper.innerHTML || '').trim();
+    }
+
+    async function resolveLinkedDocsForFeedPost(post = {}, allGlobalDocs = []) {
+      const refs = Array.isArray(post?.refs) ? post.refs : [];
+      const linkedGlobalNoteIds = new Set();
+      const linkedProjectNotes = [];
+      refs.forEach((ref) => {
+        const type = String(ref?.type || '').trim();
+        const rawId = String(ref?.id || '').trim();
+        if (!rawId) return;
+        if (type === 'global-note') {
+          linkedGlobalNoteIds.add(rawId);
+          return;
+        }
+        if (type === 'project-note') {
+          const parts = rawId.split(':');
+          const projectId = String(parts[0] || '').trim();
+          const noteId = String(parts[1] || '').trim();
+          if (projectId && noteId) linkedProjectNotes.push({ projectId, noteId });
+        }
+      });
+      const linkedDocIdsFromContent = new Set(extractLinkedGlobalDocIdsFromHtml(String(post?.content || '')));
+      const standaloneDocs = (Array.isArray(allGlobalDocs) ? allGlobalDocs : [])
+        .filter((doc) => {
+          const docId = String(doc?.id || '').trim();
+          if (!docId) return false;
+          if (linkedDocIdsFromContent.has(docId)) return true;
+          const noteIds = Array.isArray(doc?.linkedNoteIds) ? doc.linkedNoteIds : [];
+          return noteIds.some((noteId) => linkedGlobalNoteIds.has(String(noteId || '').trim()));
+        })
+        .map((doc) => ({
+          id: String(doc?.id || '').trim(),
+          name: String(doc?.name || 'Document').trim() || 'Document',
+          ref: encodeDocumentPreviewRef({
+            sourceType: 'standalone',
+            id: String(doc?.id || '').trim(),
+            sourceProjectName: 'Hors projet'
+          })
+        }))
+        .filter((doc) => doc.id);
+
+      const projectDocs = [];
+      for (const link of linkedProjectNotes) {
+        const state = await getProjectState(link.projectId, { ignoreAccessCheck: true });
+        if (!state?.project) continue;
+        (Array.isArray(state.documents) ? state.documents : []).forEach((doc) => {
+          const linkedNoteIds = Array.isArray(doc?.linkedNoteIds) ? doc.linkedNoteIds : [];
+          const isLinked = linkedNoteIds.some((noteId) => String(noteId || '').trim() === link.noteId);
+          if (!isLinked) return;
+          const docId = String(doc?.docId || '').trim();
+          if (!docId) return;
+          projectDocs.push({
+            id: `${link.projectId}:project-doc:${docId}`,
+            name: String(doc?.name || 'Document').trim() || 'Document',
+            ref: encodeDocumentPreviewRef({
+              sourceType: 'project-doc',
+              projectId: link.projectId,
+              docId,
+              sourceProjectName: state.project.name
+            })
+          });
+        });
+      }
+
+      const unique = new Map();
+      [...standaloneDocs, ...projectDocs].forEach((doc) => {
+        const key = String(doc?.id || '').trim();
+        if (!key || unique.has(key)) return;
+        unique.set(key, doc);
+      });
+      return Array.from(unique.values())
+        .filter((doc) => doc.id);
+    }
+
+    async function syncGlobalNoteLinkedDocuments(noteId = '', linkedDocIdsInput = []) {
+      const nid = String(noteId || '').trim();
+      if (!nid) return;
+      const linkedDocIds = new Set(
+        (Array.isArray(linkedDocIdsInput) ? linkedDocIdsInput : [])
+          .map((id) => String(id || '').trim())
+          .filter(Boolean)
+      );
+      const allDocs = await getAllDecrypted('globalDocs', 'id');
+      for (const row of (Array.isArray(allDocs) ? allDocs : [])) {
+        const docId = String(row?.id || '').trim();
+        if (!docId) continue;
+        const prevLinked = Array.isArray(row?.linkedNoteIds)
+          ? row.linkedNoteIds.map((id) => String(id || '').trim()).filter(Boolean)
+          : [];
+        const prevSet = new Set(prevLinked);
+        const shouldLink = linkedDocIds.has(docId);
+        const hasLink = prevSet.has(nid);
+        if (shouldLink === hasLink) continue;
+        if (shouldLink) prevSet.add(nid);
+        else prevSet.delete(nid);
+        await putEncrypted('globalDocs', {
+          ...row,
+          linkedNoteIds: Array.from(prevSet),
+          updatedAt: Date.now()
+        }, 'id');
+      }
+    }
+
+    async function attachDocumentsToRichEditorFromInput(inputId, options = {}) {
+      const sourceInput = document.getElementById(String(inputId || '').trim());
+      const selectedFiles = Array.from(sourceInput?.files || []);
+      if (!selectedFiles.length) return false;
+
+      const theme = String(options?.theme || '').trim() || 'General';
+      const rubric = String(options?.rubric || '').trim() || 'global-editor-attachment';
+      const sharingMode = normalizeSharingMode(options?.sharingMode || (sharedFolderHandle ? 'shared' : 'private'), 'private');
+      const docs = await readDocumentFilesFromInput(String(inputId || ''), {
+        projectId: 'global',
+        scope: 'global',
+        rubric,
+        theme
+      });
+      if (!Array.isArray(docs) || docs.length === 0) return false;
+
+      const insertedBlocks = [];
+      for (const file of docs) {
+        const row = {
+          id: uuidv4(),
+          name: file.name,
+          type: file.type || 'application/octet-stream',
+          size: file.size,
+          data: file.data || '',
+          storageMode: file.storageMode || '',
+          storageProvider: file.storageProvider || '',
+          storagePath: file.storagePath || '',
+          storedAt: Number(file.storedAt || 0) || null,
+          theme,
+          sharingMode,
+          createdAt: Date.now()
+        };
+        await putEncrypted('globalDocs', row, 'id');
+        insertedBlocks.push(buildInlineAttachedDocumentHtml(row));
+      }
+
+      if (sourceInput) sourceInput.value = '';
+      const inserted = appendDigestBlocksToEditorById(
+        String(options?.editorId || ''),
+        String(options?.fallbackInputId || ''),
+        insertedBlocks
+      );
+      if (!inserted) return false;
+      if (String(options?.editorId || '') === 'global-feed-editor') {
+        await updateGlobalFeedMentionCounter();
+      }
+      await renderGlobalDocs();
+      showToast(`${docs.length} document(s) intégré(s)`);
+      return true;
+    }
+
+    async function importDocumentsIntoGlobalFeedEditor() {
+      await attachDocumentsToRichEditorFromInput('global-feed-attach-doc-files', {
+        editorId: 'global-feed-editor',
+        fallbackInputId: 'global-feed-input',
+        rubric: 'global-feed-attachment',
+        theme: 'Fil-info',
+        sharingMode: sharedFolderHandle ? 'shared' : 'private'
+      });
+    }
+
+    async function importDocumentsIntoGlobalNoteEditor() {
+      return false;
+    }
+
     async function publishGlobalFeedPost() {
       const input = document.getElementById('global-feed-input');
       const titleInput = document.getElementById('global-feed-title');
@@ -27579,12 +28782,16 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
           existing.content = applyProfanityFilterToHtml(content);
           existing.mentions = mentions;
           existing.refs = refs;
+          existing.summaryWordCount = getFeedSummaryWordCount();
+          existing.summary = computeGlobalFeedPostAutoSummary(existing, existing.summaryWordCount);
           existing.updatedAt = Date.now();
           await putEncrypted('globalPosts', existing, 'postId');
           knownGlobalPostIds.add(existing.postId);
           
           if (typeof quill !== 'undefined' && quill) quill.root.innerHTML = '';
           input.value = '';
+          const attachInput = document.getElementById('global-feed-attach-doc-files');
+          if (attachInput) attachInput.value = '';
           if (titleInput) titleInput.value = '';
           projectSelect.value = '';
           taskSelect.value = '';
@@ -27608,12 +28815,17 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         content,
         mentions,
         refs,
+        summaryWordCount: getFeedSummaryWordCount(),
+        summary: '',
         createdAt: Date.now(),
         source: sharedFolderHandle ? 'shared' : 'local'
       };
+      post.summary = computeGlobalFeedPostAutoSummary(post, post.summaryWordCount);
       await putEncrypted('globalPosts', post, 'postId');
       knownGlobalPostIds.add(post.postId);
       input.value = '';
+      const attachInput = document.getElementById('global-feed-attach-doc-files');
+      if (attachInput) attachInput.value = '';
       if (titleInput) titleInput.value = '';
       if (typeof quill !== 'undefined' && quill) quill.root.innerHTML = '';
       projectSelect.value = '';
@@ -27649,12 +28861,14 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         projectNotesFocusNoteId = noteId;
         await showProjectDetail(projectId, { resetScroll: true });
         setProjectView('notes');
+        openProjectNoteReadModal(noteId);
         return;
       }
       if (t === 'global-note') {
         globalNotesFocusNoteId = id;
         await showGlobalWorkspace('notes');
-        openGlobalNoteEditor(id);
+        await renderGlobalNotes();
+        openGlobalNoteReadModal(id);
         return;
       }
       if (t === 'calendar-info') {
@@ -27758,6 +28972,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
           ? Number(a.createdAt || 0) - Number(b.createdAt || 0)
           : Number(b.createdAt || 0) - Number(a.createdAt || 0)
       ));
+      const allDocs = await getAllDecrypted('globalDocs', 'id');
 
       if (posts.length === 0) {
         list.innerHTML = buildWorkspaceEmptyState({
@@ -27770,19 +28985,129 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         return;
       }
 
-      list.innerHTML = posts.map((post) => {
+      const cardsHtml = [];
+      const unifiedNotesRenderer = window.TaskMDAProjectNotes?.renderUnifiedNotesList;
+      const renderFeedNoteCardHtml = (post, refs, linkedDocs, isFocused, typeLabel, typeClass) => {
+        if (typeof unifiedNotesRenderer !== 'function') return '';
+        const postId = String(post?.postId || '').trim();
+        if (!postId) return '';
+        let noteRef = refs.find((ref) => {
+          const type = String(ref?.type || '').trim();
+          return type === 'global-note' || type === 'project-note';
+        });
+        if (!noteRef) {
+          const sourceEventId = String(post?.sourceEventId || '').trim();
+          if (sourceEventId.startsWith('global-note:')) {
+            const globalNoteId = sourceEventId.slice('global-note:'.length).trim();
+            if (globalNoteId) {
+              noteRef = { type: 'global-note', id: globalNoteId, label: String(post?.title || '').trim() || 'Note transverse' };
+            }
+          } else if (sourceEventId.startsWith('project-note:')) {
+            const projectNoteRef = sourceEventId.slice('project-note:'.length).trim();
+            if (projectNoteRef) {
+              noteRef = { type: 'project-note', id: projectNoteRef, label: String(post?.title || '').trim() || 'Note projet' };
+            }
+          }
+        }
+        if (!noteRef) return '';
+        const refType = String(noteRef?.type || '').trim();
+        const refId = String(noteRef?.id || '').trim();
+        const refLabel = String(noteRef?.label || '').trim();
+        const pseudoNoteId = `feed-note-${postId}`;
+        const pseudoNote = {
+          noteId: pseudoNoteId,
+          title: refLabel || String(post?.title || '').trim() || 'Note sans titre',
+          content: String(post?.content || ''),
+          createdBy: String(post?.authorUserId || ''),
+          createdAt: Number(post?.createdAt || Date.now()) || Date.now(),
+          updatedAt: Number(post?.updatedAt || post?.createdAt || Date.now()) || Date.now(),
+          shareToGlobalFeed: true,
+          tags: []
+        };
+        const authorById = new Map([[pseudoNoteId, String(post?.authorName || fallbackDirectoryName(post?.authorUserId || ''))]]);
+        const canManageById = new Map([[pseudoNoteId, false]]);
+        const noteDocsCountById = new Map([[pseudoNoteId, Number(Array.isArray(linkedDocs) ? linkedDocs.length : 0)]]);
+        const tempHost = document.createElement('div');
+        unifiedNotesRenderer(tempHost, {
+          notes: [pseudoNote],
+          mode: 'all',
+          query: '',
+          currentUserId: String(currentUser?.userId || ''),
+          taskTitleById: new Map(),
+          authorById,
+          canManageById,
+          noteDocsCountById,
+          cardIdPrefix: 'global-feed-note',
+          openFn: refType === 'global-note' ? 'openGlobalNoteReadModal' : 'openGlobalFeedReference',
+          showTaskLinks: false,
+          actionsRenderer: () => ''
+        });
+        let noteCardHtml = String(tempHost.innerHTML || '').trim();
+        if (!noteCardHtml) return '';
+        if (refType === 'project-note') {
+          const encoded = encodeURIComponent(refId);
+          noteCardHtml = noteCardHtml
+            .replace(`openGlobalFeedReference('${escapeHtml(pseudoNoteId)}')`, `openGlobalFeedReference('project-note','${encoded}')`)
+            .replace(`id="global-feed-note-${escapeHtml(pseudoNoteId)}"`, `id="global-feed-note-${escapeHtml(postId)}"`);
+        } else {
+          noteCardHtml = noteCardHtml
+            .replace(`openGlobalNoteReadModal('${escapeHtml(pseudoNoteId)}')`, `openGlobalNoteReadModal('${escapeHtml(refId)}')`)
+            .replace(`id="global-feed-note-${escapeHtml(pseudoNoteId)}"`, `id="global-feed-note-${escapeHtml(postId)}"`);
+        }
+        return `
+          <article id="global-feed-post-${postId}" class="feed-item ${isFocused ? 'border-blue-400 shadow-[0_0_0_2px_rgba(59,130,246,0.15)]' : ''}">
+            <div class="feed-item-head">
+              <div class="feed-item-meta">
+                <span class="material-symbols-outlined text-slate-400">sticky_note_2</span>
+                <div>
+                  <p class="text-sm font-semibold text-slate-800">Note partagée</p>
+                  <p class="text-xs text-slate-500">${new Date(Number(post.createdAt || Date.now())).toLocaleString('fr-FR')}</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                ${refType === 'global-note'
+                  ? `<button onclick="event.stopPropagation(); openGlobalNoteReadModal('${escapeHtml(refId)}')" class="workspace-action-inline" data-action-kind="open" title="Lire">Lire</button>`
+                  : `<button onclick="event.stopPropagation(); openGlobalFeedReference('project-note','${encodeURIComponent(refId)}')" class="workspace-action-inline" data-action-kind="open" title="Lire">Lire</button>`}
+                <div class="relative inline-block">
+                  <button type="button" class="workspace-action-inline" data-action-kind="export" data-action-label="Menu d'export" onclick="toggleGlobalFeedExportMenu('${escapeHtml(postId)}', event)" aria-haspopup="true" aria-expanded="false" id="feed-export-menu-btn-${escapeHtml(postId)}">
+                    Exporter
+                  </button>
+                  <div id="feed-export-menu-${escapeHtml(postId)}" class="hidden absolute right-0 mt-1 w-44 bg-white rounded-lg shadow-lg border border-slate-200 z-50 overflow-hidden" role="menu" onclick="event.stopPropagation();">
+                    <button type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2" onclick="exportGlobalFeedPost('${escapeHtml(postId)}', 'html'); closeGlobalFeedExportMenu('${escapeHtml(postId)}');" role="menuitem"><span class="material-symbols-outlined text-[16px]">code</span><span>Exporter HTML</span></button>
+                    <button type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2" onclick="exportGlobalFeedPostAsPdf('${escapeHtml(postId)}'); closeGlobalFeedExportMenu('${escapeHtml(postId)}');" role="menuitem"><span class="material-symbols-outlined text-[16px]">picture_as_pdf</span><span>Exporter PDF</span></button>
+                    <button type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2" onclick="exportGlobalFeedPostAsDocx('${escapeHtml(postId)}'); closeGlobalFeedExportMenu('${escapeHtml(postId)}');" role="menuitem"><span class="material-symbols-outlined text-[16px]">description</span><span>Exporter DOCX</span></button>
+                    <button type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2" onclick="exportGlobalFeedPost('${escapeHtml(postId)}', 'txt'); closeGlobalFeedExportMenu('${escapeHtml(postId)}');" role="menuitem"><span class="material-symbols-outlined text-[16px]">notes</span><span>Exporter TXT</span></button>
+                  </div>
+                </div>
+                <span class="text-slate-300">|</span>
+                <span class="feed-item-type ${typeClass}">${typeLabel}</span>
+              </div>
+            </div>
+            <div class="feed-item-body">
+              ${noteCardHtml}
+            </div>
+          </article>
+        `;
+      };
+      for (const post of posts) {
         const postId = String(post.postId || '');
         const mentions = (post.mentions || [])
           .map((id) => mentionCatalog?.byUserId?.get(String(id || '')))
           .filter(Boolean);
         const refs = Array.isArray(post.refs) ? post.refs : [];
+        const linkedDocs = await resolveLinkedDocsForFeedPost(post, allDocs);
         const isFocused = globalFeedFocusPostId && globalFeedFocusPostId === postId;
         const isAuto = Boolean(post.isAuto || post.sourceEventId);
         const typeLabel = isAuto ? 'Activité auto' : 'Post manuel';
         const typeClass = isAuto ? 'feed-item-type-auto' : 'feed-item-type-manual';
+        const noteCardHtml = renderFeedNoteCardHtml(post, refs, linkedDocs, isFocused, typeLabel, typeClass);
+        if (noteCardHtml) {
+          cardsHtml.push(noteCardHtml);
+          continue;
+        }
         const identity = resolveKnownUserIdentity(post.authorUserId || '', post.authorName || fallbackDirectoryName(post.authorUserId || ''));
         const avatarStyle = safeAvatarInlineStyle(identity.avatarDataUrl, stringToColor(post.authorUserId || post.authorName || ''));
-        return `
+        cardsHtml.push(`
           <article id="global-feed-post-${postId}" class="feed-item ${isFocused ? 'border-blue-400 shadow-[0_0_0_2px_rgba(59,130,246,0.15)]' : ''} cursor-pointer" onclick="toggleCollapsibleContent(this.querySelector('.collapsible-toggle'))">
             <div class="feed-item-head">
               <div class="feed-item-meta">
@@ -27806,19 +29131,19 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
                   <div id="feed-export-menu-${escapeHtml(postId)}" class="hidden absolute right-0 mt-1 w-44 bg-white rounded-lg shadow-lg border border-slate-200 z-50 overflow-hidden" role="menu" onclick="event.stopPropagation();">
                     <button type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2" onclick="exportGlobalFeedPost('${escapeHtml(postId)}', 'html'); closeGlobalFeedExportMenu('${escapeHtml(postId)}');" role="menuitem">
                       <span class="material-symbols-outlined text-[16px]">code</span>
-                      <span>HTML</span>
+                      <span>Exporter HTML</span>
                     </button>
                     <button type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2" onclick="exportGlobalFeedPostAsPdf('${escapeHtml(postId)}'); closeGlobalFeedExportMenu('${escapeHtml(postId)}');" role="menuitem">
                       <span class="material-symbols-outlined text-[16px]">picture_as_pdf</span>
-                      <span>PDF</span>
+                      <span>Exporter PDF</span>
                     </button>
                     <button type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2" onclick="exportGlobalFeedPostAsDocx('${escapeHtml(postId)}'); closeGlobalFeedExportMenu('${escapeHtml(postId)}');" role="menuitem">
                       <span class="material-symbols-outlined text-[16px]">description</span>
-                      <span>DOCX</span>
+                      <span>Exporter DOCX</span>
                     </button>
                     <button type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2" onclick="exportGlobalFeedPost('${escapeHtml(postId)}', 'txt'); closeGlobalFeedExportMenu('${escapeHtml(postId)}');" role="menuitem">
                       <span class="material-symbols-outlined text-[16px]">notes</span>
-                      <span>TXT</span>
+                      <span>Exporter TXT</span>
                     </button>
                   </div>
                 </div>
@@ -27849,11 +29174,39 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
             ${refs.length > 0 ? `
               <div class="feed-item-refs">
                 ${refs.map((ref) => `<button onclick="event.stopPropagation(); openGlobalFeedReference('${escapeHtml(ref.type || '')}','${encodeURIComponent(String(ref.id || ''))}')" class="feed-ref-btn">${escapeHtml(ref.label || 'Référence')}</button>`).join('')}
+                ${refs.map((ref) => {
+                  const type = String(ref?.type || '').trim();
+                  const rid = String(ref?.id || '').trim();
+                  if (type === 'global-note' && rid) {
+                    return `<button onclick="event.stopPropagation(); openGlobalNoteReadModal('${escapeHtml(rid)}')" class="workspace-action-inline" data-action-kind="open" data-action-label="Lire la note">Lire note</button>`;
+                  }
+                  if (type === 'project-note' && rid) {
+                    const encoded = encodeURIComponent(rid);
+                    return `<button onclick="event.stopPropagation(); openGlobalFeedReference('project-note','${encoded}')" class="workspace-action-inline" data-action-kind="open" data-action-label="Ouvrir la note projet">Ouvrir note projet</button>`;
+                  }
+                  return '';
+                }).join('')}
+              </div>
+            ` : ''}
+            ${linkedDocs.length > 0 ? `
+              <div class="feed-item-refs mt-2">
+                ${linkedDocs.map((doc) => {
+                  const ref = String(doc?.ref || '').trim();
+                  if (!ref) return '';
+                  return `
+                    <span class="inline-flex items-center gap-1 mr-2 mb-1" onclick="event.stopPropagation();">
+                      <span class="feed-ref-btn" style="cursor: default;">📎 ${escapeHtml(doc.name)}</span>
+                      <button type="button" class="workspace-action-inline" data-action-kind="preview" data-action-label="Aperçu" onclick="event.stopPropagation(); openDocumentPreviewByRef('${escapeHtml(ref)}')">Aperçu</button>
+                      <button type="button" class="workspace-action-inline" data-action-kind="export" data-action-label="Télécharger" onclick="event.stopPropagation(); downloadDocumentByRef('${escapeHtml(ref)}')">Télécharger</button>
+                    </span>
+                  `;
+                }).join('')}
               </div>
             ` : ''}
           </article>
-        `;
-      }).join('');
+        `);
+      }
+      list.innerHTML = cardsHtml.join('');
       if (globalFeedFocusPostId) {
         const target = document.getElementById(`global-feed-post-${globalFeedFocusPostId}`);
         if (target) {
@@ -27890,12 +29243,16 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     window.deleteGlobalFeedPost = deleteGlobalFeedPost;
     window.openGlobalFeedPostReadModal = openGlobalFeedPostReadModal;
     window.openGlobalNoteReadModal = openGlobalNoteReadModal;
+    window.deleteGlobalNoteLinkedDocument = deleteGlobalNoteLinkedDocument;
     window.closeGlobalReadModal = closeGlobalReadModal;
     window.toggleGlobalFeedExportMenu = toggleGlobalFeedExportMenu;
     window.closeGlobalFeedExportMenu = closeGlobalFeedExportMenu;
     window.exportGlobalFeedPost = exportGlobalFeedPost;
     window.exportGlobalFeedPostAsPdf = exportGlobalFeedPostAsPdf;
     window.exportGlobalFeedPostAsDocx = exportGlobalFeedPostAsDocx;
+    window.exportProjectNote = exportProjectNote;
+    window.toggleProjectNoteExportMenu = toggleProjectNoteExportMenu;
+    window.closeProjectNoteExportMenu = closeProjectNoteExportMenu;
     window.openGlobalFeedComposerForNewPost = openGlobalFeedComposerForNewPost;
     window.TaskMDARequestDigestForEditor = requestDigestImportForEditor;
 
@@ -28488,7 +29845,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       const message = [
         `Lier une fiche RGPD à: ${ref.label || `${ref.entityType}:${ref.entityId}`}`,
         '',
-        'Saisissez le numéro (1..N) ou lâ€™identifiant RGPD :',
+        'Saisissez le numéro (1..N) ou l’identifiant RGPD :',
         ...preview.map((activity, index) => `${index + 1}. ${activity.title} [${activity.id}]`)
       ].join('\n');
       const choice = window.prompt(message, '1');
@@ -28505,7 +29862,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       const title = activity?.title || 'Aucune fiche liée';
       const details = activity
         ? `Complétude: ${Math.max(0, Number(activity.completenessScore || 0))}%`
-        : 'Créez ou liez une fiche pour tracer lâ€™impact RGPD.';
+        : 'Créez ou liez une fiche pour tracer l’impact RGPD.';
       return `
         <section class="modal-section-neo rounded-xl border border-blue-200 bg-blue-50/60 p-3">
           <div class="flex items-center justify-between cursor-pointer" onclick="toggleRgpdImpactCard(this)">
@@ -34004,6 +35361,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
             closeGlobalNoteEditor,
             pickGlobalFeedDigestImportMode,
             requestDigestImportForEditor,
+            importDocumentsIntoGlobalNoteEditor,
             toggleGlobalNoteFeedPublish,
             toggleGlobalNoteFavorite,
             exportGlobalNote,
@@ -34127,6 +35485,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
             openGlobalFeedComposerForNewPost,
             updateGlobalFeedMentionCounter,
             openGlobalFeedPost,
+            importDocumentsIntoGlobalFeedEditor,
             refreshManagedTabOverflow
           }
         })
@@ -34143,6 +35502,35 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
             openGlobalMessageGroupChannelFromCatalog,
             handleGlobalMessageContactsScroll,
             handleGlobalMessageThreadScroll
+          }
+        })
+      : null;
+
+    const globalEmailRuntime = window.TaskMDAEmailGenerator?.createModule
+      ? window.TaskMDAEmailGenerator.createModule({
+          actions: {
+            load: async () => {
+              try {
+                const row = await getDecrypted('appSettings', 'emailGeneratorConfig', 'key');
+                return row?.value || null;
+              } catch (error) {
+                const message = String(error?.message || '');
+                if (message.includes('Database not initialized')) return null;
+                throw error;
+              }
+            },
+            save: async (value) => {
+              await putEncrypted('appSettings', { key: 'emailGeneratorConfig', value }, 'key');
+            }
+          },
+          helpers: {
+            showToast,
+            escapeHtml,
+            getAppName: () => String(document.getElementById('app-header-name')?.textContent || 'NEXUS MDA').trim() || 'NEXUS MDA',
+            getUserName: () => String(currentUser?.name || 'Utilisateur').trim() || 'Utilisateur',
+            getProjectName: () => String(currentProjectState?.project?.name || '').trim(),
+            getTaskTitle: () => String(editingTaskId || '').trim(),
+            getStatus: () => String(document.getElementById('project-task-status')?.value || '').trim()
           }
         })
       : null;
@@ -34298,6 +35686,50 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         await renderDashboardNews();
       }
       showToast(`Seuil de la Une mis à jour: ${chars} caractères`);
+    });
+    document.getElementById('view-option-feed-summary-words')?.addEventListener('change', async (e) => {
+      if (!isAppAdmin()) {
+        showToast('Action reservee a l admin application');
+        await renderGlobalSettings();
+        return;
+      }
+      const target = e.target;
+      const words = normalizeFeedSummaryWordCount(target?.value);
+      if (target) target.value = String(words);
+      const next = deepClone(viewOptions || DEFAULT_VIEW_OPTIONS);
+      next.ui = next.ui || {};
+      next.ui.feedSummaryWordCount = words;
+      await saveViewOptions(next);
+      const current = document.getElementById('view-option-feed-summary-words-current');
+      if (current) current.textContent = `Longueur actuelle: ${words} mots`;
+      if (workspaceMode === 'dashboard') {
+        await renderDashboardNews();
+      }
+      showToast(`Resume automatique configure: ${words} mots`);
+    });
+    document.getElementById('view-option-feed-summary-enabled')?.addEventListener('change', async (e) => {
+      if (!isAppAdmin()) {
+        showToast('Action reservee a l admin application');
+        await renderGlobalSettings();
+        return;
+      }
+      const enabled = e?.target?.checked !== false;
+      const next = deepClone(viewOptions || DEFAULT_VIEW_OPTIONS);
+      next.ui = next.ui || {};
+      next.ui.feedSummaryAutoEnabled = enabled;
+      await saveViewOptions(next);
+      const current = document.getElementById('view-option-feed-summary-words-current');
+      if (current) {
+        current.textContent = enabled
+          ? `Longueur actuelle: ${getFeedSummaryWordCount()} mots`
+          : 'Résumé auto désactivé';
+      }
+      const wordsInput = document.getElementById('view-option-feed-summary-words');
+      if (wordsInput) wordsInput.disabled = !enabled || !isAppAdmin();
+      if (workspaceMode === 'dashboard') {
+        await renderDashboardNews();
+      }
+      showToast(enabled ? 'Résumé automatique activé' : 'Résumé automatique désactivé');
     });
     document.getElementById('btn-via-annuaire-ror-save')?.addEventListener('click', async () => {
       if (!isAppAdmin()) {
@@ -34608,6 +36040,12 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     });
     document.getElementById('btn-toggle-docs-upload')?.addEventListener('click', () => {
       setGlobalDocsUploadCollapsed(!globalDocsUploadCollapsed);
+    });
+    document.getElementById('btn-open-global-doc-upload-modal')?.addEventListener('click', () => {
+      openGlobalDocUploadModal();
+    });
+    document.getElementById('btn-close-global-doc-upload-modal')?.addEventListener('click', () => {
+      closeGlobalDocUploadModal();
     });
     document.getElementById('btn-toggle-project-docs-upload')?.addEventListener('click', () => {
       setProjectDocsUploadCollapsed(!projectDocsUploadCollapsed);
@@ -35118,6 +36556,22 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     document.getElementById('project-settings-tab-themes')?.addEventListener('click', () => setProjectSettingsTab('themes'));
     document.getElementById('project-settings-tab-permissions')?.addEventListener('click', () => setProjectSettingsTab('permissions'));
     document.getElementById('project-settings-tab-structure')?.addEventListener('click', () => setProjectSettingsTab('structure'));
+    document.getElementById('global-settings-tab-branding')?.addEventListener('click', () => setGlobalSettingsTab('branding'));
+    document.getElementById('global-settings-tab-themes')?.addEventListener('click', () => setGlobalSettingsTab('themes'));
+    document.getElementById('global-settings-tab-groups')?.addEventListener('click', () => setGlobalSettingsTab('groups'));
+    document.getElementById('global-settings-tab-roles')?.addEventListener('click', () => setGlobalSettingsTab('roles'));
+    document.getElementById('global-settings-tab-annuaire')?.addEventListener('click', () => setGlobalSettingsTab('annuaire'));
+    document.getElementById('global-settings-tab-file-watcher')?.addEventListener('click', () => setGlobalSettingsTab('file-watcher'));
+    document.getElementById('global-settings-tab-email')?.addEventListener('click', () => setGlobalSettingsTab('email'));
+    document.getElementById('global-settings-tab-quick-links')?.addEventListener('click', () => setGlobalSettingsTab('quick-links'));
+    document.getElementById('global-settings-tab-views')?.addEventListener('click', () => setGlobalSettingsTab('views'));
+    document.getElementById('btn-quick-link-save')?.addEventListener('click', () => {
+      saveQuickAccessLinkFromForm().catch((error) => {
+        console.error('quick link save failed', error);
+        showToast('Erreur lors de l enregistrement du raccourci');
+      });
+    });
+    document.getElementById('btn-quick-link-reset')?.addEventListener('click', () => resetQuickAccessLinkForm());
     document.getElementById('btn-toggle-permissions-details')?.addEventListener('click', () => {
       projectPermissionDetailsOpen = !projectPermissionDetailsOpen;
       renderProjectPermissionMatrix(currentProjectState);
@@ -37164,6 +38618,9 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     registerSafeBackdropClose('modal-doc-binding', () => {
       closeDocumentBindingModal();
     });
+    registerSafeBackdropClose('modal-global-doc-upload', () => {
+      closeGlobalDocUploadModal();
+    });
     registerSafeBackdropClose('modal-doc-editor', () => {
       closeDocumentEditorModal();
     });
@@ -37225,6 +38682,11 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       }, 0);
     });
     document.getElementById('global-settings-tabs-list')?.addEventListener('click', (e) => {
+      const tabBtn = e?.target?.closest?.('button[id^="global-settings-tab-"]');
+      if (tabBtn?.id) {
+        const tabKey = tabBtn.id.replace('global-settings-tab-', '');
+        if (tabKey) setGlobalSettingsTab(tabKey);
+      }
       if (e?.target?.closest?.('.tab-overflow-wrap')) return;
       setTimeout(() => refreshManagedTabOverflow(), 0);
     });
@@ -37287,14 +38749,99 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       const key = String(btn.getAttribute('data-note-theme-tab') || 'all').trim() || 'all';
       setProjectNotesThemeFilter(key);
     });
+    document.getElementById('global-notes-theme-tabs')?.addEventListener('click', (event) => {
+      const btn = event?.target?.closest?.('[data-global-note-theme-tab]');
+      if (!btn) return;
+      const key = String(btn.getAttribute('data-global-note-theme-tab') || 'all').trim() || 'all';
+      globalNotesThemeFilter = key;
+      globalNotesPage = 1;
+      renderGlobalNotes().catch(() => null);
+    });
     globalNotesRuntime?.bindDom();
     globalFeedRuntime?.bindDom();
     globalMessagesRuntime?.bindDom();
+    globalEmailRuntime?.bindDom();
     document.getElementById('btn-project-note-new')?.addEventListener('click', () => openProjectNoteEditor(''));
     document.getElementById('btn-project-note-cancel')?.addEventListener('click', () => closeProjectNoteEditor());
     document.getElementById('btn-close-project-note-modal')?.addEventListener('click', () => closeProjectNoteEditor());
     document.getElementById('btn-close-project-note-read-modal')?.addEventListener('click', () => closeProjectNoteReadModal());
     document.getElementById('btn-close-global-read-modal')?.addEventListener('click', () => closeGlobalReadModal());
+    document.getElementById('btn-global-read-edit')?.addEventListener('click', () => {
+      const noteId = String(document.getElementById('btn-global-read-edit')?.getAttribute('data-note-id') || '').trim();
+      if (!noteId) return;
+      closeGlobalReadModal();
+      openGlobalNoteEditor(noteId).catch(() => null);
+    });
+    document.getElementById('btn-global-read-delete')?.addEventListener('click', async () => {
+      const noteId = String(document.getElementById('btn-global-read-delete')?.getAttribute('data-note-id') || '').trim();
+      if (!noteId) return;
+      await deleteGlobalNote(noteId);
+      closeGlobalReadModal();
+    });
+    document.getElementById('btn-global-read-export-menu')?.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const menu = document.getElementById('global-read-export-dropdown');
+      const btn = document.getElementById('btn-global-read-export-menu');
+      if (!menu || !btn) return;
+      const willOpen = menu.classList.contains('hidden');
+      menu.classList.toggle('hidden', !willOpen);
+      btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+    });
+    document.getElementById('btn-global-read-export-html')?.addEventListener('click', async () => {
+      const nid = String(document.getElementById('btn-global-read-export-html')?.getAttribute('data-note-id') || '').trim();
+      if (!nid) return;
+      await exportGlobalNote(nid, 'html');
+    });
+    document.getElementById('btn-global-read-export-pdf')?.addEventListener('click', async () => {
+      const nid = String(document.getElementById('btn-global-read-export-pdf')?.getAttribute('data-note-id') || '').trim();
+      if (!nid) return;
+      await exportGlobalNoteAsPdf(nid);
+    });
+    document.getElementById('btn-global-read-export-docx')?.addEventListener('click', async () => {
+      const nid = String(document.getElementById('btn-global-read-export-docx')?.getAttribute('data-note-id') || '').trim();
+      if (!nid) return;
+      await exportGlobalNoteAsDocx(nid);
+    });
+    document.getElementById('btn-global-read-export-txt')?.addEventListener('click', async () => {
+      const nid = String(document.getElementById('btn-global-read-export-txt')?.getAttribute('data-note-id') || '').trim();
+      if (!nid) return;
+      await exportGlobalNote(nid, 'txt');
+    });
+    document.getElementById('btn-project-note-read-export-menu')?.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const menu = document.getElementById('project-note-read-export-dropdown');
+      const btn = document.getElementById('btn-project-note-read-export-menu');
+      if (!menu || !btn) return;
+      const open = menu.classList.contains('hidden');
+      menu.classList.toggle('hidden', !open);
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+    document.getElementById('btn-project-note-export-html')?.addEventListener('click', async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const noteId = String(projectNoteReadModalNoteId || '').trim();
+      if (noteId) await exportProjectNote(noteId, 'html');
+    });
+    document.getElementById('btn-project-note-export-pdf')?.addEventListener('click', async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const noteId = String(projectNoteReadModalNoteId || '').trim();
+      if (noteId) await exportProjectNote(noteId, 'pdf');
+    });
+    document.getElementById('btn-project-note-export-docx')?.addEventListener('click', async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const noteId = String(projectNoteReadModalNoteId || '').trim();
+      if (noteId) await exportProjectNote(noteId, 'docx');
+    });
+    document.getElementById('btn-project-note-export-txt')?.addEventListener('click', async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const noteId = String(projectNoteReadModalNoteId || '').trim();
+      if (noteId) await exportProjectNote(noteId, 'txt');
+    });
     document.getElementById('btn-project-note-read-edit')?.addEventListener('click', () => {
       const noteId = String(document.getElementById('btn-project-note-read-edit')?.getAttribute('data-note-id') || '').trim();
       openProjectNoteEditorFromReadModal(noteId);
@@ -37730,6 +39277,12 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     });
     document.addEventListener('click', (e) => {
       const target = e.target;
+      const exportDropdown = document.getElementById('project-note-read-export-dropdown');
+      const exportBtn = document.getElementById('btn-project-note-read-export-menu');
+      if (exportDropdown && exportBtn && !exportDropdown.contains(target) && !exportBtn.contains(target)) {
+        exportDropdown.classList.add('hidden');
+        exportBtn.setAttribute('aria-expanded', 'false');
+      }
       if (projectEditorEmojiPickerOpen) {
         const projectPanel = document.getElementById('project-editor-emoji-panel');
         const anchor = projectEditorEmojiAnchorId ? document.getElementById(projectEditorEmojiAnchorId) : null;
@@ -37742,6 +39295,19 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       const trigger = document.getElementById('btn-toggle-emoji-picker');
       if (panel?.contains(target) || trigger?.contains(target)) return;
       toggleEmojiPicker(false);
+    });
+    document.addEventListener('click', (e) => {
+      const target = e.target instanceof Element ? e.target : null;
+      if (!target) return;
+      const insideProjectNoteExport = target.closest('[id^="project-note-export-menu-"], [id^="project-note-export-menu-btn-"]');
+      if (insideProjectNoteExport) return;
+      document.querySelectorAll('[id^="project-note-export-menu-"]').forEach((menu) => {
+        if (menu.id.startsWith('project-note-export-menu-btn-')) return;
+        menu.classList.add('hidden');
+        const noteId = menu.id.replace('project-note-export-menu-', '');
+        const btn = document.getElementById(`project-note-export-menu-btn-${noteId}`);
+        if (btn) btn.setAttribute('aria-expanded', 'false');
+      });
     });
     document.addEventListener('click', (e) => {
       const target = e.target;
@@ -37798,6 +39364,24 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       editor.focus();
       document.execCommand('insertText', false, button.dataset.emoji || '');
       toggleProjectEditorEmojiPicker(null, null, false);
+    });
+    document.addEventListener('click', (event) => {
+      const target = event?.target instanceof Element ? event.target.closest('[data-open-doc-ref]') : null;
+      if (!(target instanceof HTMLElement)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const ref = String(target.getAttribute('data-open-doc-ref') || '').trim();
+      if (!ref) return;
+      void openDocumentPreviewByRef(ref);
+    });
+    document.addEventListener('click', (event) => {
+      const target = event?.target instanceof Element ? event.target.closest('[data-download-doc-ref]') : null;
+      if (!(target instanceof HTMLElement)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const ref = String(target.getAttribute('data-download-doc-ref') || '').trim();
+      if (!ref) return;
+      void downloadDocumentByRef(ref);
     });
     document.addEventListener('click', (e) => {
       const target = e.target;
@@ -37946,6 +39530,18 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       summary.textContent = files.map(f => `${f.name} (${formatFileSize(f.size)})`).join(' • ');
     }
 
+    function updateGlobalNoteAttachmentFilesSummary() {
+      const input = document.getElementById('global-note-attach-doc-files');
+      const summary = document.getElementById('global-note-attachments-summary');
+      if (!summary) return;
+      const files = Array.from(input?.files || []);
+      if (files.length === 0) {
+        summary.textContent = 'Aucun fichier sélectionné';
+        return;
+      }
+      summary.textContent = files.map(f => `${f.name} (${formatFileSize(f.size)})`).join(' • ');
+    }
+
     function updateCreateProjectDocFilesSummary() {
       const input = document.getElementById('project-create-doc-files');
       const summary = document.getElementById('project-create-doc-files-summary');
@@ -37972,6 +39568,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
 
     document.getElementById('project-doc-files')?.addEventListener('change', updateProjectDocFilesSummary);
     document.getElementById('project-note-attachments')?.addEventListener('change', updateProjectNoteAttachmentFilesSummary);
+    document.getElementById('global-note-attach-doc-files')?.addEventListener('change', updateGlobalNoteAttachmentFilesSummary);
     document.getElementById('project-create-doc-files')?.addEventListener('change', updateCreateProjectDocFilesSummary);
     document.getElementById('edit-project-doc-files')?.addEventListener('change', updateEditProjectDocFilesSummary);
     setProjectDeadlineModeUi('project', document.getElementById('project-deadline-mode')?.value || 'date');
