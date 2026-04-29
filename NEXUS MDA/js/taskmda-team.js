@@ -13908,6 +13908,30 @@ async function setProjectsPage(page) {
       renderProjectNotes(currentProjectState);
     }
 
+    function ensureProjectNotesVerticalThemeLayout() {
+      const section = document.getElementById('notes-section');
+      const tabs = document.getElementById('project-notes-theme-tabs');
+      const list = document.getElementById('project-notes-list');
+      if (!section || !tabs || !list) return;
+      if (section.querySelector('.project-notes-layout')) return;
+
+      const layout = document.createElement('div');
+      layout.className = 'project-notes-layout';
+
+      const sidebar = document.createElement('aside');
+      sidebar.className = 'project-notes-themes-sidebar';
+
+      const cardsArea = document.createElement('div');
+      cardsArea.className = 'project-notes-cards-area';
+
+      tabs.classList.add('project-notes-theme-tabs-vertical');
+      sidebar.appendChild(tabs);
+      cardsArea.appendChild(list);
+      layout.appendChild(sidebar);
+      layout.appendChild(cardsArea);
+      section.appendChild(layout);
+    }
+
     function renderGlobalNotesThemeTabs(notes = []) {
       const host = document.getElementById('global-notes-theme-tabs');
       if (!host) return;
@@ -13932,6 +13956,32 @@ async function setProjectsPage(page) {
         )
       ].join('');
       host.innerHTML = html;
+    }
+
+    function ensureGlobalNotesVerticalThemeLayout() {
+      const section = document.getElementById('global-notes-section');
+      const tabs = document.getElementById('global-notes-theme-tabs');
+      const list = document.getElementById('global-notes-list');
+      const pagination = document.getElementById('global-notes-pagination');
+      if (!section || !tabs || !list || !pagination) return;
+      if (section.querySelector('.global-notes-layout')) return;
+
+      const layout = document.createElement('div');
+      layout.className = 'global-notes-layout';
+
+      const sidebar = document.createElement('aside');
+      sidebar.className = 'global-notes-themes-sidebar';
+
+      const cardsArea = document.createElement('div');
+      cardsArea.className = 'global-notes-cards-area';
+
+      tabs.classList.add('global-notes-theme-tabs-vertical');
+      sidebar.appendChild(tabs);
+      cardsArea.appendChild(list);
+      cardsArea.appendChild(pagination);
+      layout.appendChild(sidebar);
+      layout.appendChild(cardsArea);
+      section.appendChild(layout);
     }
 
     function populateProjectNoteTaskOptions(state = currentProjectState, selectedTaskId = '') {
@@ -14393,6 +14443,7 @@ async function setProjectsPage(page) {
     }
 
     function renderProjectNotes(state = currentProjectState) {
+      ensureProjectNotesVerticalThemeLayout();
       const listEl = document.getElementById('project-notes-list');
       const counterEl = document.getElementById('project-notes-count');
       if (!listEl || !state?.project) return;
@@ -16789,6 +16840,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
                 <span class="inline-flex text-[10px] px-2 py-1 rounded-full ${visibility === 'transverse' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'} font-semibold">${visibility === 'transverse' ? 'Transverse' : 'Privee'}</span>
                 ${note.shareToGlobalFeed ? '<span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-indigo-100 text-indigo-700 font-semibold">Dans le fil</span>' : ''}
                 ${isFavorite ? '<span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-amber-100 text-amber-700 font-semibold">Favori</span>' : ''}
+                ${linkedDocs.length > 0 ? `<span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-indigo-100 text-indigo-700 font-semibold">${linkedDocs.length} document(s) lie(s)</span>` : ''}
                 ${theme ? `<span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 font-semibold">${escapeHtml(theme)}</span>` : ''}
               </div>
               <h4 class="mt-2 text-base font-bold text-slate-800">${escapeHtml(note.title || 'Note sans titre')}</h4>
@@ -16858,6 +16910,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
 
     async function renderGlobalNotes() {
       await migrateLegacyInlineGlobalNoteAttachmentsOnce();
+      ensureGlobalNotesVerticalThemeLayout();
       const host = document.getElementById('global-notes-list');
       const countEl = document.getElementById('global-notes-count');
       const paginationContainer = document.getElementById('global-notes-pagination');
@@ -16865,6 +16918,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       const allNotesRaw = await getAllDecrypted('globalNotes', 'noteId');
       const allGlobalDocsRaw = await getAllDecrypted('globalDocs', 'id');
       const linkedDocsByNoteId = new Map();
+      const linkedDocCountByNoteId = new Map();
       (Array.isArray(allGlobalDocsRaw) ? allGlobalDocsRaw : []).forEach((doc) => {
         const docId = String(doc?.id || '').trim();
         if (!docId) return;
@@ -16875,6 +16929,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
           if (!nid) return;
           if (!linkedDocsByNoteId.has(nid)) linkedDocsByNoteId.set(nid, []);
           linkedDocsByNoteId.get(nid).push({ id: docId, name: docName });
+          linkedDocCountByNoteId.set(nid, Number(linkedDocCountByNoteId.get(nid) || 0) + 1);
         });
       });
       const notes = (Array.isArray(allNotesRaw) ? allNotesRaw : []).filter((note) => !Number(note?.archivedAt || 0));
@@ -16967,7 +17022,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
               taskTitleById: new Map(),
               authorById,
               canManageById,
-              noteDocsCountById: linkedDocsByNoteId,
+              noteDocsCountById: linkedDocCountByNoteId,
               focusNoteId: String(globalNotesFocusNoteId || ''),
               cardIdPrefix: 'global-note',
               openFn: 'openGlobalNoteReadModal',
