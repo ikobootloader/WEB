@@ -5766,6 +5766,28 @@
 
     const QUICK_ACCESS_LINKS_SETTINGS_KEY = 'quickAccessLinks';
 
+    function normalizeQuickAccessCategory(rawCategory) {
+      return String(rawCategory || '').trim().replace(/\s+/g, ' ').slice(0, 80);
+    }
+
+    function normalizeQuickAccessCategoryKey(rawCategory) {
+      const value = normalizeQuickAccessCategory(rawCategory);
+      if (!value) return '';
+      return value
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
+    }
+
+    function resolveQuickAccessCategoryFromCatalog(rawCategory, categoryCatalog = []) {
+      const normalized = normalizeQuickAccessCategory(rawCategory);
+      if (!normalized) return '';
+      const key = normalizeQuickAccessCategoryKey(normalized);
+      const match = (Array.isArray(categoryCatalog) ? categoryCatalog : [])
+        .find((item) => normalizeQuickAccessCategoryKey(item) === key);
+      return match ? normalizeQuickAccessCategory(match) : normalized;
+    }
+
     function normalizeQuickAccessUrl(rawUrl) {
       let value = String(rawUrl || '').trim();
       if (!value) return '';
@@ -5790,6 +5812,7 @@
         id: String(row.id || `quick-link-${fallbackIndex}-${uuidv4()}`),
         name: name.slice(0, 120),
         url: url.slice(0, 500),
+        category: normalizeQuickAccessCategory(row.category || row.group || ''),
         description: String(row.description || '').trim().slice(0, 240),
         createdAt: Number(row.createdAt || Date.now()) || Date.now(),
         updatedAt: Number(row.updatedAt || Date.now()) || Date.now()
@@ -5829,20 +5852,70 @@
       quickLinkEditingId = '';
       const nameInput = document.getElementById('quick-link-name-input');
       const urlInput = document.getElementById('quick-link-url-input');
+      const categoryInput = document.getElementById('quick-link-category-input');
       const descriptionInput = document.getElementById('quick-link-description-input');
       const saveBtn = document.getElementById('btn-quick-link-save');
+      const resetBtn = document.getElementById('btn-quick-link-reset');
       if (nameInput) nameInput.value = '';
       if (urlInput) urlInput.value = '';
+      if (categoryInput) categoryInput.value = '';
       if (descriptionInput) descriptionInput.value = '';
-      if (saveBtn) saveBtn.textContent = 'Ajouter';
+      if (saveBtn) {
+        saveBtn.removeAttribute('data-loading');
+        saveBtn.removeAttribute('aria-busy');
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Ajouter';
+      }
+      if (resetBtn) resetBtn.disabled = false;
+      if (nameInput) nameInput.disabled = false;
+      if (urlInput) urlInput.disabled = false;
+      if (categoryInput) categoryInput.disabled = false;
+      if (descriptionInput) descriptionInput.disabled = false;
+    }
+
+    function setQuickAccessLinkFormLoading(isLoading, mode = 'create') {
+      const nameInput = document.getElementById('quick-link-name-input');
+      const urlInput = document.getElementById('quick-link-url-input');
+      const categoryInput = document.getElementById('quick-link-category-input');
+      const categoryFilter = document.getElementById('quick-link-category-filter');
+      const descriptionInput = document.getElementById('quick-link-description-input');
+      const saveBtn = document.getElementById('btn-quick-link-save');
+      const resetBtn = document.getElementById('btn-quick-link-reset');
+      if (nameInput) nameInput.disabled = !!isLoading;
+      if (urlInput) urlInput.disabled = !!isLoading;
+      if (categoryInput) categoryInput.disabled = !!isLoading;
+      if (categoryFilter) categoryFilter.disabled = !!isLoading;
+      if (descriptionInput) descriptionInput.disabled = !!isLoading;
+      if (resetBtn) resetBtn.disabled = !!isLoading;
+      if (!saveBtn) return;
+      saveBtn.disabled = !!isLoading;
+      if (isLoading) {
+        saveBtn.setAttribute('data-loading', '1');
+        saveBtn.setAttribute('aria-busy', 'true');
+        const label = mode === 'update' ? 'Mise à jour...' : 'Création...';
+        saveBtn.innerHTML = `<span class="quick-link-btn-spinner" aria-hidden="true"></span><span>${label}</span>`;
+        return;
+      }
+      saveBtn.removeAttribute('data-loading');
+      saveBtn.removeAttribute('aria-busy');
+      saveBtn.textContent = mode === 'update' ? 'Mettre à jour' : 'Ajouter';
     }
 
     async function saveQuickAccessLinkFromForm() {
       const nameInput = document.getElementById('quick-link-name-input');
       const urlInput = document.getElementById('quick-link-url-input');
+      const categoryInput = document.getElementById('quick-link-category-input');
       const descriptionInput = document.getElementById('quick-link-description-input');
+      const mode = quickLinkEditingId ? 'update' : 'create';
       const name = String(nameInput?.value || '').trim();
       const url = normalizeQuickAccessUrl(urlInput?.value || '');
+      const existingRows = await getQuickAccessLinks();
+      const categoryCatalog = Array.from(new Set(
+        existingRows
+          .map((row) => normalizeQuickAccessCategory(row?.category || ''))
+          .filter(Boolean)
+      ));
+      const category = resolveQuickAccessCategoryFromCatalog(categoryInput?.value || '', categoryCatalog);
       const description = String(descriptionInput?.value || '').trim();
       if (!name) {
         showToast('Nom du raccourci requis');
@@ -5854,42 +5927,52 @@
         urlInput?.focus();
         return;
       }
-      const rows = await getQuickAccessLinks();
-      const now = Date.now();
-      if (quickLinkEditingId) {
-        const index = rows.findIndex((row) => String(row.id) === String(quickLinkEditingId));
-        if (index >= 0) {
-          rows[index] = {
-            ...rows[index],
-            name: name.slice(0, 120),
-            url: url.slice(0, 500),
-            description: description.slice(0, 240),
-            updatedAt: now
-          };
+      setQuickAccessLinkFormLoading(true, mode);
+      try {
+        const rows = Array.isArray(existingRows) ? existingRows : [];
+        const now = Date.now();
+        if (quickLinkEditingId) {
+          const index = rows.findIndex((row) => String(row.id) === String(quickLinkEditingId));
+          if (index >= 0) {
+            rows[index] = {
+              ...rows[index],
+              name: name.slice(0, 120),
+              url: url.slice(0, 500),
+              category,
+              description: description.slice(0, 240),
+              updatedAt: now
+            };
+          } else {
+            rows.unshift({
+              id: `quick-link-${uuidv4()}`,
+              name: name.slice(0, 120),
+              url: url.slice(0, 500),
+              category,
+              description: description.slice(0, 240),
+              createdAt: now,
+              updatedAt: now
+            });
+          }
         } else {
           rows.unshift({
             id: `quick-link-${uuidv4()}`,
             name: name.slice(0, 120),
             url: url.slice(0, 500),
+            category,
             description: description.slice(0, 240),
             createdAt: now,
             updatedAt: now
           });
         }
-      } else {
-        rows.unshift({
-          id: `quick-link-${uuidv4()}`,
-          name: name.slice(0, 120),
-          url: url.slice(0, 500),
-          description: description.slice(0, 240),
-          createdAt: now,
-          updatedAt: now
-        });
+        await saveQuickAccessLinks(rows);
+        resetQuickAccessLinkForm();
+        showToast('Raccourci enregistré');
+        await renderGlobalSettings();
+      } catch (error) {
+        console.error('Quick link save failed:', error);
+        setQuickAccessLinkFormLoading(false, mode);
+        showToast('Erreur pendant l\'enregistrement du raccourci');
       }
-      await saveQuickAccessLinks(rows);
-      resetQuickAccessLinkForm();
-      showToast('Raccourci enregistré');
-      await renderGlobalSettings();
     }
 
     async function editQuickAccessLink(linkId) {
@@ -5901,10 +5984,12 @@
       quickLinkEditingId = row.id;
       const nameInput = document.getElementById('quick-link-name-input');
       const urlInput = document.getElementById('quick-link-url-input');
+      const categoryInput = document.getElementById('quick-link-category-input');
       const descriptionInput = document.getElementById('quick-link-description-input');
       const saveBtn = document.getElementById('btn-quick-link-save');
       if (nameInput) nameInput.value = row.name || '';
       if (urlInput) urlInput.value = row.url || '';
+      if (categoryInput) categoryInput.value = normalizeQuickAccessCategory(row.category || '');
       if (descriptionInput) descriptionInput.value = row.description || '';
       if (saveBtn) saveBtn.textContent = 'Mettre à jour';
       nameInput?.focus();
@@ -5950,6 +6035,9 @@
       const quickLinksList = document.getElementById('quick-links-admin-list');
       const quickLinkNameInput = document.getElementById('quick-link-name-input');
       const quickLinkUrlInput = document.getElementById('quick-link-url-input');
+      const quickLinkCategoryInput = document.getElementById('quick-link-category-input');
+      const quickLinkCategorySuggestions = document.getElementById('quick-link-category-suggestions');
+      const quickLinkCategoryFilter = document.getElementById('quick-link-category-filter');
       const quickLinkDescriptionInput = document.getElementById('quick-link-description-input');
       const quickLinkSaveBtn = document.getElementById('btn-quick-link-save');
       const quickLinkResetBtn = document.getElementById('btn-quick-link-reset');
@@ -6123,8 +6211,31 @@
       const filteredRoles = getProjectRoleCatalog()
         .filter(item => matchesQuery([item?.label, item?.baseRole, item?.roleKey], globalSearchQuery));
       const quickLinks = await getQuickAccessLinks();
+      const quickLinkCategories = Array.from(new Set(
+        quickLinks
+          .map((item) => normalizeQuickAccessCategory(item?.category || ''))
+          .filter(Boolean)
+      )).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+      if (quickLinkCategorySuggestions) {
+        quickLinkCategorySuggestions.innerHTML = quickLinkCategories
+          .map((category) => `<option value="${escapeHtml(category)}"></option>`)
+          .join('');
+      }
+      if (quickLinkCategoryFilter) {
+        const current = quickLinkCategoryFilter.value || quickLinkCategoryFilterValue;
+        const safeCurrent = current === 'all' || quickLinkCategories.includes(current) ? current : 'all';
+        quickLinkCategoryFilterValue = safeCurrent;
+        quickLinkCategoryFilter.innerHTML = [
+          '<option value="all">Toutes les categories</option>',
+          ...quickLinkCategories.map((category) => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`)
+        ].join('');
+        quickLinkCategoryFilter.value = safeCurrent;
+      }
       const filteredQuickLinks = quickLinks
-        .filter((item) => matchesQuery([item?.name, item?.url, item?.description], globalSearchQuery));
+        .filter((item) => quickLinkCategoryFilterValue === 'all'
+          ? true
+          : normalizeQuickAccessCategory(item?.category || '') === quickLinkCategoryFilterValue)
+        .filter((item) => matchesQuery([item?.name, item?.url, item?.category, item?.description], globalSearchQuery));
 
       if (roleBaseInput) {
         roleBaseInput.innerHTML = ['owner', 'manager', 'member'].map((baseRole) => `
@@ -6225,6 +6336,8 @@
 
       if (quickLinkNameInput) quickLinkNameInput.disabled = !canManageBranding;
       if (quickLinkUrlInput) quickLinkUrlInput.disabled = !canManageBranding;
+      if (quickLinkCategoryInput) quickLinkCategoryInput.disabled = !canManageBranding;
+      if (quickLinkCategoryFilter) quickLinkCategoryFilter.disabled = false;
       if (quickLinkDescriptionInput) quickLinkDescriptionInput.disabled = !canManageBranding;
       if (quickLinkSaveBtn) quickLinkSaveBtn.disabled = !canManageBranding;
       if (quickLinkResetBtn) quickLinkResetBtn.disabled = !canManageBranding;
@@ -6243,6 +6356,7 @@
               <div class="flex items-start justify-between gap-2">
                 <div class="min-w-0">
                   <p class="text-sm font-semibold text-slate-800 truncate">${escapeHtml(item.name)}</p>
+                  ${item.category ? `<p class="text-[11px] inline-flex items-center px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 mt-1">${escapeHtml(item.category)}</p>` : ''}
                   <p class="text-xs text-slate-500 break-all">${escapeHtml(item.url)}</p>
                   ${item.description ? `<p class="text-xs text-slate-600 mt-1">${escapeHtml(item.description)}</p>` : ''}
                 </div>
@@ -9149,6 +9263,108 @@
       }
     }
 
+    function buildDashboardHeroBannerHtml(sourceHtml, preferredTitle = '', fallbackText = '') {
+      const preferred = String(preferredTitle || '').trim();
+      if (preferred) {
+        return `<div class="dashboard-news-hero-rich-stack"><h2>${escapeHtml(preferred)}</h2></div>`;
+      }
+      const fallback = `<p>${escapeHtml(String(fallbackText || '').trim() || 'Mise à jour')}</p>`;
+      try {
+        const root = document.createElement('div');
+        root.innerHTML = String(sourceHtml || '');
+        root.querySelectorAll('img,video,iframe,table,pre,code,.feed-digest-block,.feed-attachment-chip').forEach((el) => el.remove());
+        const allowedInline = new Set(['strong', 'b', 'em', 'i', 'u', 's', 'span', 'br', 'a']);
+        const firstHeading = root.querySelector('h1, h2, h3');
+        if (!firstHeading) return fallback;
+
+        const clone = document.createElement('div');
+        clone.innerHTML = String(firstHeading.innerHTML || '');
+        clone.querySelectorAll('*').forEach((el) => {
+          const tag = String(el.tagName || '').toLowerCase();
+          if (!allowedInline.has(tag)) {
+            el.replaceWith(document.createTextNode(String(el.textContent || '')));
+            return;
+          }
+          if (tag === 'a') {
+            const href = String(el.getAttribute('href') || '').trim();
+            if (!/^https?:\/\//i.test(href) && !/^mailto:/i.test(href) && href !== '#') {
+              el.removeAttribute('href');
+            } else {
+              el.setAttribute('target', '_blank');
+              el.setAttribute('rel', 'noopener noreferrer');
+            }
+          }
+          Array.from(el.attributes || []).forEach((attr) => {
+            if (attr.name !== 'href' && attr.name !== 'target' && attr.name !== 'rel') {
+              el.removeAttribute(attr.name);
+            }
+          });
+        });
+        const cleanHtml = String(clone.innerHTML || '').trim();
+        if (!cleanHtml) return fallback;
+        const tag = String(firstHeading.tagName || 'h2').toLowerCase();
+        return `<div class="dashboard-news-hero-rich-stack"><${tag}>${cleanHtml}</${tag}></div>`;
+      } catch (_) {
+        return fallback;
+      }
+    }
+
+    function buildDashboardSubtitleHtml(sourceHtml, fallbackText = '') {
+      const fallback = `<p>${escapeHtml(String(fallbackText || '').trim())}</p>`;
+      try {
+        const root = document.createElement('div');
+        root.innerHTML = String(sourceHtml || '');
+        root.querySelectorAll('img,video,iframe,table,pre,code,.feed-digest-block,.feed-attachment-chip').forEach((el) => el.remove());
+        const firstHeading = root.querySelector('h1, h2, h3');
+        if (firstHeading) firstHeading.remove();
+        const allowedInline = new Set(['strong', 'b', 'em', 'i', 'u', 's', 'span', 'br', 'a']);
+        const blockSelector = 'p, blockquote, ul, ol, li';
+        const blocks = Array.from(root.querySelectorAll(blockSelector));
+        const picked = [];
+        let budget = 0;
+        const maxBlocks = 6;
+        const maxChars = 1500;
+        for (let i = 0; i < blocks.length; i += 1) {
+          if (picked.length >= maxBlocks || budget >= maxChars) break;
+          const block = blocks[i];
+          const text = String(block.textContent || '').replace(/\s+/g, ' ').trim();
+          if (!text) continue;
+          const clone = document.createElement('div');
+          clone.innerHTML = String(block.innerHTML || '');
+          clone.querySelectorAll('*').forEach((el) => {
+            const tag = String(el.tagName || '').toLowerCase();
+            if (!allowedInline.has(tag)) {
+              el.replaceWith(document.createTextNode(String(el.textContent || '')));
+              return;
+            }
+            if (tag === 'a') {
+              const href = String(el.getAttribute('href') || '').trim();
+              if (!/^https?:\/\//i.test(href) && !/^mailto:/i.test(href) && href !== '#') {
+                el.removeAttribute('href');
+              } else {
+                el.setAttribute('target', '_blank');
+                el.setAttribute('rel', 'noopener noreferrer');
+              }
+            }
+            Array.from(el.attributes || []).forEach((attr) => {
+              if (attr.name !== 'href' && attr.name !== 'target' && attr.name !== 'rel') {
+                el.removeAttribute(attr.name);
+              }
+            });
+          });
+          const cleanHtml = String(clone.innerHTML || '').trim();
+          if (!cleanHtml) continue;
+          const tag = String(block.tagName || 'p').toLowerCase();
+          picked.push(`<${tag}>${cleanHtml}</${tag}>`);
+          budget += text.length;
+        }
+        if (!picked.length) return fallback;
+        return `<div class="dashboard-news-sub-rich-stack">${picked.join('')}</div>`;
+      } catch (_) {
+        return fallback;
+      }
+    }
+
     function buildFeedAutoSummaryFromText(rawText, maxWords = 300) {
       const text = String(rawText || '').replace(/\s+/g, ' ').trim();
       if (!text) return '';
@@ -9170,6 +9386,9 @@
       const panel = document.getElementById('dashboard-news');
       const list = document.getElementById('dashboard-news-list');
       if (!panel || !list) return;
+      const summaryWords = getFeedSummaryWordCount();
+      const dynamicHeroLines = Math.max(6, Math.min(48, Math.ceil(summaryWords / 30)));
+      list.style.setProperty('--dashboard-news-sub-lines', String(dynamicHeroLines));
 
       if (!isDashboardNewsVisibleContext()) {
         panel.classList.add('hidden');
@@ -9228,6 +9447,8 @@
         const content = stripMentionMarkupForDashboard(plainText);
         let [headlineRaw, ...subtitleRaws] = content.split('\\n');
         const headline = stripMentionMarkupForDashboard(headlineRaw || '') || 'Mise à jour';
+        const postTitle = String(post?.title || '').trim();
+        const cardTitle = postTitle || headline || 'Mise à jour';
         
         let subtitleSrc = subtitleRaws.join(' ').trim();
         if (!subtitleSrc) {
@@ -9237,10 +9458,10 @@
           ? stripMentionMarkupForDashboard(computeGlobalFeedPostAutoSummary(post))
           : '';
         const subtitle = summaryForDashboard || stripMentionMarkupForDashboard(subtitleSrc);
+        const subtitleHtml = buildDashboardSubtitleHtml(post.content || '', subtitle);
+        const subtitleVisible = String(getProjectDescriptionPlainText(subtitleHtml) || '').trim();
         
         const imgSrc = extractFirstImageSrcFromHtml(post.content);
-        const postTitle = String(post?.title || '').trim();
-        const heroTitleText = postTitle || headline || 'Mise à jour';
         const useFullHeroContent = isHero && shouldRenderDashboardHeroFullContent(plainText, richContentHtml, !!imgSrc);
         let imgHtml = '';
         if (imgSrc) {
@@ -9248,25 +9469,10 @@
           imgHtml = `<img src="${escapeHtml(imgSrc)}" class="dashboard-news-image" alt="" loading="lazy">`;
         } else if (isHero && !useFullHeroContent) {
           // Visuel par défaut pour la Une quand il n'y a pas d'image
-          const firstLetter = heroTitleText.charAt(0).toUpperCase() || 'A';
-          const gradients = [
-            'linear-gradient(135deg, #1e3a8a 0%, #3730a3 100%)',
-            'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
-            'linear-gradient(135deg, #064e3b 0%, #065f46 100%)',
-            'linear-gradient(135deg, #0c4a6e 0%, #075985 100%)',
-            'linear-gradient(135deg, #7c2d12 0%, #92400e 100%)',
-            'linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%)',
-            'linear-gradient(135deg, #0f766e 0%, #0d9488 100%)',
-            'linear-gradient(135deg, #4c1d95 0%, #5b21b6 100%)'
-          ];
-          // Sélectionner un gradient basé sur le hash du titre pour cohérence
-          const gradientIndex = Math.abs(headline.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % gradients.length;
-          const gradient = gradients[gradientIndex];
-
+          const heroBannerHtml = buildDashboardHeroBannerHtml(post.content || '', postTitle, headline || 'Mise à jour');
           imgHtml = `
-            <div class="dashboard-news-hero-default" style="background: ${gradient}">
-              <div class="dashboard-news-hero-letter">${escapeHtml(firstLetter)}</div>
-              <div class="dashboard-news-hero-title">${escapeHtml(heroTitleText)}</div>
+            <div class="dashboard-news-hero-default">
+              <div class="dashboard-news-hero-title dashboard-news-hero-title-rich">${heroBannerHtml}</div>
             </div>
           `;
         }
@@ -9308,8 +9514,8 @@
             <div class="dashboard-news-item-main">
               ${useFullHeroContent
                 ? `<div class="dashboard-news-rich feed-item-body">${richContentHtml}</div>`
-                : `${!hasDefaultHero ? `<div class="dashboard-news-text">${escapeHtml(headline)}</div>` : ''}
-                   ${subtitle ? `<div class="dashboard-news-sub">${escapeHtml(subtitle)}</div>` : ''}`
+                : `${!hasDefaultHero ? `<div class="dashboard-news-text">${escapeHtml(cardTitle)}</div>` : ''}
+                   ${subtitleVisible ? `<div class="dashboard-news-sub dashboard-news-sub-rich">${subtitleHtml}</div>` : ''}`
               }
               ${refsHtml}
             </div>
@@ -9920,6 +10126,9 @@
     let globalSettingsTab = localStorage.getItem('taskmda_global_settings_tab') || 'branding'; // branding | themes | groups | roles | annuaire | file-watcher | email | quick-links | views
     let globalSettingsHelpOpen = false;
     let quickLinkEditingId = '';
+    let quickLinkCategoryFilterValue = 'all';
+    let projectNotesThemesSidebarCollapsed = localStorage.getItem('taskmda_project_notes_themes_sidebar_collapsed') === '1';
+    let globalNotesThemesSidebarCollapsed = localStorage.getItem('taskmda_global_notes_themes_sidebar_collapsed') === '1';
     let globalDocsUploadCollapsed = true;
     let projectDetailMode = 'work'; // work | settings
     let projectSettingsTab = 'members'; // members | collab | permissions
@@ -9936,6 +10145,10 @@
     let projectNoteModalLastFocusedElement = null;
     let projectNoteReadModalLastFocusedElement = null;
     let projectNoteReadModalNoteId = '';
+    let projectNoteReadInlineEditActive = false;
+    let projectNoteReadInlineEditSaving = false;
+    let projectNoteReadInlineOriginalTitle = '';
+    let projectNoteReadInlineOriginalContentHtml = '';
     let projectNoteSelectionMenuPayload = { text: '', html: '', noteId: '' };
     const PROJECT_NOTE_DRAFT_STORAGE_KEY = 'taskmda_project_note_draft_v1';
     let projectTaskPresentationMode = localStorage.getItem('taskmda_project_task_presentation') === 'list' ? 'list' : 'cards';
@@ -9970,6 +10183,13 @@
     let selectedGlobalNoteIdsForBulkDelete = new Set();
     let editingGlobalNoteId = '';
     let globalNotesFocusNoteId = '';
+    let globalReadModalNoteId = '';
+    let globalReadModalLastFocusedElement = null;
+    let globalReadInlineEditActive = false;
+    let globalReadInlineEditSaving = false;
+    let globalReadInlineOriginalTitle = '';
+    let globalReadInlineOriginalContentHtml = '';
+    let globalReadInlineQuill = null;
     let globalSearchQuery = '';
     let projectsFilters = { query: '', theme: '', priority: 'all', status: 'all', sharing: 'all', ownership: 'all', sort: 'recent' };
     let projectsBulkSelectionMode = false;
@@ -13423,6 +13643,7 @@ async function setProjectsPage(page) {
     function closeProjectNoteReadModal() {
       const modal = document.getElementById('modal-project-note-read');
       if (!modal || modal.classList.contains('hidden')) return;
+      cancelProjectNoteReadInlineEdit({ silent: true });
       hideProjectNoteSelectionMenu();
       closeNoteSelectionTaskTargetModal();
       const exportDropdown = document.getElementById('project-note-read-export-dropdown');
@@ -13434,6 +13655,7 @@ async function setProjectsPage(page) {
         modal.classList.add('hidden');
         document.body.classList.remove('overflow-hidden');
       }
+      modal.removeAttribute('data-inline-edit');
       projectNoteReadModalNoteId = '';
       const focusBack = projectNoteReadModalLastFocusedElement;
       projectNoteReadModalLastFocusedElement = null;
@@ -13563,10 +13785,149 @@ async function setProjectsPage(page) {
 
       projectNoteReadModalLastFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       projectNoteReadModalNoteId = nid;
+      resetProjectNoteReadInlineEditState();
       notesShared?.openModal?.('modal-project-note-read');
       if (!notesShared) {
         modal.classList.remove('hidden');
         document.body.classList.add('overflow-hidden');
+      }
+    }
+
+    function resetProjectNoteReadInlineEditState() {
+      const modal = document.getElementById('modal-project-note-read');
+      const titleEl = document.getElementById('project-note-read-title');
+      const contentEl = document.getElementById('project-note-read-content');
+      projectNoteReadInlineEditActive = false;
+      projectNoteReadInlineEditSaving = false;
+      projectNoteReadInlineOriginalTitle = '';
+      projectNoteReadInlineOriginalContentHtml = '';
+      modal?.removeAttribute('data-inline-edit');
+      if (titleEl) {
+        titleEl.removeAttribute('contenteditable');
+        titleEl.removeAttribute('spellcheck');
+      }
+      if (contentEl) {
+        contentEl.removeAttribute('contenteditable');
+        contentEl.removeAttribute('spellcheck');
+      }
+    }
+
+    function canInlineEditProjectNoteReadModal() {
+      const modal = document.getElementById('modal-project-note-read');
+      if (!modal || modal.classList.contains('hidden')) return false;
+      if (String(modal.dataset.canManage || '0') !== '1') return false;
+      if (!String(projectNoteReadModalNoteId || '').trim()) return false;
+      return true;
+    }
+
+    function placeCaretAtEnd(element) {
+      if (!element || typeof element.focus !== 'function') return;
+      element.focus();
+      try {
+        const selection = window.getSelection?.();
+        if (!selection) return;
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        range.collapse(false);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      } catch (_) {}
+    }
+
+    function beginProjectNoteReadInlineEdit(target = 'content') {
+      if (!canInlineEditProjectNoteReadModal()) return;
+      const modal = document.getElementById('modal-project-note-read');
+      const titleEl = document.getElementById('project-note-read-title');
+      const contentEl = document.getElementById('project-note-read-content');
+      if (!modal || !titleEl || !contentEl) return;
+      if (!projectNoteReadInlineEditActive) {
+        projectNoteReadInlineOriginalTitle = String(titleEl.textContent || '').trim();
+        projectNoteReadInlineOriginalContentHtml = String(contentEl.innerHTML || '');
+      }
+      projectNoteReadInlineEditActive = true;
+      modal.dataset.inlineEdit = '1';
+      titleEl.setAttribute('contenteditable', 'true');
+      titleEl.setAttribute('spellcheck', 'true');
+      contentEl.setAttribute('contenteditable', 'true');
+      contentEl.setAttribute('spellcheck', 'true');
+      if (String(target || '') === 'title') placeCaretAtEnd(titleEl);
+      else placeCaretAtEnd(contentEl);
+    }
+
+    function cancelProjectNoteReadInlineEdit(options = {}) {
+      const titleEl = document.getElementById('project-note-read-title');
+      const contentEl = document.getElementById('project-note-read-content');
+      const wasActive = projectNoteReadInlineEditActive;
+      if (!wasActive) return;
+      if (titleEl) titleEl.textContent = projectNoteReadInlineOriginalTitle || 'Note sans titre';
+      if (contentEl) contentEl.innerHTML = projectNoteReadInlineOriginalContentHtml || '<p class="text-slate-500">Aucun contenu.</p>';
+      resetProjectNoteReadInlineEditState();
+      if (!options?.silent) showToast('Édition annulée');
+    }
+
+    async function saveProjectNoteReadInlineEdit(options = {}) {
+      if (!projectNoteReadInlineEditActive || projectNoteReadInlineEditSaving) return false;
+      if (!currentProjectId) return false;
+      const noteId = String(projectNoteReadModalNoteId || '').trim();
+      if (!noteId) return false;
+      const titleEl = document.getElementById('project-note-read-title');
+      const contentEl = document.getElementById('project-note-read-content');
+      if (!titleEl || !contentEl) return false;
+      const state = await getProjectState(currentProjectId);
+      if (!state?.project) return false;
+      const note = getProjectNotesForState(state).find((row) => String(row?.noteId || '') === noteId);
+      if (!note || !canManageProjectNote(note, state)) {
+        showToast('Action non autorisee');
+        return false;
+      }
+
+      const nextTitle = String(titleEl.textContent || '').trim();
+      const rawContentHtml = String(contentEl.innerHTML || '').trim();
+      const nextContentHtml = sanitizeRichTextHtmlPreserve(rawContentHtml);
+      const nextContent = getProjectDescriptionPlainText(nextContentHtml).trim();
+
+      const prevTitle = String(note.title || '').trim();
+      const prevContentHtml = sanitizeRichTextHtmlPreserve(String(note.contentHtml || '').trim() || plainTextToRichHtml(String(note.content || '').trim()));
+      const prevContent = getProjectDescriptionPlainText(prevContentHtml).trim();
+      const titleChanged = nextTitle !== prevTitle;
+      const contentChanged = nextContentHtml !== prevContentHtml || nextContent !== prevContent;
+      if (!titleChanged && !contentChanged) {
+        resetProjectNoteReadInlineEditState();
+        return false;
+      }
+
+      projectNoteReadInlineEditSaving = true;
+      try {
+        const event = createEvent(
+          EventTypes.UPDATE_NOTE,
+          currentProjectId,
+          currentUser.userId,
+          {
+            noteId: note.noteId,
+            changes: {
+              title: nextTitle,
+              content: nextContent,
+              contentHtml: nextContentHtml
+            }
+          }
+        );
+        await publishEvent(event);
+        if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(currentProjectId, [event]); }
+        await syncProjectNoteGlobalFeed(currentProjectId, note.noteId);
+        if (workspaceMode === 'global' && globalWorkspaceView === 'feed') {
+          await renderGlobalFeed();
+        }
+        currentProjectState = await getProjectState(currentProjectId);
+        renderProjectNotes(currentProjectState);
+        openProjectNoteReadModal(note.noteId);
+        if (!options?.silent) showToast('Note mise à jour');
+        return true;
+      } catch (error) {
+        console.error('Erreur sauvegarde note inline:', error);
+        showToast(`Erreur de sauvegarde: ${error.message || 'inconnue'}`);
+        return false;
+      } finally {
+        projectNoteReadInlineEditSaving = false;
       }
     }
 
@@ -13900,6 +14261,7 @@ async function setProjectsPage(page) {
         ))
       ];
       host.innerHTML = buttons.join('');
+      updateProjectNotesThemesToggleMeta(catalog);
     }
 
     function setProjectNotesThemeFilter(themeKey = 'all') {
@@ -13913,23 +14275,42 @@ async function setProjectsPage(page) {
       const tabs = document.getElementById('project-notes-theme-tabs');
       const list = document.getElementById('project-notes-list');
       if (!section || !tabs || !list) return;
-      if (section.querySelector('.project-notes-layout')) return;
+      if (section.querySelector('.project-notes-layout')) {
+        applyProjectNotesThemesSidebarState();
+        return;
+      }
 
       const layout = document.createElement('div');
       layout.className = 'project-notes-layout';
 
       const sidebar = document.createElement('aside');
       sidebar.className = 'project-notes-themes-sidebar';
+      const toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'notes-themes-toggle-btn';
+      toggle.id = 'project-notes-themes-toggle';
+      toggle.setAttribute('aria-expanded', projectNotesThemesSidebarCollapsed ? 'false' : 'true');
+      toggle.innerHTML = `
+        <span class="material-symbols-outlined" aria-hidden="true">${projectNotesThemesSidebarCollapsed ? 'chevron_right' : 'expand_more'}</span>
+        <span>Thématiques</span>
+      `;
+      toggle.addEventListener('click', () => {
+        projectNotesThemesSidebarCollapsed = !projectNotesThemesSidebarCollapsed;
+        localStorage.setItem('taskmda_project_notes_themes_sidebar_collapsed', projectNotesThemesSidebarCollapsed ? '1' : '0');
+        applyProjectNotesThemesSidebarState();
+      });
 
       const cardsArea = document.createElement('div');
       cardsArea.className = 'project-notes-cards-area';
 
       tabs.classList.add('project-notes-theme-tabs-vertical');
+      sidebar.appendChild(toggle);
       sidebar.appendChild(tabs);
       cardsArea.appendChild(list);
       layout.appendChild(sidebar);
       layout.appendChild(cardsArea);
       section.appendChild(layout);
+      applyProjectNotesThemesSidebarState();
     }
 
     function renderGlobalNotesThemeTabs(notes = []) {
@@ -13956,6 +14337,41 @@ async function setProjectsPage(page) {
         )
       ].join('');
       host.innerHTML = html;
+      updateGlobalNotesThemesToggleMeta(sorted);
+    }
+
+    function updateProjectNotesThemesToggleMeta(catalog = []) {
+      const toggle = document.getElementById('project-notes-themes-toggle');
+      if (!toggle) return;
+      const normalizedCatalog = Array.isArray(catalog) ? catalog : [];
+      const activeCount = projectNotesThemeFilter === 'all'
+        ? normalizedCatalog.length
+        : (normalizedCatalog.some((item) => item?.key === projectNotesThemeFilter) ? 1 : 0);
+      let badge = toggle.querySelector('.notes-themes-toggle-count');
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'notes-themes-toggle-count';
+        toggle.appendChild(badge);
+      }
+      badge.textContent = String(activeCount);
+      badge.title = activeCount > 1 ? `${activeCount} thématiques actives` : `${activeCount} thématique active`;
+    }
+
+    function updateGlobalNotesThemesToggleMeta(catalog = []) {
+      const toggle = document.getElementById('global-notes-themes-toggle');
+      if (!toggle) return;
+      const normalizedCatalog = Array.isArray(catalog) ? catalog : [];
+      const activeCount = globalNotesThemeFilter === 'all'
+        ? normalizedCatalog.length
+        : (normalizedCatalog.some((item) => item?.key === globalNotesThemeFilter) ? 1 : 0);
+      let badge = toggle.querySelector('.notes-themes-toggle-count');
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'notes-themes-toggle-count';
+        toggle.appendChild(badge);
+      }
+      badge.textContent = String(activeCount);
+      badge.title = activeCount > 1 ? `${activeCount} thématiques actives` : `${activeCount} thématique active`;
     }
 
     function ensureGlobalNotesVerticalThemeLayout() {
@@ -13964,24 +14380,63 @@ async function setProjectsPage(page) {
       const list = document.getElementById('global-notes-list');
       const pagination = document.getElementById('global-notes-pagination');
       if (!section || !tabs || !list || !pagination) return;
-      if (section.querySelector('.global-notes-layout')) return;
+      if (section.querySelector('.global-notes-layout')) {
+        applyGlobalNotesThemesSidebarState();
+        return;
+      }
 
       const layout = document.createElement('div');
       layout.className = 'global-notes-layout';
 
       const sidebar = document.createElement('aside');
       sidebar.className = 'global-notes-themes-sidebar';
+      const toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'notes-themes-toggle-btn';
+      toggle.id = 'global-notes-themes-toggle';
+      toggle.setAttribute('aria-expanded', globalNotesThemesSidebarCollapsed ? 'false' : 'true');
+      toggle.innerHTML = `
+        <span class="material-symbols-outlined" aria-hidden="true">${globalNotesThemesSidebarCollapsed ? 'chevron_right' : 'expand_more'}</span>
+        <span>Thématiques</span>
+      `;
+      toggle.addEventListener('click', () => {
+        globalNotesThemesSidebarCollapsed = !globalNotesThemesSidebarCollapsed;
+        localStorage.setItem('taskmda_global_notes_themes_sidebar_collapsed', globalNotesThemesSidebarCollapsed ? '1' : '0');
+        applyGlobalNotesThemesSidebarState();
+      });
 
       const cardsArea = document.createElement('div');
       cardsArea.className = 'global-notes-cards-area';
 
       tabs.classList.add('global-notes-theme-tabs-vertical');
+      sidebar.appendChild(toggle);
       sidebar.appendChild(tabs);
       cardsArea.appendChild(list);
       cardsArea.appendChild(pagination);
       layout.appendChild(sidebar);
       layout.appendChild(cardsArea);
       section.appendChild(layout);
+      applyGlobalNotesThemesSidebarState();
+    }
+
+    function applyProjectNotesThemesSidebarState() {
+      const layout = document.querySelector('#notes-section .project-notes-layout');
+      const toggle = document.getElementById('project-notes-themes-toggle');
+      if (!layout || !toggle) return;
+      layout.classList.toggle('is-themes-collapsed', !!projectNotesThemesSidebarCollapsed);
+      toggle.setAttribute('aria-expanded', projectNotesThemesSidebarCollapsed ? 'false' : 'true');
+      const icon = toggle.querySelector('.material-symbols-outlined');
+      if (icon) icon.textContent = projectNotesThemesSidebarCollapsed ? 'chevron_right' : 'expand_more';
+    }
+
+    function applyGlobalNotesThemesSidebarState() {
+      const layout = document.querySelector('#global-notes-section .global-notes-layout');
+      const toggle = document.getElementById('global-notes-themes-toggle');
+      if (!layout || !toggle) return;
+      layout.classList.toggle('is-themes-collapsed', !!globalNotesThemesSidebarCollapsed);
+      toggle.setAttribute('aria-expanded', globalNotesThemesSidebarCollapsed ? 'false' : 'true');
+      const icon = toggle.querySelector('.material-symbols-outlined');
+      if (icon) icon.textContent = globalNotesThemesSidebarCollapsed ? 'chevron_right' : 'expand_more';
     }
 
     function populateProjectNoteTaskOptions(state = currentProjectState, selectedTaskId = '') {
@@ -16460,11 +16915,206 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     }
 
     function closeGlobalReadModal() {
+      cancelGlobalReadInlineEdit({ silent: true });
       window.TaskMDANotesShared?.closeModal?.('modal-global-read');
       const modal = document.getElementById('modal-global-read');
+      if (modal) {
+        modal.removeAttribute('data-inline-edit');
+        modal.removeAttribute('data-can-manage');
+      }
       if (!window.TaskMDANotesShared?.closeModal && modal) {
         modal.classList.add('hidden');
         document.body.classList.remove('overflow-hidden');
+      }
+      globalReadModalNoteId = '';
+      const focusBack = globalReadModalLastFocusedElement;
+      globalReadModalLastFocusedElement = null;
+      if (focusBack && typeof focusBack.focus === 'function' && document.contains(focusBack)) {
+        requestAnimationFrame(() => {
+          try { focusBack.focus(); } catch (_) {}
+        });
+      }
+    }
+
+    function ensureGlobalReadInlineQuillUi() {
+      const modal = document.getElementById('modal-global-read');
+      const contentEl = document.getElementById('global-read-content');
+      if (!modal || !contentEl) return null;
+      const displayWrap = contentEl.closest('.rounded-xl');
+      if (!displayWrap) return null;
+      let editWrap = document.getElementById('global-read-inline-editor-wrap');
+      let toolbarEl = document.getElementById('global-read-inline-toolbar');
+      let editorEl = document.getElementById('global-read-inline-editor');
+      if (!editWrap) {
+        editWrap = document.createElement('div');
+        editWrap.id = 'global-read-inline-editor-wrap';
+        editWrap.className = 'hidden rounded-xl border border-slate-200 bg-slate-50 p-3 mb-3';
+        editWrap.innerHTML = `
+          <div id="global-read-inline-toolbar" class="project-editor-toolbar">
+            <button type="button" class="ql-bold" title="Gras"></button>
+            <button type="button" class="ql-italic" title="Italique"></button>
+            <button type="button" class="ql-underline" title="Souligné"></button>
+            <button type="button" class="ql-strike" title="Barré"></button>
+            <button type="button" class="ql-list" value="ordered" title="Liste numérotée"></button>
+            <button type="button" class="ql-list" value="bullet" title="Liste à puces"></button>
+            <button type="button" class="ql-link" title="Lien"></button>
+            <button type="button" class="ql-clean" title="Nettoyer"></button>
+          </div>
+          <div id="global-read-inline-editor" class="project-description-editor task-description-editor bg-white rounded-b-lg" style="min-height: 180px;" aria-label="Édition inline de la note globale"></div>
+        `;
+        displayWrap.insertAdjacentElement('afterend', editWrap);
+        toolbarEl = document.getElementById('global-read-inline-toolbar');
+        editorEl = document.getElementById('global-read-inline-editor');
+      }
+      if (window.Quill && editorEl && !globalReadInlineQuill) {
+        globalReadInlineQuill = new window.Quill(editorEl, {
+          theme: 'snow',
+          modules: { toolbar: '#global-read-inline-toolbar' }
+        });
+      }
+      return { modal, contentEl, displayWrap, editWrap, toolbarEl, editorEl };
+    }
+
+    function resetGlobalReadInlineEditState() {
+      const refs = ensureGlobalReadInlineQuillUi();
+      const titleEl = document.getElementById('global-read-title');
+      const modal = document.getElementById('modal-global-read');
+      globalReadInlineEditActive = false;
+      globalReadInlineEditSaving = false;
+      globalReadInlineOriginalTitle = '';
+      globalReadInlineOriginalContentHtml = '';
+      if (titleEl) {
+        titleEl.removeAttribute('contenteditable');
+        titleEl.removeAttribute('spellcheck');
+      }
+      if (refs?.editWrap) refs.editWrap.classList.add('hidden');
+      if (refs?.displayWrap) refs.displayWrap.classList.remove('hidden');
+      modal?.removeAttribute('data-inline-edit');
+    }
+
+    function canInlineEditGlobalReadModal() {
+      const modal = document.getElementById('modal-global-read');
+      if (!modal || modal.classList.contains('hidden')) return false;
+      if (String(modal.dataset.canManage || '0') !== '1') return false;
+      if (!String(globalReadModalNoteId || '').trim()) return false;
+      return true;
+    }
+
+    function isElementInsideGlobalReadInlineEdit(el) {
+      if (!(el instanceof HTMLElement)) return false;
+      if (el.id === 'global-read-title') return true;
+      return !!el.closest('#global-read-inline-editor-wrap');
+    }
+
+    function placeCaretAtEndOfElement(element) {
+      if (!element || typeof element.focus !== 'function') return;
+      element.focus();
+      try {
+        const selection = window.getSelection?.();
+        if (!selection) return;
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        range.collapse(false);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      } catch (_) {}
+    }
+
+    function beginGlobalReadInlineEdit(target = 'content') {
+      if (!canInlineEditGlobalReadModal()) return;
+      const refs = ensureGlobalReadInlineQuillUi();
+      const titleEl = document.getElementById('global-read-title');
+      if (!refs || !titleEl) return;
+      if (!globalReadInlineEditActive) {
+        globalReadInlineOriginalTitle = String(titleEl.textContent || '').trim();
+        globalReadInlineOriginalContentHtml = String(refs.contentEl.innerHTML || '');
+      }
+      globalReadInlineEditActive = true;
+      refs.modal.dataset.inlineEdit = '1';
+      titleEl.setAttribute('contenteditable', 'true');
+      titleEl.setAttribute('spellcheck', 'true');
+      refs.displayWrap.classList.add('hidden');
+      refs.editWrap.classList.remove('hidden');
+      if (globalReadInlineQuill) {
+        globalReadInlineQuill.enable(true);
+        globalReadInlineQuill.clipboard.dangerouslyPasteHTML(globalReadInlineOriginalContentHtml || '<p><br></p>');
+      } else if (refs.editorEl) {
+        refs.editorEl.innerHTML = globalReadInlineOriginalContentHtml || '<p><br></p>';
+        refs.editorEl.setAttribute('contenteditable', 'true');
+      }
+      if (String(target || '') === 'title') {
+        placeCaretAtEndOfElement(titleEl);
+      } else if (globalReadInlineQuill) {
+        globalReadInlineQuill.focus();
+      } else {
+        placeCaretAtEndOfElement(refs.editorEl);
+      }
+    }
+
+    function cancelGlobalReadInlineEdit(options = {}) {
+      if (!globalReadInlineEditActive) return;
+      const titleEl = document.getElementById('global-read-title');
+      const contentEl = document.getElementById('global-read-content');
+      if (titleEl) titleEl.textContent = globalReadInlineOriginalTitle || 'Note sans titre';
+      if (contentEl) contentEl.innerHTML = globalReadInlineOriginalContentHtml || '<p>Aucun contenu.</p>';
+      resetGlobalReadInlineEditState();
+      if (!options?.silent) showToast('Édition annulée');
+    }
+
+    async function saveGlobalReadInlineEdit(options = {}) {
+      if (!globalReadInlineEditActive || globalReadInlineEditSaving) return false;
+      const noteId = String(globalReadModalNoteId || '').trim();
+      if (!noteId) return false;
+      const titleEl = document.getElementById('global-read-title');
+      if (!titleEl) return false;
+      const note = await getDecrypted('globalNotes', noteId, 'noteId');
+      if (!note) return false;
+      if (!canManageGlobalNote(note)) {
+        showToast('Action non autorisee');
+        return false;
+      }
+
+      const nextTitle = String(titleEl.textContent || '').trim();
+      const rawHtml = globalReadInlineQuill
+        ? String(globalReadInlineQuill.root?.innerHTML || '').trim()
+        : String(document.getElementById('global-read-inline-editor')?.innerHTML || '').trim();
+      const nextContentHtml = sanitizeProjectDescriptionHtml(rawHtml || '<p><br></p>');
+      const nextContent = getProjectDescriptionPlainText(nextContentHtml).trim();
+      const prevTitle = String(note.title || '').trim();
+      const prevContentHtml = sanitizeProjectDescriptionHtml(String(note.contentHtml || '').trim() || plainTextToRichHtml(String(note.content || '').trim()));
+      const prevContent = getProjectDescriptionPlainText(prevContentHtml).trim();
+      const titleChanged = nextTitle !== prevTitle;
+      const contentChanged = nextContentHtml !== prevContentHtml || nextContent !== prevContent;
+      if (!titleChanged && !contentChanged) {
+        resetGlobalReadInlineEditState();
+        return false;
+      }
+
+      globalReadInlineEditSaving = true;
+      try {
+        const updated = {
+          ...note,
+          title: nextTitle,
+          content: nextContent,
+          contentHtml: nextContentHtml,
+          updatedAt: Date.now()
+        };
+        await putEncrypted('globalNotes', updated, 'noteId');
+        await syncGlobalNoteFeed(updated);
+        if (workspaceMode === 'global' && globalWorkspaceView === 'feed') {
+          await renderGlobalFeed();
+        }
+        globalNotesFocusNoteId = noteId;
+        await renderGlobalNotes();
+        await openGlobalNoteReadModal(noteId);
+        if (!options?.silent) showToast('Note mise a jour');
+        return true;
+      } catch (error) {
+        console.error('Erreur sauvegarde note globale inline:', error);
+        showToast(`Erreur de sauvegarde: ${error.message || 'inconnue'}`);
+        return false;
+      } finally {
+        globalReadInlineEditSaving = false;
       }
     }
 
@@ -16628,6 +17278,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         linksEl.innerHTML = linksHtml;
       }
       const canManage = canManageGlobalNote(note);
+      modal.dataset.canManage = canManage ? '1' : '0';
       if (editBtn) {
         editBtn.classList.toggle('hidden', !canManage);
         editBtn.setAttribute('data-note-id', nid);
@@ -16638,6 +17289,9 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       }
       const exportButtons = ['btn-global-read-export-html', 'btn-global-read-export-pdf', 'btn-global-read-export-docx', 'btn-global-read-export-txt'];
       exportButtons.forEach((id) => document.getElementById(id)?.setAttribute('data-note-id', nid));
+      globalReadModalLastFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      globalReadModalNoteId = nid;
+      resetGlobalReadInlineEditState();
 
       notesShared?.openModal?.('modal-global-read');
       if (!notesShared) {
@@ -28935,8 +29589,12 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
 
     async function openGlobalFeedPost(postId) {
       globalFeedFocusPostId = String(postId || '').trim();
+      globalFeedFilterMode = 'all';
+      const searchInput = document.getElementById('global-feed-search');
+      if (searchInput) searchInput.value = '';
       await showGlobalWorkspace('feed');
       await renderGlobalFeed();
+      expandGlobalFeedPostCard(globalFeedFocusPostId);
     }
 
     function refreshGlobalFeedFilterButtons() {
@@ -30002,6 +30660,24 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         }
       }
       if (icon) icon.textContent = isCollapsed ? 'expand_less' : 'expand_more';
+    }
+
+    function expandGlobalFeedPostCard(postId) {
+      const pid = String(postId || '').trim();
+      if (!pid) return;
+      requestAnimationFrame(() => {
+        const article = document.getElementById(`global-feed-post-${pid}`);
+        if (!article) return;
+        const wrapper = article.querySelector('.collapsible-wrapper');
+        const content = wrapper?.querySelector('.collapsible-content');
+        const toggleBtn = wrapper?.querySelector('.collapsible-toggle');
+        if (!content || !toggleBtn) return;
+        if (content.classList.contains('is-collapsed')) {
+          toggleCollapsibleContent(toggleBtn);
+        }
+        article.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        article.focus?.();
+      });
     }
 
     window.toggleRgpdImpactCard = toggleRgpdImpactCard;
@@ -35981,6 +36657,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         updateGlobalTasksViewButtons
       });
     }
+    window.TaskMDAProjectsToolbarHeight?.bind?.();
     if (window.TaskMDACommsUI?.bind) {
       window.TaskMDACommsUI.bind({
         showGlobalWorkspace,
@@ -36628,6 +37305,16 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       });
     });
     document.getElementById('btn-quick-link-reset')?.addEventListener('click', () => resetQuickAccessLinkForm());
+    document.getElementById('quick-link-category-filter')?.addEventListener('change', async (e) => {
+      quickLinkCategoryFilterValue = String(e?.target?.value || 'all').trim() || 'all';
+      await renderGlobalSettings();
+    });
+    document.getElementById('quick-link-category-input')?.addEventListener('keydown', async (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        await saveQuickAccessLinkFromForm();
+      }
+    });
     document.getElementById('btn-toggle-permissions-details')?.addEventListener('click', () => {
       projectPermissionDetailsOpen = !projectPermissionDetailsOpen;
       renderProjectPermissionMatrix(currentProjectState);
@@ -38864,6 +39551,58 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       if (!nid) return;
       await exportGlobalNote(nid, 'txt');
     });
+    const globalReadModal = document.getElementById('modal-global-read');
+    if (globalReadModal && globalReadModal.dataset.inlineShortcutsBound !== '1') {
+      globalReadModal.dataset.inlineShortcutsBound = '1';
+      globalReadModal.addEventListener('keydown', async (event) => {
+        if (globalReadModal.classList.contains('hidden')) return;
+        const key = String(event.key || '').toLowerCase();
+        if ((event.ctrlKey || event.metaKey) && key === 's') {
+          event.preventDefault();
+          await saveGlobalReadInlineEdit();
+          return;
+        }
+        if (globalReadInlineEditActive && key === 'enter' && event.target?.id === 'global-read-title') {
+          event.preventDefault();
+          await saveGlobalReadInlineEdit();
+          return;
+        }
+        if (key === 'escape') {
+          event.preventDefault();
+          event.stopPropagation();
+          if (globalReadInlineEditActive) {
+            cancelGlobalReadInlineEdit();
+            return;
+          }
+          closeGlobalReadModal();
+        }
+      });
+    }
+    document.getElementById('global-read-title')?.addEventListener('click', () => {
+      beginGlobalReadInlineEdit('title');
+    });
+    document.getElementById('global-read-content')?.addEventListener('click', () => {
+      beginGlobalReadInlineEdit('content');
+    });
+    document.getElementById('global-read-title')?.addEventListener('blur', async () => {
+      if (!globalReadInlineEditActive) return;
+      setTimeout(async () => {
+        const active = document.activeElement;
+        if (isElementInsideGlobalReadInlineEdit(active)) return;
+        await saveGlobalReadInlineEdit({ silent: true });
+      }, 0);
+    });
+    document.addEventListener('focusout', (event) => {
+      if (!globalReadInlineEditActive) return;
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      if (!target.closest('#global-read-inline-editor-wrap')) return;
+      setTimeout(async () => {
+        const active = document.activeElement;
+        if (isElementInsideGlobalReadInlineEdit(active)) return;
+        await saveGlobalReadInlineEdit({ silent: true });
+      }, 0);
+    }, true);
     document.getElementById('btn-project-note-read-export-menu')?.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -38993,19 +39732,56 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     const projectNoteReadModal = document.getElementById('modal-project-note-read');
     if (projectNoteReadModal && projectNoteReadModal.dataset.readShortcutsBound !== '1') {
       projectNoteReadModal.dataset.readShortcutsBound = '1';
-      projectNoteReadModal.addEventListener('keydown', (event) => {
+      projectNoteReadModal.addEventListener('keydown', async (event) => {
         if (projectNoteReadModal.classList.contains('hidden')) return;
         const key = String(event.key || '').toLowerCase();
+        if ((event.ctrlKey || event.metaKey) && key === 's') {
+          event.preventDefault();
+          await saveProjectNoteReadInlineEdit();
+          return;
+        }
+        if (projectNoteReadInlineEditActive && key === 'enter' && event.target?.id === 'project-note-read-title') {
+          event.preventDefault();
+          await saveProjectNoteReadInlineEdit();
+          return;
+        }
         if (key === 'escape') {
           event.preventDefault();
           event.stopPropagation();
+          if (projectNoteReadInlineEditActive) {
+            cancelProjectNoteReadInlineEdit();
+            return;
+          }
           hideProjectNoteSelectionMenu();
           closeNoteSelectionTaskTargetModal();
           closeProjectNoteReadModal();
         }
       });
     }
+    document.getElementById('project-note-read-title')?.addEventListener('click', () => {
+      beginProjectNoteReadInlineEdit('title');
+    });
+    document.getElementById('project-note-read-content')?.addEventListener('click', () => {
+      beginProjectNoteReadInlineEdit('content');
+    });
+    document.getElementById('project-note-read-title')?.addEventListener('blur', async () => {
+      if (!projectNoteReadInlineEditActive) return;
+      setTimeout(async () => {
+        const activeId = String(document.activeElement?.id || '');
+        if (activeId === 'project-note-read-title' || activeId === 'project-note-read-content') return;
+        await saveProjectNoteReadInlineEdit({ silent: true });
+      }, 0);
+    });
+    document.getElementById('project-note-read-content')?.addEventListener('blur', async () => {
+      if (!projectNoteReadInlineEditActive) return;
+      setTimeout(async () => {
+        const activeId = String(document.activeElement?.id || '');
+        if (activeId === 'project-note-read-title' || activeId === 'project-note-read-content') return;
+        await saveProjectNoteReadInlineEdit({ silent: true });
+      }, 0);
+    });
     document.getElementById('project-note-read-content')?.addEventListener('contextmenu', (event) => {
+      if (projectNoteReadInlineEditActive) return;
       const snippet = getProjectNoteReadSelectedSnippet();
       if (!snippet?.text && !snippet?.html) {
         hideProjectNoteSelectionMenu();

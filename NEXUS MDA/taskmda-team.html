@@ -1552,6 +1552,13 @@
                   <input id="quick-link-name-input" type="text" maxlength="120" placeholder="Nom du raccourci" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
                   <input id="quick-link-url-input" type="text" maxlength="500" placeholder="URL (https://...)" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
                 </div>
+                <div class="grid grid-cols-1 md:grid-cols-[1fr_1fr] gap-2 mb-2">
+                  <input id="quick-link-category-input" type="text" maxlength="80" list="quick-link-category-suggestions" placeholder="Categorie (ex: RH, IT, Finance)" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  <datalist id="quick-link-category-suggestions"></datalist>
+                  <select id="quick-link-category-filter" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    <option value="all">Toutes les categories</option>
+                  </select>
+                </div>
                 <div class="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-2 mb-3">
                   <input id="quick-link-description-input" type="text" maxlength="240" placeholder="Description (optionnelle)" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
                   <button id="btn-quick-link-save" class="btn-primary px-3 py-2 rounded-lg text-white text-sm font-semibold">Ajouter</button>
@@ -3679,6 +3686,7 @@
   <script src="js/taskmda-workflow.js?v=20260406-04"></script>
   <script src="js/taskmda-app-init.js?v=20260406-01"></script>
   <script src="js/taskmda-projects-ui.js?v=20260406-01"></script>
+  <script src="js/taskmda-projects-toolbar-height.js?v=20260430-01"></script>
   <script src="js/taskmda-comms-ui.js?v=20260423-02"></script>
   <script src="js/taskmda-admin-ui.js?v=20260406-01"></script>
   <script src="js/taskmda-hierarchy.js?v=20260420-01"></script>
