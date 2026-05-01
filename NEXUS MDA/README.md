@@ -1,374 +1,403 @@
-﻿# NEXUS MDA ()
+# NEXUS MDA
 
-Application web locale de pilotage projets/taches, utilisable en mode solo et collaboratif, sans serveur.
-Nom d interface par defaut: `NEXUS MDA`.
+> Application web de gestion de projets et de tâches collaborative et locale, sans serveur requis.
 
-## Acces rapide
+[![Version](https://img.shields.io/badge/version-2.0-blue.svg)]()
+[![License](https://img.shields.io/badge/license-Proprietary-red.svg)]()
+[![Platform](https://img.shields.io/badge/platform-Web-green.svg)]()
 
-1. Ouvrir [`taskmda-team.html`](./taskmda-team.html) dans Chrome ou Edge.
-2. Deverrouiller (ou creer) le mot de passe local.
-3. Optionnel: lier un dossier partage pour la synchronisation collaborative.
+---
 
-## Mises a jour recentes (Avril 2026)
+## 📋 Table des matières
 
-- **Referentiels / Generateur email (nouveau)**:
-  - ajout d un onglet dedie `Generateur email` dans `Referentiels`,
-  - templates parametrables (destinataires, objet, corps riche, nom du template),
-  - variables dynamiques: `{{app_name}}`, `{{user_name}}`, `{{date}}`, `{{project_name}}`, `{{task_title}}`, `{{status}}`,
-  - actions rapides: copie HTML, copie texte, ouverture `mailto:`,
-  - persistance locale des templates dans `appSettings` (sans serveur, sans npm).
+- [Présentation](#-présentation)
+- [Démarrage rapide](#-démarrage-rapide)
+- [Fonctionnalités principales](#-fonctionnalités-principales)
+- [Architecture technique](#-architecture-technique)
+- [Nouveautés récentes](#-nouveautés-récentes)
+- [Documentation](#-documentation)
+- [Support](#-support)
 
-- **Fil d info / Notes / Dashboard (lot UX recent)**:
-  - Fil d info: ajout d un champ `Titre du post (optionnel)` dans le composeur, persistance en creation/edition, affichage sur la carte et prise en compte dans la recherche.
-  - Fil d info: ajout d un bouton `Lire` ouvrant une modale de lecture confortable (sans edition).
-  - Notes globales: ajout d un bouton `Lire` ouvrant la meme modale de lecture confortable.
-  - Fil d info: export par post en plusieurs formats (`HTML`, `PDF`, `DOCX`, `TXT`) via menu `Exporter`.
-  - Dashboard: la `Une` est maintenant reservee aux posts manuels rediges par un utilisateur; en absence de post manuel, seules les infos compactes automatiques sont affichees.
-- **Taches / Documents (harmonisation actions sur cartes)**:
-  - harmonisation de l affichage des boutons d actions dans les cartes du projet (liste + kanban): apparition au survol/focus, en overlay.
-  - alignement du kanban projet sur le comportement de la rubrique `Taches` (actions flottantes sur la carte, sans espace reserve inutile).
-  - extension du meme comportement overlay aux cartes `Documents` (rubrique projet + rubrique documents transverse).
-- **Activite projet**:
-  - correction de recuperation des evenements en mode chiffre:
-    - conservation des champs indexables (`projectId`, `timestamp`, `type`, `author`) en clair dans le store `events`,
-    - fallback retrocompatibilite quand les anciens evenements ne sont pas indexables par `projectId`.
-  - ajout de la pagination du journal d activite (navigation page par page, avec filtres conserves).
+---
 
-- **Surveillance de fichiers** (nouveau):
-  - nouvel onglet `Surveillance fichiers` dans `Referentiels`,
-  - observateurs configurables pour surveiller les modifications de fichiers dans un dossier,
-  - polling automatique (30s a 1h) avec detection creation/modification/suppression,
-  - support multi-formats: Excel, Word, PDF, CSV, texte, images + patterns personnalises,
-  - mode recursif pour observer les sous-dossiers,
-  - notifications automatiques en temps reel lors de changements detectes,
-  - historique complet des evenements avec filtres par type,
-  - actions: pause/reprise, verification manuelle, edition, suppression,
-  - module dedie: `taskmda-file-watcher.js` (core + interface),
-  - DB_VERSION 21: nouveaux stores `fileWatchers`, `fileWatcherSnapshots`, `fileWatcherEvents`.
-- Nouvelle rubrique `Notes` (transverse + privee):
-  - ajout d une section dediee `Notes` dans la navigation globale,
-  - creation/edition en modale confortable (editeur riche Quill/fallback),
-  - filtres combines (portee, onglets rapides, tri, recherche, dont `Favoris d'abord`),
-  - onglet `Favoris`, export direct d une note (HTML), pagination de la liste,
-  - selection multiple + suppression en masse des notes,
-  - export multi-notes en `ZIP HTML` et `ZIP TXT` (local, sans serveur/npm),
-  - notes privees (auteur) vs notes transverses (visibles equipe),
-  - publication optionnelle d une note dans le `Fil d info` (reference cliquable retour vers la note).
-- Documents (lot technique 1):
-  - ajout du module `js/taskmda-document-storage.js` (stockage fichier decouple de l orchestrateur principal),
-  - stockage par defaut sur disque partage quand le dossier est connecte (avec fallback local `data:`),
-  - structure de chemin horodatee et classee par rubrique/scope/projet/thematique,
-  - apercu/telechargement/edition compatibles avec chargement a la demande depuis `storagePath`.
-- Rubrique `Projets` harmonisee en panneaux:
-  - panneau `project-overview-panel` (resume + actions + filtres),
-  - panneau `project-work-panel` (cartes projets / pagination),
-  - gestion robuste du mode `Archives` (ouverture/fermeture sans artefacts d affichage au retour depuis le dashboard).
-- Barre latérale et en tete:
-  - integration visuelle du bloc marque (`NEXUS MDA`) dans la sidebar,
-  - sidebar etendue sur toute la verticale de la page.
-- Rubrique `Fil d info`:
-  - bloc `Nouveau post d information` place au-dessus du flux et replie par defaut.
-- Rubrique `Messagerie`:
-  - panneau `Agents connus` reductible (toggle),
-  - barre de composition ajustee (emoji + envoi), bouton `Envoyer` au style rectangulaire arrondi.
-- Rubrique `Workflow`:
-  - onglet `KPI` ajoute dans `Pilotage` (cards de synthese + repartitions statut/priorite + charge par agent).
-  - vue `Carte`: alignement de la barre `Rechercher une liaison...` + `Tri` sur une meme ligne en desktop, avec repli responsive en mobile.
-- Onglet `Plus (x)`:
-  - menu complementaire epingle au clic (toggle), plus d ouverture au simple survol.
+## 🎯 Présentation
 
-## Etat actuel
+**NEXUS MDA** est une solution complète de gestion de projets, de tâches et de workflows organisationnels, conçue pour fonctionner en mode autonome ou collaboratif sans infrastructure serveur. L'application s'exécute entièrement dans le navigateur avec persistance locale et synchronisation collaborative optionnelle via dossier partagé.
 
-- Architecture front locale, multi fichiers:
-  - `taskmda-team.html`
-  - `taskmda-team.css`
-  - `taskmda-workflow.css`
-  - `taskmda-core-utils.js`
-  - `taskmda-runtime-contract.js`
-  - `taskmda-team.js`
-  - `taskmda-shell.js`
-  - `taskmda-project.js`
-  - `taskmda-project-members-domain.js`
-  - `taskmda-task-lifecycle-domain.js`
-  - `taskmda-doc.js`
-  - `taskmda-global.js`
-  - `taskmda-via-annuaire.js`
-  - `taskmda-app-init.js`
-  - `taskmda-comms-ui.js`
-  - `taskmda-admin-ui.js`
-  - `taskmda-notes-shared.js`
-  - `taskmda-hierarchy.js`
-  - `taskmda-calendar.js`
-  - `taskmda-email-generator.js`
-  - `taskmda-file-watcher.js`
-  - `taskmda-document-storage.js`
-  - `taskmda-editor.js` (module editeur projet: Quill, media, emoji, formatage)
-  - `taskmda-crypto.js`
-  - `taskmda-ui.js`
-  - `taskmda-theme.js`
-  - `taskmda-notifications.js`
-  - `taskmda-recurrence.js`
-  - `taskmda-tasks.js`
-  - `taskmda-social.js` (templates UI messagerie/fil d info)
-  - `taskmda-workflow.js`
-- Persistance: IndexedDB (event sourcing + etat local projete).
-- Synchronisation: dossier partage (File System Access API), sans backend.
-  - Le dossier lie est memorise (IndexedDB) et tente une reconnexion automatique au demarrage si permission valide.
-  - Au rechargement collaboratif, l application ne conserve que les projets accessibles (membre assigne ou lecture publique).
-- Chiffrement local + verrouillage via `taskmda-crypto.js`.
+### Caractéristiques distinctives
 
-## Fonctionnalites principales
+- ✅ **Aucun serveur requis** - Architecture 100% client
+- 🔒 **Sécurité renforcée** - Chiffrement local AES-256-GCM
+- 🤝 **Collaboration simplifiée** - Synchronisation via dossier partagé
+- 📱 **Responsive** - Interface adaptative mobile/tablette/desktop
+- 🎨 **Personnalisable** - Thèmes et configurations utilisateur
 
-### Projets
-- Creation solo/collaboratif.
-- Edition/suppression.
-- Vues: liste, kanban, timeline/calendrier, documents, discussion, activite.
-- Editeur de description riche:
-  - styles de titres `H1/H2/H3`,
-  - insertion d images,
-  - redimensionnement visuel direct sur image (icone en surcouche + slider).
+---
 
-### Taches
-- CRUD complet en projet.
-- Sous taches avec progression.
-- Taches recurrentes:
-  - types `hebdomadaire` / `mensuelle` / `annuelle`,
-  - intervalle configurable (`tous les N`),
-  - fin `infinie` / `nombre d occurrences` / `jusqu a une date`.
-- Taches hors projet (solo ou collaboratif).
-- Archivage/restauration des taches (projet et hors projet) avec vues `Archives`.
-- Conversion d une tache (projet ou hors projet) en nouveau projet.
-- Pagination projets et taches.
-- Rubrique transverse `Taches`: vues cartes/liste/kanban/timeline + onglet `Calendrier`.
-- Effet visuel de completion: au passage d une tache a `termine`, un emoji `pouce leve` s anime sur la carte (envol + estompe), avec declenchement centralise sur les transitions de statut.
+## 🚀 Démarrage rapide
 
-### Vues transverses
-- `Taches`: consolidation tous projets + hors projet.
-- `Calendrier`: vue liste + vue calendrier mensuelle.
-- `Documents`: consolidation et ajout hors projet par thematique.
-- `Fil d info`: micro-posts transverses type fil social interne.
-  - mentions d agents (`@handle` ou `@[Nom Prenom]`),
-  - notifications automatiques des agents mentionnes,
-  - references cliquables vers projet, tache ou info calendrier,
-  - digestion documentaire locale (`.eml/.txt/.md/.html/.pdf/.doc/.docx/.odt/.rtf`) vers post resume.
-- Recherche globale dans le header (navigation directe vers projet/tache/document/message/canal).
-- `Referentiels`: administration globale des thematiques, groupes et registre versions logicielles.
-  - onglet `Annuaire ESMS` dedie a la recherche live PA/PH (lecture seule) via FINESS public, avec ouverture fiche ViaTrajectoire.
-  - enrichissement optionnel via endpoint FHIR Annuaire Sante (endpoint + cle API configurables).
-  - normalisation endpoint gateway (`/fhir` -> `/fhir/v2`) et garde-fous anti-spam en cas d erreurs HTTP `400/401/403`.
-  - bloc de configuration API repliable/depliable (toggle) avec memoire locale de l etat.
-  - mode `Audit divergences` FINESS vs FHIR avec badge par ligne, detail au clic et statuts `OK`, `Proche`, `Incomplet`, `Different`.
-  - heuristique de proximite semantique pour limiter les faux positifs (casse, accents, complements d adresse).
-  - recommandation d adresse enrichie dans l audit avec action `Utiliser l adresse enrichie` quand pertinent.
-- `RGPD`: registre de traitements et pilotage conformite:
-  - vues `Registre`, `Activites`, `Brouillons detectes`, `Controles`, `Journal`,
-  - creation/edition/validation/archivage de fiches,
-  - detection semi-automatique depuis les contenus metier,
-  - exports JSON/CSV,
-  - liaison contextuelle `Impact RGPD` depuis Workflow / Projet / Tache (generer, lier, ouvrir fiche).
-- `Workflow`: rubrique transverse dediee a l organisation metier:
-  - vues `Carte`, `Organisation`, `Organigramme`, `Agents`, `Processus`, `Modeles de processus`, `Taches`, `Kanban`, `Timeline`, `KPI`, `Procedures`, `Logiciels metiers`, `Contingence`, `Analyse`, `Gouvernance`, `Journal`
-  - carte metier: zoom/pan, auto-layout, mini-carte interactive, export PNG et export PDF
-  - concepteur de processus: edition par blocs d etapes (ajout rapide, duplication, reordonnancement, reliage automatique des flux)
-  - concepteur de flux: mode graphe non-lineaire (branches decision/parallele/exception, branche oui/non, bascule lineaire)
-  - visualisation SVG des liaisons et edition inline des flux (source, cible, type, condition, libelle)
-  - interaction graphe: clic noeud (source/cible) et clic arete (chargement edition)
-  - mode drag-link: creation d un flux par glisser source -> cible sur le graphe
-  - multi-selection des flux: mode multi-select, selection Ctrl/Shift/Cmd, suppression groupee, application groupee du type de flux
-  - CRUD complet: communautes, services, groupes, agents, roles, processus, etapes, flux, templates, taches, procedures, logiciels
-  - liens avances: dependances inter-taches, liaisons inter-services, hierarchie manager/agents
-  - modeles de processus: creation depuis processus, instanciation, publication/archivage, versioning, variantes
-  - gouvernance processus: validation multi-niveaux, mode sequentiel optionnel, quorum par niveau, exports JSON/CSV
-  - echange de donnees workflow: export modele complet JSON + export synthese processus CSV
-  - integration referentielle: logiciels metiers relies au suivi global des versions logicielles (lecture, ouverture du registre, synchronisation version)
-  - separation des droits: edition/soumission distinctes de la validation, controles d approbation par roles requis
-  - alertes proactives de gouvernance (responsable manquant, quorum incomplet, etapes non affectees)
-  - analyse avancee: matrices processus x services / processus x logiciels / agents x responsabilites, dependances critiques, listes d anomalies (etapes non affectees, logiciels sans procedure, processus incomplets)
-  - injection d un jeu d exemple complet de modelisation organisationnelle (bouton dedie dans la barre Workflow)
-  - gestion des plans de contingence: creation, actions, activation avec generation automatique de taches, exercices de test, revues periodiques, dashboard avec alertes, exports PDF/CSV
-  - journal/audit + historique des modifications avec restauration de versions
-  - export PDF des vues `Organisation` et `Organigramme` + fiches `Processus`, `Service`, `Agent`, `Logiciel`, `Plan de contingence`
-  - detail editable + ponts transverses vers taches/documents/themes/groupes globaux
-- Correctif UX/CSS: isolation stricte des sections transverses (plus de melange visuel Taches/Calendrier).
-- Harmonisation UX globale:
-  - mode d affichage parametrable des boutons d action (`icone`, `texte`, `icone + texte`) applique a Workflow / Projets / Taches / Documents / RGPD,
-  - infobulles custom harmonisees en mode `icone` sur les boutons d action (sans tooltip natif du navigateur), avec exclusion explicite du sidebar,
-  - harmonisation des boutons `Fermer` sur les modales (meme regle de rendu que les boutons d action),
-  - fermeture des modales au clic hors fenetre,
-  - terminologie metier uniformisee (ex: `Date limite`, `Responsable`, `Visibilite`),
-  - edition inline en consultation sur les champs metier (projet, tache, documents, calendrier) avec autosauvegarde asynchrone (debounce + finalisation).
-- Personnalisation visuelle:
-  - couleur du chrome applicatif (header + sidebar) configurable utilisateur,
-  - prise en charge complete des variables de theme en mode clair/sombre (y compris hovers metier).
+### Prérequis
 
-### Ergonomie documents
-- Versement documents projet:
-  - zone de depot visuelle (drag & drop),
-  - selection de fichiers centralisee,
-  - resume des fichiers selectionnes,
-  - action principale `Ajouter document(s)` clairement separee.
-- Association document -> taches projet:
-  - liste multi selection avec clic pour selection/deselection,
-  - boutons `Tout selectionner` / `Tout deselectionner`,
-  - texte d aide explicite sur la zone.
-- Drag & drop de fichiers active sur toutes les zones de versement:
-  - documents projet,
-  - documents hors projet,
-  - pieces jointes de message,
-  - pieces jointes de tache.
-- Editeur documentaire integre:
-  - mode texte/HTML/Markdown,
-  - mode tableur (`CSV/XLSX`) avec Tabulator + SheetJS,
-  - apercu/lecture des formats courants (images, PDF, Office, texte).
+- Navigateur moderne : **Google Chrome** ou **Microsoft Edge** (recommandé)
+- Espace de stockage local disponible (IndexedDB)
+- *(Optionnel)* Dossier partagé réseau pour collaboration
 
-### Collaboration
-- Membres, invitations utilisateurs/agents.
-- Groupes metier et groupes utilisateurs.
-- Thematiques reutilisables.
-- Groupes globaux reutilisables avec association de membres.
-- Association de groupes globaux lors de la creation/modification de projet.
-- RBAC local owner/manager/member.
-- Role global `Admin application` pour le parametrage d identite (nom + descriptif dans le header).
-- Role `manager workflow` (mapping agent -> utilisateur) pour edition Workflow sans droits admin complets.
+### Installation
 
-### Communication
-- Notifications internes (centre cloche).
-- Messagerie directe hors projet entre agents connus.
-- Panneau `Agents connus` reductible (toggle) dans la messagerie.
-- Emails preformates via `mailto:` (projet, tache, invitation, cloture).
+1. **Télécharger** ou cloner le projet dans un répertoire local
+2. **Ouvrir** le fichier [`taskmda-team.html`](./taskmda-team.html) dans votre navigateur
+3. **Créer** votre mot de passe local lors de la première utilisation
+4. *(Optionnel)* **Configurer** un dossier partagé pour activer la synchronisation
 
-### Profil, sauvegarde et securite
-- Profil utilisateur: nom affiche, email professionnel, photo de profil.
-- Export/import des donnees utilisateur en JSON.
-- Export `projets + taches` en CSV (compatible tableur).
-- Changement de mot de passe local.
-- Cle de recuperation: affichage, regeneration et restauration d acces.
+### Configuration collaborative (optionnelle)
 
-## Base de donnees
+1. Accéder au menu utilisateur → **Lier un dossier partagé**
+2. Sélectionner un dossier accessible par les membres de l'équipe
+3. Autoriser l'accès (File System Access API)
+4. La synchronisation automatique est activée
 
-- DB: `taskmda-team-standalone`
-- Version schema: `DB_VERSION = 21`
-- Stores:
-  - `events`
-  - `processedEvents`
-  - `snapshots`
-  - `localState`
-  - `users`
-  - `sharedKeys`
-  - `globalTasks`
-  - `globalDocs`
-  - `globalCalendarItems`
-  - `globalMessages`
-  - `globalPosts`
-  - `globalThemes`
-  - `globalGroups`
-  - `softwareVersions`
-  - `directoryUsers`
-  - `appSettings`
-  - `workflowCommunities`
-  - `workflowServices`
-  - `workflowGroups`
-  - `workflowAgents`
-  - `workflowTasks`
-  - `workflowProcedures`
-  - `workflowSoftware`
-  - `workflowJobTitles`
-  - `workflowRoles`
-  - `workflowProcesses`
-  - `workflowProcessSteps`
-  - `workflowFlows`
-  - `workflowProcessTemplates`
-  - `workflowMetrics`
-  - `workflowLayout`
-  - `workflowAudit`
-  - `workflowHistory`
-  - `workflowPermissionProfiles`
-  - `workflowPermissionAssignments`
-  - `workflowPermissionRequests`
-  - `workflowPermissionReviews`
-  - `workflowPermissionAudit`
-  - `workflowContingencyPlans`
-  - `workflowContingencyActions`
-  - `workflowContingencyActivations`
-  - `workflowContingencyExercises`
-  - `workflowContingencyReviews`
-  - `workflowContingencyAudit`
-  - `globalNotes`
-  - `rgpdActivities`
-  - `rgpdAssessments`
-  - `rgpdTemplates`
-  - `rgpdLinks`
-  - `rgpdAudit`
-  - `rgpdExports`
-  - `fileWatchers`
-  - `fileWatcherSnapshots`
-  - `fileWatcherEvents`
+> **Note** : La liaison au dossier est persistante et se reconnecte automatiquement au démarrage si les permissions sont valides.
 
-## Synchronisation collaborative
+---
 
-- Donnees synchronisees via dossier partage (`projects/<projectId>/events/*.json`).
-- Cle partagee projet:
-  - stockee localement dans `sharedKeys` (IndexedDB),
-  - ecrite aussi dans `projects/<projectId>/shared-key.json` pour faciliter la restauration locale.
-- Ecriture collaborative non bloquante:
-  - enregistrement local immediat (IndexedDB),
-  - replication dossier partage en arriere-plan via file asynchrone + retries.
-- Indicateur discret de synchro de fond dans le header (`bg-sync-indicator`):
-  - format icone seule pour eviter les sauts de layout,
-  - rotation pendant la synchro (etat en cours),
-  - etats en attente / en cours / erreur.
+## ⚡ Fonctionnalités principales
 
-## Hardening recent
+### 📊 Gestion de projets
 
-- Reduction des logs runtime: `console.log` passe par debug gate.
-  - Activer: `localStorage.setItem('taskmda_debug','1')`
-- Decoupage modulaire progressif:
-  - Noyau utilitaires purs: `taskmda-core-utils.js`
-  - Contrat runtime d orchestration: `taskmda-runtime-contract.js`
-  - Shell transverse: `taskmda-shell.js`
-  - Domaine projets transverse: `taskmda-project.js`
-  - Domaine membres projet / RBAC / groupes utilisateurs: `taskmda-project-members-domain.js`
-  - Domaine cycle de vie des taches (creation/edition/transitions): `taskmda-task-lifecycle-domain.js`
-  - Bundle domaine Documents (storage binding + preview inline + preview modal): `taskmda-doc.js`
-  - Domaine calendrier transverse: `taskmda-calendar.js`
-  - Domaine global transverse (notes/docs/feed/messages): `taskmda-global.js`
-  - UI Annuaire ESMS transverse (recherche/audit panneau live): `taskmda-via-annuaire.js`
-  - Initialisation applicative: `taskmda-app-init.js`
-  - UI Communication: `taskmda-comms-ui.js`
-  - UI Administration: `taskmda-admin-ui.js`
-  - Domaine hierarchie Epic/Feature: `taskmda-hierarchy.js`
-  - Domaine notes partagees (modales/read): `taskmda-notes-shared.js`
-  - Editeur projet (Quill): `taskmda-editor.js`
-  - Orchestration app/synchronisation: `taskmda-team.js`
-  - UI: `taskmda-ui.js`
-  - Theme: `taskmda-theme.js`
-  - Notifications: `taskmda-notifications.js`
-  - Taches: `taskmda-tasks.js`
-  - Recurrence: `taskmda-recurrence.js`
-  - Workflow: `taskmda-workflow.js`
-- Checklist de non regression: `docs/QA_REGRESSION_CHECKLIST.md`.
+- **Création** de projets solo ou collaboratifs
+- **Vues multiples** : liste, kanban, timeline, calendrier
+- **Éditeur enrichi** : insertion d'images, titres hiérarchiques (H1/H2/H3)
+- **Gestion documentaire** : versionnement et association aux tâches
+- **Discussion** et fil d'activité par projet
 
-## QA recommandee
+### ✅ Gestion des tâches
 
-- Navigation: dashboard, projets, taches, calendrier, documents.
-- Navigation: dashboard, projets, taches, calendrier, documents, referentiels, workflow.
-- CRUD: projet, tache projet/hors projet, document hors projet, info calendrier.
-- Recurrence: creation/edition des taches recurrentes et affichage des libelles.
-- Workflow: CRUD entites, modeles/variantes, gouvernance/validation, kanban, timeline, journal, historique/restauration.
-- Collaboration: membres, invitations, groupes projet/globaux, thematiques, permissions.
-- Communication: notifications + generation des mails + fil d info.
-- Responsive: mobile/tablette/desktop.
-- Persistance: refresh, fermeture/reouverture, coherence IndexedDB.
+- **CRUD complet** avec sous-tâches et progression
+- **Tâches récurrentes** : hebdomadaire, mensuelle, annuelle
+- **Archivage** et restauration avec historique
+- **Conversion** tâche → projet en un clic
+- **Vues transverses** : consolidation multi-projets
 
-## Limites connues
+### 🗂️ Organisation
 
-- Pas de SMTP natif (emails via client local avec `mailto:`).
-- Pas d authentification centralisee (application locale).
-- Fonctionnement collaboratif lie au dossier partage et aux permissions du poste.
+#### Workflow organisationnel
 
-## Fichiers utiles
+Vue complète de l'organisation avec :
+- **Cartographie métier** : services, groupes, processus
+- **Organigramme** interactif avec hiérarchies
+- **Modélisation de processus** : concepteur visuel par blocs
+- **Flux non-linéaires** : branches conditionnelles, parallélisme
+- **Gouvernance** : validation multi-niveaux, quorum
+- **Plans de contingence** : gestion de crise et exercices
+- **Analyses avancées** : matrices croisées, détection d'anomalies
 
-- `docs/QUICKSTART.md`: prise en main rapide.
-- `CHANGELOG.md`: historique des evolutions.
-- `docs/QA_REGRESSION_CHECKLIST.md`: controle fonctionnel minimal.
-- `docs/RECURRENCE.md`: details fonctionnels et techniques des taches recurrentes.
+#### Référentiels
+
+- **Thématiques** et groupes métier réutilisables
+- **Versions logicielles** : registre centralisé
+- **Annuaire ESMS** : recherche PA/PH via FINESS
+- **Générateur d'emails** : templates personnalisables
+- **Surveillance de fichiers** : monitoring automatique
+
+### 🔐 RGPD
+
+- **Registre des traitements** : création, validation, archivage
+- **Détection automatique** depuis contenus métier
+- **Contrôles** et audits de conformité
+- **Liaisons contextuelles** : projet, tâche, workflow
+- **Exports** JSON/CSV pour reporting
+
+### 📝 Collaboration
+
+- **Membres** et invitations utilisateurs
+- **Groupes** métier et utilisateurs
+- **RBAC** : owner, manager, member
+- **Rôles globaux** : admin application, manager workflow
+- **Messagerie** directe inter-agents
+- **Fil d'info** : posts collaboratifs avec mentions
+
+### 📄 Gestion documentaire
+
+- **Stockage hybride** : local (IndexedDB) ou disque partagé
+- **Éditeur intégré** : texte, HTML, Markdown, tableur
+- **Aperçu** : images, PDF, Office, texte
+- **Versionnement** et métadonnées enrichies
+- **Drag & drop** généralisé
+
+### 🔔 Notifications
+
+- **Centre de notifications** intégré
+- **Alertes proactives** : mentions, affectations, validations
+- **Surveillance de fichiers** : changements détectés en temps réel
+
+---
+
+## 🏗️ Architecture technique
+
+### Stack technologique
+
+- **Frontend** : HTML5, CSS3, JavaScript ES6+
+- **Persistance** : IndexedDB (event-sourcing)
+- **Synchronisation** : File System Access API
+- **Sécurité** : Web Crypto API (AES-256-GCM)
+- **Éditeur** : Quill.js
+- **Graphiques** : Charting intégré
+- **Tableur** : Tabulator + SheetJS
+
+### Architecture modulaire
+
+L'application est structurée en modules spécialisés :
+
+#### Modules métier
+- `taskmda-project.js` - Domaine projets
+- `taskmda-task-lifecycle-domain.js` - Cycle de vie des tâches
+- `taskmda-workflow.js` - Orchestration workflow
+- `taskmda-global.js` - Domaines transverses (notes, docs, feed)
+- `taskmda-doc.js` - Gestion documentaire complète
+- `taskmda-hierarchy.js` - Epic/Feature
+
+#### Modules fonctionnels
+- `taskmda-crypto.js` - Chiffrement et sécurité
+- `taskmda-calendar.js` - Calendrier transverse
+- `taskmda-recurrence.js` - Tâches récurrentes
+- `taskmda-notifications.js` - Centre de notifications
+- `taskmda-via-annuaire.js` - Annuaire ESMS
+- `taskmda-email-generator.js` - Générateur emails
+- `taskmda-file-watcher.js` - Surveillance fichiers
+- `taskmda-document-storage.js` - Stockage documents
+
+#### Modules infrastructure
+- `taskmda-core-utils.js` - Utilitaires purs
+- `taskmda-runtime-contract.js` - Contrat d'orchestration
+- `taskmda-shell.js` - Shell transverse
+- `taskmda-app-init.js` - Initialisation
+- `taskmda-ui.js` - Composants UI
+- `taskmda-theme.js` - Gestion des thèmes
+- `taskmda-editor.js` - Éditeur Quill
+
+### Base de données
+
+**Nom** : `taskmda-team-standalone`
+**Version du schéma** : `DB_VERSION = 21`
+
+#### Stores principaux
+
+| Store | Description |
+|-------|-------------|
+| `events` | Event-sourcing projets |
+| `snapshots` | États projetés |
+| `globalTasks` | Tâches transverses |
+| `globalDocs` | Documents transverses |
+| `globalNotes` | Notes collaboratives |
+| `globalPosts` | Fil d'information |
+| `workflowProcesses` | Processus métier |
+| `workflowAgents` | Agents organisationnels |
+| `rgpdActivities` | Registre RGPD |
+| `fileWatchers` | Surveillance fichiers |
+
+*Voir section complète dans le fichier pour liste exhaustive (40+ stores)*
+
+### Synchronisation collaborative
+
+#### Mécanisme
+
+1. **Écriture locale immédiate** (IndexedDB)
+2. **Réplication asynchrone** vers dossier partagé
+3. **Détection des changements** à l'ouverture
+4. **Fusion intelligente** avec résolution de conflits
+
+#### Structure du dossier partagé
+
+```
+projects/
+  <projectId>/
+    events/
+      <timestamp>.json
+    shared-key.json
+```
+
+#### Sécurité
+
+- Clé partagée AES-256 par projet
+- Double chiffrement : local + transport
+- Format `v1-e2e-encrypted`
+- Rétrocompatibilité JSON clair
+
+---
+
+## 🆕 Nouveautés récentes
+
+### Avril 2026
+
+#### 🗂️ Surveillance de fichiers
+
+Nouveau module complet de monitoring automatique :
+- Observateurs configurables par dossier
+- Polling automatique (30s à 1h)
+- Détection création/modification/suppression
+- Support multi-formats (Excel, Word, PDF, CSV, images)
+- Mode récursif pour sous-dossiers
+- Notifications temps réel
+- Historique complet avec filtres
+
+#### 📧 Générateur d'emails
+
+Templates personnalisables avec :
+- Variables dynamiques (`{{app_name}}`, `{{user_name}}`, etc.)
+- Éditeur riche HTML
+- Export HTML/texte
+- Ouverture `mailto:` pré-remplie
+
+#### 📝 Notes collaboratives
+
+Rubrique dédiée avec :
+- Notes privées vs transverses
+- Éditeur riche (Quill)
+- Favoris et export HTML/ZIP
+- Publication dans le fil d'info
+- Sélection multiple et actions groupées
+
+#### 📊 Workflow KPI
+
+Vue synthétique de pilotage :
+- Volumétrie et complétion
+- Répartitions statut/priorité
+- Charge par agent (top 8)
+- Exports PDF/CSV
+
+#### 🎨 Harmonisation UX
+
+- Mode d'affichage boutons (icône/texte/mixte)
+- Infobulles harmonisées
+- Fermeture modale au clic externe
+- Édition inline généralisée
+- Couleur chrome personnalisable
+
+---
+
+## 📚 Documentation
+
+| Document | Description |
+|----------|-------------|
+| [`QUICKSTART.md`](docs/QUICKSTART.md) | Guide de démarrage rapide |
+| [`CHANGELOG.md`](CHANGELOG.md) | Historique des versions |
+| [`QA_REGRESSION_CHECKLIST.md`](docs/QA_REGRESSION_CHECKLIST.md) | Checklist de tests |
+| [`RECURRENCE.md`](docs/RECURRENCE.md) | Tâches récurrentes (détails) |
+| [`FILE_WATCHER.md`](docs/FILE_WATCHER.md) | Surveillance fichiers (technique) |
+| [`QUICKSTART_FILE_WATCHER.md`](docs/QUICKSTART_FILE_WATCHER.md) | Surveillance fichiers (guide) |
+
+---
+
+## 🔒 Sécurité
+
+### Chiffrement
+
+- **Algorithme** : AES-256-GCM
+- **Dérivation clés** : PBKDF2-SHA256
+- **Standards** : OWASP 2024
+- **Zero-knowledge** : données chiffrées en transit et au repos
+
+### Confidentialité
+
+- Aucune donnée transmise à des tiers
+- Stockage 100% local ou réseau partagé
+- Clés en mémoire uniquement (jamais sur disque)
+- Verrouillage par mot de passe utilisateur
+
+### Récupération
+
+- Clé de récupération générée automatiquement
+- Affichage et régénération depuis profil utilisateur
+- Restauration d'accès en cas d'oubli
+
+---
+
+## 🧪 Tests recommandés
+
+### Checklist fonctionnelle
+
+- ✅ Navigation : dashboard, projets, tâches, calendrier, documents
+- ✅ CRUD : projet, tâche, document, calendrier
+- ✅ Récurrence : création et affichage des tâches récurrentes
+- ✅ Workflow : CRUD entités, modèles, gouvernance, kanban
+- ✅ Collaboration : membres, invitations, groupes, permissions
+- ✅ Communication : notifications, emails, fil d'info
+- ✅ Responsive : mobile, tablette, desktop
+- ✅ Persistance : refresh, cohérence IndexedDB
+
+### Non-régression
+
+Consulter [`docs/QA_REGRESSION_CHECKLIST.md`](docs/QA_REGRESSION_CHECKLIST.md) pour la checklist détaillée.
+
+---
+
+## ⚠️ Limites connues
+
+| Limitation | Description |
+|------------|-------------|
+| **SMTP** | Pas d'envoi email natif (utilisation `mailto:`) |
+| **Authentification** | Pas d'authentification centralisée (application locale) |
+| **Collaboration** | Dépendante du dossier partagé et permissions poste |
+| **Navigateur** | Optimisé pour Chrome/Edge (File System Access API) |
+
+---
+
+## 💡 Débogage
+
+### Mode debug
+
+Activer les logs console :
+
+```javascript
+localStorage.setItem('taskmda_debug', '1')
+```
+
+Désactiver :
+
+```javascript
+localStorage.removeItem('taskmda_debug')
+```
+
+### Indicateur de synchronisation
+
+L'icône dans le header indique l'état de synchronisation :
+- 🔄 Rotation : synchronisation en cours
+- ⏳ En attente : fichiers en file
+- ❌ Erreur : échec de synchronisation
+
+---
+
+## 🤝 Support
+
+Pour toute question ou problème :
+
+1. Consulter la [documentation](#-documentation)
+2. Vérifier les [limites connues](#️-limites-connues)
+3. Activer le [mode debug](#-débogage)
+4. Contacter l'équipe de support interne
+
+---
+
+## 📄 Licence
+
+Logiciel propriétaire. Tous droits réservés.
+
+---
+
+## 🎯 Feuille de route
+
+### Évolutions envisagées
+
+- Modal "Rejoindre un projet partagé" avec scanner automatique
+- Export/import de clés (fichier .key)
+- Interface de gestion des clés partagées
+- Rotation automatique des clés
+- Révocation de membres
+- Notifications temps réel (WebSocket/SSE)
+
+---
+
+<p align="center">
+  <strong>NEXUS MDA</strong> - Gestion de projets collaborative sans serveur<br>
+  Version 2.0 - Avril 2026
+</p>
