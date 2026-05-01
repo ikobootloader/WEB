@@ -5,11 +5,12 @@
 
     // Vérifier que les dépendances sont chargées
     function checkDependencies() {
-      if (!window.uuidv4 || !window.idb || !window.marked) {
+      if (!window.uuidv4 || !window.idb || !window.marked || !window.TaskMDACoreUtils) {
         console.error('❌ Dépendances manquantes:', {
           uuidv4: !!window.uuidv4,
           idb: !!window.idb,
-          marked: !!window.marked
+          marked: !!window.marked,
+          TaskMDACoreUtils: !!window.TaskMDACoreUtils
         });
         alert('❌ Erreur: Dépendances CDN non chargées.\n\nVérifiez votre connexion internet.');
         return false;
@@ -21,6 +22,67 @@
     // Charger les dépendances
     const uuidv4 = window.uuidv4;
     const { openDB } = window.idb;
+    const coreUtils = window.TaskMDACoreUtils;
+    const {
+      normalizeWorkflowActionButtonsMode: coreNormalizeWorkflowActionButtonsMode,
+      normalizeWorkflowActionButtonsShape: coreNormalizeWorkflowActionButtonsShape,
+      normalizeDashboardHeroShortContentMaxChars: coreNormalizeDashboardHeroShortContentMaxChars,
+      normalizeFeedSummaryWordCount: coreNormalizeFeedSummaryWordCount,
+      normalizeWorkspaceWideSections: coreNormalizeWorkspaceWideSections,
+      escapeCsvValue: coreEscapeCsvValue,
+      toCsv: coreToCsv,
+      formatExportDateTag: coreFormatExportDateTag,
+      normalizeSearch: coreNormalizeSearch,
+      normalizeCatalogKey: coreNormalizeCatalogKey,
+      normalizeTaskAutoArchiveMonths: coreNormalizeTaskAutoArchiveMonths,
+      normalizeTaskAutoArchiveSettings: coreNormalizeTaskAutoArchiveSettings,
+      normalizeProjectPriority: coreNormalizeProjectPriority,
+      getProjectPriorityLabel: coreGetProjectPriorityLabel,
+      getProjectPriorityChipClass: coreGetProjectPriorityChipClass,
+      normalizeProjectSortMode: coreNormalizeProjectSortMode,
+      escapeHtml: coreEscapeHtml,
+      normalizeCalendarYmd: coreNormalizeCalendarYmd,
+      parseYmdLocalToDate: coreParseYmdLocalToDate,
+      normalizeSharingMode: coreNormalizeSharingMode,
+      normalizeProjectReadAccess: coreNormalizeProjectReadAccess,
+      sharingModeLabel: coreSharingModeLabel,
+      toYmd: coreToYmd,
+      formatFileSize: coreFormatFileSize,
+      paginateItems: corePaginateItems,
+      normalizeTaskStatusValue: coreNormalizeTaskStatusValue,
+      normalizeTaskStatusForCreate: coreNormalizeTaskStatusForCreate,
+      normalizeActionButtonLabel: coreNormalizeActionButtonLabel,
+      normalizeActionToken: coreNormalizeActionToken,
+      addDays: coreAddDays,
+      getInitials: coreGetInitials,
+      stringToColor: coreStringToColor,
+      normalizeViaAnnuaireLiveDomain: coreNormalizeViaAnnuaireLiveDomain,
+      normalizeViaAnnuaireDepartmentCode: coreNormalizeViaAnnuaireDepartmentCode,
+      normalizeViaAnnuaireLiveSortKey: coreNormalizeViaAnnuaireLiveSortKey,
+      buildViaAnnuaireLiveResultRef: coreBuildViaAnnuaireLiveResultRef,
+      sortViaAnnuaireLiveResults: coreSortViaAnnuaireLiveResults,
+      buildViaAnnuairePublicFicheUrl: coreBuildViaAnnuairePublicFicheUrl,
+      normalizeViaAnnuaireComparableText: coreNormalizeViaAnnuaireComparableText,
+      normalizeViaAnnuaireComparablePhone: coreNormalizeViaAnnuaireComparablePhone,
+      normalizeViaAnnuaireComparableEmail: coreNormalizeViaAnnuaireComparableEmail,
+      tokenizeViaAnnuaireComparableText: coreTokenizeViaAnnuaireComparableText,
+      computeViaAnnuaireTokenOverlap: coreComputeViaAnnuaireTokenOverlap,
+      buildViaAnnuaireRecommendedAddress: coreBuildViaAnnuaireRecommendedAddress,
+      computeViaAnnuaireDiceSimilarity: coreComputeViaAnnuaireDiceSimilarity,
+      normalizeViaAnnuaireRorEndpoint: coreNormalizeViaAnnuaireRorEndpoint,
+      normalizeViaAnnuaireRorSettings: coreNormalizeViaAnnuaireRorSettings,
+      extractViaAnnuaireRorEmailFromOrganization: coreExtractViaAnnuaireRorEmailFromOrganization,
+      extractViaAnnuaireRorEmailFromPayload: coreExtractViaAnnuaireRorEmailFromPayload,
+      extractViaAnnuaireRorOrganizationFromPayload: coreExtractViaAnnuaireRorOrganizationFromPayload,
+      extractViaAnnuaireRorTelecomValue: coreExtractViaAnnuaireRorTelecomValue,
+      extractViaAnnuaireRorOrganizationAddress: coreExtractViaAnnuaireRorOrganizationAddress,
+      buildViaAnnuaireRorLookupUrlsFromEndpoint: coreBuildViaAnnuaireRorLookupUrlsFromEndpoint,
+      getViaAnnuaireAuditBadgeMeta: coreGetViaAnnuaireAuditBadgeMeta,
+      computeViaAnnuaireAuditBreakdown: coreComputeViaAnnuaireAuditBreakdown,
+      normalizeViaAnnuaireTextForMatch: coreNormalizeViaAnnuaireTextForMatch,
+      matchesViaAnnuaireAnyToken: coreMatchesViaAnnuaireAnyToken,
+      isViaAnnuaireDomainMatch: coreIsViaAnnuaireDomainMatch
+    } = coreUtils;
     const APP_DEBUG = localStorage.getItem('taskmda_debug') === '1';
 
     function debugLog(...args) {
@@ -1662,19 +1724,11 @@
     }
 
     function getInitials(name) {
-      if (!name) return '?';
-      const parts = name.trim().split(' ');
-      if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
-      return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+      return coreGetInitials(name);
     }
 
     function stringToColor(str) {
-      const colors = ['#006c4a', '#6366f1', '#ec4899', '#f59e0b', '#10b981', '#8b5cf6', '#ef4444', '#3b82f6'];
-      let hash = 0;
-      for (let i = 0; i < str.length; i++) {
-        hash = str.charCodeAt(i) + ((hash << 5) - hash);
-      }
-      return colors[Math.abs(hash) % colors.length];
+      return coreStringToColor(str);
     }
 
     function fallbackDirectoryName(userId) {
@@ -2490,35 +2544,23 @@
     let uxMetricsSaveTimer = null;
 
     function normalizeWorkflowActionButtonsMode(rawMode) {
-      const mode = String(rawMode || '').trim().toLowerCase();
-      if (mode === 'text' || mode === 'icon' || mode === 'icon_text') return mode;
-      return 'icon';
+      return coreNormalizeWorkflowActionButtonsMode(rawMode);
     }
 
     function normalizeWorkflowActionButtonsShape(rawShape) {
-      const shape = String(rawShape || '').trim().toLowerCase();
-      if (shape === 'round' || shape === 'rect') return shape;
-      return 'rect';
+      return coreNormalizeWorkflowActionButtonsShape(rawShape);
     }
 
     function normalizeDashboardHeroShortContentMaxChars(rawValue) {
-      const parsed = Number.parseInt(String(rawValue ?? ''), 10);
-      if (!Number.isFinite(parsed)) return 520;
-      return Math.min(4000, Math.max(80, parsed));
+      return coreNormalizeDashboardHeroShortContentMaxChars(rawValue);
     }
 
     function normalizeFeedSummaryWordCount(rawValue) {
-      const parsed = Number.parseInt(String(rawValue ?? ''), 10);
-      if (!Number.isFinite(parsed)) return 300;
-      return Math.min(1200, Math.max(40, parsed));
+      return coreNormalizeFeedSummaryWordCount(rawValue);
     }
 
     function normalizeWorkspaceWideSections(rawSections = {}) {
-      const normalized = {};
-      Object.keys(WORKSPACE_WIDTH_SECTION_META).forEach((sectionKey) => {
-        normalized[sectionKey] = rawSections?.[sectionKey] === true;
-      });
-      return normalized;
+      return coreNormalizeWorkspaceWideSections(rawSections, WORKSPACE_WIDTH_SECTION_META);
     }
 
     function getWorkflowActionButtonsMode() {
@@ -2649,14 +2691,11 @@
     }
 
     function normalizeActionButtonLabel(value) {
-      return String(value || '').replace(/\s+/g, ' ').trim();
+      return coreNormalizeActionButtonLabel(value);
     }
 
     function normalizeActionToken(value) {
-      return normalizeActionButtonLabel(value)
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '');
+      return coreNormalizeActionToken(value);
     }
 
     function inferActionButtonKind(label, button) {
@@ -3960,10 +3999,10 @@
         renderGlobalTasks().catch(() => null);
       }
       if (workspaceMode === 'global' && globalWorkspaceView === 'calendar') {
-        renderGlobalCalendarDelegated().catch(() => null);
+        Promise.resolve(globalCalendarRuntime?.renderGlobalCalendar?.() ?? renderGlobalCalendar()).catch(() => null);
       }
       if (workspaceMode === 'global' && globalWorkspaceView === 'notes') {
-        renderGlobalNotesDelegated().catch(() => null);
+        Promise.resolve(globalNotesRuntime?.renderGlobalNotes?.() ?? renderGlobalNotes()).catch(() => null);
       }
       if (workspaceMode === 'global' && globalWorkspaceView === 'feed') {
         renderGlobalFeed().catch(() => null);
@@ -4491,7 +4530,7 @@
     function showMainContent() {
       document.getElementById('setup-screen').classList.add('hidden');
       document.getElementById('main-content').classList.remove('hidden');
-      initSidebarCollapsedState();
+      shellUiRuntime?.initSidebarCollapsedState?.();
       setActiveSidebarNav('dashboard');
       startDueReminders();
       startBackupReminders();
@@ -4555,94 +4594,68 @@
       applyTheme(getStoredThemeChoice(), false);
     }
 
+    let shellUiRuntime = null;
+    let shellNotificationsRuntime = null;
+    let headerSearchRuntime = null;
+    let docEditorUiRuntime = null;
+    let brandingUiRuntime = null;
+    let viewOptionsUiRuntime = null;
+    let quickLinksUiRuntime = null;
+    let projectCreateUiRuntime = null;
+    let projectEditUiRuntime = null;
+    let projectViewsUiRuntime = null;
+    let tabOverflowUiRuntime = null;
+    let projectFiltersUiRuntime = null;
+    let docThemePickersUiRuntime = null;
+    let projectNotesFiltersUiRuntime = null;
+    let globalNotesFiltersUiRuntime = null;
+    let globalReadActionsUiRuntime = null;
+    let projectNotesActionsUiRuntime = null;
+    let projectReadActionsUiRuntime = null;
+    let projectNoteEditorActionsUiRuntime = null;
+    let projectReadInlineUiRuntime = null;
+    let projectNoteModalShortcutsUiRuntime = null;
+    let layoutTogglesUiRuntime = null;
+    let projectNavUiRuntime = null;
+    let projectCalendarTimelineUiRuntime = null;
+    let projectComposerUiRuntime = null;
+    let projectOutsideClickUiRuntime = null;
+    let projectChatFiltersUiRuntime = null;
+    let fileInputsUiRuntime = null;
+    let projectDocsControlsUiRuntime = null;
+    let projectActivityFiltersUiRuntime = null;
+    let projectThemeBindingsUiRuntime = null;
+    let attachmentsUiRuntime = null;
+    let discussionInputUiRuntime = null;
+    let globalGroupChannelUiRuntime = null;
+    let globalReadInlineUiRuntime = null;
+    let docPreviewInlineUiRuntime = null;
+    let docPreviewModalUiRuntime = null;
+    let delegatingRenderGlobalDocs = false;
+
+    // Compatibility facades kept intentionally thin for legacy bind contracts.
     function openMobileSidebar() {
-      document.getElementById('sidebar')?.classList.add('open');
-      document.getElementById('mobile-overlay')?.classList.remove('hidden');
+      shellUiRuntime?.openMobileSidebar?.();
     }
 
     function closeMobileSidebar() {
-      document.getElementById('sidebar')?.classList.remove('open');
-      document.getElementById('mobile-overlay')?.classList.add('hidden');
+      shellUiRuntime?.closeMobileSidebar?.();
     }
 
-    const SIDEBAR_COMPACT_STORAGE_KEY = 'taskmda_sidebar_compact';
-    let sidebarTransitionTimer = null;
-
     function updateSidebarCollapseButton() {
-      const main = document.getElementById('main-content');
-      const btn = document.getElementById('btn-sidebar-collapse');
-      const icon = document.getElementById('sidebar-collapse-icon');
-      const label = document.getElementById('sidebar-collapse-label');
-      if (!main || !btn || !icon || !label) return;
-      const collapsed = main.classList.contains('sidebar-collapsed');
-      icon.textContent = collapsed ? 'left_panel_open' : 'left_panel_close';
-      label.textContent = collapsed ? 'Déplier' : 'Réduire';
-      const action = collapsed ? 'Déplier' : 'Réduire';
-      btn.setAttribute('aria-label', `${action} la barre latérale`);
-      btn.setAttribute('title', `${action} la barre latérale`);
-
-      document.querySelectorAll('.nav-link').forEach((link) => {
-        const text = String(link.querySelector('.nav-link-label')?.textContent || '').trim();
-        if (!text) return;
-        if (collapsed) {
-          link.setAttribute('title', text);
-          link.setAttribute('aria-label', text);
-        } else {
-          link.removeAttribute('title');
-          link.removeAttribute('aria-label');
-        }
-      });
-
-      ['sidebar-create-project', 'sidebar-link-folder'].forEach((id) => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        const text = String(el.textContent || '').replace(/\s+/g, ' ').trim();
-        if (!text) return;
-        if (collapsed) {
-          el.setAttribute('title', text);
-          el.setAttribute('aria-label', text);
-        } else {
-          el.removeAttribute('title');
-          el.removeAttribute('aria-label');
-        }
-      });
+      shellUiRuntime?.updateSidebarCollapseButton?.();
     }
 
     function applySidebarCollapsedState(collapsed, persist = true) {
-      const main = document.getElementById('main-content');
-      if (!main) return;
-      const isMobile = window.matchMedia('(max-width: 1023px)').matches;
-      const shouldCollapse = !isMobile && !!collapsed;
-      main.classList.toggle('sidebar-collapsed', shouldCollapse);
-      updateSidebarCollapseButton();
-      if (persist) {
-        if (shouldCollapse) {
-          localStorage.setItem(SIDEBAR_COMPACT_STORAGE_KEY, '1');
-        } else {
-          localStorage.removeItem(SIDEBAR_COMPACT_STORAGE_KEY);
-        }
-      }
+      shellUiRuntime?.applySidebarCollapsedState?.(collapsed, persist);
     }
 
     function initSidebarCollapsedState() {
-      const saved = localStorage.getItem(SIDEBAR_COMPACT_STORAGE_KEY) === '1';
-      applySidebarCollapsedState(saved, false);
+      shellUiRuntime?.initSidebarCollapsedState?.();
     }
 
     function toggleSidebarCollapsed() {
-      const main = document.getElementById('main-content');
-      if (!main) return;
-      const nextCollapsed = !main.classList.contains('sidebar-collapsed');
-      main.classList.remove('sidebar-transitioning-collapse', 'sidebar-transitioning-expand');
-      main.classList.add('sidebar-transitioning', nextCollapsed ? 'sidebar-transitioning-collapse' : 'sidebar-transitioning-expand');
-      if (sidebarTransitionTimer) {
-        clearTimeout(sidebarTransitionTimer);
-      }
-      sidebarTransitionTimer = setTimeout(() => {
-        main.classList.remove('sidebar-transitioning', 'sidebar-transitioning-collapse', 'sidebar-transitioning-expand');
-        sidebarTransitionTimer = null;
-      }, 260);
-      applySidebarCollapsedState(nextCollapsed, true);
+      shellUiRuntime?.toggleSidebarCollapsed?.();
     }
 
     function updateSyncStatus(status) {
@@ -4828,17 +4841,11 @@
     }
 
     function escapeCsvValue(value) {
-      const raw = String(value ?? '');
-      if (/[;"\n\r]/.test(raw)) {
-        return `"${raw.replace(/"/g, '""')}"`;
-      }
-      return raw;
+      return coreEscapeCsvValue(value);
     }
 
     function toCsv(rows, headers) {
-      const head = headers.map(escapeCsvValue).join(';');
-      const lines = rows.map(row => headers.map(h => escapeCsvValue(row[h])).join(';'));
-      return '\uFEFF' + [head, ...lines].join('\n');
+      return coreToCsv(rows, headers);
     }
 
     function downloadBlobFile(content, filename, mimeType = 'application/octet-stream') {
@@ -4854,13 +4861,7 @@
     }
 
     function formatExportDateTag() {
-      const d = new Date();
-      const yyyy = d.getFullYear();
-      const mm = String(d.getMonth() + 1).padStart(2, '0');
-      const dd = String(d.getDate()).padStart(2, '0');
-      const hh = String(d.getHours()).padStart(2, '0');
-      const mi = String(d.getMinutes()).padStart(2, '0');
-      return `${yyyy}${mm}${dd}_${hh}${mi}`;
+      return coreFormatExportDateTag(new Date());
     }
 
     function renderLocalResetInfo() {
@@ -5095,14 +5096,11 @@
     }
 
     function normalizeSearch(value) {
-      return String(value || '')
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .toLowerCase();
+      return coreNormalizeSearch(value);
     }
 
     function normalizeCatalogKey(value) {
-      return normalizeSearch(value).trim().replace(/\s+/g, '-');
+      return coreNormalizeCatalogKey(value);
     }
 
     async function refreshGlobalTaxonomyCache() {
@@ -6055,22 +6053,6 @@
       const saveBrandingBtn = document.getElementById('btn-save-app-branding');
       const assignAdminBtn = document.getElementById('btn-assign-app-admin');
       const resetBrandingBtn = document.getElementById('btn-reset-app-branding');
-      const viaAnnuaireStatus = document.getElementById('via-annuaire-status');
-      const viaAnnuaireRorEndpointInput = document.getElementById('via-annuaire-ror-endpoint-input');
-      const viaAnnuaireRorApiKeyInput = document.getElementById('via-annuaire-ror-apikey-input');
-      const viaAnnuaireRorSaveBtn = document.getElementById('btn-via-annuaire-ror-save');
-      const viaAnnuaireRorTestBtn = document.getElementById('btn-via-annuaire-ror-test');
-      const viaAnnuaireRorHint = document.getElementById('via-annuaire-ror-hint');
-      const viaAnnuaireLastSync = document.getElementById('via-annuaire-last-sync');
-      const viaAnnuaireSummary = document.getElementById('via-annuaire-summary');
-      const viaAnnuaireConfigToggleBtn = document.getElementById('btn-via-annuaire-config-toggle');
-      const viaAnnuaireLiveDomain = document.getElementById('via-annuaire-live-domain');
-      const viaAnnuaireLiveDepartment = document.getElementById('via-annuaire-live-departement');
-      const viaAnnuaireLiveKeyword = document.getElementById('via-annuaire-live-keyword');
-      const viaAnnuaireLiveSort = document.getElementById('via-annuaire-live-sort');
-      const viaAnnuaireLiveSearchBtn = document.getElementById('btn-via-annuaire-live-search');
-      const viaAnnuaireLivePrevBtn = document.getElementById('btn-via-annuaire-live-prev');
-      const viaAnnuaireLiveNextBtn = document.getElementById('btn-via-annuaire-live-next');
       renderLocalResetInfo();
       if (!themesList || !groupsList || !rolesList || !quickLinksList) return;
       if (!appBranding) {
@@ -6128,73 +6110,9 @@
       if (roleNameInput) roleNameInput.disabled = !canManageBranding;
       if (roleBaseInput) roleBaseInput.disabled = !canManageBranding;
       if (roleAddBtn) roleAddBtn.disabled = !canManageBranding;
-      await ensureViaAnnuaireRorSettingsLoaded();
-      await syncViaAnnuaireDepartmentsFromApi({ silent: true });
-      const rorEndpoint = getViaAnnuaireRorFhirEndpoint();
-      const rorHasApiKey = hasViaAnnuaireRorApiKey();
-      let endpointInputValue = rorEndpoint;
-      if (!endpointInputValue && !localStorage.getItem(VIA_ANNUAIRE_ROR_PREFILL_ONCE_KEY)) {
-        endpointInputValue = VIA_ANNUAIRE_ROR_FHIR_ENDPOINTS[0] || '';
-        if (endpointInputValue) {
-          localStorage.setItem(VIA_ANNUAIRE_ROR_PREFILL_ONCE_KEY, '1');
-        }
+      if (viaAnnuaireUiRuntime?.renderViaAnnuaireSettingsPanel) {
+        await viaAnnuaireUiRuntime.renderViaAnnuaireSettingsPanel({ canManageBranding });
       }
-      if (viaAnnuaireRorEndpointInput) {
-        viaAnnuaireRorEndpointInput.value = endpointInputValue;
-        viaAnnuaireRorEndpointInput.disabled = !canManageBranding;
-      }
-      if (viaAnnuaireRorApiKeyInput) {
-        viaAnnuaireRorApiKeyInput.value = String(viaAnnuaireRorSettingsCache?.apiKey || '');
-        viaAnnuaireRorApiKeyInput.disabled = !canManageBranding;
-      }
-      if (viaAnnuaireRorSaveBtn) viaAnnuaireRorSaveBtn.disabled = !canManageBranding;
-      if (viaAnnuaireRorTestBtn) viaAnnuaireRorTestBtn.disabled = !canManageBranding;
-      if (viaAnnuaireConfigToggleBtn) viaAnnuaireConfigToggleBtn.disabled = false;
-      setViaAnnuaireConfigExpanded(viaAnnuaireConfigExpanded, { skipPersist: true });
-      if (viaAnnuaireRorHint) {
-        const endpointConfiguredOrPrefilled = !!String(rorEndpoint || endpointInputValue || '').trim();
-        const prefillPendingSave = !rorEndpoint && !!endpointInputValue;
-        viaAnnuaireRorHint.textContent = hasViaAnnuaireRorCredentials()
-          ? (rorHasApiKey
-            ? "Endpoint Annuaire Santé configuré (avec clé API)."
-            : "Endpoint Annuaire Santé configuré (mode sans clé API, si autorisé par le plan).")
-          : (prefillPendingSave
-            ? "Endpoint pré-rempli. Cliquez sur Enregistrer (clé API optionnelle selon le plan)."
-            : `Configuration incomplète: endpoint ${endpointConfiguredOrPrefilled ? 'OK' : 'manquant'}.`);
-      }
-      if (viaAnnuaireLiveDomain) viaAnnuaireLiveDomain.disabled = false;
-      if (viaAnnuaireLiveDepartment) viaAnnuaireLiveDepartment.disabled = false;
-      if (viaAnnuaireLiveKeyword) viaAnnuaireLiveKeyword.disabled = false;
-      if (viaAnnuaireLiveSort) viaAnnuaireLiveSort.disabled = false;
-      if (viaAnnuaireLiveSearchBtn) viaAnnuaireLiveSearchBtn.disabled = !!viaAnnuaireLiveSearchState.loading;
-      if (viaAnnuaireLivePrevBtn) viaAnnuaireLivePrevBtn.disabled = true;
-      if (viaAnnuaireLiveNextBtn) viaAnnuaireLiveNextBtn.disabled = true;
-      if (viaAnnuaireStatus) {
-        const hasRorConfig = hasViaAnnuaireRorCredentials();
-        viaAnnuaireStatus.textContent = !hasRorConfig
-          ? 'Source: FINESS public (Annuaire Santé non configuré)'
-          : (viaAnnuaireRorUnavailable
-            ? `Source: FINESS public (Annuaire Santé indisponible${viaAnnuaireRorUnavailableReason ? `: ${viaAnnuaireRorUnavailableReason}` : ''})`
-            : (rorHasApiKey
-              ? 'Source: FINESS public + Annuaire Santé (best effort, avec clé API)'
-              : 'Source: FINESS public + Annuaire Santé (best effort, mode sans clé API)'));
-        viaAnnuaireStatus.className = !hasRorConfig
-          ? 'text-[11px] font-semibold px-2 py-1 rounded-full bg-slate-100 text-slate-700'
-          : (viaAnnuaireRorUnavailable
-            ? 'text-[11px] font-semibold px-2 py-1 rounded-full bg-amber-100 text-amber-800'
-            : 'text-[11px] font-semibold px-2 py-1 rounded-full bg-emerald-100 text-emerald-700');
-      }
-      if (viaAnnuaireLastSync) {
-        viaAnnuaireLastSync.textContent = viaAnnuaireRuntimeCache.lastDepartmentsSyncAt > 0
-          ? `Dernière mise à jour des départements: ${new Date(viaAnnuaireRuntimeCache.lastDepartmentsSyncAt).toLocaleString('fr-FR')}`
-          : 'Dernière mise à jour des départements: jamais';
-      }
-      if (viaAnnuaireSummary) {
-        viaAnnuaireSummary.textContent = viaAnnuaireLiveSearchState.lastQueryLabel
-          ? `Dernière recherche: ${viaAnnuaireLiveSearchState.lastQueryLabel}`
-          : 'Aucune recherche annuaire lancée.';
-      }
-      renderViaAnnuaireLiveSearchPanel({ keepSelection: true });
       if (appAdminBadge) {
         appAdminBadge.textContent = canManageBranding
           ? `Role: Admin application (${adminName})`
@@ -6546,6 +6464,10 @@
     }
 
     function setActiveSidebarNav(navKey) {
+      if (shellUiRuntime?.setActiveSidebarNav) {
+        shellUiRuntime.setActiveSidebarNav(navKey);
+        return;
+      }
       const links = {
         dashboard: document.getElementById('nav-dashboard'),
         projects: document.getElementById('nav-projects'),
@@ -6570,6 +6492,9 @@
     }
 
     function normalizeWorkflowSidebarGroup(rawGroup) {
+      if (shellUiRuntime?.normalizeWorkflowSidebarGroup) {
+        return shellUiRuntime.normalizeWorkflowSidebarGroup(rawGroup);
+      }
       const group = String(rawGroup || '').trim().toLowerCase();
       if (group === 'structure' || group === 'processes' || group === 'pilotage' || group === 'referentiels' || group === 'supervision') {
         return group;
@@ -6578,6 +6503,9 @@
     }
 
     function setWorkflowSidebarSubnavOpen(nextOpen) {
+      if (shellUiRuntime?.setWorkflowSidebarSubnavOpen) {
+        return shellUiRuntime.setWorkflowSidebarSubnavOpen(nextOpen);
+      }
       const isOpen = !!nextOpen;
       const panel = document.getElementById('workflow-sidebar-subnav');
       const btn = document.getElementById('nav-workflow-subnav-toggle');
@@ -6594,6 +6522,9 @@
     }
 
     function setActiveWorkflowSidebarGroup(rawGroup) {
+      if (shellUiRuntime?.setActiveWorkflowSidebarGroup) {
+        return shellUiRuntime.setActiveWorkflowSidebarGroup(rawGroup);
+      }
       const group = normalizeWorkflowSidebarGroup(rawGroup);
       const links = {
         structure: document.getElementById('nav-workflow-group-structure'),
@@ -6712,7 +6643,7 @@
       const searchInput = document.getElementById('search-input');
       if (searchInput) searchInput.value = '';
       globalSearchQuery = '';
-      closeMobileSidebar();
+      shellUiRuntime?.closeMobileSidebar?.();
       if (item.action === 'workspace') {
         if (item.view === 'dashboard') {
           showDashboard();
@@ -7682,21 +7613,19 @@
     }
 
     function normalizeTaskAutoArchiveMonths(value) {
-      const parsed = Number.parseInt(String(value ?? ''), 10);
-      if (!Number.isFinite(parsed)) return TASK_AUTO_ARCHIVE_DEFAULT_MONTHS;
-      return Math.min(TASK_AUTO_ARCHIVE_MAX_MONTHS, Math.max(TASK_AUTO_ARCHIVE_MIN_MONTHS, parsed));
+      return coreNormalizeTaskAutoArchiveMonths(value, {
+        min: TASK_AUTO_ARCHIVE_MIN_MONTHS,
+        max: TASK_AUTO_ARCHIVE_MAX_MONTHS,
+        fallback: TASK_AUTO_ARCHIVE_DEFAULT_MONTHS
+      });
     }
 
     function normalizeTaskAutoArchiveSettings(rawValue) {
-      const value = rawValue && typeof rawValue === 'object'
-        ? rawValue
-        : { months: rawValue };
-      const months = normalizeTaskAutoArchiveMonths(value.months);
-      const lastRunAt = Number(value.lastRunAt || 0);
-      return {
-        months,
-        lastRunAt: Number.isFinite(lastRunAt) && lastRunAt > 0 ? lastRunAt : 0
-      };
+      return coreNormalizeTaskAutoArchiveSettings(rawValue, {
+        min: TASK_AUTO_ARCHIVE_MIN_MONTHS,
+        max: TASK_AUTO_ARCHIVE_MAX_MONTHS,
+        fallback: TASK_AUTO_ARCHIVE_DEFAULT_MONTHS
+      });
     }
 
     async function getTaskAutoArchiveSettings() {
@@ -7777,63 +7706,24 @@
     }
 
     async function syncViaAnnuaireDepartmentsFromApi(options = {}) {
-      const force = !!options.force;
+      if (viaAnnuaireUiRuntime?.syncViaAnnuaireDepartmentsFromApi) {
+        return viaAnnuaireUiRuntime.syncViaAnnuaireDepartmentsFromApi(options);
+      }
       const silent = !!options.silent;
-      const hasCache = Array.isArray(viaAnnuaireRuntimeCache?.departements) && viaAnnuaireRuntimeCache.departements.length > 0;
-      if (hasCache && !force) {
-        return viaAnnuaireRuntimeCache.departements;
-      }
-      try {
-        const payload = await fetchViaAnnuairePublicApiRecords({
-          limit: 120,
-          offset: 0,
-          orderBy: 'dep_code',
-          select: 'dep_code,dep_name',
-          where: 'dep_code is not null',
-          groupBy: 'dep_code,dep_name'
-        }, 20000);
-        const deps = Array.isArray(payload?.results)
-          ? payload.results.map((row) => ({
-              id: normalizeViaAnnuaireDepartmentCode(row?.dep_code),
-              nom: String(row?.dep_name || row?.dep_code || '').trim(),
-              region: ''
-            })).filter((row) => row.id && row.nom)
-          : [];
-        if (deps.length > 0) {
-          const uniqueById = new Map();
-          deps.forEach((dep) => {
-            if (!uniqueById.has(dep.id)) uniqueById.set(dep.id, dep);
-          });
-          viaAnnuaireRuntimeCache = {
-            ...viaAnnuaireRuntimeCache,
-            departements: [...uniqueById.values()],
-            lastDepartmentsSyncAt: Date.now()
-          };
-          return viaAnnuaireRuntimeCache.departements;
-        }
-        throw new Error('Aucun département retourné');
-      } catch (error) {
-        if (!silent) {
-          showToast(`Lecture départements impossible: ${String(error?.message || 'erreur')}`);
-        }
-        viaAnnuaireRuntimeCache = {
-          ...viaAnnuaireRuntimeCache,
-          departements: VIA_ANNUAIRE_FALLBACK_DEPARTEMENTS
-        };
-        return viaAnnuaireRuntimeCache.departements;
-      }
+      if (!silent) showToast('Sync départements dégradée: module annuaire indisponible, fallback local appliqué');
+      return VIA_ANNUAIRE_FALLBACK_DEPARTEMENTS;
     }
 
     function normalizeViaAnnuaireLiveDomain(value) {
-      return String(value || '').trim().toUpperCase() === 'PH' ? 'PH' : 'PA';
+      return coreNormalizeViaAnnuaireLiveDomain(value);
     }
 
     function normalizeViaAnnuaireDepartmentCode(value) {
-      return String(value || '').trim().toUpperCase();
+      return coreNormalizeViaAnnuaireDepartmentCode(value);
     }
 
     function normalizeViaAnnuaireLiveSortKey(value) {
-      return String(value || '').trim().toLowerCase() === 'city' ? 'city' : 'name';
+      return coreNormalizeViaAnnuaireLiveSortKey(value);
     }
 
     function setViaAnnuaireConfigExpanded(expanded, options = {}) {
@@ -7855,1168 +7745,95 @@
     }
 
     function buildViaAnnuaireLiveResultRef(item) {
-      const source = [
-        String(item?.finess || '').trim(),
-        String(item?.idStructure || '').trim(),
-        String(item?.name || '').trim(),
-        String(item?.city || '').trim()
-      ].filter(Boolean).join('|');
-      return source || `row:${Math.random().toString(36).slice(2, 10)}`;
+      return coreBuildViaAnnuaireLiveResultRef(item);
     }
 
     function sortViaAnnuaireLiveResults(rows, sortKey) {
-      const key = normalizeViaAnnuaireLiveSortKey(sortKey);
-      const collator = new Intl.Collator('fr', { sensitivity: 'base', numeric: true });
-      return [...(Array.isArray(rows) ? rows : [])].sort((a, b) => {
-        const aPrimary = key === 'city' ? String(a?.city || '').trim() : String(a?.name || '').trim();
-        const bPrimary = key === 'city' ? String(b?.city || '').trim() : String(b?.name || '').trim();
-        const primaryOrder = collator.compare(aPrimary, bPrimary);
-        if (primaryOrder !== 0) return primaryOrder;
-        const aSecondary = key === 'city' ? String(a?.name || '').trim() : String(a?.city || '').trim();
-        const bSecondary = key === 'city' ? String(b?.name || '').trim() : String(b?.city || '').trim();
-        return collator.compare(aSecondary, bSecondary);
-      });
-    }
-
-    function getViaAnnuaireLiveDepartments() {
-      const runtime = Array.isArray(viaAnnuaireRuntimeCache?.departements)
-        ? viaAnnuaireRuntimeCache.departements.filter((item) => normalizeViaAnnuaireDepartmentCode(item?.id))
-        : [];
-      if (runtime.length > 0) return runtime;
-      return VIA_ANNUAIRE_FALLBACK_DEPARTEMENTS;
+      return coreSortViaAnnuaireLiveResults(rows, sortKey);
     }
 
     function buildViaAnnuairePublicFicheUrl(item, domain) {
-      const finess = String(item?.finess || '').trim();
-      if (!finess) return '';
-      const normalizedDomain = normalizeViaAnnuaireLiveDomain(domain);
-      const path = normalizedDomain === 'PH'
-        ? `fiche-etablissement/personnes-situation-handicap/${encodeURIComponent(finess)}`
-        : `fiche-etablissement/personnes-agees/${encodeURIComponent(finess)}`;
-      return `https://usager.viatrajectoire.fr/${path}`;
+      return coreBuildViaAnnuairePublicFicheUrl(item, domain);
     }
 
     function extractViaAnnuaireRorEmailFromOrganization(org) {
-      if (!org || typeof org !== 'object') return '';
-      const candidates = [];
-      if (Array.isArray(org.telecom)) candidates.push(...org.telecom);
-      if (Array.isArray(org.contact)) {
-        org.contact.forEach((contact) => {
-          if (Array.isArray(contact?.telecom)) candidates.push(...contact.telecom);
-        });
-      }
-      for (const telecom of candidates) {
-        const system = String(telecom?.system || '').trim().toLowerCase();
-        if (system !== 'email') continue;
-        const value = String(telecom?.value || '').trim();
-        if (value) return value;
-      }
-      return '';
+      return coreExtractViaAnnuaireRorEmailFromOrganization(org);
     }
 
     function extractViaAnnuaireRorEmailFromPayload(payload) {
-      if (!payload || typeof payload !== 'object') return '';
-      const bundleEntries = Array.isArray(payload.entry) ? payload.entry : [];
-      for (const entry of bundleEntries) {
-        const email = extractViaAnnuaireRorEmailFromOrganization(entry?.resource);
-        if (email) return email;
-      }
-      return extractViaAnnuaireRorEmailFromOrganization(payload);
+      return coreExtractViaAnnuaireRorEmailFromPayload(payload);
     }
 
     function extractViaAnnuaireRorOrganizationFromPayload(payload) {
-      if (!payload || typeof payload !== 'object') return null;
-      if (String(payload.resourceType || '').trim() === 'Organization') return payload;
-      const entries = Array.isArray(payload.entry) ? payload.entry : [];
-      for (const entry of entries) {
-        const resource = entry?.resource;
-        if (resource && String(resource.resourceType || '').trim() === 'Organization') {
-          return resource;
-        }
-      }
-      return null;
+      return coreExtractViaAnnuaireRorOrganizationFromPayload(payload);
     }
 
     function extractViaAnnuaireRorTelecomValue(org, system) {
-      const wanted = String(system || '').trim().toLowerCase();
-      if (!wanted || !org || typeof org !== 'object') return '';
-      const values = [];
-      const pushTelecomValues = (items) => {
-        if (!Array.isArray(items)) return;
-        items.forEach((telecom) => {
-          if (String(telecom?.system || '').trim().toLowerCase() !== wanted) return;
-          const value = String(telecom?.value || '').trim();
-          if (value) values.push(value);
-        });
-      };
-      pushTelecomValues(org.telecom);
-      if (Array.isArray(org.contact)) {
-        org.contact.forEach((contact) => pushTelecomValues(contact?.telecom));
-      }
-      return values[0] || '';
+      return coreExtractViaAnnuaireRorTelecomValue(org, system);
     }
 
     function normalizeViaAnnuaireComparableText(value) {
-      return String(value || '')
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[.,;:/()'"`’\-]/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim()
-        .toLowerCase();
+      return coreNormalizeViaAnnuaireComparableText(value);
     }
 
     function normalizeViaAnnuaireComparablePhone(value) {
-      return String(value || '').replace(/[^\d+]/g, '').trim();
+      return coreNormalizeViaAnnuaireComparablePhone(value);
     }
 
     function normalizeViaAnnuaireComparableEmail(value) {
-      return String(value || '').trim().toLowerCase();
+      return coreNormalizeViaAnnuaireComparableEmail(value);
     }
 
     function tokenizeViaAnnuaireComparableText(value) {
-      return normalizeViaAnnuaireComparableText(value)
-        .split(' ')
-        .map((token) => token.trim())
-        .filter(Boolean);
+      return coreTokenizeViaAnnuaireComparableText(value);
     }
 
     function computeViaAnnuaireTokenOverlap(leftTokens = [], rightTokens = []) {
-      const a = new Set(leftTokens);
-      const b = new Set(rightTokens);
-      if (!a.size || !b.size) return 0;
-      let common = 0;
-      a.forEach((token) => {
-        if (b.has(token)) common += 1;
-      });
-      return common / Math.max(a.size, b.size);
+      return coreComputeViaAnnuaireTokenOverlap(leftTokens, rightTokens);
     }
 
     function buildViaAnnuaireRecommendedAddress(localAddress, remoteAddress) {
-      const localRaw = String(localAddress || '').trim();
-      const remoteRaw = String(remoteAddress || '').trim();
-      if (!localRaw || !remoteRaw) return '';
-      const localNorm = normalizeViaAnnuaireComparableText(localRaw);
-      const remoteNorm = normalizeViaAnnuaireComparableText(remoteRaw);
-      if (!localNorm || !remoteNorm) return '';
-      if (localNorm === remoteNorm) return '';
-      const localTokens = tokenizeViaAnnuaireComparableText(localRaw);
-      const remoteTokens = tokenizeViaAnnuaireComparableText(remoteRaw);
-      const overlap = computeViaAnnuaireTokenOverlap(localTokens, remoteTokens);
-      const contains = remoteNorm.includes(localNorm) || localNorm.includes(remoteNorm);
-      const lengthGain = remoteNorm.length - localNorm.length;
-      if ((contains && lengthGain >= 6) || (overlap >= 0.58 && remoteNorm.length > localNorm.length)) {
-        return remoteRaw;
-      }
-      return '';
+      return coreBuildViaAnnuaireRecommendedAddress(localAddress, remoteAddress);
     }
 
     function computeViaAnnuaireDiceSimilarity(left, right) {
-      const a = normalizeViaAnnuaireComparableText(left);
-      const b = normalizeViaAnnuaireComparableText(right);
-      if (!a && !b) return 1;
-      if (!a || !b) return 0;
-      if (a === b) return 1;
-      const grams = (text) => {
-        if (text.length < 2) return [text];
-        const out = [];
-        for (let i = 0; i < text.length - 1; i += 1) out.push(text.slice(i, i + 2));
-        return out;
-      };
-      const gA = grams(a);
-      const gB = grams(b);
-      const counts = new Map();
-      gA.forEach((g) => counts.set(g, (counts.get(g) || 0) + 1));
-      let overlap = 0;
-      gB.forEach((g) => {
-        const c = counts.get(g) || 0;
-        if (c > 0) {
-          overlap += 1;
-          counts.set(g, c - 1);
-        }
-      });
-      return (2 * overlap) / (gA.length + gB.length);
+      return coreComputeViaAnnuaireDiceSimilarity(left, right);
     }
 
     function extractViaAnnuaireRorOrganizationAddress(org) {
-      const first = Array.isArray(org?.address) ? org.address.find(Boolean) : null;
-      if (!first || typeof first !== 'object') return '';
-      const line = Array.isArray(first.line) ? first.line.map((v) => String(v || '').trim()).filter(Boolean).join(' ') : '';
-      return String(line || first.text || '').trim();
-    }
-
-    function buildViaAnnuaireRorLookupUrls(finess) {
-      const normalizedFiness = String(finess || '').trim();
-      if (!normalizedFiness) return [];
-      const endpoint = getViaAnnuaireRorFhirEndpoint();
-      if (!endpoint) return [];
-      const buildUrl = (pairs = []) => {
-        const params = new URLSearchParams();
-        pairs.forEach(([key, value]) => {
-          if (!key || !String(value || '').trim()) return;
-          params.set(String(key), String(value));
-        });
-        params.set('_count', '1');
-        return `${endpoint}/Organization?${params.toString()}`;
-      };
-      return [
-        buildUrl([['identifier', normalizedFiness]]),
-        buildUrl([['identifier', `urn:oid:1.2.250.1.71.4.2.2|${normalizedFiness}`]]),
-        buildUrl([['identifier', `https://finess.esante.gouv.fr|${normalizedFiness}`]])
-      ];
+      return coreExtractViaAnnuaireRorOrganizationAddress(org);
     }
 
     function normalizeViaAnnuaireRorEndpoint(value) {
-      const raw = String(value || '').trim();
-      if (!raw) return '';
-      if (!/^https?:\/\//i.test(raw)) return '';
-      try {
-        const parsed = new URL(raw);
-        const host = String(parsed.hostname || '').toLowerCase();
-        let path = String(parsed.pathname || '').replace(/\/+$/, '');
-        if (host === 'gateway.api.esante.gouv.fr') {
-          if (!path || path === '/') {
-            path = '/fhir/v2';
-          } else if (path === '/fhir') {
-            path = '/fhir/v2';
-          }
-        }
-        parsed.pathname = path || '/';
-        parsed.search = '';
-        parsed.hash = '';
-        return parsed.toString().replace(/\/+$/, '');
-      } catch (_) {
-        return '';
-      }
+      return coreNormalizeViaAnnuaireRorEndpoint(value);
     }
 
     function normalizeViaAnnuaireRorSettings(rawValue) {
-      const value = rawValue && typeof rawValue === 'object' ? rawValue : {};
-      const endpoint = normalizeViaAnnuaireRorEndpoint(value.endpoint || value.endpoints?.[0] || '');
-      const apiKey = String(value.apiKey || '').trim();
-      return { endpoint, apiKey };
-    }
-
-    async function ensureViaAnnuaireRorSettingsLoaded() {
-      if (viaAnnuaireRorSettingsLoaded) return viaAnnuaireRorSettingsCache;
-      try {
-        const row = await getDecrypted('appSettings', VIA_ANNUAIRE_ROR_SETTINGS_KEY, 'key');
-        viaAnnuaireRorSettingsCache = normalizeViaAnnuaireRorSettings(row?.value);
-      } catch (_) {
-        viaAnnuaireRorSettingsCache = normalizeViaAnnuaireRorSettings({
-          endpoint: VIA_ANNUAIRE_ROR_FHIR_ENDPOINTS[0] || '',
-          apiKey: ''
-        });
-      }
-      viaAnnuaireRorSettingsLoaded = true;
-      return viaAnnuaireRorSettingsCache;
-    }
-
-    async function saveViaAnnuaireRorSettings(nextValue) {
-      const normalized = normalizeViaAnnuaireRorSettings(nextValue);
-      await putEncrypted('appSettings', {
-        key: VIA_ANNUAIRE_ROR_SETTINGS_KEY,
-        value: normalized,
-        updatedAt: Date.now()
-      }, 'key');
-      viaAnnuaireRorSettingsCache = normalized;
-      viaAnnuaireRorSettingsLoaded = true;
-      viaAnnuaireRorUnavailable = false;
-      viaAnnuaireRorUnavailableReason = '';
-      viaAnnuaireRorProbeDone = false;
-      viaAnnuaireRorEmailCache.clear();
-      viaAnnuaireRorOrganizationCache.clear();
-      return normalized;
-    }
-
-    function getViaAnnuaireRorFhirEndpoint() {
-      return normalizeViaAnnuaireRorEndpoint(viaAnnuaireRorSettingsCache?.endpoint);
-    }
-
-    function hasViaAnnuaireRorCredentials() {
-      const endpoint = getViaAnnuaireRorFhirEndpoint();
-      return !!endpoint;
-    }
-
-    function hasViaAnnuaireRorApiKey() {
-      return !!String(viaAnnuaireRorSettingsCache?.apiKey || '').trim();
-    }
-
-    async function testViaAnnuaireRorEndpointReachability(endpoint, apiKey = '') {
-      const target = normalizeViaAnnuaireRorEndpoint(endpoint);
-      if (!target) throw new Error('Endpoint Annuaire Santé vide');
-      const token = String(apiKey || '').trim();
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 10000);
-      try {
-        const response = await fetch(`${target}/metadata`, {
-          method: 'GET',
-          headers: {
-            Accept: 'application/fhir+json, application/json;q=0.9',
-            ...(token ? { 'ESANTE-API-KEY': token } : {})
-          },
-          signal: controller.signal
-        });
-        if (response.ok) return { ok: true, authRequired: false, status: response.status };
-        if (response.status === 401 || response.status === 403) {
-          return { ok: true, authRequired: true, status: response.status };
-        }
-        throw new Error(`HTTP ${response.status}`);
-      } catch (error) {
-        const message = String(error?.message || 'erreur');
-        if (/failed to fetch|network|cors|load failed|name_not_resolved|dns/i.test(message)) {
-          throw new Error(`Accès réseau/CORS/DNS refusé (${message})`);
-        }
-        throw error;
-      } finally {
-        clearTimeout(timeout);
-      }
-    }
-
-    async function fetchViaAnnuaireRorEmailByFiness(finess) {
-      const normalizedFiness = String(finess || '').trim();
-      if (!normalizedFiness) return '';
-      await ensureViaAnnuaireRorSettingsLoaded();
-      if (viaAnnuaireRorEmailCache.has(normalizedFiness)) {
-        return String(viaAnnuaireRorEmailCache.get(normalizedFiness) || '');
-      }
-      const orgFromCache = viaAnnuaireRorOrganizationCache.get(normalizedFiness);
-      if (orgFromCache && typeof orgFromCache === 'object') {
-        const cachedEmail = extractViaAnnuaireRorTelecomValue(orgFromCache, 'email');
-        viaAnnuaireRorEmailCache.set(normalizedFiness, cachedEmail);
-        return cachedEmail;
-      }
-      if (viaAnnuaireRorUnavailable || !hasViaAnnuaireRorCredentials()) return '';
-      const urls = buildViaAnnuaireRorLookupUrls(normalizedFiness);
-      if (!urls.length) return '';
-      const apiKey = String(viaAnnuaireRorSettingsCache?.apiKey || '').trim();
-      const errors = [];
-      for (const url of urls) {
-        try {
-          const payload = await fetchJsonWithTimeout(url, {
-            method: 'GET',
-            headers: {
-              Accept: 'application/fhir+json, application/json;q=0.9',
-              ...(apiKey ? { 'ESANTE-API-KEY': apiKey } : {})
-            }
-          }, 12000);
-          const org = extractViaAnnuaireRorOrganizationFromPayload(payload);
-          if (org) {
-            viaAnnuaireRorOrganizationCache.set(normalizedFiness, org);
-          }
-          const email = org
-            ? extractViaAnnuaireRorTelecomValue(org, 'email')
-            : extractViaAnnuaireRorEmailFromPayload(payload);
-          if (email) {
-            viaAnnuaireRorEmailCache.set(normalizedFiness, email);
-            return email;
-          }
-        } catch (error) {
-          const message = String(error?.message || 'erreur');
-          errors.push(message);
-          if (/HTTP\s*400/i.test(message)) {
-            viaAnnuaireRorUnavailable = true;
-            viaAnnuaireRorUnavailableReason = 'Requête FHIR refusée (400). Vérifiez endpoint/format attendu.';
-            break;
-          }
-          if (/HTTP\s*(401|403)/i.test(message)) {
-            viaAnnuaireRorUnavailable = true;
-            viaAnnuaireRorUnavailableReason = 'Accès refusé (401/403) par l’endpoint Annuaire Santé';
-            break;
-          }
-        }
-      }
-      const hasFetchError = errors.some((message) => /failed to fetch|network|cors|load failed/i.test(message));
-      if (hasFetchError) {
-        viaAnnuaireRorUnavailable = true;
-        if (!viaAnnuaireRorUnavailableReason) {
-          viaAnnuaireRorUnavailableReason = 'Accès réseau/CORS impossible';
-        }
-      }
-      viaAnnuaireRorEmailCache.set(normalizedFiness, '');
-      return '';
-    }
-
-    async function fetchViaAnnuaireRorOrganizationByFiness(finess) {
-      const normalizedFiness = String(finess || '').trim();
-      if (!normalizedFiness) return null;
-      await ensureViaAnnuaireRorSettingsLoaded();
-      if (viaAnnuaireRorOrganizationCache.has(normalizedFiness)) {
-        return viaAnnuaireRorOrganizationCache.get(normalizedFiness) || null;
-      }
-      if (viaAnnuaireRorUnavailable || !hasViaAnnuaireRorCredentials()) return null;
-      const urls = buildViaAnnuaireRorLookupUrls(normalizedFiness);
-      if (!urls.length) return null;
-      const apiKey = String(viaAnnuaireRorSettingsCache?.apiKey || '').trim();
-      for (const url of urls) {
-        try {
-          const payload = await fetchJsonWithTimeout(url, {
-            method: 'GET',
-            headers: {
-              Accept: 'application/fhir+json, application/json;q=0.9',
-              ...(apiKey ? { 'ESANTE-API-KEY': apiKey } : {})
-            }
-          }, 12000);
-          const org = extractViaAnnuaireRorOrganizationFromPayload(payload);
-          if (org) {
-            viaAnnuaireRorOrganizationCache.set(normalizedFiness, org);
-            const email = extractViaAnnuaireRorTelecomValue(org, 'email');
-            viaAnnuaireRorEmailCache.set(normalizedFiness, email);
-            return org;
-          }
-        } catch (error) {
-          const message = String(error?.message || 'erreur');
-          if (/HTTP\s*400/i.test(message)) {
-            viaAnnuaireRorUnavailable = true;
-            viaAnnuaireRorUnavailableReason = 'Requête FHIR refusée (400). Vérifiez endpoint/format attendu.';
-            break;
-          }
-          if (/HTTP\s*(401|403)/i.test(message)) {
-            viaAnnuaireRorUnavailable = true;
-            viaAnnuaireRorUnavailableReason = 'Accès refusé (401/403) par l’endpoint Annuaire Santé';
-            break;
-          }
-        }
-      }
-      viaAnnuaireRorOrganizationCache.set(normalizedFiness, null);
-      return null;
-    }
-
-    async function ensureViaAnnuaireRorEnrichmentReady() {
-      await ensureViaAnnuaireRorSettingsLoaded();
-      if (!hasViaAnnuaireRorCredentials()) return false;
-      if (viaAnnuaireRorUnavailable) return false;
-      if (viaAnnuaireRorProbeDone) return true;
-      viaAnnuaireRorProbeDone = true;
-      const endpoint = getViaAnnuaireRorFhirEndpoint();
-      const apiKey = String(viaAnnuaireRorSettingsCache?.apiKey || '').trim();
-      try {
-        const probe = await testViaAnnuaireRorEndpointReachability(endpoint, apiKey);
-        if (probe?.authRequired && !apiKey) {
-          viaAnnuaireRorUnavailable = true;
-          viaAnnuaireRorUnavailableReason = 'Authentification requise (clé API manquante)';
-          return false;
-        }
-        viaAnnuaireRorUnavailable = false;
-        viaAnnuaireRorUnavailableReason = '';
-        return true;
-      } catch (error) {
-        const message = String(error?.message || 'erreur');
-        viaAnnuaireRorUnavailable = true;
-        viaAnnuaireRorUnavailableReason = /HTTP\s*(401|403)/i.test(message)
-          ? 'Accès refusé (401/403) par l’endpoint Annuaire Santé'
-          : `Probe endpoint échoué (${message})`;
-        return false;
-      }
-    }
-
-    function buildViaAnnuaireAuditField(label, localValue, remoteValue, normalizer = normalizeViaAnnuaireComparableText, options = {}) {
-      const left = String(localValue || '').trim();
-      const right = String(remoteValue || '').trim();
-      const leftNorm = normalizer(left);
-      const rightNorm = normalizer(right);
-      const leftMissing = !leftNorm;
-      const rightMissing = !rightNorm;
-      if (leftMissing && rightMissing) {
-        return { label, status: 'incomplete', local: left, remote: right, note: 'Absent des deux côtés' };
-      }
-      if (leftMissing || rightMissing) {
-        return { label, status: 'incomplete', local: left, remote: right, note: leftMissing ? 'Manquant FINESS' : 'Manquant API FHIR' };
-      }
-      if (leftNorm === rightNorm) {
-        return { label, status: 'ok', local: left, remote: right, note: 'Conforme' };
-      }
-      const leftTokens = tokenizeViaAnnuaireComparableText(left);
-      const rightTokens = tokenizeViaAnnuaireComparableText(right);
-      const tokenOverlap = computeViaAnnuaireTokenOverlap(leftTokens, rightTokens);
-      const dice = computeViaAnnuaireDiceSimilarity(left, right);
-      const contains = leftNorm.includes(rightNorm) || rightNorm.includes(leftNorm);
-      const closeThreshold = Number(options.closeThreshold || 0);
-      const tokenThreshold = Number(options.tokenThreshold || 0);
-      const allowContains = options.allowContains !== false;
-      const isClose = (allowContains && contains)
-        || (closeThreshold > 0 && dice >= closeThreshold)
-        || (tokenThreshold > 0 && tokenOverlap >= tokenThreshold);
-      if (isClose) {
-        return {
-          label,
-          status: 'close',
-          local: left,
-          remote: right,
-          note: `Proximité détectée (similarité ${(dice * 100).toFixed(0)}%, overlap ${(tokenOverlap * 100).toFixed(0)}%)`
-        };
-      }
-      return { label, status: 'different', local: left, remote: right, note: 'Valeur différente' };
-    }
-
-    function computeViaAnnuaireAuditFromRows(localRow, organization) {
-      const org = organization && typeof organization === 'object' ? organization : null;
-      if (!localRow || !org) {
-        return {
-          status: 'incomplete',
-          summary: 'Données API FHIR indisponibles pour cet établissement.',
-          fields: []
-        };
-      }
-      const remoteName = String(org.name || '').trim();
-      const remoteCity = String((Array.isArray(org.address) ? org.address.find(Boolean)?.city : '') || '').trim();
-      const remoteAddress = extractViaAnnuaireRorOrganizationAddress(org);
-      const remotePhone = extractViaAnnuaireRorTelecomValue(org, 'phone');
-      const remoteEmail = extractViaAnnuaireRorTelecomValue(org, 'email');
-      const fields = [
-        buildViaAnnuaireAuditField('Nom', localRow.name, remoteName, normalizeViaAnnuaireComparableText, { closeThreshold: 0.9, tokenThreshold: 0.8, allowContains: true }),
-        buildViaAnnuaireAuditField('Ville', localRow.city, remoteCity, normalizeViaAnnuaireComparableText, { closeThreshold: 0.84, tokenThreshold: 0.75, allowContains: true }),
-        buildViaAnnuaireAuditField('Adresse', localRow.address, remoteAddress, normalizeViaAnnuaireComparableText, { closeThreshold: 0.72, tokenThreshold: 0.58, allowContains: true }),
-        buildViaAnnuaireAuditField('Téléphone', localRow.phone, remotePhone, normalizeViaAnnuaireComparablePhone),
-        buildViaAnnuaireAuditField('Email', localRow.email, remoteEmail, normalizeViaAnnuaireComparableEmail)
-      ];
-      const recommendedAddress = buildViaAnnuaireRecommendedAddress(localRow.address, remoteAddress);
-      const hasDiff = fields.some((f) => f.status === 'different');
-      const hasIncomplete = fields.some((f) => f.status === 'incomplete');
-      const hasClose = fields.some((f) => f.status === 'close');
-      const status = hasDiff ? 'different' : (hasIncomplete ? 'incomplete' : (hasClose ? 'close' : 'ok'));
-      return {
-        status,
-        summary: status === 'ok'
-          ? 'FINESS et API FHIR cohérents sur les champs comparés.'
-          : (status === 'close'
-            ? 'Écarts mineurs détectés (proximité sémantique), pas de divergence forte.'
-          : (status === 'different'
-            ? 'Divergences détectées entre FINESS et API FHIR.'
-            : 'Comparaison partielle (données manquantes sur au moins un champ).')),
-        fields,
-        recommendedAddress
-      };
-    }
-
-    async function runViaAnnuaireAuditForRows(rows = []) {
-      const items = Array.isArray(rows) ? rows : [];
-      if (!items.length) return;
-      const state = viaAnnuaireLiveSearchState || {};
-      if (!state.auditMode) return;
-      if (!hasViaAnnuaireRorCredentials() || viaAnnuaireRorUnavailable) return;
-      if (state.auditLoading) return;
-      viaAnnuaireLiveSearchState = {
-        ...state,
-        auditLoading: true
-      };
-      renderViaAnnuaireLiveSearchPanel({ keepSelection: true });
-      try {
-        const ready = await ensureViaAnnuaireRorEnrichmentReady();
-        if (!ready) return;
-        const auditByRef = { ...(viaAnnuaireLiveSearchState.auditByRef || {}) };
-        let changed = false;
-        for (const row of items) {
-          if (!row || !row.ref) continue;
-          if (auditByRef[row.ref]?.status) continue;
-          const finess = String(row.finess || '').trim();
-          if (!finess) {
-            auditByRef[row.ref] = {
-              status: 'incomplete',
-              summary: 'FINESS absent: audit impossible.',
-              fields: []
-            };
-            changed = true;
-            continue;
-          }
-          const org = await fetchViaAnnuaireRorOrganizationByFiness(finess);
-          auditByRef[row.ref] = computeViaAnnuaireAuditFromRows(row, org);
-          changed = true;
-        }
-        if (changed) {
-          viaAnnuaireLiveSearchState = {
-            ...viaAnnuaireLiveSearchState,
-            auditByRef
-          };
-        }
-      } finally {
-        viaAnnuaireLiveSearchState = {
-          ...viaAnnuaireLiveSearchState,
-          auditLoading: false
-        };
-        renderViaAnnuaireLiveSearchPanel({ keepSelection: true });
-      }
+      return coreNormalizeViaAnnuaireRorSettings(rawValue);
     }
 
     function getViaAnnuaireAuditBadgeMeta(status) {
-      const key = String(status || '').trim();
-      if (key === 'ok') return { label: 'OK', className: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
-      if (key === 'close') return { label: 'Proche', className: 'bg-cyan-100 text-cyan-800 border-cyan-200' };
-      if (key === 'different') return { label: 'Différent', className: 'bg-amber-100 text-amber-900 border-amber-200' };
-      if (key === 'incomplete') return { label: 'Incomplet', className: 'bg-slate-100 text-slate-700 border-slate-200' };
-      if (key === 'error') return { label: 'Erreur', className: 'bg-red-100 text-red-800 border-red-200' };
-      return { label: 'Audit…', className: 'bg-blue-100 text-blue-800 border-blue-200' };
+      const meta = coreGetViaAnnuaireAuditBadgeMeta(status);
+      if (String(meta?.label || '') === 'Different') {
+        return { ...meta, label: 'Différent' };
+      }
+      return meta;
     }
 
     function computeViaAnnuaireAuditBreakdown(audit) {
-      const counts = { ok: 0, close: 0, incomplete: 0, different: 0 };
-      const fields = Array.isArray(audit?.fields) ? audit.fields : [];
-      fields.forEach((field) => {
-        const status = String(field?.status || '').trim();
-        if (status === 'ok') counts.ok += 1;
-        else if (status === 'close') counts.close += 1;
-        else if (status === 'incomplete') counts.incomplete += 1;
-        else if (status === 'different') counts.different += 1;
-      });
-      return counts;
-    }
-
-    function toggleViaAnnuaireAuditDetails(refEncoded) {
-      const ref = decodeURIComponent(String(refEncoded || ''));
-      if (!ref) return;
-      const current = String(viaAnnuaireLiveSearchState.openAuditRef || '');
-      viaAnnuaireLiveSearchState = {
-        ...viaAnnuaireLiveSearchState,
-        openAuditRef: current === ref ? '' : ref
-      };
-      renderViaAnnuaireLiveSearchPanel({ keepSelection: true });
-    }
-    window.toggleViaAnnuaireAuditDetails = toggleViaAnnuaireAuditDetails;
-
-    async function applyViaAnnuaireAuditRecommendedAddress(refEncoded) {
-      const ref = decodeURIComponent(String(refEncoded || ''));
-      if (!ref) return;
-      const audit = viaAnnuaireLiveSearchState?.auditByRef?.[ref];
-      const recommendedAddress = String(audit?.recommendedAddress || '').trim();
-      if (!recommendedAddress) return;
-      const updateRowAddress = (row) => {
-        if (!row || String(row.ref || '') !== ref) return row;
-        return {
-          ...row,
-          address: recommendedAddress
-        };
-      };
-      const nextAll = Array.isArray(viaAnnuaireLiveSearchState.allResults)
-        ? viaAnnuaireLiveSearchState.allResults.map(updateRowAddress)
-        : [];
-      const nextResults = Array.isArray(viaAnnuaireLiveSearchState.results)
-        ? viaAnnuaireLiveSearchState.results.map(updateRowAddress)
-        : [];
-      let nextAudit = { ...(viaAnnuaireLiveSearchState.auditByRef || {}) };
-      const row = nextResults.find((item) => String(item?.ref || '') === ref)
-        || nextAll.find((item) => String(item?.ref || '') === ref);
-      if (row) {
-        const finess = String(row.finess || '').trim();
-        const org = finess ? await fetchViaAnnuaireRorOrganizationByFiness(finess) : null;
-        nextAudit[ref] = computeViaAnnuaireAuditFromRows(row, org);
-      }
-      viaAnnuaireLiveSearchState = {
-        ...viaAnnuaireLiveSearchState,
-        allResults: nextAll,
-        results: nextResults,
-        auditByRef: nextAudit
-      };
-      renderViaAnnuaireLiveSearchPanel({ keepSelection: true });
-      showToast('Adresse enrichie appliquée pour cette ligne');
-    }
-
-    async function enrichViaAnnuaireRowsWithRorEmail(rows = []) {
-      const items = Array.isArray(rows) ? rows : [];
-      if (!items.length || viaAnnuaireRorUnavailable) return;
-      const ready = await ensureViaAnnuaireRorEnrichmentReady();
-      if (!ready) {
-        renderViaAnnuaireLiveSearchPanel({ keepSelection: true });
-        return;
-      }
-      let changed = false;
-      for (const item of items) {
-        if (!item || typeof item !== 'object') continue;
-        if (String(item.email || '').trim()) continue;
-        const finess = String(item.finess || '').trim();
-        if (!finess) continue;
-        const email = await fetchViaAnnuaireRorEmailByFiness(finess);
-        if (email && String(item.email || '').trim() !== email) {
-          item.email = email;
-          changed = true;
-        }
-      }
-      if (changed) {
-        renderViaAnnuaireLiveSearchPanel({ keepSelection: true });
-      }
+      return coreComputeViaAnnuaireAuditBreakdown(audit);
     }
 
     function normalizeViaAnnuaireTextForMatch(value) {
-      return String(value || '')
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .toLowerCase()
-        .trim();
+      return coreNormalizeViaAnnuaireTextForMatch(value);
     }
 
     function matchesViaAnnuaireAnyToken(haystack, tokens = []) {
-      if (!haystack || !tokens.length) return false;
-      return tokens.some((token) => haystack.includes(token));
+      return coreMatchesViaAnnuaireAnyToken(haystack, tokens);
     }
 
     function isViaAnnuaireDomainMatch(item, domain) {
-      const normalizedDomain = normalizeViaAnnuaireLiveDomain(domain);
-      const searchable = normalizeViaAnnuaireTextForMatch([
-        item?.name,
-        item?.category,
-        item?.mode,
-        item?.speciality
-      ].filter(Boolean).join(' '));
-      if (!searchable) return false;
-      const paTokens = [
-        'ehpad', 'personnes agees', 'residence autonomie', 'usld', 'accueil de jour',
-        'ssiad pa', 'hebergement personnes agees', 'maison de retraite'
-      ];
-      const phTokens = [
-        'handicap', 'ime', 'iem', 'mas', 'fam', 'esat', 'sessad', 'samsah',
-        'foyer accueil medicalise', 'foyer de vie', 'institut medico educatif',
-        'deficient', 'polyhandicap'
-      ];
-      if (normalizedDomain === 'PH') {
-        return matchesViaAnnuaireAnyToken(searchable, phTokens);
-      }
-      return matchesViaAnnuaireAnyToken(searchable, paTokens);
-    }
-
-    function readViaAnnuaireLiveSearchInputs() {
-      const domainInput = document.getElementById('via-annuaire-live-domain');
-      const departmentInput = document.getElementById('via-annuaire-live-departement');
-      const keywordInput = document.getElementById('via-annuaire-live-keyword');
-      const sortInput = document.getElementById('via-annuaire-live-sort');
-      return {
-        domain: normalizeViaAnnuaireLiveDomain(domainInput?.value),
-        departmentCode: normalizeViaAnnuaireDepartmentCode(departmentInput?.value),
-        keyword: String(keywordInput?.value || '').trim(),
-        sortKey: normalizeViaAnnuaireLiveSortKey(sortInput?.value)
-      };
-    }
-
-    function renderViaAnnuaireLiveSearchPanel(options = {}) {
-      const domainInput = document.getElementById('via-annuaire-live-domain');
-      const departmentInput = document.getElementById('via-annuaire-live-departement');
-      const keywordInput = document.getElementById('via-annuaire-live-keyword');
-      const sortInput = document.getElementById('via-annuaire-live-sort');
-      const summary = document.getElementById('via-annuaire-summary');
-      const lastSync = document.getElementById('via-annuaire-last-sync');
-      const searchBtn = document.getElementById('btn-via-annuaire-live-search');
-      const prevBtn = document.getElementById('btn-via-annuaire-live-prev');
-      const nextBtn = document.getElementById('btn-via-annuaire-live-next');
-      const auditToggleBtn = document.getElementById('btn-via-annuaire-live-audit-toggle');
-      const meta = document.getElementById('via-annuaire-live-meta');
-      const results = document.getElementById('via-annuaire-live-results');
-      if (!domainInput || !departmentInput || !keywordInput || !sortInput || !searchBtn || !prevBtn || !nextBtn || !meta || !results) return;
-
-      const state = viaAnnuaireLiveSearchState || {};
-      const status = document.getElementById('via-annuaire-status');
-      if (summary) {
-        summary.textContent = state.lastQueryLabel
-          ? `Dernière recherche: ${state.lastQueryLabel}`
-          : 'Aucune recherche annuaire lancée.';
-      }
-      if (status) {
-        const hasRorConfig = hasViaAnnuaireRorCredentials();
-        const rorHasApiKey = hasViaAnnuaireRorApiKey();
-        status.textContent = !hasRorConfig
-          ? 'Source: FINESS public (Annuaire Santé non configuré)'
-          : (viaAnnuaireRorUnavailable
-            ? `Source: FINESS public (Annuaire Santé indisponible${viaAnnuaireRorUnavailableReason ? `: ${viaAnnuaireRorUnavailableReason}` : ''})`
-            : (rorHasApiKey
-              ? 'Source: FINESS public + Annuaire Santé (best effort, avec clé API)'
-              : 'Source: FINESS public + Annuaire Santé (best effort, mode sans clé API)'));
-        status.className = !hasRorConfig
-          ? 'text-[11px] font-semibold px-2 py-1 rounded-full bg-slate-100 text-slate-700'
-          : (viaAnnuaireRorUnavailable
-            ? 'text-[11px] font-semibold px-2 py-1 rounded-full bg-amber-100 text-amber-800'
-            : 'text-[11px] font-semibold px-2 py-1 rounded-full bg-emerald-100 text-emerald-700');
-      }
-      if (lastSync) {
-        lastSync.textContent = viaAnnuaireRuntimeCache.lastDepartmentsSyncAt > 0
-          ? `Dernière mise à jour des départements: ${new Date(viaAnnuaireRuntimeCache.lastDepartmentsSyncAt).toLocaleString('fr-FR')}`
-          : 'Dernière mise à jour des départements: jamais';
-      }
-      const departments = getViaAnnuaireLiveDepartments();
-      const previousDepartment = normalizeViaAnnuaireDepartmentCode(options.keepSelection
-        ? state.departmentCode
-        : (departmentInput.value || state.departmentCode));
-      const departmentOptions = departments
-        .slice()
-        .sort((a, b) => String(a?.id || '').localeCompare(String(b?.id || ''), 'fr'))
-        .map((dep) => {
-          const id = normalizeViaAnnuaireDepartmentCode(dep?.id);
-          const label = String(dep?.nom || dep?.id || '').trim() || id;
-          return `<option value="${escapeHtml(id)}">${escapeHtml(label)}</option>`;
-        });
-      departmentInput.innerHTML = `<option value="">Département...</option>${departmentOptions.join('')}`;
-      if (previousDepartment && departments.some((dep) => normalizeViaAnnuaireDepartmentCode(dep?.id) === previousDepartment)) {
-        departmentInput.value = previousDepartment;
-      } else if (departments.some((dep) => normalizeViaAnnuaireDepartmentCode(dep?.id) === '61')) {
-        departmentInput.value = '61';
-      }
-
-      domainInput.value = normalizeViaAnnuaireLiveDomain(state.domain);
-      keywordInput.value = String(state.keyword || '');
-      sortInput.value = normalizeViaAnnuaireLiveSortKey(state.sortKey);
-
-      const sortedRows = sortViaAnnuaireLiveResults(state.results, state.sortKey);
-      const auditCounts = { ok: 0, close: 0, incomplete: 0, different: 0, pending: 0 };
-      if (state.auditMode) {
-        sortedRows.forEach((row) => {
-          const statusKey = String(state.auditByRef?.[row?.ref]?.status || '').trim();
-          if (statusKey === 'ok') auditCounts.ok += 1;
-          else if (statusKey === 'close') auditCounts.close += 1;
-          else if (statusKey === 'incomplete') auditCounts.incomplete += 1;
-          else if (statusKey === 'different') auditCounts.different += 1;
-          else auditCounts.pending += 1;
-        });
-      }
-      const hasResults = sortedRows.length > 0;
-      const total = Math.max(0, Number(state.total || 0));
-      const pageSize = Math.max(1, Number(state.pageSize || 12));
-      const pageIndex = Math.max(0, Number(state.pageIndex || 0));
-      const start = total === 0 ? 0 : (pageIndex * pageSize) + 1;
-      const end = total === 0 ? 0 : Math.min(total, (pageIndex + 1) * pageSize);
-      const canPrev = pageIndex > 0 && !state.loading;
-      const canNext = end < total && !state.loading;
-      prevBtn.disabled = !canPrev;
-      nextBtn.disabled = !canNext;
-      searchBtn.disabled = !!state.loading;
-      const searchBtnLabelText = state.loading ? 'Recherche...' : 'Rechercher';
-      const searchBtnIcon = searchBtn.querySelector('.taskmda-action-icon, .material-symbols-outlined');
-      if (searchBtnIcon) {
-        searchBtnIcon.textContent = state.loading ? 'progress_activity' : 'search';
-      }
-      searchBtn.setAttribute('data-action-kind', 'open');
-      searchBtn.setAttribute('data-action-label', searchBtnLabelText);
-      searchBtn.setAttribute('aria-label', searchBtnLabelText);
-      searchBtn.setAttribute('data-ui-tooltip', searchBtnLabelText);
-      let searchBtnLabel = searchBtn.querySelector('.taskmda-action-label');
-      if (!searchBtnLabel) {
-        searchBtnLabel = document.createElement('span');
-        searchBtnLabel.className = 'taskmda-action-label';
-        searchBtn.appendChild(searchBtnLabel);
-      }
-      searchBtnLabel.textContent = searchBtnLabelText;
-      Array.from(searchBtn.childNodes).forEach((node) => {
-        if (node.nodeType === Node.TEXT_NODE && String(node.textContent || '').trim()) {
-          searchBtn.removeChild(node);
-        }
-      });
-      if (auditToggleBtn) {
-        const modeOn = !!state.auditMode;
-        auditToggleBtn.textContent = modeOn ? 'Audit: ON' : 'Audit: OFF';
-        auditToggleBtn.className = modeOn
-          ? 'px-2 py-1 rounded border border-blue-300 bg-blue-50 text-blue-800 text-[11px] font-semibold'
-          : 'px-2 py-1 rounded border border-slate-300 text-slate-700 text-[11px] font-semibold';
-      }
-
-      if (state.loading) {
-        meta.textContent = 'Recherche en cours...';
-      } else if (state.lastError) {
-        meta.textContent = `Erreur: ${state.lastError}`;
-      } else if (total > 0) {
-        const audited = state.auditMode
-          ? Object.keys(state.auditByRef || {}).length
-          : 0;
-        meta.textContent = state.auditMode
-          ? `${state.lastQueryLabel || 'Résultats'} • ${start}-${end} / ${total} • audit ${audited} ligne(s) • OK ${auditCounts.ok} • Proche ${auditCounts.close} • Incomplet ${auditCounts.incomplete}${auditCounts.pending ? ` • En attente ${auditCounts.pending}` : ''}`
-          : `${state.lastQueryLabel || 'Résultats'} • ${start}-${end} / ${total}`;
-      } else {
-        meta.textContent = 'Aucune recherche effectuée.';
-      }
-
-      if (state.loading) {
-        results.innerHTML = '<p class="text-xs text-slate-500 p-3">Interrogation de l\'annuaire en cours...</p>';
-        return;
-      }
-      if (state.lastError) {
-        results.innerHTML = `<p class="text-xs text-red-600 p-3">${escapeHtml(state.lastError)}</p>`;
-        return;
-      }
-      if (!hasResults) {
-        results.innerHTML = '<p class="text-xs text-slate-500 p-3">Aucun établissement trouvé pour cette recherche.</p>';
-        return;
-      }
-
-      results.innerHTML = sortedRows.map((item) => {
-        const audit = state.auditMode ? state.auditByRef?.[item.ref] : null;
-        const auditMeta = getViaAnnuaireAuditBadgeMeta(audit?.status);
-        const auditBreakdown = computeViaAnnuaireAuditBreakdown(audit);
-        const isAuditOpen = state.auditMode && String(state.openAuditRef || '') === String(item.ref || '');
-        const encodedRef = encodeURIComponent(String(item.ref || ''));
-        const name = String(item?.name || '').trim() || 'Établissement sans nom';
-        const subtitleParts = [item?.city, item?.department].filter(Boolean).join(' • ');
-        const address = String(item?.address || '').trim();
-        const tags = [item?.mode, item?.category].filter(Boolean).join(' • ');
-        const details = [item?.finess ? `FINESS ${item.finess}` : '', item?.idStructure ? `ID ${item.idStructure}` : ''].filter(Boolean).join(' • ');
-        const ficheUrl = buildViaAnnuairePublicFicheUrl(item, state.domain);
-        const ficheActionHtml = ficheUrl
-          ? `<a class="inline-flex items-center gap-1 mt-1.5 text-[11px] font-semibold text-blue-700 hover:underline" href="${escapeHtml(ficheUrl)}" target="_blank" rel="noopener noreferrer"><span class="material-symbols-outlined text-[12px]">open_in_new</span>Fiche ViaTrajectoire</a>`
-          : '';
-        return `
-          <div class="p-3 border-b border-slate-100 last:border-b-0 hover:bg-slate-50">
-            <div class="w-full text-left">
-              <p class="text-sm font-semibold text-slate-800">${escapeHtml(name)}</p>
-              ${subtitleParts ? `<p class="text-xs text-slate-600 mt-0.5">${escapeHtml(subtitleParts)}</p>` : ''}
-              ${address ? `<p class="text-xs text-slate-500 mt-0.5">${escapeHtml(address)}</p>` : ''}
-              ${item?.phone ? `<p class="text-xs text-slate-500 mt-0.5"><span class="font-semibold text-slate-600">Téléphone:</span> ${escapeHtml(item.phone)}</p>` : ''}
-              ${item?.email ? `<p class="text-xs text-slate-500 mt-0.5"><span class="font-semibold text-slate-600">Email:</span> ${escapeHtml(item.email)}</p>` : ''}
-              ${state.auditMode ? `
-                <div class="mt-1.5 flex items-center gap-2 flex-wrap">
-                  <button type="button" class="inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[11px] font-semibold via-annuaire-audit-toggle-btn ${auditMeta.className}" data-audit-ref="${escapeHtml(encodedRef)}">
-                    <span class="material-symbols-outlined text-[13px]">rule</span>
-                    ${audit ? `
-                      <span class="inline-flex items-center gap-1">
-                        <span>OK ${auditBreakdown.ok}</span>
-                        <span>•</span>
-                        <span>Proche ${auditBreakdown.close}</span>
-                        <span>•</span>
-                        <span>Incomplet ${auditBreakdown.incomplete}</span>
-                        ${auditBreakdown.different ? `<span>• Différent ${auditBreakdown.different}</span>` : ''}
-                      </span>
-                    ` : escapeHtml(auditMeta.label)}
-                  </button>
-                  ${audit?.summary ? `<span class="text-[11px] text-slate-500">${escapeHtml(audit.summary)}</span>` : ''}
-                </div>
-              ` : ''}
-              ${tags ? `<p class="text-[11px] text-slate-500 mt-1">${escapeHtml(tags)}</p>` : ''}
-              ${details ? `<p class="text-[11px] text-slate-400 mt-1">${escapeHtml(details)}</p>` : ''}
-            </div>
-            ${ficheActionHtml}
-            ${isAuditOpen ? `
-              <div class="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-2.5">
-                <p class="text-[11px] font-semibold text-slate-700 mb-1">Détail audit FINESS vs API FHIR</p>
-                ${audit?.recommendedAddress ? `
-                  <div class="mb-2 p-2 rounded border border-cyan-200 bg-cyan-50 text-[11px] text-cyan-900">
-                    <p class="font-semibold mb-1">Adresse enrichie recommandée</p>
-                    <p>${escapeHtml(audit.recommendedAddress)}</p>
-                    <button type="button" class="mt-1.5 inline-flex items-center gap-1 px-2 py-1 rounded border border-cyan-300 bg-white text-cyan-800 font-semibold via-annuaire-audit-apply-address-btn" data-audit-ref="${escapeHtml(encodedRef)}">
-                      <span class="material-symbols-outlined text-[13px]">auto_fix_high</span>
-                      Utiliser l'adresse enrichie
-                    </button>
-                  </div>
-                ` : ''}
-                ${Array.isArray(audit?.fields) && audit.fields.length > 0
-                  ? `<div class="space-y-1.5">${audit.fields.map((field) => {
-                      const fieldMeta = getViaAnnuaireAuditBadgeMeta(field?.status);
-                      return `
-                        <div class="text-[11px] text-slate-700 border border-slate-200 rounded p-1.5 bg-white">
-                          <div class="flex items-center justify-between gap-2">
-                            <span class="font-semibold">${escapeHtml(field?.label || 'Champ')}</span>
-                            <span class="px-1.5 py-0.5 rounded border ${fieldMeta.className}">${escapeHtml(fieldMeta.label)}</span>
-                          </div>
-                          <div class="mt-1 text-slate-500">FINESS: ${escapeHtml(field?.local || '—')}</div>
-                          <div class="text-slate-500">FHIR: ${escapeHtml(field?.remote || '—')}</div>
-                          ${field?.note ? `<div class="text-slate-400">${escapeHtml(field.note)}</div>` : ''}
-                        </div>
-                      `;
-                    }).join('')}</div>`
-                  : '<p class="text-[11px] text-slate-500">Aucun détail disponible.</p>'}
-              </div>
-            ` : ''}
-          </div>
-        `;
-      }).join('');
-      results.querySelectorAll('.via-annuaire-audit-toggle-btn').forEach((btn) => {
-        btn.addEventListener('click', (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          const refEncoded = String(btn.getAttribute('data-audit-ref') || '');
-          toggleViaAnnuaireAuditDetails(refEncoded);
-        });
-      });
-      results.querySelectorAll('.via-annuaire-audit-apply-address-btn').forEach((btn) => {
-        btn.addEventListener('click', async (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          const refEncoded = String(btn.getAttribute('data-audit-ref') || '');
-          await applyViaAnnuaireAuditRecommendedAddress(refEncoded);
-        });
-      });
-    }
-
-    function mapViaAnnuaireLiveResultItem(item) {
-      const obj = item && typeof item === 'object' ? item : {};
-      const name = String(
-        obj.rs
-        || obj.rslongue
-        || obj.nom
-        || ''
-      ).trim();
-      const city = String(
-        obj.com_name
-        || obj.commune
-        || obj.ville
-        || ''
-      ).trim();
-      const department = String(
-        obj.dep_name
-        || obj.dep_code
-        || ''
-      ).trim();
-      const address = String(
-        obj.adresse
-        || obj.address
-        || ''
-      ).trim();
-      const mode = String(obj.libmft || '').trim();
-      const category = String(obj.libcategetab || '').trim();
-      const speciality = String(obj.libsph || '').trim();
-      const finess = String(obj.nofinesset || obj.nofinessej || '').trim();
-      const idStructure = String(obj.siret || '').trim();
-      const phone = String(obj.telephone || '').trim();
-      return {
-        name,
-        city,
-        department,
-        departmentCode: normalizeViaAnnuaireDepartmentCode(obj.dep_code),
-        address,
-        mode,
-        category,
-        speciality,
-        finess,
-        idStructure,
-        phone,
-        email: '',
-        ref: buildViaAnnuaireLiveResultRef({ name, city, finess, idStructure })
-      };
-    }
-
-    function filterViaAnnuaireRecordsBySearchInput(items, input) {
-      const domain = normalizeViaAnnuaireLiveDomain(input.domain);
-      const keyword = normalizeViaAnnuaireTextForMatch(input.keyword);
-      return (Array.isArray(items) ? items : []).filter((item) => {
-        if (!isViaAnnuaireDomainMatch(item, domain)) return false;
-        if (!keyword) return true;
-        const haystack = normalizeViaAnnuaireTextForMatch([
-          item?.name,
-          item?.city,
-          item?.address,
-          item?.category,
-          item?.mode,
-          item?.speciality,
-          item?.finess
-        ].filter(Boolean).join(' '));
-        return haystack.includes(keyword);
-      });
-    }
-
-    async function runViaAnnuaireLiveSearch(options = {}) {
-      const fromUi = options.fromUi !== false;
-      const requestedPageIndex = Number.isFinite(Number(options.pageIndex))
-        ? Math.max(0, Number(options.pageIndex))
-        : Math.max(0, Number(viaAnnuaireLiveSearchState.pageIndex || 0));
-      const input = fromUi ? readViaAnnuaireLiveSearchInputs() : {
-        domain: normalizeViaAnnuaireLiveDomain(viaAnnuaireLiveSearchState.domain),
-        departmentCode: normalizeViaAnnuaireDepartmentCode(viaAnnuaireLiveSearchState.departmentCode),
-        keyword: String(viaAnnuaireLiveSearchState.keyword || '').trim(),
-        sortKey: normalizeViaAnnuaireLiveSortKey(viaAnnuaireLiveSearchState.sortKey)
-      };
-      if (!input.departmentCode) {
-        showToast('Sélectionnez un département');
-        return null;
-      }
-      if (!fromUi && Array.isArray(viaAnnuaireLiveSearchState.allResults) && viaAnnuaireLiveSearchState.allResults.length > 0) {
-        const sortedAll = sortViaAnnuaireLiveResults(viaAnnuaireLiveSearchState.allResults, input.sortKey);
-        const pageSize = Math.max(1, Number(viaAnnuaireLiveSearchState.pageSize || 12));
-        const total = sortedAll.length;
-        const maxPageIndex = total > 0 ? Math.max(0, Math.ceil(total / pageSize) - 1) : 0;
-        const safePageIndex = Math.min(requestedPageIndex, maxPageIndex);
-        const startIndex = safePageIndex * pageSize;
-        const paged = sortedAll.slice(startIndex, startIndex + pageSize);
-        viaAnnuaireLiveSearchState = {
-          ...viaAnnuaireLiveSearchState,
-          sortKey: input.sortKey,
-          pageIndex: safePageIndex,
-          allResults: sortedAll,
-          results: paged,
-          total,
-          selectedResultRef: String(paged[0]?.ref || '')
-        };
-        renderViaAnnuaireLiveSearchPanel({ keepSelection: true });
-        void enrichViaAnnuaireRowsWithRorEmail(paged);
-        void runViaAnnuaireAuditForRows(paged);
-        return paged;
-      }
-      if (!Array.isArray(viaAnnuaireRuntimeCache?.departements) || viaAnnuaireRuntimeCache.departements.length === 0) {
-        await syncViaAnnuaireDepartmentsFromApi({ silent: true });
-      }
-
-      const nextState = {
-        ...viaAnnuaireLiveSearchState,
-        domain: input.domain,
-        departmentCode: input.departmentCode,
-        keyword: input.keyword,
-        sortKey: input.sortKey,
-        pageIndex: requestedPageIndex,
-        allResults: [],
-        results: [],
-        auditByRef: {},
-        openAuditRef: '',
-        total: 0,
-        loading: true,
-        lastError: '',
-        selectedResultRef: fromUi ? '' : String(viaAnnuaireLiveSearchState.selectedResultRef || '')
-      };
-      viaAnnuaireLiveSearchState = nextState;
-      renderViaAnnuaireLiveSearchPanel({ keepSelection: true });
-      try {
-        const scanTarget = Math.max(VIA_ANNUAIRE_PUBLIC_PAGE_SIZE, VIA_ANNUAIRE_PUBLIC_MAX_SCAN);
-        let offset = 0;
-        let scannedCount = 0;
-        const rawRows = [];
-        while (offset < scanTarget) {
-          const payload = await fetchViaAnnuairePublicApiRecords({
-            limit: VIA_ANNUAIRE_PUBLIC_PAGE_SIZE,
-            offset,
-            orderBy: 'rs',
-            select: 'nofinesset,nofinessej,rs,rslongue,address,telephone,dep_code,dep_name,com_name,libmft,libcategetab,categetab,libsph,siret',
-            where: `dep_code = "${escapeOdsWhereValue(input.departmentCode)}"`
-          }, 25000);
-          const batch = Array.isArray(payload?.results) ? payload.results : [];
-          rawRows.push(...batch);
-          scannedCount += batch.length;
-          if (batch.length < VIA_ANNUAIRE_PUBLIC_PAGE_SIZE) break;
-          if (scannedCount >= scanTarget) break;
-          offset += VIA_ANNUAIRE_PUBLIC_PAGE_SIZE;
-        }
-        const mappedAll = rawRows.map(mapViaAnnuaireLiveResultItem).filter((item) => item.name);
-        const filtered = filterViaAnnuaireRecordsBySearchInput(mappedAll, input);
-        const sortedAll = sortViaAnnuaireLiveResults(filtered, input.sortKey);
-        const pageSize = Math.max(1, Number(nextState.pageSize || 12));
-        const total = sortedAll.length;
-        const maxPageIndex = total > 0 ? Math.max(0, Math.ceil(total / pageSize) - 1) : 0;
-        const safePageIndex = Math.min(requestedPageIndex, maxPageIndex);
-        const startIndex = safePageIndex * pageSize;
-        const paged = sortedAll.slice(startIndex, startIndex + pageSize);
-        const selectedRef = paged.some((item) => String(item?.ref || '') === String(nextState.selectedResultRef || ''))
-          ? String(nextState.selectedResultRef || '')
-          : String(paged[0]?.ref || '');
-        const departmentLabel = getViaAnnuaireLiveDepartments().find((dep) => (
-          normalizeViaAnnuaireDepartmentCode(dep?.id) === input.departmentCode
-        ))?.nom || input.departmentCode;
-        const scanNotice = scannedCount >= scanTarget ? ` (échantillon ${scanTarget})` : '';
-        viaAnnuaireLiveSearchState = {
-          ...nextState,
-          loading: false,
-          pageIndex: safePageIndex,
-          results: paged,
-          allResults: sortedAll,
-          total,
-          selectedResultRef: selectedRef,
-          lastQueryLabel: `${input.domain} • ${departmentLabel}${input.keyword ? ` • ${input.keyword}` : ''}${scanNotice}`
-        };
-        renderViaAnnuaireLiveSearchPanel({ keepSelection: true });
-        void enrichViaAnnuaireRowsWithRorEmail(paged);
-        void runViaAnnuaireAuditForRows(paged);
-        return paged;
-      } catch (error) {
-        const errorMessage = String(error?.message || 'Erreur de recherche');
-        viaAnnuaireLiveSearchState = {
-          ...nextState,
-          loading: false,
-          allResults: [],
-          results: [],
-          total: 0,
-          lastError: errorMessage
-        };
-        renderViaAnnuaireLiveSearchPanel({ keepSelection: true });
-        showToast(`Recherche annuaire impossible: ${errorMessage}`);
-        return null;
-      }
+      return coreIsViaAnnuaireDomainMatch(item, domain);
     }
 
     function escapeOdsWhereValue(value) {
@@ -9545,33 +8362,19 @@
     };
 
     function normalizeProjectPriority(value) {
-      const normalized = String(value || '').trim().toLowerCase();
-      if (normalized === 'critique' || normalized === 'haute' || normalized === 'normale' || normalized === 'basse') {
-        return normalized;
-      }
-      return 'normale';
+      return coreNormalizeProjectPriority(value);
     }
 
     function getProjectPriorityLabel(value) {
-      const key = normalizeProjectPriority(value);
-      return PROJECT_PRIORITY_LABELS[key] || PROJECT_PRIORITY_LABELS.normale;
+      return coreGetProjectPriorityLabel(value, PROJECT_PRIORITY_LABELS);
     }
 
     function getProjectPriorityChipClass(value) {
-      const key = normalizeProjectPriority(value);
-      if (key === 'critique') return 'workspace-chip-priority-critique';
-      if (key === 'haute') return 'workspace-chip-priority-haute';
-      if (key === 'basse') return 'workspace-chip-priority-basse';
-      return 'workspace-chip-priority-normale';
+      return coreGetProjectPriorityChipClass(value);
     }
 
     function normalizeProjectSortMode(value) {
-      const mode = String(value || 'recent').trim().toLowerCase();
-      if (mode === 'status') return 'priority';
-      if (mode === 'recent' || mode === 'oldest' || mode === 'name-asc' || mode === 'name-desc' || mode === 'priority' || mode === 'deadline-near' || mode === 'deadline-far') {
-        return mode;
-      }
-      return 'recent';
+      return coreNormalizeProjectSortMode(value);
     }
 
     function getProjectDeadlineSortTimestamp(project = {}) {
@@ -10196,8 +8999,6 @@
     let selectedProjectIdsForBulkDelete = new Set();
     let headerSearchResults = [];
     let headerSearchActiveIndex = -1;
-    let headerSearchDebounceTimer = null;
-    let headerSearchRequestToken = 0;
     let docsFilters = { query: '', type: 'all', sort: 'recent' };
     let activityFilters = { type: 'all', author: '', period: 'all' };
     let activityPage = 1;
@@ -10229,7 +9030,6 @@
     let globalCalendarSelectedMonth = null;
     let globalCalendarPinnedThemes = [];
     let globalCalendarPinnedThemeChecks = [];
-    let globalCalendarPinsInitialized = false;
     let globalCalendarControlsExpanded = true;
     let projectCalendarViewMode = 'month'; // month | year
     let editingGlobalCalendarItemId = null;
@@ -10247,9 +9047,6 @@
     let currentDocEditorContext = null;
     let currentDocPreviewContext = null;
     let currentDocPreviewCanEdit = false;
-    const docPreviewInlineDebounceTimers = new Map();
-    const docPreviewInlineFinalizeTimers = new Map();
-    const docPreviewInlineLastSavedValues = new Map();
     let docSpreadsheetEditorState = {
       table: null,
       activeTab: 'css',
@@ -10387,43 +9184,10 @@
     const VIA_ANNUAIRE_ROR_FHIR_ENDPOINTS = ['https://gateway.api.esante.gouv.fr/fhir/v2'];
     const VIA_ANNUAIRE_ROR_SETTINGS_KEY = 'viaAnnuaireRorSettings';
     const VIA_ANNUAIRE_CONFIG_EXPANDED_KEY = 'taskmda_via_annuaire_config_expanded_v1';
-    let viaAnnuaireRuntimeCache = {
-      departements: [],
-      lastDepartmentsSyncAt: 0
-    };
     const VIA_ANNUAIRE_FALLBACK_DEPARTEMENTS = [
       { id: '61', nom: 'Orne (61)', region: 'NORMANDIE' }
     ];
-    const viaAnnuaireRorEmailCache = new Map();
-    const viaAnnuaireRorOrganizationCache = new Map();
-    let viaAnnuaireRorUnavailable = false;
-    let viaAnnuaireRorUnavailableReason = '';
-    let viaAnnuaireRorProbeDone = false;
-    let viaAnnuaireRorSettingsLoaded = false;
-    let viaAnnuaireRorSettingsCache = {
-      endpoint: VIA_ANNUAIRE_ROR_FHIR_ENDPOINTS[0] || '',
-      apiKey: ''
-    };
     let viaAnnuaireConfigExpanded = localStorage.getItem(VIA_ANNUAIRE_CONFIG_EXPANDED_KEY) !== '0';
-    let viaAnnuaireLiveSearchState = {
-      domain: 'PH',
-      departmentCode: '',
-      keyword: '',
-      sortKey: 'name',
-      pageIndex: 0,
-      pageSize: 12,
-      total: 0,
-      allResults: [],
-      results: [],
-      selectedResultRef: '',
-      openAuditRef: '',
-      auditMode: false,
-      auditLoading: false,
-      auditByRef: {},
-      loading: false,
-      lastError: '',
-      lastQueryLabel: ''
-    };
     let taskDetailWorkspaceRefreshTimer = null;
     let taskDetailWorkspaceRefreshQueue = Promise.resolve();
     let currentProjectInlineCanEdit = false;
@@ -10453,13 +9217,7 @@
     ];
 
     function escapeHtml(value) {
-      if (value === null || value === undefined) return '';
-      return String(value)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
+      return coreEscapeHtml(value);
     }
 
     function buildWorkspaceEmptyState(options = {}) {
@@ -11103,8 +9861,7 @@
     }
 
     function normalizeCalendarYmd(rawValue) {
-      const raw = String(rawValue || '').trim();
-      return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : '';
+      return coreNormalizeCalendarYmd(rawValue);
     }
 
     function normalizeCalendarHm(rawValue) {
@@ -11205,30 +9962,6 @@
       return keys;
     }
 
-    const GLOBAL_CALENDAR_PINNED_THEMES_KEY = 'taskmda_global_calendar_pinned_themes';
-    const GLOBAL_CALENDAR_PINNED_THEME_CHECKS_KEY = 'taskmda_global_calendar_pinned_theme_checks';
-    const GLOBAL_CALENDAR_CONTROLS_EXPANDED_KEY = 'taskmda_global_calendar_controls_expanded';
-
-    function readLocalArray(key) {
-      try {
-        const raw = localStorage.getItem(key);
-        if (!raw) return [];
-        const parsed = JSON.parse(raw);
-        if (!Array.isArray(parsed)) return [];
-        return parsed.map((v) => String(v || '').trim()).filter(Boolean);
-      } catch {
-        return [];
-      }
-    }
-
-    function writeLocalArray(key, values) {
-      try {
-        localStorage.setItem(key, JSON.stringify(Array.from(new Set((values || []).map((v) => String(v || '').trim()).filter(Boolean)))));
-      } catch {
-        // Ignore storage write failures
-      }
-    }
-
     function normalizeCalendarThemeName(rawTheme) {
       const name = String(rawTheme || '').trim();
       return name || 'Général';
@@ -11238,108 +9971,8 @@
       return normalizeCatalogKey(normalizeCalendarThemeName(rawTheme));
     }
 
-    function syncPinnedCalendarThemeState() {
-      const pinnedKeys = new Set(globalCalendarPinnedThemes.map(normalizeCalendarThemeKey));
-      globalCalendarPinnedThemes = globalCalendarPinnedThemes.filter((theme, idx, arr) => {
-        const key = normalizeCalendarThemeKey(theme);
-        return key && arr.findIndex((other) => normalizeCalendarThemeKey(other) === key) === idx;
-      });
-      globalCalendarPinnedThemeChecks = globalCalendarPinnedThemeChecks.filter((theme) => pinnedKeys.has(normalizeCalendarThemeKey(theme)));
-      writeLocalArray(GLOBAL_CALENDAR_PINNED_THEMES_KEY, globalCalendarPinnedThemes);
-      writeLocalArray(GLOBAL_CALENDAR_PINNED_THEME_CHECKS_KEY, globalCalendarPinnedThemeChecks);
-    }
-
-    function isPinnedCalendarThemeChecked(themeName) {
-      const key = normalizeCalendarThemeKey(themeName);
-      return globalCalendarPinnedThemeChecks.some((theme) => normalizeCalendarThemeKey(theme) === key);
-    }
-
-    function renderGlobalCalendarThemePins(availableThemes = []) {
-      const pinsWrap = document.getElementById('global-calendar-theme-pins');
-      const select = document.getElementById('global-calendar-theme-pin-select');
-      const counter = document.getElementById('global-calendar-theme-pin-counter');
-      if (!pinsWrap || !select) return;
-
-      const normalizedAvailable = Array.from(new Set((availableThemes || []).map(normalizeCalendarThemeName)));
-      const allKnown = Array.from(new Set([...normalizedAvailable, ...globalCalendarPinnedThemes.map(normalizeCalendarThemeName)]))
-        .sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
-
-      select.innerHTML = `
-        <option value="">Choisir une thématique à épingler...</option>
-        ${allKnown
-          .filter((theme) => !globalCalendarPinnedThemes.some((pinned) => normalizeCalendarThemeKey(pinned) === normalizeCalendarThemeKey(theme)))
-          .map((theme) => `<option value="${escapeHtml(theme)}">${escapeHtml(theme)}</option>`)
-          .join('')}
-      `;
-
-      if (globalCalendarPinnedThemes.length === 0) {
-        pinsWrap.innerHTML = '<p class="text-xs text-slate-500">Aucune thématique épinglée.</p>';
-        if (counter) counter.textContent = '(0/0 actives)';
-        return;
-      }
-      if (counter) {
-        counter.textContent = `(${globalCalendarPinnedThemeChecks.length}/${globalCalendarPinnedThemes.length} actives)`;
-      }
-
-      pinsWrap.innerHTML = globalCalendarPinnedThemes.map((theme) => `
-        <label class="calendar-theme-pin-chip">
-          <input type="checkbox" data-calendar-theme-check="${escapeHtml(theme)}" ${isPinnedCalendarThemeChecked(theme) ? 'checked' : ''}>
-          <span>${escapeHtml(theme)}</span>
-          <button type="button" class="calendar-theme-pin-unpin" data-calendar-theme-unpin="${escapeHtml(theme)}" aria-label="Désépingler ${escapeHtml(theme)}">×</button>
-        </label>
-      `).join('');
-    }
-
-    function initGlobalCalendarPinnedThemesState() {
-      if (globalCalendarPinsInitialized) return;
-      globalCalendarPinnedThemes = readLocalArray(GLOBAL_CALENDAR_PINNED_THEMES_KEY).map(normalizeCalendarThemeName);
-      globalCalendarPinnedThemeChecks = readLocalArray(GLOBAL_CALENDAR_PINNED_THEME_CHECKS_KEY).map(normalizeCalendarThemeName);
-      globalCalendarControlsExpanded = localStorage.getItem(GLOBAL_CALENDAR_CONTROLS_EXPANDED_KEY) !== '0';
-      syncPinnedCalendarThemeState();
-      globalCalendarPinsInitialized = true;
-    }
-
-    function setGlobalCalendarControlsExpanded(expanded, options = {}) {
-      const next = !!expanded;
-      globalCalendarControlsExpanded = next;
-      const panel = document.getElementById('global-calendar-controls-panel');
-      const top = document.querySelector('#global-calendar-section .calendar-toolbar-top');
-      const toggleBtn = document.getElementById('global-calendar-toggle-controls');
-      const toggleIcon = document.getElementById('global-calendar-toggle-controls-icon');
-      const toggleLabel = document.getElementById('global-calendar-toggle-controls-label');
-      if (panel) panel.classList.toggle('is-collapsed', !next);
-      if (top) top.classList.toggle('mb-3', next);
-      if (toggleBtn) {
-        toggleBtn.setAttribute('aria-expanded', next ? 'true' : 'false');
-        toggleBtn.setAttribute('title', next ? 'Masquer les filtres et outils' : 'Afficher les filtres et outils');
-      }
-      if (toggleIcon) toggleIcon.textContent = next ? 'expand_less' : 'expand_more';
-      if (toggleLabel) toggleLabel.textContent = next ? 'Masquer les filtres' : 'Afficher les filtres';
-      if (!options.skipPersist) {
-        try {
-          localStorage.setItem(GLOBAL_CALENDAR_CONTROLS_EXPANDED_KEY, next ? '1' : '0');
-        } catch {
-          // Ignore storage failures
-        }
-      }
-    }
-
-    function toggleGlobalCalendarThemeActionsMenu(forceOpen = null) {
-      const menu = document.getElementById('global-calendar-theme-actions-menu');
-      if (!menu) return;
-      const shouldOpen = typeof forceOpen === 'boolean' ? forceOpen : menu.classList.contains('hidden');
-      menu.classList.toggle('hidden', !shouldOpen);
-    }
-
     function parseYmdLocalToDate(dateKey) {
-      const raw = String(dateKey || '').trim();
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
-      const [y, m, d] = raw.split('-').map((v) => Number.parseInt(v, 10));
-      const date = new Date(y, m - 1, d);
-      if (Number.isNaN(date.getTime())) return null;
-      if (date.getFullYear() !== y || date.getMonth() !== (m - 1) || date.getDate() !== d) return null;
-      date.setHours(0, 0, 0, 0);
-      return date;
+      return coreParseYmdLocalToDate(dateKey);
     }
 
     function getTaskRecurringNextDueDateKey(task) {
@@ -11564,15 +10197,15 @@
     }
 
     function normalizeSharingMode(mode, fallback = 'private') {
-      return mode === 'shared' || mode === 'private' ? mode : fallback;
+      return coreNormalizeSharingMode(mode, fallback);
     }
 
     function normalizeProjectReadAccess(value, fallback = 'private') {
-      return value === 'public' || value === 'members' || value === 'private' ? value : fallback;
+      return coreNormalizeProjectReadAccess(value, fallback);
     }
 
     function sharingModeLabel(mode) {
-      return normalizeSharingMode(mode, 'private') === 'shared' ? 'Visibilité collaborative' : 'Visibilité privée';
+      return coreSharingModeLabel(mode);
     }
 
     function sharingModeBadge(mode) {
@@ -11584,10 +10217,7 @@
     }
 
     function toYmd(date) {
-      const y = date.getFullYear();
-      const m = String(date.getMonth() + 1).padStart(2, '0');
-      const d = String(date.getDate()).padStart(2, '0');
-      return `${y}-${m}-${d}`;
+      return coreToYmd(date);
     }
 
     function taskDueDateKey(task) {
@@ -11601,20 +10231,11 @@
     }
 
     function formatFileSize(size) {
-      if (!size) return '0 o';
-      if (size < 1024) return `${size} o`;
-      if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} Ko`;
-      return `${(size / (1024 * 1024)).toFixed(1)} Mo`;
+      return coreFormatFileSize(size);
     }
 
     function paginateItems(items, page, pageSize) {
-      const totalItems = items.length;
-      const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
-      const currentPage = Math.min(Math.max(1, page), totalPages);
-      const start = (currentPage - 1) * pageSize;
-      const end = Math.min(totalItems, start + pageSize);
-      const pageItems = items.slice(start, start + pageSize);
-      return { totalItems, totalPages, currentPage, start, end, pageItems };
+      return corePaginateItems(items, page, pageSize);
     }
 
     function renderPagination(containerId, pagination, setPageFunctionName, label) {
@@ -14314,30 +12935,7 @@ async function setProjectsPage(page) {
     }
 
     function renderGlobalNotesThemeTabs(notes = []) {
-      const host = document.getElementById('global-notes-theme-tabs');
-      if (!host) return;
-      const total = Array.isArray(notes) ? notes.length : 0;
-      const buckets = new Map();
-      (Array.isArray(notes) ? notes : []).forEach((note) => {
-        const label = String(note?.theme || '').trim() || 'Sans thematique';
-        const key = normalizeCatalogKey(label);
-        if (!key) return;
-        const prev = buckets.get(key);
-        if (prev) {
-          prev.count += 1;
-        } else {
-          buckets.set(key, { key, label, count: 1 });
-        }
-      });
-      const sorted = Array.from(buckets.values()).sort((a, b) => a.label.localeCompare(b.label, 'fr'));
-      const html = [
-        `<button type="button" class="project-notes-theme-tab ${globalNotesThemeFilter === 'all' ? 'is-active' : ''}" data-global-note-theme-tab="all">Toutes <span>${total}</span></button>`,
-        ...sorted.map((item) =>
-          `<button type="button" class="project-notes-theme-tab ${globalNotesThemeFilter === item.key ? 'is-active' : ''}" data-global-note-theme-tab="${escapeHtml(item.key)}">${escapeHtml(item.label)} <span>${item.count}</span></button>`
-        )
-      ].join('');
-      host.innerHTML = html;
-      updateGlobalNotesThemesToggleMeta(sorted);
+      globalNotesFiltersUiRuntime?.renderGlobalNotesThemeTabs?.(notes);
     }
 
     function updateProjectNotesThemesToggleMeta(catalog = []) {
@@ -14347,23 +12945,6 @@ async function setProjectsPage(page) {
       const activeCount = projectNotesThemeFilter === 'all'
         ? normalizedCatalog.length
         : (normalizedCatalog.some((item) => item?.key === projectNotesThemeFilter) ? 1 : 0);
-      let badge = toggle.querySelector('.notes-themes-toggle-count');
-      if (!badge) {
-        badge = document.createElement('span');
-        badge.className = 'notes-themes-toggle-count';
-        toggle.appendChild(badge);
-      }
-      badge.textContent = String(activeCount);
-      badge.title = activeCount > 1 ? `${activeCount} thématiques actives` : `${activeCount} thématique active`;
-    }
-
-    function updateGlobalNotesThemesToggleMeta(catalog = []) {
-      const toggle = document.getElementById('global-notes-themes-toggle');
-      if (!toggle) return;
-      const normalizedCatalog = Array.isArray(catalog) ? catalog : [];
-      const activeCount = globalNotesThemeFilter === 'all'
-        ? normalizedCatalog.length
-        : (normalizedCatalog.some((item) => item?.key === globalNotesThemeFilter) ? 1 : 0);
       let badge = toggle.querySelector('.notes-themes-toggle-count');
       if (!badge) {
         badge = document.createElement('span');
@@ -17410,6 +15991,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     async function openGlobalFeedPostReadModal(postId = '') {
       const pid = String(postId || '').trim();
       if (!pid) return;
+      const notesShared = window.TaskMDANotesShared;
       const post = await getDecrypted('globalPosts', pid, 'postId');
       if (!post || post.deletedAt) {
         showToast('Post introuvable');
@@ -17457,7 +16039,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       }).join('');
       linksEl.innerHTML = `${refsHtml}${docsHtml}`;
 
-      notesShared?.openModal?.('modal-project-note-read');
+      notesShared?.openModal?.('modal-global-read');
       if (!notesShared) {
         modal.classList.remove('hidden');
         document.body.classList.add('overflow-hidden');
@@ -19962,62 +18544,17 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     }
 
     function closeTaskConvertModal() {
-      const modal = document.getElementById('modal-task-convert');
-      if (!modal) return;
-      modal.classList.add('hidden');
-      pendingTaskConvertRef = null;
-      const errorEl = document.getElementById('task-convert-error');
-      if (errorEl) errorEl.classList.add('hidden');
+      if (taskLifecycleDomainRuntime?.closeTaskConvertModal) {
+        taskLifecycleDomainRuntime.closeTaskConvertModal();
+        return;
+      }
     }
 
     async function openTaskConvertModal(taskRef, prefill = {}) {
-      const modal = document.getElementById('modal-task-convert');
-      if (!modal) {
-        await convertTaskToProject(taskRef, { ...prefill, __fromModal: true });
+      if (taskLifecycleDomainRuntime?.openTaskConvertModal) {
+        await taskLifecycleDomainRuntime.openTaskConvertModal(taskRef, prefill);
         return;
       }
-      const resolved = await resolveGlobalTaskFromRef(taskRef);
-      if (!resolved?.task) {
-        showToast('Tache introuvable');
-        return;
-      }
-      const task = resolved.task;
-      const sourceType = resolved.sourceType;
-      const sourceState = sourceType === 'project' ? resolved.state : null;
-      if (sourceType === 'project' && !canEditTaskInProject(task, sourceState)) {
-        showToast('Action non autorisee');
-        return;
-      }
-
-      const suggestedName = String(task.title || '').trim() || 'Nouveau projet';
-      const sharingMode = normalizeSharingMode(
-        prefill?.sharingMode || task.sharingMode || sourceState?.project?.sharingMode || 'private',
-        'private'
-      );
-      const sourceProjectName = sourceType === 'project'
-        ? String(sourceState?.project?.name || '').trim()
-        : 'Hors projet';
-
-      const sourceLabelEl = document.getElementById('task-convert-source-label');
-      const projectNameInput = document.getElementById('task-convert-project-name');
-      const modeSelect = document.getElementById('task-convert-mode');
-      const archiveCheckbox = document.getElementById('task-convert-archive-source');
-      const openCheckbox = document.getElementById('task-convert-open-project');
-      const errorEl = document.getElementById('task-convert-error');
-
-      if (sourceLabelEl) sourceLabelEl.textContent = `${String(task.title || 'Tâche').trim()} • ${sourceProjectName}`;
-      if (projectNameInput) projectNameInput.value = String(prefill?.projectName || suggestedName);
-      if (modeSelect) modeSelect.value = sharingMode;
-      if (archiveCheckbox) archiveCheckbox.checked = prefill?.archiveSource !== false;
-      if (openCheckbox) openCheckbox.checked = prefill?.openProjectAfterConvert !== false;
-      if (errorEl) errorEl.classList.add('hidden');
-
-      pendingTaskConvertRef = taskRef;
-      modal.classList.remove('hidden');
-      requestAnimationFrame(() => {
-        projectNameInput?.focus();
-        projectNameInput?.select();
-      });
     }
 
     async function convertTaskToProject(taskRef, options = {}) {
@@ -20629,153 +19166,24 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     }
 
     async function sendInvitationEmail(inviteId) {
-      if (!currentProjectId) return;
-      if (!canManageProjectCollaboration(currentProjectState)) {
-        showToast('Seuls Propriétaire/Manager peuvent envoyer des invitations');
+      if (projectMembersDomainRuntime?.sendInvitationEmail) {
+        await projectMembersDomainRuntime.sendInvitationEmail(inviteId);
         return;
       }
-      const state = await getProjectState(currentProjectId);
-      const invite = (state?.invites || []).find(i => i.inviteId === inviteId);
-      if (!invite) return;
-
-      const projectName = state?.project?.name || 'Projet';
-      const roleLabel = getProjectRoleLabel(invite.role);
-      const typeLabel = invite.inviteType === 'agent' ? 'agent' : 'utilisateur';
-      const subject = `[NEXUS MDA] Invitation projet: ${projectName}`;
-      const body = [
-        `Bonjour ${invite.displayName || ''},`,
-        '',
-        `Vous êtes invité(e) en tant que ${typeLabel} (${roleLabel}) sur le projet "${projectName}".`,
-        '',
-        'Merci de confirmer votre disponibilité et votre prise en charge.',
-        '',
-        `Envoyé par: ${currentUser?.name || 'Equipe projet'}`,
-        `Date: ${new Date().toLocaleDateString('fr-FR')}`
-      ].join('\n');
-
-      openMailto({ to: [invite.email], subject, body });
-
-      const event = createEvent(
-        EventTypes.UPDATE_INVITE,
-        currentProjectId,
-        currentUser.userId,
-        { inviteId, changes: { status: 'sent', lastSentAt: Date.now() } }
-      );
-      await publishEvent(event);
-      if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [event]);
-      await showProjectDetail(currentProjectId);
     }
 
     async function updateInviteStatus(inviteId, status) {
-      if (!currentProjectId || !inviteId) return;
-      if (!canManageProjectCollaboration(currentProjectState)) {
-        showToast('Seuls Propriétaire/Manager peuvent mettre à jour les invitations');
+      if (projectMembersDomainRuntime?.updateInviteStatus) {
+        await projectMembersDomainRuntime.updateInviteStatus(inviteId, status);
         return;
       }
-      const normalized = ['pending', 'sent', 'accepted', 'declined'].includes(status) ? status : 'pending';
-      const invite = (currentProjectState?.invites || []).find(i => i.inviteId === inviteId);
-      const myRole = normalizeProjectRole(getMyProjectRole(currentProjectState));
-      if (normalized === 'accepted' && myRole === 'manager' && normalizeProjectRole(invite?.role) !== 'member') {
-        showToast('Action non autorisee');
-        return;
-      }
-      const event = createEvent(
-        EventTypes.UPDATE_INVITE,
-        currentProjectId,
-        currentUser.userId,
-        { inviteId, changes: { status: normalized } }
-      );
-      await publishEvent(event);
-      if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [event]);
-      if (normalized === 'accepted' && invite) {
-        const users = await getAllDecrypted('users', 'userId');
-        let user = users.find(u => normalizeSearch(u.name) === normalizeSearch(invite.displayName));
-        if (!user) {
-          user = { userId: uuidv4(), name: invite.displayName, email: invite.email, createdAt: Date.now() };
-          await putEncrypted('users', user, 'userId');
-        }
-        await upsertDirectoryUser({
-          userId: user.userId,
-          name: user.name,
-          email: user.email || '',
-          source: 'invite_accept',
-          lastSeenAt: Date.now()
-        });
-        const memberExists = (currentProjectState?.members || []).some(m => m.userId === user.userId);
-        if (!memberExists) {
-          const memberEvent = createEvent(
-            EventTypes.ADD_MEMBER,
-            currentProjectId,
-            currentUser.userId,
-            { userId: user.userId, role: invite.role || 'member', displayName: user.name }
-          );
-          await publishEvent(memberEvent);
-          if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [memberEvent]);
-        }
-      }
-      showToast(`Invitation marquée: ${normalized}`);
-      await showProjectDetail(currentProjectId);
     }
 
     async function addProjectInvite() {
-      if (!currentProjectId || !currentProjectState) return;
-      if (!canManageProjectCollaboration(currentProjectState)) {
-        showToast('Seuls Propriétaire/Manager peuvent inviter');
+      if (projectMembersDomainRuntime?.addProjectInvite) {
+        await projectMembersDomainRuntime.addProjectInvite();
         return;
       }
-
-      const nameInput = document.getElementById('invite-name-input');
-      const emailInput = document.getElementById('invite-email-input');
-      const typeInput = document.getElementById('invite-type-input');
-      const roleInput = document.getElementById('invite-role-input');
-      const displayName = (nameInput?.value || '').trim();
-      const email = (emailInput?.value || '').trim().toLowerCase();
-      const inviteType = (typeInput?.value || 'user').trim();
-      const selectedRoleKey = String(roleInput?.value || 'member').trim() || 'member';
-      const role = getProjectRoleMeta(selectedRoleKey).roleKey;
-      const targetRoleBase = normalizeProjectRole(selectedRoleKey);
-      const myRole = normalizeProjectRole(getMyProjectRole(currentProjectState));
-      if (myRole === 'manager' && targetRoleBase !== 'member') {
-        showToast('Action non autorisee');
-        return;
-      }
-
-      if (!displayName) {
-        showToast('Nom invité requis');
-        return;
-      }
-      const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-      if (!emailOk) {
-        showToast('Email professionnel invalide');
-        return;
-      }
-      const exists = (currentProjectState.invites || []).some(inv => normalizeSearch(inv.email) === normalizeSearch(email));
-      if (exists) {
-        showToast('Cette adresse est déjà invitée');
-        return;
-      }
-
-      const event = createEvent(
-        EventTypes.CREATE_INVITE,
-        currentProjectId,
-        currentUser.userId,
-        {
-          inviteId: uuidv4(),
-          displayName,
-          email,
-          inviteType: inviteType === 'agent' ? 'agent' : 'user',
-          role,
-          status: 'pending'
-        }
-      );
-      await publishEvent(event);
-      if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [event]);
-
-      if (nameInput) nameInput.value = '';
-      if (emailInput) emailInput.value = '';
-      showToast('Invitation créée');
-      addNotification('Invitation', `${displayName} invité(e)`, currentProjectId);
-      await showProjectDetail(currentProjectId);
     }
 
     function renderProjectInvitations(state) {
@@ -20828,134 +19236,17 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     }
 
     async function createProjectGroup() {
-      if (!currentProjectId || !currentProjectState) return;
-      if (!canManageProjectCollaboration(currentProjectState)) {
-        showToast('Seuls Propriétaire/Manager peuvent créer des groupes');
+      if (projectMembersDomainRuntime?.createProjectGroup) {
+        await projectMembersDomainRuntime.createProjectGroup();
         return;
       }
-      const nameInput = document.getElementById('group-name-input');
-      const descInput = document.getElementById('group-description-input');
-      const membersSelect = document.getElementById('group-members-input');
-      const name = (nameInput?.value || '').trim();
-      const description = (descInput?.value || '').trim();
-      const selectedIds = Array.from(membersSelect?.selectedOptions || []).map(o => o.value).filter(Boolean);
-      if (!name) {
-        showToast('Nom de groupe requis');
-        return;
-      }
-      const editGroup = selectedProjectGroupId
-        ? (currentProjectState.groups || []).find(g => g.groupId === selectedProjectGroupId)
-        : null;
-      const exists = (currentProjectState.groups || []).some(g =>
-        normalizeSearch(g.name) === normalizeSearch(name)
-        && (!editGroup || g.groupId !== editGroup.groupId)
-      );
-      if (exists) {
-        showToast('Ce groupe existe déjà');
-        return;
-      }
-
-      const groupId = editGroup?.groupId || uuidv4();
-      if (editGroup) {
-        const event = createEvent(
-          EventTypes.UPDATE_GROUP,
-          currentProjectId,
-          currentUser.userId,
-          { groupId, changes: { name, description } }
-        );
-        await publishEvent(event);
-        if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [event]);
-      } else {
-        const event = createEvent(
-          EventTypes.CREATE_GROUP,
-          currentProjectId,
-          currentUser.userId,
-          { groupId, name, description }
-        );
-        await publishEvent(event);
-        if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [event]);
-      }
-      const existingUserGroup = (currentProjectState.userGroups || []).find(g =>
-        g.groupId === groupId || normalizeSearch(g.name) === normalizeSearch(editGroup?.name || name)
-      );
-      if (existingUserGroup) {
-        const eventUserGroupUpdate = createEvent(
-          EventTypes.UPDATE_USER_GROUP,
-          currentProjectId,
-          currentUser.userId,
-          { groupId: existingUserGroup.groupId, changes: { memberUserIds: [...new Set(selectedIds)], name, description } }
-        );
-        await publishEvent(eventUserGroupUpdate);
-        if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [eventUserGroupUpdate]);
-      } else {
-        const eventUserGroupCreate = createEvent(
-          EventTypes.CREATE_USER_GROUP,
-          currentProjectId,
-          currentUser.userId,
-          { groupId, name, memberUserIds: [...new Set(selectedIds)] }
-        );
-        await publishEvent(eventUserGroupCreate);
-        if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [eventUserGroupCreate]);
-      }
-      const refreshedAfterGroupSave = await getProjectState(currentProjectId, { ignoreAccessCheck: true });
-      const savedGroup = (refreshedAfterGroupSave?.groups || []).find(g => g.groupId === groupId)
-        || { name, description };
-      const savedLinkedUserGroup = (refreshedAfterGroupSave?.userGroups || []).find(ug =>
-        ug.groupId === groupId || normalizeSearch(ug.name) === normalizeSearch(savedGroup.name || name)
-      );
-      const savedMemberUserIds = Array.from(new Set(
-        (savedLinkedUserGroup?.memberUserIds || selectedIds).map(id => String(id || '').trim()).filter(Boolean)
-      ));
-      await upsertGlobalGroup({
-        name: savedGroup.name || name,
-        description: savedGroup.description || description,
-        memberUserIds: savedMemberUserIds,
-        projectId: currentProjectId  // Tracker l'origine du groupe
-      });
-      await refreshGlobalTaxonomyCache();
-      if (nameInput) nameInput.value = '';
-      if (descInput) descInput.value = '';
-      if (membersSelect) {
-        Array.from(membersSelect.options || []).forEach(opt => { opt.selected = false; });
-      }
-      selectedProjectGroupId = null;
-      showToast(editGroup ? 'Groupe modifié' : 'Groupe créé');
-      addNotification('Groupe', editGroup ? `Groupe ${name} modifié` : `Groupe ${name} créé`, currentProjectId);
-      await showProjectDetail(currentProjectId);
     }
 
     async function deleteProjectGroup(groupId) {
-      if (!currentProjectId || !currentProjectState || !groupId) return;
-      if (!canManageProjectCollaboration(currentProjectState)) {
-        showToast('Seuls Propriétaire/Manager peuvent supprimer des groupes');
+      if (projectMembersDomainRuntime?.deleteProjectGroup) {
+        await projectMembersDomainRuntime.deleteProjectGroup(groupId);
         return;
       }
-      const groupName = getGroupNameById(currentProjectState, groupId) || 'ce groupe';
-      if (!confirm(`Supprimer le groupe "${groupName}" ?`)) return;
-
-      const event = createEvent(
-        EventTypes.DELETE_GROUP,
-        currentProjectId,
-        currentUser.userId,
-        { groupId }
-      );
-      await publishEvent(event);
-      if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [event]);
-      const linkedUserGroups = (currentProjectState.userGroups || []).filter(g =>
-        g.groupId === groupId || normalizeSearch(g.name) === normalizeSearch(groupName)
-      );
-      for (const userGroup of linkedUserGroups) {
-        const userGroupDeleteEvent = createEvent(
-          EventTypes.DELETE_USER_GROUP,
-          currentProjectId,
-          currentUser.userId,
-          { groupId: userGroup.groupId }
-        );
-        await publishEvent(userGroupDeleteEvent);
-        if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [userGroupDeleteEvent]);
-      }
-      showToast('Groupe supprimé');
-      await showProjectDetail(currentProjectId);
     }
 
     function renderProjectGroups(state) {
@@ -21077,98 +19368,33 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     }
 
     function selectProjectGroup(groupId) {
-      selectedProjectGroupId = groupId || null;
-      renderProjectGroups(currentProjectState);
-      const membersSelect = document.getElementById('group-members-input');
-      if (membersSelect) membersSelect.focus();
+      if (projectMembersDomainRuntime?.selectProjectGroup) {
+        projectMembersDomainRuntime.selectProjectGroup(groupId);
+        return;
+      }
     }
 
     async function updateProjectGroupMembers() {
-      if (!currentProjectId || !currentProjectState || !selectedProjectGroupId) return;
-      if (!canManageProjectCollaboration(currentProjectState)) {
-        showToast('Action non autorisee');
+      if (projectMembersDomainRuntime?.updateProjectGroupMembers) {
+        await projectMembersDomainRuntime.updateProjectGroupMembers();
         return;
       }
-      const group = (currentProjectState.groups || []).find(g => g.groupId === selectedProjectGroupId);
-      if (!group) {
-        showToast('Sélectionnez un groupe');
-        return;
-      }
-      const membersSelect = document.getElementById('group-members-input');
-      const selectedIds = Array.from(membersSelect?.selectedOptions || []).map(o => o.value).filter(Boolean);
-      const linked = (currentProjectState.userGroups || []).find(ug =>
-        ug.groupId === group.groupId || normalizeSearch(ug.name) === normalizeSearch(group.name)
-      );
-      const event = linked
-        ? createEvent(
-            EventTypes.UPDATE_USER_GROUP,
-            currentProjectId,
-            currentUser.userId,
-            { groupId: linked.groupId, changes: { memberUserIds: [...new Set(selectedIds)], name: group.name } }
-          )
-        : createEvent(
-            EventTypes.CREATE_USER_GROUP,
-            currentProjectId,
-            currentUser.userId,
-            { groupId: group.groupId, name: group.name, memberUserIds: [...new Set(selectedIds)] }
-          );
-      await publishEvent(event);
-      if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [event]);
-      showToast('Membres du groupe mis à jour');
-      await showProjectDetail(currentProjectId);
     }
 
     window.selectProjectGroup = selectProjectGroup;
 
     async function addProjectTheme() {
-      if (!currentProjectId || !currentProjectState) return;
-      if (!canManageProjectCollaboration(currentProjectState)) {
-        showToast('Seuls Propriétaire/Manager peuvent gérer les thèmes');
+      if (projectMembersDomainRuntime?.addProjectTheme) {
+        await projectMembersDomainRuntime.addProjectTheme();
         return;
       }
-      const input = document.getElementById('theme-name-input');
-      const theme = (input?.value || '').trim();
-      if (!theme) {
-        showToast('Thématique requise');
-        return;
-      }
-      const exists = (currentProjectState.themes || []).some(t => normalizeSearch(t) === normalizeSearch(theme));
-      if (exists) {
-        showToast('Thématique déjà présente');
-        return;
-      }
-
-      const event = createEvent(
-        EventTypes.ADD_THEME,
-        currentProjectId,
-        currentUser.userId,
-        { theme }
-      );
-      await publishEvent(event);
-      if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [event]);
-      await upsertGlobalTheme(theme);
-      await refreshGlobalTaxonomyCache();
-      if (input) input.value = '';
-      showToast('Thématique ajoutée');
-      await showProjectDetail(currentProjectId);
     }
 
     async function removeProjectTheme(theme) {
-      if (!currentProjectId || !currentProjectState || !theme) return;
-      if (!canManageProjectCollaboration(currentProjectState)) {
-        showToast('Seuls Propriétaire/Manager peuvent gérer les thèmes');
+      if (projectMembersDomainRuntime?.removeProjectTheme) {
+        await projectMembersDomainRuntime.removeProjectTheme(theme);
         return;
       }
-      const event = createEvent(
-        EventTypes.REMOVE_THEME,
-        currentProjectId,
-        currentUser.userId,
-        { theme }
-      );
-      await publishEvent(event);
-      if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [event]);
-      showToast('Thématique retirée');
-      await showProjectDetail(currentProjectId);
     }
 
     function renderProjectThemes(state) {
@@ -22034,110 +20260,17 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     };
 
     async function addProjectMember() {
-      if (!currentProjectId || !currentProjectState) return;
-
-      if (!canManageProjectCollaboration(currentProjectState)) {
-        showToast('Action non autorisee');
+      if (projectMembersDomainRuntime?.addProjectMember) {
+        await projectMembersDomainRuntime.addProjectMember();
         return;
       }
-
-      const input = document.getElementById('member-name-input');
-      const roleInput = document.getElementById('member-role-input');
-      const name = (input?.value || '').trim();
-      const selectedRoleKey = String(roleInput?.value || 'member').trim() || 'member';
-      const role = getProjectRoleMeta(selectedRoleKey).roleKey;
-      const targetRoleBase = normalizeProjectRole(selectedRoleKey);
-      const myRole = normalizeProjectRole(getMyProjectRole(currentProjectState));
-      if (myRole === 'manager' && targetRoleBase !== 'member') {
-        showToast('Action non autorisee');
-        return;
-      }
-      if (!name) {
-        showToast('Saisissez le nom du membre');
-        input?.focus();
-        return;
-      }
-
-      const users = await getAllDecrypted('users', 'userId');
-      const directoryUsers = await getAllDecrypted('directoryUsers', 'userId');
-      const byName = (entry) => normalizeSearch(entry?.name || '') === normalizeSearch(name);
-      let user = users.find(byName);
-      const directoryUser = directoryUsers.find(byName);
-      if (!user && directoryUser) {
-        user = {
-          userId: directoryUser.userId,
-          name: directoryUser.name,
-          email: directoryUser.email || '',
-          createdAt: Date.now()
-        };
-        await putEncrypted('users', user, 'userId');
-      }
-      if (!user) {
-        user = { userId: uuidv4(), name, createdAt: Date.now() };
-        await putEncrypted('users', user, 'userId');
-      }
-      await upsertDirectoryUser({
-        userId: user.userId,
-        name: user.name,
-        email: user.email || '',
-        source: 'member_add',
-        lastSeenAt: Date.now()
-      });
-
-      const exists = (currentProjectState.members || []).some(m => m.userId === user.userId);
-      if (exists) {
-        showToast('Ce membre est déjà dans le projet');
-        return;
-      }
-
-      const event = createEvent(
-        EventTypes.ADD_MEMBER,
-        currentProjectId,
-        currentUser.userId,
-        { userId: user.userId, role, displayName: user.name }
-      );
-      await publishEvent(event);
-      if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(currentProjectId, [event]); }
-
-      input.value = '';
-      showToast('Membre ajouté');
-      addNotification('Membre', `${user.name} a ete ajoute au projet`, currentProjectId);
-      await showProjectDetail(currentProjectId);
     }
 
     async function removeProjectMember(userId) {
-      if (!currentProjectId || !currentProjectState || !userId) return;
-      if (userId === currentUser.userId) {
-        showToast('Vous ne pouvez pas vous retirer vous-même');
+      if (projectMembersDomainRuntime?.removeProjectMember) {
+        await projectMembersDomainRuntime.removeProjectMember(userId);
         return;
       }
-
-      if (!canManageProjectCollaboration(currentProjectState)) {
-        showToast('Action non autorisee');
-        return;
-      }
-
-      const target = (currentProjectState.members || []).find(m => m.userId === userId);
-      if (!target) return;
-      const myRole = normalizeProjectRole(getMyProjectRole(currentProjectState));
-      const targetRole = normalizeProjectRole(target.role);
-      if (myRole === 'manager' && targetRole !== 'member') {
-        showToast('Action non autorisee');
-        return;
-      }
-      if (!confirm(`Retirer ${target.displayName || userId} du projet ?`)) return;
-
-      const event = createEvent(
-        EventTypes.REMOVE_MEMBER,
-        currentProjectId,
-        currentUser.userId,
-        { userId }
-      );
-      await publishEvent(event);
-      if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [event], { ensureRegistered: true });
-      showToast('Membre retiré');
-      addNotification('Membre', 'Un membre a ete retire du projet', currentProjectId);
-      await showProjectDetail(currentProjectId);
     }
 
     window.removeProjectMember = removeProjectMember;
@@ -22170,87 +20303,31 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     window.toggleProjectBulkSelection = toggleProjectBulkSelection;
 
     async function createUserGroup() {
-      if (!currentProjectId || !currentProjectState) return;
-      if (!canManageProjectCollaboration(currentProjectState)) {
-        showToast('Action non autorisee');
+      if (projectMembersDomainRuntime?.createUserGroup) {
+        await projectMembersDomainRuntime.createUserGroup();
         return;
       }
-      const nameInput = document.getElementById('user-group-name-input');
-      const membersSelect = document.getElementById('user-group-members-input');
-      const name = (nameInput?.value || '').trim();
-      if (!name) {
-        showToast('Nom de groupe utilisateurs requis');
-        return;
-      }
-      const exists = (currentProjectState.userGroups || []).some(g => normalizeSearch(g.name) === normalizeSearch(name));
-      if (exists) {
-        showToast('Ce groupe utilisateurs existe deja');
-        return;
-      }
-      const selectedIds = Array.from(membersSelect?.selectedOptions || []).map(o => o.value).filter(Boolean);
-      const event = createEvent(
-        EventTypes.CREATE_USER_GROUP,
-        currentProjectId,
-        currentUser.userId,
-        { groupId: uuidv4(), name, memberUserIds: selectedIds }
-      );
-      await publishEvent(event);
-      if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [event]);
-      if (nameInput) nameInput.value = '';
-      showToast('Groupe utilisateurs cree');
-      await showProjectDetail(currentProjectId);
     }
 
     async function updateUserGroupSelection() {
-      if (!currentProjectId || !currentProjectState || !selectedUserGroupId) return;
-      if (!canManageProjectCollaboration(currentProjectState)) {
-        showToast('Action non autorisee');
+      if (projectMembersDomainRuntime?.updateUserGroupSelection) {
+        await projectMembersDomainRuntime.updateUserGroupSelection();
         return;
       }
-      const exists = (currentProjectState.userGroups || []).some(g => g.groupId === selectedUserGroupId);
-      if (!exists) {
-        showToast('Selectionnez un groupe utilisateurs');
-        return;
-      }
-      const membersSelect = document.getElementById('user-group-members-input');
-      const selectedIds = Array.from(membersSelect?.selectedOptions || []).map(o => o.value).filter(Boolean);
-      const event = createEvent(
-        EventTypes.UPDATE_USER_GROUP,
-        currentProjectId,
-        currentUser.userId,
-        { groupId: selectedUserGroupId, changes: { memberUserIds: [...new Set(selectedIds)] } }
-      );
-      await publishEvent(event);
-      if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [event]);
-      showToast('Groupe utilisateurs mis a jour');
-      await showProjectDetail(currentProjectId);
     }
 
     async function deleteUserGroup(groupId) {
-      if (!currentProjectId || !currentProjectState || !groupId) return;
-      if (!canManageProjectCollaboration(currentProjectState)) {
-        showToast('Action non autorisee');
+      if (projectMembersDomainRuntime?.deleteUserGroup) {
+        await projectMembersDomainRuntime.deleteUserGroup(groupId);
         return;
       }
-      const group = (currentProjectState.userGroups || []).find(g => g.groupId === groupId);
-      if (!group) return;
-      if (!confirm(`Supprimer le groupe utilisateurs "${group.name}" ?`)) return;
-      const event = createEvent(
-        EventTypes.DELETE_USER_GROUP,
-        currentProjectId,
-        currentUser.userId,
-        { groupId }
-      );
-      await publishEvent(event);
-      if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [event]);
-      if (selectedUserGroupId === groupId) selectedUserGroupId = null;
-      showToast('Groupe utilisateurs supprime');
-      await showProjectDetail(currentProjectId);
     }
 
     function selectUserGroup(groupId) {
-      selectedUserGroupId = groupId || null;
-      renderProjectUserGroups(currentProjectState);
+      if (projectMembersDomainRuntime?.selectUserGroup) {
+        projectMembersDomainRuntime.selectUserGroup(groupId);
+        return;
+      }
     }
 
     window.selectUserGroup = selectUserGroup;
@@ -22269,209 +20346,31 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     }
 
     function normalizeTaskStatusValue(rawStatus) {
-      const value = String(rawStatus || '').trim().toLowerCase();
-      if (!value) return 'todo';
-      const aliasMap = {
-        'todo': 'todo',
-        'a-faire': 'todo',
-        'à-faire': 'todo',
-        'afaire': 'todo',
-        'a faire': 'todo',
-        'à faire': 'todo',
-        'en-cours': 'en-cours',
-        'encours': 'en-cours',
-        'in-progress': 'en-cours',
-        'in progress': 'en-cours',
-        'en-attente': 'suspendu',
-        'en attente': 'suspendu',
-        'suspendu': 'suspendu',
-        'paused': 'suspendu',
-        'termine': 'termine',
-        'terminé': 'termine',
-        'done': 'termine',
-        'completed': 'termine',
-        'realise': 'termine',
-        'réalisé': 'termine'
-      };
-      return aliasMap[value] || 'todo';
+      return coreNormalizeTaskStatusValue(rawStatus);
     }
 
     function normalizeTaskStatusForCreate(rawStatus) {
-      return normalizeTaskStatusValue(rawStatus);
+      return coreNormalizeTaskStatusForCreate(rawStatus);
     }
 
     function openProjectTaskCreateModalWithStatus(status = 'todo') {
-      trackUxMetric('openNewTaskProject');
-      standaloneTaskMode = false;
-      pendingTaskStatusPrefill = normalizeTaskStatusForCreate(status);
-      openTaskModal();
+      if (taskLifecycleDomainRuntime?.openProjectTaskCreateModalWithStatus) {
+        void taskLifecycleDomainRuntime.openProjectTaskCreateModalWithStatus(status);
+        return;
+      }
     }
 
     function openGlobalTaskCreateModalWithStatus(status = 'todo') {
-      trackUxMetric('openNewTaskGlobal');
-      standaloneTaskMode = true;
-      pendingTaskStatusPrefill = normalizeTaskStatusForCreate(status);
-      openTaskModal();
+      if (taskLifecycleDomainRuntime?.openGlobalTaskCreateModalWithStatus) {
+        void taskLifecycleDomainRuntime.openGlobalTaskCreateModalWithStatus(status);
+        return;
+      }
     }
 
     function openTaskModal(task = null) {
-      const modal = document.getElementById('modal-new-task');
-      modal.classList.remove('hidden');
-      updateEditLockBadges();
-      const titleEl = modal.querySelector('h3');
-      const standaloneModeWrap = document.getElementById('task-standalone-mode-wrap');
-      const standaloneModeInput = document.getElementById('task-standalone-mode');
-      const metadataWrap = document.getElementById('task-project-metadata-wrap');
-      const groupAssignWrap = document.getElementById('task-group-assignment-wrap');
-      const featureAssignWrap = document.getElementById('task-feature-assignment-wrap');
-      const groupPendingBox = document.getElementById('task-group-pending-members');
-      const taskThemeInput = document.getElementById('task-theme');
-      const taskGroupInput = document.getElementById('task-group');
-      const taskFeatureInput = document.getElementById('task-feature');
-      if (standaloneModeWrap) {
-        standaloneModeWrap.classList.toggle('hidden', !standaloneTaskMode);
-      }
-      if (metadataWrap) {
-        metadataWrap.classList.remove('hidden');
-      }
-      if (groupAssignWrap) {
-        groupAssignWrap.classList.toggle('hidden', standaloneTaskMode);
-      }
-      if (featureAssignWrap) {
-        featureAssignWrap.classList.toggle('hidden', standaloneTaskMode);
-      }
-      if (groupPendingBox) {
-        groupPendingBox.classList.add('hidden');
-        groupPendingBox.innerHTML = '';
-      }
-      taskPendingGroupMemberUserIds = [];
-      refreshTaskMetadataOptions(
-        standaloneTaskMode ? null : currentProjectState,
-        { skipGroups: standaloneTaskMode }
-      );
-      const currentAssignees = getTaskAssigneeEntries(task, standaloneTaskMode ? null : currentProjectState);
-      const selectedAssigneeValues = currentAssignees
-        .map((entry) => buildTaskAssigneeSelectValue(entry))
-        .filter(Boolean);
-      const defaultCreatorAssigneeValue = !task ? String(currentUser?.userId || '').trim() : '';
-      const effectiveSelectedAssigneeValues = (!task && !selectedAssigneeValues.length && defaultCreatorAssigneeValue)
-        ? [defaultCreatorAssigneeValue]
-        : selectedAssigneeValues;
-      refreshTaskAssigneeOptionsMulti(
-        standaloneTaskMode ? null : currentProjectState,
-        effectiveSelectedAssigneeValues
-      );
-      refreshTaskQuickAssigneeSuggestions(standaloneTaskMode ? null : currentProjectState);
-      if (titleEl) {
-        titleEl.textContent = standaloneTaskMode ? 'Nouvelle tâche hors projet' : 'Nouvelle tâche';
-      }
-
-      if (task) {
-        pendingTaskStatusPrefill = null;
-        editingTaskId = task.taskId;
-        editingStandaloneTaskId = standaloneTaskMode ? (task.id || editingStandaloneTaskId || null) : null;
-        document.getElementById('task-title').value = task.title || '';
-        setProjectDescriptionEditorContent(
-          'task-description-editor',
-          'task-description',
-          task.descriptionHtml || task.description || ''
-        );
-        const manualAssignees = currentAssignees
-          .filter(a => !a.userId && !a.agentId && a.name)
-          .map(a => (a.email && normalizeSearch(a.email) !== normalizeSearch(a.name || '')) ? `${a.name} <${a.email}>` : a.name);
-        document.getElementById('task-assignee-manual').value = manualAssignees.join('\n');
-        document.getElementById('task-request-date').value = task.requestDate || (task.createdAt ? toYmd(new Date(task.createdAt)) : '');
-        populateTaskDeadlineForm(task);
-        document.getElementById('task-status').value = task.status || 'todo';
-        document.getElementById('task-urgency').value = task.urgency || 'medium';
-        document.getElementById('task-subtasks').value = (task.subtasks || []).map(st => st.label).join('\n');
-        document.getElementById('task-files').value = '';
-        const taskEditorImageInput = document.getElementById('task-description-image-input');
-        if (taskEditorImageInput) taskEditorImageInput.value = '';
-        document.getElementById('task-share-docs').checked = true;
-        const saveTaskBtn = document.getElementById('btn-save-task');
-        if (saveTaskBtn) {
-          saveTaskBtn.setAttribute('data-action-kind', 'save');
-          saveTaskBtn.setAttribute('data-action-label', 'Mettre à jour');
-          saveTaskBtn.setAttribute('aria-label', 'Mettre à jour');
-          saveTaskBtn.setAttribute('data-ui-tooltip', 'Mettre à jour');
-          const saveTaskIcon = saveTaskBtn.querySelector('.taskmda-action-icon, .material-symbols-outlined');
-          if (saveTaskIcon) saveTaskIcon.textContent = 'save';
-          const saveTaskLabel = saveTaskBtn.querySelector('.taskmda-action-label');
-          if (saveTaskLabel) saveTaskLabel.textContent = 'Mettre à jour';
-        }
-        if (standaloneModeInput) standaloneModeInput.value = normalizeSharingMode(task.sharingMode, 'private');
-        if (taskThemeInput) taskThemeInput.value = task.theme || '';
-        syncThemePickerSelectionFromInput('task-theme-known', 'task-theme');
-        if (taskGroupInput) {
-          if (task.groupId) {
-            taskGroupInput.value = task.groupId;
-          } else if (task.groupName) {
-            const wanted = normalizeCatalogKey(task.groupName);
-            const option = Array.from(taskGroupInput.options || [])
-              .find(opt => String(opt.value || '').startsWith('global:') && normalizeCatalogKey(opt.dataset.groupName || '') === wanted);
-            if (option) {
-              taskGroupInput.value = option.value;
-            } else {
-              taskGroupInput.value = '';
-            }
-          } else {
-            taskGroupInput.value = '';
-          }
-        }
-        if (taskFeatureInput) {
-          taskFeatureInput.value = String(task.featureId || '').trim();
-        }
-        // Charger la configuration de récurrence si elle existe
-        if (window.TaskMDARecurrenceUI?.populateRecurrenceForm) {
-          window.TaskMDARecurrenceUI.populateRecurrenceForm(task.recurring);
-        }
-        if (!standaloneTaskMode) {
-          refreshTaskGroupSelectionPreview(
-            currentProjectState,
-            effectiveSelectedAssigneeValues
-          );
-        }
-      } else {
-        editingTaskId = null;
-        editingStandaloneTaskId = null;
-        const defaultStatus = normalizeTaskStatusForCreate(pendingTaskStatusPrefill || 'todo');
-        pendingTaskStatusPrefill = null;
-        document.getElementById('task-title').value = '';
-        setProjectDescriptionEditorContent('task-description-editor', 'task-description', '');
-        document.getElementById('task-assignee-manual').value = '';
-        document.getElementById('task-request-date').value = toYmd(new Date());
-        populateTaskDeadlineForm(null);
-        document.getElementById('task-status').value = defaultStatus;
-        document.getElementById('task-urgency').value = 'medium';
-        document.getElementById('task-subtasks').value = '';
-        document.getElementById('task-files').value = '';
-        const taskEditorImageInput = document.getElementById('task-description-image-input');
-        if (taskEditorImageInput) taskEditorImageInput.value = '';
-        document.getElementById('task-share-docs').checked = true;
-        const saveTaskBtn = document.getElementById('btn-save-task');
-        if (saveTaskBtn) {
-          saveTaskBtn.setAttribute('data-action-kind', 'create');
-          saveTaskBtn.setAttribute('data-action-label', 'Créer');
-          saveTaskBtn.setAttribute('aria-label', 'Créer');
-          saveTaskBtn.setAttribute('data-ui-tooltip', 'Créer');
-          const saveTaskIcon = saveTaskBtn.querySelector('.taskmda-action-icon, .material-symbols-outlined');
-          if (saveTaskIcon) saveTaskIcon.textContent = 'add_circle';
-          const saveTaskLabel = saveTaskBtn.querySelector('.taskmda-action-label');
-          if (saveTaskLabel) saveTaskLabel.textContent = 'Créer';
-        }
-        if (standaloneModeInput) standaloneModeInput.value = 'private';
-        if (taskThemeInput) taskThemeInput.value = (currentProjectState?.themes || [])[0] || '';
-        syncThemePickerSelectionFromInput('task-theme-known', 'task-theme');
-        if (taskGroupInput) taskGroupInput.value = '';
-        if (taskFeatureInput) taskFeatureInput.value = '';
-        // Réinitialiser la configuration de récurrence
-        if (window.TaskMDARecurrenceUI?.resetRecurrenceForm) {
-          window.TaskMDARecurrenceUI.resetRecurrenceForm();
-        }
-        if (!standaloneTaskMode) {
-          refreshTaskGroupSelectionPreview(currentProjectState, effectiveSelectedAssigneeValues);
-        }
+      if (taskLifecycleDomainRuntime?.openTaskModal) {
+        taskLifecycleDomainRuntime.openTaskModal(task);
+        return;
       }
     }
 
@@ -22862,7 +20761,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       tasksPage = 1;
       archivedTasksPage = 1;
       const state = await getProjectState(projectId);
-      closeMobileSidebar();
+      shellUiRuntime?.closeMobileSidebar?.();
 
       if (!state || !state.project) {
         showToast('Acces refuse ou projet introuvable');
@@ -23878,7 +21777,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
 
     function showDashboard() {
       resetWorkspaceScrollTop();
-      closeMobileSidebar();
+      shellUiRuntime?.closeMobileSidebar?.();
       clearProjectWorkFocusState();
       resetProjectInlineEditingState();
       workspaceMode = 'dashboard';
@@ -23909,7 +21808,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
 
     async function showProjectsWorkspace() {
       resetWorkspaceScrollTop();
-      closeMobileSidebar();
+      shellUiRuntime?.closeMobileSidebar?.();
       clearProjectWorkFocusState();
       resetProjectInlineEditingState();
       workspaceMode = 'dashboard';
@@ -24734,8 +22633,8 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     };
 
     async function renderGlobalCalendar() {
-      initGlobalCalendarPinnedThemesState();
-      setGlobalCalendarControlsExpanded(globalCalendarControlsExpanded, { skipPersist: true });
+      globalCalendarRuntime?.initGlobalCalendarPinnedThemesState?.();
+      globalCalendarRuntime?.setGlobalCalendarControlsExpanded?.(globalCalendarControlsExpanded, { skipPersist: true });
       const container = document.getElementById('global-calendar-container');
       const monthInput = document.getElementById('global-calendar-month');
       const monthLabel = document.getElementById('global-calendar-month-label');
@@ -24824,7 +22723,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
 
       const allEntries = [...taskEntries, ...infoEntries].filter((entry) => !entry.archivedAt);
       const availableThemes = allEntries.map((entry) => normalizeCalendarThemeName(entry.theme));
-      renderGlobalCalendarThemePins(availableThemes);
+      globalCalendarRuntime?.renderGlobalCalendarThemePins?.(availableThemes);
       const checkedThemeKeys = new Set(globalCalendarPinnedThemeChecks.map(normalizeCalendarThemeKey));
 
       const mixed = allEntries
@@ -24991,7 +22890,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
             const dayKey = String(addButton.getAttribute('data-day') || '');
             if (!dayKey) return;
             globalCalendarSelectedDay = dayKey;
-            openGlobalCalendarItemModal(dayKey);
+            globalCalendarRuntime?.openGlobalCalendarItemModal?.(dayKey);
           });
         });
 
@@ -25151,22 +23050,6 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         </div>
       `).join('');
       return;
-    }
-
-    async function renderGlobalCalendarDelegated() {
-      if (globalCalendarRuntime?.renderGlobalCalendar) {
-        await globalCalendarRuntime.renderGlobalCalendar();
-        return;
-      }
-      await renderGlobalCalendar();
-    }
-
-    async function renderGlobalNotesDelegated() {
-      if (globalNotesRuntime?.renderGlobalNotes) {
-        await globalNotesRuntime.renderGlobalNotes();
-        return;
-      }
-      await renderGlobalNotes();
     }
 
     function ensureGlobalCalendarMonthOption(monthInput, year, monthIndex) {
@@ -25707,26 +23590,6 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       document.getElementById('modal-calendar-info-details')?.classList.add('hidden');
     }
 
-    function setGlobalCalendarItemFormEditing(isEditing) {
-      if (!globalCalendarRuntime?.setGlobalCalendarItemFormEditing) return;
-      globalCalendarRuntime.setGlobalCalendarItemFormEditing(isEditing);
-    }
-
-    function openGlobalCalendarItemModal(prefillDate = '') {
-      if (!globalCalendarRuntime?.openGlobalCalendarItemModal) return;
-      globalCalendarRuntime.openGlobalCalendarItemModal(prefillDate);
-    }
-
-    function closeGlobalCalendarItemModal() {
-      if (!globalCalendarRuntime?.closeGlobalCalendarItemModal) return;
-      globalCalendarRuntime.closeGlobalCalendarItemModal();
-    }
-
-    function resetStandaloneCalendarForm(options = {}) {
-      if (!globalCalendarRuntime?.resetStandaloneCalendarForm) return;
-      globalCalendarRuntime.resetStandaloneCalendarForm(options);
-    }
-
     async function editStandaloneCalendarItem(itemId) {
       const id = String(itemId || '').trim();
       if (!id) return;
@@ -25746,7 +23609,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         return;
       }
       activeCalendarEditLock = { itemId: id, lockId: lockResult.lockId || '' };
-      openGlobalCalendarItemModal(getCalendarItemStartDate(item) || '');
+      globalCalendarRuntime?.openGlobalCalendarItemModal?.(getCalendarItemStartDate(item) || '');
       document.getElementById('global-calendar-item-title').value = item.title || '';
       document.getElementById('global-calendar-item-date').value = getCalendarItemStartDate(item) || '';
       document.getElementById('global-calendar-item-end-date').value = getCalendarItemEndDate(item) || getCalendarItemStartDate(item) || '';
@@ -25758,7 +23621,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       editingGlobalCalendarItemId = id;
       const submitBtn = document.getElementById('btn-global-calendar-add');
       if (submitBtn) submitBtn.textContent = 'Enregistrer info';
-      setGlobalCalendarItemFormEditing(true);
+      globalCalendarRuntime?.setGlobalCalendarItemFormEditing?.(true);
       document.getElementById('global-calendar-item-title')?.focus();
     }
 
@@ -25774,8 +23637,8 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         updatedAt: Date.now()
       }, 'id');
       if (editingGlobalCalendarItemId === id) {
-        resetStandaloneCalendarForm();
-        closeGlobalCalendarItemModal();
+        globalCalendarRuntime?.resetStandaloneCalendarForm?.();
+        globalCalendarRuntime?.closeGlobalCalendarItemModal?.();
       }
       showToast('Information archivée');
       addNotification('Calendrier', 'Information hors projet archivée', null);
@@ -25790,8 +23653,8 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       const db = getDatabase();
       await deleteFromStore('globalCalendarItems', id);
       if (editingGlobalCalendarItemId === id) {
-        resetStandaloneCalendarForm();
-        closeGlobalCalendarItemModal();
+        globalCalendarRuntime?.resetStandaloneCalendarForm?.();
+        globalCalendarRuntime?.closeGlobalCalendarItemModal?.();
       }
       showToast('Information supprimee');
       addNotification('Calendrier', 'Information hors projet supprimee', null);
@@ -25842,8 +23705,8 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         archivedAt: null
       }, 'id');
 
-      resetStandaloneCalendarForm();
-      closeGlobalCalendarItemModal();
+      globalCalendarRuntime?.resetStandaloneCalendarForm?.();
+      globalCalendarRuntime?.closeGlobalCalendarItemModal?.();
       if (existing?.id) {
         await releaseCalendarItemLock(existing.id, activeCalendarEditLock?.lockId || '');
       }
@@ -25870,152 +23733,44 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     }
 
     function openGlobalDocUploadModal() {
-      const notesShared = window.TaskMDANotesShared;
-      const modal = document.getElementById('modal-global-doc-upload');
-      if (!modal) return;
-      notesShared?.openModal?.('modal-global-doc-upload');
-      if (!notesShared) {
-        modal.classList.remove('hidden');
-        document.body.classList.add('overflow-hidden');
-      }
+      if (!globalDocsRuntime?.openGlobalDocUploadModal) return;
+      globalDocsRuntime.openGlobalDocUploadModal();
     }
 
     function closeGlobalDocUploadModal() {
-      const modal = document.getElementById('modal-global-doc-upload');
-      if (!modal) return;
-      modal.classList.add('hidden');
-      document.body.classList.remove('overflow-hidden');
+      if (!globalDocsRuntime?.closeGlobalDocUploadModal) return;
+      globalDocsRuntime.closeGlobalDocUploadModal();
     }
 
     async function openDocumentPreviewByRef(refEncoded = '') {
-      const ref = parseDocumentPreviewRef(refEncoded);
-      if (!ref) {
-        showToast('Référence document invalide');
-        return;
-      }
-      await runWithLoading(async () => {
-        const resolved = await resolveDocumentPreviewContext(ref);
-        if (!resolved?.doc) {
-          showToast('Document introuvable');
-          return;
-        }
-        await openDocumentPreview(
-          encodeURIComponent(String(resolved.doc.data || '')),
-          encodeURIComponent(String(resolved.doc.name || 'document')),
-          encodeURIComponent(String(resolved.doc.type || '')),
-          refEncoded
-        );
-      });
+      if (!globalDocsRuntime?.openDocumentPreviewByRef) return;
+      await globalDocsRuntime.openDocumentPreviewByRef(refEncoded);
     }
 
     async function downloadDocumentByRef(refEncoded = '') {
-      const ref = parseDocumentPreviewRef(refEncoded);
-      if (!ref) {
-        showToast('Référence document invalide');
-        return;
-      }
-      await runWithLoading(async () => {
-        const resolved = await resolveDocumentPreviewContext(ref);
-        if (!resolved?.doc) {
-          showToast('Document introuvable');
-          return;
-        }
-        const safeHref = sanitizeDownloadHref(resolved.doc.data || '', String(resolved.doc.type || ''));
-        if (!safeHref) {
-          showToast('Téléchargement indisponible');
-          return;
-        }
-        const link = document.createElement('a');
-        link.href = safeHref;
-        link.download = String(resolved.doc.name || 'document');
-        link.rel = 'noopener';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      });
+      if (!globalDocsRuntime?.downloadDocumentByRef) return;
+      await globalDocsRuntime.downloadDocumentByRef(refEncoded);
     }
 
     async function renderGlobalDocs() {
-      const container = document.getElementById('global-docs-container');
-      if (!container) return;
-      const all = await getGlobalDocumentsList();
-      const states = await getAllProjectStates();
-      const stateByProjectId = new Map(states.map(s => [s?.project?.projectId, s]));
-      refreshGlobalDocumentThemePicker(all, states);
-
-      const q = `${globalSearchQuery} ${document.getElementById('global-doc-search')?.value || ''}`.trim();
-      const themeFilter = document.getElementById('global-doc-theme-filter')?.value || '';
-      const filtered = all.filter(doc => matchesQuery([doc.name, doc.sourceProjectName, doc.theme, doc.type, sharingModeLabel(doc.sharingMode)], q))
-        .filter(doc => !themeFilter.trim() || matchesQuery([doc.theme], themeFilter));
-
-      if (filtered.length === 0) {
-        container.classList.remove('has-results');
-        container.innerHTML = buildWorkspaceEmptyState({
-          icon: 'description',
-          title: 'Aucun document trouvé',
-          text: 'Importez un document transverse ou modifiez vos filtres.',
-          ctaLabel: 'Ajouter un document',
-          ctaOnclick: "(function(){document.getElementById('btn-open-global-doc-upload-modal')?.click();})()"
-        });
+      if (globalDocsRuntime?.renderGlobalDocs) {
+        if (delegatingRenderGlobalDocs) return;
+        delegatingRenderGlobalDocs = true;
+        try {
+          await globalDocsRuntime.renderGlobalDocs();
+        } finally {
+          delegatingRenderGlobalDocs = false;
+        }
         return;
       }
-
-      container.classList.add('has-results');
-
-      container.innerHTML = filtered.map(doc => `
-          <div class="doc-card workspace-card-shell bg-surface-container-low rounded-xl p-4">
-          <div class="flex items-center justify-between mb-2">
-            <span class="material-symbols-outlined text-primary">description</span>
-            <div class="flex items-center gap-1">
-              ${sharingModeBadge(doc.sharingMode)}
-              <span class="text-[10px] font-semibold uppercase px-2 py-1 rounded bg-white">${escapeHtml(getDocumentCategory(doc))}</span>
-            </div>
-          </div>
-          <h4 class="workspace-card-title font-semibold text-sm truncate">${escapeHtml(doc.name || 'document')}</h4>
-          <p class="workspace-card-subtitle text-xs mt-1">${escapeHtml(doc.sourceProjectName || 'Hors projet')} • ${escapeHtml(doc.theme || 'Général')}</p>
-          <div class="mt-3 flex items-center justify-between text-xs">
-            <span class="text-slate-500">${formatFileSize(doc.size || 0)}</span>
-            <div class="doc-hover-actions flex items-center gap-2 flex-wrap">
-              ${isDocumentPreviewable(doc) ? `<button onclick="openDocumentPreviewByRef('${encodeDocumentPreviewRef(doc)}')" class="workspace-action-inline" data-action-kind="preview" data-action-label="Aperçu">Aperçu</button>` : ''}
-              <button onclick="downloadDocumentByRef('${encodeDocumentPreviewRef(doc)}')" class="workspace-action-inline" data-action-kind="export" data-action-label="Télécharger">Télécharger</button>
-              ${(() => {
-                const canManageDocBinding = doc.sourceType === 'standalone'
-                  || (doc.sourceType === 'project-doc' && (() => {
-                    const state = stateByProjectId.get(doc.sourceProjectId);
-                    return !!(state && canEditProjectMeta(state));
-                  })());
-                if (doc.sourceType === 'standalone') {
-                  return `
-                    ${isDocumentEditable(doc) ? `<button onclick="openGlobalDocumentEditor('${escapeHtml(doc.id)}')" class="workspace-action-inline" data-action-kind="edit" data-action-label="Modifier">Modifier</button>` : ''}
-                    ${canManageDocBinding ? `<button onclick="openDocumentBindingModal('${escapeHtml(doc.id)}')" class="workspace-action-inline" data-action-kind="manage" data-action-label="Gérer">Gérer</button>` : ''}
-                    <button onclick="deleteGlobalDocument('${escapeHtml(doc.id)}')" class="workspace-action-inline" data-action-kind="danger" data-action-label="Supprimer">Supprimer</button>
-                  `;
-                }
-                if (doc.sourceType === 'project-doc') {
-                  const state = stateByProjectId.get(doc.sourceProjectId);
-                  if (state && canEditProjectMeta(state)) {
-                    return `
-                      ${isDocumentEditable(doc) ? `<button onclick="openGlobalDocumentEditor('${escapeHtml(doc.id)}')" class="workspace-action-inline" data-action-kind="edit" data-action-label="Modifier">Modifier</button>` : ''}
-                      ${canManageDocBinding ? `<button onclick="openDocumentBindingModal('${escapeHtml(doc.id)}')" class="workspace-action-inline" data-action-kind="manage" data-action-label="Gérer">Gérer</button>` : ''}
-                      <button onclick="deleteGlobalDocument('${escapeHtml(doc.id)}')" class="workspace-action-inline" data-action-kind="danger" data-action-label="Supprimer">Supprimer</button>
-                    `;
-                  }
-                  return '';
-                }
-                const state = stateByProjectId.get(doc.sourceProjectId);
-                const task = (state?.tasks || []).find(t => t.taskId === doc.taskId);
-                if (state && task && canEditTaskInProject(task, state)) {
-                  return `
-                    ${isDocumentEditable(doc) ? `<button onclick="openGlobalDocumentEditor('${escapeHtml(doc.id)}')" class="workspace-action-inline" data-action-kind="edit" data-action-label="Modifier">Modifier</button>` : ''}
-                    <button onclick="deleteGlobalDocument('${escapeHtml(doc.id)}')" class="workspace-action-inline" data-action-kind="danger" data-action-label="Supprimer">Supprimer</button>
-                  `;
-                }
-                return '';
-              })()}
-            </div>
-          </div>
-        </div>
-      `).join('');
+      const container = document.getElementById('global-docs-container');
+      if (!container) return;
+      container.classList.remove('has-results');
+      container.innerHTML = buildWorkspaceEmptyState({
+        icon: 'error',
+        title: 'Module Documents indisponible',
+        text: 'Le module global-docs n est pas charge.'
+      });
     }
 
     async function populateDocBindingTaskOptions(projectId, selectedTaskIds = []) {
@@ -26048,40 +23803,8 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     }
 
     async function resolveDocumentForBinding(docId) {
-      const id = String(docId || '').trim();
-      if (!id) return null;
-      const all = await getGlobalDocumentsList();
-      const fromGlobal = all.find(item => String(item.id || '') === id);
-      if (fromGlobal) return fromGlobal;
-
-      const marker = ':project-doc:';
-      const markerIndex = id.indexOf(marker);
-      if (markerIndex <= 0) return null;
-      const sourceProjectId = id.slice(0, markerIndex);
-      const sourceDocId = id.slice(markerIndex + marker.length);
-      if (!sourceProjectId || !sourceDocId) return null;
-
-      const sourceState = await getProjectState(sourceProjectId);
-      if (!sourceState?.project) return null;
-      const sourceDoc = (sourceState.documents || []).find(item => String(item.docId || '') === sourceDocId);
-      if (!sourceDoc) return null;
-
-      return {
-        id,
-        name: sourceDoc.name,
-        type: sourceDoc.type,
-        size: sourceDoc.size,
-        data: sourceDoc.data,
-        theme: sourceDoc.theme || sourceState.project.name || 'Projet',
-        sourceProjectName: sourceState.project.name,
-        sourceProjectId,
-        docId: sourceDoc.docId,
-        linkedTaskIds: Array.isArray(sourceDoc.linkedTaskIds) ? [...sourceDoc.linkedTaskIds] : [],
-        sourceType: 'project-doc',
-        sharingMode: normalizeSharingMode(sourceDoc.sharingMode, normalizeSharingMode(sourceState.project.sharingMode, 'shared')),
-        notes: sourceDoc.notes || '',
-        createdAt: sourceDoc.uploadedAt || sourceDoc.createdAt || sourceState.project.createdAt || 0
-      };
+      if (!globalDocsRuntime?.resolveDocumentForBinding) return null;
+      return globalDocsRuntime.resolveDocumentForBinding(docId);
     }
 
     function resetDocumentBindingInlineEditingState() {
@@ -26100,52 +23823,8 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     }
 
     function initDocumentBindingInlineEditing(canEdit = false) {
-      currentDocBindingCanEdit = !!canEdit;
-      setDocumentBindingReadModeAll(true);
-      const modal = document.getElementById('modal-doc-binding');
-      if (!modal || modal.dataset.inlineDocBindingBound === '1') return;
-      modal.dataset.inlineDocBindingBound = '1';
-      modal.addEventListener('click', (event) => {
-        const rawTarget = event.target;
-        const clickTarget = rawTarget instanceof Element ? rawTarget : null;
-        if (clickTarget?.closest('button, a[href]')) return;
-        const fieldWrap = clickTarget?.closest('[data-inline-doc-binding-field]');
-        if (!(fieldWrap instanceof HTMLElement)) return;
-        if (!currentDocBindingCanEdit) return;
-        const fieldKey = String(fieldWrap.getAttribute('data-inline-doc-binding-field') || '').trim();
-        if (!fieldKey) return;
-        setDocumentBindingFieldReadMode(fieldKey, false);
-        const selectId = fieldKey === 'mode'
-          ? 'doc-binding-mode'
-          : fieldKey === 'project'
-            ? 'doc-binding-project'
-            : 'doc-binding-task';
-        const select = document.getElementById(selectId);
-        if (select && !select.disabled) {
-          requestAnimationFrame(() => select.focus());
-        }
-      });
-      modal.addEventListener('keydown', (event) => {
-        const target = event.target instanceof Element ? event.target : null;
-        const fieldWrap = target?.closest('[data-inline-doc-binding-field]');
-        if (!(fieldWrap instanceof HTMLElement)) return;
-        if (!currentDocBindingCanEdit) return;
-        if (event.key !== 'Enter' && event.key !== ' ') return;
-        if (shouldIgnoreInlineActivationKeydown(target, fieldWrap)) return;
-        event.preventDefault();
-        const fieldKey = String(fieldWrap.getAttribute('data-inline-doc-binding-field') || '').trim();
-        if (!fieldKey) return;
-        setDocumentBindingFieldReadMode(fieldKey, false);
-        const selectId = fieldKey === 'mode'
-          ? 'doc-binding-mode'
-          : fieldKey === 'project'
-            ? 'doc-binding-project'
-            : 'doc-binding-task';
-        const select = document.getElementById(selectId);
-        if (select && !select.disabled) {
-          requestAnimationFrame(() => select.focus());
-        }
-      });
+      if (!globalDocsRuntime?.initDocumentBindingInlineEditing) return;
+      globalDocsRuntime.initDocumentBindingInlineEditing(canEdit);
     }
 
     async function openDocumentBindingModal(docId) {
@@ -26164,142 +23843,24 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     }
 
     async function copyDocumentBindingStoragePath() {
-      const input = document.getElementById('doc-binding-storage-path');
-      if (!input) return;
-      const value = String(input.value || '').trim();
-      if (!value || value === '-') {
-        showToast('Aucun chemin à copier');
-        return;
-      }
-      const copied = await copyTextToClipboard(value);
-      showToast(copied ? 'Chemin copié' : 'Copie impossible');
+      if (!globalDocsRuntime?.copyDocumentBindingStoragePath) return;
+      await globalDocsRuntime.copyDocumentBindingStoragePath();
     }
 
     async function deleteGlobalDocument(docId) {
-      const id = String(docId || '').trim();
-      if (!id) return;
-      const docs = await getGlobalDocumentsList();
-      const doc = docs.find(d => String(d.id || '') === id);
-      if (!doc) {
-        showToast('Document introuvable');
+      if (!globalDocsRuntime?.deleteGlobalDocument) {
+        showToast('Module documents indisponible');
         return;
       }
-
-      if (doc.sourceType === 'standalone') {
-        if (!confirm('Supprimer ce document hors projet ?')) return;
-        const db = getDatabase();
-        await deleteFromStore('globalDocs', doc.id);
-        showToast('Document supprimé');
-        addNotification('Documents', 'Document hors projet supprimé', null);
-        await renderGlobalDocs();
-        return;
-      }
-
-      if (doc.sourceType === 'project-doc') {
-        const state = await getProjectState(doc.sourceProjectId);
-        if (!state?.project) {
-          showToast('Projet source introuvable');
-          return;
-        }
-        if (!canEditProjectMeta(state)) {
-          showToast('Action non autorisee');
-          return;
-        }
-        if (!confirm('Supprimer ce document du projet ?')) return;
-        const event = createEvent(
-          EventTypes.DELETE_DOCUMENT,
-          doc.sourceProjectId,
-          currentUser.userId,
-          { docId: doc.docId }
-        );
-        await publishEvent(event);
-        if (sharedFolderHandle) void syncProjectEventsToSharedSpace(doc.sourceProjectId, [event]);
-        showToast('Document projet supprimé');
-        addNotification('Documents', 'Document de projet supprimé', doc.sourceProjectId);
-        await renderGlobalDocs();
-        return;
-      }
-
-      const state = await getProjectState(doc.sourceProjectId);
-      const task = (state?.tasks || []).find(t => t.taskId === doc.taskId);
-      if (!state || !task) {
-        showToast('Tâche source introuvable');
-        return;
-      }
-      if (!canChangeTaskStatus(task, state)) {
-        showToast('Action non autorisee');
-        return;
-      }
-      if (!confirm('Supprimer cette pièce jointe du projet ?')) return;
-
-      const attachments = (task.attachments || []).filter((_, idx) => idx !== Number(doc.attachmentIndex));
-      const event = createEvent(
-        EventTypes.UPDATE_TASK,
-        doc.sourceProjectId,
-        currentUser.userId,
-        { taskId: doc.taskId, changes: { attachments } }
-      );
-      await publishEvent(event);
-      if (sharedFolderHandle) void syncProjectEventsToSharedSpace(doc.sourceProjectId, [event]);
-      showToast('Pièce jointe supprimée');
-      addNotification('Documents', 'Pièce jointe de projet supprimée', doc.sourceProjectId);
-      await renderGlobalDocs();
+      await globalDocsRuntime.deleteGlobalDocument(docId);
     }
 
     async function addStandaloneDocuments() {
-      const filesInput = document.getElementById('global-doc-files');
-      const themeInput = document.getElementById('global-doc-upload-theme');
-      const modeInput = document.getElementById('global-doc-mode');
-      const files = Array.from(filesInput?.files || []);
-      const theme = themeInput?.value?.trim() || 'General';
-      const sharingMode = modeInput?.value || 'private';
-      if (files.length === 0) {
-        showToast('Sélectionnez au moins un document');
+      if (!globalDocsRuntime?.addStandaloneDocuments) {
+        showToast('Module documents indisponible');
         return;
       }
-
-      const maxFileSize = 8 * 1024 * 1024;
-      await runWithLoading(async () => {
-      for (const rawFile of files) {
-        if (rawFile.size > maxFileSize) {
-          showToast(`Le fichier ${rawFile.name} dépasse 8 Mo`);
-          return;
-        }
-      }
-
-      const docs = await readDocumentFilesFromInput('global-doc-files', {
-        projectId: 'global',
-        scope: 'global',
-        rubric: 'global-doc-upload',
-        theme
-      });
-      for (const file of docs) {
-        await putEncrypted('globalDocs', {
-          id: uuidv4(),
-          name: file.name,
-          type: file.type || 'application/octet-stream',
-          size: file.size,
-          data: file.data || '',
-          storageMode: file.storageMode || '',
-          storageProvider: file.storageProvider || '',
-          storagePath: file.storagePath || '',
-          storedAt: Number(file.storedAt || 0) || null,
-          theme,
-          sharingMode: normalizeSharingMode(sharingMode, 'private'),
-          createdAt: Date.now()
-        }, 'id');
-      }
-
-      if (filesInput) filesInput.value = '';
-      if (themeInput) themeInput.value = '';
-      if (modeInput) modeInput.value = 'private';
-      const label = document.getElementById('global-doc-files-label');
-      if (label) label.textContent = 'Aucun fichier choisi';
-      });
-      showToast('Documents hors projet ajoutés');
-      addNotification('Documents', `${files.length} document(s) hors projet ajouté(s)`, null);
-      closeGlobalDocUploadModal();
-      await renderGlobalDocs();
+      await globalDocsRuntime.addStandaloneDocuments();
     }
 
     function loadGlobalMessageReadMap() {
@@ -29083,32 +26644,9 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     }
 
     async function publishGlobalFeedDigestFromFiles(fileList, options = {}) {
-      const files = Array.from(fileList || []).filter(Boolean);
-      if (files.length === 0) return;
-      const digestViewMode = normalizeGlobalFeedDigestView(options?.digestView || globalFeedDigestViewMode, globalFeedDigestViewMode);
-      const digestBlocks = [];
-      for (const file of files) {
-        try {
-          const digest = await extractFeedDigestFromFile(file);
-          const contentHtml = buildDigestContentHtml(digest, file, digestViewMode);
-          digestBlocks.push(contentHtml);
-        } catch (error) {
-          console.warn('Digest feed import failed:', error);
-          showToast(`Digest impossible pour ${file?.name || 'fichier'}`);
-        }
+      if (globalFeedRuntime?.publishGlobalFeedDigestFromFiles) {
+        return globalFeedRuntime.publishGlobalFeedDigestFromFiles(fileList, options);
       }
-
-      if (!digestBlocks.length) return;
-
-      if (typeof editingGlobalFeedPostId !== 'undefined' && editingGlobalFeedPostId) {
-        cancelEditGlobalFeedPost();
-      }
-      openGlobalFeedComposerForNewPost({ focusEditor: false });
-
-      appendDigestBlocksToRichEditor('global-feed-editor', 'global-feed-input', digestBlocks);
-
-      await updateGlobalFeedMentionCounter();
-      showToast(`${digestBlocks.length} digest importe(s) dans l editeur (publication manuelle).`);
     }
 
     async function importProjectNoteDigestFromFiles(fileList, options = {}) {
@@ -29281,75 +26819,10 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     }
 
     async function resolveLinkedDocsForFeedPost(post = {}, allGlobalDocs = []) {
-      const refs = Array.isArray(post?.refs) ? post.refs : [];
-      const linkedGlobalNoteIds = new Set();
-      const linkedProjectNotes = [];
-      refs.forEach((ref) => {
-        const type = String(ref?.type || '').trim();
-        const rawId = String(ref?.id || '').trim();
-        if (!rawId) return;
-        if (type === 'global-note') {
-          linkedGlobalNoteIds.add(rawId);
-          return;
-        }
-        if (type === 'project-note') {
-          const parts = rawId.split(':');
-          const projectId = String(parts[0] || '').trim();
-          const noteId = String(parts[1] || '').trim();
-          if (projectId && noteId) linkedProjectNotes.push({ projectId, noteId });
-        }
-      });
-      const linkedDocIdsFromContent = new Set(extractLinkedGlobalDocIdsFromHtml(String(post?.content || '')));
-      const standaloneDocs = (Array.isArray(allGlobalDocs) ? allGlobalDocs : [])
-        .filter((doc) => {
-          const docId = String(doc?.id || '').trim();
-          if (!docId) return false;
-          if (linkedDocIdsFromContent.has(docId)) return true;
-          const noteIds = Array.isArray(doc?.linkedNoteIds) ? doc.linkedNoteIds : [];
-          return noteIds.some((noteId) => linkedGlobalNoteIds.has(String(noteId || '').trim()));
-        })
-        .map((doc) => ({
-          id: String(doc?.id || '').trim(),
-          name: String(doc?.name || 'Document').trim() || 'Document',
-          ref: encodeDocumentPreviewRef({
-            sourceType: 'standalone',
-            id: String(doc?.id || '').trim(),
-            sourceProjectName: 'Hors projet'
-          })
-        }))
-        .filter((doc) => doc.id);
-
-      const projectDocs = [];
-      for (const link of linkedProjectNotes) {
-        const state = await getProjectState(link.projectId, { ignoreAccessCheck: true });
-        if (!state?.project) continue;
-        (Array.isArray(state.documents) ? state.documents : []).forEach((doc) => {
-          const linkedNoteIds = Array.isArray(doc?.linkedNoteIds) ? doc.linkedNoteIds : [];
-          const isLinked = linkedNoteIds.some((noteId) => String(noteId || '').trim() === link.noteId);
-          if (!isLinked) return;
-          const docId = String(doc?.docId || '').trim();
-          if (!docId) return;
-          projectDocs.push({
-            id: `${link.projectId}:project-doc:${docId}`,
-            name: String(doc?.name || 'Document').trim() || 'Document',
-            ref: encodeDocumentPreviewRef({
-              sourceType: 'project-doc',
-              projectId: link.projectId,
-              docId,
-              sourceProjectName: state.project.name
-            })
-          });
-        });
+      if (globalFeedRuntime?.resolveLinkedDocsForFeedPost) {
+        return globalFeedRuntime.resolveLinkedDocsForFeedPost(post, allGlobalDocs);
       }
-
-      const unique = new Map();
-      [...standaloneDocs, ...projectDocs].forEach((doc) => {
-        const key = String(doc?.id || '').trim();
-        if (!key || unique.has(key)) return;
-        unique.set(key, doc);
-      });
-      return Array.from(unique.values())
-        .filter((doc) => doc.id);
+      return [];
     }
 
     async function syncGlobalNoteLinkedDocuments(noteId = '', linkedDocIdsInput = []) {
@@ -29447,246 +26920,89 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     }
 
     async function publishGlobalFeedPost() {
-      const input = document.getElementById('global-feed-input');
-      const titleInput = document.getElementById('global-feed-title');
-      const projectSelect = document.getElementById('global-feed-project-ref');
-      const taskSelect = document.getElementById('global-feed-task-ref');
-      const calendarSelect = document.getElementById('global-feed-calendar-ref');
-      if (!input || !projectSelect || !taskSelect || !calendarSelect) return;
-      const title = String(titleInput?.value || '').trim();
-      const quill = projectDescriptionQuillEditors.get('global-feed-editor');
-      let content = '';
-      if (quill) {
-        content = String(quill.root.innerHTML || '').trim();
-        if (content === '<p><br></p>') content = '';
-      } else {
-        content = String(input.value || '').trim();
+      if (globalFeedRuntime?.publishGlobalFeedPost) {
+        return globalFeedRuntime.publishGlobalFeedPost();
       }
-      content = applyProfanityFilterToHtml(content);
-      if (!content) {
-        showToast('Le post est vide');
-        return;
-      }
-
-      const mentionCatalog = await buildGlobalMentionCatalog();
-      const textToScan = quill ? (quill.getText() || '') : content;
-      const mentions = Array.from(extractMentionedUserIdsFromText(textToScan, mentionCatalog));
-      const refs = [];
-      if (projectSelect.value) {
-        const opt = projectSelect.options[projectSelect.selectedIndex];
-        refs.push({ type: 'project', id: projectSelect.value, label: opt?.textContent || 'Projet' });
-      }
-      if (taskSelect.value) {
-        const opt = taskSelect.options[taskSelect.selectedIndex];
-        refs.push({ type: 'task', id: taskSelect.value, label: opt?.textContent || 'Tache' });
-      }
-      if (calendarSelect.value) {
-        const opt = calendarSelect.options[calendarSelect.selectedIndex];
-        refs.push({ type: 'calendar-info', id: calendarSelect.value, label: opt?.textContent || 'Info calendrier' });
-      }
-
-      if (typeof editingGlobalFeedPostId !== 'undefined' && editingGlobalFeedPostId) {
-        const existing = await getDecrypted('globalPosts', editingGlobalFeedPostId, 'postId');
-        if (existing) {
-          existing.title = title;
-          existing.content = applyProfanityFilterToHtml(content);
-          existing.mentions = mentions;
-          existing.refs = refs;
-          existing.summaryWordCount = getFeedSummaryWordCount();
-          existing.summary = computeGlobalFeedPostAutoSummary(existing, existing.summaryWordCount);
-          existing.updatedAt = Date.now();
-          await putEncrypted('globalPosts', existing, 'postId');
-          knownGlobalPostIds.add(existing.postId);
-          
-          if (typeof quill !== 'undefined' && quill) quill.root.innerHTML = '';
-          input.value = '';
-          const attachInput = document.getElementById('global-feed-attach-doc-files');
-          if (attachInput) attachInput.value = '';
-          if (titleInput) titleInput.value = '';
-          projectSelect.value = '';
-          taskSelect.value = '';
-          calendarSelect.value = '';
-          await updateGlobalFeedMentionCounter();
-          await renderGlobalFeed();
-          if (sharedFolderHandle) {
-            writeGlobalFeedPostToSharedFolder(existing);
-          }
-          showToast('Post mis à jour');
-          cancelEditGlobalFeedPost();
-          return;
-        }
-      }
-
-      const post = {
-        postId: uuidv4(),
-        authorUserId: String(currentUser?.userId || ''),
-        authorName: String(currentUser?.name || fallbackDirectoryName(currentUser?.userId || '')),
-        title,
-        content,
-        mentions,
-        refs,
-        summaryWordCount: getFeedSummaryWordCount(),
-        summary: '',
-        createdAt: Date.now(),
-        source: sharedFolderHandle ? 'shared' : 'local'
-      };
-      post.summary = computeGlobalFeedPostAutoSummary(post, post.summaryWordCount);
-      await putEncrypted('globalPosts', post, 'postId');
-      knownGlobalPostIds.add(post.postId);
-      input.value = '';
-      const attachInput = document.getElementById('global-feed-attach-doc-files');
-      if (attachInput) attachInput.value = '';
-      if (titleInput) titleInput.value = '';
-      if (typeof quill !== 'undefined' && quill) quill.root.innerHTML = '';
-      projectSelect.value = '';
-      taskSelect.value = '';
-      calendarSelect.value = '';
-      await updateGlobalFeedMentionCounter();
-      await renderGlobalFeed();
-      if (sharedFolderHandle) {
-        writeGlobalFeedPostToSharedFolder(post);
-      }
-      showToast('Post publie');
-      setGlobalFeedComposerCollapsed(true);
     }
 
     async function openGlobalFeedReference(type, refId) {
-      const t = String(type || '').trim();
-      const id = decodeURIComponent(String(refId || '').trim());
-      if (!t || !id) return;
-      if (t === 'project') {
-        await showProjectDetail(id, { resetScroll: true });
-        return;
-      }
-      if (t === 'task') {
-        await showGlobalWorkspace('tasks');
-        await openGlobalTaskDetails(id);
-        return;
-      }
-      if (t === 'project-note') {
-        const parts = String(id || '').split(':');
-        const projectId = String(parts[0] || '').trim();
-        const noteId = String(parts[1] || '').trim();
-        if (!projectId || !noteId) return;
-        projectNotesFocusNoteId = noteId;
-        await showProjectDetail(projectId, { resetScroll: true });
-        setProjectView('notes');
-        openProjectNoteReadModal(noteId);
-        return;
-      }
-      if (t === 'global-note') {
-        globalNotesFocusNoteId = id;
-        await showGlobalWorkspace('notes');
-        await renderGlobalNotes();
-        openGlobalNoteReadModal(id);
-        return;
-      }
-      if (t === 'calendar-info') {
-        await showGlobalWorkspace('calendar');
-        await openStandaloneCalendarDetails(id);
+      if (globalFeedRuntime?.openGlobalFeedReference) {
+        return globalFeedRuntime.openGlobalFeedReference(type, refId);
       }
     }
 
     async function openGlobalFeedPost(postId) {
-      globalFeedFocusPostId = String(postId || '').trim();
-      globalFeedFilterMode = 'all';
-      const searchInput = document.getElementById('global-feed-search');
-      if (searchInput) searchInput.value = '';
-      await showGlobalWorkspace('feed');
-      await renderGlobalFeed();
-      expandGlobalFeedPostCard(globalFeedFocusPostId);
+      if (globalFeedRuntime?.openGlobalFeedPost) {
+        return globalFeedRuntime.openGlobalFeedPost(postId);
+      }
     }
 
     function refreshGlobalFeedFilterButtons() {
-      const map = {
-        all: document.getElementById('global-feed-filter-all'),
-        auto: document.getElementById('global-feed-filter-auto'),
-        manual: document.getElementById('global-feed-filter-manual'),
-        mentions: document.getElementById('global-feed-filter-mentions'),
-        'project-refs': document.getElementById('global-feed-filter-project-refs'),
-        'task-refs': document.getElementById('global-feed-filter-task-refs')
-      };
-      if (!isTabEnabled('globalFeed', globalFeedFilterMode)) {
-        globalFeedFilterMode = getDefaultTab('globalFeed') || 'all';
+      if (globalFeedRuntime?.refreshGlobalFeedFilterButtons) {
+        return globalFeedRuntime.refreshGlobalFeedFilterButtons();
       }
-      Object.entries(map).forEach(([key, btn]) => {
-        if (!btn) return;
-        btn.classList.toggle('hidden', !isTabEnabled('globalFeed', key));
-        const active = key === globalFeedFilterMode;
-        btn.classList.toggle('view-tab-active', active);
-        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
-      });
-      const sortSelect = document.getElementById('global-feed-sort');
-      if (sortSelect) sortSelect.value = globalFeedSortMode;
-      refreshManagedTabOverflow();
     }
 
     function renderGlobalFeedSummary(posts, mentionCatalog) {
-      const summary = document.getElementById('global-feed-summary');
-      if (!summary) return;
-      const me = String(currentUser?.userId || '');
-      const total = posts.length;
-      const autoCount = posts.filter((p) => Boolean(p.isAuto || p.sourceEventId)).length;
-      const manualCount = total - autoCount;
-      const mentionCount = posts.filter((p) => Array.isArray(p.mentions) && p.mentions.map((id) => String(id || '')).includes(me)).length;
-      const projectRefsCount = posts.filter((p) => Array.isArray(p.refs) && p.refs.some((r) => String(r?.type || '') === 'project')).length;
-      const taskRefsCount = posts.filter((p) => Array.isArray(p.refs) && p.refs.some((r) => String(r?.type || '') === 'task')).length;
-      const knownMentions = (mentionCatalog?.users || []).length;
-      summary.innerHTML = `
-        <span class="feed-summary-chip"><span class="material-symbols-outlined text-[14px]">feed</span>${total} éléments</span>
-        <span class="feed-summary-chip"><span class="material-symbols-outlined text-[14px]">bolt</span>${autoCount} activités auto</span>
-        <span class="feed-summary-chip"><span class="material-symbols-outlined text-[14px]">edit_square</span>${manualCount} posts manuels</span>
-        <span class="feed-summary-chip"><span class="material-symbols-outlined text-[14px]">alternate_email</span>${mentionCount} mentions</span>
-        <span class="feed-summary-chip"><span class="material-symbols-outlined text-[14px]">folder</span>${projectRefsCount} refs projet</span>
-        <span class="feed-summary-chip"><span class="material-symbols-outlined text-[14px]">assignment</span>${taskRefsCount} refs tache</span>
-        <span class="feed-summary-chip"><span class="material-symbols-outlined text-[14px]">group</span>${knownMentions} agents connus</span>
-      `;
+      if (globalFeedRuntime?.renderGlobalFeedSummary) {
+        return globalFeedRuntime.renderGlobalFeedSummary(posts, mentionCatalog);
+      }
     }
 
     async function renderGlobalFeed() {
       const list = document.getElementById('global-feed-list');
-      const searchInput = document.getElementById('global-feed-search');
       if (!list) return;
       if (editingGlobalFeedPostId) {
         setGlobalFeedComposerCollapsed(false);
       } else {
         setGlobalFeedComposerCollapsed(globalFeedComposerCollapsed);
       }
-      const mentionCatalog = await populateGlobalFeedComposerContext();
-      if (mentionCatalog) globalFeedMentionCatalogCache = mentionCatalog;
-      const query = String(searchInput?.value || '').trim();
-      const postsAll = (await getAllDecrypted('globalPosts', 'postId') || [])
-        .filter((p) => !p.deletedAt)
-        .filter((p) => matchesQuery([
-          p.title,
-          p.content,
-          p.authorName,
-          ...(Array.isArray(p.refs) ? p.refs.map((r) => r?.label) : []),
-          ...(Array.isArray(p.mentions) ? p.mentions.map((id) => mentionCatalog?.byUserId?.get(id)?.name || '') : [])
-        ], query));
-      const me = String(currentUser?.userId || '');
-      renderGlobalFeedSummary(postsAll, mentionCatalog);
-      refreshGlobalFeedFilterButtons();
+      let mentionCatalog = globalFeedMentionCatalogCache;
+      let posts = [];
+      let allDocs = [];
+      if (globalFeedRuntime?.prepareGlobalFeedRenderScope) {
+        const scope = await globalFeedRuntime.prepareGlobalFeedRenderScope();
+        mentionCatalog = scope?.mentionCatalog || mentionCatalog;
+        posts = Array.isArray(scope?.posts) ? scope.posts : [];
+        allDocs = Array.isArray(scope?.allDocs) ? scope.allDocs : [];
+      } else {
+        mentionCatalog = await populateGlobalFeedComposerContext();
+        if (mentionCatalog) globalFeedMentionCatalogCache = mentionCatalog;
+        const searchInput = document.getElementById('global-feed-search');
+        const query = String(searchInput?.value || '').trim();
+        const postsAll = (await getAllDecrypted('globalPosts', 'postId') || [])
+          .filter((p) => !p.deletedAt)
+          .filter((p) => matchesQuery([
+            p.title,
+            p.content,
+            p.authorName,
+            ...(Array.isArray(p.refs) ? p.refs.map((r) => r?.label) : []),
+            ...(Array.isArray(p.mentions) ? p.mentions.map((id) => mentionCatalog?.byUserId?.get(id)?.name || '') : [])
+          ], query));
+        const me = String(currentUser?.userId || '');
+        renderGlobalFeedSummary(postsAll, mentionCatalog);
+        refreshGlobalFeedFilterButtons();
 
-      const postsFilteredByType = postsAll.filter((post) => {
-        const isAuto = Boolean(post.isAuto || post.sourceEventId);
-        const isMention = Array.isArray(post.mentions) && post.mentions.map((id) => String(id || '')).includes(me);
-        const refs = Array.isArray(post.refs) ? post.refs : [];
-        const hasProjectRef = refs.some((ref) => String(ref?.type || '') === 'project');
-        const hasTaskRef = refs.some((ref) => String(ref?.type || '') === 'task');
-        if (globalFeedFilterMode === 'auto') return isAuto;
-        if (globalFeedFilterMode === 'manual') return !isAuto;
-        if (globalFeedFilterMode === 'mentions') return isMention;
-        if (globalFeedFilterMode === 'project-refs') return hasProjectRef;
-        if (globalFeedFilterMode === 'task-refs') return hasTaskRef;
-        return true;
-      });
-      const posts = postsFilteredByType.sort((a, b) => (
-        globalFeedSortMode === 'asc'
-          ? Number(a.createdAt || 0) - Number(b.createdAt || 0)
-          : Number(b.createdAt || 0) - Number(a.createdAt || 0)
-      ));
-      const allDocs = await getAllDecrypted('globalDocs', 'id');
+        const postsFilteredByType = postsAll.filter((post) => {
+          const isAuto = Boolean(post.isAuto || post.sourceEventId);
+          const isMention = Array.isArray(post.mentions) && post.mentions.map((id) => String(id || '')).includes(me);
+          const refs = Array.isArray(post.refs) ? post.refs : [];
+          const hasProjectRef = refs.some((ref) => String(ref?.type || '') === 'project');
+          const hasTaskRef = refs.some((ref) => String(ref?.type || '') === 'task');
+          if (globalFeedFilterMode === 'auto') return isAuto;
+          if (globalFeedFilterMode === 'manual') return !isAuto;
+          if (globalFeedFilterMode === 'mentions') return isMention;
+          if (globalFeedFilterMode === 'project-refs') return hasProjectRef;
+          if (globalFeedFilterMode === 'task-refs') return hasTaskRef;
+          return true;
+        });
+        posts = postsFilteredByType.sort((a, b) => (
+          globalFeedSortMode === 'asc'
+            ? Number(a.createdAt || 0) - Number(b.createdAt || 0)
+            : Number(b.createdAt || 0) - Number(a.createdAt || 0)
+        ));
+        allDocs = await getAllDecrypted('globalDocs', 'id');
+      }
 
       if (posts.length === 0) {
         list.innerHTML = buildWorkspaceEmptyState({
@@ -29699,228 +27015,17 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         return;
       }
 
-      const cardsHtml = [];
-      const unifiedNotesRenderer = window.TaskMDAProjectNotes?.renderUnifiedNotesList;
-      const renderFeedNoteCardHtml = (post, refs, linkedDocs, isFocused, typeLabel, typeClass) => {
-        if (typeof unifiedNotesRenderer !== 'function') return '';
-        const postId = String(post?.postId || '').trim();
-        if (!postId) return '';
-        let noteRef = refs.find((ref) => {
-          const type = String(ref?.type || '').trim();
-          return type === 'global-note' || type === 'project-note';
+      if (!globalFeedRuntime?.buildGlobalFeedCardsHtml) {
+        list.innerHTML = buildWorkspaceEmptyState({
+          icon: 'warning',
+          title: 'Module Fil d info indisponible',
+          text: 'Le rendu du fil d info n a pas pu etre initialise.',
+          ctaLabel: '',
+          ctaOnclick: ''
         });
-        if (!noteRef) {
-          const sourceEventId = String(post?.sourceEventId || '').trim();
-          if (sourceEventId.startsWith('global-note:')) {
-            const globalNoteId = sourceEventId.slice('global-note:'.length).trim();
-            if (globalNoteId) {
-              noteRef = { type: 'global-note', id: globalNoteId, label: String(post?.title || '').trim() || 'Note transverse' };
-            }
-          } else if (sourceEventId.startsWith('project-note:')) {
-            const projectNoteRef = sourceEventId.slice('project-note:'.length).trim();
-            if (projectNoteRef) {
-              noteRef = { type: 'project-note', id: projectNoteRef, label: String(post?.title || '').trim() || 'Note projet' };
-            }
-          }
-        }
-        if (!noteRef) return '';
-        const refType = String(noteRef?.type || '').trim();
-        const refId = String(noteRef?.id || '').trim();
-        const refLabel = String(noteRef?.label || '').trim();
-        const pseudoNoteId = `feed-note-${postId}`;
-        const pseudoNote = {
-          noteId: pseudoNoteId,
-          title: refLabel || String(post?.title || '').trim() || 'Note sans titre',
-          content: String(post?.content || ''),
-          createdBy: String(post?.authorUserId || ''),
-          createdAt: Number(post?.createdAt || Date.now()) || Date.now(),
-          updatedAt: Number(post?.updatedAt || post?.createdAt || Date.now()) || Date.now(),
-          shareToGlobalFeed: true,
-          tags: []
-        };
-        const authorById = new Map([[pseudoNoteId, String(post?.authorName || fallbackDirectoryName(post?.authorUserId || ''))]]);
-        const canManageById = new Map([[pseudoNoteId, false]]);
-        const noteDocsCountById = new Map([[pseudoNoteId, Number(Array.isArray(linkedDocs) ? linkedDocs.length : 0)]]);
-        const tempHost = document.createElement('div');
-        unifiedNotesRenderer(tempHost, {
-          notes: [pseudoNote],
-          mode: 'all',
-          query: '',
-          currentUserId: String(currentUser?.userId || ''),
-          taskTitleById: new Map(),
-          authorById,
-          canManageById,
-          noteDocsCountById,
-          cardIdPrefix: 'global-feed-note',
-          openFn: refType === 'global-note' ? 'openGlobalNoteReadModal' : 'openGlobalFeedReference',
-          showTaskLinks: false,
-          actionsRenderer: () => ''
-        });
-        let noteCardHtml = String(tempHost.innerHTML || '').trim();
-        if (!noteCardHtml) return '';
-        if (refType === 'project-note') {
-          const encoded = encodeURIComponent(refId);
-          noteCardHtml = noteCardHtml
-            .replace(`openGlobalFeedReference('${escapeHtml(pseudoNoteId)}')`, `openGlobalFeedReference('project-note','${encoded}')`)
-            .replace(`id="global-feed-note-${escapeHtml(pseudoNoteId)}"`, `id="global-feed-note-${escapeHtml(postId)}"`);
-        } else {
-          noteCardHtml = noteCardHtml
-            .replace(`openGlobalNoteReadModal('${escapeHtml(pseudoNoteId)}')`, `openGlobalNoteReadModal('${escapeHtml(refId)}')`)
-            .replace(`id="global-feed-note-${escapeHtml(pseudoNoteId)}"`, `id="global-feed-note-${escapeHtml(postId)}"`);
-        }
-        return `
-          <article id="global-feed-post-${postId}" class="feed-item ${isFocused ? 'border-blue-400 shadow-[0_0_0_2px_rgba(59,130,246,0.15)]' : ''}">
-            <div class="feed-item-head">
-              <div class="feed-item-meta">
-                <span class="material-symbols-outlined text-slate-400">sticky_note_2</span>
-                <div>
-                  <p class="text-sm font-semibold text-slate-800">Note partagée</p>
-                  <p class="text-xs text-slate-500">${new Date(Number(post.createdAt || Date.now())).toLocaleString('fr-FR')}</p>
-                </div>
-              </div>
-              <div class="flex items-center gap-2">
-                ${refType === 'global-note'
-                  ? `<button onclick="event.stopPropagation(); openGlobalNoteReadModal('${escapeHtml(refId)}')" class="workspace-action-inline" data-action-kind="open" title="Lire">Lire</button>`
-                  : `<button onclick="event.stopPropagation(); openGlobalFeedReference('project-note','${encodeURIComponent(refId)}')" class="workspace-action-inline" data-action-kind="open" title="Lire">Lire</button>`}
-                <div class="relative inline-block">
-                  <button type="button" class="workspace-action-inline" data-action-kind="export" data-action-label="Menu d'export" onclick="toggleGlobalFeedExportMenu('${escapeHtml(postId)}', event)" aria-haspopup="true" aria-expanded="false" id="feed-export-menu-btn-${escapeHtml(postId)}">
-                    Exporter
-                  </button>
-                  <div id="feed-export-menu-${escapeHtml(postId)}" class="hidden absolute right-0 mt-1 w-44 bg-white rounded-lg shadow-lg border border-slate-200 z-50 overflow-hidden" role="menu" onclick="event.stopPropagation();">
-                    <button type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2" onclick="exportGlobalFeedPost('${escapeHtml(postId)}', 'html'); closeGlobalFeedExportMenu('${escapeHtml(postId)}');" role="menuitem"><span class="material-symbols-outlined text-[16px]">code</span><span>Exporter HTML</span></button>
-                    <button type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2" onclick="exportGlobalFeedPostAsPdf('${escapeHtml(postId)}'); closeGlobalFeedExportMenu('${escapeHtml(postId)}');" role="menuitem"><span class="material-symbols-outlined text-[16px]">picture_as_pdf</span><span>Exporter PDF</span></button>
-                    <button type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2" onclick="exportGlobalFeedPostAsDocx('${escapeHtml(postId)}'); closeGlobalFeedExportMenu('${escapeHtml(postId)}');" role="menuitem"><span class="material-symbols-outlined text-[16px]">description</span><span>Exporter DOCX</span></button>
-                    <button type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2" onclick="exportGlobalFeedPost('${escapeHtml(postId)}', 'txt'); closeGlobalFeedExportMenu('${escapeHtml(postId)}');" role="menuitem"><span class="material-symbols-outlined text-[16px]">notes</span><span>Exporter TXT</span></button>
-                  </div>
-                </div>
-                <span class="text-slate-300">|</span>
-                <span class="feed-item-type ${typeClass}">${typeLabel}</span>
-              </div>
-            </div>
-            <div class="feed-item-body">
-              ${noteCardHtml}
-            </div>
-          </article>
-        `;
-      };
-      for (const post of posts) {
-        const postId = String(post.postId || '');
-        const mentions = (post.mentions || [])
-          .map((id) => mentionCatalog?.byUserId?.get(String(id || '')))
-          .filter(Boolean);
-        const refs = Array.isArray(post.refs) ? post.refs : [];
-        const linkedDocs = await resolveLinkedDocsForFeedPost(post, allDocs);
-        const isFocused = globalFeedFocusPostId && globalFeedFocusPostId === postId;
-        const isAuto = Boolean(post.isAuto || post.sourceEventId);
-        const typeLabel = isAuto ? 'Activité auto' : 'Post manuel';
-        const typeClass = isAuto ? 'feed-item-type-auto' : 'feed-item-type-manual';
-        const noteCardHtml = renderFeedNoteCardHtml(post, refs, linkedDocs, isFocused, typeLabel, typeClass);
-        if (noteCardHtml) {
-          cardsHtml.push(noteCardHtml);
-          continue;
-        }
-        const identity = resolveKnownUserIdentity(post.authorUserId || '', post.authorName || fallbackDirectoryName(post.authorUserId || ''));
-        const avatarStyle = safeAvatarInlineStyle(identity.avatarDataUrl, stringToColor(post.authorUserId || post.authorName || ''));
-        cardsHtml.push(`
-          <article id="global-feed-post-${postId}" class="feed-item ${isFocused ? 'border-blue-400 shadow-[0_0_0_2px_rgba(59,130,246,0.15)]' : ''} cursor-pointer" onclick="toggleCollapsibleContent(this.querySelector('.collapsible-toggle'))">
-            <div class="feed-item-head">
-              <div class="feed-item-meta">
-                <span class="discussion-avatar" style="${avatarStyle}">${escapeHtml(getInitials(post.authorName || 'U'))}</span>
-                <div>
-                  <p class="text-sm font-semibold text-slate-800">${escapeHtml(post.authorName || fallbackDirectoryName(post.authorUserId || ''))}</p>
-                  <p class="text-xs text-slate-500">${new Date(Number(post.createdAt || Date.now())).toLocaleString('fr-FR')}</p>
-                </div>
-              </div>
-              <div class="flex items-center gap-2">
-                ${!isAuto && String(post.authorUserId || '') === String(currentUser?.userId || '') ? `
-                  <button onclick="event.stopPropagation(); openGlobalFeedPostReadModal('${postId}')" class="workspace-action-inline" data-action-kind="open" title="Lire">Lire</button>
-                  <button onclick="event.stopPropagation(); startEditGlobalFeedPost('${postId}')" class="workspace-action-inline" data-action-kind="edit" title="Éditer">Éditer</button>
-                  <button onclick="event.stopPropagation(); deleteGlobalFeedPost('${postId}')" class="workspace-action-inline" data-action-kind="danger" title="Supprimer">Supprimer</button>
-                ` : ''}
-                ${String(post.authorUserId || '') !== String(currentUser?.userId || '') ? `<button onclick="event.stopPropagation(); openGlobalFeedPostReadModal('${postId}')" class="workspace-action-inline" data-action-kind="open" title="Lire">Lire</button>` : ''}
-                <div class="relative inline-block">
-                  <button type="button" class="workspace-action-inline" data-action-kind="export" data-action-label="Menu d'export" onclick="toggleGlobalFeedExportMenu('${escapeHtml(postId)}', event)" aria-haspopup="true" aria-expanded="false" id="feed-export-menu-btn-${escapeHtml(postId)}">
-                    Exporter
-                  </button>
-                  <div id="feed-export-menu-${escapeHtml(postId)}" class="hidden absolute right-0 mt-1 w-44 bg-white rounded-lg shadow-lg border border-slate-200 z-50 overflow-hidden" role="menu" onclick="event.stopPropagation();">
-                    <button type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2" onclick="exportGlobalFeedPost('${escapeHtml(postId)}', 'html'); closeGlobalFeedExportMenu('${escapeHtml(postId)}');" role="menuitem">
-                      <span class="material-symbols-outlined text-[16px]">code</span>
-                      <span>Exporter HTML</span>
-                    </button>
-                    <button type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2" onclick="exportGlobalFeedPostAsPdf('${escapeHtml(postId)}'); closeGlobalFeedExportMenu('${escapeHtml(postId)}');" role="menuitem">
-                      <span class="material-symbols-outlined text-[16px]">picture_as_pdf</span>
-                      <span>Exporter PDF</span>
-                    </button>
-                    <button type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2" onclick="exportGlobalFeedPostAsDocx('${escapeHtml(postId)}'); closeGlobalFeedExportMenu('${escapeHtml(postId)}');" role="menuitem">
-                      <span class="material-symbols-outlined text-[16px]">description</span>
-                      <span>Exporter DOCX</span>
-                    </button>
-                    <button type="button" class="export-menu-item w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2" onclick="exportGlobalFeedPost('${escapeHtml(postId)}', 'txt'); closeGlobalFeedExportMenu('${escapeHtml(postId)}');" role="menuitem">
-                      <span class="material-symbols-outlined text-[16px]">notes</span>
-                      <span>Exporter TXT</span>
-                    </button>
-                  </div>
-                </div>
-                <span class="text-slate-300">|</span>
-                <span class="feed-item-type ${typeClass}">${typeLabel}</span>
-              </div>
-            </div>
-            <div class="feed-item-body">
-              ${String(post.title || '').trim() ? `<h4 class="text-base font-semibold text-slate-800 mb-2">${escapeHtml(String(post.title || '').trim())}</h4>` : ''}
-              <div class="collapsible-wrapper">
-                <div class="collapsible-content is-collapsed">
-                  <div class="ql-snow">
-                    <div class="ql-editor p-0 text-sm text-slate-600 markdown-content" style="min-height: auto; overflow-y: hidden; cursor: inherit;">
-                      ${renderGlobalFeedContentHtml(post.content || '', mentionCatalog)}
-                    </div>
-                  </div>
-                </div>
-                <button type="button" class="collapsible-toggle hidden" onclick="event.stopPropagation(); toggleCollapsibleContent(this)">
-                  <span class="label">Afficher le contenu</span>
-                </button>
-              </div>
-            </div>
-            ${mentions.length > 0 ? `
-              <div class="feed-item-mentions">
-                ${mentions.map((u) => `<span class="inline-flex text-[10px] px-2 py-1 rounded-full bg-blue-100 text-blue-700 font-semibold">@${escapeHtml(u.name)}</span>`).join('')}
-              </div>
-            ` : ''}
-            ${refs.length > 0 ? `
-              <div class="feed-item-refs">
-                ${refs.map((ref) => `<button onclick="event.stopPropagation(); openGlobalFeedReference('${escapeHtml(ref.type || '')}','${encodeURIComponent(String(ref.id || ''))}')" class="feed-ref-btn">${escapeHtml(ref.label || 'Référence')}</button>`).join('')}
-                ${refs.map((ref) => {
-                  const type = String(ref?.type || '').trim();
-                  const rid = String(ref?.id || '').trim();
-                  if (type === 'global-note' && rid) {
-                    return `<button onclick="event.stopPropagation(); openGlobalNoteReadModal('${escapeHtml(rid)}')" class="workspace-action-inline" data-action-kind="open" data-action-label="Lire la note">Lire note</button>`;
-                  }
-                  if (type === 'project-note' && rid) {
-                    const encoded = encodeURIComponent(rid);
-                    return `<button onclick="event.stopPropagation(); openGlobalFeedReference('project-note','${encoded}')" class="workspace-action-inline" data-action-kind="open" data-action-label="Ouvrir la note projet">Ouvrir note projet</button>`;
-                  }
-                  return '';
-                }).join('')}
-              </div>
-            ` : ''}
-            ${linkedDocs.length > 0 ? `
-              <div class="feed-item-refs mt-2">
-                ${linkedDocs.map((doc) => {
-                  const ref = String(doc?.ref || '').trim();
-                  if (!ref) return '';
-                  return `
-                    <span class="inline-flex items-center gap-1 mr-2 mb-1" onclick="event.stopPropagation();">
-                      <span class="feed-ref-btn" style="cursor: default;">📎 ${escapeHtml(doc.name)}</span>
-                      <button type="button" class="workspace-action-inline" data-action-kind="preview" data-action-label="Aperçu" onclick="event.stopPropagation(); openDocumentPreviewByRef('${escapeHtml(ref)}')">Aperçu</button>
-                      <button type="button" class="workspace-action-inline" data-action-kind="export" data-action-label="Télécharger" onclick="event.stopPropagation(); downloadDocumentByRef('${escapeHtml(ref)}')">Télécharger</button>
-                    </span>
-                  `;
-                }).join('')}
-              </div>
-            ` : ''}
-          </article>
-        `);
+        return;
       }
-      list.innerHTML = cardsHtml.join('');
+      list.innerHTML = await globalFeedRuntime.buildGlobalFeedCardsHtml(posts, allDocs, mentionCatalog);
       if (globalFeedFocusPostId) {
         const target = document.getElementById(`global-feed-post-${globalFeedFocusPostId}`);
         if (target) {
@@ -31436,7 +28541,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         groupBtn.click();
       }
       if (options.closeSidebar !== false) {
-        closeMobileSidebar();
+        shellUiRuntime?.closeMobileSidebar?.();
       }
     }
 
@@ -31513,9 +28618,9 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
           setActiveWorkflowSidebarGroup(getActiveWorkflowGroupFromDom());
         }
       }
-      if (view === 'calendar') await renderGlobalCalendarDelegated();
+      if (view === 'calendar') await (globalCalendarRuntime?.renderGlobalCalendar?.() ?? renderGlobalCalendar());
       if (view === 'docs') await renderGlobalDocs();
-      if (view === 'notes') await renderGlobalNotesDelegated();
+      if (view === 'notes') await (globalNotesRuntime?.renderGlobalNotes?.() ?? renderGlobalNotes());
       if (view === 'messages') {
         resetGlobalMessageRenderLimits();
         await renderGlobalMessages();
@@ -31526,7 +28631,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       if (previousWorkspaceView !== view) {
         trackUxMetric('switchGlobalWorkspace');
       }
-      closeMobileSidebar();
+      shellUiRuntime?.closeMobileSidebar?.();
     }
 
     function getSubtaskProgress(task) {
@@ -32138,9 +29243,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     }
 
     function addDays(date, delta) {
-      const d = new Date(date);
-      d.setDate(d.getDate() + delta);
-      return d;
+      return coreAddDays(date, delta);
     }
 
     function diffDaysInclusive(fromDate, toDate) {
@@ -32779,28 +29882,9 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     }
 
     function resetDocumentPreviewInlineEditingState() {
-      for (const timer of docPreviewInlineDebounceTimers.values()) clearTimeout(timer);
-      for (const timer of docPreviewInlineFinalizeTimers.values()) clearTimeout(timer);
-      docPreviewInlineDebounceTimers.clear();
-      docPreviewInlineFinalizeTimers.clear();
-      docPreviewInlineLastSavedValues.clear();
-    }
-
-    function parseDocumentPreviewRef(refEncoded) {
-      try {
-        if (!refEncoded) return null;
-        return JSON.parse(decodeURIComponent(refEncoded));
-      } catch {
-        return null;
+      if (docStorageBindingRuntime?.resetDocumentPreviewInlineEditingState) {
+        docStorageBindingRuntime.resetDocumentPreviewInlineEditingState();
       }
-    }
-
-    function getDocumentPreviewSourceLabel(ctx = {}) {
-      if (ctx.sourceType === 'standalone') return 'Hors projet';
-      if (ctx.sourceType === 'project-doc') return String(ctx.sourceProjectName || 'Document projet');
-      if (ctx.sourceType === 'project') return String(ctx.sourceProjectName || 'Pièce jointe de tâche');
-      if (ctx.sourceType === 'task-attachment') return String(ctx.sourceProjectName || 'Pièce jointe de tâche');
-      return 'Document';
     }
 
     function encodeDocumentPreviewRef(doc = {}, fallbackProjectId = '') {
@@ -32822,104 +29906,68 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     }
 
     function canUseSharedFilesystemDocumentStorage() {
-      return Boolean(sharedFolderHandle && window.TaskMDADocumentStorage?.isAvailable?.());
+      if (docStorageBindingRuntime?.canUseSharedFilesystemDocumentStorage) {
+        return docStorageBindingRuntime.canUseSharedFilesystemDocumentStorage();
+      }
+      return false;
+    }
+
+    function formatDocumentStoragePathForDisplay(doc = {}) {
+      if (docPreviewModalUiRuntime?.formatDocumentStoragePathForDisplay) {
+        return docPreviewModalUiRuntime.formatDocumentStoragePathForDisplay(doc);
+      }
+      const path = String(doc?.storagePath || '').trim();
+      if (path) return path;
+      if (String(doc?.storageMode || '').trim() === 'fs') return 'Stockage disque (chemin non disponible)';
+      return 'Stockage local (IndexedDB)';
     }
 
     async function resolveDocumentDataForRuntime(doc = {}) {
-      if (String(doc?.data || '').trim()) return String(doc.data || '');
-      if (!canUseSharedFilesystemDocumentStorage()) return '';
-      if (String(doc?.storageMode || '').trim() !== 'fs') return '';
-      const storagePath = String(doc?.storagePath || '').trim();
-      if (!storagePath) return '';
-      try {
-        const dataUrl = await window.TaskMDADocumentStorage.readDataUrl(
-          sharedFolderHandle,
-          storagePath,
-          String(doc?.type || 'application/octet-stream')
-        );
-        return String(dataUrl || '');
-      } catch (error) {
-        console.warn('Unable to load document from shared filesystem:', error);
-        return '';
+      if (docStorageBindingRuntime?.resolveDocumentDataForRuntime) {
+        return docStorageBindingRuntime.resolveDocumentDataForRuntime(doc);
       }
+      return '';
     }
 
     async function hydrateDocumentDataForRuntime(doc = {}) {
-      if (!doc || typeof doc !== 'object') return doc;
-      if (String(doc.data || '').trim()) return doc;
-      const resolvedData = await resolveDocumentDataForRuntime(doc);
-      if (!resolvedData) return doc;
-      return { ...doc, data: resolvedData };
+      if (docStorageBindingRuntime?.hydrateDocumentDataForRuntime) {
+        return docStorageBindingRuntime.hydrateDocumentDataForRuntime(doc);
+      }
+      return doc;
     }
 
     function inferStorageRubricFromPath(storagePath = '', fallback = 'document-upload') {
-      const normalized = String(storagePath || '').replace(/\\/g, '/');
-      const parts = normalized.split('/').filter(Boolean);
-      const idx = parts.findIndex((part) => part === 'documents');
-      const rubric = idx >= 0 ? String(parts[idx + 1] || '').trim() : '';
-      return rubric || fallback;
+      if (docStorageBindingRuntime?.inferStorageRubricFromPath) {
+        return docStorageBindingRuntime.inferStorageRubricFromPath(storagePath, fallback);
+      }
+      return String(fallback || 'document-upload');
     }
 
     function inferStorageScopeFromPath(storagePath = '', fallback = 'project') {
-      const normalized = String(storagePath || '').replace(/\\/g, '/');
-      const parts = normalized.split('/').filter(Boolean);
-      const idx = parts.findIndex((part) => part === 'documents');
-      const scope = idx >= 0 ? String(parts[idx + 2] || '').trim() : '';
-      return scope || fallback;
+      if (docStorageBindingRuntime?.inferStorageScopeFromPath) {
+        return docStorageBindingRuntime.inferStorageScopeFromPath(storagePath, fallback);
+      }
+      return String(fallback || 'project');
     }
 
     function inferStorageProjectFromPath(storagePath = '', fallback = 'global') {
-      const normalized = String(storagePath || '').replace(/\\/g, '/');
-      const parts = normalized.split('/').filter(Boolean);
-      const idx = parts.findIndex((part) => part === 'documents');
-      const projectId = idx >= 0 ? String(parts[idx + 3] || '').trim() : '';
-      return projectId || fallback;
+      if (docStorageBindingRuntime?.inferStorageProjectFromPath) {
+        return docStorageBindingRuntime.inferStorageProjectFromPath(storagePath, fallback);
+      }
+      return String(fallback || 'global');
     }
 
     async function maybeRelocateStoredDocumentByTheme(doc = {}, nextTheme = '', context = {}) {
-      const currentTheme = String(doc?.theme || '').trim() || 'General';
-      const targetTheme = String(nextTheme || '').trim() || 'General';
-      if (!canUseSharedFilesystemDocumentStorage()) return {};
-      if (String(doc?.storageMode || '').trim() !== 'fs') return {};
-      const oldStoragePath = String(doc?.storagePath || '').trim();
-      if (!oldStoragePath) return {};
-      const currentScope = inferStorageScopeFromPath(oldStoragePath, 'project');
-      const currentProjectId = inferStorageProjectFromPath(oldStoragePath, 'global');
-      const targetScope = String(context.scope || '').trim() || currentScope || 'project';
-      const targetProjectId = String(context.projectId || '').trim() || currentProjectId || 'global';
-      const keepSameTheme = normalizeSearch(currentTheme) === normalizeSearch(targetTheme);
-      const keepSameScope = normalizeSearch(currentScope) === normalizeSearch(targetScope);
-      const keepSameProject = normalizeSearch(currentProjectId) === normalizeSearch(targetProjectId);
-      const force = context.force === true;
-      if (keepSameTheme && keepSameScope && keepSameProject && !force) return {};
-      const dataUrl = await resolveDocumentDataForRuntime(doc);
-      if (!String(dataUrl || '').trim()) return {};
-      const rubric = String(context.rubric || '').trim() || inferStorageRubricFromPath(oldStoragePath, 'document-upload');
-      try {
-        const fsMeta = await window.TaskMDADocumentStorage.writeDataUrl(sharedFolderHandle, dataUrl, {
-          rubric,
-          scope: targetScope,
-          projectId: targetProjectId,
-          theme: targetTheme,
-          fileName: String(doc?.name || 'document.bin')
-        });
-        try {
-          await window.TaskMDADocumentStorage.removeFile(sharedFolderHandle, oldStoragePath);
-        } catch (_) {}
-        return {
-          storageMode: fsMeta.storageMode || 'fs',
-          storageProvider: fsMeta.storageProvider || 'shared-folder',
-          storagePath: fsMeta.storagePath || oldStoragePath,
-          storedAt: Number(fsMeta.storedAt || Date.now()) || Date.now(),
-          data: ''
-        };
-      } catch (error) {
-        console.warn('Unable to relocate stored document for theme change:', error);
-        return {};
+      if (docStorageBindingRuntime?.maybeRelocateStoredDocumentByTheme) {
+        return docStorageBindingRuntime.maybeRelocateStoredDocumentByTheme(doc, nextTheme, context);
       }
+      return {};
     }
 
     function normalizeDocumentPreviewInlineFieldValue(field, rawValue) {
+      if (docPreviewInlineUiRuntime?.normalizeFieldValue) {
+        return docPreviewInlineUiRuntime.normalizeFieldValue(field, rawValue);
+      }
       const value = rawValue == null ? '' : String(rawValue);
       if (field === 'name') return value.trim();
       if (field === 'theme') return value.trim() || 'General';
@@ -32929,6 +29977,9 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     }
 
     function getDocumentPreviewFieldValue(doc = {}, field = '') {
+      if (docPreviewInlineUiRuntime?.getFieldValue) {
+        return docPreviewInlineUiRuntime.getFieldValue(doc, field);
+      }
       if (field === 'name') return String(doc?.name || '');
       if (field === 'theme') return String(doc?.theme || 'General');
       if (field === 'notes') return String(doc?.notes || '');
@@ -32943,6 +29994,9 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     }
 
     function mergeDocumentPreviewContextDoc(patch = {}, expectedContext = null) {
+      if (docPreviewInlineUiRuntime?.mergeContextDoc) {
+        return docPreviewInlineUiRuntime.mergeContextDoc(patch, expectedContext);
+      }
       if (!canMutateDocumentPreviewContext(expectedContext)) return false;
       currentDocPreviewContext.doc = { ...(currentDocPreviewContext.doc || {}), ...(patch || {}) };
       return true;
@@ -32964,6 +30018,9 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     }
 
     function refreshDocumentPreviewInlineDisplay(field, value) {
+      if (docPreviewInlineUiRuntime?.refreshInlineDisplay) {
+        return docPreviewInlineUiRuntime.refreshInlineDisplay(field, value);
+      }
       const normalized = normalizeDocumentPreviewInlineFieldValue(field, value);
       const ctxDoc = currentDocPreviewContext?.doc || {};
       if (field === 'name') {
@@ -33040,113 +30097,38 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       if (!ctx?.doc) return;
       if (options.expectedContext && ctx !== options.expectedContext) return;
       const normalizedValue = normalizeDocumentPreviewInlineFieldValue(field, rawValue);
-      const saveKey = `${ctx.docRef || ctx.id || ''}::${field}`;
-      const signature = `${field}::${normalizedValue}`;
-      if (!options.force && docPreviewInlineLastSavedValues.get(saveKey) === signature) return;
-
-      const sourceType = String(ctx.sourceType || '').trim();
-      if (sourceType === 'standalone') {
-        const row = await getDecrypted('globalDocs', ctx.id, 'id');
-        if (!row) return;
-        const next = { ...row, updatedAt: Date.now() };
-        if (field === 'name' && normalizedValue) next.name = normalizedValue;
-        if (field === 'theme') {
-          const themeTarget = normalizedValue || 'General';
-          const relocated = await maybeRelocateStoredDocumentByTheme(row, themeTarget, {
-            scope: 'global',
-            projectId: 'global',
-            rubric: inferStorageRubricFromPath(row?.storagePath || '', 'global-doc-upload')
-          });
-          Object.assign(next, relocated);
-          next.theme = themeTarget;
-        }
-        if (field === 'notes') next.notes = normalizedValue;
-        if (field === 'sharingMode') next.sharingMode = normalizeSharingMode(normalizedValue, normalizeSharingMode(row.sharingMode, 'private'));
-        await putEncrypted('globalDocs', next, 'id');
-        mergeDocumentPreviewContextDoc(next, ctx);
-      } else if (sourceType === 'project-doc') {
-        const state = await getProjectState(ctx.projectId, { ignoreAccessCheck: true });
-        if (!state?.project) return;
-        const doc = (state.documents || []).find((item) => String(item.docId || '') === String(ctx.docId || ''));
-        if (!doc) return;
-        const canEdit = canEditProjectMeta(state) || (doc.createdBy && doc.createdBy === currentUser?.userId);
-        if (!canEdit) return;
-        const changes = {};
-        if (field === 'name' && normalizedValue) changes.name = normalizedValue;
-        if (field === 'theme') {
-          const themeTarget = normalizedValue || 'General';
-          const relocated = await maybeRelocateStoredDocumentByTheme(doc, themeTarget, {
-            scope: 'project',
-            projectId: ctx.projectId,
-            rubric: inferStorageRubricFromPath(doc?.storagePath || '', 'project-doc-upload')
-          });
-          Object.assign(changes, relocated);
-          changes.theme = themeTarget;
-        }
-        if (field === 'notes') changes.notes = normalizedValue;
-        if (field === 'sharingMode') {
-          changes.sharingMode = normalizeSharingMode(
-            normalizedValue,
-            normalizeSharingMode(doc.sharingMode, normalizeSharingMode(state.project.sharingMode, 'shared'))
-          );
-        }
-        if (!Object.keys(changes).length) return;
-        const event = createEvent(EventTypes.UPDATE_DOCUMENT, ctx.projectId, currentUser.userId, { docId: doc.docId, changes });
-        await publishEvent(event);
-        if (sharedFolderHandle) void syncProjectEventsToSharedSpace(ctx.projectId, [event]);
-        mergeDocumentPreviewContextDoc(changes, ctx);
-      } else if ((sourceType === 'project' || sourceType === 'task-attachment') && field === 'name') {
-        const state = await getProjectState(ctx.projectId, { ignoreAccessCheck: true });
-        const task = (state?.tasks || []).find((item) => String(item.taskId || '') === String(ctx.taskId || ''));
-        const idx = Number(ctx.attachmentIndex);
-        if (!state?.project || !task || !task.attachments?.[idx] || !canEditTaskInProject(task, state)) return;
-        const attachments = [...(task.attachments || [])];
-        attachments[idx] = { ...attachments[idx], name: normalizedValue || attachments[idx].name };
-        const event = createEvent(EventTypes.UPDATE_TASK, ctx.projectId, currentUser.userId, {
-          taskId: task.taskId,
-          changes: { attachments }
+      if (docStorageBindingRuntime?.persistDocumentPreviewInlineField) {
+        const result = await docStorageBindingRuntime.persistDocumentPreviewInlineField({
+          field,
+          rawValue: normalizedValue,
+          force: options.force === true,
+          context: ctx
         });
-        await publishEvent(event);
-        if (sharedFolderHandle) void syncProjectEventsToSharedSpace(ctx.projectId, [event]);
-        mergeDocumentPreviewContextDoc({ name: attachments[idx].name }, ctx);
-      } else {
+        if (result?.contextPatch) {
+          mergeDocumentPreviewContextDoc(result.contextPatch, ctx);
+        }
         return;
       }
-
-      docPreviewInlineLastSavedValues.set(saveKey, signature);
     }
 
     async function scheduleDocumentPreviewInlineSave(field, rawValue, options = {}) {
       if (!currentDocPreviewContext?.doc) return;
       const contextSnapshot = options.expectedContext || currentDocPreviewContext;
       const normalizedValue = normalizeDocumentPreviewInlineFieldValue(field, rawValue);
-      if (docPreviewInlineDebounceTimers.has(field)) {
-        clearTimeout(docPreviewInlineDebounceTimers.get(field));
+      if (docStorageBindingRuntime?.scheduleDocumentPreviewInlineSave) {
+        return docStorageBindingRuntime.scheduleDocumentPreviewInlineSave({
+          field,
+          rawValue: normalizedValue,
+          context: contextSnapshot,
+          immediate: options.immediate === true
+        });
       }
-      docPreviewInlineDebounceTimers.set(field, setTimeout(() => {
-        setInlineSaveIndicator('doc-preview', 'saving');
-        runWithoutGlobalLoading(() => persistDocumentPreviewInlineField(field, normalizedValue, { expectedContext: contextSnapshot }))
-          .then(() => setInlineSaveIndicator('doc-preview', 'saved'))
-          .catch((error) => {
-            setInlineSaveIndicator('doc-preview', 'error');
-            console.error('document preview inline save failed', error);
-          });
-      }, options.immediate ? 0 : 220));
-      if (docPreviewInlineFinalizeTimers.has(field)) {
-        clearTimeout(docPreviewInlineFinalizeTimers.get(field));
-      }
-      docPreviewInlineFinalizeTimers.set(field, setTimeout(() => {
-        setInlineSaveIndicator('doc-preview', 'saving');
-        runWithoutGlobalLoading(() => persistDocumentPreviewInlineField(field, normalizedValue, { force: true, expectedContext: contextSnapshot }))
-          .then(() => setInlineSaveIndicator('doc-preview', 'saved'))
-          .catch((error) => {
-            setInlineSaveIndicator('doc-preview', 'error');
-            console.error('document preview inline finalize save failed', error);
-          });
-      }, 900));
     }
 
     function startDocumentPreviewInlineEdit(triggerEl) {
+      if (docPreviewInlineUiRuntime?.startInlineEdit) {
+        return docPreviewInlineUiRuntime.startInlineEdit(triggerEl);
+      }
       if (!currentDocPreviewCanEdit || !triggerEl || triggerEl.dataset.inlineEditing === '1') return;
       const inlineContext = currentDocPreviewContext;
       const field = String(triggerEl.dataset.inlineDocPreviewField || '').trim();
@@ -33207,6 +30189,9 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     }
 
     function initDocumentPreviewInlineEditing(canEdit = false) {
+      if (docPreviewInlineUiRuntime?.initInlineEditing) {
+        return docPreviewInlineUiRuntime.initInlineEditing(canEdit);
+      }
       currentDocPreviewCanEdit = !!canEdit;
       const editableFields = ['name', 'sharingMode', 'theme', 'notes'];
       editableFields.forEach((field) => {
@@ -33247,6 +30232,9 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     }
 
     async function resolveDocumentPreviewContext(ref = null) {
+      if (docStorageBindingRuntime?.resolveDocumentPreviewContext) {
+        return docStorageBindingRuntime.resolveDocumentPreviewContext(ref);
+      }
       const sourceType = String(ref?.sourceType || '').trim();
       if (sourceType === 'standalone' && ref?.id) {
         const row = await getDecrypted('globalDocs', ref.id, 'id');
@@ -33297,13 +30285,6 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         };
       }
       return null;
-    }
-
-    function formatDocumentStoragePathForDisplay(doc = {}) {
-      const path = String(doc?.storagePath || '').trim();
-      if (path) return path;
-      if (String(doc?.storageMode || '').trim() === 'fs') return 'Stockage disque (chemin non disponible)';
-      return 'Stockage local (IndexedDB)';
     }
 
     async function renderPdfPreviewInModal(contentEl, dataUrl, fileName = 'PDF') {
@@ -33447,17 +30428,14 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       const modal = document.getElementById('modal-doc-preview');
       const title = document.getElementById('doc-preview-title');
       const content = document.getElementById('doc-preview-content');
-      const metaName = document.getElementById('doc-preview-meta-name');
-      const metaTheme = document.getElementById('doc-preview-meta-theme');
-      const metaNotes = document.getElementById('doc-preview-meta-notes');
-      const metaSharing = document.getElementById('doc-preview-meta-sharing');
-      const metaSource = document.getElementById('doc-preview-meta-source');
       if (!modal || !title || !content) return;
 
       const data = decodeURIComponent(dataEncoded || '');
       const name = decodeURIComponent(nameEncoded || '');
       const type = decodeURIComponent(typeEncoded || '');
-      const parsedRef = parseDocumentPreviewRef(refEncoded);
+      const parsedRef = docPreviewModalUiRuntime?.parseDocumentPreviewRef
+        ? docPreviewModalUiRuntime.parseDocumentPreviewRef(refEncoded)
+        : null;
       const resolvedContext = await resolveDocumentPreviewContext(parsedRef);
       currentDocPreviewContext = resolvedContext || {
         sourceType: '',
@@ -33476,105 +30454,28 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       title.textContent = `Aperçu: ${name || 'document'}`;
       content.innerHTML = '';
 
-      if (!data) {
-        const p = document.createElement('p');
-        p.className = 'text-sm text-slate-500';
-        p.textContent = 'Aucun contenu disponible pour ce document.';
-        content.appendChild(p);
-      } else if ((type || '').startsWith('image/')) {
-        const safeSrc = sanitizeUrlForDom(data, {
-          allowHttp: true,
-          allowBlob: true,
-          allowData: true,
-          allowDataMimePrefixes: ['image/']
-        });
-        if (!safeSrc) {
-          const p = document.createElement('p');
-          p.className = 'text-sm text-slate-500';
-          p.textContent = 'Prévisualisation bloquée (source non sûre).';
-          content.appendChild(p);
-        } else {
-          const img = document.createElement('img');
-          img.src = safeSrc;
-          img.alt = String(name || 'image');
-          img.className = 'max-w-full h-auto rounded-lg mx-auto';
-          content.appendChild(img);
-        }
-      } else if ((type || '').includes('pdf') || String(name || '').toLowerCase().endsWith('.pdf')) {
-        const rendered = await renderPdfPreviewInModal(content, data, name);
-        if (!rendered) {
-          const safeSrc = sanitizeUrlForDom(data, {
-            allowHttp: true,
-            allowBlob: true,
-            allowData: true,
-            allowDataMimePrefixes: ['application/pdf']
-          });
-          if (!safeSrc) {
-            const p = document.createElement('p');
-            p.className = 'text-sm text-slate-500';
-            p.textContent = 'Prévisualisation PDF indisponible pour ce document.';
-            content.appendChild(p);
-          } else {
-            const frame = document.createElement('iframe');
-            frame.src = safeSrc;
-            frame.className = 'w-full h-[70vh] rounded-lg border border-slate-200';
-            frame.title = String(name || 'PDF');
-            content.appendChild(frame);
-          }
-        }
-      } else if ((type || '').startsWith('text/')) {
-        const safeSrc = sanitizeUrlForDom(data, {
-          allowHttp: false,
-          allowBlob: true,
-          allowData: true,
-          allowDataMimePrefixes: ['text/']
-        });
-        if (!safeSrc) {
-          const p = document.createElement('p');
-          p.className = 'text-sm text-slate-500';
-          p.textContent = 'Prévisualisation bloquée (source non sûre).';
-          content.appendChild(p);
-        } else {
-          const frame = document.createElement('iframe');
-          frame.src = safeSrc;
-          frame.className = 'w-full h-[70vh] rounded-lg border border-slate-200 bg-white';
-          frame.title = String(name || 'Texte');
-          content.appendChild(frame);
-        }
+      if (docPreviewModalUiRuntime?.renderPreviewContent) {
+        await docPreviewModalUiRuntime.renderPreviewContent(content, { data, type, name });
       } else {
         const p = document.createElement('p');
         p.className = 'text-sm text-slate-500';
-        p.textContent = 'Prévisualisation non disponible. Utilisez Télécharger.';
+        p.textContent = 'Previsualisation indisponible: module modal non charge.';
         content.appendChild(p);
       }
 
-      if (metaName) metaName.textContent = String(currentDocPreviewContext?.doc?.name || name || 'document');
-      if (metaTheme) metaTheme.textContent = String(currentDocPreviewContext?.doc?.theme || 'Général');
-      if (metaNotes) metaNotes.textContent = String(currentDocPreviewContext?.doc?.notes || 'Aucune note.');
-      if (metaSharing) metaSharing.textContent = sharingModeLabel(normalizeSharingMode(currentDocPreviewContext?.doc?.sharingMode, 'private'));
-      if (metaSource) metaSource.textContent = getDocumentPreviewSourceLabel(currentDocPreviewContext || {});
+      docPreviewModalUiRuntime?.applyPreviewMetadata?.(currentDocPreviewContext || {}, name || 'document');
       initDocumentPreviewInlineEditing(!!currentDocPreviewContext?.canEdit);
       modal.classList.remove('hidden');
     }
 
     async function closeDocumentPreview() {
-      const modal = document.getElementById('modal-doc-preview');
-      if (!modal || modal.classList.contains('hidden')) return;
-      const content = document.getElementById('doc-preview-content');
-      if (content) content.innerHTML = '';
-      const previousContext = currentDocPreviewContext;
-      currentDocPreviewContext = null;
-      currentDocPreviewCanEdit = false;
-      resetDocumentPreviewInlineEditingState();
-      modal?.classList.add('hidden');
-      if (workspaceMode === 'project' && currentProjectId) {
-        const latest = await getProjectState(currentProjectId);
-        if (latest?.project) {
-          currentProjectState = latest;
-          renderDocuments(latest);
+      if (docPreviewModalUiRuntime?.closePreviewModal) {
+        await docPreviewModalUiRuntime.closePreviewModal();
+      } else {
+        const modal = document.getElementById('modal-doc-preview');
+        if (modal && !modal.classList.contains('hidden')) {
+          modal.classList.add('hidden');
         }
-      } else if (workspaceMode === 'globalDocs' || previousContext?.sourceType === 'standalone') {
-        await renderGlobalDocs();
       }
     }
 
@@ -35225,299 +32126,79 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     }
 
     async function toggleTaskStatus(taskId) {
-      if (!currentProjectId) return;
-
-      const state = await getProjectState(currentProjectId);
-      const task = state.tasks.find(t => t.taskId === taskId);
-
-      if (!task) return;
-      if (!canChangeTaskStatus(task, state)) {
-        showToast('Action non autorisee');
+      if (taskLifecycleDomainRuntime?.toggleTaskStatus) {
+        await taskLifecycleDomainRuntime.toggleTaskStatus(taskId);
         return;
       }
-      if (!ensureProjectResourceUnlockedForAction(state, LOCK_SCOPE_TASK, task.taskId, 'Changement de statut').ok) {
-        return;
-      }
-
-      // Cycle through statuses
-      const statuses = ['todo', 'en-cours', 'suspendu', 'termine'];
-      const currentIndex = statuses.indexOf(task.status);
-      const newStatus = statuses[(currentIndex + 1) % statuses.length];
-      const transition = buildTaskStatusTransitionChanges(task, newStatus, { nowTs: Date.now() });
-
-      const event = createEvent(
-        EventTypes.UPDATE_TASK,
-        currentProjectId,
-        currentUser.userId,
-        {
-          taskId: taskId,
-          changes: transition.changes
-        }
-      );
-
-      await runWithLoading(async () => {
-        await publishEvent(event);
-        if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(currentProjectId, [event]); }
-      });
-
-      if (transition.recurringRolloverApplied && transition.nextDueDate) {
-        showToast(`🔁 Tâche récurrente replanifiée au ${formatDate(transition.nextDueDate)}`);
-      } else {
-        showToast('✅ Statut mis à jour');
-      }
-      await showProjectDetail(currentProjectId);
     }
 
     async function markProjectTaskDone(taskId) {
-      if (!currentProjectId) return;
-      const state = await getProjectState(currentProjectId);
-      const task = state.tasks.find(t => t.taskId === taskId);
-      if (!task) return;
-      if ((task.status || 'todo') === 'termine') return;
-      if (!canChangeTaskStatus(task, state)) {
-        showToast('Action non autorisee');
+      if (taskLifecycleDomainRuntime?.markProjectTaskDone) {
+        await taskLifecycleDomainRuntime.markProjectTaskDone(taskId);
         return;
       }
-      if (!ensureProjectResourceUnlockedForAction(state, LOCK_SCOPE_TASK, task.taskId, 'Changement de statut').ok) {
-        return;
-      }
-
-      const transition = buildTaskStatusTransitionChanges(task, 'termine', { nowTs: Date.now() });
-      const event = createEvent(
-        EventTypes.UPDATE_TASK,
-        currentProjectId,
-        currentUser.userId,
-        {
-          taskId,
-          changes: transition.changes
-        }
-      );
-
-      await runWithLoading(async () => {
-        await publishEvent(event);
-        if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(currentProjectId, [event]); }
-      });
-
-      if (transition.recurringRolloverApplied && transition.nextDueDate) {
-        showToast(`🔁 Tâche récurrente replanifiée au ${formatDate(transition.nextDueDate)}`);
-      } else {
-        showToast('✅ Tâche marquée comme réalisée');
-      }
-      await showProjectDetail(currentProjectId);
     }
 
     async function editTask(taskId) {
-      if (!currentProjectId) return;
-      const state = await getProjectState(currentProjectId);
-      const task = state.tasks.find(t => t.taskId === taskId);
-      if (!task) return;
-      if (!canEditTaskInProject(task, state)) {
-        showToast('Action non autorisee');
+      if (taskLifecycleDomainRuntime?.editTask) {
+        await taskLifecycleDomainRuntime.editTask(taskId);
         return;
       }
-      const lockResult = await acquireProjectResourceLock(currentProjectId, LOCK_SCOPE_TASK, task.taskId, { scope: 'task-edit' });
-      if (!lockResult.ok) {
-        showToast(buildLockBlockedMessage(lockResult.lock, 'Tache en cours de modification'));
-        return;
-      }
-      activeTaskEditLock = {
-        projectId: currentProjectId,
-        resourceType: LOCK_SCOPE_TASK,
-        resourceId: task.taskId,
-        lockId: lockResult.lockId
-      };
-      openTaskModal(task);
     }
 
     async function deleteTask(taskId) {
-      if (!currentProjectId) return;
-      const state = await getProjectState(currentProjectId);
-      const task = state.tasks.find(t => t.taskId === taskId);
-      if (!task) return;
-      if (!canDeleteTaskInProject(task, state)) {
-        showToast('Action non autorisee');
+      if (taskLifecycleDomainRuntime?.deleteTask) {
+        await taskLifecycleDomainRuntime.deleteTask(taskId);
         return;
       }
-      if (!ensureProjectResourceUnlockedForAction(state, LOCK_SCOPE_TASK, task.taskId, 'Suppression').ok) {
-        return;
-      }
-      if (!confirm('Supprimer cette tâche ?')) return;
-
-      const event = createEvent(
-        EventTypes.DELETE_TASK,
-        currentProjectId,
-        currentUser.userId,
-        { taskId }
-      );
-
-      await publishEvent(event);
-      if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(currentProjectId, [event]); }
-      showToast('✅ Tâche supprimée');
-      addNotification('Tache', 'Une tache a ete supprimee', currentProjectId, {
-        targetView: 'list',
-        linkLabel: 'Ouvrir le projet'
-      });
-      await showProjectDetail(currentProjectId);
     }
 
     async function archiveTask(taskId) {
-      if (!currentProjectId) return;
-      const state = await getProjectState(currentProjectId);
-      const task = state.tasks.find(t => t.taskId === taskId);
-      if (!task) return;
-      if (!canEditTaskInProject(task, state)) {
-        showToast('Action non autorisee');
+      if (taskLifecycleDomainRuntime?.archiveTask) {
+        await taskLifecycleDomainRuntime.archiveTask(taskId);
         return;
       }
-      if (!ensureProjectResourceUnlockedForAction(state, LOCK_SCOPE_TASK, task.taskId, 'Archivage').ok) {
-        return;
-      }
-      if (!confirm('Archiver cette tâche ?')) return;
-
-      const event = createEvent(
-        EventTypes.UPDATE_TASK,
-        currentProjectId,
-        currentUser.userId,
-        {
-          taskId,
-          changes: {
-            status: 'termine',
-            completedAt: Date.now(),
-            archivedAt: Date.now()
-          }
-        }
-      );
-      await publishEvent(event);
-      if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(currentProjectId, [event]); }
-      showToast('✅ Tâche archivée');
-      await showProjectDetail(currentProjectId);
     }
 
     async function toggleSubtask(taskId, subtaskId, done) {
-      if (!currentProjectId) return;
-      const state = await getProjectState(currentProjectId);
-      const task = state.tasks.find(t => t.taskId === taskId);
-      if (!task) return;
-      if (!canChangeTaskStatus(task, state)) {
-        showToast('Action non autorisee');
+      if (taskLifecycleDomainRuntime?.toggleSubtask) {
+        await taskLifecycleDomainRuntime.toggleSubtask(taskId, subtaskId, done);
         return;
       }
-
-      const subtasks = (task.subtasks || []).map(st => st.id === subtaskId ? { ...st, done } : st);
-      const event = createEvent(
-        EventTypes.UPDATE_TASK,
-        currentProjectId,
-        currentUser.userId,
-        { taskId, changes: { subtasks } }
-      );
-
-      await publishEvent(event);
-      if (sharedFolderHandle) void syncProjectEventsToSharedSpace(currentProjectId, [event]);
-      await showProjectDetail(currentProjectId);
     }
 
     async function removeAttachment(taskId, attachmentIndex) {
-      const normalizedTaskId = String(taskId || '').trim();
-      const normalizedIndex = Number.parseInt(String(attachmentIndex), 10);
-      if (!normalizedTaskId || !Number.isFinite(normalizedIndex) || normalizedIndex < 0) return;
-
-      let projectId = String(currentProjectId || '').trim();
-      if (!projectId && currentGlobalTaskDetailResolved?.sourceType === 'project') {
-        const ctxTaskId = String(currentGlobalTaskDetailResolved?.task?.taskId || '').trim();
-        if (ctxTaskId && ctxTaskId === normalizedTaskId) {
-          projectId = String(currentGlobalTaskDetailResolved?.projectId || '').trim();
-        }
-      }
-      if (!projectId) return;
-
-      const state = await getProjectState(projectId);
-      const task = state.tasks.find(t => t.taskId === normalizedTaskId);
-      if (!task) return;
-      if (!canEditTaskInProject(task, state)) {
-        showToast('Action non autorisee');
+      if (taskLifecycleDomainRuntime?.removeAttachment) {
+        await taskLifecycleDomainRuntime.removeAttachment(taskId, attachmentIndex);
         return;
-      }
-
-      const attachments = [...(task.attachments || [])];
-      if (normalizedIndex >= attachments.length) return;
-      attachments.splice(normalizedIndex, 1);
-
-      const event = createEvent(
-        EventTypes.UPDATE_TASK,
-        projectId,
-        currentUser.userId,
-        { taskId: normalizedTaskId, changes: { attachments } }
-      );
-      await publishEvent(event);
-      if (sharedFolderHandle) void syncProjectEventsToSharedSpace(projectId, [event]);
-      showToast('✅ Document supprimé');
-      if (workspaceMode === 'project' && String(currentProjectId || '').trim() === projectId) {
-        await showProjectDetail(projectId);
-      } else if (currentGlobalTaskDetailRef) {
-        await openGlobalTaskDetails(currentGlobalTaskDetailRef);
       }
     }
 
     async function readDocumentFilesFromInput(inputId, options = {}) {
-      const input = document.getElementById(inputId);
-      const files = Array.from(input?.files || []);
-      if (!files.length) return [];
-      const safeOptions = (options && typeof options === 'object') ? options : {};
-      const useFsStorage = canUseSharedFilesystemDocumentStorage();
-      const fileScope = String(safeOptions.scope || 'project').trim() || 'project';
-      const fileProjectId = String(safeOptions.projectId || currentProjectId || 'global').trim() || 'global';
-      const fileTheme = String(safeOptions.theme || 'General').trim() || 'General';
-      const fileRubric = String(safeOptions.rubric || 'document-upload').trim() || 'document-upload';
-      const docs = await Promise.all(
-        files.map(async (file) => {
-          const baseDoc = {
-            docId: uuidv4(),
-            name: file.name,
-            type: file.type || 'application/octet-stream',
-            size: file.size,
-            uploadedAt: Date.now()
-          };
-          if (useFsStorage) {
-            try {
-              const fsMeta = await window.TaskMDADocumentStorage.writeFile(sharedFolderHandle, file, {
-                rubric: fileRubric,
-                scope: fileScope,
-                projectId: fileProjectId,
-                theme: fileTheme
-              });
-              return {
-                ...baseDoc,
-                data: '',
-                storageMode: fsMeta.storageMode,
-                storageProvider: fsMeta.storageProvider,
-                storagePath: fsMeta.storagePath,
-                storedAt: fsMeta.storedAt
-              };
-            } catch (error) {
-              console.warn('Falling back to IndexedDB payload storage for document:', error);
-            }
-          }
-          const data = window.TaskMDADocumentStorage?.readFileAsDataUrl
-            ? await window.TaskMDADocumentStorage.readFileAsDataUrl(file)
-            : await fileToDataUrl(file);
-          return {
-            ...baseDoc,
-            data
-          };
-        })
-      );
-      return docs;
+      if (docStorageBindingRuntime?.readDocumentFilesFromInput) {
+        return docStorageBindingRuntime.readDocumentFilesFromInput(inputId, options);
+      }
+      return [];
     }
 
     async function readProjectDocumentFiles(options = {}) {
+      if (docStorageBindingRuntime?.readProjectDocumentFiles) {
+        return docStorageBindingRuntime.readProjectDocumentFiles(options);
+      }
       return readDocumentFilesFromInput('project-doc-files', options);
     }
 
     async function readCreateProjectDocumentFiles(options = {}) {
+      if (docStorageBindingRuntime?.readCreateProjectDocumentFiles) {
+        return docStorageBindingRuntime.readCreateProjectDocumentFiles(options);
+      }
       return readDocumentFilesFromInput('project-create-doc-files', options);
     }
 
     async function readEditProjectDocumentFiles(options = {}) {
+      if (docStorageBindingRuntime?.readEditProjectDocumentFiles) {
+        return docStorageBindingRuntime.readEditProjectDocumentFiles(options);
+      }
       return readDocumentFilesFromInput('edit-project-doc-files', options);
     }
 
@@ -35997,6 +32678,805 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     // MODULE 7: APPLICATION LIFECYCLE
     // ============================================================================
 
+    const runtimeContract = window.TaskMDARuntimeContract || null;
+    const requiredRuntimeModules = [
+      { moduleName: 'TaskMDAAppInit', methodName: 'createModule' },
+      { moduleName: 'TaskMDAShellUI', methodName: 'createModule' },
+      { moduleName: 'TaskMDAProjectsUI', methodName: 'bind' },
+      { moduleName: 'TaskMDACommsUI', methodName: 'bind' },
+      { moduleName: 'TaskMDAAdminUI', methodName: 'bind' },
+      { moduleName: 'TaskMDAWorkflow', methodName: 'createModule' }
+    ];
+    const runtimeContractStatus = runtimeContract?.validateRequiredModules
+      ? runtimeContract.validateRequiredModules(requiredRuntimeModules)
+      : { ok: true, missing: [] };
+    const orchestratorDomainRegistry = runtimeContract?.buildDomainRegistry
+      ? runtimeContract.buildDomainRegistry([
+          { domain: 'shell', moduleName: 'TaskMDAShellUI', methodName: 'createModule', required: true },
+          { domain: 'shell-notifications', moduleName: 'TaskMDAShellNotifications', methodName: 'createModule', required: false },
+          { domain: 'header-search', moduleName: 'TaskMDAHeaderSearch', methodName: 'createModule', required: false },
+          { domain: 'projects', moduleName: 'TaskMDAProjectsUI', methodName: 'bind', required: true },
+          { domain: 'project-ui', moduleName: 'TaskMDAProjectViewsUI', methodName: 'createModule', required: false },
+          { domain: 'project-members-domain', moduleName: 'TaskMDAProjectMembersDomain', methodName: 'createModule', required: false },
+          { domain: 'task-lifecycle-domain', moduleName: 'TaskMDATaskLifecycleDomain', methodName: 'createModule', required: false },
+          { domain: 'doc-storage-binding', moduleName: 'TaskMDADocStorageBinding', methodName: 'createModule', required: false },
+          { domain: 'doc-preview-inline-ui', moduleName: 'TaskMDADocPreviewInlineUI', methodName: 'createModule', required: false },
+          { domain: 'doc-preview-modal-ui', moduleName: 'TaskMDADocPreviewModalUI', methodName: 'createModule', required: false },
+          { domain: 'communications', moduleName: 'TaskMDACommsUI', methodName: 'bind', required: true },
+          { domain: 'admin', moduleName: 'TaskMDAAdminUI', methodName: 'bind', required: true },
+          { domain: 'workflow', moduleName: 'TaskMDAWorkflow', methodName: 'createModule', required: true },
+          { domain: 'global-notes', moduleName: 'TaskMDAGlobalNotes', methodName: 'createModule', required: false },
+          { domain: 'global-calendar', moduleName: 'TaskMDAGlobalCalendar', methodName: 'createModule', required: false },
+          { domain: 'global-docs', moduleName: 'TaskMDAGlobalDocs', methodName: 'createModule', required: false },
+          { domain: 'global-feed', moduleName: 'TaskMDAGlobalFeed', methodName: 'createModule', required: false },
+          { domain: 'global-messages', moduleName: 'TaskMDAGlobalMessages', methodName: 'createModule', required: false },
+          { domain: 'via-annuaire-ui', moduleName: 'TaskMDAViaAnnuaireUI', methodName: 'createModule', required: false },
+          { domain: 'email-generator', moduleName: 'TaskMDAEmailGenerator', methodName: 'createModule', required: false },
+          { domain: 'app-init', moduleName: 'TaskMDAAppInit', methodName: 'createModule', required: true }
+        ])
+      : [];
+    window.TaskMDAOrchestratorMeta = {
+      generatedAt: Date.now(),
+      requiredModules: requiredRuntimeModules,
+      runtimeContractStatus,
+      domains: orchestratorDomainRegistry
+    };
+
+    shellUiRuntime = window.TaskMDAShellUI?.createModule
+      ? window.TaskMDAShellUI.createModule({
+          updateTopbarHeightVar,
+          syncProjectWorkFocusButton,
+          applyProjectOverviewCollapsedState,
+          applyProjectSubnavLayout,
+          getGlobalDocsUploadCollapsed: () => globalDocsUploadCollapsed,
+          setGlobalDocsUploadCollapsed,
+          getProjectDocsUploadCollapsed: () => projectDocsUploadCollapsed,
+          setProjectDocsUploadCollapsed,
+          onCreateProjectFromSidebar: () => {
+            document.getElementById('btn-create-project')?.click();
+          },
+          showDashboard,
+          showGlobalWorkspace,
+          openGlobalFeedReference,
+          openGlobalFeedPost,
+          openWorkflowSidebarGroup,
+          applyWorkspaceWidthMode
+        })
+      : null;
+
+    shellNotificationsRuntime = window.TaskMDAShellNotifications?.createModule
+      ? window.TaskMDAShellNotifications.createModule({
+          toggleNotificationsPanel,
+          markAllNotificationsRead,
+          clearNotifications
+        })
+      : null;
+
+    headerSearchRuntime = window.TaskMDAHeaderSearch?.createModule
+      ? window.TaskMDAHeaderSearch.createModule({
+          setGlobalSearchQuery: (value) => {
+            globalSearchQuery = String(value || '').trim();
+          },
+          onSearchContextChanged: async () => {
+            if (workspaceMode === 'global') {
+              if (globalWorkspaceView === 'tasks') {
+                globalTasksPage = 1;
+                globalArchivedTasksPage = 1;
+                await renderGlobalTasks();
+              }
+              if (globalWorkspaceView === 'workflow') await renderWorkflowWorkspace();
+              if (globalWorkspaceView === 'calendar') await (globalCalendarRuntime?.renderGlobalCalendar?.() ?? renderGlobalCalendar());
+              if (globalWorkspaceView === 'docs') await renderGlobalDocs();
+              if (globalWorkspaceView === 'notes') await (globalNotesRuntime?.renderGlobalNotes?.() ?? renderGlobalNotes());
+              if (globalWorkspaceView === 'messages') await renderGlobalMessages();
+              if (globalWorkspaceView === 'rgpd') await renderRgpdWorkspace();
+              if (globalWorkspaceView === 'settings') await renderGlobalSettings();
+              return;
+            }
+            if (workspaceMode === 'dashboard') projectsPage = 1;
+            if (workspaceMode === 'project') tasksPage = 1;
+            await rerenderCurrentContext();
+          },
+          buildResults: buildHeaderSearchResults,
+          renderResults: renderHeaderSearchResults,
+          hideResults: hideHeaderSearchResults,
+          executeResult: executeHeaderSearchResult,
+          getResults: () => headerSearchResults,
+          setResults: (value) => {
+            headerSearchResults = Array.isArray(value) ? value : [];
+          },
+          getActiveIndex: () => headerSearchActiveIndex,
+          setActiveIndex: (value) => {
+            headerSearchActiveIndex = Number.isFinite(value) ? Number(value) : -1;
+          }
+        })
+      : null;
+
+    docEditorUiRuntime = window.TaskMDADocEditorUI?.createModule
+      ? window.TaskMDADocEditorUI.createModule({
+          closeDocumentEditorModal,
+          saveDocumentEditorChanges,
+          updateDocumentEditorFileSummary,
+          applyMarkdownEditorAction,
+          setSpreadsheetEditorTab,
+          persistCurrentSpreadsheetXlsxSheet,
+          getA1ColumnLabel,
+          isSpreadsheetMode: () => Boolean(currentDocEditorContext && String(currentDocEditorContext.mode || '').startsWith('spreadsheet')),
+          isSpreadsheetXlsxTab: () => docSpreadsheetEditorState.activeTab === 'xlsx',
+          isSpreadsheetCssTab: () => docSpreadsheetEditorState.activeTab === 'css',
+          isMarkdownMode: () => Boolean(currentDocEditorContext?.isMarkdown),
+          getSpreadsheetTable: () => docSpreadsheetEditorState.table,
+          getSpreadsheetColumns: () => docSpreadsheetEditorState.xlsxColumns,
+          setSpreadsheetColumns: (value) => {
+            docSpreadsheetEditorState.xlsxColumns = Math.max(1, Number(value) || 1);
+          },
+          setSpreadsheetSheetName: (value) => {
+            docSpreadsheetEditorState.sheetName = String(value || '').trim();
+          }
+        })
+      : null;
+
+    brandingUiRuntime = window.TaskMDABrandingUI?.createModule
+      ? window.TaskMDABrandingUI.createModule({
+          hexToRgbString,
+          colorToHex,
+          normalizeChromeBackgroundColor,
+          defaultChromeBgLight: DEFAULT_APP_BRANDING.chromeBgLight,
+          defaultChromeBgDark: DEFAULT_APP_BRANDING.chromeBgDark
+        })
+      : null;
+
+    viewOptionsUiRuntime = window.TaskMDAViewOptionsUI?.createModule
+      ? window.TaskMDAViewOptionsUI.createModule({
+          isAppAdmin,
+          showToast,
+          renderGlobalSettings,
+          getViewOptions: () => viewOptions,
+          defaultViewOptions: DEFAULT_VIEW_OPTIONS,
+          deepClone,
+          viewSectionMeta: VIEW_SECTION_META,
+          workspaceWidthSectionMeta: WORKSPACE_WIDTH_SECTION_META,
+          normalizeWorkspaceWideSections,
+          saveViewOptions,
+          renderViewOptionsMatrix,
+          applyTabIconsToUI,
+          normalizeWorkflowActionButtonsMode,
+          normalizeWorkflowActionButtonsShape,
+          applyWorkflowGroupTabsVisibility,
+          isWorkflowWorkspaceActive: () => workspaceMode === 'global' && globalWorkspaceView === 'workflow',
+          renderWorkflowIfAny: async () => {
+            if (workflowRuntime) await workflowRuntime.render().catch(() => null);
+          },
+          normalizeViewOptions,
+          updateAppChrome: (typeof updateAppChrome === 'function') ? updateAppChrome : null,
+          applyAppBrandingToHeader,
+          uxMetricsDefault: UX_METRICS_DEFAULT,
+          setUxMetrics: (next) => {
+            uxMetrics = next;
+          },
+          scheduleSaveUxMetrics,
+          viewRolePresets: VIEW_ROLE_PRESETS,
+          buildViewOptionsFromPreset
+        })
+      : null;
+
+    quickLinksUiRuntime = window.TaskMDAQuickLinksUI?.createModule
+      ? window.TaskMDAQuickLinksUI.createModule({
+          saveQuickAccessLinkFromForm,
+          resetQuickAccessLinkForm,
+          setQuickLinkCategoryFilterValue: (value) => {
+            quickLinkCategoryFilterValue = String(value || 'all').trim() || 'all';
+          },
+          renderGlobalSettings,
+          showToast
+        })
+      : null;
+
+    projectCreateUiRuntime = window.TaskMDAProjectCreateUI?.createModule
+      ? window.TaskMDAProjectCreateUI.createModule({
+          openNewProjectModal,
+          closeNewProjectModal,
+          createGlobalGroupFromProjectCreateModal,
+          updateProjectCreateModeBadge,
+          setProjectDeadlineModeUi
+        })
+      : null;
+
+    projectEditUiRuntime = window.TaskMDAProjectEditUI?.createModule
+      ? window.TaskMDAProjectEditUI.createModule({
+          closeEditProjectModal,
+          saveProjectEdits,
+          updateProjectEditSharingUi
+        })
+      : null;
+
+    projectViewsUiRuntime = window.TaskMDAProjectViewsUI?.createModule
+      ? window.TaskMDAProjectViewsUI.createModule({
+          setProjectView,
+          setProjectTaskPresentationMode,
+          setProjectTaskCardsColumns
+        })
+      : null;
+
+    tabOverflowUiRuntime = window.TaskMDATabOverflowUI?.createModule
+      ? window.TaskMDATabOverflowUI.createModule({
+          refreshManagedTabOverflow,
+          closeAllTabOverflowMenus,
+          setActiveWorkflowSidebarGroup,
+          getActiveWorkflowGroupFromDom,
+          setGlobalSettingsTab
+        })
+      : null;
+
+    projectFiltersUiRuntime = window.TaskMDAProjectFiltersUI?.createModule
+      ? window.TaskMDAProjectFiltersUI.createModule({
+          syncThemePickerSelectionFromInput,
+          syncThemePickerInputFromSelection,
+          refreshProjectHierarchyTaskFilters,
+          getCurrentProjectState: () => currentProjectState,
+          rerenderProjectFilters: () => {
+            tasksPage = 1;
+            rerenderActiveProjectTaskView();
+          }
+        })
+      : null;
+
+    docThemePickersUiRuntime = window.TaskMDADocThemePickersUI?.createModule
+      ? window.TaskMDADocThemePickersUI.createModule({
+          syncThemePickerSelectionFromInput,
+          syncThemePickerInputFromSelection
+        })
+      : null;
+
+    projectNotesFiltersUiRuntime = window.TaskMDAProjectNotesFiltersUI?.createModule
+      ? window.TaskMDAProjectNotesFiltersUI.createModule({
+          setProjectNotesSearchQuery: (value) => {
+            projectNotesSearchQuery = String(value || '').trim();
+          },
+          setProjectNotesFilterMode: (value) => {
+            projectNotesFilterMode = String(value || 'all').trim() || 'all';
+          },
+          setProjectNotesThemeFilter,
+          renderProjectNotes,
+          getCurrentProjectState: () => currentProjectState
+        })
+      : null;
+
+    globalNotesFiltersUiRuntime = window.TaskMDAGlobalNotesFiltersUI?.createModule
+      ? window.TaskMDAGlobalNotesFiltersUI.createModule({
+          setGlobalNotesThemeFilter: (value) => {
+            globalNotesThemeFilter = String(value || 'all').trim() || 'all';
+          },
+          getGlobalNotesThemeFilter: () => globalNotesThemeFilter,
+          setGlobalNotesPage: (value) => {
+            globalNotesPage = Math.max(1, Number(value) || 1);
+          },
+          renderGlobalNotes,
+          normalizeCatalogKey,
+          escapeHtml
+        })
+      : null;
+
+    globalReadActionsUiRuntime = window.TaskMDAGlobalReadActionsUI?.createModule
+      ? window.TaskMDAGlobalReadActionsUI.createModule({
+          closeGlobalReadModal,
+          openGlobalNoteEditor,
+          deleteGlobalNote,
+          exportGlobalNote,
+          exportGlobalNoteAsPdf,
+          exportGlobalNoteAsDocx
+        })
+      : null;
+
+    projectNotesActionsUiRuntime = window.TaskMDAProjectNotesActionsUI?.createModule
+      ? window.TaskMDAProjectNotesActionsUI.createModule({
+          openProjectNoteEditor,
+          closeProjectNoteEditor,
+          closeProjectNoteReadModal
+        })
+      : null;
+
+    projectReadActionsUiRuntime = window.TaskMDAProjectReadActionsUI?.createModule
+      ? window.TaskMDAProjectReadActionsUI.createModule({
+          getProjectNoteReadModalNoteId: () => projectNoteReadModalNoteId,
+          exportProjectNote,
+          openProjectNoteEditorFromReadModal,
+          deleteProjectNote,
+          hideProjectNoteSelectionMenu,
+          normalizeProjectNoteSelectionSnippet,
+          getProjectNoteSelectionMenuPayload: () => projectNoteSelectionMenuPayload,
+          showToast,
+          appendProjectNoteSelectionToProjectDescription,
+          copyTextToClipboard,
+          openNoteSelectionTaskTargetModal,
+          closeNoteSelectionTaskTargetModal,
+          handleProjectNoteSelectionCopyToTask
+        })
+      : null;
+
+    projectNoteEditorActionsUiRuntime = window.TaskMDAProjectNoteEditorActionsUI?.createModule
+      ? window.TaskMDAProjectNoteEditorActionsUI.createModule({
+          isProjectNoteModalFullscreen: () => !!projectNoteModalFullscreen,
+          applyProjectNoteModalFullscreen,
+          saveProjectNoteFromEditor,
+          pickGlobalFeedDigestImportMode,
+          importProjectNoteDigestFromFiles
+        })
+      : null;
+
+    projectReadInlineUiRuntime = window.TaskMDAProjectReadInlineUI?.createModule
+      ? window.TaskMDAProjectReadInlineUI.createModule({
+          saveProjectNoteReadInlineEdit,
+          cancelProjectNoteReadInlineEdit,
+          closeProjectNoteReadModal,
+          hideProjectNoteSelectionMenu,
+          closeNoteSelectionTaskTargetModal,
+          beginProjectNoteReadInlineEdit,
+          getProjectNoteReadSelectedSnippet,
+          showProjectNoteSelectionMenu,
+          getProjectNoteReadModalNoteId: () => projectNoteReadModalNoteId,
+          isProjectNoteReadInlineEditActive: () => !!projectNoteReadInlineEditActive
+        })
+      : null;
+
+    projectNoteModalShortcutsUiRuntime = window.TaskMDAProjectNoteModalShortcutsUI?.createModule
+      ? window.TaskMDAProjectNoteModalShortcutsUI.createModule({
+          saveProjectNoteFromEditor,
+          closeProjectNoteEditor,
+          trapProjectNoteModalFocus
+        })
+      : null;
+
+    layoutTogglesUiRuntime = window.TaskMDALayoutTogglesUI?.createModule
+      ? window.TaskMDALayoutTogglesUI.createModule({
+          setProjectSubnavLayout,
+          toggleProjectWorkFocus,
+          toggleProjectSettingsFocus,
+          setGlobalTaskCardsColumns
+        })
+      : null;
+
+    projectNavUiRuntime = window.TaskMDAProjectNavUI?.createModule
+      ? window.TaskMDAProjectNavUI.createModule({
+          canReadProjectActivity,
+          getCurrentProjectState: () => currentProjectState,
+          showToast,
+          setProjectView,
+          getCurrentProjectId: () => currentProjectId,
+          setActivityPage: (value) => {
+            activityPage = Math.max(1, Number(value) || 1);
+          },
+          getProjectEvents,
+          setCurrentProjectEvents: (events) => {
+            currentProjectEvents = Array.isArray(events) ? events : [];
+          },
+          renderActivity,
+          getProjectSubnavLayout: () => projectSubnavLayout,
+          setProjectTaskPresentationMode
+        })
+      : null;
+
+    projectCalendarTimelineUiRuntime = window.TaskMDAProjectCalendarTimelineUI?.createModule
+      ? window.TaskMDAProjectCalendarTimelineUI.createModule({
+          setTimelineFilter: (value) => {
+            timelineFilter = String(value || 'all').trim() || 'all';
+          },
+          getCurrentProjectTasks: () => currentProjectState?.tasks || [],
+          renderTimeline,
+          renderCalendar,
+          setProjectCalendarViewMode: (value) => {
+            projectCalendarViewMode = String(value || 'month').trim() || 'month';
+          },
+          getProjectCalendarViewMode: () => projectCalendarViewMode,
+          setCalendarDayFilterEnabled: (value) => {
+            calendarDayFilterEnabled = !!value;
+          },
+          getCalendarCursor: () => calendarCursor,
+          setCalendarCursor: (value) => {
+            calendarCursor = value instanceof Date ? value : new Date(value);
+          },
+          toYmd,
+          setSelectedCalendarDayKey: (value) => {
+            selectedCalendarDayKey = String(value || '').trim() || null;
+          }
+        })
+      : null;
+
+    projectComposerUiRuntime = window.TaskMDAProjectComposerUI?.createModule
+      ? window.TaskMDAProjectComposerUI.createModule({
+          getMessageMarkdownDebounceTimer: () => messageMarkdownDebounceTimer,
+          setMessageMarkdownDebounceTimer: (value) => {
+            messageMarkdownDebounceTimer = value;
+          },
+          getDiscussionInputPlainText,
+          renderSafeMarkdown,
+          setMessageRenderedDraftHtml: (value) => {
+            messageRenderedDraftHtml = String(value || '');
+          },
+          insertImageFilesIntoDiscussionInput,
+          showToast,
+          toggleEmojiPicker,
+          toggleProjectMessageFilesPanel,
+          insertTextAtCursor,
+          openMessageImagePreview,
+          closeMessageImagePreview,
+          clearProjectMessageReply
+        })
+      : null;
+
+    projectOutsideClickUiRuntime = window.TaskMDAProjectOutsideClickUI?.createModule
+      ? window.TaskMDAProjectOutsideClickUI.createModule({
+          isProjectEditorEmojiPickerOpen: () => !!projectEditorEmojiPickerOpen,
+          getProjectEditorEmojiAnchorId: () => projectEditorEmojiAnchorId,
+          getProjectEditorEmojiTarget: () => projectEditorEmojiTarget,
+          getActiveProjectEditorImage: () => activeProjectEditorImage,
+          getActiveProjectEditorId: () => activeProjectEditorId,
+          clearProjectEditorImageSelection,
+          updateProjectEditorImageOverlayPosition,
+          toggleProjectEditorEmojiPicker,
+          isEmojiPickerOpen: () => !!emojiPickerOpen,
+          toggleEmojiPicker,
+          isProjectMessageFilesPanelOpen: () => !!projectMessageFilesPanelOpen,
+          toggleProjectMessageFilesPanel
+        })
+      : null;
+
+    projectChatFiltersUiRuntime = window.TaskMDAProjectChatFiltersUI?.createModule
+      ? window.TaskMDAProjectChatFiltersUI.createModule({
+          setMessageFilters: (patch) => {
+            const next = patch && typeof patch === 'object' ? patch : {};
+            messageFilters = {
+              query: Object.prototype.hasOwnProperty.call(next, 'query') ? String(next.query || '') : String(messageFilters?.query || ''),
+              onlyMine: Object.prototype.hasOwnProperty.call(next, 'onlyMine') ? !!next.onlyMine : !!messageFilters?.onlyMine
+            };
+          },
+          resetMessageFilters: () => {
+            messageFilters = { query: '', onlyMine: false };
+          },
+          getCurrentProjectMessages: () => currentProjectState?.messages || [],
+          renderMessages
+        })
+      : null;
+
+    fileInputsUiRuntime = window.TaskMDAFileInputsUI?.createModule
+      ? window.TaskMDAFileInputsUI.createModule({
+          showToast,
+          formatFileSize
+        })
+      : null;
+
+    projectDocsControlsUiRuntime = window.TaskMDAProjectDocsControlsUI?.createModule
+      ? window.TaskMDAProjectDocsControlsUI.createModule({
+          setDocsFilters: (patch) => {
+            const next = patch && typeof patch === 'object' ? patch : {};
+            docsFilters = {
+              query: Object.prototype.hasOwnProperty.call(next, 'query') ? String(next.query || '') : String(docsFilters?.query || ''),
+              type: Object.prototype.hasOwnProperty.call(next, 'type') ? String(next.type || 'all') || 'all' : String(docsFilters?.type || 'all') || 'all',
+              sort: Object.prototype.hasOwnProperty.call(next, 'sort') ? String(next.sort || 'recent') || 'recent' : String(docsFilters?.sort || 'recent') || 'recent'
+            };
+          },
+          resetDocsFilters: () => {
+            docsFilters = { query: '', type: 'all', sort: 'recent' };
+          },
+          getCurrentProjectState: () => currentProjectState,
+          renderDocuments,
+          addProjectDocuments,
+          closeDocumentPreview,
+          registerSafeBackdropClose
+        })
+      : null;
+
+    projectActivityFiltersUiRuntime = window.TaskMDAProjectActivityFiltersUI?.createModule
+      ? window.TaskMDAProjectActivityFiltersUI.createModule({
+          setActivityFilters: (patch) => {
+            const next = patch && typeof patch === 'object' ? patch : {};
+            activityFilters = {
+              type: Object.prototype.hasOwnProperty.call(next, 'type') ? String(next.type || 'all') || 'all' : String(activityFilters?.type || 'all') || 'all',
+              author: Object.prototype.hasOwnProperty.call(next, 'author') ? String(next.author || '') : String(activityFilters?.author || ''),
+              period: Object.prototype.hasOwnProperty.call(next, 'period') ? String(next.period || 'all') || 'all' : String(activityFilters?.period || 'all') || 'all'
+            };
+          },
+          resetActivityFilters: () => {
+            activityFilters = { type: 'all', author: '', period: 'all' };
+          },
+          setActivityPage: (value) => {
+            activityPage = Math.max(1, Number(value) || 1);
+          },
+          getCurrentProjectEvents: () => currentProjectEvents,
+          renderActivity
+        })
+      : null;
+
+    projectThemeBindingsUiRuntime = window.TaskMDAProjectThemeBindingsUI?.createModule
+      ? window.TaskMDAProjectThemeBindingsUI.createModule({
+          syncThemePickerSelectionFromInput,
+          syncThemePickerInputFromSelection
+        })
+      : null;
+
+    const projectMembersDomainRuntime = window.TaskMDAProjectMembersDomain?.createModule
+      ? window.TaskMDAProjectMembersDomain.createModule({
+          state: {
+            getCurrentProjectId: () => currentProjectId,
+            getCurrentProjectState: () => currentProjectState,
+            getCurrentUser: () => currentUser,
+            getSelectedUserGroupId: () => selectedUserGroupId,
+            setSelectedUserGroupId: (value) => {
+              selectedUserGroupId = value || null;
+            },
+            getSelectedProjectGroupId: () => selectedProjectGroupId,
+            setSelectedProjectGroupId: (value) => {
+              selectedProjectGroupId = value || null;
+            }
+          },
+          uuidv4,
+          EventTypes,
+          getAllDecrypted,
+          putEncrypted,
+          upsertDirectoryUser,
+          normalizeSearch,
+          getProjectRoleMeta,
+          getProjectRoleLabel,
+          normalizeProjectRole,
+          getMyProjectRole,
+          canManageProjectCollaboration,
+          getProjectState,
+          upsertGlobalTheme,
+          upsertGlobalGroup,
+          refreshGlobalTaxonomyCache,
+          getGroupNameById,
+          createEvent,
+          publishEvent,
+          openMailto,
+          showToast,
+          addNotification,
+          showProjectDetail,
+          renderProjectGroups,
+          renderProjectUserGroups,
+          syncProjectEventsToSharedSpace,
+          getSharedFolderHandle: () => sharedFolderHandle
+        })
+      : null;
+
+    const docStorageBindingRuntime = window.TaskMDADocStorageBinding?.createModule
+      ? window.TaskMDADocStorageBinding.createModule({
+          state: {
+            getSharedFolderHandle: () => sharedFolderHandle,
+            getCurrentProjectId: () => currentProjectId
+          },
+          getCurrentUserId: () => currentUser?.userId,
+          getDecrypted,
+          putEncrypted,
+          getProjectState,
+          canEditProjectMeta,
+          canEditTaskInProject,
+          EventTypes,
+          createEvent,
+          publishEvent,
+          syncProjectEventsToSharedSpace,
+          hasSharedFolderHandle: () => !!sharedFolderHandle,
+          normalizeDocumentPreviewInlineFieldValue,
+          setInlineSaveIndicator,
+          runWithoutGlobalLoading,
+          onDocumentPreviewContextPatch: (patch, expectedContext) => {
+            mergeDocumentPreviewContextDoc(patch || {}, expectedContext || null);
+          },
+          normalizeSharingMode,
+          normalizeSearch,
+          fileToDataUrl,
+          uuidv4
+        })
+      : null;
+
+    docPreviewInlineUiRuntime = window.TaskMDADocPreviewInlineUI?.createModule
+      ? window.TaskMDADocPreviewInlineUI.createModule({
+          normalizeSharingMode,
+          sharingModeLabel,
+          shouldIgnoreInlineActivationKeydown,
+          getCurrentContext: () => currentDocPreviewContext,
+          getCanEdit: () => currentDocPreviewCanEdit,
+          setCanEdit: (value) => {
+            currentDocPreviewCanEdit = !!value;
+          },
+          scheduleSave: (field, rawValue, options = {}) => {
+            const context = options.expectedContext || currentDocPreviewContext;
+            if (!docStorageBindingRuntime?.scheduleDocumentPreviewInlineSave) return;
+            return docStorageBindingRuntime.scheduleDocumentPreviewInlineSave({
+              field,
+              rawValue,
+              context,
+              immediate: options.immediate === true
+            });
+          }
+        })
+      : null;
+
+    docPreviewModalUiRuntime = window.TaskMDADocPreviewModalUI?.createModule
+      ? window.TaskMDADocPreviewModalUI.createModule({
+          normalizeSharingMode,
+          sharingModeLabel,
+          sanitizeUrlForDom,
+          renderPdfPreviewInModal,
+          getCurrentContext: () => currentDocPreviewContext,
+          setCurrentContext: (value) => {
+            currentDocPreviewContext = value || null;
+          },
+          setCanEdit: (value) => {
+            currentDocPreviewCanEdit = !!value;
+          },
+          resetInlineEditingState: resetDocumentPreviewInlineEditingState,
+          onAfterClose: async (previousContext) => {
+            if (workspaceMode === 'project' && currentProjectId) {
+              const latest = await getProjectState(currentProjectId);
+              if (latest?.project) {
+                currentProjectState = latest;
+                renderDocuments(latest);
+              }
+            } else if (workspaceMode === 'globalDocs' || previousContext?.sourceType === 'standalone') {
+              await renderGlobalDocs();
+            }
+          }
+        })
+      : null;
+
+    const taskLifecycleDomainRuntime = window.TaskMDATaskLifecycleDomain?.createModule
+      ? window.TaskMDATaskLifecycleDomain.createModule({
+          state: {
+            getCurrentProjectId: () => currentProjectId,
+            getCurrentProjectState: () => currentProjectState,
+            getCurrentUser: () => currentUser,
+            getStandaloneTaskMode: () => !!standaloneTaskMode,
+            setStandaloneTaskMode: (value) => {
+              standaloneTaskMode = !!value;
+            },
+            getPendingTaskStatusPrefill: () => pendingTaskStatusPrefill,
+            setPendingTaskStatusPrefill: (value) => {
+              pendingTaskStatusPrefill = value || null;
+            },
+            getEditingTaskId: () => editingTaskId,
+            setEditingTaskId: (value) => {
+              editingTaskId = value || null;
+            },
+            getEditingStandaloneTaskId: () => editingStandaloneTaskId,
+            setEditingStandaloneTaskId: (value) => {
+              editingStandaloneTaskId = value || null;
+            },
+            getCurrentGlobalTaskDetailResolved: () => currentGlobalTaskDetailResolved,
+            getCurrentGlobalTaskDetailRef: () => currentGlobalTaskDetailRef,
+            getPendingTaskConvertRef: () => pendingTaskConvertRef,
+            setPendingTaskConvertRef: (value) => {
+              pendingTaskConvertRef = value || null;
+            }
+          },
+          EventTypes,
+          LOCK_SCOPE_TASK,
+          trackUxMetric,
+          normalizeTaskStatusForCreate,
+          updateEditLockBadges,
+          setTaskPendingGroupMemberUserIds: (values) => {
+            taskPendingGroupMemberUserIds = Array.isArray(values) ? values : [];
+          },
+          refreshTaskMetadataOptions,
+          getTaskAssigneeEntries,
+          buildTaskAssigneeSelectValue,
+          refreshTaskAssigneeOptionsMulti,
+          refreshTaskQuickAssigneeSuggestions,
+          setProjectDescriptionEditorContent,
+          normalizeSearch,
+          normalizeSharingMode,
+          normalizeCatalogKey,
+          syncThemePickerSelectionFromInput,
+          toYmd,
+          populateTaskDeadlineForm,
+          refreshTaskGroupSelectionPreview,
+          getProjectState,
+          canChangeTaskStatus,
+          canEditTaskInProject,
+          canDeleteTaskInProject,
+          canCreateTaskInProject,
+          ensureProjectResourceUnlockedForAction,
+          buildTaskStatusTransitionChanges,
+          createEvent,
+          publishEvent,
+          runWithLoading,
+          showProjectDetail,
+          showToast,
+          formatDate,
+          addNotification,
+          acquireProjectResourceLock,
+          buildLockBlockedMessage,
+          setActiveTaskEditLock: (value) => {
+            activeTaskEditLock = value || null;
+          },
+          readTaskFiles,
+          addQuickTaskAssignee,
+          parseSubtasks,
+          resolveTaskSelectedGroupContext,
+          ensureTaskGroupAssociationInProject,
+          parseTaskAssigneeSelectValue,
+          parseManualAssigneeEntries,
+          mergeSubtasksWithExisting,
+          getProjectDescriptionHtmlForStorage,
+          getProjectDescriptionPlainText,
+          readTaskDeadlineFromForm,
+          getDecrypted,
+          putEncrypted,
+          buildGlobalTaskRef,
+          fallbackDirectoryName,
+          getWorkspaceMode: () => workspaceMode,
+          getGlobalWorkspaceView: () => globalWorkspaceView,
+          renderGlobalFeed,
+          openGlobalTaskDetails,
+          closeTaskConvertModal,
+          convertTaskToProject,
+          normalizeSharingMode,
+          resolveGlobalTaskFromRef,
+          writeGlobalFeedPostToSharedFolder,
+          addKnownGlobalPostId: (postId) => {
+            if (!postId) return;
+            knownGlobalPostIds.add(postId);
+          },
+          renderGlobalTasks,
+          refreshStats,
+          releaseActiveTaskEditLock,
+          setTaskDeadlineModeUi,
+          showGlobalThemeManagementModal,
+          uuidv4,
+          syncProjectEventsToSharedSpace,
+          getSharedFolderHandle: () => sharedFolderHandle
+        })
+      : null;
+
+    attachmentsUiRuntime = window.TaskMDAAttachmentsUI?.createModule
+      ? window.TaskMDAAttachmentsUI.createModule({
+          fileToDataUrl,
+          resizeImageDataUrl,
+          estimateDataUrlBytes,
+          showToast,
+          escapeHtml,
+          insertHtmlAtCursor
+        })
+      : null;
+
+    discussionInputUiRuntime = window.TaskMDADiscussionInputUI?.createModule
+      ? window.TaskMDADiscussionInputUI.createModule({
+          plainTextToRichHtml,
+          sanitizeProjectDescriptionHtml
+        })
+      : null;
+
+    globalGroupChannelUiRuntime = window.TaskMDAGlobalGroupChannelUI?.createModule
+      ? window.TaskMDAGlobalGroupChannelUI.createModule({
+          getCurrentUserId: () => currentUser?.userId,
+          getAllProjects,
+          normalizeProjectReadAccess,
+          getGlobalGroupCatalog: () => globalGroupCatalog,
+          escapeHtml
+        })
+      : null;
+
+    const docRefActionsRuntime = window.TaskMDADocRefActionsUI?.createModule
+      ? window.TaskMDADocRefActionsUI.createModule({
+          openDocumentPreviewByRef: (ref) => {
+            void openDocumentPreviewByRef(ref);
+          },
+          downloadDocumentByRef: (ref) => {
+            void downloadDocumentByRef(ref);
+          }
+        })
+      : null;
+
+    globalReadInlineUiRuntime = window.TaskMDAGlobalReadInlineUI?.createModule
+      ? window.TaskMDAGlobalReadInlineUI.createModule({
+          saveGlobalReadInlineEdit,
+          cancelGlobalReadInlineEdit,
+          closeGlobalReadModal,
+          beginGlobalReadInlineEdit,
+          isElementInsideGlobalReadInlineEdit,
+          isGlobalReadInlineEditActive: () => !!globalReadInlineEditActive
+        })
+      : null;
+
     const appInitRuntime = window.TaskMDAAppInit?.createModule
       ? window.TaskMDAAppInit.createModule({
           checkDependencies,
@@ -36113,6 +33593,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
             setSelectedMonth: (value) => { globalCalendarSelectedMonth = value; },
             setViewMode: (value) => { globalCalendarViewMode = value; },
             getControlsExpanded: () => globalCalendarControlsExpanded,
+            setControlsExpanded: (value) => { globalCalendarControlsExpanded = !!value; },
             getPinnedThemes: () => globalCalendarPinnedThemes,
             setPinnedThemes: (next) => { globalCalendarPinnedThemes = Array.isArray(next) ? [...next] : []; },
             getPinnedThemeChecks: () => globalCalendarPinnedThemeChecks,
@@ -36123,8 +33604,6 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
           actions: {
             renderGlobalCalendar,
             resolveViewWithLock,
-            initGlobalCalendarPinnedThemesState,
-            setGlobalCalendarControlsExpanded,
             shiftGlobalCalendarMonth,
             ensureGlobalCalendarMonthOption,
             addStandaloneCalendarItem,
@@ -36134,7 +33613,6 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
             openStandaloneCalendarDetails,
             closeStandaloneCalendarDetails,
             toYmd,
-            toggleGlobalCalendarThemeActionsMenu,
             releaseActiveCalendarEditLock: () => {
               if (activeCalendarEditLock?.itemId) {
                 releaseCalendarItemLock(activeCalendarEditLock.itemId, activeCalendarEditLock.lockId || '');
@@ -36145,7 +33623,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
           helpers: {
             normalizeCalendarThemeName,
             normalizeCalendarThemeKey,
-            syncPinnedCalendarThemeState
+            escapeHtml
           }
         })
       : null;
@@ -36167,9 +33645,14 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
             renderGlobalDocs,
             addStandaloneDocuments,
             deleteGlobalDocument,
-            openDocumentPreviewByRef,
-            downloadDocumentByRef,
-            copyDocumentBindingStoragePath,
+            getGlobalDocumentsList,
+            encodeDocumentPreviewRef,
+            parseDocumentPreviewRef: (refEncoded) => docPreviewModalUiRuntime?.parseDocumentPreviewRef
+              ? docPreviewModalUiRuntime.parseDocumentPreviewRef(refEncoded)
+              : null,
+            resolveDocumentPreviewContext,
+            openDocumentPreview,
+            sanitizeDownloadHref,
             resolveDocumentForBinding,
             resolveDocumentDataForRuntime,
             maybeRelocateStoredDocumentByTheme,
@@ -36183,8 +33666,12 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
             createEvent,
             publishEvent,
             syncProjectEventsToSharedSpace,
+            canChangeTaskStatus,
+            canEditTaskInProject,
+            addNotification,
+            readDocumentFilesFromInput,
+            refreshGlobalDocumentThemePicker,
             populateDocBindingTaskOptions,
-            initDocumentBindingInlineEditing,
             runWithoutGlobalLoading,
             setInlineSaveIndicator,
             syncThemePickerSelectionFromInput,
@@ -36193,10 +33680,21 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
           helpers: {
             showToast,
             escapeHtml,
+            matchesQuery,
+            buildWorkspaceEmptyState,
             normalizeSharingMode,
+            sharingModeLabel,
+            sharingModeBadge,
+            formatFileSize,
+            getDocumentCategory,
+            isDocumentPreviewable,
+            isDocumentEditable,
             fillThemePicker,
             formatDocumentStoragePathForDisplay,
+            getGlobalSearchQuery: () => globalSearchQuery,
             getGlobalThemeCatalog: () => globalThemeCatalog,
+            copyTextToClipboard,
+            shouldIgnoreInlineActivationKeydown,
             uuidv4,
             EventTypes,
             getCurrentUserId: () => currentUser?.userId || '',
@@ -36207,10 +33705,28 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
 
     const globalFeedRuntime = window.TaskMDAGlobalFeed?.createModule
       ? window.TaskMDAGlobalFeed.createModule({
+          state: {
+            getGlobalFeedDigestViewMode: () => globalFeedDigestViewMode,
+            getEditingGlobalFeedPostId: () => editingGlobalFeedPostId,
+            getSharedFolderHandle: () => sharedFolderHandle,
+            getCurrentUser: () => currentUser,
+            getCurrentUserId: () => currentUser?.userId || '',
+            getGlobalFeedMentionCatalogCache: () => globalFeedMentionCatalogCache,
+            setGlobalFeedMentionCatalogCache: (value) => {
+              globalFeedMentionCatalogCache = value || null;
+            },
+            getGlobalFeedFilterMode: () => globalFeedFilterMode,
+            setGlobalFeedFilterMode: (value) => {
+              globalFeedFilterMode = String(value || '').trim() || 'all';
+            },
+            getGlobalFeedSortMode: () => globalFeedSortMode,
+            getGlobalFeedFocusPostId: () => globalFeedFocusPostId,
+            setGlobalFeedFocusPostId: (value) => {
+              globalFeedFocusPostId = String(value || '').trim();
+            }
+          },
           actions: {
             renderGlobalFeed,
-            publishGlobalFeedPost,
-            publishGlobalFeedDigestFromFiles,
             pickGlobalFeedDigestImportMode,
             insertMentionTokenInGlobalFeed,
             setGlobalFeedComposerCollapsed,
@@ -36218,7 +33734,57 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
             updateGlobalFeedMentionCounter,
             openGlobalFeedPost,
             importDocumentsIntoGlobalFeedEditor,
-            refreshManagedTabOverflow
+            refreshManagedTabOverflow,
+            normalizeGlobalFeedDigestView,
+            extractFeedDigestFromFile,
+            buildDigestContentHtml,
+            cancelEditGlobalFeedPost,
+            appendDigestBlocksToRichEditor,
+            getGlobalFeedQuillEditor: () => projectDescriptionQuillEditors.get('global-feed-editor'),
+            applyProfanityFilterToHtml,
+            buildGlobalMentionCatalog,
+            extractMentionedUserIdsFromText,
+            getGlobalPostById: (postId) => getDecrypted('globalPosts', postId, 'postId'),
+            putGlobalPost: (post) => putEncrypted('globalPosts', post, 'postId'),
+            addKnownGlobalPostId: (postId) => knownGlobalPostIds.add(postId),
+            getFeedSummaryWordCount,
+            computeGlobalFeedPostAutoSummary,
+            writeGlobalFeedPostToSharedFolder,
+            fallbackDirectoryName,
+            resolveKnownUserIdentity,
+            safeAvatarInlineStyle,
+            stringToColor,
+            getInitials,
+            renderGlobalFeedContentHtml,
+            getAllGlobalPosts: () => getAllDecrypted('globalPosts', 'postId'),
+            getAllGlobalDocs: () => getAllDecrypted('globalDocs', 'id'),
+            populateGlobalFeedComposerContext,
+            extractLinkedGlobalDocIdsFromHtml,
+            encodeDocumentPreviewRef,
+            getProjectState,
+            showProjectDetail,
+            showGlobalWorkspace,
+            openGlobalTaskDetails,
+            setProjectView,
+            openProjectNoteReadModal,
+            renderGlobalNotes,
+            openGlobalNoteReadModal,
+            openStandaloneCalendarDetails,
+            setGlobalNotesFocusNoteId: (value) => {
+              globalNotesFocusNoteId = String(value || '').trim();
+            },
+            setProjectNotesFocusNoteId: (value) => {
+              projectNotesFocusNoteId = String(value || '').trim();
+            },
+            expandGlobalFeedPostCard,
+            isTabEnabled,
+            getDefaultTab
+          },
+          helpers: {
+            showToast,
+            uuidv4,
+            matchesQuery,
+            escapeHtml
           }
         })
       : null;
@@ -36233,7 +33799,34 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
             clearGlobalMessageRecipients,
             openGlobalMessageGroupChannelFromCatalog,
             handleGlobalMessageContactsScroll,
-            handleGlobalMessageThreadScroll
+            handleGlobalMessageThreadScroll,
+            toggleGlobalEmojiPicker,
+            toggleGlobalMessageFilesPanel,
+            insertTextAtCursor,
+            insertImageFilesIntoDiscussionInput,
+            showToast,
+            openMessageImagePreview,
+            clearGlobalMessageReply,
+            isGlobalEmojiPickerOpen: () => !!globalEmojiPickerOpen,
+            isGlobalMessageFilesPanelOpen: () => !!globalMessageFilesPanelOpen
+          }
+        })
+      : null;
+
+    const messageReactionsOutsideRuntime = window.TaskMDAMessageReactionsOutsideUI?.createModule
+      ? window.TaskMDAMessageReactionsOutsideUI.createModule({
+          getProjectReactionPickerMessageId: () => projectReactionPickerMessageId,
+          setProjectReactionPickerMessageId: (value) => {
+            projectReactionPickerMessageId = String(value || '');
+          },
+          getCurrentProjectState: () => currentProjectState,
+          renderMessages,
+          getGlobalReactionPickerMessageId: () => globalReactionPickerMessageId,
+          setGlobalReactionPickerMessageId: (value) => {
+            globalReactionPickerMessageId = String(value || '');
+          },
+          renderGlobalMessages: (options) => {
+            void renderGlobalMessages(options);
           }
         })
       : null;
@@ -36263,6 +33856,94 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
             getProjectName: () => String(currentProjectState?.project?.name || '').trim(),
             getTaskTitle: () => String(editingTaskId || '').trim(),
             getStatus: () => String(document.getElementById('project-task-status')?.value || '').trim()
+          }
+        })
+      : null;
+
+    const viaAnnuaireUiRuntime = window.TaskMDAViaAnnuaireUI?.createModule
+      ? window.TaskMDAViaAnnuaireUI.createModule({
+          state: {
+            getViaAnnuaireConfigExpanded: () => viaAnnuaireConfigExpanded,
+            getPublicPageSize: () => VIA_ANNUAIRE_PUBLIC_PAGE_SIZE,
+            getPublicMaxScan: () => VIA_ANNUAIRE_PUBLIC_MAX_SCAN
+          },
+          initialState: {
+            liveSearchState: {
+              domain: 'PH',
+              departmentCode: '',
+              keyword: '',
+              sortKey: 'name',
+              pageIndex: 0,
+              pageSize: 12,
+              total: 0,
+              allResults: [],
+              results: [],
+              selectedResultRef: '',
+              openAuditRef: '',
+              auditMode: false,
+              auditLoading: false,
+              auditByRef: {},
+              loading: false,
+              lastError: '',
+              lastQueryLabel: ''
+            },
+            runtimeCache: {
+              departements: [],
+              lastDepartmentsSyncAt: 0
+            },
+            rorUnavailable: false,
+            rorUnavailableReason: '',
+            rorProbeDone: false,
+            rorSettingsLoaded: false,
+            rorSettingsCache: {
+              endpoint: VIA_ANNUAIRE_ROR_FHIR_ENDPOINTS[0] || '',
+              apiKey: ''
+            },
+            rorEmailCache: new Map(),
+            rorOrganizationCache: new Map(),
+            viaAnnuaireConfigExpanded
+          },
+          actions: {
+            normalizeViaAnnuaireLiveDomain,
+            normalizeViaAnnuaireDepartmentCode,
+            normalizeViaAnnuaireLiveSortKey,
+            buildViaAnnuaireLiveResultRef,
+            normalizeViaAnnuaireTextForMatch,
+            isViaAnnuaireDomainMatch,
+            normalizeViaAnnuaireComparableText,
+            normalizeViaAnnuaireComparablePhone,
+            normalizeViaAnnuaireComparableEmail,
+            tokenizeViaAnnuaireComparableText,
+            computeViaAnnuaireTokenOverlap,
+            computeViaAnnuaireDiceSimilarity,
+            buildViaAnnuaireRecommendedAddress,
+            extractViaAnnuaireRorOrganizationAddress,
+            extractViaAnnuaireRorTelecomValue,
+            extractViaAnnuaireRorEmailFromPayload,
+            extractViaAnnuaireRorOrganizationFromPayload,
+            normalizeViaAnnuaireRorEndpoint,
+            normalizeViaAnnuaireRorSettings,
+            buildViaAnnuaireRorLookupUrlsFromEndpoint: coreBuildViaAnnuaireRorLookupUrlsFromEndpoint,
+            getViaAnnuaireRorSettingsKey: () => VIA_ANNUAIRE_ROR_SETTINGS_KEY,
+            getViaAnnuaireRorPrefillOnceKey: () => VIA_ANNUAIRE_ROR_PREFILL_ONCE_KEY,
+            getDefaultViaAnnuaireRorEndpoint: () => VIA_ANNUAIRE_ROR_FHIR_ENDPOINTS[0] || '',
+            getViaAnnuaireFallbackDepartments: () => VIA_ANNUAIRE_FALLBACK_DEPARTEMENTS,
+            sortViaAnnuaireLiveResults,
+            getViaAnnuaireAuditBadgeMeta,
+            computeViaAnnuaireAuditBreakdown,
+            buildViaAnnuairePublicFicheUrl,
+            fetchViaAnnuairePublicApiRecords,
+            fetchJsonWithTimeout,
+            loadViaAnnuaireRorSettingsRow: () => getDecrypted('appSettings', VIA_ANNUAIRE_ROR_SETTINGS_KEY, 'key'),
+            saveViaAnnuaireRorSettingsRow: (payload) => putEncrypted('appSettings', payload, 'key'),
+            setViaAnnuaireConfigExpanded,
+            isAppAdmin,
+            renderGlobalSettings,
+            showLoading
+          },
+          helpers: {
+            escapeHtml,
+            showToast
           }
         })
       : null;
@@ -36463,141 +34144,9 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       }
       showToast(enabled ? 'Résumé automatique activé' : 'Résumé automatique désactivé');
     });
-    document.getElementById('btn-via-annuaire-ror-save')?.addEventListener('click', async () => {
-      if (!isAppAdmin()) {
-        showToast('Action reservee a l admin application');
-        await renderGlobalSettings();
-        return;
-      }
-      const endpointInput = document.getElementById('via-annuaire-ror-endpoint-input');
-      const apiKeyInput = document.getElementById('via-annuaire-ror-apikey-input');
-      const endpoint = normalizeViaAnnuaireRorEndpoint(endpointInput?.value || '');
-      const apiKey = String(apiKeyInput?.value || '').trim();
-      await saveViaAnnuaireRorSettings({ endpoint, apiKey });
-      showToast(endpoint
-        ? (apiKey
-          ? 'Configuration Annuaire Santé enregistrée (avec clé API)'
-          : 'Configuration Annuaire Santé enregistrée (mode sans clé API)')
-        : 'Configuration Annuaire Santé incomplète (endpoint manquant)');
-      await renderGlobalSettings();
-    });
-    document.getElementById('btn-via-annuaire-ror-test')?.addEventListener('click', async () => {
-      const endpointInput = document.getElementById('via-annuaire-ror-endpoint-input');
-      const apiKeyInput = document.getElementById('via-annuaire-ror-apikey-input');
-      const endpoint = normalizeViaAnnuaireRorEndpoint(endpointInput?.value || '');
-      const apiKey = String(apiKeyInput?.value || '').trim();
-      if (!endpoint) {
-        showToast('Renseignez un endpoint Annuaire Santé FHIR');
-        return;
-      }
-      try {
-        showLoading(true);
-        const result = await testViaAnnuaireRorEndpointReachability(endpoint, apiKey);
-        if (result.authRequired) {
-          showToast(`Endpoint Annuaire Santé joignable (HTTP ${result.status}, authentification requise)`);
-        } else {
-          showToast(`Endpoint Annuaire Santé joignable (HTTP ${result.status})`);
-        }
-      } catch (error) {
-        showToast(`Test endpoint Annuaire Santé impossible: ${String(error?.message || 'erreur')}`);
-      } finally {
-        showLoading(false);
-      }
-    });
-    document.getElementById('via-annuaire-ror-endpoint-input')?.addEventListener('keydown', async (event) => {
-      if (event?.key !== 'Enter') return;
-      event.preventDefault();
-      document.getElementById('btn-via-annuaire-ror-save')?.click();
-    });
-    document.getElementById('via-annuaire-ror-apikey-input')?.addEventListener('keydown', async (event) => {
-      if (event?.key !== 'Enter') return;
-      event.preventDefault();
-      document.getElementById('btn-via-annuaire-ror-save')?.click();
-    });
-    document.getElementById('btn-via-annuaire-live-search')?.addEventListener('click', async () => {
-      await runViaAnnuaireLiveSearch({ fromUi: true, pageIndex: 0 });
-    });
-    document.getElementById('btn-via-annuaire-live-prev')?.addEventListener('click', async () => {
-      const nextPage = Math.max(0, Number(viaAnnuaireLiveSearchState.pageIndex || 0) - 1);
-      await runViaAnnuaireLiveSearch({ fromUi: false, pageIndex: nextPage });
-    });
-    document.getElementById('btn-via-annuaire-live-next')?.addEventListener('click', async () => {
-      const nextPage = Math.max(0, Number(viaAnnuaireLiveSearchState.pageIndex || 0) + 1);
-      await runViaAnnuaireLiveSearch({ fromUi: false, pageIndex: nextPage });
-    });
-    document.getElementById('btn-via-annuaire-config-toggle')?.addEventListener('click', () => {
-      setViaAnnuaireConfigExpanded(!viaAnnuaireConfigExpanded);
-    });
-    document.getElementById('btn-via-annuaire-live-audit-toggle')?.addEventListener('click', async () => {
-      const nextMode = !Boolean(viaAnnuaireLiveSearchState.auditMode);
-      viaAnnuaireLiveSearchState = {
-        ...viaAnnuaireLiveSearchState,
-        auditMode: nextMode,
-        openAuditRef: '',
-        auditByRef: nextMode ? (viaAnnuaireLiveSearchState.auditByRef || {}) : {}
-      };
-      renderViaAnnuaireLiveSearchPanel({ keepSelection: true });
-      if (nextMode) {
-        void runViaAnnuaireAuditForRows(viaAnnuaireLiveSearchState.results || []);
-      }
-    });
-    document.getElementById('via-annuaire-live-domain')?.addEventListener('change', () => {
-      const input = readViaAnnuaireLiveSearchInputs();
-      viaAnnuaireLiveSearchState = {
-        ...viaAnnuaireLiveSearchState,
-        domain: input.domain,
-        pageIndex: 0,
-        total: 0,
-        allResults: [],
-        results: [],
-        auditByRef: {},
-        openAuditRef: '',
-        selectedResultRef: '',
-        lastQueryLabel: ''
-      };
-      renderViaAnnuaireLiveSearchPanel({ keepSelection: true });
-    });
-    document.getElementById('via-annuaire-live-departement')?.addEventListener('change', () => {
-      const input = readViaAnnuaireLiveSearchInputs();
-      viaAnnuaireLiveSearchState = {
-        ...viaAnnuaireLiveSearchState,
-        departmentCode: input.departmentCode,
-        pageIndex: 0,
-        total: 0,
-        allResults: [],
-        results: [],
-        auditByRef: {},
-        openAuditRef: '',
-        selectedResultRef: '',
-        lastQueryLabel: ''
-      };
-      renderViaAnnuaireLiveSearchPanel({ keepSelection: true });
-    });
-    document.getElementById('via-annuaire-live-sort')?.addEventListener('change', () => {
-      const input = readViaAnnuaireLiveSearchInputs();
-      const sortedAll = sortViaAnnuaireLiveResults(viaAnnuaireLiveSearchState.allResults, input.sortKey);
-      const pageSize = Math.max(1, Number(viaAnnuaireLiveSearchState.pageSize || 12));
-      const total = sortedAll.length;
-      const pageIndex = 0;
-      const paged = sortedAll.slice(0, pageSize);
-      viaAnnuaireLiveSearchState = {
-        ...viaAnnuaireLiveSearchState,
-        sortKey: input.sortKey,
-        allResults: sortedAll,
-        pageIndex,
-        total,
-        results: paged,
-        selectedResultRef: String(paged[0]?.ref || '')
-      };
-      renderViaAnnuaireLiveSearchPanel({ keepSelection: true });
-      void enrichViaAnnuaireRowsWithRorEmail(paged);
-      void runViaAnnuaireAuditForRows(paged);
-    });
-    document.getElementById('via-annuaire-live-keyword')?.addEventListener('keydown', async (event) => {
-      if (event?.key !== 'Enter') return;
-      event.preventDefault();
-      await runViaAnnuaireLiveSearch({ fromUi: true, pageIndex: 0 });
-    });
+    if (viaAnnuaireUiRuntime?.bindViaAnnuaireEventHandlers) {
+      viaAnnuaireUiRuntime.bindViaAnnuaireEventHandlers();
+    }
     document.getElementById('btn-open-app-help')?.addEventListener('click', () => {
       document.getElementById('modal-app-help')?.classList.remove('hidden');
     });
@@ -36662,15 +34211,15 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       window.TaskMDACommsUI.bind({
         showGlobalWorkspace,
         closeMobileSidebar,
-        publishGlobalFeedPost: (...args) => globalFeedRuntime?.publishGlobalFeedPost?.(...args) ?? publishGlobalFeedPost(...args),
-        publishGlobalFeedDigestFromFiles: (...args) => globalFeedRuntime?.publishGlobalFeedDigestFromFiles?.(...args) ?? publishGlobalFeedDigestFromFiles(...args),
-        pickGlobalFeedDigestImportMode: (...args) => globalFeedRuntime?.pickGlobalFeedDigestImportMode?.(...args) ?? pickGlobalFeedDigestImportMode(...args),
-        insertMentionTokenInGlobalFeed: (...args) => globalFeedRuntime?.insertMentionTokenInGlobalFeed?.(...args) ?? insertMentionTokenInGlobalFeed(...args),
-        setGlobalFeedComposerCollapsed: (...args) => globalFeedRuntime?.setGlobalFeedComposerCollapsed?.(...args) ?? setGlobalFeedComposerCollapsed(...args),
-        openGlobalFeedComposerForNewPost: (...args) => globalFeedRuntime?.openGlobalFeedComposerForNewPost?.(...args) ?? openGlobalFeedComposerForNewPost(...args),
-        renderGlobalFeed: (...args) => globalFeedRuntime?.renderGlobalFeed?.(...args) ?? renderGlobalFeed(...args),
+        publishGlobalFeedPost,
+        publishGlobalFeedDigestFromFiles,
+        pickGlobalFeedDigestImportMode,
+        insertMentionTokenInGlobalFeed,
+        setGlobalFeedComposerCollapsed,
+        openGlobalFeedComposerForNewPost,
+        renderGlobalFeed,
         resolveViewWithLock,
-        updateGlobalFeedMentionCounter: (...args) => globalFeedRuntime?.updateGlobalFeedMentionCounter?.(...args) ?? updateGlobalFeedMentionCounter(...args),
+        updateGlobalFeedMentionCounter,
         setFeedSortMode: (value) => {
           globalFeedSortMode = value;
         },
@@ -36680,18 +34229,18 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         renderGlobalDocs,
         trackUxMetric,
         addStandaloneDocuments,
-        renderGlobalMessages: (...args) => globalMessagesRuntime?.renderGlobalMessages?.(...args) ?? renderGlobalMessages(...args),
+        renderGlobalMessages,
         initialGlobalMessageContactsRenderLimit: GLOBAL_MESSAGE_CONTACTS_INITIAL_BATCH,
         setGlobalMessageContactsRenderLimit: (value) => {
           globalMessageContactsRenderLimit = value;
         },
-        handleGlobalMessageContactsScroll: (...args) => globalMessagesRuntime?.handleGlobalMessageContactsScroll?.(...args) ?? handleGlobalMessageContactsScroll(...args),
-        handleGlobalMessageThreadScroll: (...args) => globalMessagesRuntime?.handleGlobalMessageThreadScroll?.(...args) ?? handleGlobalMessageThreadScroll(...args),
-        selectAllGlobalMessageRecipients: (...args) => globalMessagesRuntime?.selectAllGlobalMessageRecipients?.(...args) ?? selectAllGlobalMessageRecipients(...args),
-        clearGlobalMessageRecipients: (...args) => globalMessagesRuntime?.clearGlobalMessageRecipients?.(...args) ?? clearGlobalMessageRecipients(...args),
-        openGlobalMessageGroupChannelFromCatalog: (...args) => globalMessagesRuntime?.openGlobalMessageGroupChannelFromCatalog?.(...args) ?? openGlobalMessageGroupChannelFromCatalog(...args),
-        sendGlobalMessage: (...args) => globalMessagesRuntime?.sendGlobalMessage?.(...args) ?? sendGlobalMessage(...args),
-        deleteGlobalConversation: (...args) => globalMessagesRuntime?.deleteGlobalConversation?.(...args) ?? deleteGlobalConversation(...args)
+        handleGlobalMessageContactsScroll,
+        handleGlobalMessageThreadScroll,
+        selectAllGlobalMessageRecipients,
+        clearGlobalMessageRecipients,
+        openGlobalMessageGroupChannelFromCatalog,
+        sendGlobalMessage,
+        deleteGlobalConversation
       });
     }
     if (window.TaskMDAAdminUI?.bind) {
@@ -36794,455 +34343,20 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         });
       }
     });
-    document.getElementById('mobile-menu-btn')?.addEventListener('click', openMobileSidebar);
-    document.getElementById('mobile-overlay')?.addEventListener('click', closeMobileSidebar);
-    updateTopbarHeightVar();
-    requestAnimationFrame(updateTopbarHeightVar);
-    window.addEventListener('resize', () => {
-      updateTopbarHeightVar();
-      const collapsed = localStorage.getItem(SIDEBAR_COMPACT_STORAGE_KEY) === '1';
-      applySidebarCollapsedState(collapsed, false);
-      syncProjectWorkFocusButton();
-    });
-    applyProjectOverviewCollapsedState();
-    applyProjectSubnavLayout();
-    syncProjectWorkFocusButton();
-    setGlobalDocsUploadCollapsed(globalDocsUploadCollapsed);
-    setProjectDocsUploadCollapsed(projectDocsUploadCollapsed);
-    document.getElementById('btn-notifications')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      toggleNotificationsPanel();
-    });
-    document.getElementById('btn-notif-mark-read')?.addEventListener('click', markAllNotificationsRead);
-    document.getElementById('btn-notif-clear')?.addEventListener('click', clearNotifications);
-    document.addEventListener('click', (e) => {
-      const panel = document.getElementById('notifications-panel');
-      const btn = document.getElementById('btn-notifications');
-      if (!panel || panel.classList.contains('hidden')) return;
-      if (panel.contains(e.target) || btn?.contains(e.target)) return;
-      toggleNotificationsPanel(false);
-    });
-    document.getElementById('sidebar-create-project')?.addEventListener('click', () => {
-      document.getElementById('btn-create-project').click();
-      closeMobileSidebar();
-    });
-    document.getElementById('nav-dashboard')?.addEventListener('click', (e) => {
-      e.preventDefault();
-      showDashboard();
-      closeMobileSidebar();
-    });
-    document.getElementById('btn-open-feed-from-dashboard-news')?.addEventListener('click', async () => {
-      await showGlobalWorkspace('feed');
-      closeMobileSidebar();
-    });
-    document.getElementById('dashboard-news-list')?.addEventListener('click', async (e) => {
-      const refBtn = e.target?.closest?.('[data-dashboard-news-ref-type][data-dashboard-news-ref-id]');
-      if (refBtn) {
-        e.preventDefault();
-        e.stopPropagation();
-        const type = String(refBtn.getAttribute('data-dashboard-news-ref-type') || '').trim();
-        const id = String(refBtn.getAttribute('data-dashboard-news-ref-id') || '').trim();
-        if (type && id) {
-          await openGlobalFeedReference(type, encodeURIComponent(id));
-          closeMobileSidebar();
-        }
-        return;
-      }
-      const item = e.target?.closest?.('[data-dashboard-news-post-id]');
-      if (!item) return;
-      const postId = String(item.getAttribute('data-dashboard-news-post-id') || '').trim();
-      if (!postId) return;
-      await openGlobalFeedPost(postId);
-      closeMobileSidebar();
-    });
-    document.getElementById('dashboard-news-list')?.addEventListener('keydown', async (e) => {
-      const refBtn = e.target?.closest?.('[data-dashboard-news-ref-type][data-dashboard-news-ref-id]');
-      if (refBtn) return;
-      const isActivationKey = e.key === 'Enter' || e.key === ' ';
-      if (!isActivationKey) return;
-      const item = e.target?.closest?.('[data-dashboard-news-post-id]');
-      if (!item) return;
-      e.preventDefault();
-      const postId = String(item.getAttribute('data-dashboard-news-post-id') || '').trim();
-      if (!postId) return;
-      await openGlobalFeedPost(postId);
-      closeMobileSidebar();
-    });
-    document.getElementById('nav-calendar')?.addEventListener('click', async (e) => {
-      e.preventDefault();
-      await showGlobalWorkspace('calendar');
-      closeMobileSidebar();
-    });
-    document.getElementById('nav-workflow')?.addEventListener('click', async (e) => {
-      e.preventDefault();
-      const preferredGroup = localStorage.getItem('taskmda_sidebar_workflow_group') || 'structure';
-      await openWorkflowSidebarGroup(preferredGroup);
-    });
-    document.getElementById('nav-workflow-group-structure')?.addEventListener('click', async (e) => {
-      e.preventDefault();
-      await openWorkflowSidebarGroup('structure');
-    });
-    document.getElementById('nav-workflow-group-processes')?.addEventListener('click', async (e) => {
-      e.preventDefault();
-      await openWorkflowSidebarGroup('processes');
-    });
-    document.getElementById('nav-workflow-group-pilotage')?.addEventListener('click', async (e) => {
-      e.preventDefault();
-      await openWorkflowSidebarGroup('pilotage');
-    });
-    document.getElementById('nav-workflow-group-referentiels')?.addEventListener('click', async (e) => {
-      e.preventDefault();
-      await openWorkflowSidebarGroup('referentiels');
-    });
-    document.getElementById('nav-workflow-group-supervision')?.addEventListener('click', async (e) => {
-      e.preventDefault();
-      await openWorkflowSidebarGroup('supervision');
-    });
-    setActiveWorkflowSidebarGroup(localStorage.getItem('taskmda_sidebar_workflow_group') || 'structure');
-    setWorkflowSidebarSubnavOpen(localStorage.getItem('taskmda_workflow_sidebar_subnav_open') === '1');
-    document.getElementById('nav-workflow-subnav-toggle')?.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const current = document.getElementById('nav-workflow-subnav-toggle')?.getAttribute('aria-expanded') === 'true';
-      setWorkflowSidebarSubnavOpen(!current);
-    });
-
-    document.getElementById('search-input')?.addEventListener('input', async (e) => {
-      globalSearchQuery = (e.target.value || '').trim();
-      if (workspaceMode === 'global') {
-        if (globalWorkspaceView === 'tasks') {
-          globalTasksPage = 1;
-          globalArchivedTasksPage = 1;
-          await renderGlobalTasks();
-        }
-      if (globalWorkspaceView === 'workflow') await renderWorkflowWorkspace();
-      if (globalWorkspaceView === 'calendar') await renderGlobalCalendarDelegated();
-      if (globalWorkspaceView === 'docs') await renderGlobalDocs();
-      if (globalWorkspaceView === 'notes') await renderGlobalNotesDelegated();
-      if (globalWorkspaceView === 'messages') await renderGlobalMessages();
-      if (globalWorkspaceView === 'rgpd') await renderRgpdWorkspace();
-      if (globalWorkspaceView === 'settings') await renderGlobalSettings();
-      } else {
-        if (workspaceMode === 'dashboard') projectsPage = 1;
-        if (workspaceMode === 'project') tasksPage = 1;
-        await rerenderCurrentContext();
-      }
-
-      if (headerSearchDebounceTimer) clearTimeout(headerSearchDebounceTimer);
-      const query = globalSearchQuery;
-      const token = ++headerSearchRequestToken;
-      if (!query || query.length < 2) {
-        headerSearchResults = [];
-        hideHeaderSearchResults();
-        return;
-      }
-      headerSearchDebounceTimer = setTimeout(async () => {
-        const results = await buildHeaderSearchResults(query);
-        if (token !== headerSearchRequestToken) return;
-        headerSearchResults = results;
-        headerSearchActiveIndex = results.length > 0 ? 0 : -1;
-        renderHeaderSearchResults();
-      }, 170);
-    });
-    document.getElementById('search-input')?.addEventListener('focus', () => {
-      const query = (document.getElementById('search-input')?.value || '').trim();
-      if (query.length >= 2) {
-        if (headerSearchResults.length > 0) renderHeaderSearchResults();
-      }
-    });
-    document.getElementById('search-input')?.addEventListener('keydown', async (e) => {
-      if (e.key === 'Escape') {
-        hideHeaderSearchResults();
-        return;
-      }
-      if (!headerSearchResults.length) return;
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        headerSearchActiveIndex = Math.min(headerSearchResults.length - 1, headerSearchActiveIndex + 1);
-        renderHeaderSearchResults();
-        return;
-      }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        headerSearchActiveIndex = Math.max(0, headerSearchActiveIndex - 1);
-        renderHeaderSearchResults();
-        return;
-      }
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        const idx = headerSearchActiveIndex >= 0 ? headerSearchActiveIndex : 0;
-        const item = headerSearchResults[idx];
-        await executeHeaderSearchResult(item);
-      }
-    });
-    document.getElementById('header-search-results')?.addEventListener('click', async (e) => {
-      const row = e.target?.closest?.('[data-search-result-index]');
-      if (!row) return;
-      const idx = Number(row.dataset.searchResultIndex);
-      if (!Number.isFinite(idx) || idx < 0 || idx >= headerSearchResults.length) return;
-      await executeHeaderSearchResult(headerSearchResults[idx]);
-    });
-    document.addEventListener('click', (e) => {
-      const wrap = document.getElementById('header-search-wrap');
-      if (!wrap) return;
-      if (wrap.contains(e.target)) return;
-      hideHeaderSearchResults();
-    });
+    shellUiRuntime?.bindShellNavigation?.();
+    shellNotificationsRuntime?.bindDom?.();
+    headerSearchRuntime?.bindDom?.();
     globalCalendarRuntime?.bindDom();
     globalDocsRuntime?.bindDom();
-    document.getElementById('btn-close-doc-editor')?.addEventListener('click', () => {
-      closeDocumentEditorModal();
-    });
-    document.getElementById('btn-save-doc-editor')?.addEventListener('click', async () => {
-      await saveDocumentEditorChanges();
-    });
-    document.getElementById('doc-editor-file-input')?.addEventListener('change', () => {
-      updateDocumentEditorFileSummary();
-    });
-    document.getElementById('doc-editor-markdown-tools')?.addEventListener('click', (e) => {
-      const button = e.target instanceof Element ? e.target.closest('[data-md-action]') : null;
-      if (!button) return;
-      const action = button.getAttribute('data-md-action') || '';
-      applyMarkdownEditorAction(action);
-    });
-    document.getElementById('doc-editor-tab-xlsx')?.addEventListener('click', () => {
-      if (!currentDocEditorContext || !currentDocEditorContext.mode.startsWith('spreadsheet')) return;
-      setSpreadsheetEditorTab('xlsx');
-    });
-    document.getElementById('doc-editor-tab-css')?.addEventListener('click', () => {
-      if (!currentDocEditorContext || !currentDocEditorContext.mode.startsWith('spreadsheet')) return;
-      setSpreadsheetEditorTab('css');
-    });
-    document.getElementById('doc-editor-xlsx-sheet-select')?.addEventListener('change', (e) => {
-      const nextSheet = String(e?.target?.value || '').trim();
-      if (!nextSheet) return;
-      persistCurrentSpreadsheetXlsxSheet();
-      docSpreadsheetEditorState.sheetName = nextSheet;
-      if (docSpreadsheetEditorState.activeTab === 'xlsx') {
-        setSpreadsheetEditorTab('xlsx');
-      }
-    });
-    document.getElementById('btn-doc-editor-sheet-add-row')?.addEventListener('click', () => {
-      const table = docSpreadsheetEditorState.table;
-      if (!table) return;
-      if (docSpreadsheetEditorState.activeTab === 'css') {
-        table.addData([{ selector: '', property: '', value: '' }], false);
-        return;
-      }
-      const row = { __row: table.getDataCount() + 1 };
-      const cols = Math.max(1, docSpreadsheetEditorState.xlsxColumns || 1);
-      for (let c = 0; c < cols; c += 1) row[`c${c}`] = '';
-      table.addData([row], false);
-      const all = table.getData();
-      all.forEach((item, idx) => { item.__row = idx + 1; });
-      table.replaceData(all);
-    });
-    document.getElementById('btn-doc-editor-sheet-add-col')?.addEventListener('click', () => {
-      if (docSpreadsheetEditorState.activeTab !== 'xlsx') return;
-      const table = docSpreadsheetEditorState.table;
-      if (!table) return;
-      const nextCol = Math.max(1, docSpreadsheetEditorState.xlsxColumns || 1);
-      table.addColumn({
-        title: getA1ColumnLabel(nextCol),
-        field: `c${nextCol}`,
-        headerSort: false,
-        editor: 'input'
-      }, false);
-      docSpreadsheetEditorState.xlsxColumns = nextCol + 1;
-      const data = table.getData();
-      data.forEach((row) => { row[`c${nextCol}`] = row[`c${nextCol}`] ?? ''; });
-      table.replaceData(data);
-    });
-    document.getElementById('doc-editor-textarea')?.addEventListener('keydown', (e) => {
-      if (!currentDocEditorContext?.isMarkdown) return;
-      if (e.ctrlKey || e.metaKey) {
-        const key = String(e.key || '').toLowerCase();
-        if (key === 'b') {
-          e.preventDefault();
-          applyMarkdownEditorAction('bold');
-        } else if (key === 'i') {
-          e.preventDefault();
-          applyMarkdownEditorAction('italic');
-        } else if (key === 'k') {
-          e.preventDefault();
-          applyMarkdownEditorAction('link');
-        }
-      }
-    });
-    document.getElementById('app-chrome-bg-light-color')?.addEventListener('input', (e) => {
-      const input = document.getElementById('app-chrome-bg-light-input');
-      const value = String(e?.target?.value || '').trim();
-      if (!input || !value) return;
-      input.value = hexToRgbString(value);
-    });
-    document.getElementById('app-chrome-bg-light-input')?.addEventListener('change', (e) => {
-      const colorInput = document.getElementById('app-chrome-bg-light-color');
-      const value = String(e?.target?.value || '').trim();
-      if (!colorInput || !value) return;
-      colorInput.value = colorToHex(normalizeChromeBackgroundColor(value, DEFAULT_APP_BRANDING.chromeBgLight), '#eceff8');
-    });
-    document.getElementById('app-chrome-bg-dark-color')?.addEventListener('input', (e) => {
-      const input = document.getElementById('app-chrome-bg-dark-input');
-      const value = String(e?.target?.value || '').trim();
-      if (!input || !value) return;
-      input.value = hexToRgbString(value);
-    });
-    document.getElementById('app-chrome-bg-dark-input')?.addEventListener('change', (e) => {
-      const colorInput = document.getElementById('app-chrome-bg-dark-color');
-      const value = String(e?.target?.value || '').trim();
-      if (!colorInput || !value) return;
-      colorInput.value = colorToHex(normalizeChromeBackgroundColor(value, DEFAULT_APP_BRANDING.chromeBgDark), '#0f1525');
-    });
+    docEditorUiRuntime?.bindDom?.();
+    brandingUiRuntime?.bindDom?.();
     async function handleViewOptionsChange(e) {
-      const target = e.target;
-      if (!target) return;
-      if (!isAppAdmin()) {
-        showToast('Action reservee a l admin application');
-        await renderGlobalSettings();
-        return;
-      }
-      if (target.classList.contains('view-option-checkbox')) {
-        const sectionKey = String(target.getAttribute('data-view-section') || '').trim();
-        const tabKey = String(target.getAttribute('data-view-tab') || '').trim();
-        if (!sectionKey || !tabKey || !VIEW_SECTION_META[sectionKey]) return;
-        const next = deepClone(viewOptions || DEFAULT_VIEW_OPTIONS);
-        if (!next.sections || !next.sections[sectionKey] || !next.sections[sectionKey].tabs) return;
-        next.sections[sectionKey].tabs[tabKey] = !!target.checked;
-        await saveViewOptions(next);
-        renderViewOptionsMatrix(true);
-        return;
-      }
-      if (target.classList.contains('view-option-lock-overrides')) {
-        const next = deepClone(viewOptions || DEFAULT_VIEW_OPTIONS);
-        next.policy = next.policy || {};
-        next.policy.lockUserOverrides = !!target.checked;
-        await saveViewOptions(next);
-        renderViewOptionsMatrix(true);
-        return;
-      }
-      if (target.classList.contains('view-option-icon-tooltips')) {
-        const next = deepClone(viewOptions || DEFAULT_VIEW_OPTIONS);
-        next.ui = next.ui || {};
-        next.ui.iconTooltips = !!target.checked;
-        await saveViewOptions(next);
-        renderViewOptionsMatrix(true);
-        return;
-      }
-      if (target.classList.contains('view-option-tab-icons')) {
-        const next = deepClone(viewOptions || DEFAULT_VIEW_OPTIONS);
-        next.ui = next.ui || {};
-        next.ui.tabIcons = !!target.checked;
-        await saveViewOptions(next);
-        applyTabIconsToUI();
-        renderViewOptionsMatrix(true);
-        return;
-      }
-      if (target.classList.contains('view-option-workspace-wide')) {
-        const sectionKey = String(target.getAttribute('data-view-workspace-width') || '').trim();
-        if (!sectionKey || !WORKSPACE_WIDTH_SECTION_META[sectionKey]) return;
-        const next = deepClone(viewOptions || DEFAULT_VIEW_OPTIONS);
-        next.ui = next.ui || {};
-        next.ui.workspaceWideSections = normalizeWorkspaceWideSections(next.ui.workspaceWideSections || {});
-        next.ui.workspaceWideSections[sectionKey] = !!target.checked;
-        await saveViewOptions(next);
-        renderViewOptionsMatrix(true);
-        return;
-      }
-      if (target.classList.contains('view-option-default')) {
-        const sectionKey = String(target.getAttribute('data-view-section') || '').trim();
-        const defaultTab = String(target.value || '').trim();
-        if (!sectionKey || !defaultTab || !VIEW_SECTION_META[sectionKey]) return;
-        const next = deepClone(viewOptions || DEFAULT_VIEW_OPTIONS);
-        if (!next.sections || !next.sections[sectionKey]) return;
-        next.sections[sectionKey].defaultTab = defaultTab;
-        await saveViewOptions(next);
-        renderViewOptionsMatrix(true);
-        return;
-      }
-      if (target.classList.contains('view-option-workflow-actions-mode')) {
-        const next = deepClone(viewOptions || DEFAULT_VIEW_OPTIONS);
-        next.ui = next.ui || {};
-        next.ui.workflowActionButtons = normalizeWorkflowActionButtonsMode(target.value);
-        await saveViewOptions(next);
-        if (workflowRuntime && workspaceMode === 'global' && globalWorkspaceView === 'workflow') {
-          await workflowRuntime.render().catch(() => null);
-        }
-        return;
-      }
-      if (target.classList.contains('view-option-workflow-group-tabs-visible')) {
-        const next = deepClone(viewOptions || DEFAULT_VIEW_OPTIONS);
-        next.ui = next.ui || {};
-        next.ui.workflowGroupTabsVisible = !!target.checked;
-        await saveViewOptions(next);
-        applyWorkflowGroupTabsVisibility();
-        if (workflowRuntime && workspaceMode === 'global' && globalWorkspaceView === 'workflow') {
-          await workflowRuntime.render().catch(() => null);
-          applyWorkflowGroupTabsVisibility();
-        }
-        return;
-      }
-      if (target.classList.contains('view-option-workflow-actions-shape')) {
-        const next = deepClone(viewOptions || DEFAULT_VIEW_OPTIONS);
-        next.ui = next.ui || {};
-        next.ui.workflowActionButtonsShape = normalizeWorkflowActionButtonsShape(target.value);
-        await saveViewOptions(next);
-        if (workflowRuntime && workspaceMode === 'global' && globalWorkspaceView === 'workflow') {
-          await workflowRuntime.render().catch(() => null);
-        }
-        return;
-      }
+      await viewOptionsUiRuntime?.handleViewOptionsChange?.(e);
     }
     async function handleViewOptionsClick(e) {
-      const pinBtn = e.target?.closest?.('.view-option-pin-btn');
-      if (pinBtn) {
-        if (!isAppAdmin()) {
-          showToast('Action reservee a l admin application');
-          await renderGlobalSettings();
-          return;
-        }
-        const sectionInfo = String(pinBtn.getAttribute('data-view-section') || '').trim();
-        const tabInfo = String(pinBtn.getAttribute('data-view-tab') || '').trim();
-        if (sectionInfo && tabInfo) {
-          const next = normalizeViewOptions(viewOptions);
-          const currentPinned = Boolean(next.sections[sectionInfo]?.pinned?.[tabInfo]);
-          next.sections[sectionInfo].pinned[tabInfo] = !currentPinned;
-          await saveViewOptions(next);
-          renderViewOptionsMatrix(true);
-          if (typeof updateAppChrome === 'function') {
-            updateAppChrome();
-          } else if (typeof applyAppBrandingToHeader === 'function') {
-            applyAppBrandingToHeader();
-          }
-        }
-        return;
-      }
-      const resetBtn = e.target?.closest?.('[data-view-kpi-reset]');
-      if (resetBtn) {
-        if (!isAppAdmin()) {
-          showToast('Action reservee a l admin application');
-          await renderGlobalSettings();
-          return;
-        }
-        uxMetrics = deepClone(UX_METRICS_DEFAULT);
-        scheduleSaveUxMetrics();
-        renderViewOptionsMatrix(true);
-        showToast('KPI UX reinitialises');
-        return;
-      }
-      const presetBtn = e.target?.closest?.('[data-view-preset]');
-      if (!presetBtn) return;
-      if (!isAppAdmin()) {
-        showToast('Action reservee a l admin application');
-        await renderGlobalSettings();
-        return;
-      }
-      const presetKey = String(presetBtn.getAttribute('data-view-preset') || '').trim();
-      if (!presetKey || !VIEW_ROLE_PRESETS[presetKey]) return;
-      const next = buildViewOptionsFromPreset(presetKey);
-      await saveViewOptions(next);
-      renderViewOptionsMatrix(true);
-      showToast(`Preset applique: ${VIEW_ROLE_PRESETS[presetKey].label}`);
+      await viewOptionsUiRuntime?.handleViewOptionsClick?.(e);
     }
+    quickLinksUiRuntime?.bindDom?.();
     document.getElementById('btn-add-member')?.addEventListener('click', addProjectMember);
     document.getElementById('member-name-input')?.addEventListener('keydown', async (e) => {
       if (e.key === 'Enter') {
@@ -37298,23 +34412,6 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     document.getElementById('global-settings-tab-email')?.addEventListener('click', () => setGlobalSettingsTab('email'));
     document.getElementById('global-settings-tab-quick-links')?.addEventListener('click', () => setGlobalSettingsTab('quick-links'));
     document.getElementById('global-settings-tab-views')?.addEventListener('click', () => setGlobalSettingsTab('views'));
-    document.getElementById('btn-quick-link-save')?.addEventListener('click', () => {
-      saveQuickAccessLinkFromForm().catch((error) => {
-        console.error('quick link save failed', error);
-        showToast('Erreur lors de l enregistrement du raccourci');
-      });
-    });
-    document.getElementById('btn-quick-link-reset')?.addEventListener('click', () => resetQuickAccessLinkForm());
-    document.getElementById('quick-link-category-filter')?.addEventListener('change', async (e) => {
-      quickLinkCategoryFilterValue = String(e?.target?.value || 'all').trim() || 'all';
-      await renderGlobalSettings();
-    });
-    document.getElementById('quick-link-category-input')?.addEventListener('keydown', async (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        await saveQuickAccessLinkFromForm();
-      }
-    });
     document.getElementById('btn-toggle-permissions-details')?.addEventListener('click', () => {
       projectPermissionDetailsOpen = !projectPermissionDetailsOpen;
       renderProjectPermissionMatrix(currentProjectState);
@@ -37368,7 +34465,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       updateProjectEditModeBadge(nextMode);
     }
 
-    document.getElementById('btn-create-project').addEventListener('click', async () => {
+    async function openNewProjectModal() {
       trackUxMetric('openNewProject');
       document.getElementById('modal-new-project').classList.remove('hidden');
       document.getElementById('project-name').value = '';
@@ -37398,7 +34495,7 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       if (createPresetDesc) createPresetDesc.value = '';
       await populateProjectGroupPresetOptions('project-group-presets');
       document.getElementById('project-name').focus();
-    });
+    }
 
     function closeNewProjectModal() {
       document.getElementById('modal-new-project').classList.add('hidden');
@@ -37415,52 +34512,44 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       if (createPresetDesc) createPresetDesc.value = '';
     }
 
-    document.getElementById('btn-cancel-project').addEventListener('click', () => {
-      closeNewProjectModal();
-    });
-    document.getElementById('btn-close-new-project')?.addEventListener('click', () => {
-      closeNewProjectModal();
-    });
+    projectCreateUiRuntime?.bindDom?.();
 
-    document.getElementById('btn-add-project-group-preset')?.addEventListener('click', async () => {
-      await createGlobalGroupFromProjectCreateModal();
-    });
-    document.getElementById('project-group-preset-name-input')?.addEventListener('keydown', async (e) => {
-      if (e.key !== 'Enter') return;
-      e.preventDefault();
-      await createGlobalGroupFromProjectCreateModal();
-    });
+    async function closeEditProjectModal() {
+      editProjectFromDashboard = false;
+      await releaseActiveProjectEditLock();
+      document.getElementById('modal-edit-project')?.classList.add('hidden');
+      const editProjectDocInput = document.getElementById('edit-project-doc-files');
+      if (editProjectDocInput) editProjectDocInput.value = '';
+      const editPassphraseInput = document.getElementById('edit-project-passphrase');
+      if (editPassphraseInput) editPassphraseInput.value = '';
+      updateEditProjectDocFilesSummary();
+    }
 
-    document.getElementById('project-sharing-mode-select')?.addEventListener('change', (e) => {
-      const nextMode = String(e?.target?.value || '').trim() === 'shared' ? 'shared' : 'private';
-      document.querySelectorAll('input[name="sharing-mode"]').forEach((radio) => {
-        radio.checked = radio.value === nextMode;
-      });
-      updateProjectCreateModeBadge(nextMode);
-      const passphraseSection = document.getElementById('passphrase-section');
-      if (passphraseSection) passphraseSection.classList.toggle('hidden', nextMode !== 'shared');
-    });
-
-    // Toggle passphrase section based on sharing mode
-    document.querySelectorAll('input[name="sharing-mode"]').forEach(radio => {
-      radio.addEventListener('change', (e) => {
-        const sharingModeSelect = document.getElementById('project-sharing-mode-select');
-        const passphraseSection = document.getElementById('passphrase-section');
-        updateProjectCreateModeBadge(e.target.value);
-        if (sharingModeSelect) sharingModeSelect.value = e.target.value === 'shared' ? 'shared' : 'private';
-        if (e.target.value === 'shared') {
-          passphraseSection.classList.remove('hidden');
-        } else {
-          passphraseSection.classList.add('hidden');
-        }
-      });
-    });
-    document.getElementById('project-deadline-mode')?.addEventListener('change', (e) => {
-      setProjectDeadlineModeUi('project', e?.target?.value || 'date');
-    });
-    document.getElementById('edit-project-deadline-mode')?.addEventListener('change', (e) => {
-      setProjectDeadlineModeUi('edit-project', e?.target?.value || 'date');
-    });
+    projectEditUiRuntime?.bindDom?.();
+    projectViewsUiRuntime?.bindDom?.();
+    tabOverflowUiRuntime?.bindDom?.();
+    projectFiltersUiRuntime?.bindDom?.();
+    docThemePickersUiRuntime?.bindDom?.();
+    projectNotesFiltersUiRuntime?.bindDom?.();
+    globalNotesFiltersUiRuntime?.bindDom?.();
+    globalReadActionsUiRuntime?.bindDom?.();
+    projectNotesActionsUiRuntime?.bindDom?.();
+    projectReadActionsUiRuntime?.bindDom?.();
+    projectNoteEditorActionsUiRuntime?.bindDom?.();
+    projectReadInlineUiRuntime?.bindDom?.();
+    projectNoteModalShortcutsUiRuntime?.bindDom?.();
+    layoutTogglesUiRuntime?.bindDom?.();
+    projectNavUiRuntime?.bindDom?.();
+    projectCalendarTimelineUiRuntime?.bindDom?.();
+    projectComposerUiRuntime?.bindDom?.();
+    projectOutsideClickUiRuntime?.bindDom?.();
+    projectChatFiltersUiRuntime?.bindDom?.();
+    fileInputsUiRuntime?.bindDom?.();
+    projectDocsControlsUiRuntime?.bindDom?.();
+    projectActivityFiltersUiRuntime?.bindDom?.();
+    projectThemeBindingsUiRuntime?.bindDom?.();
+    globalReadInlineUiRuntime?.bindDom?.();
+    docRefActionsRuntime?.bindDom?.();
 
     function buildUniqueWorkflowAgentHandle(baseLabel, existingAgents = [], currentAgentId = '') {
       const raw = normalizeMentionHandle(baseLabel || 'agent');
@@ -38183,26 +35272,6 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       pendingProfilePhotoDirty = false;
       document.getElementById('modal-edit-user-name').classList.add('hidden');
     });
-    document.getElementById('btn-cancel-edit-project')?.addEventListener('click', async () => {
-      editProjectFromDashboard = false;
-      await releaseActiveProjectEditLock();
-      document.getElementById('modal-edit-project').classList.add('hidden');
-      const editProjectDocInput = document.getElementById('edit-project-doc-files');
-      if (editProjectDocInput) editProjectDocInput.value = '';
-      const editPassphraseInput = document.getElementById('edit-project-passphrase');
-      if (editPassphraseInput) editPassphraseInput.value = '';
-      updateEditProjectDocFilesSummary();
-    });
-    document.getElementById('btn-save-edit-project')?.addEventListener('click', saveProjectEdits);
-    document.getElementById('edit-project-sharing-mode-select')?.addEventListener('change', (e) => {
-      const nextMode = String(e?.target?.value || '').trim() === 'shared' ? 'shared' : 'private';
-      updateProjectEditSharingUi(nextMode);
-      if (nextMode !== 'shared') {
-        const editPassphraseInput = document.getElementById('edit-project-passphrase');
-        if (editPassphraseInput) editPassphraseInput.value = '';
-      }
-    });
-
     document.getElementById('btn-save-user-name').addEventListener('click', async () => {
       const newName = document.getElementById('edit-user-name-input').value.trim();
       const emailInput = document.getElementById('edit-user-email-input');
@@ -38781,351 +35850,47 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     }
 
     document.getElementById('btn-cancel-task').addEventListener('click', async () => {
-      await releaseActiveTaskEditLock();
-      document.getElementById('modal-new-task').classList.add('hidden');
-      editingTaskId = null;
-      editingStandaloneTaskId = null;
-      pendingTaskStatusPrefill = null;
-      standaloneTaskMode = false;
-      const standaloneModeInput = document.getElementById('task-standalone-mode');
-      if (standaloneModeInput) standaloneModeInput.value = 'private';
-      const taskThemeInput = document.getElementById('task-theme');
-      const taskGroupInput = document.getElementById('task-group');
-      const taskGroupPendingBox = document.getElementById('task-group-pending-members');
-      const taskAssigneeManualInput = document.getElementById('task-assignee-manual');
-      const taskAssigneeQuickInput = document.getElementById('task-assignee-quick-input');
-      if (taskThemeInput) taskThemeInput.value = '';
-      if (taskGroupInput) taskGroupInput.value = '';
-      if (taskGroupPendingBox) {
-        taskGroupPendingBox.classList.add('hidden');
-        taskGroupPendingBox.innerHTML = '';
-      }
-      taskPendingGroupMemberUserIds = [];
-      if (taskAssigneeManualInput) taskAssigneeManualInput.value = '';
-      if (taskAssigneeQuickInput) taskAssigneeQuickInput.value = '';
-      populateTaskDeadlineForm(null);
-      // Réinitialiser la configuration de récurrence
-      if (window.TaskMDARecurrenceUI?.resetRecurrenceForm) {
-        window.TaskMDARecurrenceUI.resetRecurrenceForm();
+      if (taskLifecycleDomainRuntime?.closeTaskModalAndReset) {
+        await taskLifecycleDomainRuntime.closeTaskModalAndReset();
+        return;
       }
     });
     document.getElementById('btn-task-assignee-quick-add')?.addEventListener('click', () => {
-      const value = document.getElementById('task-assignee-quick-input')?.value || '';
-      addQuickTaskAssignee(value);
+      if (taskLifecycleDomainRuntime?.handleQuickAssigneeAdd) {
+        taskLifecycleDomainRuntime.handleQuickAssigneeAdd();
+        return;
+      }
     });
     document.getElementById('task-assignee-quick-input')?.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        addQuickTaskAssignee(e.target?.value || '');
+      if (taskLifecycleDomainRuntime?.handleQuickAssigneeKeydown) {
+        taskLifecycleDomainRuntime.handleQuickAssigneeKeydown(e);
+        return;
       }
     });
     document.getElementById('task-group')?.addEventListener('change', async () => {
-      if (standaloneTaskMode || !currentProjectState?.project) return;
-      await refreshTaskGroupSelectionPreview(currentProjectState);
+      if (taskLifecycleDomainRuntime?.handleTaskGroupChange) {
+        await taskLifecycleDomainRuntime.handleTaskGroupChange();
+        return;
+      }
     });
     document.getElementById('task-deadline-mode')?.addEventListener('change', (e) => {
-      setTaskDeadlineModeUi(e?.target?.value || 'date');
+      if (taskLifecycleDomainRuntime?.handleTaskDeadlineModeChange) {
+        taskLifecycleDomainRuntime.handleTaskDeadlineModeChange(e);
+        return;
+      }
     });
     document.getElementById('btn-open-task-theme-manager')?.addEventListener('click', async () => {
-      await showGlobalThemeManagementModal();
+      if (taskLifecycleDomainRuntime?.openTaskThemeManager) {
+        await taskLifecycleDomainRuntime.openTaskThemeManager();
+        return;
+      }
     });
 
     document.getElementById('btn-save-task').addEventListener('click', async () => {
-      if (!currentProjectId && !standaloneTaskMode) return;
-
-      const title = document.getElementById('task-title').value.trim();
-      if (!title) {
-        showToast('❌ Le titre est requis');
+      if (taskLifecycleDomainRuntime?.saveTaskFromModal) {
+        await taskLifecycleDomainRuntime.saveTaskFromModal();
         return;
       }
-
-      let attachments = [];
-      try {
-        attachments = await runWithLoading(async () => readTaskFiles());
-      } catch (error) {
-        showToast(`❌ ${error.message}`);
-        return;
-      }
-
-      const subtasksText = document.getElementById('task-subtasks').value;
-      const subtasksParsed = parseSubtasks(subtasksText);
-      const state = standaloneTaskMode ? null : await getProjectState(currentProjectId);
-      if (!standaloneTaskMode && !state?.project) {
-        showToast('Action non autorisee');
-        return;
-      }
-      const existingTask = (!standaloneTaskMode && editingTaskId)
-        ? (state.tasks || []).find(t => t.taskId === editingTaskId)
-        : null;
-      if (!standaloneTaskMode) {
-        if (existingTask) {
-          if (!canEditTaskInProject(existingTask, state)) {
-            showToast('Action non autorisee');
-            return;
-          }
-        } else if (!canCreateTaskInProject(state)) {
-          showToast('Action non autorisee');
-          return;
-        }
-      }
-
-      const groupSelectEl = document.getElementById('task-group');
-      const selectedGroupOption = groupSelectEl?.options?.[groupSelectEl.selectedIndex] || null;
-      const selectedGroupScope = String(selectedGroupOption?.dataset?.groupScope || '');
-      const selectedGroupName = String(selectedGroupOption?.dataset?.groupName || '').trim();
-      const rawGroupValue = String(groupSelectEl?.value || '');
-      let effectiveState = state;
-      let resolvedGroupId = selectedGroupScope === 'project' ? rawGroupValue || null : null;
-      let resolvedGroupName = rawGroupValue ? (selectedGroupName || null) : null;
-      let autoAddedMembersCount = 0;
-      if (!standaloneTaskMode && rawGroupValue) {
-        const groupContext = await resolveTaskSelectedGroupContext(state, rawGroupValue);
-        if (!groupContext) {
-          showToast('Groupe selectionne introuvable. Rechargez et reessayez.');
-          return;
-        }
-        try {
-          const ensured = await runWithLoading(async () => ensureTaskGroupAssociationInProject(state, groupContext));
-          effectiveState = ensured.state || state;
-          resolvedGroupId = ensured.groupId || null;
-          resolvedGroupName = ensured.groupName || groupContext.groupName || resolvedGroupName;
-          autoAddedMembersCount = Number(ensured.addedMembersCount || 0);
-        } catch (error) {
-          showToast(error?.message || 'Association du groupe impossible');
-          return;
-        }
-      }
-      const assigneeSelectEl = document.getElementById('task-assignee');
-      const manualAssigneeInput = document.getElementById('task-assignee-manual');
-      const selectedAssigneeValues = Array.from(assigneeSelectEl?.selectedOptions || [])
-        .map(opt => String(opt.value || '').trim())
-        .filter(Boolean);
-      const selectedAssigneesFromMembers = selectedAssigneeValues.map((assigneeValue) => {
-        const parsed = parseTaskAssigneeSelectValue(assigneeValue);
-        const option = Array.from(assigneeSelectEl?.options || []).find(opt => String(opt.value || '').trim() === assigneeValue);
-        if (parsed.kind === 'agent') {
-          const agentId = parsed.id;
-          const linkedUserId = String(option?.dataset?.userId || '').trim();
-          const name = String(option?.dataset?.assigneeName || option?.textContent || '').trim();
-          return {
-            agentId: agentId || null,
-            userId: linkedUserId || null,
-            name
-          };
-        }
-        const userId = parsed.id;
-        let name = '';
-        if (!standaloneTaskMode) {
-          const member = (effectiveState?.members || []).find(m => m.userId === userId);
-          name = member?.displayName || '';
-        } else if (userId === currentUser?.userId) {
-          name = currentUser?.name || '';
-        }
-        if (!name) {
-          name = String(option?.dataset?.assigneeName || option?.textContent || '').trim();
-        }
-        return { userId, name };
-      });
-      const manualAssigneeEntries = parseManualAssigneeEntries(manualAssigneeInput?.value || '');
-      const seenAssignees = new Set();
-      const assignees = [...selectedAssigneesFromMembers, ...manualAssigneeEntries.map(entry => ({
-        userId: null,
-        name: entry.name,
-        email: entry.email || ''
-      }))]
-        .filter((entry) => entry.userId || entry.name)
-        .filter((entry) => {
-          const key = `${entry.agentId || ''}|${entry.userId || ''}|${normalizeSearch(entry.name || '')}|${String(entry.email || '').toLowerCase()}`;
-          if (seenAssignees.has(key)) return false;
-          seenAssignees.add(key);
-          return true;
-        });
-      const primaryAssignee = assignees[0] || { userId: null, name: '' };
-
-      const taskDescriptionHtml = getProjectDescriptionHtmlForStorage('task-description-editor', 'task-description');
-      const taskDescriptionText = getProjectDescriptionPlainText(taskDescriptionHtml).trim();
-      const taskDeadline = readTaskDeadlineFromForm();
-
-      const payload = {
-        title: title,
-        assignee: primaryAssignee.name || '',
-        assigneeUserId: primaryAssignee.userId || null,
-        assignees,
-        description: taskDescriptionText,
-        descriptionHtml: taskDescriptionHtml || '',
-        requestDate: document.getElementById('task-request-date').value || null,
-        dueDate: taskDeadline.dueDate,
-        deadlineMode: taskDeadline.deadlineMode,
-        deadlineDate: taskDeadline.deadlineDate,
-        deadlineMonth: taskDeadline.deadlineMonth,
-        deadlineYear: taskDeadline.deadlineYear,
-        deadlineStart: taskDeadline.deadlineStart,
-        deadlineEnd: taskDeadline.deadlineEnd,
-        status: document.getElementById('task-status').value,
-        urgency: document.getElementById('task-urgency').value,
-        theme: (document.getElementById('task-theme')?.value || '').trim(),
-        groupId: resolvedGroupId || null,
-        groupName: resolvedGroupName || null,
-        featureId: standaloneTaskMode ? null : (String(document.getElementById('task-feature')?.value || '').trim() || null),
-        subtasks: existingTask
-          ? mergeSubtasksWithExisting(existingTask.subtasks || [], subtasksParsed)
-          : subtasksParsed
-      };
-
-      // Extraire la configuration de récurrence
-      let recurring = null;
-      if (window.TaskMDARecurrenceUI?.extractRecurrenceConfig) {
-        try {
-          recurring = window.TaskMDARecurrenceUI.extractRecurrenceConfig();
-        } catch (error) {
-          showToast(`❌ Erreur de récurrence: ${error.message}`);
-          return;
-        }
-      }
-      if (recurring) {
-        payload.recurring = recurring;
-      }
-
-      if (existingTask) {
-        payload.subtasks = mergeSubtasksWithExisting(existingTask.subtasks || [], subtasksParsed);
-        if (attachments.length > 0) {
-          payload.attachments = [...(existingTask.attachments || []), ...attachments];
-        }
-      } else {
-        payload.attachments = attachments;
-      }
-
-      if (standaloneTaskMode) {
-        const standaloneSharingMode = normalizeSharingMode(
-          document.getElementById('task-standalone-mode')?.value || 'private',
-          'private'
-        );
-        const isEditStandalone = Boolean(editingStandaloneTaskId);
-        const existingStandalone = isEditStandalone
-          ? await getDecrypted('globalTasks', editingStandaloneTaskId, 'id')
-          : null;
-        const mergedStandaloneSubtasks = isEditStandalone
-          ? mergeSubtasksWithExisting(existingStandalone?.subtasks || [], subtasksParsed)
-          : subtasksParsed;
-        const standaloneTask = {
-          id: isEditStandalone ? editingStandaloneTaskId : uuidv4(),
-          title: payload.title,
-          assignee: payload.assignee,
-          assigneeUserId: payload.assigneeUserId,
-          assignees: payload.assignees || [],
-          description: payload.description,
-          descriptionHtml: payload.descriptionHtml || '',
-          requestDate: payload.requestDate,
-          dueDate: payload.dueDate,
-          deadlineMode: payload.deadlineMode || 'date',
-          deadlineDate: payload.deadlineDate || null,
-          deadlineMonth: payload.deadlineMonth || null,
-          deadlineYear: payload.deadlineYear || null,
-          deadlineStart: payload.deadlineStart || null,
-          deadlineEnd: payload.deadlineEnd || null,
-          status: payload.status,
-          urgency: payload.urgency,
-          subtasks: mergedStandaloneSubtasks,
-          attachments: attachments.length > 0
-            ? ([...(existingStandalone?.attachments || []), ...attachments])
-            : (existingStandalone?.attachments || payload.attachments || []),
-          theme: payload.theme || document.getElementById('global-task-theme-known')?.value?.trim() || 'General',
-          groupId: payload.groupId || null,
-          groupName: payload.groupName || null,
-          featureId: null,
-          sharingMode: standaloneSharingMode,
-          recurring: recurring || null,
-          createdAt: existingStandalone?.createdAt || Date.now(),
-          updatedAt: Date.now(),
-          archivedAt: existingStandalone?.archivedAt || null
-        };
-        await runWithLoading(async () => {
-          await putEncrypted('globalTasks', standaloneTask, 'id');
-        });
-        if (!isEditStandalone) {
-          const standaloneFeedPostId = `auto-standalone-task-${standaloneTask.id}`;
-          const existingStandalonePost = await getDecrypted('globalPosts', standaloneFeedPostId, 'postId');
-          if (!existingStandalonePost) {
-            const standaloneTaskRef = buildGlobalTaskRef({
-              sourceType: 'standalone',
-              sourceProjectId: null,
-              taskId: null,
-              id: standaloneTask.id
-            });
-            const standaloneAutoPost = {
-              postId: standaloneFeedPostId,
-              authorUserId: String(currentUser?.userId || ''),
-              authorName: String(currentUser?.name || fallbackDirectoryName(currentUser?.userId || '')),
-              content: `Nouvelle tâche créée: ${standaloneTask.title || 'Tâche'}\nProjet: Hors projet`,
-              mentions: [],
-              refs: [{ type: 'task', id: standaloneTaskRef, label: `${standaloneTask.title || 'Tâche'} • Hors projet` }],
-              createdAt: Number(standaloneTask.createdAt || Date.now()),
-              source: sharedFolderHandle ? 'shared' : 'local',
-              isAuto: true,
-              autoKind: 'task-created',
-              sourceEventId: `standalone:${standaloneTask.id}`
-            };
-            await putEncrypted('globalPosts', standaloneAutoPost, 'postId');
-            knownGlobalPostIds.add(standaloneAutoPost.postId);
-            if (sharedFolderHandle) {
-              await writeGlobalFeedPostToSharedFolder(standaloneAutoPost);
-            }
-            if (workspaceMode === 'global' && globalWorkspaceView === 'feed') {
-              await renderGlobalFeed();
-            }
-          }
-        }
-        document.getElementById('modal-new-task').classList.add('hidden');
-        if (standaloneSharingMode === 'shared' && !sharedFolderHandle) {
-          showToast('Visibilité collaborative active: connectez un dossier partagé pour synchroniser.');
-        }
-        showToast(isEditStandalone ? '✅ Tâche hors projet mise à jour' : '✅ Tâche hors projet créée');
-        addNotification('Tache', isEditStandalone ? 'Tache hors projet mise a jour' : 'Nouvelle tache hors projet creee', null, {
-          targetType: 'task',
-          targetId: standaloneTask.id,
-          targetView: 'global-tasks',
-          linkLabel: 'Ouvrir les tâches'
-        });
-        standaloneTaskMode = false;
-        editingStandaloneTaskId = null;
-        await renderGlobalTasks();
-        await refreshStats();
-        return;
-      }
-
-      const event = editingTaskId
-        ? createEvent(
-            EventTypes.UPDATE_TASK,
-            currentProjectId,
-            currentUser.userId,
-            { taskId: editingTaskId, changes: payload }
-          )
-        : createEvent(
-            EventTypes.CREATE_TASK,
-            currentProjectId,
-            currentUser.userId,
-            { taskId: uuidv4(), createdBy: currentUser.userId, ...payload }
-          );
-
-      await runWithLoading(async () => {
-        await publishEvent(event);
-        if (sharedFolderHandle) { void syncProjectEventsToSharedSpace(currentProjectId, [event]); }
-      });
-
-      await releaseActiveTaskEditLock();
-      document.getElementById('modal-new-task').classList.add('hidden');
-      showToast(editingTaskId ? '✅ Tâche mise à jour' : '✅ Tâche créée');
-      if (autoAddedMembersCount > 0) {
-        showToast(`✅ ${autoAddedMembersCount} membre(s) du groupe ajouté(s) au projet`);
-      }
-      editingTaskId = null;
-      addNotification('Tache', event.type === EventTypes.UPDATE_TASK ? 'Tache mise a jour' : 'Nouvelle tache creee', currentProjectId, {
-        targetType: 'task',
-        targetId: event.payload?.taskId || null,
-        targetView: 'list',
-        linkLabel: 'Ouvrir la tâche'
-      });
-      await showProjectDetail(currentProjectId);
     });
 
     // Send message
@@ -39145,33 +35910,10 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       closeTaskConvertModal();
     });
     document.getElementById('btn-task-convert-confirm')?.addEventListener('click', async () => {
-      const taskRef = pendingTaskConvertRef;
-      if (!taskRef) {
-        closeTaskConvertModal();
+      if (taskLifecycleDomainRuntime?.confirmTaskConvertFromModal) {
+        await taskLifecycleDomainRuntime.confirmTaskConvertFromModal();
         return;
       }
-      const projectName = String(document.getElementById('task-convert-project-name')?.value || '').trim();
-      const sharingMode = normalizeSharingMode(
-        document.getElementById('task-convert-mode')?.value || 'private',
-        'private'
-      );
-      const archiveSource = !!document.getElementById('task-convert-archive-source')?.checked;
-      const openProjectAfterConvert = !!document.getElementById('task-convert-open-project')?.checked;
-      const errorEl = document.getElementById('task-convert-error');
-      if (!projectName) {
-        if (errorEl) errorEl.classList.remove('hidden');
-        document.getElementById('task-convert-project-name')?.focus();
-        return;
-      }
-      if (errorEl) errorEl.classList.add('hidden');
-      closeTaskConvertModal();
-      await convertTaskToProject(taskRef, {
-        __fromModal: true,
-        projectName,
-        sharingMode,
-        archiveSource,
-        openProjectAfterConvert
-      });
     });
     document.getElementById('btn-close-global-conversation-delete')?.addEventListener('click', () => {
       closeGlobalConversationDeleteModal();
@@ -39183,9 +35925,10 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       await confirmDeleteGlobalConversation();
     });
     document.getElementById('task-convert-project-name')?.addEventListener('keydown', async (e) => {
-      if (e.key !== 'Enter') return;
-      e.preventDefault();
-      document.getElementById('btn-task-convert-confirm')?.click();
+      if (taskLifecycleDomainRuntime?.handleTaskConvertNameKeydown) {
+        taskLifecycleDomainRuntime.handleTaskConvertNameKeydown(e);
+        return;
+      }
     });
     document.getElementById('btn-close-calendar-info-details')?.addEventListener('click', async () => {
       await closeStandaloneCalendarDetails();
@@ -39295,14 +36038,20 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     // Close modals on escape key
     document.addEventListener('keydown', async (e) => {
       if (e.key === 'Escape') {
-        await releaseActiveTaskEditLock();
+        if (taskLifecycleDomainRuntime?.closeTaskModalAndReset) {
+          await taskLifecycleDomainRuntime.closeTaskModalAndReset();
+        } else {
+          await releaseActiveTaskEditLock();
+          document.getElementById('modal-new-task').classList.add('hidden');
+          editingTaskId = null;
+          editingStandaloneTaskId = null;
+        }
         await releaseActiveProjectEditLock();
         if (activeCalendarEditLock?.itemId) {
           await releaseCalendarItemLock(activeCalendarEditLock.itemId, activeCalendarEditLock.lockId || '');
           activeCalendarEditLock = null;
         }
         document.getElementById('modal-new-project').classList.add('hidden');
-        document.getElementById('modal-new-task').classList.add('hidden');
         document.getElementById('modal-edit-user-name').classList.add('hidden');
         pendingProfilePhotoDirty = false;
         document.getElementById('modal-edit-project').classList.add('hidden');
@@ -39318,13 +36067,11 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
         closeGlobalNotesBulkExportModal();
         document.getElementById('modal-app-help')?.classList.add('hidden');
         await closeGlobalTaskDetails();
-        resetStandaloneCalendarForm();
-        closeGlobalCalendarItemModal();
+        globalCalendarRuntime?.resetStandaloneCalendarForm?.();
+        globalCalendarRuntime?.closeGlobalCalendarItemModal?.();
         toggleNotificationsPanel(false);
         toggleEmojiPicker(false);
-        editingTaskId = null;
-        editingStandaloneTaskId = null;
-        closeMobileSidebar();
+        shellUiRuntime?.closeMobileSidebar?.();
       }
     });
 
@@ -39334,6 +36081,10 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     });
 
     registerSafeBackdropClose('modal-new-task', async () => {
+        if (taskLifecycleDomainRuntime?.closeTaskModalAndReset) {
+          await taskLifecycleDomainRuntime.closeTaskModalAndReset();
+          return;
+        }
         await releaseActiveTaskEditLock();
         document.getElementById('modal-new-task')?.classList.add('hidden');
         editingTaskId = null;
@@ -39355,8 +36106,8 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       await closeStandaloneCalendarDetails();
     });
     registerSafeBackdropClose('modal-calendar-item-form', () => {
-      resetStandaloneCalendarForm();
-      closeGlobalCalendarItemModal();
+      globalCalendarRuntime?.resetStandaloneCalendarForm?.();
+      globalCalendarRuntime?.closeGlobalCalendarItemModal?.();
     });
     registerSafeBackdropClose('modal-doc-binding', () => {
       closeDocumentBindingModal();
@@ -39388,1166 +36139,97 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
       pendingProfilePhotoDirty = false;
     });
     registerSafeBackdropClose('modal-edit-project', async () => {
-      editProjectFromDashboard = false;
-      await releaseActiveProjectEditLock();
-      document.getElementById('modal-edit-project')?.classList.add('hidden');
-      const editProjectDocInput = document.getElementById('edit-project-doc-files');
-      if (editProjectDocInput) editProjectDocInput.value = '';
-      const editPassphraseInput = document.getElementById('edit-project-passphrase');
-      if (editPassphraseInput) editPassphraseInput.value = '';
-      updateEditProjectDocFilesSummary();
+      await closeEditProjectModal();
     });
 
     // Project views
-    document.getElementById('view-overview')?.addEventListener('click', () => setProjectView('overview'));
-    document.getElementById('view-cards')?.addEventListener('click', () => setProjectTaskPresentationMode('cards'));
-    document.getElementById('view-list').addEventListener('click', () => setProjectTaskPresentationMode('list'));
-    document.getElementById('view-kanban').addEventListener('click', () => setProjectView('kanban'));
-    document.getElementById('view-gantt')?.addEventListener('click', () => setProjectView('gantt'));
-    document.getElementById('view-timeline').addEventListener('click', () => setProjectView('timeline'));
-    document.getElementById('view-docs').addEventListener('click', () => setProjectView('docs'));
-    document.getElementById('view-notes')?.addEventListener('click', () => setProjectView('notes'));
-    document.getElementById('view-chat').addEventListener('click', () => setProjectView('chat'));
-    document.getElementById('view-archives')?.addEventListener('click', () => setProjectView('archives'));
-    document.getElementById('global-tasks-view-tabs')?.addEventListener('click', (e) => {
-      if (e?.target?.closest?.('.tab-overflow-wrap')) return;
-      setTimeout(() => refreshManagedTabOverflow(), 0);
-    });
-    document.getElementById('project-view-tabs-wrap')?.addEventListener('click', (e) => {
-      if (e?.target?.closest?.('.tab-overflow-wrap')) return;
-      setTimeout(() => refreshManagedTabOverflow(), 0);
-    });
-    document.getElementById('workflow-view-tabs-list')?.addEventListener('click', (e) => {
-      if (e?.target?.closest?.('.tab-overflow-wrap')) return;
-      setTimeout(() => refreshManagedTabOverflow(), 0);
-      setTimeout(() => {
-        setActiveWorkflowSidebarGroup(getActiveWorkflowGroupFromDom());
-      }, 0);
-    });
-    document.getElementById('global-settings-tabs-list')?.addEventListener('click', (e) => {
-      const tabBtn = e?.target?.closest?.('button[id^="global-settings-tab-"]');
-      if (tabBtn?.id) {
-        const tabKey = tabBtn.id.replace('global-settings-tab-', '');
-        if (tabKey) setGlobalSettingsTab(tabKey);
-      }
-      if (e?.target?.closest?.('.tab-overflow-wrap')) return;
-      setTimeout(() => refreshManagedTabOverflow(), 0);
-    });
-    window.addEventListener('resize', () => {
-      refreshManagedTabOverflow();
-    });
-    document.addEventListener('click', (e) => {
-      if (e.target?.closest?.('.tab-overflow-wrap')) return;
-      closeAllTabOverflowMenus();
-    });
     ensureActionButtonsObserver();
     ensureModalFieldIconsObserver();
     ensureModalCloseButtonsObserver();
-    document.getElementById('project-task-view-1')?.addEventListener('click', () => setProjectTaskCardsColumns(1));
-    document.getElementById('project-task-view-2')?.addEventListener('click', () => setProjectTaskCardsColumns(2));
-    document.getElementById('project-task-view-3')?.addEventListener('click', () => setProjectTaskCardsColumns(3));
-    document.getElementById('project-task-view-4')?.addEventListener('click', () => setProjectTaskCardsColumns(4));
-    const rerenderProjectFilters = () => {
-      tasksPage = 1;
-      rerenderActiveProjectTaskView();
-    };
-    document.getElementById('project-task-search')?.addEventListener('input', rerenderProjectFilters);
-    document.getElementById('project-task-theme-filter')?.addEventListener('input', () => {
-      syncThemePickerSelectionFromInput('project-task-theme-known', 'project-task-theme-filter');
-      rerenderProjectFilters();
-    });
-    document.getElementById('project-task-status')?.addEventListener('change', rerenderProjectFilters);
-    document.getElementById('project-task-filter-feature')?.addEventListener('change', rerenderProjectFilters);
-    document.getElementById('project-task-theme-known')?.addEventListener('change', () => {
-      syncThemePickerInputFromSelection('project-task-theme-known', 'project-task-theme-filter');
-      rerenderProjectFilters();
-    });
-    document.getElementById('project-doc-theme')?.addEventListener('input', () => {
-      syncThemePickerSelectionFromInput('project-doc-theme-known', 'project-doc-theme');
-    });
-    document.getElementById('project-doc-theme-known')?.addEventListener('change', () => {
-      syncThemePickerInputFromSelection('project-doc-theme-known', 'project-doc-theme');
-    });
-    document.getElementById('global-doc-upload-theme')?.addEventListener('input', () => {
-      syncThemePickerSelectionFromInput('global-doc-upload-theme-known', 'global-doc-upload-theme');
-    });
-    document.getElementById('global-doc-upload-theme-known')?.addEventListener('change', () => {
-      syncThemePickerInputFromSelection('global-doc-upload-theme-known', 'global-doc-upload-theme');
-    });
-    document.getElementById('project-task-filter-epic')?.addEventListener('change', () => {
-      refreshProjectHierarchyTaskFilters(currentProjectState);
-      rerenderProjectFilters();
-    });
-    document.getElementById('project-notes-search')?.addEventListener('input', () => {
-      projectNotesSearchQuery = String(document.getElementById('project-notes-search')?.value || '').trim();
-      renderProjectNotes(currentProjectState);
-    });
-    document.getElementById('project-notes-filter')?.addEventListener('change', () => {
-      projectNotesFilterMode = String(document.getElementById('project-notes-filter')?.value || 'all').trim() || 'all';
-      renderProjectNotes(currentProjectState);
-    });
-    document.getElementById('project-notes-theme-tabs')?.addEventListener('click', (event) => {
-      const btn = event?.target?.closest?.('[data-note-theme-tab]');
-      if (!btn) return;
-      const key = String(btn.getAttribute('data-note-theme-tab') || 'all').trim() || 'all';
-      setProjectNotesThemeFilter(key);
-    });
-    document.getElementById('global-notes-theme-tabs')?.addEventListener('click', (event) => {
-      const btn = event?.target?.closest?.('[data-global-note-theme-tab]');
-      if (!btn) return;
-      const key = String(btn.getAttribute('data-global-note-theme-tab') || 'all').trim() || 'all';
-      globalNotesThemeFilter = key;
-      globalNotesPage = 1;
-      renderGlobalNotes().catch(() => null);
-    });
     globalNotesRuntime?.bindDom();
     globalFeedRuntime?.bindDom();
     globalMessagesRuntime?.bindDom();
+    messageReactionsOutsideRuntime?.bindDom();
     globalEmailRuntime?.bindDom();
-    document.getElementById('btn-project-note-new')?.addEventListener('click', () => openProjectNoteEditor(''));
-    document.getElementById('btn-project-note-cancel')?.addEventListener('click', () => closeProjectNoteEditor());
-    document.getElementById('btn-close-project-note-modal')?.addEventListener('click', () => closeProjectNoteEditor());
-    document.getElementById('btn-close-project-note-read-modal')?.addEventListener('click', () => closeProjectNoteReadModal());
-    document.getElementById('btn-close-global-read-modal')?.addEventListener('click', () => closeGlobalReadModal());
-    document.getElementById('btn-global-read-edit')?.addEventListener('click', () => {
-      const noteId = String(document.getElementById('btn-global-read-edit')?.getAttribute('data-note-id') || '').trim();
-      if (!noteId) return;
-      closeGlobalReadModal();
-      openGlobalNoteEditor(noteId).catch(() => null);
-    });
-    document.getElementById('btn-global-read-delete')?.addEventListener('click', async () => {
-      const noteId = String(document.getElementById('btn-global-read-delete')?.getAttribute('data-note-id') || '').trim();
-      if (!noteId) return;
-      await deleteGlobalNote(noteId);
-      closeGlobalReadModal();
-    });
-    document.getElementById('btn-global-read-export-menu')?.addEventListener('click', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const menu = document.getElementById('global-read-export-dropdown');
-      const btn = document.getElementById('btn-global-read-export-menu');
-      if (!menu || !btn) return;
-      const willOpen = menu.classList.contains('hidden');
-      menu.classList.toggle('hidden', !willOpen);
-      btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
-    });
-    document.getElementById('btn-global-read-export-html')?.addEventListener('click', async () => {
-      const nid = String(document.getElementById('btn-global-read-export-html')?.getAttribute('data-note-id') || '').trim();
-      if (!nid) return;
-      await exportGlobalNote(nid, 'html');
-    });
-    document.getElementById('btn-global-read-export-pdf')?.addEventListener('click', async () => {
-      const nid = String(document.getElementById('btn-global-read-export-pdf')?.getAttribute('data-note-id') || '').trim();
-      if (!nid) return;
-      await exportGlobalNoteAsPdf(nid);
-    });
-    document.getElementById('btn-global-read-export-docx')?.addEventListener('click', async () => {
-      const nid = String(document.getElementById('btn-global-read-export-docx')?.getAttribute('data-note-id') || '').trim();
-      if (!nid) return;
-      await exportGlobalNoteAsDocx(nid);
-    });
-    document.getElementById('btn-global-read-export-txt')?.addEventListener('click', async () => {
-      const nid = String(document.getElementById('btn-global-read-export-txt')?.getAttribute('data-note-id') || '').trim();
-      if (!nid) return;
-      await exportGlobalNote(nid, 'txt');
-    });
-    const globalReadModal = document.getElementById('modal-global-read');
-    if (globalReadModal && globalReadModal.dataset.inlineShortcutsBound !== '1') {
-      globalReadModal.dataset.inlineShortcutsBound = '1';
-      globalReadModal.addEventListener('keydown', async (event) => {
-        if (globalReadModal.classList.contains('hidden')) return;
-        const key = String(event.key || '').toLowerCase();
-        if ((event.ctrlKey || event.metaKey) && key === 's') {
-          event.preventDefault();
-          await saveGlobalReadInlineEdit();
-          return;
-        }
-        if (globalReadInlineEditActive && key === 'enter' && event.target?.id === 'global-read-title') {
-          event.preventDefault();
-          await saveGlobalReadInlineEdit();
-          return;
-        }
-        if (key === 'escape') {
-          event.preventDefault();
-          event.stopPropagation();
-          if (globalReadInlineEditActive) {
-            cancelGlobalReadInlineEdit();
-            return;
-          }
-          closeGlobalReadModal();
-        }
-      });
-    }
-    document.getElementById('global-read-title')?.addEventListener('click', () => {
-      beginGlobalReadInlineEdit('title');
-    });
-    document.getElementById('global-read-content')?.addEventListener('click', () => {
-      beginGlobalReadInlineEdit('content');
-    });
-    document.getElementById('global-read-title')?.addEventListener('blur', async () => {
-      if (!globalReadInlineEditActive) return;
-      setTimeout(async () => {
-        const active = document.activeElement;
-        if (isElementInsideGlobalReadInlineEdit(active)) return;
-        await saveGlobalReadInlineEdit({ silent: true });
-      }, 0);
-    });
-    document.addEventListener('focusout', (event) => {
-      if (!globalReadInlineEditActive) return;
-      const target = event.target;
-      if (!(target instanceof HTMLElement)) return;
-      if (!target.closest('#global-read-inline-editor-wrap')) return;
-      setTimeout(async () => {
-        const active = document.activeElement;
-        if (isElementInsideGlobalReadInlineEdit(active)) return;
-        await saveGlobalReadInlineEdit({ silent: true });
-      }, 0);
-    }, true);
-    document.getElementById('btn-project-note-read-export-menu')?.addEventListener('click', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const menu = document.getElementById('project-note-read-export-dropdown');
-      const btn = document.getElementById('btn-project-note-read-export-menu');
-      if (!menu || !btn) return;
-      const open = menu.classList.contains('hidden');
-      menu.classList.toggle('hidden', !open);
-      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-    });
-    document.getElementById('btn-project-note-export-html')?.addEventListener('click', async (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const noteId = String(projectNoteReadModalNoteId || '').trim();
-      if (noteId) await exportProjectNote(noteId, 'html');
-    });
-    document.getElementById('btn-project-note-export-pdf')?.addEventListener('click', async (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const noteId = String(projectNoteReadModalNoteId || '').trim();
-      if (noteId) await exportProjectNote(noteId, 'pdf');
-    });
-    document.getElementById('btn-project-note-export-docx')?.addEventListener('click', async (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const noteId = String(projectNoteReadModalNoteId || '').trim();
-      if (noteId) await exportProjectNote(noteId, 'docx');
-    });
-    document.getElementById('btn-project-note-export-txt')?.addEventListener('click', async (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const noteId = String(projectNoteReadModalNoteId || '').trim();
-      if (noteId) await exportProjectNote(noteId, 'txt');
-    });
-    document.getElementById('btn-project-note-read-edit')?.addEventListener('click', () => {
-      const noteId = String(document.getElementById('btn-project-note-read-edit')?.getAttribute('data-note-id') || '').trim();
-      openProjectNoteEditorFromReadModal(noteId);
-    });
-    document.getElementById('btn-project-note-read-delete')?.addEventListener('click', () => {
-      const noteId = String(document.getElementById('btn-project-note-read-delete')?.getAttribute('data-note-id') || '').trim();
-      if (noteId) void deleteProjectNote(noteId);
-    });
-    document.getElementById('btn-note-selection-to-project')?.addEventListener('click', async () => {
-      hideProjectNoteSelectionMenu();
-      const snippet = normalizeProjectNoteSelectionSnippet(projectNoteSelectionMenuPayload);
-      if (!snippet.text && !snippet.html) {
-        showToast('Aucun texte sélectionné');
-        return;
-      }
-      await appendProjectNoteSelectionToProjectDescription(snippet);
-    });
-    document.getElementById('btn-note-selection-copy')?.addEventListener('click', async () => {
-      hideProjectNoteSelectionMenu();
-      const snippet = normalizeProjectNoteSelectionSnippet(projectNoteSelectionMenuPayload);
-      if (!snippet.text) {
-        showToast('Aucun texte sélectionné');
-        return;
-      }
-      const copied = await copyTextToClipboard(snippet.text);
-      showToast(copied ? 'Texte copié' : 'Copie impossible');
-    });
-    document.getElementById('btn-note-selection-to-task')?.addEventListener('click', () => {
-      hideProjectNoteSelectionMenu();
-      const snippet = normalizeProjectNoteSelectionSnippet(projectNoteSelectionMenuPayload);
-      if (!snippet.text && !snippet.html) {
-        showToast('Aucun texte sélectionné');
-        return;
-      }
-      openNoteSelectionTaskTargetModal(snippet, projectNoteSelectionMenuPayload.noteId || projectNoteReadModalNoteId, { copyMode: 'task' });
-    });
-    document.getElementById('btn-note-selection-to-project-and-task')?.addEventListener('click', () => {
-      hideProjectNoteSelectionMenu();
-      const snippet = normalizeProjectNoteSelectionSnippet(projectNoteSelectionMenuPayload);
-      if (!snippet.text && !snippet.html) {
-        showToast('Aucun texte sélectionné');
-        return;
-      }
-      openNoteSelectionTaskTargetModal(snippet, projectNoteSelectionMenuPayload.noteId || projectNoteReadModalNoteId, { copyMode: 'both' });
-    });
-    document.getElementById('btn-close-note-selection-task-target')?.addEventListener('click', () => closeNoteSelectionTaskTargetModal());
-    document.getElementById('btn-cancel-note-selection-task-target')?.addEventListener('click', () => closeNoteSelectionTaskTargetModal());
-    document.getElementById('btn-confirm-note-selection-task-target')?.addEventListener('click', async () => {
-      await handleProjectNoteSelectionCopyToTask();
-    });
-    document.getElementById('btn-project-note-fullscreen')?.addEventListener('click', () => {
-      applyProjectNoteModalFullscreen(!projectNoteModalFullscreen);
-    });
-    document.getElementById('btn-project-note-save')?.addEventListener('click', async () => {
-      await saveProjectNoteFromEditor();
-    });
-    document.getElementById('btn-project-note-digest')?.addEventListener('click', () => {
-      const input = document.getElementById('project-note-digest-files');
-      const chosenMode = pickGlobalFeedDigestImportMode();
-      if (chosenMode !== 'compact' && chosenMode !== 'full') return;
-      if (input) input.dataset.importDigestView = chosenMode;
-      input?.click();
-    });
-    document.getElementById('project-note-digest-files')?.addEventListener('change', async (event) => {
-      const files = event?.target?.files;
-      const digestView = String(event?.target?.dataset?.importDigestView || '').toLowerCase();
-      await importProjectNoteDigestFromFiles(files, { digestView });
-      if (event?.target) {
-        event.target.value = '';
-        delete event.target.dataset.importDigestView;
-      }
-    });
-    const projectNoteModal = document.getElementById('modal-project-note');
-    if (projectNoteModal && projectNoteModal.dataset.noteShortcutsBound !== '1') {
-      projectNoteModal.dataset.noteShortcutsBound = '1';
-      projectNoteModal.addEventListener('keydown', (event) => {
-        if (projectNoteModal.classList.contains('hidden')) return;
-        const key = String(event.key || '').toLowerCase();
-        if ((event.ctrlKey || event.metaKey) && key === 's') {
-          event.preventDefault();
-          void saveProjectNoteFromEditor();
-          return;
-        }
-        if (key === 'escape') {
-          event.preventDefault();
-          event.stopPropagation();
-          closeProjectNoteEditor();
-          return;
-        }
-        trapProjectNoteModalFocus(event);
-      });
-    }
-    const projectNoteReadModal = document.getElementById('modal-project-note-read');
-    if (projectNoteReadModal && projectNoteReadModal.dataset.readShortcutsBound !== '1') {
-      projectNoteReadModal.dataset.readShortcutsBound = '1';
-      projectNoteReadModal.addEventListener('keydown', async (event) => {
-        if (projectNoteReadModal.classList.contains('hidden')) return;
-        const key = String(event.key || '').toLowerCase();
-        if ((event.ctrlKey || event.metaKey) && key === 's') {
-          event.preventDefault();
-          await saveProjectNoteReadInlineEdit();
-          return;
-        }
-        if (projectNoteReadInlineEditActive && key === 'enter' && event.target?.id === 'project-note-read-title') {
-          event.preventDefault();
-          await saveProjectNoteReadInlineEdit();
-          return;
-        }
-        if (key === 'escape') {
-          event.preventDefault();
-          event.stopPropagation();
-          if (projectNoteReadInlineEditActive) {
-            cancelProjectNoteReadInlineEdit();
-            return;
-          }
-          hideProjectNoteSelectionMenu();
-          closeNoteSelectionTaskTargetModal();
-          closeProjectNoteReadModal();
-        }
-      });
-    }
-    document.getElementById('project-note-read-title')?.addEventListener('click', () => {
-      beginProjectNoteReadInlineEdit('title');
-    });
-    document.getElementById('project-note-read-content')?.addEventListener('click', () => {
-      beginProjectNoteReadInlineEdit('content');
-    });
-    document.getElementById('project-note-read-title')?.addEventListener('blur', async () => {
-      if (!projectNoteReadInlineEditActive) return;
-      setTimeout(async () => {
-        const activeId = String(document.activeElement?.id || '');
-        if (activeId === 'project-note-read-title' || activeId === 'project-note-read-content') return;
-        await saveProjectNoteReadInlineEdit({ silent: true });
-      }, 0);
-    });
-    document.getElementById('project-note-read-content')?.addEventListener('blur', async () => {
-      if (!projectNoteReadInlineEditActive) return;
-      setTimeout(async () => {
-        const activeId = String(document.activeElement?.id || '');
-        if (activeId === 'project-note-read-title' || activeId === 'project-note-read-content') return;
-        await saveProjectNoteReadInlineEdit({ silent: true });
-      }, 0);
-    });
-    document.getElementById('project-note-read-content')?.addEventListener('contextmenu', (event) => {
-      if (projectNoteReadInlineEditActive) return;
-      const snippet = getProjectNoteReadSelectedSnippet();
-      if (!snippet?.text && !snippet?.html) {
-        hideProjectNoteSelectionMenu();
-        return;
-      }
-      event.preventDefault();
-      event.stopPropagation();
-      showProjectNoteSelectionMenu(event.clientX, event.clientY, {
-        text: snippet.text,
-        html: snippet.html,
-        noteId: projectNoteReadModalNoteId
-      });
-    });
-    document.addEventListener('pointerdown', (event) => {
-      const menu = document.getElementById('project-note-selection-menu');
-      if (!menu || menu.classList.contains('hidden')) return;
-      const target = event.target;
-      if (target instanceof Node && menu.contains(target)) return;
-      hideProjectNoteSelectionMenu();
-    });
-    document.addEventListener('scroll', () => hideProjectNoteSelectionMenu(), true);
     // Fonction pour remplir le select de sélection de groupe en messagerie
     async function populateGlobalMessageGroupChannelSelect() {
-      console.log('[populateGlobalMessageGroupChannelSelect] START');
-      const select = document.getElementById('global-message-group-channel-select');
-      if (!select) {
-        console.error('Select element not found');
+      if (globalGroupChannelUiRuntime?.populateGlobalMessageGroupChannelSelect) {
+        await globalGroupChannelUiRuntime.populateGlobalMessageGroupChannelSelect();
         return;
       }
-      console.log('Select element found');
-
-      const me = String(currentUser?.userId || '').trim();
-      console.log('Current user ID:', me);
-      if (!me) {
-        select.innerHTML = '<option value="">-- Sélectionner un groupe --</option>';
-        console.log('No current user, aborting');
-        return;
-      }
-
-      console.log('globalGroupCatalog length:', (globalGroupCatalog || []).length);
-      console.log('globalGroupCatalog:', globalGroupCatalog);
-
-      // Récupérer tous les projets accessibles pour vérifier lesquels sont publics
-      const allProjects = await getAllProjects();
-      console.log('All projects count:', allProjects.length);
-      const publicProjectIds = new Set(
-        allProjects
-          .filter(p => normalizeProjectReadAccess(p?.readAccess) === 'public')
-          .map(p => p.projectId)
-      );
-      console.log('Public project IDs:', Array.from(publicProjectIds));
-
-      // Filtrer les groupes selon la logique :
-      // 1. Groupes dont l'utilisateur est membre
-      // 2. Groupes créés dans "Référentiels" (sans projectId) - toujours publics
-      // 3. Groupes de projets publics
-      const visibleGroups = (globalGroupCatalog || [])
-        .filter((group) => {
-          const memberIds = Array.isArray(group?.memberUserIds) ? group.memberUserIds : [];
-          const isMember = memberIds.includes(me);
-          const isFromReferentiels = !group.projectId;  // Créé dans Référentiels
-          const isFromPublicProject = group.projectId && publicProjectIds.has(group.projectId);
-
-          const willShow = isMember || isFromReferentiels || isFromPublicProject;
-          console.log(`  Group "${group.name}": isMember=${isMember}, isFromRef=${isFromReferentiels}, isFromPub=${isFromPublicProject} -> ${willShow ? 'SHOW' : 'HIDE'}`);
-
-          // Accepter si : membre OU groupe référentiel OU projet public
-          return willShow;
-        })
-        .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'fr'));
-
-      console.log(`Visible groups: ${visibleGroups.length}`, visibleGroups.map(g => g.name));
-
-      const memberGroups = visibleGroups;  // Pour compatibilité avec le code existant
-
-      // Créer un mapping projectId -> nom du projet pour affichage
-      const projectMap = new Map(allProjects.map(p => [p.projectId, p.name]));
-
-      const htmlOptions = memberGroups.map((group) => {
-        // Ajouter une indication de l'origine du groupe
-        let label = escapeHtml(group.name);
-        if (group.projectId && projectMap.has(group.projectId)) {
-          label += ` (projet: ${escapeHtml(projectMap.get(group.projectId))})`;
-        } else if (!group.projectId) {
-          label += ' (global)';
-        }
-        const option = `<option value="${escapeHtml(group.groupKey)}">${label}</option>`;
-        console.log(`[debug] HTML option: ${option}`);
-        return option;
-      });
-
-      const finalHTML = [
-        '<option value="">-- Sélectionner un groupe --</option>',
-        ...htmlOptions
-      ].join('\n');
-
-      console.log('[debug] Final HTML to insert:');
-      console.log(finalHTML);
-
-      select.innerHTML = finalHTML;
-
-      console.log('✅ Select updated. Options count:', select.options.length);
-      console.log('[debug] [populateGlobalMessageGroupChannelSelect] END');
     }
 
-    document.getElementById('btn-project-subnav-horizontal')?.addEventListener('click', () => setProjectSubnavLayout('horizontal'));
-    document.getElementById('btn-project-subnav-vertical')?.addEventListener('click', () => setProjectSubnavLayout('vertical'));
-    document.getElementById('btn-project-settings-subnav-horizontal')?.addEventListener('click', () => setProjectSubnavLayout('horizontal'));
-    document.getElementById('btn-project-settings-subnav-vertical')?.addEventListener('click', () => setProjectSubnavLayout('vertical'));
-    document.getElementById('btn-project-work-focus')?.addEventListener('click', toggleProjectWorkFocus);
-    document.getElementById('btn-project-settings-work-focus')?.addEventListener('click', toggleProjectSettingsFocus);
-    document.getElementById('global-task-view-1')?.addEventListener('click', () => setGlobalTaskCardsColumns(1));
-    document.getElementById('global-task-view-2')?.addEventListener('click', () => setGlobalTaskCardsColumns(2));
-    document.getElementById('global-task-view-3')?.addEventListener('click', () => setGlobalTaskCardsColumns(3));
-    document.getElementById('global-task-view-4')?.addEventListener('click', () => setGlobalTaskCardsColumns(4));
-    document.getElementById('view-activity').addEventListener('click', async () => {
-      if (!canReadProjectActivity(currentProjectState)) {
-        showToast('Action non autorisee');
-        setProjectView('list');
-        return;
-      }
-      setProjectView('activity');
-      if (!currentProjectId) return;
-      activityPage = 1;
-      currentProjectEvents = await getProjectEvents(currentProjectId);
-      await renderActivity(currentProjectEvents);
-    });
-
-    const orderedViews = ['overview', 'kanban', 'cards', 'list', 'gantt', 'timeline', 'notes', 'chat', 'docs', 'activity', 'archives'];
-    orderedViews.forEach((viewKey, idx) => {
-      const btn = document.getElementById(`view-${viewKey === 'docs' ? 'docs' : viewKey}`);
-      if (!btn) return;
-      btn.addEventListener('keydown', (e) => {
-        const isVertical = projectSubnavLayout === 'vertical';
-        const prevKeyPressed = e.key === 'ArrowLeft' || (isVertical && e.key === 'ArrowUp');
-        const nextKeyPressed = e.key === 'ArrowRight' || (isVertical && e.key === 'ArrowDown');
-        if (!prevKeyPressed && !nextKeyPressed) return;
-        e.preventDefault();
-        const nextIdx = nextKeyPressed
-          ? (idx + 1) % orderedViews.length
-          : (idx - 1 + orderedViews.length) % orderedViews.length;
-        let nextKey = orderedViews[nextIdx];
-        if (nextKey === 'activity' && !canReadProjectActivity(currentProjectState)) {
-          nextKey = 'cards';
-        }
-        const nextBtn = document.getElementById(`view-${nextKey === 'docs' ? 'docs' : nextKey}`);
-        if (nextBtn) {
-          nextBtn.focus();
-          if (nextKey === 'cards' || nextKey === 'list') {
-            setProjectTaskPresentationMode(nextKey);
-          } else {
-            setProjectView(nextKey);
-          }
-        }
-      });
-    });
-
-    document.getElementById('timeline-filter-all')?.addEventListener('click', () => {
-      timelineFilter = 'all';
-      renderTimeline(currentProjectState?.tasks || []);
-    });
-    document.getElementById('timeline-filter-milestone')?.addEventListener('click', () => {
-      timelineFilter = 'milestone';
-      renderTimeline(currentProjectState?.tasks || []);
-    });
-    document.getElementById('timeline-filter-urgent')?.addEventListener('click', () => {
-      timelineFilter = 'urgent';
-      renderTimeline(currentProjectState?.tasks || []);
-    });
-    document.getElementById('timeline-filter-overdue')?.addEventListener('click', () => {
-      timelineFilter = 'overdue';
-      renderTimeline(currentProjectState?.tasks || []);
-    });
-    document.getElementById('calendar-view-month')?.addEventListener('click', () => {
-      projectCalendarViewMode = 'month';
-      calendarDayFilterEnabled = false;
-      renderCalendar(currentProjectState?.tasks || []);
-      renderTimeline(currentProjectState?.tasks || []);
-    });
-    document.getElementById('calendar-view-year')?.addEventListener('click', () => {
-      projectCalendarViewMode = 'year';
-      calendarDayFilterEnabled = false;
-      renderCalendar(currentProjectState?.tasks || []);
-      renderTimeline(currentProjectState?.tasks || []);
-    });
-    document.getElementById('calendar-prev-month')?.addEventListener('click', () => {
-      calendarCursor = projectCalendarViewMode === 'year'
-        ? new Date(calendarCursor.getFullYear() - 1, calendarCursor.getMonth(), 1)
-        : new Date(calendarCursor.getFullYear(), calendarCursor.getMonth() - 1, 1);
-      calendarDayFilterEnabled = false;
-      renderCalendar(currentProjectState?.tasks || []);
-      renderTimeline(currentProjectState?.tasks || []);
-    });
-    document.getElementById('calendar-next-month')?.addEventListener('click', () => {
-      calendarCursor = projectCalendarViewMode === 'year'
-        ? new Date(calendarCursor.getFullYear() + 1, calendarCursor.getMonth(), 1)
-        : new Date(calendarCursor.getFullYear(), calendarCursor.getMonth() + 1, 1);
-      calendarDayFilterEnabled = false;
-      renderCalendar(currentProjectState?.tasks || []);
-      renderTimeline(currentProjectState?.tasks || []);
-    });
-    document.getElementById('calendar-today')?.addEventListener('click', () => {
-      calendarCursor = new Date();
-      selectedCalendarDayKey = toYmd(new Date());
-      calendarDayFilterEnabled = false;
-      renderCalendar(currentProjectState?.tasks || []);
-      renderTimeline(currentProjectState?.tasks || []);
-    });
-
-    document.getElementById('message-input')?.addEventListener('input', () => {
-      if (messageMarkdownDebounceTimer) {
-        clearTimeout(messageMarkdownDebounceTimer);
-      }
-      messageMarkdownDebounceTimer = setTimeout(() => {
-        const current = getDiscussionInputPlainText(document.getElementById('message-input'));
-        // Conversion markdown "a chaud" (sans zone de preview visible)
-        messageRenderedDraftHtml = renderSafeMarkdown(current);
-      }, 280);
-    });
-    document.getElementById('message-input')?.addEventListener('paste', async (e) => {
-      const files = Array.from(e.clipboardData?.files || []);
-      if (!files.length) return;
-      const input = e.currentTarget;
-      const inserted = await insertImageFilesIntoDiscussionInput(input, files);
-      if (inserted > 0) {
-        e.preventDefault();
-        showToast(`${inserted} image(s) inseree(s) dans le message`);
-      }
-    });
-    document.getElementById('message-input')?.addEventListener('drop', async (e) => {
-      const files = Array.from(e.dataTransfer?.files || []);
-      if (!files.length) return;
-      e.preventDefault();
-      e.stopPropagation();
-      const input = e.currentTarget;
-      const inserted = await insertImageFilesIntoDiscussionInput(input, files);
-      if (inserted > 0) {
-        showToast(`${inserted} image(s) inseree(s) dans le message`);
-      }
-    });
-    document.getElementById('btn-toggle-emoji-picker')?.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      toggleEmojiPicker();
-    });
-    document.getElementById('btn-toggle-message-files')?.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      toggleProjectMessageFilesPanel();
-    });
-    document.getElementById('emoji-picker-panel')?.addEventListener('click', (e) => {
-      const button = e.target.closest('[data-emoji]');
-      if (!button) return;
-      const input = document.getElementById('message-input');
-      insertTextAtCursor(input, button.dataset.emoji || '');
-    });
 
     document.addEventListener('fullscreenchange', () => {
       syncProjectWorkFocusButton();
     });
-    document.getElementById('btn-global-toggle-emoji-picker')?.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      toggleGlobalEmojiPicker();
-    });
-    document.getElementById('btn-global-toggle-message-files')?.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      toggleGlobalMessageFilesPanel();
-    });
-    document.getElementById('global-emoji-picker-panel')?.addEventListener('click', (e) => {
-      const button = e.target.closest('[data-emoji]');
-      if (!button) return;
-      const input = document.getElementById('global-message-input');
-      insertTextAtCursor(input, button.dataset.emoji || '');
-    });
-    document.getElementById('global-message-input')?.addEventListener('paste', async (e) => {
-      const files = Array.from(e.clipboardData?.files || []);
-      if (!files.length) return;
-      const input = e.currentTarget;
-      const inserted = await insertImageFilesIntoDiscussionInput(input, files);
-      if (inserted > 0) {
-        e.preventDefault();
-        showToast(`${inserted} image(s) inseree(s) dans le message`);
-      }
-    });
-    document.getElementById('global-message-input')?.addEventListener('drop', async (e) => {
-      const files = Array.from(e.dataTransfer?.files || []);
-      if (!files.length) return;
-      e.preventDefault();
-      e.stopPropagation();
-      const input = e.currentTarget;
-      const inserted = await insertImageFilesIntoDiscussionInput(input, files);
-      if (inserted > 0) {
-        showToast(`${inserted} image(s) inseree(s) dans le message`);
-      }
-    });
-    document.getElementById('messages-container')?.addEventListener('click', (e) => {
-      const img = e.target?.closest?.('.markdown-content img');
-      if (!img) return;
-      const src = String(img.getAttribute('src') || '').trim();
-      if (!src) return;
-      e.preventDefault();
-      openMessageImagePreview(src, img.getAttribute('alt') || 'Image message');
-    });
-    document.getElementById('global-message-thread')?.addEventListener('click', (e) => {
-      const img = e.target?.closest?.('.markdown-content img');
-      if (!img) return;
-      const src = String(img.getAttribute('src') || '').trim();
-      if (!src) return;
-      e.preventDefault();
-      openMessageImagePreview(src, img.getAttribute('alt') || 'Image message');
-    });
-    document.getElementById('btn-close-message-image-preview')?.addEventListener('click', () => {
-      closeMessageImagePreview();
-    });
-    document.getElementById('btn-clear-project-message-reply')?.addEventListener('click', () => {
-      clearProjectMessageReply();
-    });
-    document.getElementById('btn-clear-global-message-reply')?.addEventListener('click', () => {
-      clearGlobalMessageReply();
-    });
     registerSafeBackdropClose('modal-message-image-preview', () => {
       closeMessageImagePreview();
     });
-    document.addEventListener('click', (e) => {
-      const target = e.target;
-      const exportDropdown = document.getElementById('project-note-read-export-dropdown');
-      const exportBtn = document.getElementById('btn-project-note-read-export-menu');
-      if (exportDropdown && exportBtn && !exportDropdown.contains(target) && !exportBtn.contains(target)) {
-        exportDropdown.classList.add('hidden');
-        exportBtn.setAttribute('aria-expanded', 'false');
-      }
-      if (projectEditorEmojiPickerOpen) {
-        const projectPanel = document.getElementById('project-editor-emoji-panel');
-        const anchor = projectEditorEmojiAnchorId ? document.getElementById(projectEditorEmojiAnchorId) : null;
-        if (!projectPanel?.contains(target) && !anchor?.contains(target)) {
-          toggleProjectEditorEmojiPicker(null, null, false);
-        }
-      }
-      if (!emojiPickerOpen) return;
-      const panel = document.getElementById('emoji-picker-panel');
-      const trigger = document.getElementById('btn-toggle-emoji-picker');
-      if (panel?.contains(target) || trigger?.contains(target)) return;
-      toggleEmojiPicker(false);
-    });
-    document.addEventListener('click', (e) => {
-      const target = e.target instanceof Element ? e.target : null;
-      if (!target) return;
-      const insideProjectNoteExport = target.closest('[id^="project-note-export-menu-"], [id^="project-note-export-menu-btn-"]');
-      if (insideProjectNoteExport) return;
-      document.querySelectorAll('[id^="project-note-export-menu-"]').forEach((menu) => {
-        if (menu.id.startsWith('project-note-export-menu-btn-')) return;
-        menu.classList.add('hidden');
-        const noteId = menu.id.replace('project-note-export-menu-', '');
-        const btn = document.getElementById(`project-note-export-menu-btn-${noteId}`);
-        if (btn) btn.setAttribute('aria-expanded', 'false');
-      });
-    });
-    document.addEventListener('click', (e) => {
-      const target = e.target;
-      const clickedReactionUi = !!target?.closest?.('.discussion-reaction-picker, .discussion-react-trigger-btn');
-      if (clickedReactionUi) return;
-      let changed = false;
-      if (projectReactionPickerMessageId) {
-        projectReactionPickerMessageId = '';
-        if (currentProjectState) {
-          renderMessages(currentProjectState.messages || []);
-        }
-        changed = true;
-      }
-      if (globalReactionPickerMessageId) {
-        globalReactionPickerMessageId = '';
-        void renderGlobalMessages({ keepThreadAnchor: true });
-        changed = true;
-      }
-      if (changed) {
-        // no-op: UI refresh already dispatched
-      }
-    });
-    document.addEventListener('click', (e) => {
-      if (!projectMessageFilesPanelOpen) return;
-      const target = e.target;
-      const panel = document.getElementById('message-files-panel');
-      const trigger = document.getElementById('btn-toggle-message-files');
-      const composer = document.getElementById('project-discussion-composer');
-      if (panel?.contains(target) || trigger?.contains(target) || composer?.contains(target)) return;
-      toggleProjectMessageFilesPanel(false);
-    });
-    document.addEventListener('click', (e) => {
-      if (!globalEmojiPickerOpen) return;
-      const target = e.target;
-      const panel = document.getElementById('global-emoji-picker-panel');
-      const trigger = document.getElementById('btn-global-toggle-emoji-picker');
-      if (panel?.contains(target) || trigger?.contains(target)) return;
-      toggleGlobalEmojiPicker(false);
-    });
-    document.addEventListener('click', (e) => {
-      if (!globalMessageFilesPanelOpen) return;
-      const target = e.target;
-      const panel = document.getElementById('global-message-files-panel');
-      const trigger = document.getElementById('btn-global-toggle-message-files');
-      const composer = document.querySelector('#global-messages-section .discussion-composer');
-      if (panel?.contains(target) || trigger?.contains(target) || composer?.contains(target)) return;
-      toggleGlobalMessageFilesPanel(false);
-    });
-    document.addEventListener('click', (e) => {
-      const button = e.target.closest('#project-editor-emoji-panel [data-emoji]');
-      if (!button || !projectEditorEmojiTarget) return;
-      const editor = document.getElementById(projectEditorEmojiTarget);
-      if (!editor) return;
-      editor.focus();
-      document.execCommand('insertText', false, button.dataset.emoji || '');
-      toggleProjectEditorEmojiPicker(null, null, false);
-    });
-    document.addEventListener('click', (event) => {
-      const target = event?.target instanceof Element ? event.target.closest('[data-open-doc-ref]') : null;
-      if (!(target instanceof HTMLElement)) return;
-      event.preventDefault();
-      event.stopPropagation();
-      const ref = String(target.getAttribute('data-open-doc-ref') || '').trim();
-      if (!ref) return;
-      void openDocumentPreviewByRef(ref);
-    });
-    document.addEventListener('click', (event) => {
-      const target = event?.target instanceof Element ? event.target.closest('[data-download-doc-ref]') : null;
-      if (!(target instanceof HTMLElement)) return;
-      event.preventDefault();
-      event.stopPropagation();
-      const ref = String(target.getAttribute('data-download-doc-ref') || '').trim();
-      if (!ref) return;
-      void downloadDocumentByRef(ref);
-    });
-    document.addEventListener('click', (e) => {
-      const target = e.target;
-      if (!activeProjectEditorImage || !activeProjectEditorId) return;
-      const editor = document.getElementById(activeProjectEditorId);
-      if (!editor) {
-        clearProjectEditorImageSelection();
-        return;
-      }
-      const overlay = editor.querySelector('.project-editor-image-overlay');
-      if (editor.contains(target) || overlay?.contains(target)) return;
-      clearProjectEditorImageSelection();
-    });
-    window.addEventListener('resize', () => {
-      if (!activeProjectEditorImage || !activeProjectEditorId) return;
-      const editor = document.getElementById(activeProjectEditorId);
-      if (!editor || !editor.contains(activeProjectEditorImage)) {
-        clearProjectEditorImageSelection();
-        return;
-      }
-      updateProjectEditorImageOverlayPosition(editor);
-    });
-    document.getElementById('chat-search-input')?.addEventListener('input', () => {
-      messageFilters.query = document.getElementById('chat-search-input').value || '';
-      renderMessages(currentProjectState?.messages || []);
-    });
-    document.getElementById('chat-filter-mine')?.addEventListener('change', () => {
-      messageFilters.onlyMine = !!document.getElementById('chat-filter-mine').checked;
-      renderMessages(currentProjectState?.messages || []);
-    });
-    document.getElementById('chat-filter-reset')?.addEventListener('click', () => {
-      messageFilters = { query: '', onlyMine: false };
-      document.getElementById('chat-search-input').value = '';
-      document.getElementById('chat-filter-mine').checked = false;
-      renderMessages(currentProjectState?.messages || []);
-    });
-    document.getElementById('task-theme')?.addEventListener('input', () => {
-      syncThemePickerSelectionFromInput('task-theme-known', 'task-theme');
-    });
-    document.getElementById('task-theme-known')?.addEventListener('change', () => {
-      syncThemePickerInputFromSelection('task-theme-known', 'task-theme');
-    });
-
-    function assignFilesToInput(input, files) {
-      if (!input || !files) return;
-      const dt = new DataTransfer();
-      Array.from(files || []).forEach(file => {
-        if (file) dt.items.add(file);
-      });
-      input.files = dt.files;
-      input.dispatchEvent(new Event('change', { bubbles: true }));
-    }
-
-    function initFileDropInputs() {
-      const inputs = Array.from(document.querySelectorAll('.js-file-drop-input'));
-      inputs.forEach((input) => {
-        if (input.dataset.dropBound) return;
-        const decorateDropHost = input.dataset.dropDecor !== 'false';
-        const customHostSelector = String(input.dataset.dropHost || '').trim();
-        const host = (customHostSelector && input.closest(customHostSelector))
-          || input.closest('.space-y-1')
-          || input.parentElement;
-        if (!host) return;
-        if (decorateDropHost) {
-          host.classList.add('file-drop-host');
-          const title = document.createElement('div');
-          title.className = 'file-drop-title';
-          title.innerHTML = '<span class="material-symbols-outlined">upload_file</span><span>Zone de depot</span>';
-          host.insertBefore(title, input);
-          const hint = document.createElement('p');
-          hint.className = 'file-drop-hint';
-          hint.textContent = input.dataset.dropLabel || 'Glissez-deposez des fichiers ici ou cliquez pour selectionner.';
-          host.appendChild(hint);
-        }
-
-        const toggleHover = (on) => host.classList.toggle('is-drag-over', !!on);
-        ['dragenter', 'dragover'].forEach(evtName => {
-          host.addEventListener(evtName, (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            toggleHover(true);
-          });
-        });
-        ['dragleave', 'dragend', 'drop'].forEach(evtName => {
-          host.addEventListener(evtName, (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            toggleHover(false);
-          });
-        });
-        host.addEventListener('drop', (e) => {
-          const files = Array.from(e.dataTransfer?.files || []);
-          if (!files.length) return;
-          assignFilesToInput(input, files);
-          showToast(`${files.length} fichier(s) ajoute(s)`);
-        });
-        input.dataset.dropBound = '1';
-      });
-    }
-
-    document.getElementById('message-files')?.addEventListener('change', () => {
-      const input = document.getElementById('message-files');
-      const list = document.getElementById('message-files-list');
-      if (!input || !list) return;
-      const files = Array.from(input.files || []);
-      if (files.length === 0) {
-        list.textContent = 'Aucun fichier sélectionné';
-        return;
-      }
-      list.textContent = files.map(f => `${f.name} (${formatFileSize(f.size)})`).join(' • ');
-    });
-
-    document.getElementById('global-message-files')?.addEventListener('change', () => {
-      const input = document.getElementById('global-message-files');
-      const list = document.getElementById('global-message-files-list');
-      if (!input || !list) return;
-      const files = Array.from(input.files || []);
-      if (files.length === 0) {
-        list.textContent = 'Aucun fichier sélectionné';
-        return;
-      }
-      list.textContent = files.map(f => `${f.name} (${formatFileSize(f.size)})`).join(' • ');
-    });
-
     function updateProjectDocFilesSummary() {
-      const input = document.getElementById('project-doc-files');
-      const summary = document.getElementById('project-doc-selected-files');
-      if (!summary) return;
-      const files = Array.from(input?.files || []);
-      if (files.length === 0) {
-        summary.textContent = 'Aucun fichier selectionne';
-        return;
-      }
-      summary.textContent = files.map(f => `${f.name} (${formatFileSize(f.size)})`).join(' • ');
+      fileInputsUiRuntime?.updateProjectDocFilesSummary?.();
     }
 
     function updateProjectNoteAttachmentFilesSummary() {
-      const input = document.getElementById('project-note-attachments');
-      const summary = document.getElementById('project-note-attachments-summary');
-      if (!summary) return;
-      const files = Array.from(input?.files || []);
-      if (files.length === 0) {
-        summary.textContent = 'Aucun fichier sélectionné';
-        return;
-      }
-      summary.textContent = files.map(f => `${f.name} (${formatFileSize(f.size)})`).join(' • ');
+      fileInputsUiRuntime?.updateProjectNoteAttachmentFilesSummary?.();
     }
 
     function updateGlobalNoteAttachmentFilesSummary() {
-      const input = document.getElementById('global-note-attach-doc-files');
-      const summary = document.getElementById('global-note-attachments-summary');
-      if (!summary) return;
-      const files = Array.from(input?.files || []);
-      if (files.length === 0) {
-        summary.textContent = 'Aucun fichier sélectionné';
-        return;
-      }
-      summary.textContent = files.map(f => `${f.name} (${formatFileSize(f.size)})`).join(' • ');
+      fileInputsUiRuntime?.updateGlobalNoteAttachmentFilesSummary?.();
     }
 
     function updateCreateProjectDocFilesSummary() {
-      const input = document.getElementById('project-create-doc-files');
-      const summary = document.getElementById('project-create-doc-files-summary');
-      if (!summary) return;
-      const files = Array.from(input?.files || []);
-      if (files.length === 0) {
-        summary.textContent = 'Aucun fichier sélectionné';
-        return;
-      }
-      summary.textContent = files.map(f => `${f.name} (${formatFileSize(f.size)})`).join(' • ');
+      fileInputsUiRuntime?.updateCreateProjectDocFilesSummary?.();
     }
 
     function updateEditProjectDocFilesSummary() {
-      const input = document.getElementById('edit-project-doc-files');
-      const summary = document.getElementById('edit-project-doc-files-summary');
-      if (!summary) return;
-      const files = Array.from(input?.files || []);
-      if (files.length === 0) {
-        summary.textContent = 'Aucun fichier sélectionné';
-        return;
-      }
-      summary.textContent = files.map(f => `${f.name} (${formatFileSize(f.size)})`).join(' • ');
+      fileInputsUiRuntime?.updateEditProjectDocFilesSummary?.();
     }
-
-    document.getElementById('project-doc-files')?.addEventListener('change', updateProjectDocFilesSummary);
-    document.getElementById('project-note-attachments')?.addEventListener('change', updateProjectNoteAttachmentFilesSummary);
-    document.getElementById('global-note-attach-doc-files')?.addEventListener('change', updateGlobalNoteAttachmentFilesSummary);
-    document.getElementById('project-create-doc-files')?.addEventListener('change', updateCreateProjectDocFilesSummary);
-    document.getElementById('edit-project-doc-files')?.addEventListener('change', updateEditProjectDocFilesSummary);
     setProjectDeadlineModeUi('project', document.getElementById('project-deadline-mode')?.value || 'date');
     setProjectDeadlineModeUi('edit-project', document.getElementById('edit-project-deadline-mode')?.value || 'date');
     setTaskDeadlineModeUi(document.getElementById('task-deadline-mode')?.value || 'date');
 
-    initFileDropInputs();
     updateProjectReplyComposerUi();
     updateGlobalReplyComposerUi();
     initProjectDescriptionEditors();
     initProjectArchives();
 
-    document.getElementById('activity-filter-type')?.addEventListener('change', async (e) => {
-      activityFilters.type = e.target.value;
-      activityPage = 1;
-      await renderActivity(currentProjectEvents);
-    });
-    document.getElementById('activity-filter-author')?.addEventListener('input', async (e) => {
-      activityFilters.author = e.target.value;
-      activityPage = 1;
-      await renderActivity(currentProjectEvents);
-    });
-    document.getElementById('activity-filter-period')?.addEventListener('change', async (e) => {
-      activityFilters.period = e.target.value;
-      activityPage = 1;
-      await renderActivity(currentProjectEvents);
-    });
-    document.getElementById('activity-filter-reset')?.addEventListener('click', async () => {
-      activityFilters = { type: 'all', author: '', period: 'all' };
-      activityPage = 1;
-      document.getElementById('activity-filter-type').value = 'all';
-      document.getElementById('activity-filter-author').value = '';
-      document.getElementById('activity-filter-period').value = 'all';
-      await renderActivity(currentProjectEvents);
-    });
-
-    document.getElementById('docs-search-input')?.addEventListener('input', () => {
-      docsFilters.query = document.getElementById('docs-search-input').value || '';
-      renderDocuments(currentProjectState);
-    });
-    document.getElementById('docs-type-filter')?.addEventListener('change', () => {
-      docsFilters.type = document.getElementById('docs-type-filter').value || 'all';
-      renderDocuments(currentProjectState);
-    });
-    document.getElementById('docs-sort')?.addEventListener('change', () => {
-      docsFilters.sort = document.getElementById('docs-sort').value || 'recent';
-      renderDocuments(currentProjectState);
-    });
-    document.getElementById('docs-filter-reset')?.addEventListener('click', () => {
-      docsFilters = { query: '', type: 'all', sort: 'recent' };
-      document.getElementById('docs-search-input').value = '';
-      document.getElementById('docs-type-filter').value = 'all';
-      document.getElementById('docs-sort').value = 'recent';
-      renderDocuments(currentProjectState);
-    });
-    document.getElementById('btn-add-project-documents')?.addEventListener('click', addProjectDocuments);
-    document.getElementById('btn-close-doc-preview')?.addEventListener('click', closeDocumentPreview);
-    registerSafeBackdropClose('modal-doc-preview', async () => {
-      await closeDocumentPreview();
-    });
-
     async function readTaskFiles() {
-      const input = document.getElementById('task-files');
-      const shareToDocs = document.getElementById('task-share-docs').checked;
-      const files = Array.from(input.files || []);
-      const maxFileSize = 5 * 1024 * 1024;
-
-      const attachments = [];
-      for (const file of files) {
-        if (file.size > maxFileSize) {
-          throw new Error(`Le fichier "${file.name}" dépasse 5 Mo`);
-        }
-        const data = await fileToDataUrl(file);
-        attachments.push({
-          name: file.name,
-          size: file.size,
-          type: file.type || 'application/octet-stream',
-          shareToDocs,
-          data
-        });
+      // Compatibility wrapper: legacy call sites still call this local function.
+      if (attachmentsUiRuntime?.readTaskFiles) {
+        return attachmentsUiRuntime.readTaskFiles();
       }
-      return attachments;
+      return [];
     }
 
     async function readMessageFiles(inputId = 'message-files') {
-      const input = document.getElementById(inputId);
-      const files = Array.from(input?.files || []);
-      const maxFileSize = 10 * 1024 * 1024;
-
-      const attachments = [];
-      const rejected = [];
-      for (const file of files) {
-        if (file.size > maxFileSize) {
-          rejected.push(`"${file.name}" depasse 10 Mo`);
-          continue;
-        }
-        try {
-          const rawData = await fileToDataUrl(file);
-          const optimized = await optimizeMessageAttachment(file, rawData);
-          attachments.push({
-            name: optimized.name,
-            size: optimized.size,
-            type: optimized.type,
-            data: optimized.data
-          });
-        } catch (error) {
-          rejected.push(`"${file.name}" est illisible`);
-        }
+      // Compatibility wrapper: delegated implementation lives in TaskMDAAttachmentsUI.
+      if (attachmentsUiRuntime?.readMessageFiles) {
+        return attachmentsUiRuntime.readMessageFiles(inputId);
       }
-      if (rejected.length > 0) {
-        const suffix = rejected.length > 1 ? ` (+${rejected.length - 1})` : '';
-        showToast(`⚠ Piece jointe ignoree: ${rejected[0]}${suffix}`);
-      }
-      return attachments;
+      return [];
     }
 
     function renameFileExtension(name, extensionWithDot) {
+      if (attachmentsUiRuntime?.renameFileExtension) {
+        return attachmentsUiRuntime.renameFileExtension(name, extensionWithDot);
+      }
       const safeName = String(name || 'image').trim();
       const ext = String(extensionWithDot || '.jpg').trim() || '.jpg';
       const dot = safeName.lastIndexOf('.');
-      if (dot <= 0) return `${safeName}${ext}`;
-      return `${safeName.slice(0, dot)}${ext}`;
+      if (dot <= 0) return safeName + ext;
+      return safeName.slice(0, dot) + ext;
     }
 
     async function optimizeMessageAttachment(file, rawDataUrl) {
-      const fallback = {
+      if (attachmentsUiRuntime?.optimizeMessageAttachment) {
+        return attachmentsUiRuntime.optimizeMessageAttachment(file, rawDataUrl);
+      }
+      return {
         name: String(file?.name || 'piece-jointe'),
         size: Number(file?.size || 0),
         type: String(file?.type || 'application/octet-stream') || 'application/octet-stream',
         data: rawDataUrl
-      };
-      const isImage = /^image\//i.test(String(file?.type || ''));
-      if (!isImage) return fallback;
-
-      const optimized = await resizeImageDataUrl(rawDataUrl, {
-        maxWidth: 1280,
-        maxHeight: 1280,
-        quality: 0.82,
-        outputType: 'image/jpeg'
-      });
-      if (!optimized) return fallback;
-
-      return {
-        name: renameFileExtension(fallback.name, '.jpg'),
-        size: estimateDataUrlBytes(optimized),
-        type: 'image/jpeg',
-        data: optimized
       };
     }
 
@@ -40591,6 +36273,9 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     }
 
     function buildInlineMessageImageHtml(dataUrl, altText = 'image') {
+      if (attachmentsUiRuntime?.buildInlineMessageImageHtml) {
+        return attachmentsUiRuntime.buildInlineMessageImageHtml(dataUrl, altText);
+      }
       const safeSrc = String(dataUrl || '').trim();
       if (!safeSrc) return '';
       const safeAlt = escapeHtml(String(altText || 'image').slice(0, 120));
@@ -40598,23 +36283,10 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     }
 
     async function insertImageFilesIntoDiscussionInput(input, files) {
-      if (!input || !input.isContentEditable) return 0;
-      const list = Array.from(files || []).filter((file) => /^image\//i.test(String(file?.type || '')));
-      if (!list.length) return 0;
-      let inserted = 0;
-      for (const file of list) {
-        try {
-          const rawData = await fileToDataUrl(file);
-          const optimized = await optimizeMessageAttachment(file, rawData);
-          const imageHtml = buildInlineMessageImageHtml(optimized?.data || rawData, file.name || 'image');
-          if (!imageHtml) continue;
-          insertHtmlAtCursor(input, imageHtml);
-          inserted += 1;
-        } catch (error) {
-          // ignore a single image failure to preserve the rest
-        }
+      if (attachmentsUiRuntime?.insertImageFilesIntoDiscussionInput) {
+        return attachmentsUiRuntime.insertImageFilesIntoDiscussionInput(input, files);
       }
-      return inserted;
+      return 0;
     }
 
     function fileToDataUrl(file) {
@@ -40627,6 +36299,10 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     }
 
     function insertTextAtCursor(input, text) {
+      if (discussionInputUiRuntime?.insertTextAtCursor) {
+        discussionInputUiRuntime.insertTextAtCursor(input, text);
+        return;
+      }
       if (!input) return;
       if (input.isContentEditable) {
         input.focus();
@@ -40659,6 +36335,10 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     }
 
     function setDiscussionInputPlaceholder(input, text) {
+      if (discussionInputUiRuntime?.setDiscussionInputPlaceholder) {
+        discussionInputUiRuntime.setDiscussionInputPlaceholder(input, text);
+        return;
+      }
       if (!input) return;
       const value = String(text || '').trim();
       if (input.isContentEditable) {
@@ -40669,6 +36349,9 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     }
 
     function getDiscussionInputPlainText(input) {
+      if (discussionInputUiRuntime?.getDiscussionInputPlainText) {
+        return discussionInputUiRuntime.getDiscussionInputPlainText(input);
+      }
       if (!input) return '';
       if (input.isContentEditable) {
         return String(input.textContent || '').replace(/\u00a0/g, ' ').trim();
@@ -40677,12 +36360,19 @@ h1{margin:0 0 8px;font-size:24px;font-weight:bold;color:#1e293b}
     }
 
     function getDiscussionInputHtml(input) {
+      if (discussionInputUiRuntime?.getDiscussionInputHtml) {
+        return discussionInputUiRuntime.getDiscussionInputHtml(input);
+      }
       if (!input) return '';
       const raw = input.isContentEditable ? String(input.innerHTML || '') : plainTextToRichHtml(String(input.value || ''));
       return sanitizeProjectDescriptionHtml(raw || '');
     }
 
     function clearDiscussionInput(input) {
+      if (discussionInputUiRuntime?.clearDiscussionInput) {
+        discussionInputUiRuntime.clearDiscussionInput(input);
+        return;
+      }
       if (!input) return;
       if (input.isContentEditable) {
         input.innerHTML = '';

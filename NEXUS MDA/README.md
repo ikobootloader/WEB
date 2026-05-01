@@ -43,7 +43,7 @@ Nom d interface par defaut: `NEXUS MDA`.
   - notifications automatiques en temps reel lors de changements detectes,
   - historique complet des evenements avec filtres par type,
   - actions: pause/reprise, verification manuelle, edition, suppression,
-  - modules dedies: `taskmda-file-watcher.js` (core) + `taskmda-file-watcher-ui.js` (interface),
+  - module dedie: `taskmda-file-watcher.js` (core + interface),
   - DB_VERSION 21: nouveaux stores `fileWatchers`, `fileWatcherSnapshots`, `fileWatcherEvents`.
 - Nouvelle rubrique `Notes` (transverse + privee):
   - ajout d une section dediee `Notes` dans la navigation globale,
@@ -83,20 +83,34 @@ Nom d interface par defaut: `NEXUS MDA`.
   - `taskmda-team.html`
   - `taskmda-team.css`
   - `taskmda-workflow.css`
+  - `taskmda-core-utils.js`
+  - `taskmda-runtime-contract.js`
   - `taskmda-team.js`
+  - `taskmda-shell.js`
+  - `taskmda-project.js`
+  - `taskmda-project-members-domain.js`
+  - `taskmda-task-lifecycle-domain.js`
+  - `taskmda-doc.js`
+  - `taskmda-global.js`
+  - `taskmda-via-annuaire.js`
   - `taskmda-app-init.js`
-  - `taskmda-projects-ui.js`
   - `taskmda-comms-ui.js`
   - `taskmda-admin-ui.js`
+  - `taskmda-notes-shared.js`
+  - `taskmda-hierarchy.js`
+  - `taskmda-calendar.js`
+  - `taskmda-email-generator.js`
+  - `taskmda-file-watcher.js`
+  - `taskmda-document-storage.js`
   - `taskmda-editor.js` (module editeur projet: Quill, media, emoji, formatage)
   - `taskmda-crypto.js`
   - `taskmda-ui.js`
   - `taskmda-theme.js`
   - `taskmda-notifications.js`
-  - `taskmda-recurrence.js` + `taskmda-recurrence-ui.js`
+  - `taskmda-recurrence.js`
   - `taskmda-tasks.js`
   - `taskmda-social.js` (templates UI messagerie/fil d info)
-  - `taskmda-workflow.js` + `taskmda-workflow-store.js` + `taskmda-workflow-graph.js` + `taskmda-workflow-ui.js`
+  - `taskmda-workflow.js`
 - Persistance: IndexedDB (event sourcing + etat local projete).
 - Synchronisation: dossier partage (File System Access API), sans backend.
   - Le dossier lie est memorise (IndexedDB) et tente une reconnexion automatique au demarrage si permission valide.
@@ -233,7 +247,7 @@ Nom d interface par defaut: `NEXUS MDA`.
 ## Base de donnees
 
 - DB: `taskmda-team-standalone`
-- Version schema: `DB_VERSION = 18`
+- Version schema: `DB_VERSION = 21`
 - Stores:
   - `events`
   - `processedEvents`
@@ -258,6 +272,7 @@ Nom d interface par defaut: `NEXUS MDA`.
   - `workflowTasks`
   - `workflowProcedures`
   - `workflowSoftware`
+  - `workflowJobTitles`
   - `workflowRoles`
   - `workflowProcesses`
   - `workflowProcessSteps`
@@ -267,12 +282,27 @@ Nom d interface par defaut: `NEXUS MDA`.
   - `workflowLayout`
   - `workflowAudit`
   - `workflowHistory`
+  - `workflowPermissionProfiles`
+  - `workflowPermissionAssignments`
+  - `workflowPermissionRequests`
+  - `workflowPermissionReviews`
+  - `workflowPermissionAudit`
+  - `workflowContingencyPlans`
+  - `workflowContingencyActions`
+  - `workflowContingencyActivations`
+  - `workflowContingencyExercises`
+  - `workflowContingencyReviews`
+  - `workflowContingencyAudit`
+  - `globalNotes`
   - `rgpdActivities`
   - `rgpdAssessments`
   - `rgpdTemplates`
   - `rgpdLinks`
   - `rgpdAudit`
   - `rgpdExports`
+  - `fileWatchers`
+  - `fileWatcherSnapshots`
+  - `fileWatcherEvents`
 
 ## Synchronisation collaborative
 
@@ -293,18 +323,29 @@ Nom d interface par defaut: `NEXUS MDA`.
 - Reduction des logs runtime: `console.log` passe par debug gate.
   - Activer: `localStorage.setItem('taskmda_debug','1')`
 - Decoupage modulaire progressif:
+  - Noyau utilitaires purs: `taskmda-core-utils.js`
+  - Contrat runtime d orchestration: `taskmda-runtime-contract.js`
+  - Shell transverse: `taskmda-shell.js`
+  - Domaine projets transverse: `taskmda-project.js`
+  - Domaine membres projet / RBAC / groupes utilisateurs: `taskmda-project-members-domain.js`
+  - Domaine cycle de vie des taches (creation/edition/transitions): `taskmda-task-lifecycle-domain.js`
+  - Bundle domaine Documents (storage binding + preview inline + preview modal): `taskmda-doc.js`
+  - Domaine calendrier transverse: `taskmda-calendar.js`
+  - Domaine global transverse (notes/docs/feed/messages): `taskmda-global.js`
+  - UI Annuaire ESMS transverse (recherche/audit panneau live): `taskmda-via-annuaire.js`
   - Initialisation applicative: `taskmda-app-init.js`
-  - UI Projets: `taskmda-projects-ui.js`
   - UI Communication: `taskmda-comms-ui.js`
   - UI Administration: `taskmda-admin-ui.js`
+  - Domaine hierarchie Epic/Feature: `taskmda-hierarchy.js`
+  - Domaine notes partagees (modales/read): `taskmda-notes-shared.js`
   - Editeur projet (Quill): `taskmda-editor.js`
   - Orchestration app/synchronisation: `taskmda-team.js`
   - UI: `taskmda-ui.js`
   - Theme: `taskmda-theme.js`
   - Notifications: `taskmda-notifications.js`
   - Taches: `taskmda-tasks.js`
-  - Recurrence: `taskmda-recurrence.js` + `taskmda-recurrence-ui.js`
-  - Workflow: `taskmda-workflow.js` + `taskmda-workflow-store.js` + `taskmda-workflow-graph.js` + `taskmda-workflow-ui.js`
+  - Recurrence: `taskmda-recurrence.js`
+  - Workflow: `taskmda-workflow.js`
 - Checklist de non regression: `docs/QA_REGRESSION_CHECKLIST.md`.
 
 ## QA recommandee

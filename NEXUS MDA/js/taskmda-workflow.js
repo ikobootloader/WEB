@@ -1,5 +1,307 @@
-﻿
+﻿/* TaskMDA Workflow Domain Bundle (manual, no-build) */
+/* Consolidates workflow store/graph/ui/main */
+
+/* --- taskmda-workflow-store.js --- */
+(function initTaskMdaWorkflowStore(global) {
+  // Module role: UI/domain boundary for TaskMdaWorkflowStore.
+  'use strict';
+
+  function deepClone(value) {
+    if (value === null || value === undefined) return value;
+    try {
+      return JSON.parse(JSON.stringify(value));
+    } catch (_) {
+      return value;
+    }
+  }
+
+  function buildHistoryEntry(options) {
+    const now = Number(options?.now || Date.now());
+    const uid = String(options?.uid || `${now}-${Math.random().toString(16).slice(2, 8)}`);
+    return {
+      id: `wf-history-${uid}`,
+      action: String(options?.action || 'update'),
+      entityType: String(options?.entityType || ''),
+      entityId: String(options?.entityId || ''),
+      reason: String(options?.reason || ''),
+      changedKeys: Array.isArray(options?.changedKeys) ? options.changedKeys.map((key) => String(key || '').trim()).filter(Boolean) : [],
+      byUserId: String(options?.byUserId || 'system'),
+      createdAt: now,
+      beforeEntity: deepClone(options?.beforeEntity || null),
+      afterEntity: deepClone(options?.afterEntity || null)
+    };
+  }
+
+  function computeChangedKeys(beforeEntity, afterEntity) {
+    const before = beforeEntity && typeof beforeEntity === 'object' ? beforeEntity : {};
+    const after = afterEntity && typeof afterEntity === 'object' ? afterEntity : {};
+    const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+    return Array.from(keys).filter((key) => JSON.stringify(before[key]) !== JSON.stringify(after[key]));
+  }
+
+  function sanitizeMapOptions(mapOptions) {
+    const src = mapOptions && typeof mapOptions === 'object' ? mapOptions : {};
+    const safe = {
+      zoom: Number(src.zoom || 1),
+      panX: Number(src.panX || 0),
+      panY: Number(src.panY || 0),
+      showStructure: src.showStructure !== false,
+      showTransverse: src.showTransverse !== false,
+      showApplicative: src.showApplicative !== false,
+      showMinimap: src.showMinimap !== false,
+      showAllStructure: src.showAllStructure === true,
+      showAllTransverse: src.showAllTransverse === true,
+      showAllApplicative: src.showAllApplicative === true,
+      structureVisible: Number(src.structureVisible || 120),
+      transverseVisible: Number(src.transverseVisible || 120),
+      applicativeVisible: Number(src.applicativeVisible || 120),
+      linkQuery: String(src.linkQuery || ''),
+      linkSort: String(src.linkSort || 'source')
+    };
+    if (!Number.isFinite(safe.zoom) || safe.zoom < 0.6 || safe.zoom > 2.4) safe.zoom = 1;
+    if (!Number.isFinite(safe.panX)) safe.panX = 0;
+    if (!Number.isFinite(safe.panY)) safe.panY = 0;
+    if (!Number.isFinite(safe.structureVisible) || safe.structureVisible < 40) safe.structureVisible = 120;
+    if (!Number.isFinite(safe.transverseVisible) || safe.transverseVisible < 40) safe.transverseVisible = 120;
+    if (!Number.isFinite(safe.applicativeVisible) || safe.applicativeVisible < 40) safe.applicativeVisible = 120;
+    if (!['source', 'target', 'label'].includes(safe.linkSort)) safe.linkSort = 'source';
+    return safe;
+  }
+
+  global.TaskMDAWorkflowStore = {
+    buildHistoryEntry,
+    sanitizeMapOptions,
+    computeChangedKeys
+  };
+}(window));
+
+/* --- taskmda-workflow-graph.js --- */
+(function initTaskMdaWorkflowGraph(global) {
+  // Module role: UI/domain boundary for TaskMdaWorkflowGraph.
+  'use strict';
+
+  function normalizeText(value) {
+    return String(value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  }
+
+  function buildMapRelations(params) {
+    const maps = params?.maps || {};
+    const services = Array.isArray(params?.services) ? params.services : [];
+    const groups = Array.isArray(params?.groups) ? params.groups : [];
+    const agents = Array.isArray(params?.agents) ? params.agents : [];
+    const tasks = Array.isArray(params?.tasks) ? params.tasks : [];
+    const serviceIds = new Set(services.map((row) => String(row.id)));
+    const groupIds = new Set(groups.map((row) => String(row.id)));
+    const taskIds = new Set(tasks.map((row) => String(row.id)));
+    const structure = [];
+    const transverse = [];
+    const applicative = [];
+
+    services.forEach((service) => {
+      if (service.communityId) {
+        structure.push({
+          label: 'Communaute -> Service',
+          source: { type: 'community', id: service.communityId, name: maps.communityById?.get(service.communityId)?.name || service.communityId },
+          target: { type: 'service', id: service.id, name: service.name || service.id }
+        });
+      }
+      (service.relatedServiceIds || []).forEach((relatedId) => {
+        if (!serviceIds.has(String(relatedId))) return;
+        if (String(relatedId) <= String(service.id)) return;
+        transverse.push({
+          label: 'Service <-> Service',
+          source: { type: 'service', id: service.id, name: service.name || service.id },
+          target: { type: 'service', id: relatedId, name: maps.serviceById?.get(relatedId)?.name || relatedId }
+        });
+      });
+    });
+
+    groups.forEach((group) => {
+      structure.push({
+        label: 'Service -> Groupe',
+        source: { type: 'service', id: group.serviceId, name: maps.serviceById?.get(group.serviceId)?.name || group.serviceId || 'Sans service' },
+        target: { type: 'group', id: group.id, name: group.name || group.id }
+      });
+    });
+
+    agents.forEach((agent) => {
+      if (Array.isArray(agent.groupIds) && agent.groupIds.some((id) => groupIds.has(String(id)))) {
+        agent.groupIds.filter((id) => groupIds.has(String(id))).forEach((groupId) => {
+          structure.push({
+            label: 'Groupe -> Agent',
+            source: { type: 'group', id: groupId, name: maps.groupById?.get(groupId)?.name || groupId },
+            target: { type: 'agent', id: agent.id, name: agent.displayName || agent.id }
+          });
+        });
+        return;
+      }
+      structure.push({
+        label: 'Service -> Agent',
+        source: { type: 'service', id: agent.serviceId, name: maps.serviceById?.get(agent.serviceId)?.name || agent.serviceId || 'Sans service' },
+        target: { type: 'agent', id: agent.id, name: agent.displayName || agent.id }
+      });
+    });
+
+    tasks.forEach((task) => {
+      if (!taskIds.has(String(task.id))) return;
+      if (task.linkedProcedureId) {
+        applicative.push({
+          label: 'Tache -> Procedure',
+          source: { type: 'task', id: task.id, name: task.title || task.id },
+          target: { type: 'procedure', id: task.linkedProcedureId, name: maps.procedureById?.get(task.linkedProcedureId)?.title || task.linkedProcedureId }
+        });
+      }
+      (task.linkedSoftwareIds || []).forEach((softwareId) => {
+        applicative.push({
+          label: 'Tache -> Logiciel',
+          source: { type: 'task', id: task.id, name: task.title || task.id },
+          target: { type: 'software', id: softwareId, name: maps.softwareById?.get(softwareId)?.name || softwareId }
+        });
+      });
+    });
+
+    return { structure, transverse, applicative };
+  }
+
+  function filterAndSortRelations(relations, query, sortKey) {
+    const safeQuery = normalizeText(query);
+    const safeSort = ['source', 'target', 'label'].includes(String(sortKey || '')) ? String(sortKey) : 'source';
+    const list = Array.isArray(relations) ? relations : [];
+    const filtered = list.filter((link) => {
+      if (!safeQuery) return true;
+      const haystack = normalizeText(`${link?.label || ''} ${link?.source?.name || ''} ${link?.target?.name || ''}`);
+      return haystack.includes(safeQuery);
+    });
+    return filtered.sort((a, b) => {
+      const sourceCmp = String(a?.source?.name || '').localeCompare(String(b?.source?.name || ''), 'fr');
+      const targetCmp = String(a?.target?.name || '').localeCompare(String(b?.target?.name || ''), 'fr');
+      const labelCmp = String(a?.label || '').localeCompare(String(b?.label || ''), 'fr');
+      if (safeSort === 'target') return targetCmp || sourceCmp || labelCmp;
+      if (safeSort === 'label') return labelCmp || sourceCmp || targetCmp;
+      return sourceCmp || targetCmp || labelCmp;
+    });
+  }
+
+  global.TaskMDAWorkflowGraph = {
+    buildMapRelations,
+    filterAndSortRelations
+  };
+}(window));
+
+
+/* --- taskmda-workflow-ui.js --- */
+(function initTaskMdaWorkflowUi(global) {
+  // Module role: UI/domain boundary for TaskMdaWorkflowUi.
+  'use strict';
+
+  function renderBreadcrumbHtml(crumbs, esc) {
+    const safeEsc = typeof esc === 'function'
+      ? esc
+      : (value) => String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    const list = Array.isArray(crumbs) ? crumbs : [];
+    return `
+      <nav class="workflow-breadcrumb-nav" aria-label="Breadcrumb workflow">
+        ${list.map((crumb) => `<span class="workflow-breadcrumb-item">${safeEsc(crumb)}</span>`).join('<span class="workflow-breadcrumb-sep">â€º</span>')}
+      </nav>
+    `;
+  }
+
+  function renderHistoryPanelHtml(rows, esc, options = {}) {
+    const safeEsc = typeof esc === 'function'
+      ? esc
+      : (value) => String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    const type = String(options.type || '');
+    const editable = options.editable !== false;
+    const list = Array.isArray(rows) ? rows : [];
+    const pagination = options?.pagination && typeof options.pagination === 'object'
+      ? options.pagination
+      : null;
+    const formatValue = (value) => {
+      if (value === undefined) return '(absent)';
+      if (value === null) return 'null';
+      if (typeof value === 'string') return value || '(vide)';
+      if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+      try {
+        const raw = JSON.stringify(value);
+        if (raw.length > 220) return `${raw.slice(0, 220)}...`;
+        return raw;
+      } catch (_) {
+        return String(value);
+      }
+    };
+    if (list.length === 0) {
+      return `
+        <div class="workflow-map-col">
+          <h6>Historique</h6>
+          <p class="workflow-card-sub">Aucune version historisee.</p>
+        </div>
+      `;
+    }
+    return `
+      <div class="workflow-map-col">
+        <div class="workflow-history-head">
+          <h6>Historique</h6>
+          ${pagination && Number(pagination.totalPages || 1) > 1 ? `
+            <div class="workflow-history-pager">
+              <button type="button" class="workflow-btn-light" data-wf-history-page-action="prev" ${pagination.currentPage <= 1 ? 'disabled' : ''}>Precedent</button>
+              <span class="workflow-card-sub">${safeEsc(String(pagination.start || 0))}-${safeEsc(String(pagination.end || 0))} / ${safeEsc(String(pagination.totalItems || list.length || 0))}</span>
+              <button type="button" class="workflow-btn-light" data-wf-history-page-action="next" ${pagination.currentPage >= pagination.totalPages ? 'disabled' : ''}>Suivant</button>
+            </div>
+          ` : ''}
+        </div>
+        <ul class="workflow-history-list">
+          ${list.map((row) => {
+            const when = Number(row?.createdAt || 0);
+            const date = when ? new Date(when).toLocaleString() : '-';
+            const action = String(row?.action || 'update');
+            const reason = String(row?.reason || '');
+            const changedKeys = Array.isArray(row?.changedKeys) ? row.changedKeys.filter(Boolean) : [];
+            const changedPreview = changedKeys.slice(0, 6);
+            const changedMore = Math.max(0, changedKeys.length - changedPreview.length);
+            const beforeEntity = row?.beforeEntity && typeof row.beforeEntity === 'object' ? row.beforeEntity : {};
+            const afterEntity = row?.afterEntity && typeof row.afterEntity === 'object' ? row.afterEntity : {};
+            return `
+              <li class="workflow-history-row">
+                <div class="workflow-history-meta">
+                  <span class="workflow-chip">${safeEsc(action)}</span>
+                  <span class="workflow-card-sub">${safeEsc(`${date} - ${row?.byUserId || 'system'}`)}</span>
+                  ${reason ? `<span class="workflow-card-sub">${safeEsc(reason)}</span>` : ''}
+                  ${changedKeys.length > 0 ? `<span class="workflow-card-sub">Champs: ${safeEsc(changedPreview.join(', '))}${changedMore > 0 ? ` (+${changedMore})` : ''}</span>` : ''}
+                </div>
+                <div class="workflow-history-actions">
+                  ${changedKeys.length > 0 ? `<button type="button" class="workflow-btn-light" data-wf-history-diff-toggle="${safeEsc(row.id)}">Voir diff</button>` : ''}
+                  ${editable && action !== 'restore' ? `<button type="button" class="workflow-btn-light" data-wf-history-restore="${safeEsc(row.id)}" data-wf-history-type="${safeEsc(type)}">Restaurer tout</button>` : ''}
+                  ${editable && changedKeys.length > 0 ? `<button type="button" class="workflow-btn-light" data-wf-history-restore-fields="${safeEsc(row.id)}" data-wf-history-type="${safeEsc(type)}" data-wf-history-default-fields="${safeEsc(changedKeys.join(','))}">Restaurer champs</button>` : ''}
+                </div>
+                ${changedKeys.length > 0 ? `
+                  <div class="workflow-history-diff hidden" data-wf-history-diff="${safeEsc(row.id)}">
+                    ${changedKeys.map((key) => `
+                      <div class="workflow-history-diff-row">
+                        <p class="workflow-history-diff-key">${safeEsc(key)}</p>
+                        <p class="workflow-history-diff-val workflow-history-diff-before"><strong>Avant:</strong> ${safeEsc(formatValue(beforeEntity[key]))}</p>
+                        <p class="workflow-history-diff-val workflow-history-diff-after"><strong>Apres:</strong> ${safeEsc(formatValue(afterEntity[key]))}</p>
+                      </div>
+                    `).join('')}
+                  </div>
+                ` : ''}
+              </li>
+            `;
+          }).join('')}
+        </ul>
+      </div>
+    `;
+  }
+
+  global.TaskMDAWorkflowUI = {
+    renderBreadcrumbHtml,
+    renderHistoryPanelHtml
+  };
+}(window));
+
+/* --- taskmda-workflow.js (main) --- */
+
 (function initTaskMdaWorkflowModule(global) {
+  // Module role: UI/domain boundary for TaskMdaWorkflowModule.
   'use strict';
 
   const STORE_KEY_FIELDS = {
@@ -184,6 +486,7 @@
   }
 
   function createModule(options) {
+    // Injected dependencies: callbacks/state accessors provided by taskmda-team orchestrator.
     const opts = options || {};
     const api = opts.api || {};
 

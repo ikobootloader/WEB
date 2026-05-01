@@ -1,12 +1,48 @@
+﻿/* TaskMDA Global Calendar Domain (manual, no-build) */
+/* Extracted from taskmda-global.js during refactor */
+
+/* --- taskmda-global-calendar.js --- */
 (function initTaskMdaGlobalCalendarModule(global) {
+  // Module role: UI/domain boundary for TaskMdaGlobalCalendarModule.
   'use strict';
 
   function createModule(options) {
+    // Injected dependencies: callbacks/state accessors provided by taskmda-team orchestrator.
     const opts = options || {};
     const state = opts.state || {};
     const actions = opts.actions || {};
     const helpers = opts.helpers || {};
     let bound = false;
+    let pinnedThemesInitialized = false;
+    const GLOBAL_CALENDAR_PINNED_THEMES_KEY = 'taskmda_global_calendar_pinned_themes';
+    const GLOBAL_CALENDAR_PINNED_THEME_CHECKS_KEY = 'taskmda_global_calendar_pinned_theme_checks';
+    const GLOBAL_CALENDAR_CONTROLS_EXPANDED_KEY = 'taskmda_global_calendar_controls_expanded';
+    const escapeHtml = typeof helpers.escapeHtml === 'function'
+      ? helpers.escapeHtml
+      : (value) => String(value || '');
+
+    function readLocalArray(key) {
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return [];
+        return parsed.map((value) => String(value || '').trim()).filter(Boolean);
+      } catch {
+        return [];
+      }
+    }
+
+    function writeLocalArray(key, values) {
+      try {
+        localStorage.setItem(
+          key,
+          JSON.stringify(Array.from(new Set((values || []).map((value) => String(value || '').trim()).filter(Boolean))))
+        );
+      } catch {
+        // Ignore storage write failures
+      }
+    }
 
     function getPinnedThemes() {
       const value = state.getPinnedThemes?.();
@@ -30,8 +66,109 @@
       return String(helpers.normalizeCalendarThemeKey?.(value) || '').trim();
     }
 
+    function syncPinnedCalendarThemeState() {
+      const pinnedThemes = getPinnedThemes();
+      const pinnedChecks = getPinnedThemeChecks();
+      const pinnedKeys = new Set(pinnedThemes.map((theme) => themeKey(theme)).filter(Boolean));
+      const dedupedPinned = pinnedThemes.filter((theme, index, arr) => {
+        const key = themeKey(theme);
+        return key && arr.findIndex((other) => themeKey(other) === key) === index;
+      });
+      const filteredChecks = pinnedChecks.filter((theme) => pinnedKeys.has(themeKey(theme)));
+      setPinnedThemes(dedupedPinned);
+      setPinnedThemeChecks(filteredChecks);
+      writeLocalArray(GLOBAL_CALENDAR_PINNED_THEMES_KEY, dedupedPinned);
+      writeLocalArray(GLOBAL_CALENDAR_PINNED_THEME_CHECKS_KEY, filteredChecks);
+    }
+
+    function initGlobalCalendarPinnedThemesState() {
+      if (pinnedThemesInitialized) return;
+      const normalizeName = (value) => String(helpers.normalizeCalendarThemeName?.(value) || '').trim();
+      setPinnedThemes(readLocalArray(GLOBAL_CALENDAR_PINNED_THEMES_KEY).map(normalizeName).filter(Boolean));
+      setPinnedThemeChecks(readLocalArray(GLOBAL_CALENDAR_PINNED_THEME_CHECKS_KEY).map(normalizeName).filter(Boolean));
+      const expandedFromStorage = localStorage.getItem(GLOBAL_CALENDAR_CONTROLS_EXPANDED_KEY) !== '0';
+      setGlobalCalendarControlsExpanded(expandedFromStorage, { skipPersist: true });
+      syncPinnedCalendarThemeState();
+      pinnedThemesInitialized = true;
+    }
+
+    function setGlobalCalendarControlsExpanded(expanded, options = {}) {
+      const next = !!expanded;
+      state.setControlsExpanded?.(next);
+      const panel = document.getElementById('global-calendar-controls-panel');
+      const top = document.querySelector('#global-calendar-section .calendar-toolbar-top');
+      const toggleBtn = document.getElementById('global-calendar-toggle-controls');
+      const toggleIcon = document.getElementById('global-calendar-toggle-controls-icon');
+      const toggleLabel = document.getElementById('global-calendar-toggle-controls-label');
+      if (panel) panel.classList.toggle('is-collapsed', !next);
+      if (top) top.classList.toggle('mb-3', next);
+      if (toggleBtn) {
+        toggleBtn.setAttribute('aria-expanded', next ? 'true' : 'false');
+        toggleBtn.setAttribute('title', next ? 'Masquer les filtres et outils' : 'Afficher les filtres et outils');
+      }
+      if (toggleIcon) toggleIcon.textContent = next ? 'expand_less' : 'expand_more';
+      if (toggleLabel) toggleLabel.textContent = next ? 'Masquer les filtres' : 'Afficher les filtres';
+      if (!options.skipPersist) {
+        try {
+          localStorage.setItem(GLOBAL_CALENDAR_CONTROLS_EXPANDED_KEY, next ? '1' : '0');
+        } catch {
+          // Ignore storage failures
+        }
+      }
+    }
+
+    function toggleGlobalCalendarThemeActionsMenu(forceOpen = null) {
+      const menu = document.getElementById('global-calendar-theme-actions-menu');
+      if (!menu) return;
+      const shouldOpen = typeof forceOpen === 'boolean' ? forceOpen : menu.classList.contains('hidden');
+      menu.classList.toggle('hidden', !shouldOpen);
+    }
+
+    function isPinnedCalendarThemeChecked(themeName) {
+      const key = themeKey(themeName);
+      return getPinnedThemeChecks().some((theme) => themeKey(theme) === key);
+    }
+
+    function renderGlobalCalendarThemePins(availableThemes = []) {
+      const pinsWrap = document.getElementById('global-calendar-theme-pins');
+      const select = document.getElementById('global-calendar-theme-pin-select');
+      const counter = document.getElementById('global-calendar-theme-pin-counter');
+      if (!pinsWrap || !select) return;
+
+      const pinnedThemes = getPinnedThemes();
+      const pinnedChecks = getPinnedThemeChecks();
+      const normalizedAvailable = Array.from(new Set((availableThemes || []).map((theme) => String(helpers.normalizeCalendarThemeName?.(theme) || '').trim()).filter(Boolean)));
+      const allKnown = Array.from(new Set([...normalizedAvailable, ...pinnedThemes.map((theme) => String(helpers.normalizeCalendarThemeName?.(theme) || '').trim()).filter(Boolean)]))
+        .sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+
+      select.innerHTML = `
+        <option value="">Choisir une thematique a epingler...</option>
+        ${allKnown
+          .filter((theme) => !pinnedThemes.some((pinned) => themeKey(pinned) === themeKey(theme)))
+          .map((theme) => `<option value="${escapeHtml(theme)}">${escapeHtml(theme)}</option>`)
+          .join('')}
+      `;
+
+      if (pinnedThemes.length === 0) {
+        pinsWrap.innerHTML = '<p class="text-xs text-slate-500">Aucune thematique epinglee.</p>';
+        if (counter) counter.textContent = '(0/0 actives)';
+        return;
+      }
+      if (counter) {
+        counter.textContent = `(${pinnedChecks.length}/${pinnedThemes.length} actives)`;
+      }
+
+      pinsWrap.innerHTML = pinnedThemes.map((theme) => `
+        <label class="calendar-theme-pin-chip">
+          <input type="checkbox" data-calendar-theme-check="${escapeHtml(theme)}" ${isPinnedCalendarThemeChecked(theme) ? 'checked' : ''}>
+          <span>${escapeHtml(theme)}</span>
+          <button type="button" class="calendar-theme-pin-unpin" data-calendar-theme-unpin="${escapeHtml(theme)}" aria-label="Desepingler ${escapeHtml(theme)}">x</button>
+        </label>
+      `).join('');
+    }
+
     function pinThemeFromSelect() {
-      actions.initGlobalCalendarPinnedThemesState?.();
+      initGlobalCalendarPinnedThemesState();
       const select = document.getElementById('global-calendar-theme-pin-select');
       if (!select) return;
       const picked = String(helpers.normalizeCalendarThemeName?.(select.value) || '').trim();
@@ -49,12 +186,12 @@
       }
       setPinnedThemes(pinnedThemes);
       setPinnedThemeChecks(checks);
-      helpers.syncPinnedCalendarThemeState?.();
+      syncPinnedCalendarThemeState();
       actions.renderGlobalCalendar?.();
     }
 
     function applyThemeMenuAction(action) {
-      actions.initGlobalCalendarPinnedThemesState?.();
+      initGlobalCalendarPinnedThemesState();
       const currentPinned = getPinnedThemes();
       if (action === 'check-all') {
         setPinnedThemeChecks(currentPinned);
@@ -64,13 +201,13 @@
         setPinnedThemes([]);
         setPinnedThemeChecks([]);
       }
-      helpers.syncPinnedCalendarThemeState?.();
-      actions.toggleGlobalCalendarThemeActionsMenu?.(false);
+      syncPinnedCalendarThemeState();
+      toggleGlobalCalendarThemeActionsMenu(false);
       actions.renderGlobalCalendar?.();
     }
 
     function handleThemePinsChange(event) {
-      actions.initGlobalCalendarPinnedThemesState?.();
+      initGlobalCalendarPinnedThemesState();
       const target = event?.target;
       if (!(target instanceof HTMLInputElement) || target.type !== 'checkbox') return;
       const themeName = String(helpers.normalizeCalendarThemeName?.(target.getAttribute('data-calendar-theme-check') || '') || '').trim();
@@ -83,12 +220,12 @@
         checks = checks.filter((theme) => themeKey(theme) !== key);
       }
       setPinnedThemeChecks(checks);
-      helpers.syncPinnedCalendarThemeState?.();
+      syncPinnedCalendarThemeState();
       actions.renderGlobalCalendar?.();
     }
 
     function handleThemePinsClick(event) {
-      actions.initGlobalCalendarPinnedThemesState?.();
+      initGlobalCalendarPinnedThemesState();
       const btn = event?.target?.closest?.('[data-calendar-theme-unpin]');
       if (!btn) return;
       event.preventDefault();
@@ -97,7 +234,7 @@
       const key = themeKey(themeName);
       setPinnedThemes(getPinnedThemes().filter((theme) => themeKey(theme) !== key));
       setPinnedThemeChecks(getPinnedThemeChecks().filter((theme) => themeKey(theme) !== key));
-      helpers.syncPinnedCalendarThemeState?.();
+      syncPinnedCalendarThemeState();
       actions.renderGlobalCalendar?.();
     }
 
@@ -177,6 +314,7 @@
     }
 
     function bindDom() {
+      // DOM bindings are attached once; module remains idempotent across repeated init calls.
       if (bound) return;
       bound = true;
 
@@ -200,9 +338,9 @@
         actions.renderGlobalCalendar?.();
       });
       document.getElementById('global-calendar-toggle-controls')?.addEventListener('click', () => {
-        actions.initGlobalCalendarPinnedThemesState?.();
+        initGlobalCalendarPinnedThemesState();
         const nextExpanded = !state.getControlsExpanded?.();
-        actions.setGlobalCalendarControlsExpanded?.(nextExpanded);
+        setGlobalCalendarControlsExpanded(nextExpanded);
       });
       document.getElementById('btn-global-calendar-pin-theme')?.addEventListener('click', () => {
         pinThemeFromSelect();
@@ -210,7 +348,7 @@
       document.getElementById('btn-global-calendar-theme-actions-toggle')?.addEventListener('click', (event) => {
         event.preventDefault();
         event.stopPropagation();
-        actions.toggleGlobalCalendarThemeActionsMenu?.();
+        toggleGlobalCalendarThemeActionsMenu();
       });
       document.getElementById('global-calendar-theme-actions-menu')?.addEventListener('click', (event) => {
         const btn = event.target?.closest?.('[data-calendar-theme-action]');
@@ -221,7 +359,7 @@
       document.addEventListener('click', (event) => {
         const wrap = event.target?.closest?.('.calendar-theme-actions-menu-wrap');
         if (wrap) return;
-        actions.toggleGlobalCalendarThemeActionsMenu?.(false);
+        toggleGlobalCalendarThemeActionsMenu(false);
       });
       document.getElementById('global-calendar-theme-pins')?.addEventListener('change', (event) => {
         handleThemePinsChange(event);
@@ -252,7 +390,12 @@
 
     return {
       bindDom,
+      initGlobalCalendarPinnedThemesState,
+      syncPinnedCalendarThemeState,
+      setGlobalCalendarControlsExpanded,
+      toggleGlobalCalendarThemeActionsMenu,
       renderGlobalCalendar: (...args) => actions.renderGlobalCalendar?.(...args),
+      renderGlobalCalendarThemePins,
       setGlobalCalendarItemFormEditing,
       openGlobalCalendarItemModal,
       closeGlobalCalendarItemModal,
@@ -270,3 +413,5 @@
     createModule
   };
 }(window));
+
+/* --- taskmda-global-docs.js --- */
