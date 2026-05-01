@@ -3,8 +3,9 @@
 > Application web de gestion de projets et de tâches collaborative et locale, sans serveur requis.
 
 [![Version](https://img.shields.io/badge/version-2.0-blue.svg)]()
-[![License](https://img.shields.io/badge/license-Proprietary-red.svg)]()
-[![Platform](https://img.shields.io/badge/platform-Web-green.svg)]()
+[![License](https://img.shields.io/badge/license-MIT-green.svg)]()
+[![Platform](https://img.shields.io/badge/platform-Web-brightgreen.svg)]()
+[![Author](https://img.shields.io/badge/author-Frédérick%20MURAT-blue.svg)]()
 
 ---
 
@@ -380,7 +381,27 @@ Pour toute question ou problème :
 
 ## 📄 Licence
 
-Logiciel propriétaire. Tous droits réservés.
+MIT License
+
+Copyright (c) 2026 Frédérick MURAT
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 ---
 
@@ -399,5 +420,8 @@ Logiciel propriétaire. Tous droits réservés.
 
 <p align="center">
   <strong>NEXUS MDA</strong> - Gestion de projets collaborative sans serveur<br>
-  Version 2.0 - Avril 2026
+  Version 2.0 - Avril 2026<br>
+  <br>
+  Créé par <strong>Frédérick MURAT</strong><br>
+  Licence MIT © 2026
 </p>
